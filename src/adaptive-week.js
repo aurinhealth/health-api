@@ -1,4 +1,4 @@
-import { L, isImperial, num } from './lang.js';
+import { L, isImperial, num, plural } from './lang.js';
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
 import { planWeekRoles, roleTime, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { timeZone } from "./user-time.js";
@@ -9,15 +9,30 @@ import { planSports } from "./training-plans.js";
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
 export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?.daily?.training?.planned || [])].filter(a => sportOf(a));
-export function activityHistoryEstimate(history = [], reference) {
+// A first week from the athlete's own "hours a week now" (onboarding review
+// point 10, triathlon coach 2026-11-10), only until the history gives an
+// estimate: 80 % of the stated hours (at most 15), 2 to 5 easy sessions and
+// first-week caps per session. The experience levels may replace it later.
+const START_CAP = { run: 40, swim: 30, ride: 75, gym: 60 };
+export function startWeek(weeklyHours) {
+  const stated = Number(weeklyHours);
+  if (!(stated >= 1)) return null;
+  const hours = Math.min(15, stated * .8), count = Math.min(5, Math.max(2, Math.round(hours * .6 + 1)));
+  const each = Math.round(hours * 60 / count / 5) * 5;
+  return { count, minutes: Object.fromEntries(Object.entries(START_CAP).map(([sport, cap]) => [sport, Math.max(LEAST_MINUTES[sport], Math.min(cap, each))])) };
+}
+export function activityHistoryEstimate(history = [], reference, weeklyHours = null) {
   const recent = history.filter(d => d.date < reference && d.date >= shift(reference, -21));
   const activities = recent.reduce((n,d)=>n+(d.daily?.training?.completed||[]).filter(sportOf).length,0);
   const dates = recent.filter(d=>(d.daily?.training?.completed||[]).some(sportOf)).map(d=>d.date).sort();
   const days = dates.length ? Math.min(21,Math.max(1,(Date.parse(reference+'T12:00:00Z')-Date.parse(dates[0]+'T12:00:00Z'))/86400000)) : 0;
   const enough = days >= 14 && activities >= 4;
-  const count = enough ? Math.min(14,Math.max(1,Math.round(activities/(days/7)))) : 3;
+  const stated = enough ? null : startWeek(weeklyHours);
+  const count = enough ? Math.min(14,Math.max(1,Math.round(activities/(days/7)))) : stated?.count ?? 3;
   const message = enough ? L('Odhad ', 'Estimate: ')+count+L(' aktivit týdně z ', ' activities a week from ')+activities+L(' dokončených aktivit za ', ' completed activities in ')+days+L(' dní.', ' days.')
-    : (activities ? L('Historie je zatím krátká (', 'The history is still short (')+activities+L(' aktivit, ', ' activities, ')+days+L(' dní).', ' days).') : L('Zatím tu není historie dokončených aktivit.', 'There\'s no history of completed activities yet.'))+L(' Pro odhad potřebujeme alespoň 2 týdny a 4 aktivity. Do té doby navrhneme nejvýše 3 aktivity týdně podle dostupného času. Počet můžeš nastavit ručně.', ' An estimate needs at least 2 weeks and 4 activities. Until then we\'ll suggest at most 3 activities a week based on your available time. You can set the number by hand.');
+    : (activities ? L('Historie je zatím krátká (', 'The history is still short (')+activities+L(' aktivit, ', ' activities, ')+days+L(' dní).', ' days).') : L('Zatím tu není historie dokončených aktivit.', 'There\'s no history of completed activities yet.'))+L(' Pro odhad potřebujeme alespoň 2 týdny a 4 aktivity. ', ' An estimate needs at least 2 weeks and 4 activities. ')
+      +(stated ? L('Do té doby navrhneme podle toho, kolik teď trénuješ, a dostupného času ', 'Until then we\'ll suggest, based on how much you train now and your available time, ')+count+' '+plural(count,'aktivitu','aktivity','aktivit','activity','activities')+L(' týdně. ', ' a week. ') : L('Do té doby navrhneme nejvýše 3 aktivity týdně podle dostupného času. ', 'Until then we\'ll suggest at most 3 activities a week based on your available time. '))
+      +L('Počet můžeš nastavit ručně.', 'You can set the number by hand.');
   return { status: enough ? 'ready' : activities ? 'short' : 'empty', activities, days, count, message };
 }
 export function environmentFor(date, sport, weather = null) {
@@ -126,9 +141,11 @@ export function usualMinutes(history = [], reference) {
     return [sport, Math.max(LEAST_MINUTES[sport], Math.round(median / 5) * 5)];
   }));
 }
-export function estimatedTargets(roles, start, today, loads = [], history = []) {
-  const usual = usualMinutes(history, today < start ? today : start);
-  return { status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports?.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: usual[x.sport] ?? ESTIMATED_MINUTES[x.sport] ?? 60, tss: 25 }))) };
+// The stated weekly hours (startWeek) set the length while the history has no estimate.
+export function estimatedTargets(roles, start, today, loads = [], history = [], weeklyHours = null) {
+  const reference = today < start ? today : start, usual = usualMinutes(history, reference);
+  const stated = activityHistoryEstimate(history, reference).status === 'ready' ? null : startWeek(weeklyHours)?.minutes;
+  return { status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports?.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: usual[x.sport] ?? stated?.[x.sport] ?? ESTIMATED_MINUTES[x.sport] ?? 60, tss: 25 }))) };
 }
 export function capWeekTargets(targets, prefs, days = [], weather = {}) {
   const remaining = new Map();
@@ -218,7 +235,7 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   const history = (suppliedHistory || week.days || []).filter(d => d.date < reference && d.date >= shift(reference, -21));
   const frequency = { ride: 0, run: 0, swim: 0, gym: 0 };
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
-  const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
+  const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference,focus?.weeklyHours).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
   const sports = Object.keys(frequency).filter(s=>frequency[s]>0&&allowedSport(focus,s)).sort((a, b) => frequency[b] - frequency[a]);
   if (!sports.length) sports.push(...fallbackSports(focus));
@@ -280,7 +297,7 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 // proposal then carries its split, which the AI week and the coach follow.
 // openWater: the swim setting (training profile: off, races or season).
 export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null, triathlon = null, openWater = null }) {
-  const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
+  const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start,focus?.weeklyHours);
   const split = focus?.sport === 'triathlon' ? triathlonSplit({ ...(triathlon || {}), sessions: prefs.weeklyActivities ?? historyEstimate.count, minutes: (prefs.availability || []).reduce((n, d) => n + (Number(d?.minutes) || 0), 0) || null, daysToRace: focus.event?.daysLeft ?? null }) : null;
   const planOn = plan?.plan ? planSports(plan.plan) : [];
   const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history, split, planSports: planOn });
@@ -314,10 +331,10 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // Running this week so far (done, and planned still ahead or today) counts against the weekly running cap.
   const runOf = list => (list || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0);
   const runCommitted = existing.reduce((n, d) => n + committedRunMinutes(d.date, today, runOf(d.daily?.training?.planned), runOf(d.daily?.training?.completed)), 0);
-  let targets = capRunVolume(withPlan(weekTargets({ plan: plan?.load || null, strained: level >= 1, roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(hrvSourceRows(fitness.wellness, health?.wellness, start), start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) })), history ? weeklyRunCap(history, start) : null, runCommitted);
+  let targets = capRunVolume(withPlan(weekTargets({ plan: plan?.load || null, strained: level >= 1, eventDate: plan?.plan ? null : focus?.event?.date || null, taperDays: focus?.event?.taperDays ?? 7, roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(hrvSourceRows(fitness.wellness, health?.wellness, start), start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) })), history ? weeklyRunCap(history, start) : null, runCommitted);
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
-  if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads, history || week.days || [])), weeklyRunCap(history || [], start), runCommitted);
+  if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads, history || week.days || [], focus?.weeklyHours)), weeklyRunCap(history || [], start), runCommitted);
   // A triathlon plan has made its own brick and lengths (training-plans.js applyTriathlon).
   const own = x => !(x.plan && plan?.plan?.sport === 'triathlon');
   if (split) targets = { ...targets, items: (targets.items || []).map(x => own(x) ? splitItem(x, split, proposedPrefs.days[(Date.parse(x.date + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000] || []) : x) };

@@ -84,14 +84,14 @@ const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 // rows: one per user and feature for yesterday ({who, feature, calls, cost,
 // input, cached}: input tokens and the part of them OpenAI had cached);
 // month: one per user since the 1st ({who, cost, owner}). who is "Ty" for
-// the owner and "Účet #id · group" for everyone else: the report is an
+// the owner and "Účet #id, group" for everyone else: the report is an
 // e-mail, and an account number is all it needs (no e-mail addresses).
 // calls: each call of the day ({group, feature, cost}): the average and p95
 // price of a call by group and feature, the five that cost the most in all.
 export function callPrices(calls = []) {
   const by = new Map();
   for (const c of calls) {
-    const key = c.group + " · " + (c.feature ? featureName(c.feature) : "jiné");
+    const key = c.group + ", " + (c.feature ? featureName(c.feature) : "jiné");
     if (!by.has(key)) by.set(key, []);
     by.get(key).push(Number(c.cost) || 0);
   }
@@ -130,11 +130,11 @@ const accountsWord = n => n === 1 ? "účet" : n >= 2 && n <= 4 ? "účty" : "ú
 export const aiReport = (rows, month, limit) => aiText(aiSummary(rows, month, limit));
 export function aiText(ai) {
   if (!ai) return null;
-  const cache = ai.cachedShare != null ? ` · z cache ${ai.cachedShare} % vstupu` : "";
-  const lines = ai.users.map(u => `- ${u.who}: ${money(u.cost)} · ${u.features.map(f => `${f.name} ${f.calls}×`).join(", ")}`);
+  const cache = ai.cachedShare != null ? `, z cache ${ai.cachedShare} % vstupu` : "";
+  const lines = ai.users.map(u => `- ${u.who}: ${money(u.cost)}, ${u.features.map(f => `${f.name} ${f.calls}×`).join(", ")}`);
   const named = ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`);
   const others = ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${accountsWord(ai.others.count)} dohromady ${money(ai.others.cost)}` : "";
-  const monthLine = [...named, others].filter(Boolean).join(" · ");
+  const monthLine = [...named, others].filter(Boolean).join(", ");
   const prices = (ai.prices || []).map(p => `- ${p.name}: průměr ${money(p.average)}, p95 ${money(p.p95)} (${p.calls}×)`);
   return `Útrata AI včera: ${money(ai.total)}, ${ai.calls} dotazů${cache}\n${lines.join("\n")}\n\nZa měsíc${ai.limit ? ` (strop ${usd(ai.limit)} na účet)` : ""}: ${monthLine}`
     + (prices.length ? `\n\nCena jednoho dotazu podle skupiny\n${prices.join("\n")}` : "");
@@ -178,7 +178,7 @@ export function accountsReport(stats, limits = {}) {
 - Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), pilot a dárky ${stats.gift || 0}, ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
 - AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}${stats.groups?.length ? `\n- AI včera podle skupin: ${stats.groups.map(g => `${GROUP_NAMES[g.grp] || g.grp} ${usd(Number(g.cost_usd) || 0)}${g.brake_usd != null ? ` z ${usd(Number(g.brake_usd))}` : ""}`).join(", ")}` : ""}
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
-- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? ` · strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
+- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
   const proposals = [];
   for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
   if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
@@ -307,7 +307,7 @@ export async function sendDailyOpsReport(env, now = new Date()) {
 }
 
 // Yesterday's AI per account and feature, and the month per account. The
-// owner is "Ty", everyone else "Účet #id · group" (no e-mail addresses).
+// owner is "Ty", everyone else "Účet #id, group" (no e-mail addresses).
 export async function aiData(env, date, now = Date.now()) {
   const exists = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'").first();
   if (!exists) return { rows: [], month: [] };
@@ -336,7 +336,7 @@ export async function aiData(env, date, now = Date.now()) {
     const group = sub ? groupOfSubscription(sub, now) : String(user.created_at || "").replace("T", " ").slice(0, 19) >= newAccountSince(now) ? "new" : "free";
     return ACCOUNT_GROUPS[group] || group;
   };
-  const who = id => isOwner(id) ? "Ty" : `Účet #${id} · ${groupOf(id)}`;
+  const who = id => isOwner(id) ? "Ty" : `Účet #${id}, ${groupOf(id)}`;
   return {
     rows: rows.map(r => ({ who: who(Number(r.user_id)), feature: r.feature, calls: r.calls, cost: r.cost, input: r.input, cached: r.cached })),
     month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)) })),

@@ -78,12 +78,28 @@ struct HealthContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !editing {
-                // The same top as Dnes (TabHeader) and its week.
-                TabHeader(date: health.date, coach: actions.coach, settings: actions.settings)
-                WeekStrip(date: health.date, week: WeekStrip.week(of: health.date, in: page.map(\.today) ?? model.today))
-                    .padding(.top, 14)
+            // The same top as Dnes (TabHeader) and its week, which stay put
+            // while the day below is swiped; a day drawn beside has none.
+            if page == nil && !editing {
+                VStack(alignment: .leading, spacing: 0) {
+                    TabHeader(date: health.date, coach: actions.coach, settings: actions.settings)
+                    WeekStrip(date: health.date).padding(.top, 14)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+            }
+            day
+                .padding(.horizontal, 24)
+                .padding(.top, editing ? 16 : 0)
+                .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
+        }
+        .task { if model.cycle == nil { await model.loadCycle() } }
+    }
 
+    /// The day under the week: what a swipe moves.
+    private var day: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !editing {
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness, date: health.date) }
                     .padding(.top, 24)
 
@@ -99,10 +115,6 @@ struct HealthContent: View {
                         editing: $editing)
                 .padding(.top, editing ? 0 : 30)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
-        .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }
 

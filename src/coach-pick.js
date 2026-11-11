@@ -54,14 +54,14 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   const session = coach => coach?.recommendation?.session || {};
   const endurance = (sport, coach) => {
     const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
-    const title = (sport === "run" ? L("Běh", "Run") : sport === "swim" ? L("Plavání", "Swim") : L("Kolo", "Ride")) + " · " + (names[kind] || kind);
-    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(" · zóna 2", " · zone 2") : sport === "swim" ? L(" · plynule", " · steady") : L(" · lehce", " · easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
+    const title = (sport === "run" ? L("Běh", "Run") : sport === "swim" ? L("Plavání", "Swim") : L("Kolo", "Ride")) + ": " + (names[kind] || kind);
+    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(", zóna 2", ", zone 2") : sport === "swim" ? L(", plynule", ", steady") : L(", lehce", ", easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
   };
   const options = [
     endurance("ride", ride),
     endurance("run", run),
-    { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("60 min · nohy nech odpočinout", "60 min · let the legs rest") : L("60 min", "60 min") },
-    swim ? endurance("swim", swim) : { kind: "swim", title: L("Plavání · technika", "Swim · technique"), detail: L("45 min · 1 800 m", "45 min · 1,800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m · pauza 20 s", "8 × 50 m · 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
+    { kind: "gym", title: lowerTired ? L("Posilovna na horní polovinu", "Upper-body gym") : L("Posilovna na celé tělo", "Full-body gym"), detail: lowerTired ? L("60 min, nohy nech odpočinout", "60 min, let the legs rest") : L("60 min", "60 min") },
+    swim ? endurance("swim", swim) : { kind: "swim", title: L("Technika plavání", "Swim technique"), detail: L("45 min, 1 800 m", "45 min, 1800 m"), lines: [[L("Rozplavání", "Warm-up"), "200 m"], [L("Technika", "Drills"), L("8 × 50 m, pauza 20 s", "8 × 50 m, 20 s rest")], [L("Plynule", "Steady"), L("1 000 m lehce", "1,000 m easy")], [L("Vyplavání", "Cool-down"), "200 m"]] },
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] }
   ];
@@ -109,12 +109,44 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   const best = options[0];
   // After training the day off is stretching and an evening walk.
   const rest = options.find(o => o.kind === "rest");
-  if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
+  if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min, večer procházka 30 min", "15 min, an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
   // Why the sauna is missing where it would be offered, without naming a cause.
   if (noSauna && best.kind === "rest" && (status === "red" || trainedToday)) best.reason += " " + L("Sauna je taky zátěž, dnes ne.", "Sauna adds load, so not today.");
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+}
+
+// How late it is against tonight's bedtime (Today's tonight.bedtime, "HH:MM"),
+// both the athlete's local time: "wind-down" in the last hour before it, "bed"
+// once it has passed (until 4:00), else null. Without a bedtime 23:00 stands
+// in; a bedtime between noon and 18:00 (a day sleeper) is left alone.
+export const DEFAULT_BEDTIME = "23:00";
+export function eveningPhase(now, bedtime = null) {
+  const minutes = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "")); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+  let at = minutes(now), bed = minutes(bedtime) ?? minutes(DEFAULT_BEDTIME);
+  if (at == null || (bed >= 12 * 60 && bed < 18 * 60)) return null;
+  // After midnight both count on from the evening before.
+  if (bed < 12 * 60) bed += 1440;
+  if (at < 4 * 60) at += 1440;
+  return at >= bed ? "bed" : at >= bed - 60 ? "wind-down" : null;
+}
+
+// Late in the evening (eveningPhase) the day's activity is the wind-down (no
+// walk, no training), past bedtime only bed; the other options stay under
+// Další možnosti. A sick day keeps its rest as it is. The route keeps the
+// day's ranking for pickSignature, so the day's ready workouts stay.
+export function lateOptions(ranked, evening, { today = [], done = [] } = {}) {
+  const i = ranked.options.findIndex(o => o.kind === "rest");
+  if (!evening || i < 0 || ranked.paused === "sick") return ranked;
+  const bed = evening === "bed", trained = today.some(k => k !== "walk");
+  const rest = bed
+    ? { kind: "rest", title: L("Spánek", "Sleep"), detail: L("Jdi teď spát", "Go to bed now"), lines: [[L("Do postele", "Bed"), L("teď", "now")]] }
+    : { kind: "rest", title: L("Zklidnění", "Wind down"), detail: L("5–10 min lehkého protažení, pak spát", "5–10 min of easy stretching, then bed"), lines: [[L("Lehké protažení", "Easy stretching"), "5–10 min"], [L("Pak", "Then"), L("do postele", "bed")]] };
+  const why = (trained ? doneSentence(done) + " " : "") + (bed ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.")
+    : L("Je pozdě večer: už jen zklidni, 5–10 minut lehkého protažení a pak do postele.", "It's late in the evening: just wind down with 5–10 minutes of easy stretching, then bed."));
+  const others = ranked.options.filter((_, k) => k !== i).map(({ best, reason, ...o }) => o);
+  return { ...ranked, evening, options: [{ ...ranked.options[i], ...rest, best: true, reason: why, action: "accept" }, ...others] };
 }
 
 // The night's signs that take the sauna off the list, any one of them: a
@@ -236,13 +268,17 @@ export function dayChoice({ chosen = null, planned = [] } = {}) {
 // the day off is a walk and stretching. A ride or run is in the calendar and
 // the gym in its plan already (the app saves those before the choice).
 export const PICK_PLAN = { swim: ["swim"], sauna: ["sauna"], rest: ["walk", "stretch"] };
+// Late in the evening (lateOptions) the day off is only the stretching, past bedtime nothing.
+const LATE_REST = { "wind-down": ["stretch"], bed: [] };
 
 // The athlete's choice for the day; another than the coach's top is a decline of it.
+// evening (the late card the athlete saw, pickEvening): the rest puts no walk
+// into the plan, and the late card's top is no recommendation to learn from.
 // "skip" (Odmítnout) takes nothing: Aktivita dne leaves Dnes for the day and
 // the coach's top counts as declined.
 // The choice goes into the day's plan; a changed mind takes the earlier
 // choice's rows out again (unless already done).
-export async function savePick(db, userId, { date, kind, top }) {
+export async function savePick(db, userId, { date, kind, top, evening = null }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !(KINDS.includes(kind) || kind === SKIP)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(TABLE).run();
   const before = (await db.prepare("SELECT kind FROM coach_picks WHERE user_id=? AND date=?").bind(userId, date).first())?.kind || null;
@@ -250,11 +286,13 @@ export async function savePick(db, userId, { date, kind, top }) {
     await ensureRecoveryTable(db);
     for (const k of PICK_PLAN[before]) await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(userId, date, k).run();
   }
-  if (PICK_PLAN[kind]) {
+  const plan = kind === "rest" && LATE_REST[evening] ? LATE_REST[evening] : PICK_PLAN[kind];
+  if (plan?.length) {
     await ensureRecoveryTable(db);
     const there = new Set(((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(userId, date).all()).results || []).map(r => r.kind));
-    for (const k of PICK_PLAN[kind]) if (!there.has(k)) await addRecovery(db, { date, kind: k });
+    for (const k of plan) if (!there.has(k)) await addRecovery(db, { date, kind: k });
   }
+  if (LATE_REST[evening]) top = null;
   await db.prepare("INSERT INTO coach_picks (user_id, date, kind, top, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET kind=excluded.kind, top=COALESCE(coach_picks.top, excluded.top), created_at=excluded.created_at")
     .bind(userId, date, kind, KINDS.includes(top) ? top : null, new Date().toISOString()).run();
   return { status: "ok", chosen: kind };
@@ -303,6 +341,16 @@ export async function storedDetails(db, userId, date, signature) {
   try { return JSON.parse(row.details_json); } catch { return null; }
 }
 
+// The late phase the day's card was last shown in (lateOptions), kept with the day's details.
+export async function pickEvening(db, userId, date) {
+  await db.prepare(DETAILS_TABLE).run();
+  const row = await db.prepare("SELECT json_extract(details_json, '$.evening') AS evening FROM coach_pick_details WHERE user_id=? AND date=?").bind(userId, date).first().catch(() => null);
+  return LATE_REST[row?.evening] ? row.evening : null;
+}
+export async function markEvening(db, userId, date, evening) {
+  await db.prepare("UPDATE coach_pick_details SET details_json=json_set(details_json, '$.evening', ?) WHERE user_id=? AND date=?").bind(evening, userId, date).run();
+}
+
 export async function storeDetails(db, userId, date, signature, details) {
   await db.prepare(DETAILS_TABLE).run();
   await db.prepare("INSERT INTO coach_pick_details (user_id, date, signature, details_json, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET signature=excluded.signature, details_json=excluded.details_json, updated_at=excluded.updated_at")
@@ -338,7 +386,7 @@ export function workoutLines(steps = [], sport = "ride") {
   const run = sport === "run";
   const minutes = s => Math.round((s.durationSeconds || 0) / 60);
   const target = s => run ? (s.paceFast ? paceText(parsePace(s.paceFast)) : null) : s.wattsLow != null ? Math.round((s.wattsLow + (s.wattsHigh ?? s.wattsLow)) / 2) + " W" : Math.round((s.percentLow + s.percentHigh) / 2) + " % FTP";
-  const value = s => [minutes(s) + " min", target(s)].filter(Boolean).join(" · ");
+  const value = s => [minutes(s) + " min", target(s)].filter(Boolean).join(", ");
   const name = (s, i, last) => s.note || (i === 0 ? (run ? L("Rozklus", "Warm-up") : L("Rozjetí", "Warm-up")) : i === last ? (run ? L("Výklus", "Cool-down") : L("Vyjetí", "Cool-down")) : L("Úsek", "Section"));
   const last = steps.length - 1;
   return steps.slice(0, 8).map((b, i) => {
@@ -353,11 +401,11 @@ export function workoutLines(steps = [], sport = "ride") {
 
 // A swim's rows: each set in metres with its pace per 100 m and rest.
 function swimLines(steps = []) {
-  const one = s => [s.meters ? s.meters + " m" : Math.round((s.durationSeconds || 0) / 60) + " min", s.paceFast ? s.paceFast + "/100 m" : null].filter(Boolean).join(" · ");
+  const one = s => [s.meters ? s.meters + " m" : Math.round((s.durationSeconds || 0) / 60) + " min", s.paceFast ? s.paceFast + "/100 m" : null].filter(Boolean).join(", ");
   return steps.slice(0, 8).map(b => {
     const list = (b.steps || []).filter(s => !s.rest), rest = (b.steps || []).find(s => s.rest);
     if (!list.length) return null;
-    if ((b.repeats || 1) > 1 || list.length > 1) return [(b.repeats > 1 ? b.repeats + " × " : "") + (list[0].note || L("úsek", "set")), one(list[0]) + (rest ? L(" · pauza ", " · rest ") + Math.round(rest.durationSeconds) + " s" : "")];
+    if ((b.repeats || 1) > 1 || list.length > 1) return [(b.repeats > 1 ? b.repeats + " × " : "") + (list[0].note || L("úsek", "set")), one(list[0]) + (rest ? L(", pauza ", ", rest ") + Math.round(rest.durationSeconds) + " s" : "")];
     return [list[0].note || L("Plavání", "Swim"), one(list[0])];
   }).filter(Boolean);
 }
@@ -366,5 +414,5 @@ function swimLines(steps = []) {
 export function gymLines(rows = []) {
   const by = new Map();
   for (const r of rows) if (r?.[0] === "WORK" && r[1]) { const e = by.get(r[1]) || { sets: 0, reps: r[4], kg: r[3] }; e.sets += 1; by.set(r[1], e); }
-  return [...by].slice(0, 10).map(([name, e]) => [name, [e.sets + " × " + (e.reps || ""), e.kg ? e.kg + " kg" : ""].filter(Boolean).join(" · ")]);
+  return [...by].slice(0, 10).map(([name, e]) => [name, [e.sets + " × " + (e.reps || ""), e.kg ? e.kg + " kg" : ""].filter(Boolean).join(", ")]);
 }

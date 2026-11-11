@@ -53,7 +53,10 @@ struct FoodWeekWidget: View {
             }
         }
         // Again when the day's food changes (a meal added on Jídlo).
-        .task(id: (date ?? "") + "|" + Fmt.int((page?.food ?? model.food)?.kcal)) { await load() }
+        // Not for a day drawn beside during a swipe (DayPager): no request for it.
+        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal)) {
+            if page == nil { await load() }
+        }
     }
 
     @ViewBuilder private func content(_ week: FoodWeek, target: Double) -> some View {

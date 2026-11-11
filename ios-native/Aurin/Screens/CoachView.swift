@@ -1050,9 +1050,9 @@ struct ActionCard: View {
             if result == nil, let change = action.quickChange {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark").font(.caption.weight(.bold))
-                    Text(verbatim: change).font(Typo.caption.weight(.medium)).padding(.trailing, 8)
+                    Text(verbatim: change).font(Typo.caption.weight(.medium))
                     Button { adjust("undo", nil) } label: { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.plain).padding(.leading, 6)
                 }
                 .foregroundStyle(Palette.green)
                 .disabled(adjusting != nil)
@@ -1060,10 +1060,10 @@ struct ActionCard: View {
             if let result {
                 HStack(spacing: 6) {
                     if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
-                    Text(result).font(Typo.caption.weight(.medium)).padding(.trailing, canUndo ? 8 : 0)
+                    Text(result).font(Typo.caption.weight(.medium))
                     if canUndo {
-                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
-                            .buttonStyle(.plain)
+                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
+                            .buttonStyle(.plain).padding(.leading, 6)
                     }
                 }
                 .foregroundStyle(Palette.green)
@@ -1236,7 +1236,7 @@ struct PlanProposalBlock: View {
     }
 }
 
-/// The proposed session on the coach's card: "Naplánovat, Pá 16. 10.", its
+/// The proposed session on the coach's card: "Naplánovat Pá 16. 10.", its
 /// name, the profile with length, TSS and the hardest step, or the gym
 /// exercises with their sets and weights.
 struct WorkoutPreviewBlock: View {
@@ -1245,7 +1245,7 @@ struct WorkoutPreviewBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L10n.tr("Naplánovat") + (action.date.map { ", " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
                 Text(verbatim: workout.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -1264,7 +1264,11 @@ struct WorkoutPreviewBlock: View {
                         HStack {
                             Text(verbatim: e.name).foregroundStyle(Palette.ink)
                             Spacer(minLength: 8)
-                            Text(verbatim: "\(max(1, e.sets))×\(e.reps)" + (e.kg.isEmpty ? "" : ", \(e.kg) kg")).foregroundStyle(Palette.secondary).monospacedDigit()
+                            HStack(spacing: 12) {
+                                Text(verbatim: "\(max(1, e.sets))×\(e.reps)")
+                                if !e.kg.isEmpty { Text(verbatim: "\(e.kg) kg") }
+                            }
+                            .foregroundStyle(Palette.secondary).monospacedDigit()
                         }
                         .font(Typo.caption)
                         .padding(.vertical, 7)
@@ -1547,8 +1551,8 @@ struct CoachThinkingLine: View {
     }
 }
 
-/// One row wherever the app waits for AI: the dots, the step and ", 4 s" from
-/// 3 s. VoiceOver reads the step only, not the seconds.
+/// One row wherever the app waits for AI: the dots, the step and, from 3 s, a
+/// faint "4 s" after it as its own label. VoiceOver reads the step only, not the seconds.
 struct CoachWaitRow: View {
     let text: String
     var since: Date? = nil
@@ -1559,11 +1563,15 @@ struct CoachWaitRow: View {
             CoachDots(size: 6, spacing: 4)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let seconds = Int(context.date.timeIntervalSince(since ?? appeared))
-                (Text(verbatim: text).foregroundColor(Palette.muted)
-                    + Text(verbatim: seconds >= 3 ? ", " + L10n.f("%lld s", seconds) : "").foregroundColor(Palette.faint))
-                    .font(Typo.small)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: text)
+                HStack(spacing: 8) {
+                    Text(verbatim: text).foregroundStyle(Palette.muted)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.25), value: text)
+                    if seconds >= 3 {
+                        Text(verbatim: L10n.f("%lld s", seconds)).foregroundStyle(Palette.faint).monospacedDigit()
+                    }
+                }
+                .font(Typo.small)
             }
         }
         .accessibilityElement(children: .ignore)

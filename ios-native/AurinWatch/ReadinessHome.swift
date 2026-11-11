@@ -62,7 +62,7 @@ struct ReadinessHome: View {
             if let race = todayRace {
                 // Race day: the race opens its legs (RaceDetail).
                 NavigationLink(value: race) {
-                    todayRow(text: race.name + (race.first.time.map { " · " + W.clockText($0) } ?? ""), symbol: "flag.fill", opens: true)
+                    todayRow(text: race.name + (race.first.time.map { ", " + W.clockText($0) } ?? ""), symbol: "flag.fill", opens: true)
                 }
                 .buttonStyle(.plain)
             } else if let today = todayLine {
@@ -213,7 +213,7 @@ struct ReadinessHome: View {
 
     // MARK: Today
 
-    /// Today's race not yet done, in place of the next workout ("Duatlon · 9:00").
+    /// Today's race not yet done, in place of the next workout ("Duatlon, 9:00").
     private var todayRace: RaceDay? {
         // As todayLine: an older day's plan is not today's.
         guard !older else { return nil }
@@ -237,13 +237,13 @@ struct ReadinessHome: View {
         .contentShape(Rectangle())
     }
 
-    /// What is next today, under the numbers ("Sweet spot · 75′ at 17:30"), the
+    /// What is next today, under the numbers ("Sweet spot, 75′ at 17:30"), the
     /// length once though the plan's title may already end with it.
     private var todayLine: (text: String, symbol: String, session: WatchSnapshot.Session)? {
         // An older day's plan is not today's: only today's snapshot tells it.
         guard !older, let next = (s.week ?? []).first(where: { $0.date == s.date && !$0.done }) else { return nil }
         var text = next.name
-        if let minutes = next.minutes { text += " · \(minutes)′" }
+        if let minutes = next.minutes { text += ", \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
         return (text, W.sportSymbol(next.sport), next)
     }

@@ -69,8 +69,9 @@ p{margin:0}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
 .wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
 
-/* Grain over the whole page: printed paper rather than a flat screen. */
-.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* Grain over the whole page: printed paper rather than a flat screen. Black noise at varying alpha darkens like
+   multiply did, without a blend mode that made every moving piece repaint the whole screen behind it. */
+.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.333 -.333 -.333 0 .622'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* Shared pieces of the overview. */
 .eyebrow{font-size:var(--fs-12);font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
@@ -113,10 +114,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
    Google Health or directly), as plain names, Bevel-like. Brand logos need their makers' written OK. */
 .xw{margin-top:34px}
 .xw .xe{display:block;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
-.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;row-gap:6px}
+.xw ul{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 1.4em}
 .xw li{font-size:var(--fs-17);font-weight:600;letter-spacing:-.01em;line-height:1.3;color:var(--text);white-space:nowrap}
-/* A dot after each name: where the row breaks on a narrow phone, a line ends with it and names never run together. */
-.xw li:not(:last-child)::after{content:"·";margin:0 .55em;font-weight:400;color:var(--muted)}
 /* A wordmark stands about as tall as the names' capitals, on their line. */
 .xw .wm{display:inline-flex;align-items:center;height:1.3em}.xw .wm picture{display:contents}
 .xw .wm img{display:block;width:auto;height:.74em}.xw .wm.ultrahuman img{height:.6em}
@@ -364,21 +363,21 @@ main:focus{outline:none}
   .js .sun{opacity:0;transform:translateY(40px);animation:lift 1.1s cubic-bezier(.16,1,.3,1) forwards}
   .sun .rg{animation:spread 4s linear infinite}.sun .rg:nth-child(3){animation-delay:-1.33s}.sun .rg:nth-child(4){animation-delay:-2.67s}
   @keyframes spread{from{transform:scale(.47);opacity:.9}to{transform:scale(1);opacity:0}}
-  .sun .mark{animation:bob 4.8s ease-in-out infinite}
-  @keyframes bob{50%{transform:translateY(-6px)}}
+  .sun .mark{will-change:transform;animation:bob 4.8s ease-in-out infinite}
+  @keyframes bob{50%{transform:translate3d(0,-6px,0)}}
   .js .lock .shackle{transform:translateY(-14px);transition:transform .5s cubic-bezier(.34,1.8,.5,1) .5s}.js .promise.in .lock .shackle{transform:none}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
   .js .part{transform:translate(-24px,24px) scale(.94);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .1s}
   .js .flip .part{transform:translate(24px,24px) scale(.94);clip-path:inset(0 0 0 100% round 22px)}
-  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
-  @keyframes float{50%{transform:translateY(-8px)}}
+  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);will-change:transform;animation:float 6s ease-in-out 1.2s infinite}
+  @keyframes float{50%{transform:translate3d(0,-8px,0)}}
   .js .auto .step.on .bar{display:block}
   .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
   .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
-  @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
+  @media (hover:none),(max-width:960px){.js .part.on,.js .flip .part.on{animation:none}}
   @supports (interpolate-size:allow-keywords){
     .faq{interpolate-size:allow-keywords}
     .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.16,1,.3,1),content-visibility .35s allow-discrete}
@@ -576,15 +575,15 @@ document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelect
   else if(navigator.clipboard)navigator.clipboard.writeText(link).then(function(){said.textContent='Link copied: '+link;});});});
 })();</script>
 <script>(function(){
-// Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
+// Muscles: frame k of 72 is the figure turned k × 5°; ids.png holds, per frame, which muscle each pixel is
 // (a quarter of the size, the index in NAMES). The frames load when the figure comes near.
 var fig=document.querySelector('.fig');if(!fig)return;
 var N=72,IW=160,IH=250,base=fig.dataset.base,rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
 var NAMES=['quads','hamstrings','glutes','calves','adductors','abductors','chest','back','lower_back','traps','shoulders','side_delts','rear_delts','biceps','triceps','forearms','core','other','bone'];
 var LABEL={quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',calves:'Calves',adductors:'Adductors',abductors:'Abductors',chest:'Chest',back:'Back',lower_back:'Lower back',traps:'Traps',shoulders:'Shoulders',side_delts:'Side delts',rear_delts:'Rear delts',biceps:'Biceps',triceps:'Triceps',forearms:'Forearms',core:'Core'};
 var TIRED='var(--rust)',RECOVERING='var(--amber)',RESTED=['rested','var(--green)'];
-var STATE={glutes:['26 % rested · in 2 days',TIRED],hamstrings:['35 % rested · in 2 days',TIRED],quads:['37 % rested · ≈ in 2 days',TIRED],
- calves:['47 % rested · ≈ tomorrow',TIRED],chest:['61 % rested · today',RECOVERING],back:['61 % rested · today',RECOVERING]};
+var STATE={glutes:['26 % rested, in 2 days',TIRED],hamstrings:['35 % rested, in 2 days',TIRED],quads:['37 % rested, ≈ in 2 days',TIRED],
+ calves:['47 % rested, ≈ tomorrow',TIRED],chest:['61 % rested, today',RECOVERING],back:['61 % rested, today',RECOVERING]};
 var cv=fig.querySelector('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),bub=fig.querySelector('.bubble'),hint=document.querySelector('.muscles .hint'),card=document.querySelector('.muscle-card');
 var frames=[],ids=null,cur=0,vel=0,sel=null,spin=!still,drag=null,shown=-1,running=false;
 function load(){if(frames.length)return;
@@ -638,7 +637,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=12';
+const SHARE_IMAGE = '/site/og-en.jpg?v=13';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -693,7 +692,7 @@ ${body}
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-coach">Coach</a></li>${WATCH_ON_SITE ? '<li><a href="/#a-watch">Apple Watch</a></li>' : ''}</ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li><li><a href="https://x.com/aurin_health" rel="me noopener">Aurin on X</a></li></ul></nav>
-<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
+<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a>, <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
@@ -811,7 +810,7 @@ export function overviewPage(request) {
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own usual range.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen.', 7000],
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen. Tap the month for every day of it: readiness, sleep, strain or HRV.', 7000],
       ['html:strain', 'strainMade', 200, 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000],
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
@@ -886,22 +885,24 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
 </div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn, tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch or Fitbit. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring.'],
-    ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit works with it too.'],
-    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
-    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch or Fitbit. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring you wear at night.'],
+    ['Which phones does Aurin run on?', 'Only iPhone; there’s no Android app. A Fitbit works too: its data comes through Google Health with your Google account.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
-    ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo, and each day the data of Today, Training and Food for the coach’s short summary there. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
-    ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
+    ['How soon does Aurin know me?', 'By the next morning if your watch or ring already has a few weeks of data: Aurin reads them when you connect. Starting fresh, Aurin first learns your usual range: readiness comes after 14 days of HRV or resting heart rate, and your usual sleep range after 7 nights.'],
+    ['Why is my readiness different from my watch’s?', 'Every app works out its own score. Aurin compares last night’s HRV, resting heart rate and sleep with your own usual range from the last weeks, so its number can differ from the one your watch shows. Follow how it moves from day to day rather than comparing the two.'],
+    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
+    ['What does it cost?', `Nothing while we test. After the release, everything under Free stays free, and Aurin Pro is ${PRO_PRICE.year} a year with the first week free, or ${PRO_PRICE.month} a month. Cancel any time in Settings → Aurin Pro → Manage subscription; your data stays and the free part keeps working.`],
+    ['How do I get early access?', 'Leave your email <a href="#join">below</a>. Once we add you to the test, Apple’s TestFlight emails you a link: install TestFlight, open the link and Aurin installs for free. Once Aurin is in the App Store, you sign in with the same account and keep your data.'],
+    ['What does the AI coach see?', 'Only what it needs, and only once you allow AI features in Settings → Privacy &amp; data. When you ask the coach or log food from a photo, it gets the numbers that question needs, and once a day it reads your Today, Training and Food to write its short summary. That goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
+    ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data, pause your health data (Aurin deletes it and keeps your account) or delete your account with everything in it. Before any of them, Aurin asks you to confirm it’s you with Face ID or a code sent to your email, so nobody else can do it with your phone or your sign-in.'],
     ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
-    ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],
-    ['I’m missing something in Aurin. Can I suggest it?', 'Yes. In the app, open Settings → Help → Suggest a feature, write what would help you and send it.']]
+    ['Something doesn’t work, or something’s missing?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or Suggest a feature. You can also write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`]]
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
   // The hero says what the welcome's first page says, its last words in the coach's green italic.
   const headline = 'A coach that knows how you slept.';
@@ -921,14 +922,14 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     {'@type': 'WebSite', url: origin, name: 'Aurin', inLanguage: 'en', publisher: {'@id': `${origin}/#org`}}]};
 
   return sitePage({lang, origin, path: '/', jsonLd,
-    title: 'Aurin · train for how you feel today',
+    title: 'Aurin: train for how you feel today',
     description,
     body: `<main id="main" tabindex="-1">
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
 ${sun(72)}
-<span class="kicker"><i></i>For iPhone · early access</span>
+<span class="kicker"><i></i>Early access for iPhone</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
@@ -992,7 +993,7 @@ ${store('end')}
 export function notFoundPage(request) {
   const {lang, origin} = pageLang(request);
   return sitePage({lang, origin, path: request ? new URL(request.url).pathname : '/', index: false, status: 404,
-    title: 'Page not found · Aurin', description: 'This page doesn’t exist on aurin.health.',
+    title: 'Aurin: page not found', description: 'This page doesn’t exist on aurin.health.',
     body: `<main id="main" tabindex="-1">
 <section class="final"><div class="wrap" id="join">
 ${sun(104)}
@@ -1008,7 +1009,7 @@ function doc(request, path, title, html) {
   const other = !czech ? '' : lang === 'cs'
     ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
     : `<p class="muted"><a href="/cs${path}" lang="cs" hreflang="cs">Česká verze</a></p>`;
-  return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
+  return sitePage({lang, origin, path, czech, title: `Aurin: ${pick(title)}`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
     body: `<main id="main" tabindex="-1" class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
 

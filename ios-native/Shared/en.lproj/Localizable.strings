@@ -2936,6 +2936,7 @@
 "1 porce = %@ %@" = "1 serving = %@ %@";
 "Nastavit porci" = "Set a serving";
 "Název porce" = "Serving name";
+"např. plechovka" = "e.g. can";
 "Váha jedné porce" = "One serving weighs";
 "Navrhnout opravu pro všechny" = "Suggest the fix for everyone";
 "Správa" = "Admin";
@@ -4069,7 +4070,7 @@
 "Posílá se dvě hodiny po konci tréninku a jen když ho Intervals.icu ještě nemá. Aplikaci, která do Intervals.icu posílá sama, nech vypnutou." = "Sent two hours after a workout ends, only if Intervals.icu doesn’t have it yet. Leave an app off if it already sends to Intervals.icu itself.";
 "Apple Watch a další aplikace" = "Apple Watch and other apps";
 "Jízdy s výkonem, tepem a trasou" = "Rides with power, heart rate, route";
-"Fitbit a Pixel Watch" = "Fitbit and Pixel Watch";
+"Fitbit a další hodinky" = "Fitbit and other watches";
 "Posílat tréninky z %@ do %@?" = "Send %1$@ workouts to %2$@?";
 "Aurin zkopíruje každý dokončený trénink z Wahoo do tvého účtu Intervals.icu jako jeho soubor: čas, délku, vzdálenost, trasu, výkon, tep, kadenci a kalorie." = "Aurin copies each finished Wahoo workout to your Intervals.icu account as its file: time, duration, distance, route, power, heart rate, cadence and calories.";
 "Aurin zkopíruje každý dokončený trénink z Google Health do tvého účtu Intervals.icu: typ, název, čas, délku, vzdálenost, tep a kalorie." = "Aurin copies each finished Google Health workout to your Intervals.icu account: type, name, time, duration, distance, heart rate and calories.";
@@ -4170,3 +4171,21 @@
 "Spustit rozcvičku" = "Start warm-up";
 "Spustit protažení" = "Start stretching";
 "Spustit posilku" = "Start gym";
+"HRV" = "HRV";
+"Otevře kalendář měsíce" = "Opens the month calendar";
+"Připravenost se ukáže po první noci s hodinkami." = "Readiness shows after your first night with a watch.";
+"Průměr %@." = "Average %@.";
+"Tento měsíc zatím bez zaznamenaných nocí." = "No nights recorded this month yet.";
+"Průměrně %@ %% potřeby spánku." = "On average %@%% of your sleep need.";
+"Tento měsíc zatím bez námahy." = "No strain this month yet.";
+"Průměrná námaha %@ z 21." = "Average strain %@ of 21.";
+"Tento měsíc zatím bez HRV." = "No HRV this month yet.";
+"Kroužek je připravenost 0 až 100." = "The ring is readiness from 0 to 100.";
+"Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený." = "The ring is sleep against your need, full at 100%. Green from 85%, orange from 70%, red below.";
+"Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený." = "The ring is the day's strain from 0 to 21. Yellow below 10, orange below 14, red above.";
+"Šipka je HRV proti obvyklému rozmezí." = "The arrow is HRV against your usual range.";
+"připravenost %@" = "readiness %@";
+"námaha %@" = "strain %@";
+"HRV %@ ms, nad obvyklým rozmezím" = "HRV %@ ms, above your usual range";
+"HRV %@ ms, pod obvyklým rozmezím" = "HRV %@ ms, below your usual range";
+"HRV %@ ms, v obvyklém rozmezí" = "HRV %@ ms, within your usual range";

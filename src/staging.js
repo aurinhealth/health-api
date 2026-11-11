@@ -1,7 +1,7 @@
 // The test server (wrangler env "staging", staging.aurin.health) runs the same
 // code against its own databases. Every page it serves says so, and search
 // engines are kept out.
-const BADGE = '<div style="position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:2147483647;padding:4px 12px;border-radius:999px;background:#d97706;color:#fff;font:600 12px/1.6 system-ui,sans-serif;letter-spacing:.04em;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)">TEST · staging</div>';
+const BADGE = '<div style="position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:2147483647;padding:4px 12px;border-radius:999px;background:#d97706;color:#fff;font:600 12px/1.6 system-ui,sans-serif;letter-spacing:.04em;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.25)">Test server</div>';
 
 export function isStaging(env) {
   return env?.ENVIRONMENT === "staging";

@@ -3,7 +3,7 @@ import { assertAiTotal, addAiSpend } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
 import { cycleShared } from "./cycle-model.js";
-import { withFocus } from "./athlete-focus.js";
+import { withFocus, racePhase } from "./athlete-focus.js";
 import { brokenStations } from "./athlete-state.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
@@ -220,12 +220,13 @@ export function strengthDay(engine,{availabilityMinutes=null,dayMinutes=null,wee
   return {...engine,sport:'gym',recommendation:{session,adaptations:[legs&&time!==0&&status!=='red'?L('Nohy pracovaly v posledních 48 h: dnes horní polovina těla.','Legs worked in the last 48 h: upper body today.'):null].filter(Boolean),decisionRule:'strength_main_sport',progression:null},
     alternatives:[...(endurance&&endurance.kind!=='rest'?[{...endurance,onlyWhenAsked:true}]:[]),...(engine.alternatives||[]).map(a=>({...a,onlyWhenAsked:true}))]};
 }
-// The engine's goal from the main event: base far out, build in the last 12
-// weeks; the final 3 weeks stay automatic (the engine has no taper phase).
+// The engine's goal from the main event: base before the build (racePhase,
+// by the race's distance), build after it; the final 3 weeks stay automatic
+// (the engine has no taper phase).
 export function focusGoal(focus){
   if(!focus?.event&&!focus?.goal)return null;
   const days=focus.event?.daysLeft;
-  return compactObject({event:focus.event?.name,eventDate:focus.event?.date,daysLeft:days,goal:focus.goal,phase:days==null?null:days>84?'base':days>=21?'build':null});
+  return compactObject({event:focus.event?.name,eventDate:focus.event?.date,daysLeft:days,goal:focus.goal,phase:days==null?null:racePhase(days,focus.event)==='base'?'base':days>=21?'build':null});
 }
 
 // One wellness day as the coach reads it (A7): the recovery numbers, no raw
@@ -514,6 +515,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   let parsed=null;if(actions){try{parsed=JSON.parse(text);}catch{/* cut off or plain text */}}
   const raw=String(text||''),plain=!/^\s*[{[]/.test(raw);
   let answer=String((typeof parsed?.answer==='string'?parsed.answer:null)??(plain?raw:partialCoachAnswer(raw))).trim();
+  answer=answer.replace(/ · /g,", ");// no middle-dot separators in what the athlete reads
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];

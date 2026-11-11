@@ -44,6 +44,8 @@ final class AppModel {
     }
     /// The training calendar's days by date (Training → the strip and month).
     var calendar: [String: CalendarDay] = [:]
+    /// Readiness, sleep, strain and HRV by date (Today → the month calendar).
+    var dayValues: [String: DayValues] = [:]
     /// The strain of past days before this week, by date, as Today shows it for
     /// that day (Training → the day chosen in the calendar).
     var pastStrain: [String: Double] = [:]

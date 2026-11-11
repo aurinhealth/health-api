@@ -129,10 +129,10 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var race: Bool? = nil
 
         /// The title without the length the server's plan already ends it with
-        /// ("Endurance with cadence drills · 60 min"), which the screens show apart.
+        /// ("Endurance with cadence drills, 60 min"), which the screens show apart.
         var name: String {
             guard let minutes else { return title }
-            for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where title.hasSuffix(suffix) {
+            for suffix in [" · \(minutes) min", ", \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where title.hasSuffix(suffix) {
                 return String(title.dropLast(suffix.count))
             }
             return title
