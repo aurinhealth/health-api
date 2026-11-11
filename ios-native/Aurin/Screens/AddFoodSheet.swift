@@ -209,7 +209,7 @@ struct AddFoodSheet: View {
         .onChange(of: galleryItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) {
                     read(image, mode: "portion")
                 }
                 galleryItem = nil

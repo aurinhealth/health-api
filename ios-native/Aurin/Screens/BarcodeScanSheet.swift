@@ -992,13 +992,25 @@ struct CameraPicker: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onImage: (UIImage?) -> Void
+        /// The photo is shrunk before onImage, while the picker still shows:
+        /// a second tap on Use Photo is not another photo.
+        private var done = false
         init(onImage: @escaping (UIImage?) -> Void) { self.onImage = onImage }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            onImage(info[.originalImage] as? UIImage)
+            guard !done else { return }
+            done = true
+            // At most 2560 px, so a 48-megapixel shot is not kept whole (PhotoDownsample.swift).
+            guard let image = info[.originalImage] as? UIImage else { return onImage(nil) }
+            Task {
+                let small = await Task.detached(priority: .userInitiated) { image.shrunk() }.value
+                onImage(small)
+            }
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            guard !done else { return }
+            done = true
             onImage(nil)
         }
     }
@@ -1015,12 +1027,6 @@ extension UIImage {
     /// Drawn at scale 1 (as Avatar does): the renderer's default is the
     /// screen's 3×, which made a 1600 px photo 4800 px.
     private func resizedJPEG(side: CGFloat) -> Data? {
-        let pixels = CGSize(width: size.width * scale, height: size.height * scale)
-        let factor = min(1, side / max(pixels.width, pixels.height))
-        let target = CGSize(width: max(1, (pixels.width * factor).rounded()), height: max(1, (pixels.height * factor).rounded()))
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.75)
+        shrunk(side: side).jpegData(compressionQuality: 0.75)
     }
 }

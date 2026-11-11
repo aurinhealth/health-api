@@ -202,7 +202,7 @@ struct CoachView: View {
             .onChange(of: galleryItem) {
                 guard let item = galleryItem else { return }
                 Task {
-                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { photo = image }
+                    if let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) { photo = image }
                     galleryItem = nil
                 }
             }
