@@ -179,7 +179,7 @@ struct MonthCalendarSheet: View {
         switch chosen {
         case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.")
         case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený.")
-        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21.")
+        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený.")
         case .hrv: return L10n.tr("Šipka je HRV proti obvyklému rozmezí.")
         }
     }
@@ -215,7 +215,9 @@ struct DayMark: Equatable {
         case .strain:
             guard let v = values?.strain else { return }
             fill = min(v / 21, 1)
-            color = Palette.amberBar
+            // How hard, not good or bad: light under 10, moderate under 14,
+            // high above (the usual bands of the 0-21 strain scale).
+            color = v >= 14 ? Palette.rust : v >= 10 ? Palette.amberBar : Palette.gold
             spoken = L10n.f("námaha %@", Fmt.decimal(v, digits: 1))
         case .hrv:
             guard let h = values?.hrv else { return }
