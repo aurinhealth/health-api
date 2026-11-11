@@ -188,7 +188,7 @@ test("the AI limit reaches the user as a message, and every AI call names its fe
   for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {
     const source = readFileSync(new URL(`../src/${file}.js`, import.meta.url), "utf8");
     const calls = source.match(/(?:await|return) callOpenAI\(env, \{/g) || [];
-    const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?(?:["'][a-z-]+["']|COACH_CHAT_FEATURE)/g) || [];
+    const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?(?:["'][a-z-]+["']|COACH_CHAT_FEATURE|COACH_CHECK_FEATURE)/g) || [];
     assert.ok(calls.length && calls.length === named.length, file);
   }
 });

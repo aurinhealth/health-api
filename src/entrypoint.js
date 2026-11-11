@@ -2433,9 +2433,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
       onProgress(L('Kouč píše…', 'The coach is writing…'));
-      const contextMs=Date.now()-started,checking=coachCheckOn(env);
       // With the live check on, the athlete sees the answer only after the
-      // checker read it (coach-checker.js), so nothing streams.
+      // checker read it (coach-checker.js), so nothing streams. A photo message
+      // is not checked: the checker does not see the photo the coach read.
+      const contextMs=Date.now()-started,checking=coachCheckOn(env)&&!image;
       let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}),check=null;
       if(checking&&answer.status==='ok'){
         const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
