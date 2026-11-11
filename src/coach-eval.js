@@ -656,7 +656,7 @@ function dayRefs(sentence, date, planned = {}) {
 // Run 51, S28: "na pondělí 26. 10. a … na středu 28. 10., aby…" stays one sentence (a date is no sentence end).
 const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+(?![\d\p{Ll}])|(?<=[^\d][.!?])\s+|\n+/u).map(x => x.trim()).filter(Boolean);
 // Run 69, S52: "vynechal skoky" leaves out an exercise, not a session.
-const CHANGE = /vynech(?![a-zá-ž]*\s+(?:skok|cvik|séri|dřep|výpad|plyometri))|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
+const CHANGE = /vynech(?![a-zá-ž]*(?:\s+bych)?\s+(?:skok|cvik|cvič|dřep|výpad|plyometri)(?![^.!?]*(?:trénink|jízd|běh|plav|interval)))|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
 // A question that offers the change of the sentence before it ("Chceš to upravit?", "Want me to adjust it?").
 const OFFER = /^(?:chceš|mám(?: ti)?|want me|shall i|should i)\s[^?]*\?\s*$/i;
 const CONDITIONAL = /^\s*[-•*]?\s*(?:pokud|když|jestli|kdyby|kdybys|if|when|should)\b|chceš|want me|mám ti|shall i/i;
