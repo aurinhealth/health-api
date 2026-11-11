@@ -819,6 +819,9 @@ test('the AI checker reads each answer as a warning and K01–K10 test the check
   assert.equal((await runCheckerScenario({}, k03, { check: seen('MDR'), date, now })).checks[0].ok, false);
   assert.equal((await runCheckerScenario({}, scenarioById('K09'), { check: seen(null), date, now })).checks[0].ok, true);
   assert.equal((await runCheckerScenario({}, scenarioById('K10'), { check: seen('PAIN'), date, now })).checks[0].ok, false);
+  // A failing checker fails the K check as a warning, never the run, and a clean answer does not pass on it.
+  const down = await runCheckerScenario({}, scenarioById('K09'), { check: async () => { throw new Error('429'); }, date, now });
+  assert.equal(down.status, 'ok');assert.equal(down.checks[0].ok, false);assert.ok(down.checks[0].detail.includes('429'));assert.equal(down.passed, true);
   // runScenario sends a K situation to the checker, not to the coach.
   assert.equal((await runScenario({}, k03, { ask: async () => { throw new Error('no coach'); }, check: seen('PAIN'), date, now })).checks[0].ok, true);
 });
