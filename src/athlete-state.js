@@ -4,7 +4,7 @@ import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
 import { L, plural } from './lang.js';
 import { localToday } from "./user-time.js";
-import { PASSING_WORDS, checkDays } from './pain-words.js';
+import { PASSING_WORDS, checkDays, heartSymptom } from './pain-words.js';
 import { knownStation } from './gym-equipment.js';
 import { MEMORY_RULE } from './private/athlete-state.js';
 export { MEMORY_RULE };
@@ -71,8 +71,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // "Use memory": off, the coach neither reads nor saves memories.
   if (typeof patch.memoryOff === 'boolean') state.memoryOff = patch.memoryOff;
   // "Still true": the coach asks again in two weeks at the soonest (a lasting
-  // illness is not asked about every three days).
-  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) Object.assign(state.memoryMeta[patch.keep], { check: shiftDate(date, Math.max(checkDays(patch.keep) || 0, KEEP_DAYS)), keptAt: date });
+  // illness is not asked about every three days), chest symptoms in two days.
+  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) Object.assign(state.memoryMeta[patch.keep], { check: shiftDate(date, heartSymptom(patch.keep) ? HEART_KEEP_DAYS : Math.max(checkDays(patch.keep) || 0, KEEP_DAYS)), keptAt: date });
   // Settings → Oznámení: the morning readiness, the coach's own messages, the
   // water push and hiding the values in them (push.js hidesValues), on until turned off.
   if (patch.notify && typeof patch.notify === 'object') {
@@ -96,7 +96,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
 // A pain, an injury or an illness passes: the coach asks after a few days
 // (pain-words.js checkDays) whether such a memory still holds (memoryCheck),
 // so it does not wait for the athlete to delete it.
-const KEEP_DAYS = 14;
+const KEEP_DAYS = 14, HEART_KEEP_DAYS = 2;
 const shiftDate = (day, days) => new Date(Date.parse(day + 'T12:00:00Z') + days * 864e5).toISOString().slice(0, 10);
 const PASSING = PASSING_WORDS;
 const memoryMeta = (text, date) => ({ at: date, check: checkDays(text) ? shiftDate(date, checkDays(text)) : null });
@@ -104,7 +104,7 @@ const memoryMeta = (text, date) => ({ at: date, check: checkDays(text) ? shiftDa
 export const MEMORY_GROUPS = ['goals', 'training', 'health', 'life'];
 const validGroup = group => MEMORY_GROUPS.includes(group) ? group : null;
 // A memory from before the groups: a pain or an illness is Health, the rest Training.
-const groupOf = (text, meta) => validGroup(meta?.group) || (PASSING.test(text) ? 'health' : 'training');
+const groupOf = (text, meta) => validGroup(meta?.group) || (PASSING.test(text) || heartSymptom(text) ? 'health' : 'training');
 // How many lasting memories and past ones are kept; the oldest go first.
 export const MEMORY_KEEP = 50;
 const PAST_KEEP = 20;
@@ -136,10 +136,17 @@ export const memoryList = (state, date = localToday()) => (state.memories || [])
 // What no longer holds: a past pain or illness, newest first.
 export const pastMemoryList = state => [...(state.pastMemories || [])].reverse().map(p => ({ text: p.text, group: p.group || 'health', since: p.at || null, ended: p.endedAt || null }));
 // The oldest passing memory whose check day has come: "Is this still true?"
-export function memoryCheck(state, date = localToday()) {
+// Chest symptoms are asked about after the first training since they were
+// told or last confirmed too (trainedOn: the day of the latest training).
+export const heartSince = state => state?.memoryOff ? null : (state?.memories || []).filter(heartSymptom)
+  .map(text => state.memoryMeta?.[text]?.keptAt || state.memoryMeta?.[text]?.at).filter(Boolean).sort()[0] || null;
+export function memoryCheck(state, date = localToday(), { trainedOn = null } = {}) {
   if (state?.memoryOff) return null;
+  const trained = trainedOn && (state.memories || []).find(text => heartSymptom(text) && trainedOn > (state.memoryMeta?.[text]?.keptAt || state.memoryMeta?.[text]?.at || date));
+  if (trained) return { id: 'memory:trained:' + trainedOn + ':' + trained, kind: 'memory_check', memory: trained, headline: L('Objevilo se to i na tréninku?', 'Did it come back during training?'), reasons: [trained], message: null };
   const due = memoryList(state).filter(m => m.check && m.check <= date).sort((a, b) => a.check.localeCompare(b.check))[0];
-  return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: null } : null;
+  const headline = heartSymptom(due?.text) ? L('Trvají ty potíže pořád?', 'Are the symptoms still there?') : L('Platí to pořád?', 'Is this still true?');
+  return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline, reasons: [due.text], message: null } : null;
 }
 // Nemoc or Zranění without an end day: after 3 days of Nemoc, 7 of Zranění,
 // the coach asks whether the athlete is better, again every 3 or 7 days until

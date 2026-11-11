@@ -16,7 +16,14 @@ export const PASSING_WORDS = word([...PAIN_PARTS, ...ILLNESS_PARTS, ...PREGNANCY
 // (athlete-state.js memoryCheck; audit 2026-11-07, point 6): an illness
 // passes in days, a pain in a week or so, a pregnancy lasts months.
 const ILLNESS_WORDS = word(ILLNESS_PARTS), PREGNANCY_WORDS = word(PREGNANCY_PARTS);
-export const checkDays = text => !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
+// Chest pain, pressure or stabbing, a near blackout or fainting, a pounding or
+// irregular heartbeat: the coach asks the next day and after the next training
+// whether it is still there (Petr 2026-11-11), not in a week like other pains.
+// "Hrudník" alone is the gym's chest, no symptom.
+const HEART = /(?<!\p{L})(?:zatm[ěe]l|zatm[ěe]n|mdl[oe]|omdl|faint|black(?:ed|ing)?\s?out|bušen\p{L}*\s+srdce|buseni\s+srdce|palpitac|palpitation|nepravideln\p{L}*\s+tep|irregular\s+heart|(?:srdce|tep)\s+(?:\p{L}+\s+){0,2}vynech|vynechal\p{L}*\s+úder|skipped\s+(?:a\s+)?beat|missed\s+(?:a\s+)?beat)/iu;
+const CHEST = /(?<!\p{L})(?:hrud|chest)/iu, CHEST_FEEL = /(?<!\p{L})(?:bol|pích|pich|tlak\s+na\s+hrudi|tlačí|tlaci|svír|svir|hurt|pain|pressure|tight|stab|sting)/iu;
+export const heartSymptom = text => HEART.test(String(text || '')) || (CHEST.test(String(text || '')) && CHEST_FEEL.test(String(text || '')));
+export const checkDays = text => heartSymptom(text) ? 1 : !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
 
 // The body parts a remembered pain can name, the sports whose intensity it
 // holds back (audit 2026-11-07, point 4: a sore knee gets no run or ride
