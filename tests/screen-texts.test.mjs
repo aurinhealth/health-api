@@ -349,6 +349,10 @@ test("late advice: a walk or training gives way, bed and winding down stay", () 
   assert.equal(lateAdvice(wind, "Trénink už vynech, ale dej si 30 min procházku."), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.");
   assert.equal(lateAdvice(bed, "Skip the walk and go to bed now."), "Skip the walk and go to bed now.");
   assert.equal(lateAdvice(bed, "Žádný běh, odpočiň si a jdi spát."), "Žádný běh, odpočiň si a jdi spát.");
+  // Eval run 61, S67: two words between the move and the verb that rules it out.
+  for (const advice of ["Trénink už dnes vynech a dej si 5–10 minut lehkého protažení, pak do postele.", "Trénink už dnes nezačínej; dej si 5–10 minut klidného protažení a pak do postele."]) assert.equal(lateAdvice(wind, advice), advice, advice);
+  for (const advice of ["Trénink dnes už nezačínej, ale projdi se 30 minut.", "Procházku nedělej delší než 10 minut.", "Běh nedělej rychle."]) assert.equal(lateAdvice(wind, advice), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.", advice);
+  assert.equal(lateAdvice(wind, "Trénink už dnes radši nezačínej a jdi spát."), "Trénink už dnes radši nezačínej a jdi spát.");
   // Review: a negation of something else keeps the walk out, and the chat's easy spin is a move too.
   for (const advice of ["Don't skip the walk tonight.", "No need to skip the walk, 20 min easy.", "Walk 10 min without your phone, then bed.", "Odlož mobil a projdi se 10 minut.", "Nevynechávej večerní procházku.", "Teď už nejdřív krátká procházka, pak spát.", "Dej si 20 minut lehkého šlapání.", "Projeď se 20 minut.", "Zaběhni si 15 minut."]) assert.equal(lateAdvice(wind, advice), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.", advice);
   // The text itself never aims at a bedtime that has passed: it is not shown.

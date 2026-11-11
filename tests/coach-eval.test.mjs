@@ -758,6 +758,7 @@ test('late evening (Petr 2026-11-10, 23:49): Today\'s sentence gets the hour, th
   assert.equal(bad.passed, true, 'the app shows bed instead of the walk');
   assert.equal(bad.checks.find(c => /míří k večerce/.test(c.name)).ok, false);
   assert.match(bad.answer, /Rada v aplikaci:\*\* It's late, so go to bed now\./);
+  assert.equal(bad.checks.find(c => c.name === 'aplikace radu AI nepřepsala').ok, false);
   const good = await withLang('en', () => runScreenScenario({}, s66, { ask: ask({ text: 'Your ride is done and bedtime has passed.', advice: 'Go to bed now.' }) }));
   assert.ok(good.checks.every(c => c.ok), JSON.stringify(good.checks));
   const s67 = await runScreenScenario({}, scenarioById('S67'), { ask: ask({ text: 'Jízda dnes už nebude.', advice: 'Už jen zklidni a v 22:10 do postele.' }) });

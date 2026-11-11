@@ -411,11 +411,12 @@ export function checkedText(facts, answer, fallbackAdvice = null) {
 // says bed, with no food tip and no bedtime that has already passed.
 // "běž spát" is go to sleep, so "běž" is no move. A move ruled out right
 // before it ("skip the walk", "žádný běh") or right after it ("Trénink už
-// vynech") is no advice to move (eval run 60, S67); "don't skip the walk" is.
+// vynech", "Trénink už dnes nezačínej") is no advice to move (eval runs 60
+// and 61, S67); "don't skip the walk" is.
 const LATE_MOVES = /walk|(?<!\p{L})(?:runs?|jog\p{L}*|rides?|swim\p{L}*|gym|spin)(?!\p{L})|workout|training|yoga|procházk|projdi|projeď|odjeď|(?<!\p{L})jeď|(?<!\p{L})běh|zaběh|jízd|plav|posil|trénink|jóg|šlapán|trenažér/giu;
 const NOT_BEFORE = /(?<!\p{L})(?:skip|no|cancel|without|vynech\p{L}*|zruš|bez|žádn\p{L}*|ani)\s+(?:(?!(?:a|and|pak|then)\s)\p{L}+\s+){0,2}$/iu;
 const KEPT_BEFORE = /(?:don't|do not|no need to)\s+skip\s+(?:\p{L}+\s+){0,2}$/iu;
-const NOT_AFTER = /^\p{L}*\s+(?:(?:už|dnes|dneska|radši|today|tonight)\s+)?(?:vynech|zruš|odlož|přesuň|nech\s+(?:na|být)|is off|can wait|počká)/iu;
+const NOT_AFTER = /^\p{L}*\s+(?:(?:už|dnes|dneska|radši|ještě|teď|vůbec|today|tonight)\s+){0,3}(?:vynech|zruš|odlož|přesuň|nech\s+(?:na|být)|ne(?:začínej|dělej|dávej|plánuj)\s*(?:$|(?:a|ani|ale)\s)|is off|can wait|počká)/iu;
 const advisesMove = advice => String(advice).split(/[.;,!?]/).some(clause => [...clause.matchAll(LATE_MOVES)].some(m => {
   const before = clause.slice(0, m.index), after = clause.slice(m.index);
   return KEPT_BEFORE.test(before) || !(NOT_BEFORE.test(before) || NOT_AFTER.test(after));
