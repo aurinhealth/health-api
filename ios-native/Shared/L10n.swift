@@ -76,8 +76,12 @@ enum L10n {
     private final class Marker {}
 
     /// The text in the app's language; a text without a translation stays as it is.
-    static func tr(_ text: String) -> String {
-        guard isEnglish, let english, !text.isEmpty else { return text }
+    static func tr(_ text: String) -> String { tr(text, in: language) }
+
+    /// The text in another language than the app's, "cs" or "en": the coach's
+    /// questions follow the language the athlete writes to the coach in.
+    static func tr(_ text: String, in language: String) -> String {
+        guard language == "en", let english, !text.isEmpty else { return text }
         let missing = "\u{1}"
         let found = english.localizedString(forKey: text, value: missing, table: nil)
         if found != missing { return found }
@@ -94,6 +98,23 @@ enum L10n {
     static func f(_ format: String, _ args: CVarArg...) -> String {
         String(format: tr(format), locale: locale, arguments: args)
     }
+
+    static func f(_ format: String, in language: String, _ args: CVarArg...) -> String {
+        String(format: tr(format, in: language), locale: language == "en" ? englishLocale : czechLocale, arguments: args)
+    }
+
+    /// The language a message is written in, "cs" or "en", nil when it can't be
+    /// told (a number, a name). Czech letters say Czech; otherwise the common
+    /// words of each language, as people write to the coach without diacritics too.
+    static func written(_ text: String) -> String? {
+        let t = text.lowercased()
+        if t.range(of: "[ěščřžýáíéůúňťď]", options: .regularExpression) != nil { return "cs" }
+        let words = t.split { !$0.isLetter }.map(String.init)
+        let cs = words.filter(czechWords.contains).count, en = words.filter(englishWords.contains).count
+        return cs == en ? nil : cs > en ? "cs" : "en"
+    }
+    private static let czechWords: Set<String> = ["jak", "mam", "co", "proc", "dnes", "zitra", "jsem", "muzu", "je", "se", "na", "mi", "ale", "uz", "bych", "nebo", "kdy", "kolik", "trenink", "vcera", "jo", "ne", "dobre", "dik", "diky"]
+    private static let englishWords: Set<String> = ["the", "what", "how", "should", "i", "my", "can", "today", "is", "do", "why", "and", "it", "me", "you", "tomorrow", "yesterday", "workout", "when", "feel", "thanks", "yes", "no", "ok"]
 
     /// A text with a count, in the form the count asks for: L10n.plural("%lld dní", 5)
     /// is "5 dní" (1 den, 2 dny) and in English "5 days". Each language's forms live

@@ -43,7 +43,7 @@ struct AISpendingView: View {
             SettingsTitle(text: "Dnes")
             Text(verbatim: Self.usd(spending.today)).font(Typo.number(58)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 4)
-            Text(verbatim: L10n.f("Včera %@ · %@ %@", Self.usd(spending.yesterday), Self.monthName, Self.usd(spending.month)))
+            Text(verbatim: L10n.f("Včera %@, %@ %@", Self.usd(spending.yesterday), Self.monthName, Self.usd(spending.month)))
                 .font(Typo.small).foregroundStyle(Palette.muted).padding(.horizontal, 4)
         }
         if let error { Text(verbatim: error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -69,7 +69,7 @@ struct AISpendingView: View {
             SettingsTitle(text: Self.monthName)
             Text(verbatim: Self.usd(spending.month)).font(Typo.number(58)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 4)
-            Text(verbatim: L10n.f("%@ · %@ denně", L10n.plural("%lld dní", days), Self.usd(spending.month / Double(days))))
+            Text(verbatim: L10n.f("%@, %@ denně", L10n.plural("%lld dní", days), Self.usd(spending.month / Double(days))))
                 .font(Typo.small).foregroundStyle(Palette.muted).padding(.horizontal, 4)
         }
         if let error { Text(verbatim: error).font(Typo.small).foregroundStyle(Palette.rust) }

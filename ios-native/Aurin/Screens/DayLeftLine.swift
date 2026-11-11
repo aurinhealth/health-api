@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// What is left of the day's target once these foods are in, before "Přidat":
-/// "Po přidání zbývá dnes 860 kcal · 42 g bílkovin" with a thin bar (eaten in
+/// "Po přidání zbývá dnes 860 kcal, 42 g bílkovin" with a thin bar (eaten in
 /// ink, this food in grey). Past the target the line turns amber, never red.
 /// It counts the day the food goes into (`day`), and hides without a target
 /// or without that day's numbers on the phone (no extra request).
@@ -32,7 +32,7 @@ struct DayLeftLine: View {
                 }
                 bar(eaten: eaten, target: target, over: over)
                 if !over {
-                    Text(verbatim: L10n.f("%@ z %@ kcal snědeno · tohle jídlo %@ kcal", Fmt.int(eaten), Fmt.int(target), Fmt.int(kcal)))
+                    Text(verbatim: L10n.f("%@ z %@ kcal snědeno, tohle jídlo %@ kcal", Fmt.int(eaten), Fmt.int(target), Fmt.int(kcal)))
                         .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
                 }
             }
@@ -57,7 +57,7 @@ struct DayLeftLine: View {
             Text(verbatim: text).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.amber).lineLimit(1)
         } else {
             (Text(verbatim: L10n.f("%@ kcal", Fmt.int(left))).font(Typo.small.weight(.bold))
-             + Text(verbatim: second.map { " · " + $0 } ?? "").font(Typo.small))
+             + Text(verbatim: second.map { ", " + $0 } ?? "").font(Typo.small))
                 .foregroundStyle(Palette.ink).lineLimit(1)
         }
     }

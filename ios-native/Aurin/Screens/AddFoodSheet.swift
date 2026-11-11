@@ -347,15 +347,18 @@ struct AddFoodSheet: View {
     /// The own recipes: one portion each, and "Nový recept".
     private var recipeList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { path.append(.recipe) } label: {
-                Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+            // Choosing an ingredient or a photo's item: no new recipe from here.
+            if pick == nil {
+                Button { path.append(.recipe) } label: {
+                    Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .disabled(model.demo)
+                .padding(.top, 14)
             }
-            .buttonStyle(.plain)
-            .disabled(model.demo)
-            .padding(.top, 14)
-            if recipes.isEmpty {
+            if recipes.isEmpty && pick == nil {
                 Text("Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
@@ -404,7 +407,7 @@ struct AddFoodSheet: View {
         }
         let count = r.ingredients?.count ?? 0
         if count > 0 { parts.append(L10n.plural("%lld surovin", count)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     /// Every query word starts a word of the name (no diacritics, any case).
@@ -552,9 +555,9 @@ struct ProductRow: View {
     }
 
     private var subtitle: String {
-        // A basic food: "1 šálek (237 ml) · USDA".
+        // A basic food: "1 šálek (237 ml), USDA".
         if product.isTableFood, let size = product.usableServing {
-            return "1 " + product.servingName + " (" + Fmt.int(size) + " " + product.unit + ") · " + (product.source_name ?? "USDA")
+            return "1 " + product.servingName + " (" + Fmt.int(size) + " " + product.unit + "), " + (product.source_name ?? "USDA")
         }
         let amount = !product.perPortion ? Fmt.int(product.defaultAmount) + " " + product.unit
             : product.defaultAmount == 1 ? L10n.tr("1 porce") : L10n.f("%@ porce", FoodAmountView.text(product.defaultAmount))
@@ -565,7 +568,7 @@ struct ProductRow: View {
         case "table": product.source_name ?? "USDA"
         default: product.source == nil ? nil : L10n.tr("katalog")
         }
-        return [product.brand, amount, source].compactMap { $0 }.joined(separator: " · ")
+        return [product.brand, amount, source].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -635,7 +638,7 @@ struct FoodAmountView: View {
                     PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
                         .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))
                     if !current.perPortion, let size = current.usableServing {
-                        Text(L10n.f("1 %@ = %@ %@ · %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
+                        Text(L10n.f("1 %@ = %@ %@, %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
@@ -812,12 +815,12 @@ struct NutritionCells: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
             let extra = extras
             if !extra.isEmpty {
-                Text(extra.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(extra.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
     }
 
-    /// "z toho cukry 5,6 g · vláknina 2 g · sůl 0,8 g", for what the food has.
+    /// "z toho cukry 5,6 g, vláknina 2 g, sůl 0,8 g", for what the food has.
     private var extras: [String] {
         var out: [String] = []
         if let g = product.grams(product.sugars_100g, for: amount) { out.append(L10n.f("z toho cukry %@", Self.grams(g))) }

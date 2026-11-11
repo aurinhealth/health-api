@@ -14,7 +14,7 @@ struct SettingsTitle: View {
     }
 }
 
-/// The photo, the name and "34 let · 182 cm · 81,4 kg" under it; opens Účet.
+/// The photo, the name and "34 let, 182 cm, 81,4 kg" under it; opens Účet.
 struct SettingsProfileCard: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -40,7 +40,7 @@ struct SettingsProfileCard: View {
         if let years, years > 0 { parts.append(L10n.f("%@ let", String(years))) }
         if let height = p["height"]?.number, height > 0 { parts.append(Units.lengthText(height)) }
         if let weight = model.today?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     var body: some View {

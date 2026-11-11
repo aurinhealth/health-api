@@ -272,7 +272,7 @@ struct TodaySnapshot: Decodable, Equatable {
         var strain: Double? = nil
         /// Bedtime: the planned wake time, the end of the dashed night ahead.
         var end: String? = nil
-        /// A ride or run still ahead outdoors on a hot day: "Horko 30 °C · …" (src/heat-advice.js).
+        /// A ride or run still ahead outdoors on a hot day: "Horko 30 °C, …" (src/heat-advice.js).
         var heat: String? = nil
         /// A hard ride, run or swim still ahead on a yellow morning: how to do
         /// it ("Steady day: ride it easy …", src/app-today.js steadyOf).

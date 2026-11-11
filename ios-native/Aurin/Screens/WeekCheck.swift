@@ -151,7 +151,7 @@ struct WeekCheckContent: View {
             Image(systemName: Self.symbol(c.sport)).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
                 .frame(width: 30, height: 30).background(Palette.amberSoft, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text([c.from?.name, c.from?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · "))
+                Text([c.from?.name, c.from?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.faint).strikethrough().lineLimit(1)
                 Text(Self.line(c)).font(Typo.bodyStrong).foregroundStyle(Self.tone(c)).fixedSize(horizontal: false, vertical: true)
             }
@@ -174,12 +174,12 @@ struct WeekCheckContent: View {
         switch c.type {
         case "move":
             let day = L10n.f("Přesunout na %@", c.to?.date.map { Fmt.weekdayName($0) } ?? "")
-            return [day, c.to?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+            return [day, c.to?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: ", ")
         case "cancel": return L10n.tr("Zrušit")
-        case "recovery": return L10n.f("Místo toho protažení · %@", Fmt.duration(c.to?.minutes ?? 12))
+        case "recovery": return L10n.f("Místo toho protažení, %@", Fmt.duration(c.to?.minutes ?? 12))
         default:
             let what = c.to?.name ?? c.to?.kind.flatMap { kindName($0) } ?? L10n.tr("Lehčí trénink")
-            return [what, c.to?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+            return [what, c.to?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: ", ")
         }
     }
 

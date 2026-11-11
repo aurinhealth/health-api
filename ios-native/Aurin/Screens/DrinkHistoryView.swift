@@ -135,7 +135,7 @@ struct DrinkHistoryView: View {
                             .background(DrinkHistory.color(g.kind).opacity(0.14), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
                             Text(L10n.tr(kind?.label ?? g.kind)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                            Text(L10n.f("%@× · vypito %@", Fmt.int(Double(g.count)), Units.volumeText(g.ml)))
+                            Text(L10n.f("%@×, vypito %@", Fmt.int(Double(g.count)), Units.volumeText(g.ml)))
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer(minLength: 8)

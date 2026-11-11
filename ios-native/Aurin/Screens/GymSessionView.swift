@@ -122,7 +122,7 @@ struct GymSessionView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
+                SectionLabel(text: L10n.tr("Posilovna") + ", " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
                 Spacer()
                 // Move or cancel the day's session (GymPlanActions.swift).
                 if !model.demo && !showsDone && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
@@ -321,7 +321,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.plural("%lld/%lld sérií · %lld cviků", done, total, day.exercises.count))
+            Text(L10n.plural("%lld/%lld sérií, %lld cviků", done, total, day.exercises.count))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
         }
@@ -789,7 +789,7 @@ struct AlternativesSheet: View {
     let exercise: String
     /// The proposal's other exercises (not saved yet), so they are not offered.
     var inPlan: [String] = []
-    /// Under the exercise's name: "Zadní ramena · Zbývají 2 série".
+    /// Under the exercise's name: "Zadní ramena, Zbývají 2 série".
     var subtitle: String? = nil
     var footnote: String? = "Nahradí jen série, které ještě nejsou hotové."
     var choose: (String) -> Void

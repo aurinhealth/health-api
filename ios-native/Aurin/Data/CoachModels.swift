@@ -25,11 +25,20 @@ struct AssistantResult: Decodable, Equatable {
     var coachAllowance: CoachAllowance? = nil
     /// "Nenavrhuj mi kolo": the sport turned off in Sporty k navrhování (src/sport-choice.js).
     var sportChanges: SportChanges? = nil
+    /// The coach's thinking steps for this answer (src/coach-steps.js), final states.
+    var steps: [CoachStep]? = nil
+    /// The live check of the answer (src/coach-checker.js): passed, rewritten, fallback or skipped.
+    var check: Check? = nil
+
+    struct Check: Decodable, Equatable {
+        let status: String?
+        let ms: Int?
+    }
 
     struct SportChanges: Decodable, Equatable {
         let removed: [String]?
 
-        /// "Nenavrhovat kolo · Zpět" under the answer.
+        /// "Nenavrhovat kolo, Zpět" under the answer.
         var chips: [CoachMemoryChip] { (removed ?? []).map { CoachMemoryChip(kind: .sportOff, text: $0) } }
     }
 
@@ -263,7 +272,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "rest": return L10n.f("Odstranit %@ (%@)", name, day)
         case "workout":
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "swim": "plavání", "gym": "posilovna"][sport ?? ""] ?? "trénink")
-            return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
+            return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { ", " + Fmt.duration(Int($0)) } ?? "") + ", " + day
         case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
         case "activity_delete": return L10n.tr("Smazat aktivitu")
@@ -283,15 +292,15 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     }
 
     /// The line under the title of a change of a done activity:
-    /// "Běh 07:02 + Běh 07:31", "Jízda 18:10 · út 14. 10.", "Posilovna · 17:30 → 18:00".
+    /// "Běh 07:02 + Běh 07:31", "Jízda 18:10, út 14. 10.", "Posilovna, 17:30 → 18:00".
     var detail: String? {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
         switch type {
-        case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: " · ")
+        case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: ", ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
-        case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: " · ")
+        case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
-        case "week_sport": return day.map { $0 + " · " + L10n.tr("jen tento týden") }
+        case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
         default: return nil
         }
     }
@@ -305,7 +314,43 @@ enum AssistantEvent: Equatable {
     /// The chat the answer will be saved in, before the model runs: after a
     /// lost connection the finished answer is loaded from it.
     case chat(Int)
+    /// One thinking step, new or with its new state (src/coach-steps.js).
+    case step(CoachStep)
     case done(AssistantResult)
+}
+
+/// What the coach does for one answer, written by the server from the
+/// athlete's data, never by the model: "Comparing your HRV with your usual
+/// range" with "This morning your HRV was 58 ms, …". `view` names the app's
+/// own component its sheet shows (hrv), none for a text-only step.
+struct CoachStep: Codable, Equatable, Identifiable, Hashable {
+    let id: String
+    let icon: String?
+    let title: String
+    let text: String?
+    let status: String?
+    let view: String?
+
+    var running: Bool { status == "running" }
+
+    /// The steps kept once the answer is done: the check only when it ran
+    /// (passed or rewrote the answer), never one that failed or timed out.
+    static func shown(_ steps: [CoachStep], check: String?) -> [CoachStep] {
+        steps.filter { step in
+            switch step.id {
+            case "check": return check == "passed" || check == "rewritten"
+            case "refine": return check == "rewritten"
+            default: return true
+            }
+        }
+    }
+
+    /// One list with each step once, in the order it first came.
+    static func merged(_ steps: [CoachStep], _ step: CoachStep) -> [CoachStep] {
+        var out = steps
+        if let i = out.firstIndex(where: { $0.id == step.id }) { out[i] = step } else { out.append(step) }
+        return out
+    }
 }
 
 struct ChatSummary: Decodable, Equatable, Identifiable {

@@ -45,7 +45,7 @@ struct PlanCompliance: Decodable, Equatable {
         let lo: Double?
         let hi: Double?
         let value: Double?
-        /// "8:00 · 291 W", "8:00 · 4:35 /km".
+        /// "8:00, 291 W", "8:00, 4:35 /km".
         let text: String?
         /// "in", "under", "over", "missing" or nil (not judged).
         let status: String?

@@ -62,10 +62,10 @@
 			<string>kroků</string>
 		</dict>
 	</dict>
-	<key>%@ · %lld nových cviků</key>
+	<key>%@, %lld nových cviků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%@ · %#@n@</string>
+		<string>%@, %#@n@</string>
 		<key>n</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -458,10 +458,10 @@
 			<string>%lld sérií v plánu</string>
 		</dict>
 	</dict>
-	<key>%lld sérií · %@ %@</key>
+	<key>%lld sérií, %@ %@</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%#@n@ · %@ %@</string>
+		<string>%#@n@, %@ %@</string>
 		<key>n</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -658,10 +658,10 @@
 			<string>%lld sérií</string>
 		</dict>
 	</dict>
-	<key>%lld/%lld sérií · %lld cviků</key>
+	<key>%lld/%lld sérií, %lld cviků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%lld/%#@n@ · %#@m@</string>
+		<string>%lld/%#@n@, %#@m@</string>
 		<key>m</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -853,7 +853,7 @@
 			<string>Tento týden zbývá %lld zpráv koučovi.</string>
 		</dict>
 	</dict>
-	<key>Z knihovny · %lld tréninků</key>
+	<key>Z knihovny, %lld tréninků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%#@n@</string>
@@ -864,13 +864,13 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>few</key>
-			<string>Z knihovny · %lld tréninky</string>
+			<string>Z knihovny, %lld tréninky</string>
 			<key>many</key>
-			<string>Z knihovny · %lld tréninků</string>
+			<string>Z knihovny, %lld tréninků</string>
 			<key>one</key>
-			<string>Z knihovny · %lld trénink</string>
+			<string>Z knihovny, %lld trénink</string>
 			<key>other</key>
-			<string>Z knihovny · %lld tréninků</string>
+			<string>Z knihovny, %lld tréninků</string>
 		</dict>
 	</dict>
 	<key>Zbývá %lld sérií</key>
@@ -1451,6 +1451,26 @@
 			<string>%lld den nad obvyklým rozmezím</string>
 			<key>other</key>
 			<string>%lld dní nad obvyklým rozmezím</string>
+		</dict>
+	</dict>
+	<key>%lld kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld kroky</string>
+			<key>many</key>
+			<string>%lld kroků</string>
+			<key>one</key>
+			<string>%lld krok</string>
+			<key>other</key>
+			<string>%lld kroků</string>
 		</dict>
 	</dict>
 </dict>

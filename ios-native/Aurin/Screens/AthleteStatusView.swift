@@ -117,7 +117,7 @@ struct AthleteStatusRow: View {
                 Text(kind.title).font(.footnote.weight(.semibold)).foregroundStyle(kind.color)
                     .fixedSize()
                 if let detail = Self.detail(status, kind) {
-                    Text(verbatim: "· " + detail).font(.footnote).foregroundStyle(Palette.muted)
+                    Text(verbatim: detail).font(.footnote).foregroundStyle(Palette.muted)
                         .lineLimit(1).truncationMode(.tail)
                 }
                 // It opens a choice below, not a page: a quiet downward chevron.
@@ -131,12 +131,12 @@ struct AthleteStatusRow: View {
         .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }
     }
 
-    /// "koleno · do 20. 10.", "do změny"; nil while active.
+    /// "koleno, do 20. 10.", "do změny"; nil while active.
     static func detail(_ status: AthleteStatus, _ kind: AthleteStatusKind) -> String? {
         guard kind != .active else { return nil }
         let until = status.statusUntil.map { L10n.f("do %@", Fmt.dayMonth(ISODay.shift($0, -1))) } ?? L10n.tr("do změny")
         let note = kind == .injured ? status.note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank : nil
-        return [note, until].compactMap { $0 }.joined(separator: " · ")
+        return [note, until].compactMap { $0 }.joined(separator: ", ")
     }
 }
 

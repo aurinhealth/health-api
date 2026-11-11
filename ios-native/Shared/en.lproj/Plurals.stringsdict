@@ -50,10 +50,10 @@
 			<string>steps</string>
 		</dict>
 	</dict>
-	<key>%@ · %lld nových cviků</key>
+	<key>%@, %lld nových cviků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%@ · %#@n@</string>
+		<string>%@, %#@n@</string>
 		<key>n</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -370,10 +370,10 @@
 			<string>%lld sets planned</string>
 		</dict>
 	</dict>
-	<key>%lld sérií · %@ %@</key>
+	<key>%lld sérií, %@ %@</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%#@n@ · %@ %@</string>
+		<string>%#@n@, %@ %@</string>
 		<key>n</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -530,10 +530,10 @@
 			<string>%lld sets</string>
 		</dict>
 	</dict>
-	<key>%lld/%lld sérií · %lld cviků</key>
+	<key>%lld/%lld sérií, %lld cviků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
-		<string>%lld/%#@n@ · %#@m@</string>
+		<string>%lld/%#@n@, %#@m@</string>
 		<key>m</key>
 		<dict>
 			<key>NSStringFormatSpecTypeKey</key>
@@ -685,7 +685,7 @@
 			<string>%lld coach messages left this week.</string>
 		</dict>
 	</dict>
-	<key>Z knihovny · %lld tréninků</key>
+	<key>Z knihovny, %lld tréninků</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%#@n@</string>
@@ -696,9 +696,9 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>From the library · %lld workout</string>
+			<string>From the library, %lld workout</string>
 			<key>other</key>
-			<string>From the library · %lld workouts</string>
+			<string>From the library, %lld workouts</string>
 		</dict>
 	</dict>
 	<key>Zbývá %lld sérií</key>
@@ -1163,6 +1163,22 @@
 			<string>%lld day above your usual range</string>
 			<key>other</key>
 			<string>%lld days above your usual range</string>
+		</dict>
+	</dict>
+	<key>%lld kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld step</string>
+			<key>other</key>
+			<string>%lld steps</string>
 		</dict>
 	</dict>
 </dict>

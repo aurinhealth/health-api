@@ -336,7 +336,7 @@ struct ShareWeekCard: View {
         let later = future(day)
         let minutes = day.minutes ?? 0
         let name = { (sport: String) in L10n.tr(ShareWorkout(title: "", sport: sport).sportName) }
-        let sport: String = later ? "" : day.legs.map { $0.map(name).joined(separator: " · ") } ?? (day.sport.map(name) ?? L10n.tr("Volno"))
+        let sport: String = later ? "" : day.legs.map { $0.map(name).joined(separator: ", ") } ?? (day.sport.map(name) ?? L10n.tr("Volno"))
         return HStack(spacing: u * 2.6) {
             Text(verbatim: ShareText.weekday(day.date)).font(s.sans(3.4)).foregroundStyle(s.t.muted)
                 .frame(width: u * 6, alignment: .leading)

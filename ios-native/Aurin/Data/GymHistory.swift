@@ -271,13 +271,13 @@ enum GymCoach {
         return L10n.f("minule %@ opakování", repsList(session))
     }
 
-    /// "80×8 · 80×8 · 82,5×6".
+    /// "80×8, 80×8, 82,5×6".
     static func setsLine(_ lifts: [GymHistory.Lift]) -> String {
         lifts.map { (lift: GymHistory.Lift) -> String in
             let reps = String(Int(lift.reps ?? 0))
             if let kg = lift.kg, kg > 0 { return shown(kg) + "×" + reps }
             return reps
-        }.joined(separator: " · ")
+        }.joined(separator: ", ")
     }
 
     /// The done work sets of an exercise as one line.

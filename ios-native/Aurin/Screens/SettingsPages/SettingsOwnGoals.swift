@@ -177,7 +177,7 @@ struct WaterGoalSheet: View {
                     ForEach(Array((build.weeks ?? []).enumerated()), id: \.offset) { index, week in
                         SettingsDivider()
                         SettingsRow(title: index == 0 ? "Posledních 7 dní" : "7 dní předtím",
-                                    subtitle: L10n.f("%@ z %@ denně · splněno %@ z %@ dní", waterText(week.drunkMl), waterText(week.goalMl), String(week.met), String(week.days)),
+                                    subtitle: L10n.f("%@ z %@ denně, splněno %@ z %@ dní", waterText(week.drunkMl), waterText(week.goalMl), String(week.met), String(week.days)),
                                     value: Fmt.int(week.drunkMl / max(1, week.goalMl) * 100) + Fmt.percentSign, chevron: false)
                     }
                 }

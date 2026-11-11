@@ -213,6 +213,8 @@
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",
+        // The live answer check with the thinking steps (coach-checker.js): staging only until the release.
+        "COACH_CHECK": "true",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
         "WAHOO_CLIENT_ID": "W-nkdGNWUzPdr3a1rN2Z5Wvm7IOXPv_bjdGGmfbToFs",

@@ -272,7 +272,7 @@ struct GymPartView: View {
         let line = W.tr("\(count) \(count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")", "\(count) \(count == 1 ? "move" : "moves")")
         return ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                header(W.tr("NA ŘADĚ", "UP NEXT") + ", " + name.uppercased(), name, color: W.green)
+                header(W.tr("NA ŘADĚ", "UP NEXT") + ": " + name.uppercased(), name, color: W.green)
                 Text(line).watchFont(12).foregroundStyle(W.secondary)
                 primary(W.tr("Start", "Start")) {
                     run.begun = true

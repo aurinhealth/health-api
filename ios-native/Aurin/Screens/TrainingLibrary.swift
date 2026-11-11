@@ -19,7 +19,7 @@ struct TrainingLibraryView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: sport?.label ?? "Knihovna tréninků") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
+                SectionLabel(text: "Knihovna tréninků").padding(.top, 24)
                 Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if let sport {
@@ -305,7 +305,7 @@ struct LibraryBrickSheet: View {
                                 .background(s?.color ?? Palette.green, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                             Text(L10n.tr(s?.label ?? leg.sport)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                             Spacer()
-                            Text(verbatim: [Fmt.duration(leg.minutes), leg.meters.map { Fmt.int($0) + " m" }].compactMap { $0 }.joined(separator: " · "))
+                            Text(verbatim: [Fmt.duration(leg.minutes), leg.meters.map { Fmt.int($0) + " m" }].compactMap { $0 }.joined(separator: ", "))
                                 .font(Typo.small).foregroundStyle(Palette.muted)
                         }
                         if !leg.steps.isEmpty {
@@ -454,7 +454,7 @@ struct WorkoutLibrarySection: View {
                 Text(composeShown ? "V knihovně tomuto výběru nic neodpovídá." : "Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text(L10n.plural(composeShown ? "Z knihovny · %lld tréninků" : "%lld tréninků", workouts.count))
+                Text(L10n.plural(composeShown ? "Z knihovny, %lld tréninků" : "%lld tréninků", workouts.count))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -852,7 +852,7 @@ struct ExerciseLibraryView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Cviky") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · knihovna cviků").padding(.top, 24)
+                SectionLabel(text: "Knihovna cviků").padding(.top, 24)
                 Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 ExerciseCatalog(muscle: muscle)
             }
@@ -978,7 +978,7 @@ struct ExerciseCatalog: View {
             BodyMap(load: ex.muscles ?? [:], height: 54, compact: true).frame(width: 64).allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 if let m = tired(ex), let data = model.muscles {
                     Text(verbatim: L10n.f("%@ unavené, odpočaté %@", m.label, m.readyText(today: data.date)))
                         .font(Typo.caption).foregroundStyle(Palette.rust).lineLimit(1)
@@ -1054,7 +1054,7 @@ struct ExerciseSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 Text(exercise.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
+                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted)
                 BodyMap(load: exercise.muscles ?? [:], height: 280, legend: true)
                 if let note = exercise.note?.nilIfBlank {

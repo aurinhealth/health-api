@@ -157,9 +157,9 @@ struct MetricWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             let v = entry.metric.value(s)
-            // Steps from hours ago would read as now (Background App Refresh off): "cíl 10 000 · před 3 h".
+            // Steps from hours ago would read as now (Background App Refresh off): "cíl 10 000, před 3 h".
             let notes = [v.note, entry.metric == .steps ? W.age(s, at: entry.date) : nil].compactMap { $0 }
-            let note = notes.isEmpty ? nil : notes.joined(separator: " · ")
+            let note = notes.isEmpty ? nil : notes.joined(separator: ", ")
             switch family {
             case .accessoryInline:
                 Text(entry.metric.title + " " + v.number + (v.unit.isEmpty ? "" : " " + v.unit))
@@ -187,7 +187,7 @@ struct MetricWidgetView: View {
                         Spacer(minLength: 4)
                         WidgetTrend(values: trend.values, low: trend.low, high: trend.high, color: entry.metric.color)
                             .frame(height: 30)
-                        if let note = v.note { Text(note + " · " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
+                        if let note = v.note { Text(note + ", " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
                     } else if let note {
                         Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
                     }
@@ -270,7 +270,7 @@ struct WeekWidgetView: View {
                     // Today's readiness as a word and number, not a second ring
                     // beside the small Připravenost widget.
                     if let score = entry.readiness {
-                        Text((W.zoneWord(entry.zone).map { $0.capitalized(with: L10n.locale) + " · " } ?? "") + String(score))
+                        Text((W.zoneWord(entry.zone).map { $0.capitalized(with: L10n.locale) + ", " } ?? "") + String(score))
                             .font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(entry.zone))
                             .padding(.horizontal, 9).padding(.vertical, 4)
                             .background(W.zoneColor(entry.zone).opacity(0.14), in: Capsule())
@@ -299,7 +299,7 @@ struct WeekWidgetView: View {
     private func summary(_ week: WidgetWeek) -> String {
         let time = W.hm(week.minutes) + " h"
         guard week.planned > 0 else { return time }
-        return time + " · " + L10n.f("%@ z %@ splněno", String(week.done), String(week.planned))
+        return time + ", " + L10n.f("%@ z %@ splněno", String(week.done), String(week.planned))
     }
 
     /// Done training as solid bars in the day's readiness colour, what the
@@ -444,6 +444,6 @@ struct NextWorkoutWidgetView: View {
 
     private func detail(_ s: WidgetSnapshot) -> String {
         [L10n.tr("Dnes") + (s.nextTime.map { " " + ClockText.format($0) } ?? ""), s.nextMinutes.map { W.hm(Double($0)) + " h" }]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.joined(separator: ", ")
     }
 }
