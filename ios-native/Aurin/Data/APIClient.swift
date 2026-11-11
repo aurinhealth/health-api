@@ -164,6 +164,9 @@ final class APIClient: @unchecked Sendable {
                         case "progress": continuation.yield(.progress(object["message"] as? String ?? ""))
                         case "answer": continuation.yield(.answer(object["answer"] as? String ?? ""))
                         case "chat": if let id = object["chatId"] as? Int { continuation.yield(.chat(id)) }
+                        case "step":
+                            if let step = object["step"], let data = try? JSONSerialization.data(withJSONObject: step),
+                               let decoded = try? decoder.decode(CoachStep.self, from: data) { continuation.yield(.step(decoded)) }
                         case "error": throw APIError.message(object["message"] as? String ?? L10n.tr("Kouč teď neodpověděl."))
                         case "done":
                             let result = try JSONSerialization.data(withJSONObject: object["result"] ?? [:])

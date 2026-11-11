@@ -4179,3 +4179,11 @@
 "Spustit rozcvičku" = "Start warm-up";
 "Spustit protažení" = "Start stretching";
 "Spustit posilku" = "Start gym";
+
+/* Coach thinking steps (CoachSteps.swift) */
+"Odpověď za %lld s, %@" = "Answered in %lld s, %@";
+"Pracuji" = "Working";
+"probíhá" = "in progress";
+"Ukáže čísla." = "Shows the numbers.";
+"Skryje kroky kouče." = "Hides the coach's steps.";
+"Ukáže kroky kouče." = "Shows the coach's steps.";

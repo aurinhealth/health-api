@@ -1393,5 +1393,25 @@
 			<string>průměr %lld dnů</string>
 		</dict>
 	</dict>
+	<key>%lld kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld kroky</string>
+			<key>many</key>
+			<string>%lld kroků</string>
+			<key>one</key>
+			<string>%lld krok</string>
+			<key>other</key>
+			<string>%lld kroků</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

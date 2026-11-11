@@ -93,6 +93,8 @@ struct CoachView: View {
         var photoMark = false
         /// The seconds the answer took, for one given while the chat was open.
         var answeredIn: Int? = nil
+        /// The coach's thinking steps for an answer given while the chat was open.
+        var steps: [CoachStep] = []
         /// The stored answer on the server, which its thumb points to.
         var serverId: Int? = nil
         /// When the answer came: the time under the last one.
@@ -133,7 +135,7 @@ struct CoachView: View {
                             if !followUps.isEmpty { followUpList }
                             // Until the first words arrive: the coach's bubble with dots and what he is doing;
                             // then the same row under the words while the answer is finished (proposals, preview).
-                            if let progress, sending {
+                            if let progress, sending, !stepsShown {
                                 if waiting {
                                     CoachThinking(text: progress, since: askedAt).id("thinking")
                                 } else {
@@ -417,6 +419,14 @@ struct CoachView: View {
     }
 
     /// The answer being prepared has no words yet (nor a food card).
+    /// The answer's thinking steps stand in for the waiting row: the bubble
+    /// shows them while the coach works; the row comes back under the words
+    /// for what follows them (the proposals, the workout preview).
+    private var stepsShown: Bool {
+        guard let last = messages.last, !last.mine, !last.steps.isEmpty else { return false }
+        return waiting || last.steps.contains(where: \.running)
+    }
+
     private var waiting: Bool {
         guard let last = messages.last, !last.mine else { return true }
         return last.text.isEmpty && last.food == nil
@@ -544,6 +554,7 @@ struct CoachView: View {
                 switch event {
                 case .progress(let p): progress = p
                 case .chat(let chat): savedIn = chat
+                case .step(let step): edit(id) { $0.steps = CoachStep.merged($0.steps, step) }
                 case .answer(let a):
                     if Date().timeIntervalSince(shownAt) >= 0.1 {
                         edit(id) { $0.text = a }
@@ -558,6 +569,7 @@ struct CoachView: View {
                     edit(id) {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.answeredIn = max(1, Int(Date().timeIntervalSince(asked).rounded()))
+                        $0.steps = CoachStep.shown(result.steps ?? $0.steps, check: result.check?.status)
                         $0.serverId = result.messageId
                         $0.at = Date()
                         $0.actions = result.actions ?? []
@@ -946,7 +958,10 @@ struct BubbleView: View {
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
-            if !bubble.mine, !bubble.note, let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
+            if !bubble.mine, !bubble.note {
+                if !bubble.steps.isEmpty { CoachSteps(steps: bubble.steps, answeredIn: bubble.answeredIn) }
+                else if let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
+            }
             if let photo = bubble.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
                     .frame(width: 210, height: 210)
