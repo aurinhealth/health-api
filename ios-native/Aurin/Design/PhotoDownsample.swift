@@ -28,12 +28,12 @@ extension UIImage {
         await Task.detached(priority: .userInitiated) { UIImage.downsampled(data) }.value
     }
 
-    /// An already decoded photo (the system camera) drawn again at most
-    /// `side` pixels on its longer side, at scale 1; a smaller one stays as it is.
+    /// An already decoded photo (the system camera) drawn again upright at most
+    /// `side` pixels on its longer side, at scale 1; a smaller upright one stays as it is.
     func shrunk(side: CGFloat = UIImage.photoSide) -> UIImage {
         let pixels = CGSize(width: size.width * scale, height: size.height * scale)
-        let factor = side / max(pixels.width, pixels.height)
-        guard factor < 1 else { return self }
+        let factor = min(1, side / max(pixels.width, pixels.height))
+        guard factor < 1 || imageOrientation != .up || scale != 1 else { return self }
         let target = CGSize(width: max(1, (pixels.width * factor).rounded()), height: max(1, (pixels.height * factor).rounded()))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

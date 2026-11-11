@@ -813,9 +813,14 @@ struct CameraPicker: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let onImage: (UIImage?) -> Void
+        /// The photo is shrunk before onImage, while the picker still shows:
+        /// a second tap on Use Photo is not another photo.
+        private var done = false
         init(onImage: @escaping (UIImage?) -> Void) { self.onImage = onImage }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            guard !done else { return }
+            done = true
             // At most 2560 px, so a 48-megapixel shot is not kept whole (PhotoDownsample.swift).
             guard let image = info[.originalImage] as? UIImage else { return onImage(nil) }
             Task {
@@ -825,6 +830,8 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            guard !done else { return }
+            done = true
             onImage(nil)
         }
     }
