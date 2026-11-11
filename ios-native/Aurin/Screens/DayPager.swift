@@ -84,6 +84,9 @@ private struct DaySwipe: ViewModifier {
     @State private var coming: DayPage?
     /// A picked day's slide in from its side.
     @State private var slide: CGFloat = 0
+    /// The pager's own width: the page that paging moves (on the closed iPhone
+    /// Duo containerRelativeFrame came out wider, see PageScroll).
+    @State private var width: CGFloat?
 
     private var waiting: Bool { coming.map { $0.date != date } ?? false }
     private var shown: String { model.selectedDate ?? AppModel.localDate(Date()) }
@@ -93,39 +96,59 @@ private struct DaySwipe: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         // Not in the demo (and so not in the screenshots, which cannot draw it).
+        // iOS 18 and later: on iOS 17 the scroll view tells no end of a swipe
+        // (its position changes mid-drag), so there the week and the arrows.
         if drawnAsNeighbour != nil || model.demo {
             content
-        } else {
+        } else if #available(iOS 18, *) {
             paged(content)
+        } else {
+            content
         }
     }
 
+    @available(iOS 18, *)
     private func paged(_ content: Content) -> some View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 0) {
                 if let before { side(before).id(0) }
                 content
+                    // Only the swipe stops while editing or loading, not the
+                    // scroll views inside the day and its sheets.
+                    .environment(\.isScrollEnabled, true)
                     .opacity(waiting ? 0 : 1)
                     .overlay(alignment: .top) { if waiting { comingDay } }
                     .offset(x: slide)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
-                    .containerRelativeFrame(.horizontal)
+                    .containerRelativeFrame(.horizontal) { length, _ in width ?? length }
                     .id(1)
                 if let after { side(after).id(2) }
             }
-            // As tall as this day; the cards' shadows drawn past the edges.
-            .fixedSize(horizontal: false, vertical: true)
             .scrollTargetLayout()
+            // As tall as this day, with room for the cards' shadows above and below.
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 24)
         }
-        .scrollClipDisabled()
+        .padding(.vertical, -24)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.paging)
         .scrollPosition(id: $position)
+        .onAppear {
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { position = 1 }
+        }
         .scrollDisabled(!enabled || model.dayLocked)
-        .landing(position) { land() }
+        .onScrollPhaseChange { _, phase in
+            if phase == .idle { land() }
+        }
         .onChange(of: date) { old, new in
-            if new == coming?.date { coming = nil; return }
-            coming = nil
+            // A swipe on its way: the days in between come and go unseen.
+            if let pending = coming {
+                if new == pending.date { coming = nil }
+                return
+            }
             // Picked in the week or with the arrows: in from its side.
             var instant = Transaction()
             instant.disablesAnimations = true
@@ -144,9 +167,9 @@ private struct DaySwipe: ViewModifier {
                 DayPlaceholder()
             }
         }
-        .frame(height: height, alignment: .top)
+        .frame(height: height ?? 0, alignment: .top)
         .clipped()
-        .containerRelativeFrame(.horizontal)
+        .containerRelativeFrame(.horizontal) { length, _ in width ?? length }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
@@ -165,6 +188,8 @@ private struct DaySwipe: ViewModifier {
         if let coming, coming.hasSaved {
             NeighbourDay(page: coming, neighbour: neighbour)
                 .equatable()
+                .frame(height: height, alignment: .top)
+                .clipped()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         } else {
@@ -190,20 +215,6 @@ private struct DaySwipe: ViewModifier {
         Task {
             try? await Task.sleep(for: .seconds(8))
             if coming?.date == target { coming = nil }
-        }
-    }
-}
-
-private extension View {
-    /// When the swipe has stopped: the scroll phase from iOS 18; on iOS 17
-    /// (no phase) when the paging scroll view moves the position.
-    @ViewBuilder func landing(_ position: Int?, _ action: @escaping () -> Void) -> some View {
-        if #available(iOS 18, *) {
-            onScrollPhaseChange { _, phase in
-                if phase == .idle { action() }
-            }
-        } else {
-            onChange(of: position) { action() }
         }
     }
 }
