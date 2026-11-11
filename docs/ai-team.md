@@ -16,8 +16,8 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Kouč | Sports Nutritionist | `sports-nutritionist` | no | Sonnet 5.5 |
 | Kouč | Physiotherapist | `physiotherapist` | no | Opus 5.5 |
 | Marketing (team) | **Marketing, lead** | `marketing` | read-only commands, public web | Sonnet 5.5 |
-| Produkt a vývoj (led by the PM): Design | iOS & watchOS Designer, owner | `ios-designer` | no | Opus 5.5 |
-| Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Opus 5.5 |
+| Produkt a vývoj (led by the PM): Design | iOS & watchOS Designer, owner | `ios-designer` | no | Fable 5.2 (medium) |
+| Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Fable 5.2 (medium) |
 | Produkt a vývoj: Data | Data & Integrations Engineer, owner | `data-engineer` | read-only commands | Opus 5.5 |
 | Produkt a vývoj: Data | Data Analyst | `data-analyst` | read-only commands | Sonnet 5.5 |
 | Kontrola: Věda (team) | **Sport & Health Scientist, lead** | `health-scientist` | no | Opus 5.5 |
@@ -103,8 +103,9 @@ The owner approved this structure on 2026-11-10.
 ```
 
 ## Models
-Most work stays on Opus 5.5. Fable 5.2 is only for checks where a mistake costs money or user data;
-roles that mostly read and summarise run on Sonnet 5.5. The owner approved this on 2026-11-09.
+Most work stays on Opus 5.5. Fable 5.2 is for checks where a mistake costs money or user data and
+for design; roles that mostly read and summarise run on Sonnet 5.5. The owner approved this on
+2026-11-09.
 - The table above gives each role's model. In a cloud thread the roles in `.claude/agents/` are not
   loaded as sub agent types, so the thread starts each role as a general sub agent told to read its
   file, and passes the model from the table (`fable`, `opus`, `sonnet`, `haiku`) when it starts it.
@@ -122,6 +123,10 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
   spot later.
 - `qa-tester` runs on Opus 5.5 since 2026-11-11: the owner kept finding bugs the tester missed, and
   the customer check needs judgement, not only running tests.
+- Design runs on Fable 5.2 at effort medium since 2026-11-11 (the owner's request): `ios-designer`,
+  `visual-designer`, and every graphic design, mockup or visual for the owner, web, App Store or
+  social media. The PM never draws one itself; it starts a Fable 5.2 sub agent at effort medium
+  (`fable`, `medium`) to make it, and the design review runs on Fable 5.2 medium too.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
@@ -175,8 +180,8 @@ A role does not see the thread's history, so every brief carries what it needs, 
   and the papers for the accountant: `finance-controller`. Tax decisions stay with the accountant.
 - Every screen, flow or mockup users will see: `qa-tester` runs the customer check (a first-time
   customer's questions, each answered by the app itself or reported as a bug). A mockup goes to the
-  owner only after the design review (`ios-designer` for app and watch mockups, which the PM or
-  `visual-designer` makes; `visual-designer` for the rest) and the customer check passed. The PM gives
+  owner only after the design review (`ios-designer` for app and watch mockups, which a Fable 5.2
+  sub agent makes as Models says; `visual-designer` for the rest) and the customer check passed. The PM gives
   `qa-tester` the mockup as PNG images; after fixes `qa-tester` checks the new version again.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
