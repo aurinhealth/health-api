@@ -347,15 +347,18 @@ struct AddFoodSheet: View {
     /// The own recipes: one portion each, and "Nový recept".
     private var recipeList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { path.append(.recipe) } label: {
-                Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+            // Choosing an ingredient or a photo's item: no new recipe from here.
+            if pick == nil {
+                Button { path.append(.recipe) } label: {
+                    Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .disabled(model.demo)
+                .padding(.top, 14)
             }
-            .buttonStyle(.plain)
-            .disabled(model.demo)
-            .padding(.top, 14)
-            if recipes.isEmpty {
+            if recipes.isEmpty && pick == nil {
                 Text("Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
