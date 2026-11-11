@@ -309,6 +309,7 @@ extension AppModel {
         // Its own task: the app's start does not wait for the writes.
         let api = api
         Task { await AppleHealthExport.shared.writeForwarded(api: api) }
+        Task { await AppleHealthExport.shared.writeOthers(api: api) }
     }
 
     /// Every tab again, e.g. after a change of language (the server's texts).

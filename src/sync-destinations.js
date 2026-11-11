@@ -32,15 +32,22 @@ const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 // The health data each destination accepts. Intervals.icu: what
 // wellness-sync.js (and weight-sync.js for weight) really writes there, and
 // workouts: Apple Health's workouts watch-forward.js copies there.
-// Apple Health: what the iPhone writes from the app's own entries. Google
+// Apple Health: what the iPhone writes from the app's own entries, and with
+// the user's yes what other apps sent to Aurin (OTHER_TYPES). Google
 // Health: weight (weight-sync.js, with the weight-writing permission) and
 // the food log (food-google-sync.js).
 export const HEALTH_TYPES = {
-  apple: ['weight', 'nutrition', 'water'],
+  apple: ['weight', 'nutrition', 'water', 'sleep', 'heartRate', 'restingHR', 'spO2', 'respiration', 'steps'],
   google: ['weight', 'nutrition'],
   intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max', 'workouts'],
   wahoo: []
 };
+
+// Apple Health's types that come from other apps (apple-health-forward.js),
+// not from what the user logs in Aurin. They go only after the user's yes.
+export const OTHER_TYPES = ['sleep', 'heartRate', 'restingHR', 'spO2', 'respiration', 'steps'];
+// That yes and where sending starts: "consent:health@<at>" and "from:health@<since>" in Apple's health_json.
+const OTHERS = /^(from|consent):health@(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)$/;
 
 // What each destination can do at all; the app shows only these rows.
 export const SUPPORTS = {
@@ -122,10 +129,11 @@ export function normalizeSyncPrefs(destination, input = {}, base = defaultSyncPr
 // The saved "from:" and "consent:" entries apart from the health types.
 function splitHealth(stored) {
   const list = Array.isArray(stored) ? stored.map(String) : stored === 'all' ? ['all'] : [];
-  const since = {}, consent = {};
+  const since = {}, consent = {}, others = {};
   for (const item of list) { const m = FORWARD.exec(item); if (m) (m[1] === 'from' ? since : consent)[m[2]] = m[3]; }
-  const rest = list.filter(item => !FORWARD.test(item));
-  return { health: rest.includes('all') ? 'all' : rest, since, consent };
+  for (const item of list) { const m = OTHERS.exec(item); if (m) others[m[1]] = m[2]; }
+  const rest = list.filter(item => !FORWARD.test(item) && !OTHERS.test(item));
+  return { health: rest.includes('all') ? 'all' : rest, since, consent, others };
 }
 
 async function forwardEntries(db, userId, destination = 'intervals') {
@@ -134,7 +142,13 @@ async function forwardEntries(db, userId, destination = 'intervals') {
     let stored = [];
     try { stored = JSON.parse(row?.health_json || '[]'); } catch { stored = []; }
     return splitHealth(stored);
-  } catch { return { since: {}, consent: {} }; }
+  } catch { return { since: {}, consent: {}, others: {} }; }
+}
+
+// Where Apple Health's data from other apps starts (apple-health-forward.js); null before the user's yes.
+export async function othersSince(db, userId) {
+  const { others } = await forwardEntries(db, userId, 'apple');
+  return others.consent ? others.from || others.consent : null;
 }
 
 // When sending each source's workouts starts from ({ wahoo: ISO, … }).
@@ -153,6 +167,8 @@ const fromRow = (destination, row) => {
   try { stored = JSON.parse(row.health_json || '[]'); } catch { stored = []; }
   let { health, since } = splitHealth(stored);
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
+  // Apple Health's "all" chosen before other apps' data was there, or without its yes: Aurin's own types only.
+  if (destination === 'apple' && health === 'all' && !splitHealth(stored).others.consent) health = HEALTH_TYPES.apple.filter(type => !OTHER_TYPES.includes(type));
   return { prefs: normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) }), since };
 };
 
@@ -187,6 +203,13 @@ export async function saveSyncPrefs(db, userId, destination, input, { now = Date
     stopped = Object.keys(before).filter(source => !next.forward.includes(source));
     if (healthAllowed(current, 'workouts') && !healthAllowed(next, 'workouts')) stopped.push('apple');
     const entries = next.forward.flatMap(source => ['from:' + source + '@' + (before[source] || from), 'consent:' + source + '@' + (consent[source] || at)]);
+    // Health data from other apps (Apple Health only): kept while any of its types is on,
+    // given anew only with the app's yes (consent: true), so an older app's "All" sends nothing.
+    if (destination === 'apple' && OTHER_TYPES.some(type => healthAllowed(next, type))) {
+      const { others } = await forwardEntries(db, userId, destination);
+      if (others.consent) entries.push('from:health@' + (others.from || others.consent), 'consent:health@' + others.consent);
+      else if (input?.consent === true) entries.push('from:health@' + from, 'consent:health@' + at);
+    }
     if (entries.length) health = [...(health === 'all' ? ['all'] : health), ...entries];
   }
   await db.prepare(`INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)

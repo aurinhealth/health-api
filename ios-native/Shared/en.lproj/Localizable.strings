@@ -4201,3 +4201,9 @@
 "Ukáže čísla." = "Shows the numbers.";
 "Skryje kroky kouče." = "Hides the coach's steps.";
 "Ukáže kroky kouče." = "Shows the coach's steps.";
+"Z tvých dalších aplikací" = "From your other apps";
+"Z hodinek, které posílají do Google Health. Nikdy nic z toho, co Aurin přečetl z Apple Health." = "From watches that send to Google Health. Never anything Aurin read from Apple Health.";
+"Posílat data z dalších aplikací do Apple Health?" = "Send data from your other apps to Apple Health?";
+"Aurin zapíše do Apple Health na tomhle iPhonu, co mu posílá Google Health z tvých hodinek." = "Aurin will write to Apple Health on this iPhone what Google Health sends it from your watch.";
+"Jen typy, které zaškrtneš: spánek, tep, klidový tep, okysličení krve, dechovou frekvenci a kroky." = "Only the types you tick: sleep, heart rate, resting heart rate, blood oxygen, respiratory rate and steps.";
+"Vypnout to můžeš kdykoli a zápis tím skončí. Co už v Apple Health je, tam zůstane i po smazání účtu a mohou to číst aplikace, kterým čtení Apple Health povolíš." = "You can turn it off at any time, and writing stops. What is already in Apple Health stays there, also after you delete your account, and apps you allow to read Apple Health can read it.";
