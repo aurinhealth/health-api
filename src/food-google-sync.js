@@ -62,16 +62,22 @@ async function enqueue(db,entryId,desired){
     message=NULL,updated_at=CURRENT_TIMESTAMP`).bind(db.userId,entryId,desired).run();
 }
 // Settings → Synchronizace → Google Health → Voda: the plain water the user
-// logged in Aurin over the last 14 days (as Apple Health gets it), never a
-// drink another app sent. A changed or deleted glass is queued again.
+// logged in Aurin (as Apple Health gets it), never a drink another app sent.
+// New glasses from the day it is on (earlier days the Google Health app has
+// already read from Apple Health); a changed or deleted one of the last 14 days
+// is queued again. Compared by day, clock and amount, so a new time zone
+// does not move old glasses.
 async function queueDrinks(db){
   const from=new Date(Date.parse(today()+'T00:00:00Z')-13*86400000).toISOString().slice(0,10);
-  const drinks=(await db.prepare("SELECT id,date,consumed_at,ml FROM fluid_log WHERE user_id=? AND date>=? AND date<=? AND source IS NULL AND kind='water' LIMIT 500").bind(db.userId,from,today()).all().catch(()=>({results:[]}))).results||[];
-  const known=new Map(((await db.prepare("SELECT entry_id,desired_json FROM food_google_exports WHERE user_id=? AND entry_id<0 AND desired_json IS NOT NULL AND json_extract(desired_json,'$.date')>=?").bind(db.userId,from).all()).results||[]).map(r=>[r.entry_id,r.desired_json]));
+  let drinks;
+  try{drinks=(await db.prepare("SELECT id,date,consumed_at,ml FROM fluid_log WHERE user_id=? AND date>=? AND date<=? AND source IS NULL AND kind='water' ORDER BY date DESC,id DESC LIMIT 500").bind(db.userId,from,today()).all()).results||[];}
+  catch(error){if(/no such table/i.test(error.message))return;throw error;}
+  const known=new Map(((await db.prepare("SELECT entry_id,desired_json FROM food_google_exports WHERE user_id=? AND entry_id<0 AND desired_json IS NOT NULL AND json_extract(desired_json,'$.date')>=?").bind(db.userId,from).all()).results||[]).map(r=>[r.entry_id,JSON.parse(r.desired_json)]));
   for(const drink of drinks){
-    const desired=JSON.stringify({date:drink.date,payload:drinkGooglePayload(drink)});
-    if(known.get(-drink.id)!==desired)await enqueue(db,-drink.id,desired);
-    known.delete(-drink.id);
+    const was=known.get(-drink.id);known.delete(-drink.id);
+    if(!was&&drink.date<today())continue;
+    if(was&&was.date===drink.date&&was.at===drink.consumed_at&&was.ml===Number(drink.ml))continue;
+    await enqueue(db,-drink.id,JSON.stringify({date:drink.date,at:drink.consumed_at,ml:Number(drink.ml),payload:drinkGooglePayload(drink)}));
   }
   for(const entryId of known.keys())await enqueue(db,entryId,null);
 }
@@ -105,8 +111,10 @@ export async function processFoodGoogle(env,{token,fetcher=fetch}={}){
     return {status:'disconnected'};
   }
   if(water)await queueDrinks(db);
+  // Water has no Odeslat znovu button: a failed glass is tried again after an hour.
   const rows=(await db.prepare(`SELECT * FROM food_google_exports WHERE user_id=? AND (entry_id>0 OR ?) AND (entry_id<0 OR ?) AND
-    (status IN ('queued','operation','disconnected') OR (status='syncing' AND updated_at<datetime('now','-5 minutes')))
+    (status IN ('queued','operation','disconnected') OR (status='syncing' AND updated_at<datetime('now','-5 minutes'))
+     OR (entry_id<0 AND status='error' AND updated_at<datetime('now','-1 hour')))
     AND (desired_json IS NULL OR json_extract(desired_json,'$.date')<=? OR remote_name IS NOT NULL OR operation_name IS NOT NULL)
     ORDER BY updated_at,entry_id LIMIT 20`).bind(db.userId,water?1:0,food?1:0,today()).all()).results;
   let access=null,synced=0;

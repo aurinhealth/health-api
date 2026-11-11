@@ -259,6 +259,7 @@ struct SyncSendGroup: View {
         var names: [String] = []
         if export.prefs.health.allows("nutrition") && export.viaGoogle.contains("nutrition") { names.append("jídlo") }
         if export.prefs.health.allows("weight") && export.viaGoogle.contains("weight") { names.append("váhu") }
+        if export.prefs.health.allows("water") && export.viaGoogle.contains("water") { names.append("vodu") }
         if export.prefs.pushActivities && export.viaGoogle.contains("activities") { names.append("tréninky") }
         return names
     }

@@ -6,9 +6,10 @@ import { ensure as ensureFluids } from '../src/fluids.js';
 import { processFoodGoogle, foodGoogleStatus } from '../src/food-google-sync.js';
 import { saveSyncPrefs, readSyncPrefs, healthAllowed, googleMissingScopes } from '../src/sync-destinations.js';
 import { HEALTH_SCOPES } from '../src/google-scopes.js';
+import { localToday } from '../src/user-time.js';
 
 const token = async () => 'test-token';
-const day = new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
+const day = localToday(), before = new Date(Date.parse(day + 'T12:00:00Z') - 2 * 864e5).toISOString().slice(0, 10);
 const drink = 'users/1/dataTypes/hydration-log/dataPoints/w1';
 function google() {
   const calls = [];
@@ -18,8 +19,9 @@ async function setup() {
   const raw = createD1(), db = scopedDb(raw, 1);
   raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');
   await ensureFluids(db);
-  const add = (id, kind, ml, source = null) => raw.sqlite.prepare('INSERT INTO fluid_log(id,user_id,date,consumed_at,ml,kind,source) VALUES(?,?,?,?,?,?,?)').run(id, 1, day, day + 'T08:30', ml, kind, source);
-  add(1, 'water', 500); add(2, 'coffee', 200); add(3, 'water', 300, 'google-health');
+  const add = (id, kind, ml, source = null, date = day) => raw.sqlite.prepare('INSERT INTO fluid_log(id,user_id,date,consumed_at,ml,kind,source) VALUES(?,?,?,?,?,?,?)').run(id, 1, date, date + 'T08:30', ml, kind, source);
+  // Only the first goes: coffee, another app's water and a day before water was on stay out.
+  add(1, 'water', 500); add(2, 'coffee', 200); add(3, 'water', 300, 'google-health'); add(4, 'water', 400, null, before);
   return { raw, db, env: { DB: db, CONNECTED_PROVIDERS: ['google'] } };
 }
 
