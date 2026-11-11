@@ -189,6 +189,18 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Proč dvě noci:** klidový tep je u jednotlivce stabilní, ale pětina lidí má aspoň jeden týden s výkyvem ≥ 10 tepů/min (Quer G et al., PLoS One 2020;15:e0227709), takže jedna noc dává falešné poplachy. Změny tepu a HRV dávají smysl jen spolu s dalšími znaky přetížení (Bosquet L et al., Br J Sports Med 2008). Alkohol zvyšuje tep v noci v závislosti na dávce (Pietilä J et al., JMIR Ment Health 2018). Horko zvyšuje tep při stejné zátěži (Racinais S et al., Scand J Med Sci Sports 2015, konsenzus k tréninku v horku).
 - **Limity:** je to práh zátěže pro úpravu tréninku, ne hodnocení zdraví.
 
+### 2.11 Aurin age (složený věk z kondice a návyků)
+
+- **Výpočet** (`compositeAge` v `src/own-vo2max.js`): skutečný věk plus roky za kondici a návyky. Každý vliv má publikovaný vztah dávka–účinek (poměr rizika, HR). Na roky se převádí Gompertzovým pravidlem: u dospělých se riziko zdvojnásobí zhruba každých 8 let, takže roky = 8 · log2(HR). Protože jde o observační studie, výsledek **půlíme** (naše volba kvůli zkreslení a obrácené kauzalitě) a každou část omezujeme stropem.
+- **Kondice (jeden shluk, strop ±5 let):** VO2max proti normě pro věk a pohlaví, 0,87 na 1 MET (3,5 ml/kg/min) (Kodama S et al., JAMA 2009;301:2024, doi:10.1001/jama.2009.681), strop ±4. Klidový tep 1,09 na 10 tepů/min (Zhang D et al., CMAJ 2016, doi:10.1503/cmaj.150535), minuty aktivity (střední + 2× intenzivní za týden; 0,69 při 150, 0,61 od 450; Arem H et al., JAMA Intern Med 2015, doi:10.1001/jamainternmed.2015.0533) a kroky (0,47 na plató 8–10 tisíc pod 60 let, 6–8 tisíc od 60; Paluch AE et al., Lancet Public Health 2022, doi:10.1016/S2468-2667(21)00302-9). Tep, aktivita a kroky leží na stejné příčinné cestě jako VO2max, proto se počítají jen čtvrtinou.
+- **Posilovna:** aspoň jednou týdně 0,85 (10–17 % podle Momma H et al., Br J Sports Med 2022, doi:10.1136/bjsports-2021-105061), strop −1.
+- **Spánek (strop ±1,5):** kratší než 7 h až 1,12 (Cappuccio FP et al., Sleep 2010, doi:10.1093/sleep/33.5.585), dlouhý spánek se nepenalizuje (převážně obrácená kauzalita). Pravidelnost (rozptyl středu spánku ≤ 30 min) až 0,70 (Windred DP et al., Sleep 2024, doi:10.1093/sleep/zsad253: o 20–48 % méně; přesné HR ověřit v plném textu).
+- **Pas:** nad 94 cm (muži) / 80 cm (ženy) 1,11 na 10 cm (Jayedi A et al., BMJ 2020, doi:10.1136/bmj.m3324), strop +2. **Jen obvod pasu zadaný uživatelem:** BMI nerozezná svaly od tuku a domácí váhy tuk na břiše podceňují (rozhodnutí 2026-11-11).
+- **Celek ±8 let.** Potřebuje VO2max a aspoň dvě ze skupin spánek, posilovna, pas; jinak se nezobrazí.
+- **Co zlepšit:** ke každému návyku výpočet vrací, o kolik let by se věk snížil při dosažení cíle (7 h pravidelného spánku, posilovna týdně, 300 minut aktivity, plató kroků, pas na hranici). Aplikace ukazuje největší příležitosti.
+- **Texty:** „Aurin age, estimate from your fitness and habits“. Nikdy „biological age“ (neměříme krev ani DNA), nikdy riziko, úmrtnost, nemoc ani délka života, ani na webu a v textech kouče.
+- **Limity:** jde o souvislosti z kohort, ne o příčiny ani osobní předpověď. Sčítání vlivů z různých studií předpokládá nezávislost, shluk kondice to řeší jen zčásti. Hodinky měří jinak než studie. Půlení a stropy jsou naše volba. Výpočet není ověřený proti výsledkům.
+
 ## Co zbývá
 
 - **Výsledky ověření (bod 2.8):** nástroj je hotový, ale tvrzení „index předpovídá průběh tréninku“ lze použít až po spuštění na reálných datech (aspoň desítky tréninkových dní u více uživatelů).
