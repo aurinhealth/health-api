@@ -247,7 +247,7 @@ enum Small {
             case .aurin, .readiness:
                 guard let r = s.readiness else { return empty }
                 return SmallValue(fraction: Double(r) / 100, color: C.stale, word: Days.weekday(s.date).uppercased(), text: "\(r)",
-                                  line: name(.readiness) + " \(r) · " + Days.weekday(s.date), symbol: symbol(m))
+                                  line: name(.readiness) + " \(r), " + Days.weekday(s.date), symbol: symbol(m))
             case .sleep:
                 return SmallValue(fraction: 0, color: C.stale, word: tr("ČEKÁM", "WAITING"), text: "···",
                                   line: tr("Spánek: čekám na noc", "Sleep: waiting for last night"), symbol: symbol(m))
@@ -665,7 +665,7 @@ struct WideView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
                     // The app's word for the zone (high, moderate, low), as on Today.
-                    head(tr("DNES", "TODAY") + (today.zone.map { " · " + zoneWord($0) } ?? ""), C.zone(today.zone))
+                    head(tr("DNES", "TODAY") + (today.zone.map { ", " + zoneWord($0) } ?? ""), C.zone(today.zone))
                     if let next {
                         Text(next.name)
                             .font(.system(size: 13, weight: .semibold)).lineLimit(2).minimumScaleFactor(0.8)
@@ -710,10 +710,10 @@ struct WideView: View {
         return Text(date, style: .relative)
     }
 
-    /// "17:30 · in 1 hr, 23 min" while it is still to come.
+    /// "17:30, in 1 hr, 23 min" while it is still to come.
     @ViewBuilder private func startLine(_ s: WatchSnapshot.Session, on key: String) -> some View {
         if let start = Days.at(s.time, on: key), start > entry.date {
-            (Text((s.time ?? "") + " · " + tr("za ", "in ")) + until(start))
+            (Text((s.time ?? "") + ", " + tr("za ", "in ")) + until(start))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         } else {
             Text(Days.join([s.time, s.minutes.map(Days.minutes)]))
@@ -728,7 +728,7 @@ struct WideView: View {
             readinessRing(r)
             VStack(alignment: .leading, spacing: 1) {
                 if let today {
-                    head(tr("RÁNO · ", "MORNING · ") + (today.zone.map(zoneWord) ?? ""), C.zone(today.zone))
+                    head(tr("RÁNO: ", "MORNING: ") + (today.zone.map(zoneWord) ?? ""), C.zone(today.zone))
                     Text(today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
                         .font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     if !today.awaitingNight, let hrv = today.hrv?.value {
@@ -761,16 +761,16 @@ struct WideView: View {
         return text
     }
 
-    /// "HRV 64 · in your usual range".
+    /// "HRV 64, in your usual range".
     private func hrvLine(_ hrv: Double, _ metric: WatchSnapshot.Metric?) -> String {
         var text = "HRV " + Days.int(hrv)
         guard let low = metric?.low, let high = metric?.high else { return text }
         if hrv < low {
-            text += " · " + tr("pod obvyklým rozmezím", "below your usual range")
+            text += ", " + tr("pod obvyklým rozmezím", "below your usual range")
         } else if hrv > high {
-            text += " · " + tr("nad obvyklým rozmezím", "above your usual range")
+            text += ", " + tr("nad obvyklým rozmezím", "above your usual range")
         } else {
-            text += " · " + tr("v obvyklém rozmezí", "in your usual range")
+            text += ", " + tr("v obvyklém rozmezí", "in your usual range")
         }
         return text
     }
@@ -1297,9 +1297,9 @@ enum Days {
 
     static func minutes(_ m: Int) -> String { "\(m) min" }
 
-    /// The parts there are, joined with " · ".
+    /// The parts there are, joined with ", ".
     static func join(_ parts: [String?]) -> String {
-        parts.compactMap { $0 }.joined(separator: " · ")
+        parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     private static func number(_ digits: Int, grouping: Bool) -> NumberFormatter {

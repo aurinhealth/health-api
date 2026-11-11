@@ -48,12 +48,12 @@ test("the AI section lists yesterday's cost per account with the most used featu
   const text = aiReport([
     { who: "Ty", feature: "assistant", calls: 10, cost: 0.08, input: 150000, cached: 90000 },
     { who: "Ty", feature: "food-photo", calls: 3, cost: 0.02 },
-    { who: "Účet #6 · TestFlight", feature: "screen-text", calls: 21, cost: 0.003 }
-  ], [{ who: "Ty", cost: 1, owner: true }, { who: "Účet #6 · TestFlight", cost: 0.004 }, { who: "Účet #9 · Pro", cost: 3 }], 4);
-  assert.match(text, /Útrata AI včera: 0\.10 \$, 34 dotazů · z cache 60 % vstupu/);
-  assert.match(text, /- Ty: 0\.10 \$ · chat s koučem 10×, jídlo z fotky 3×/);
-  assert.match(text, /- Účet #6 · TestFlight: 0\.3 ¢ · věty kouče na obrazovkách 21×/, "below a cent in cents, not 0.00 $");
-  assert.match(text, /Za měsíc \(strop 4\.00 \$ na účet\): Účet #9 · Pro 3\.00 \$ \(75 %\) · Ty 1\.00 \$ \(25 %\) · ostatní 1 účet dohromady 0\.4 ¢/, "by name only the owner and accounts past half the cap");
+    { who: "Účet #6, TestFlight", feature: "screen-text", calls: 21, cost: 0.003 }
+  ], [{ who: "Ty", cost: 1, owner: true }, { who: "Účet #6, TestFlight", cost: 0.004 }, { who: "Účet #9, Pro", cost: 3 }], 4);
+  assert.match(text, /Útrata AI včera: 0\.10 \$, 34 dotazů, z cache 60 % vstupu/);
+  assert.match(text, /- Ty: 0\.10 \$, chat s koučem 10×, jídlo z fotky 3×/);
+  assert.match(text, /- Účet #6, TestFlight: 0\.3 ¢, věty kouče na obrazovkách 21×/, "below a cent in cents, not 0.00 $");
+  assert.match(text, /Za měsíc \(strop 4\.00 \$ na účet\): Účet #9, Pro 3\.00 \$ \(75 %\), Ty 1\.00 \$ \(25 %\), ostatní 1 účet dohromady 0\.4 ¢/, "by name only the owner and accounts past half the cap");
   assert.ok(text.indexOf("Ty:") < text.indexOf("Účet #6"));
   assert.doesNotMatch(text, /@/);
   assert.equal(aiReport([], [], 4), null);
@@ -63,11 +63,11 @@ test("the AI section lists yesterday's cost per account with the most used featu
 test("the AI section gives the average and p95 price of a call by group and feature", async () => {
   const calls = [...Array.from({ length: 19 }, () => ({ group: "Pro", feature: "assistant", cost: 0.02 })), { group: "Pro", feature: "assistant", cost: 0.12 },
     { group: "týden zdarma", feature: "screen-text", cost: 0.001 }];
-  assert.deepEqual(callPrices(calls).map(p => [p.name, p.calls, Math.round(p.average * 1000) / 1000, p.p95]), [["Pro · chat s koučem", 20, 0.025, 0.02], ["týden zdarma · věty kouče na obrazovkách", 1, 0.001, 0.001]]);
+  assert.deepEqual(callPrices(calls).map(p => [p.name, p.calls, Math.round(p.average * 1000) / 1000, p.p95]), [["Pro, chat s koučem", 20, 0.025, 0.02], ["týden zdarma, věty kouče na obrazovkách", 1, 0.001, 0.001]]);
   calls.push({ group: "Pro", feature: "assistant", cost: 0.2 });
   assert.equal(callPrices(calls)[0].p95, 0.12);
-  const ai = aiSummary([{ who: "Účet #9 · Pro", feature: "assistant", calls: 21, cost: 0.7 }], [], 5, calls);
-  assert.match(aiText(ai), /Cena jednoho dotazu podle skupiny\n- Pro · chat s koučem: průměr 0\.03 \$, p95 0\.12 \$ \(21×\)/);
+  const ai = aiSummary([{ who: "Účet #9, Pro", feature: "assistant", calls: 21, cost: 0.7 }], [], 5, calls);
+  assert.match(aiText(ai), /Cena jednoho dotazu podle skupiny\n- Pro, chat s koučem: průměr 0\.03 \$, p95 0\.12 \$ \(21×\)/);
   assert.match(opsReport([], null, "2026-11-02", ai).html, /Cena jednoho dotazu podle skupiny/);
   // From the log: the group of each call, never an e-mail.
   const db = createD1();
@@ -92,7 +92,7 @@ test("the AI report names accounts by number and group, never by e-mail", async 
   add.run(1, "assistant", 0.07); add.run(6, "screen-text", 0.002); add.run(12, "workout-pick", 0.0002); add.run(14, "screen-text", 0.001); add.run(99, "screen-text", 0.001);
   const env = { DB: db, OWNER_EMAIL: "owner@example.com" };
   const { rows, month } = await aiData(env, "2026-11-02", Date.parse("2026-11-03T06:00:00Z"));
-  assert.deepEqual([...new Set(rows.map(r => r.who))].sort(), ["Ty", "Účet #12 · nový účet", "Účet #14 · bez nákupu", "Účet #6 · TestFlight", "Účet #99 · smazaný"]);
+  assert.deepEqual([...new Set(rows.map(r => r.who))].sort(), ["Ty", "Účet #12, nový účet", "Účet #14, bez nákupu", "Účet #6, TestFlight", "Účet #99, smazaný"]);
   assert.deepEqual(month.filter(m => m.owner).map(m => m.who), ["Ty"]);
   const report = opsReport([], null, "2026-11-02", aiSummary(rows, month, 5));
   assert.doesNotMatch(report.text + report.html, /@x\.cz|@example\.com/);
@@ -106,7 +106,7 @@ test("the morning e-mail comes as a page too: what matters today first, slow req
     ...Array.from({ length: 7 }, (_, i) => ({ kind: "slow", service: `GET /app/api/x${i}`, count: 1, last_message: "3100 ms, 5 dotazů, 5 řádků" })),
     { kind: "slow", service: "GET /app/api/<script>", count: 1, last_message: "3000 ms, 1 dotazů, 1 řádků" }
   ];
-  const ai = aiSummary([{ who: "Ty", feature: "assistant", calls: 1, cost: 0.07 }, { who: "Účet #6 · TestFlight", feature: "screen-text", calls: 21, cost: 0.003 }], [{ who: "Ty", cost: 0.45, owner: true }, { who: "Účet #6 · TestFlight", cost: 0.01 }], 5);
+  const ai = aiSummary([{ who: "Ty", feature: "assistant", calls: 1, cost: 0.07 }, { who: "Účet #6, TestFlight", feature: "screen-text", calls: 21, cost: 0.003 }], [{ who: "Ty", cost: 0.45, owner: true }, { who: "Účet #6, TestFlight", cost: 0.01 }], 5);
   const { html, text } = opsReport(rows, null, "2026-11-02", ai, [], "Účty a AI (bez tebe)\n- Účtů: 2\n\nNávrhy\n- Limity stačí, není potřeba nic měnit.");
   assert.match(html, /2 věci k řešení/);
   assert.match(html, /Revize týdne trvalo až 10,1 s \(20×\)/);
@@ -119,7 +119,7 @@ test("the morning e-mail comes as a page too: what matters today first, slow req
   assert.match(html, /Další: /, "the rest of the slow list in one line");
   assert.match(html, /&lt;script&gt;/);
   assert.doesNotMatch(html, /<script>/);
-  assert.match(html, /Ty 0\.45 \$ \(9 %\) · ostatní 1 účet dohromady 0\.01 \$/);
+  assert.match(html, /Ty 0\.45 \$ \(9 %\), ostatní 1 účet dohromady 0\.01 \$/);
   assert.match(html, /Účty a limity 🟢/);
   assert.match(text, /Pomalé požadavky a úlohy/, "the plain text stays for mail apps without HTML");
   assert.match(opsReport([], null, "2026-11-02", null, [], "Účty a AI (bez tebe)\n- Účtů: 2\n\nNávrhy\n- Limity stačí, není potřeba nic měnit.").html, /Vše v pořádku/);
@@ -164,7 +164,7 @@ test("every morning: accounts and AI against what Pro brings in, with a proposal
   const limits = { monthly: 6, unpaidShare: 0.5, totalAlert: 10, totalLimit: 30 };
   const daily = accountsReport(stats, limits);
   assert.match(daily, /Platí: 1 \(měsíčně 1, ročně 0\), pilot a dárky 1, ve zkušebním týdnu 1/);
-  assert.match(daily, /Pro vydělá asi 5\.90 \$ za měsíc · strop na účet 6\.00 \$, bez placení 3\.00 \$/);
+  assert.match(daily, /Pro vydělá asi 5\.90 \$ za měsíc, strop na účet 6\.00 \$, bez placení 3\.00 \$/);
   assert.match(daily, /Návrhy\n- free@x\.cz má za měsíc 2\.50 \$ z 3\.00 \$ \(83 %\)\. Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z 6\.00 \$ na 8\.00 \$/);
   const quiet = { ...stats, nearCap: [] };
   assert.match(accountsReport(quiet, limits), /Návrhy\n- Limity stačí, není potřeba nic měnit\./, "the numbers come every day, quiet or not");

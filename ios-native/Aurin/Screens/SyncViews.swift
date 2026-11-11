@@ -402,7 +402,7 @@ struct SyncForwardGroup: View {
         case "wahoo" where to == "google" && (sync.destination("apple")?.prefs.forward ?? []).contains("wahoo"): return "Jde přes Apple Health"
         case "wahoo" where to == "google": return "Jízdy s časem, vzdáleností a tepem"
         case "wahoo": return "Jízdy s časem, vzdáleností a kaloriemi"
-        default: return "Fitbit a Pixel Watch"
+        default: return "Fitbit a další hodinky"
         }
     }
 

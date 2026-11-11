@@ -14,6 +14,7 @@ import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
+import { racePhase } from "./athlete-focus.js";
 import { sessionLoad } from "./training-load.js";
 import { MAX_MINUTES } from "./workout-model.js";
 import { sorePartsFor } from "./pain-words.js";
@@ -411,11 +412,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const lastWeekLoad=Math.round(rides.filter(a=>a.completed&&inWeek(a,shiftIso(monday,-7))).reduce((s,a)=>s+loadOf(a),0));
   const namedRecovery=rides.some(a=>inWeek(a,monday)&&/recovery week|deload|regenera[čc]n[íi] t[ýy]den|odpo[čc]inkov/i.test(String(a.name||"")+" "+String(a.description||"")));
   // Same rule as the calendar's week targets: after a week ≥ 125 % of maintenance (CTL × 7).
-  // Periodization from the main event in the settings: base more than 12
-  // weeks out, build in the last 12, taper in the final week, openers the day
-  // before and the race itself. A lighter taper week is not a recovery week.
+  // Periodization from the main event in the settings (racePhase): base, the
+  // build and the taper by the race's distance (12 weeks and the final week
+  // without one), openers the day before and the race itself. A lighter taper
+  // week is not a recovery week.
   const eventDays=focus?.event?.date?diffDays(focus.event.date,targetDate):null;
-  const eventPhase=eventDays==null||eventDays<0?null:eventDays===0?"race":eventDays===1?"openers":eventDays<=7?"taper":eventDays<=84?"build":"base";
+  const eventPhase=eventDays===1?"openers":racePhase(eventDays,focus?.event);
   const tapering=["race","openers","taper"].includes(eventPhase);
   // The same rule as the week plan and the gym (all sports from the Intervals.icu
   // wellness; this sport's rides when the wellness has no loads).
@@ -662,7 +664,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // Nemoc ticked in Deník today, or yesterday (morning-checkin.js readinessCheckin):
   // rest today like the status Nemoc, without setting it (audit wave 2, 9.1).
   const sickDay=!policy.paused&&checkin==="sick"&&manualReadiness===manualReadinessFor("sick")&&daysAhead===0;
-  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku · odpočinek","Sick in your Journal · rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
+  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
   if(tsb==null)missing.push("current CTL/ATL/TSB");
@@ -676,7 +678,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     sport,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
-    // The "HRV +15 · Tep −8 · Spánek −13" row under the readiness on Health:
+    // The "HRV +15, Tep −8, Spánek −13" row under the readiness on Health:
     // points each signal added to or took from 70, never beats or ms.
     readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,awaitingNight,noBodyData,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},

@@ -82,7 +82,7 @@ enum WatchDemo {
         let before: [(String, String, String, Int)] = [
             ("Běh 14 km", "Run 14 km", "run", 72),
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
-            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Procházka", "Walk", "walk", 70),
             ("Dlouhý běh", "Long run", "run", 96),
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72)]
@@ -90,7 +90,7 @@ enum WatchDemo {
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72),
             ("Dlouhý běh", "Long run", "run", 96),
             ("Procházka", "Walk", "walk", 70),
-            ("Posilovna · dolní tělo", "Gym · lower body", "strength", 60),
+            ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
             ("Běh 14 km", "Run 14 km", "run", 72)]
         var sessions = before.enumerated().reversed().map {

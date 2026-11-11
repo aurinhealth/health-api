@@ -8,7 +8,7 @@ import { EASIER, HARDER, MIN_MINUTES, MAX_MINUTES, kindOfSystem } from './week-a
 import { MAX_MINUTES as LONGEST } from './workout-model.js';
 import { shiftDate } from './dashboard-shared.js';
 
-// "Kratší · Delší · Lehčí · Těžší · Jiný den" under the coach's workout card
+// "Kratší, Delší, Lehčí, Těžší, Jiný den" under the coach's workout card
 // (návrh 11, 2026-10-24): the card changes by rules, without the AI and
 // without counting as a message. The coach's context of the moment is kept
 // with the draft, so a change later checks the same days and the same morning.

@@ -110,12 +110,12 @@ test("four gym days a week alternate upper and lower body, five and more push, p
   assert.equal(splitParts(3), null);
   assert.deepEqual(splitParts(4), ["upper", "lower"]);
   assert.deepEqual(splitParts(6), ["push", "pull", "legs"]);
-  assert.deepEqual(buildBlock(["2026-10-23", "2026-10-24", "2026-10-25"], { weeklyGymDays: 5 }).map(p => p.planName), ["Push · prsa, ramena, triceps", "Pull · záda, biceps", "Nohy"]);
+  assert.deepEqual(buildBlock(["2026-10-23", "2026-10-24", "2026-10-25"], { weeklyGymDays: 5 }).map(p => p.planName), ["Push: prsa, ramena, triceps", "Pull: záda, biceps", "Nohy"]);
   assert.deepEqual(buildBlock(["2026-10-23", "2026-10-24", "2026-10-25"], { weeklyGymDays: 4 }).map(p => p.planName), ["Upper Body", "Lower Body", "Upper Body"]);
   // Generated one by one: the part trained longest ago comes next.
   const done = ["Low row", "Lat pulldown", "DB curl", "Rear delt pec deck"].map(exercise => ({ workout_date: "2026-10-22", exercise, type: "WORK", completed: 1, actual_kg: 20, actual_reps: 8, rpe: 8, set_no: 1 }));
   const next = generateStrengthPlan(context("2026-10-23", [], done), { durationMinutes: 60, weeklyGymDays: 5 });
-  assert.equal(next.planName, "Push · prsa, ramena, triceps");
+  assert.equal(next.planName, "Push: prsa, ramena, triceps");
   assert.ok(workExercises(next).every(x => !["back", "biceps", "rear_delts"].includes(EXERCISES[x].muscle)));
 });
 

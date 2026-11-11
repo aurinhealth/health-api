@@ -202,11 +202,13 @@ export function proTester(env) {
 
 // PRO_TESTFLIGHT=true (Worker secret) gives Pro to every account last seen on a
 // TestFlight build, also the anonymous testers of the public link; their AI group
-// stays "testflight". A record without appTransactionId (sent before #984 or iOS < 18.4)
-// counts too, or today's testers would wait for a new build. App Review uses the same Sandbox: the review account is left
+// stays "testflight". Only a record with appTransactionId (iOS 18.4 and later) gives Pro:
+// one without it is the same signed text for any account, so one copy would make any
+// number of new accounts Pro (penetration test 2026-11-10); such an account still counts
+// with TestFlight for AI limits (saveAppInstall). App Review uses the same Sandbox: the review account is left
 // out, a reviewer's own new account is not (Review Notes ask for the review account;
 // switch it off if Apple says the paywall is missing). Petr, 10 Nov 2026.
-const testflightPro = (env, row) => env?.PRO_TESTFLIGHT === 'true' && Number(row?.testflight) === 1 && !isReviewAccount(env);
+const testflightPro = (env, row) => env?.PRO_TESTFLIGHT === 'true' && Number(row?.testflight) === 1 && Boolean(row?.install_hash) && !isReviewAccount(env);
 
 // Pro: a listed tester, a TestFlight account with PRO_TESTFLIGHT, or a purchase that counts.
 export function proActive(env, row, now = Date.now()) {
@@ -226,7 +228,7 @@ function purchaseActive(env, row, now = Date.now()) {
 // The account's plan row as proActive reads it; null without one.
 export async function subscriptionRow(env) {
   const db = env.DB, id = env.USER_ID ?? db.userId;
-  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment,testflight FROM subscriptions WHERE user_id=?').bind(id).first());
+  return withColumns(db, () => db.prepare('SELECT plan,valid_until,store_environment,testflight,install_hash FROM subscriptions WHERE user_id=?').bind(id).first());
 }
 
 // What the App Store says about the account's purchase, for /app/api/subscription.

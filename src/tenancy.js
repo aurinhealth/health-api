@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { routedUserDb } from './user-data-routing.js';
+import { routedUserDb, TARGET_KIND } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
 import { allowClient, releaseClient, allowSite, releaseSite } from './ip-rate-limit.js';
@@ -194,15 +194,15 @@ function schemaStatement(statement, sql, schemaDone) {
 
 // A database blip (d1-retry.js) is tried again: a read after any of them, a
 // write only when it never ran.
-function retriedStatement(statement, sql) {
+function retriedStatement(statement, sql, target = null) {
   const read = readOnlySql(sql);
   return {
     [REAL]: statement?.[REAL] || statement,
-    bind: (...values) => retriedStatement(statement.bind(...values), sql),
-    run: (...args) => withD1Retry(() => statement.run(...args), { read }),
-    first: (...args) => withD1Retry(() => statement.first(...args), { read }),
-    all: (...args) => withD1Retry(() => statement.all(...args), { read }),
-    raw: (...args) => withD1Retry(() => statement.raw(...args), { read })
+    bind: (...values) => retriedStatement(statement.bind(...values), sql, target),
+    run: (...args) => withD1Retry(() => statement.run(...args), { read, target }),
+    first: (...args) => withD1Retry(() => statement.first(...args), { read, target }),
+    all: (...args) => withD1Retry(() => statement.all(...args), { read, target }),
+    raw: (...args) => withD1Retry(() => statement.raw(...args), { read, target })
   };
 }
 
@@ -210,8 +210,8 @@ function retriedStatement(statement, sql) {
 export function retryingDb(db) {
   if (!db?.prepare) return db;
   return {
-    prepare: query => retriedStatement(db.prepare(query), query),
-    batch: statements => withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }),
+    prepare: query => retriedStatement(db.prepare(query), query, "core"),
+    batch: statements => withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false, target: "core" }),
     exec: query => db.exec(query),
     dump: () => db.dump()
   };
@@ -338,14 +338,14 @@ export function scopedDb(db, userId, { memo = false } = {}) {
     prepare(query) {
       check(query);
       const statement = db.prepare(query);
-      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
+      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query, statement?.[TARGET_KIND] || null);
       return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
       for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
       const forget = () => { if (reads) for (const s of statements) { if (s?.[GUARDED]) forgetWritten(reads, s[GUARDED].sql); else reads.clear(); } };
       forget();
-      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { forget(); }
+      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false, target: statements[0]?.[REAL]?.[TARGET_KIND] || null }); } finally { forget(); }
     },
     exec(query) { check(query); reads?.clear(); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }

@@ -5,7 +5,7 @@
 //   the health type 'workouts'), which Intervals.icu cannot read; Wahoo's,
 //   once the user unpaired it from Intervals.icu to have one place for
 //   everything (the ride's FIT file, sync-destinations.js uploadFit); Google
-//   Health's (Fitbit, Pixel Watch), which Intervals.icu cannot read either.
+//   Health's (Fitbit and other watches), which Intervals.icu cannot read either.
 //   Aurin's own workouts are not among them; they go when they are finished.
 // - to Google Health: Wahoo's (forwardToGoogle). Not Apple Health's: the
 //   Google Health app reads Apple Health itself.

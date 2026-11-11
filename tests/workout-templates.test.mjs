@@ -97,7 +97,7 @@ test("the link's page shows the workout and its preview image to anyone", async 
   assert.match(html, /Petr ti posílá trénink/);
   assert.match(html, /4 × 8–12/);
   assert.match(html, new RegExp('og:image" content="' + ORIGIN + "/t/" + shared.body.id + '/og.png'));
-  assert.match(html, /· Aurin<\/title>/);
+  assert.match(html, /<title>Nohy<\/title>/);
   assert.match(html, /og:site_name" content="Aurin"/);
   assert.match(html, /Otevřít v Aurinu/);
   assert.match(html, /Aurin bude brzy v App Store/);

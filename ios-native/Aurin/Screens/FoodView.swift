@@ -113,15 +113,30 @@ struct FoodContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if editing {
-                board
-            } else {
-                content
+            // The same top as Dnes (TabHeader), with the barcode; the week reaches
+            // two weeks ahead. Both stay put while the day below is swiped; a
+            // day drawn beside has none.
+            if page == nil && !editing {
+                VStack(alignment: .leading, spacing: 0) {
+                    TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
+                        HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+                    }
+                    WeekStrip(date: food.date, ahead: true).padding(.top, 14)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
             }
+            VStack(alignment: .leading, spacing: 0) {
+                if editing {
+                    board
+                } else {
+                    content
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, editing ? 16 : 0)
+            .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
     }
 
     private var board: some View {
@@ -132,13 +147,6 @@ struct FoodContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        // The same top as Dnes (TabHeader), with the barcode; the week reaches two weeks ahead.
-        TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
-            HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
-        }
-        WeekStrip(date: food.date, week: WeekStrip.week(of: food.date, in: page.map(\.today) ?? model.today), ahead: true)
-            .padding(.top, 14)
-
         // A wide window: the day's numbers and the widgets on the left, the meals on the right.
         WideColumns {
             HStack(alignment: .lastTextBaseline, spacing: 12) {

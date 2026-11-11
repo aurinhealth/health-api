@@ -28,7 +28,7 @@ export async function saveTrainingProfile(db, input, { today = new Date().toISOS
   return profile;
 }
 
-// "Test 20 min · před 3 týdny", "Z Intervals.icu", "Odhad podle věku": where
+// "Test 20 min, před 3 týdny", "Z Intervals.icu", "Odhad podle věku": where
 // each threshold on Nastavení → Zóny comes from and how old it is, so an
 // estimate never looks like a measured value. `t`: athleteThresholds().
 const TESTS = () => ({ "test-ride-ftp20": L("Test 20 min", "20-min test"), "test-ride-lthr30": L("Test 30 min", "30-min test"), "test-run-tt30": L("Test 30 min", "30-min test"), "test-swim-css": L("Test 400 + 200 m", "400 + 200 m test") });
@@ -55,7 +55,7 @@ export function thresholdNotes(t = {}, today = new Date().toISOString().slice(0,
     const source = t.sources?.[key], set = t.profile?.set?.[key];
     if (source === "manual") {
       const when = set?.on ? ago(set.on, today) : null;
-      notes[key] = [TESTS()[set?.by] || L("Zadáno ručně", "Set by you"), when].filter(Boolean).join(" · ");
+      notes[key] = [TESTS()[set?.by] || L("Zadáno ručně", "Set by you"), when].filter(Boolean).join(", ");
     } else if (from()[source]) notes[key] = from()[source];
   }
   return notes;
