@@ -337,7 +337,8 @@ test("late advice: a walk or training gives way, bed and winding down stay", () 
   assert.equal(withLang("en", () => lateAdvice({ evening: "wind-down" }, "A 30 min walk, then stretching.")), "Just wind down: 5–10 minutes of easy stretching, then bed.");
   assert.equal(lateAdvice({ evening: "bed" }, "Go to bed now."), "Go to bed now.");
   assert.equal(withLang("en", () => lateAdvice({ evening: "bed" }, "Aim for protein and carbs.")), "It's late, so go to bed now.");
-  assert.equal(lateAdvice({ evening: "bed" }, "Jdi spát, procházka počká na zítra."), "Je pozdě, jdi teď spát.");
+  assert.equal(lateAdvice({ evening: "bed" }, "Jdi spát, procházka počká na zítra."), "Jdi spát, procházka počká na zítra.");
+  assert.equal(lateAdvice({ evening: "bed" }, "Jdi spát, zítra ráno procházka."), "Je pozdě, jdi teď spát.");
   // Found in review: a bedtime already gone as the target, food, a swim or a short walk before bed.
   const bed = { evening: "bed", bedtimeTonight: "21:10" };
   for (const advice of ["Get to sleep by 21:10.", "Jdi spát ve 21:10.", "A protein snack before sleep.", "Projdi se 10 minut a pak do postele.", "Zaplavej si.", "A short swim, then bed."]) assert.equal(lateAdvice(bed, advice), "Je pozdě, jdi teď spát.", advice);
@@ -347,6 +348,9 @@ test("late advice: a walk or training gives way, bed and winding down stay", () 
   for (const advice of ["Už netrénuj; dej si 5–10 minut lehkého protažení a pak běž spát.", "Trénink už vynech; dej si 5–10 minut klidného protažení a pak do postele.", "Skip the walk tonight, just stretch and go to bed."]) assert.equal(lateAdvice(wind, advice), advice, advice);
   assert.equal(lateAdvice(wind, "Trénink už vynech, ale dej si 30 min procházku."), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.");
   assert.equal(lateAdvice(bed, "Skip the walk and go to bed now."), "Skip the walk and go to bed now.");
+  assert.equal(lateAdvice(bed, "Žádný běh, odpočiň si a jdi spát."), "Žádný běh, odpočiň si a jdi spát.");
+  // Review: a negation of something else keeps the walk out, and the chat's easy spin is a move too.
+  for (const advice of ["Don't skip the walk tonight.", "No need to skip the walk, 20 min easy.", "Walk 10 min without your phone, then bed.", "Odlož mobil a projdi se 10 minut.", "Nevynechávej večerní procházku.", "Teď už nejdřív krátká procházka, pak spát.", "Dej si 20 minut lehkého šlapání.", "Projeď se 20 minut.", "Zaběhni si 15 minut."]) assert.equal(lateAdvice(wind, advice), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.", advice);
   // The text itself never aims at a bedtime that has passed: it is not shown.
   assert.throws(() => checkedText(bed, JSON.stringify({ text: "Skip extra training and aim for your 21:10 bedtime.", advice: "Go to bed now." })), /late/);
   assert.equal(checkedText(bed, JSON.stringify({ text: "Your 21:10 bedtime is gone.", advice: "Go to bed now." })).text, "Your 21:10 bedtime is gone.");
