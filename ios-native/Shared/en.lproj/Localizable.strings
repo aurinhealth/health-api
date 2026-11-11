@@ -4199,3 +4199,11 @@
 "HRV %@ ms, nad obvyklým rozmezím" = "HRV %@ ms, above your usual range";
 "HRV %@ ms, pod obvyklým rozmezím" = "HRV %@ ms, below your usual range";
 "HRV %@ ms, v obvyklém rozmezí" = "HRV %@ ms, within your usual range";
+
+/* Coach thinking steps (CoachSteps.swift) */
+"Odpověď za %lld s, %@" = "Answered in %lld s, %@";
+"Pracuji" = "Working";
+"probíhá" = "in progress";
+"Ukáže čísla." = "Shows the numbers.";
+"Skryje kroky kouče." = "Hides the coach's steps.";
+"Ukáže kroky kouče." = "Shows the coach's steps.";
