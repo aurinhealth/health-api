@@ -2,7 +2,8 @@ import Foundation
 
 extension AppModel {
     /// The days from start to end (today at most) for the month calendar,
-    /// once; force again after a sync. The server sends at most 42 days.
+    /// once; the sheet asks for the current month again each time it opens.
+    /// The server sends at most a month.
     func loadDays(from start: String, to end: String, force: Bool = false) async {
         let today = Self.localDate(Date())
         let last = min(end, today)

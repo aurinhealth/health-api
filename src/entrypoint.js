@@ -2958,10 +2958,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   // Today's day strip and month calendar (app-days.js): readiness, sleep,
-  // strain and HRV per day, at most 42 days and back to 90 days before today
+  // strain and HRV per day, at most a month (31 days) and back to 90 days before today
   // (the 91 days of daily rows each day's 60-day baseline reads). The range
-  // ending today shares Today's cached Google/Apple rows; a past one is kept
-  // for six hours (a sync of new data bumps the cache version).
+  // ending today shares Today's cached Google/Apple rows and is kept two
+  // minutes as they are; a past one six hours (a sync of new data bumps the
+  // cache version).
   if(url.pathname==='/app/api/days'&&request.method==='GET'){
     try{
       const today=localToday(),valid=v=>validTrainingDay(v);
@@ -2976,13 +2977,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const from=shiftDate(start,-14),to=shiftDate(end,1);
         const [health,fitness,sleep,profile,checkin]=await Promise.all([
           googleHealthFor(env,ctx,end).catch(()=>({})),
-          cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
+          cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
           read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
           dashboardProfile(env).catch(()=>null),
           end===today?readinessCheckin(env.DB,today).catch(()=>null):null
         ]);
-        return buildDays({start,end,today,google:Array.isArray(health.wellness)?health.wellness:[],intervals:Array.isArray(fitness.wellness)?fitness.wellness:[],sessions:sleep.sessions,profile,checkin});
-      },end<today?{ttl:CLOSED_DAY_TTL_SECONDS}:{});
+        const days=buildDays({start,end,today,google:Array.isArray(health.wellness)?health.wellness:[],intervals:Array.isArray(fitness.wellness)?fitness.wellness:[],sessions:sleep.sessions,profile,checkin});
+        // A failed read is not kept: the next open asks again.
+        return Array.isArray(health.wellness)&&Object.keys(sleep||{}).length?days:{...days,degraded:true};
+      },{ttl:end<today?CLOSED_DAY_TTL_SECONDS:120});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }

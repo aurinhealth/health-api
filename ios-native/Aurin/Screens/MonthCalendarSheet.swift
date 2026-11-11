@@ -71,8 +71,8 @@ struct MonthCalendarSheet: View {
                     Button { dismiss() } label: { Image(systemName: "xmark") }
                         .accessibilityLabel("Zavřít")
                 }
-                ToolbarItem(placement: .bottomBar) {
-                    if month != ISODay.monthStart(today) {
+                if month != ISODay.monthStart(today) {
+                    ToolbarItem(placement: .bottomBar) {
                         Button("Dnes") { month = ISODay.monthStart(today) }
                     }
                 }

@@ -31,7 +31,7 @@ test("Days: one entry per day up to today, each like Health shows it", () => {
   assert.equal(short.sleep.minutes, 300);
 });
 
-test("Days: at most six weeks, a day without data stays empty", () => {
+test("Days: at most a month, a day without data stays empty", () => {
   const { days } = buildDays({ start: day(-80), end: DATE, today: DATE, google: [], sessions: [], profile });
   assert.equal(days.length, DAYS_MAX);
   assert.deepEqual(days[0], { date: day(-80), readiness: null, sleep: null, strain: null, hrv: null });

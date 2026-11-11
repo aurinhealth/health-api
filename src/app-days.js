@@ -10,8 +10,9 @@ import { dayStrainParts } from "./recovery-model.js";
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
-// At most six weeks a call: a month grid, or the strip's weeks around a day.
-export const DAYS_MAX = 42;
+// At most a month a call: the steps and heart-rate zones the strain needs
+// reach 31 days before the range's end (googleDashboard).
+export const DAYS_MAX = 31;
 
 // Days from start to end (today at most), oldest first. `checkin` is today's
 // morning answer, which lowers today's number as on Today. A past day's strain
