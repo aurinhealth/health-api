@@ -65,6 +65,8 @@ struct TodayContent: View {
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
     @State private var editing = false
+    /// The month calendar (MonthCalendarSheet), from a tap on the month.
+    @State private var showMonth = false
     /// Nastavení → Kouč na obrazovkách: the coach's card on Dnes.
     @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
@@ -104,6 +106,7 @@ struct TodayContent: View {
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
+        .sheet(isPresented: $showMonth) { MonthCalendarSheet(date: today.date) }
     }
 
     private var board: some View {
@@ -116,7 +119,7 @@ struct TodayContent: View {
     /// The month, the week and the data's state, across the whole width.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
-        TabHeader(date: today.date, share: openShare, coach: openCoach, settings: openSettings)
+        TabHeader(date: today.date, share: openShare, month: { showMonth = true }, coach: openCoach, settings: openSettings)
         WeekStrip(date: today.date, week: today.week).padding(.top, 14)
 
         if selectedDate == nil && !model.demo {
@@ -391,6 +394,8 @@ struct TabHeader<Extra: View>: View {
     var showToday: (() -> Void)? = nil
     /// Sdílet, only on Dnes.
     var share: (() -> Void)? = nil
+    /// The month calendar, only on Dnes: the month becomes a button with ⌄.
+    var month: (() -> Void)? = nil
     var coach: () -> Void
     var settings: () -> Void
     @ViewBuilder var extra: Extra
@@ -401,13 +406,8 @@ struct TabHeader<Extra: View>: View {
         // "Dnes" and the capsule are 8 pt apart: they never melt into one.
         ChromeGlassGroup(spacing: 4) {
             HStack(spacing: 8) {
-                Text(verbatim: Fmt.monthTitle(date))
-                    .font(Typo.sentence(30, relativeTo: .title))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                title
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
-                    .accessibilityLabel(Fmt.monthTitleSpoken(date))
-                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let back = backToToday {
                     Button(action: back) {
@@ -428,6 +428,34 @@ struct TabHeader<Extra: View>: View {
         }
     }
 
+    @ViewBuilder private var title: some View {
+        let text = Text(verbatim: Fmt.monthTitle(date))
+            .font(Typo.sentence(30, relativeTo: .title))
+            .foregroundStyle(Palette.ink)
+            .lineLimit(1).minimumScaleFactor(0.7)
+        if let month {
+            Button(action: month) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    text
+                    Image(systemName: "chevron.down")
+                        .scaledFont(13, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.muted)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(model.demo || model.dayLocked)
+            .accessibilityLabel(Fmt.monthTitleSpoken(date))
+            .accessibilityHint(L10n.tr("Otevře kalendář měsíce"))
+            .accessibilityAddTraits(.isHeader)
+        } else {
+            text
+                .accessibilityLabel(Fmt.monthTitleSpoken(date))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
     private var backToToday: (() -> Void)? {
         if !followsDay { return showToday }
         guard (page.map(\.selectedDate) ?? model.selectedDate) != nil else { return nil }
@@ -437,8 +465,8 @@ struct TabHeader<Extra: View>: View {
 
 extension TabHeader where Extra == EmptyView {
     init(date: String, followsDay: Bool = true, showToday: (() -> Void)? = nil, share: (() -> Void)? = nil,
-         coach: @escaping () -> Void, settings: @escaping () -> Void) {
-        self.init(date: date, followsDay: followsDay, showToday: showToday, share: share, coach: coach, settings: settings) { EmptyView() }
+         month: (() -> Void)? = nil, coach: @escaping () -> Void, settings: @escaping () -> Void) {
+        self.init(date: date, followsDay: followsDay, showToday: showToday, share: share, month: month, coach: coach, settings: settings) { EmptyView() }
     }
 }
 
