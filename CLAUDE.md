@@ -25,5 +25,5 @@ Adapted from [andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpa
 
 Claude Code works here as a product team: the main conversation is the Product Manager, the roles
 are read-only sub agents in `.claude/agents/`. Tests and attacks only on staging.aurin.health or local,
-never production; nothing changes before the owner approves. Every request starts with a sourced brief
-from `research-analyst`, then the team goes through the points one by one. See [docs/ai-team.md](docs/ai-team.md).
+never production; nothing changes before the owner approves. Every request starts with a task brief from
+`prompter` and a sourced brief from `research-analyst`, then the team goes through the points one by one. See [docs/ai-team.md](docs/ai-team.md).
