@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges, healthMemorySince, statusCheck } from '../src/athlete-state.js';
-import { checkDays } from '../src/pain-words.js';
+import { getAthleteState, updateAthleteState, memoryList, memoryCheck, memoryChanges, healthMemorySince, statusCheck, heartSince } from '../src/athlete-state.js';
+import { checkDays, heartSymptom } from '../src/pain-words.js';
 import { readFileSync } from 'node:fs';
 import { coachAnswerText } from '../src/coach-assistant.js';
 import { COACH_ACTION_FORMAT } from '../src/coach-actions.js';
@@ -66,7 +66,7 @@ test('the coach gets the day a pain was told or last confirmed, and the check co
   assert.deepEqual(healthMemorySince(kept), [{ text: 'Bolí mě koleno', since: '2026-10-28' }]);
   assert.deepEqual(healthMemorySince({ ...kept, memoryOff: true }), []);
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|statusCheck\(state,date\)\|\|memoryCheck\(state,date\)\|\|easier/);
+  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|statusCheck\(state,date\)\|\|memoryCheck\(state,date,\{trainedOn\}\)\|\|easier/);
   assert.match(src, /healthMemorySince:healthSince/);
 });
 
@@ -95,4 +95,39 @@ test('the reply format carries memory changes and the parser reads them', () => 
   const reply = coachAnswerText(JSON.stringify({ answer: 'Super, běhy vracím.', visuals: [], actions: [], memory: { forget: ['Nechci běhat, bolí mě koleno'], update: [] } }), { actions: true });
   assert.deepEqual(reply.memory.forget, ['Nechci běhat, bolí mě koleno']);
   assert.deepEqual(coachAnswerText('plain', { actions: true }).memory, { save: [], forget: [], update: [] });
+});
+
+// Petr 2026-11-11: chest symptoms under load are asked about the next day and
+// after the first training since, not in a week like other pains.
+test('chest symptoms: asked the next day, after the next training, again in two days when still there', async () => {
+  for (const t of ['Píchání na hrudi a zatmění před očima při zátěži', 'Tlak na hrudi při stoupání', 'Chest pain on intervals', 'Nearly blacked out on the climb']) assert.equal(checkDays(t), 1, t);
+  for (const t of ['Tlak v hrudi při stoupání', 'Sevřelo se mi na hrudi', 'Pálení na hrudi při zátěži', 'Závrať při intervalu', 'Zatočila se mi hlava', 'Dizzy during intervals', 'Buší mi srdce', 'Splašený tep při zátěži',
+    'Racing heartbeat', 'Skipped heartbeats at rest', 'My heart skips beats', 'Srdce mi občas v klidu vynechává', 'I passed out after the sprint', 'Vision went dim', 'Nečekaná dušnost při běhu']) assert.ok(heartSymptom(t), t);
+  for (const t of ['Chci víc hrudníku', 'Bench press na hrudník', 'Tlaky na hrudník 3x týdně', 'Chest exercises twice a week', 'Tlačím na hrudník 80 kg', 'Cviky na hrudník a stabilizaci', 'Chest day: tighten core',
+    'Chest workouts painless', 'Chest press hurts my shoulder', 'Chci posílit hrudník, bolí mě rameno', 'Bolest hrudní páteře', 'My chest strap hurts', 'Vynechal jsem trénink', 'Lapal jsem po dechu']) assert.equal(heartSymptom(t), false, t);
+  const db = scopedDb(createD1(), 1), chest = 'Píchání na hrudi a zatmění při sweet spotu';
+  await updateAthleteState(db, { memory: chest }, { date });
+  const state = await getAthleteState(db, { date });
+  assert.equal(memoryList(state)[0].group, 'health');
+  assert.equal(heartSince(state), date);
+  assert.equal(memoryCheck(state, date, { trainedOn: date }), null);
+  const next = memoryCheck(state, '2026-10-15');
+  assert.equal(next.headline, 'Trvají ty potíže pořád?');
+  const trained = memoryCheck(state, '2026-10-15', { trainedOn: '2026-10-15' });
+  assert.equal(trained.headline, 'Objevilo se to i na tréninku?');
+  assert.equal(trained.memory, chest);
+  const kept = await updateAthleteState(db, { keep: chest }, { date: '2026-10-15' });
+  assert.equal(memoryList(kept)[0].check, '2026-10-17');
+  assert.equal(memoryCheck(kept, '2026-10-16', { trainedOn: '2026-10-15' }), null);
+  assert.equal(memoryCheck(kept, '2026-10-16', { trainedOn: '2026-10-16' }).headline, 'Objevilo se to i na tréninku?');
+  assert.equal(heartSince({ ...kept, memoryOff: true }), null);
+  // A heart memory saved before checkDays knew it (no check day): Still true still settles the after-training card.
+  const oldDb = scopedDb(createD1(), 2), blackout = 'Zatmělo se mi před očima';
+  const before = await updateAthleteState(oldDb, { memory: blackout }, { date });
+  delete before.memoryMeta[blackout].check;
+  await oldDb.prepare('UPDATE athlete_state SET state_json=? WHERE user_id=?').bind(JSON.stringify(before), oldDb.userId).run();
+  assert.equal(memoryList(await getAthleteState(oldDb, { date }))[0].check, null);
+  const settled = await updateAthleteState(oldDb, { keep: blackout }, { date: '2026-10-20' });
+  assert.equal(settled.memoryMeta[blackout].keptAt, '2026-10-20');
+  assert.equal(memoryCheck(settled, '2026-10-21', { trainedOn: '2026-10-20' }), null);
 });
