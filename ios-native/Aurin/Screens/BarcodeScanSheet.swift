@@ -490,7 +490,7 @@ struct BarcodeScanSheet: View {
     private static func firstAmount(_ p: FoodProduct) -> Double {
         if p.perPortion { return 1 }
         if let s = p.usableServing { return s }
-        if let q = FoodProduct.leadingNumber(p.quantity), q > 0, q <= 500 { return q }
+        if let q = FoodProduct.size(p.quantity, unit: p.unit), q <= 500 { return q }
         return 100
     }
 

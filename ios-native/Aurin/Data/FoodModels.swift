@@ -247,7 +247,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         if let last_amount { return last_amount }
         if perPortion { return 1 }
         if let s = usableServing { return s }
-        if let q = Self.leadingNumber(quantity), q > 0, q <= 500 { return q }
+        if let q = Self.size(quantity, unit: unit), q <= 500 { return q }
         return 100
     }
 
