@@ -84,6 +84,9 @@ final class BarcodeDigitsTests: XCTestCase {
         XCTAssertEqual(VisionBarcodeReader.printedCode(["4  006795  304763>"]), "4006795304763")
         XCTAssertEqual(VisionBarcodeReader.printedCode(["Lot 12", "4 C06795 304763"]), "4006795304763")
         XCTAssertEqual(VisionBarcodeReader.printedCode(["e 500 g 4006795304763"]), "4006795304763")
+        // Guard bars read as marks.
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["4|006795|304763|"]), "4006795304763")
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["4 ‘C06795‘304763‘"]), "4006795304763")
     }
 
     func testOtherNumbersAreNoCode() {
@@ -92,10 +95,15 @@ final class BarcodeDigitsTests: XCTestCase {
         XCTAssertNil(VisionBarcodeReader.printedCode(["Best before 31.12.2026", "L 20261231"]))
         XCTAssertNil(VisionBarcodeReader.printedCode(["0 36000 29145 2"]))
         XCTAssertNil(VisionBarcodeReader.printedCode(["Cola"]))
+        // Numbers that would add up to 13 digits in another layout.
+        XCTAssertNil(VisionBarcodeReader.printedCode(["31.12.2026 L 23345"]))
+        XCTAssertNil(VisionBarcodeReader.printedCode(["4 006795 1 304763"]))
+        XCTAssertNil(VisionBarcodeReader.printedCode(["4 0067951304763"]))
     }
 
-    func testMisreadLettersOnlyNextToDigits() {
-        XCTAssertEqual(VisionBarcodeReader.digitsMisread("4 C06795 Cola l2"), "4 006795 Cola 12")
+    func testMisreadZerosOnlyInDigitGroups() {
+        XCTAssertEqual(VisionBarcodeReader.digitsMisread("C06795"), "006795")
+        XCTAssertEqual(VisionBarcodeReader.digitsMisread("Cola"), "Cola")
     }
 
     func testPhotoOfTheCan() async throws {
@@ -112,5 +120,8 @@ final class BarcodeDigitsTests: XCTestCase {
         // The window in the middle of the picture stays in the middle, its sides swapped.
         XCTAssertEqual(VisionBarcodeReader.uprightRegion(CGRect(x: 0.25, y: 0.125, width: 0.5, height: 0.75)),
                        CGRect(x: 0.125, y: 0.25, width: 0.75, height: 0.5))
+        // Off the middle: the picture's top (right of the upright screen) and left (its top).
+        XCTAssertEqual(VisionBarcodeReader.uprightRegion(CGRect(x: 0.125, y: 0.25, width: 0.25, height: 0.5)),
+                       CGRect(x: 0.25, y: 0.625, width: 0.5, height: 0.25))
     }
 }

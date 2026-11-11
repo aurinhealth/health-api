@@ -559,7 +559,9 @@ struct BarcodeScanSheet: View {
             if let code = request.results?.compactMap(\.payloadStringValue).first(where: { !$0.isEmpty }) {
                 return VisionBarcodeReader.likeTheCamera(code)
             }
-            return VisionBarcodeReader.printedCode(handler)
+            // The digits at most 2000 px across: a 48 MP photo read whole took seconds.
+            let scale = min(1, 2000 / max(image.extent.width, image.extent.height))
+            return VisionBarcodeReader.printedCode(VNImageRequestHandler(ciImage: image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))))
         }.value
     }
 
@@ -872,8 +874,10 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
     private var resting = false
     var paused: Bool {
         get { lock.withLock { resting } }
-        set { lock.withLock { resting = newValue } }
+        set { lock.withLock { resting = newValue; if newValue { scanningSince = nil } } }
     }
+    /// The first frame since the scanner last found a code (under `lock`).
+    private var scanningSince: Date?
     /// Only on `queue`.
     private var last = Date.distantPast
     private var lastText = Date.distantPast
@@ -887,15 +891,20 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
         let now = Date()
         guard !paused, now.timeIntervalSince(last) >= 0.1, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         last = now
-        let window = lock.withLock { self.window }
+        let (window, since) = lock.withLock { () -> (CGRect, Date) in
+            if scanningSince == nil { scanningSince = now }
+            return (self.window, scanningSince ?? now)
+        }
         if let code = Self.code(in: pixels, region: Self.visionRegion(window)) { onCode?(code); return }
         // Bars too blurred or bent to read (a can, a dim kitchen): the digits
-        // under them, a slower read, so less often. The phone is upright, so
-        // the picture is turned to read a code held along the screen.
-        guard now.timeIntervalSince(lastText) >= 0.6 else { return }
-        lastText = now
+        // under them. A slower read, so only once the bars have failed for a
+        // while, and with a pause after each. The phone is upright, so the
+        // picture is turned to read a code held along the screen.
+        guard now.timeIntervalSince(since) >= 1.2, now.timeIntervalSince(lastText) >= 0.6 else { return }
         let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .right)
-        if let code = Self.printedCode(handler, region: Self.uprightRegion(window)) { onCode?(code) }
+        let code = Self.printedCode(handler, region: Self.uprightRegion(window))
+        lastText = Date()
+        if let code { onCode?(code) }
     }
 
     /// The metadata output's rect (the camera's unrotated picture, origin top
@@ -939,37 +948,31 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
         return LabelReader.rows((request.results ?? []).compactMap { o in o.topCandidates(1).first.map { (o.boundingBox, $0.string) } })
     }
 
-    /// "4 006795 304763" on a line of text: groups of digits that together
-    /// make 13 with a matching check digit (EAN-13, most foods here). Not 12:
-    /// an EAN-13 with one digit missed would pass as UPC-A one time in ten.
-    /// Not 8: a date or a batch number has 8 digits too.
+    /// "4 006795 304763" on a line of text, as EAN-13 prints it: one digit,
+    /// six and six (or 1 and 12, or all 13 together), with a matching check
+    /// digit. Only these layouts: other numbers in the window (a date, a
+    /// batch) never add up to a code. Not 12 digits (UPC-A): an EAN-13 with
+    /// one digit missed would pass one time in ten. Not 8: dates have 8 too.
     static func printedCode(_ lines: [String]) -> String? {
-        for line in lines.map(digitsMisread) {
-            // Anything but a digit parts the groups ("304763>" too).
-            let groups = line.split { !$0.isASCII || !$0.isNumber }.map(String.init)
-            for start in groups.indices {
-                var digits = ""
-                for group in groups[start...] {
-                    digits += group
-                    if digits.count > 13 { break }
-                    if digits.count == 13, let code = BarcodeScanSheet.typedCode(digits) { return code }
+        for line in lines {
+            // The guard bars reach into the digit row and read as marks.
+            let tokens = String(line.map { "<>|‘’'\"`".contains($0) ? " " : $0 }).split(separator: " ").map { digitsMisread(String($0)) }
+            for start in tokens.indices {
+                for layout in [[1, 6, 6], [1, 12], [13]] where start + layout.count <= tokens.count {
+                    let group = tokens[start..<start + layout.count]
+                    guard zip(group, layout).allSatisfy({ $0.count == $1 && $0.allSatisfy { $0.isASCII && $0.isNumber } }) else { continue }
+                    if let code = BarcodeScanSheet.typedCode(group.joined()) { return code }
                 }
             }
         }
         return nil
     }
 
-    /// A blurred 0 or 1 read as a letter ("4 C06795"), only next to digits;
-    /// the check digit catches a wrong guess.
-    static func digitsMisread(_ line: String) -> String {
-        let chars = Array(line)
-        let zero: Set<Character> = ["O", "o", "Q", "D", "C"], one: Set<Character> = ["I", "l", "|"]
-        return String(chars.indices.map { i -> Character in
-            let c = chars[i]
-            guard zero.contains(c) || one.contains(c) else { return c }
-            let byDigit = (i > 0 && chars[i - 1].isASCII && chars[i - 1].isNumber) || (i + 1 < chars.count && chars[i + 1].isASCII && chars[i + 1].isNumber)
-            return byDigit ? (zero.contains(c) ? "0" : "1") : c
-        })
+    /// A blurred 0 read as a letter ("C06795") inside a group of digits; the
+    /// check digit catches a wrong guess. Not 1: a guard bar looks like one.
+    static func digitsMisread(_ token: String) -> String {
+        guard token.contains(where: { $0.isASCII && $0.isNumber }) else { return token }
+        return String(token.map { "OoQDC".contains($0) ? "0" : $0 })
     }
 }
 
