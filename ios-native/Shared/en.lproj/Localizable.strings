@@ -4189,8 +4189,8 @@
 "Průměrná námaha %@ z 21." = "Average strain %@ of 21.";
 "Tento měsíc zatím bez HRV." = "No HRV this month yet.";
 "Kroužek je připravenost 0 až 100." = "The ring is readiness from 0 to 100.";
-"Kroužek je spánek proti potřebě, plný při 100 %." = "The ring is sleep against your need, full at 100%.";
-"Kroužek je námaha dne 0 až 21." = "The ring is the day's strain from 0 to 21.";
+"Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený." = "The ring is sleep against your need, full at 100%. Green from 85%, orange from 70%, red below.";
+"Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený." = "The ring is the day's strain from 0 to 21. Yellow below 10, orange below 14, red above.";
 "Šipka je HRV proti obvyklému rozmezí." = "The arrow is HRV against your usual range.";
 "připravenost %@" = "readiness %@";
 "námaha %@" = "strain %@";

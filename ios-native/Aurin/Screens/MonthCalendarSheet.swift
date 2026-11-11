@@ -178,8 +178,8 @@ struct MonthCalendarSheet: View {
     private var legend: String {
         switch chosen {
         case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.")
-        case .sleep: return L10n.tr("Kroužek je spánek proti potřebě, plný při 100 %.")
-        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21.")
+        case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený.")
+        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený.")
         case .hrv: return L10n.tr("Šipka je HRV proti obvyklému rozmezí.")
         }
     }
@@ -207,12 +207,17 @@ struct DayMark: Equatable {
         case .sleep:
             guard let s = values?.sleep else { return }
             fill = min(Double(s.percent) / 100, 1)
-            color = Palette.indigo
+            // A colour by state as Bevel (Petr, 2026-11-11): how much of the
+            // need the night covered, in WHOOP's sleep performance bands (85 and
+            // 70 %), only a guide; rust as on a red readiness.
+            color = s.percent >= 85 ? Palette.green : s.percent >= 70 ? Palette.amber : Palette.rust
             spoken = Fmt.hoursMinutesLong(Double(s.minutes)) + ", " + L10n.f("%@ %% potřeby", String(s.percent))
         case .strain:
             guard let v = values?.strain else { return }
             fill = min(v / 21, 1)
-            color = Palette.amberBar
+            // How hard, not good or bad: light under 10, moderate under 14,
+            // high above (the usual bands of the 0-21 strain scale).
+            color = v >= 14 ? Palette.rust : v >= 10 ? Palette.amberBar : Palette.gold
             spoken = L10n.f("námaha %@", Fmt.decimal(v, digits: 1))
         case .hrv:
             guard let h = values?.hrv else { return }
