@@ -27,12 +27,13 @@ export function readOnlySql(sql) {
   return /^\s*(SELECT|WITH)\b/i.test(code) && !/\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|DROP|ALTER)\b/i.test(code);
 }
 
-export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_MS, sleep = wait } = {}) {
+// target: which database ("user", "core", "foods"), for the slow report's split.
+export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_MS, sleep = wait, target = null } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const started = Date.now(), end = beginWait("d1");
+      const started = Date.now(), end = beginWait("d1"), endTarget = target ? beginWait("d1" + target) : () => {};
       let result;
-      try { result = await run(); } finally { end(); }
+      try { result = await run(); } finally { end(); endTarget(); }
       noteD1(result, Date.now() - started);
       return result;
     }

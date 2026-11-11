@@ -35,9 +35,8 @@ function reimportAfterPause(env,ctx){
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
-    const [onboarding,ai,consent]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null,session.signedIn?consentStatus(env):null]);
-    const apple = session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
-    const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
+    // All side by side: when D1 is busy, each read in turn would wait in its queue again.
+    const [onboarding,ai,consent,apple,passkeys]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null,session.signedIn?consentStatus(env):null,session.user?appleIdentity(env.RAW_DB,session.user.id):null,session.user?listPasskeys(env.RAW_DB,session.user.id):[]]);
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env),internalTester:internalTester(env,session.user)},{headers:{"Cache-Control":"no-store"}});
   }
   // The app's own settings, kept with the account for a new install (app-settings.js).

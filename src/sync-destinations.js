@@ -259,9 +259,11 @@ const offered = (env, id) => id === 'wahoo' ? Boolean(String(env.WAHOO_CLIENT_ID
 
 // GET /app/api/sync/prefs: every destination with its state and preferences.
 export async function syncOverview(env) {
-  const destinations = [];
-  for (const id of DESTINATIONS.filter(d => offered(env, d))) {
-    const { stored, ...prefs } = await readSyncPrefs(env.DB, env.USER_ID, id);
+  const destinations = [], ids = DESTINATIONS.filter(d => offered(env, d));
+  // Side by side: when D1 is busy, each read in turn would wait in its queue again.
+  const read = await Promise.all(ids.map(id => readSyncPrefs(env.DB, env.USER_ID, id)));
+  for (const [i, id] of ids.entries()) {
+    const { stored, ...prefs } = read[i];
     const row = { id, connected: destinationConnected(env, id), stored, prefs, supports: SUPPORTS[id], healthTypes: HEALTH_TYPES[id] };
     // The apps whose workouts can go on there: the connected ones.
     if (FORWARD_TO[id]) row.forwardSources = FORWARD_TO[id].filter(source => destinationConnected(env, source) && offered(env, source));
