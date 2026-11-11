@@ -498,7 +498,7 @@ final class APIClient: @unchecked Sendable {
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
     func searchFood(name: String, barcode: String? = nil) async throws -> [FoodProduct] {
-        var body: JSONObject = ["name": .string(name)]
+        var body: JSONObject = ["name": .string(name), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodSearchResponse = try await send("/app/api/food/search", method: "POST", body: body)
         return response.candidates ?? response.product.map { [$0] } ?? []
@@ -531,7 +531,7 @@ final class APIClient: @unchecked Sendable {
     /// estimate: when the web has no such product, typical values marked as
     /// an AI estimate (source "ai-estimate").
     func lookupFood(name: String, barcode: String? = nil, estimate: Bool = true) async throws -> FoodProduct? {
-        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate)]
+        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodLookupResponse = try await send("/app/api/food/ai-lookup", method: "POST", body: body)
         return response.status == "ok" ? response.product : nil
