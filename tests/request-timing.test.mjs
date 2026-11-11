@@ -75,7 +75,7 @@ test("the slow report says what the request waited for: D1, Intervals, AI, anoth
   assert.ok(work.waits.intervals >= 140 && work.waits.intervals < 260, String(work.waits.intervals));
   assert.ok(work.waits.d1 >= 100);
   const slow = slowness({ ...work, started: Date.now() - 3200 });
-  assert.match(slow, /^3\d{3} ms, 1 dotazů, 1 řádků; databáze: SQL 0 ms, souběžně 0; čekání: D1 \d+ ms, Intervals \d+ ms$/);
+  assert.match(slow, /^3\d{3} ms, 1 dotazů, 1 řádků; databáze: SQL 0 ms \(0 z 1 dotazů\), souběžně 0; čekání: D1 \d+ ms, Intervals \d+ ms$/);
   assert.match(serverTiming(work), /, intervals;dur=\d+$/);
   // Waiting for the coach inputs another request is computing.
   const store = { match: async () => undefined, put: async () => {} };
@@ -106,9 +106,9 @@ test("a slow request says which database it waited for, how much was SQL and how
   assert.ok(work.waits.d1user >= 100 && work.waits.d1core >= 25 && work.waits.d1core < 100, JSON.stringify(work.waits));
   assert.equal(work.sqlMs, 4);
   assert.equal(work.peers, 1);
-  assert.match(databaseSummary(work), /^databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms, souběžně 1$/);
+  assert.match(databaseSummary(work), /^databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms \(2 z 2 dotazů\), souběžně 1$/);
   const slow = slowness({ ...work, started: Date.now() - 3200 });
-  assert.match(slow, /^3\d{3} ms, 2 dotazů, 2 řádků; databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms, souběžně 1; čekání: D1 \d+ ms$/);
+  assert.match(slow, /^3\d{3} ms, 2 dotazů, 2 řádků; databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms \(2 z 2 dotazů\), souběžně 1; čekání: D1 \d+ ms$/);
   // The morning report still reads the total and what it waited for.
   const { parseSlow } = await import("../src/ops-report-html.js");
   assert.deepEqual({ ...parseSlow(slow), ms: null }, { ms: null, rows: 2, waited: "D1" });

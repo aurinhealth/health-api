@@ -13,7 +13,9 @@ const current = new AsyncLocalStorage();
 const running = new Set();
 
 export function timed(fn) {
-  const store = { started: Date.now(), queries: 0, trips: 0, rowsRead: 0, dbMs: 0, sqlMs: 0, peers: 0, waits: {}, open: {}, since: {} };
+  const store = { started: Date.now(), queries: 0, trips: 0, rowsRead: 0, dbMs: 0, sqlMs: 0, sqlQueries: 0, peers: 0, waits: {}, open: {}, since: {} };
+  // A request the client gave up on may never finish: after a minute it no longer counts.
+  for (const other of running) if (store.started - other.started > 60000) running.delete(other);
   running.add(store);
   for (const other of running) other.peers = Math.max(other.peers, running.size - 1);
   let result;
@@ -81,7 +83,8 @@ export function noteD1(result, ms) {
   for (const r of results) {
     store.rowsRead += Number(r?.meta?.rows_read) || 0;
     // What D1 itself spent running the SQL; the rest of the wait is the queue and the trip.
-    store.sqlMs += Number(r?.meta?.duration) || 0;
+    // first() has no meta: its SQL time is not known (sqlQueries says how many were).
+    if (r?.meta?.duration != null) { store.sqlMs += Number(r.meta.duration) || 0; store.sqlQueries += 1; }
   }
   store.dbMs += ms;
 }
@@ -110,7 +113,7 @@ export function slowness(store, { cron = false } = {}) {
   return `${ms} ms, ${queries}, ${store.rowsRead} řádků` + (databases ? `; ${databases}` : "") + (waits ? `; čekání: ${waits}` : "");
 }
 
-// "databáze: účet 8200 ms, hlavní 700 ms, SQL 90 ms, souběžně 6": once D1 took
+// "databáze: účet 8200 ms, hlavní 700 ms, SQL 90 ms (20 z 27 dotazů), souběžně 6": once D1 took
 // 100 ms or more, which database the request waited for, how much of it D1
 // spent running SQL (one account's slow database) and how many other requests
 // this isolate ran at the same time (the app's requests at once). It stands
@@ -118,6 +121,6 @@ export function slowness(store, { cron = false } = {}) {
 export function databaseSummary(store) {
   if (!(store?.waits?.d1 >= 100)) return "";
   const parts = Object.entries(D1_TARGETS).filter(([kind]) => store.waits[kind] > 0).map(([kind, name]) => `${name} ${store.waits[kind]} ms`);
-  parts.push(`SQL ${Math.round(store.sqlMs || 0)} ms`, `souběžně ${store.peers || 0}`);
+  parts.push(`SQL ${Math.round(store.sqlMs || 0)} ms (${store.sqlQueries || 0} z ${store.queries || 0} dotazů)`, `souběžně ${store.peers || 0}`);
   return "databáze: " + parts.join(", ");
 }
