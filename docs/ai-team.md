@@ -20,6 +20,7 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Fable 5.2 (medium) |
 | Produkt a vývoj: Data | Data & Integrations Engineer, owner | `data-engineer` | read-only commands | Opus 5.5 |
 | Produkt a vývoj: Data | Data Analyst | `data-analyst` | read-only commands | Sonnet 5.5 |
+| Produkt a vývoj | Prompter | `prompter` | no | Opus 5.5 (medium) |
 | Kontrola: Věda (team) | **Sport & Health Scientist, lead** | `health-scientist` | no | Opus 5.5 |
 | Kontrola: Věda | Sleep Scientist | `sleep-scientist` | no | Sonnet 5.5 |
 | Kontrola: Věda | Questionnaires & Habits Scientist | `behaviour-scientist` | no | Sonnet 5.5 |
@@ -151,6 +152,11 @@ A role does not see the thread's history, so every brief carries what it needs, 
 5. **Report:** the common findings format, short, with sources.
 
 ## Who checks what
+- A new request from the owner that starts a team run or a new thread: `prompter` first turns it into
+  a task brief (the order of "How the PM briefs a role"), before `research-analyst`. Where an answer
+  would change the work, it first returns up to 3 questions with a recommended answer; the PM asks
+  the owner and gives the answers back to `prompter`, which then writes the final brief. It follows Anthropic's
+  guide "Prompting Claude Fable 5.2". Quick answers, small fixes and follow-ups skip it.
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
   "Rychlost a náklady" paragraph (speed, D1 rows, Cloudflare limits) for its description.
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
@@ -158,7 +164,7 @@ A role does not see the thread's history, so every brief carries what it needs, 
   AI disclosures and other companies' names and logos: `privacy-compliance`.
 - AI features, AI limits, the paywall and prices: `monetization-analyst` checks they never block a
   normal user and that every user earns more than they cost.
-- Every request or point to discuss: `research-analyst` first researches competitors, medical and
+- Every request or point to discuss: `research-analyst`, after the task brief of `prompter`, researches competitors, medical and
   sport-science literature, guidelines, news and studies, each claim with a source. The other roles
   build their proposals on that brief.
 - Training, plans, workouts and the coach's training advice: the coach of each sport the change touches
@@ -203,7 +209,8 @@ and they are not always right.
 
 ## How a task runs
 1. The owner gives a task (e.g. "audit the Today screen").
-2. The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
+2. `prompter` asks the owner (through the PM) the few questions that change the work, then turns the
+   request into a task brief (see Who checks what). The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
    only after the owner says yes. Then it briefs only the roles the task needs. It first judges whether
    the request makes sense (see "The owner's requests are input" below) and says so before the team
    spends credits on a request that is wrong or not needed.
