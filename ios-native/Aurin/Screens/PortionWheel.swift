@@ -138,20 +138,25 @@ struct PortionWheel: View {
         Binding(get: { part }, set: { typing = false; amount = (Double(whole) + Self.parts[$0].value) * current.size })
     }
 
-    /// Grams keep the amount; a serving or the package starts at one of it.
+    /// Another unit keeps about the same amount: whole grams, or the nearest fraction;
+    /// less than one serving or package becomes one, so picking "balení" never shows 0 ¼.
     private var unitChoice: Binding<Int> {
         Binding(get: { min(unit, units.count - 1) }, set: { index in
             typing = false
             unit = index
             kind?.wrappedValue = units[index].kind
-            amount = Self.amount(amount, switchedTo: units[index], perPortion: product.perPortion)
+            amount = Self.amount(amount, switchedTo: units[index])
         })
     }
 
-    /// The amount after picking another unit: whole grams, or one serving or package.
-    static func amount(_ amount: Double, switchedTo unit: Unit, perPortion: Bool) -> Double {
-        if unit.kind == .base && !perPortion { return max(1, amount.rounded()) }
-        return unit.size
+    static func amount(_ amount: Double, switchedTo unit: Unit) -> Double {
+        if unit.kind == .base { return max(1, amount.rounded()) }
+        let count = amount / unit.size
+        if count < 1 { return unit.size }
+        let w = count.rounded(.down)
+        let near = parts.map { w + $0.value } + [w + 1]
+        let pick = near.min { abs($0 - count) < abs($1 - count) } ?? count
+        return min(pick, Double(unit.most)) * unit.size
     }
 
     /// 1500 → "1500", 0.4 → "0,4": no thousands separator, so the field reads it back.

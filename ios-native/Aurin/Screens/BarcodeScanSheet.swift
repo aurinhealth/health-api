@@ -485,20 +485,11 @@ struct BarcodeScanSheet: View {
         editing = p
     }
 
-    /// The amount offered first: a serving that means something, else the
-    /// package up to 500, else 100 (FoodProduct.defaultAmount without a 1 g serving).
-    private static func firstAmount(_ p: FoodProduct) -> Double {
-        if p.perPortion { return 1 }
-        if let s = p.usableServing { return s }
-        if let q = FoodProduct.size(p.quantity, unit: p.unit), q <= 500 { return q }
-        return 100
-    }
-
     private func show(_ p: FoodProduct, keepAmount: Bool = false) {
         let before = product
         product = p
         // After "Upravit produkt" with a new serving, the wheel starts on one serving.
-        if !keepAmount || before?.usableServing != p.usableServing { amount = Self.firstAmount(p) }
+        if !keepAmount || before?.usableServing != p.usableServing { amount = p.firstAmount }
         state = .found
     }
 

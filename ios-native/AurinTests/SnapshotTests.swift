@@ -205,17 +205,25 @@ final class SnapshotTests: XCTestCase {
         let product = try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"Rohlík","calories_100g":"287","protein_100g":9.2,"serving_size":"43 g","id":12,"confidence":"high"}"#.utf8))
         XCTAssertEqual(product.calories_100g, 287)
         XCTAssertEqual(product.defaultAmount, 43)
-        // A package in kilograms or litres starts at the package, not at 1 g.
-        let flour = try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"Mouka","calories_100g":350,"quantity":"1 kg"}"#.utf8))
-        XCTAssertEqual(flour.defaultAmount, 100)
-        let cheese = try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"Sýr","calories_100g":350,"quantity":"0,25 kg"}"#.utf8))
-        XCTAssertEqual(cheese.defaultAmount, 250)
-        // Picking the package means one package, not the grams counted in packages (¼).
+        // Packages in kg, l, dl or cl are counted in grams or ml, not as 1 g.
+        func sized(_ quantity: String) throws -> FoodProduct {
+            try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"X","calories_100g":350,"quantity":"\#(quantity)"}"#.utf8))
+        }
+        XCTAssertEqual(try sized("1 kg").defaultAmount, 100, "a package over 500 starts at 100")
+        XCTAssertEqual(try sized("0,25 kg").defaultAmount, 250)
+        XCTAssertEqual(try sized("0,5 l").defaultAmount, 500)
+        XCTAssertEqual(try sized("33 cl").defaultAmount, 330)
+        XCTAssertEqual(try sized("2,5 dl").defaultAmount, 250)
+        XCTAssertEqual(try sized("2 x 125 g").defaultAmount, 100)
+        // Picking the package or a serving: less than one becomes one (not 0 ¼), more keeps the nearest fraction.
         let package = PortionWheel.Unit(name: "balení", kind: .package, size: 400, most: 10)
-        XCTAssertEqual(PortionWheel.amount(1, switchedTo: package, perPortion: false), 400)
-        XCTAssertEqual(PortionWheel.amount(100, switchedTo: package, perPortion: false), 400)
+        XCTAssertEqual(PortionWheel.amount(1, switchedTo: package), 400)
+        XCTAssertEqual(PortionWheel.amount(100, switchedTo: package), 400)
+        XCTAssertEqual(PortionWheel.amount(600, switchedTo: package), 600)
+        let serving = PortionWheel.Unit(name: "porce", kind: .serving, size: 43, most: 46)
+        XCTAssertEqual(PortionWheel.amount(129, switchedTo: serving), 129)
         let grams = PortionWheel.Unit(name: "g", size: 1, most: 2000)
-        XCTAssertEqual(PortionWheel.amount(399.6, switchedTo: grams, perPortion: false), 400)
+        XCTAssertEqual(PortionWheel.amount(399.6, switchedTo: grams), 400)
         // The empty shapes the server returns without data.
         let emptyHealth = """
         {"status":"ok","date":"2026-10-08","readiness":{"score":null,"zone":null,"missing":[],"flags":[],"parts":[],"hrv":null,"restingHR":null,"sleepMinutes":null,"strainYesterday":null,"history":[]},
