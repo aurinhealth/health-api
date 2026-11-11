@@ -3599,6 +3599,10 @@
 "%@ pauza" = "%@ rest";
 "Bazén" = "Pool";
 "Volná voda" = "Open water";
+"Teď v bazénu" = "Now in the pool";
+"Teď ve volné vodě" = "Now in open water";
+"Teď uvnitř" = "Now indoors";
+"Teď venku" = "Now outdoors";
 "CSS %@ /100 m" = "CSS %@ /100 m";
 "CSS je tempo, které udržíš zhruba 30 minut. Z něj jsou plavecké zóny." = "CSS is the pace you can hold for about 30 minutes. The swim zones come from it.";
 "Intenzita je v procentech CSS, kamarádovi se přepočte na jeho tempo na 100 m." = "Intensity is a percentage of CSS; for a friend it becomes their own pace per 100 m.";

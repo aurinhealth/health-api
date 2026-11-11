@@ -65,6 +65,13 @@ test('offline workout scheduling, moving and environment edits persist; completi
  await completeLocalWorkout(a,scheduled.eventId,{minutes:83,rpe:6,notes:'Hotovo'});assert.equal((await getScheduledWorkouts(a))[0].status,'completed');
  const row=await a.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='activity'").bind(1).first();assert.equal(JSON.parse(row.payload_json).moving_time,83*60);
 });
+test('a library pool swim stays in the pool when moved and goes to open water only when picked',async()=>{
+ const {a,env}=setup();
+ const scheduled=await scheduleWorkoutInIntervals(env,a,{workoutId:'swim-endurance-3x300',date:'2026-10-10',confirm:true});
+ await movePlannedEvent(env,{eventId:scheduled.eventId,date:'2026-10-11'});assert.equal((await getScheduledWorkouts(a))[0].environment,'indoor');
+ const changed=await setPlannedEnvironment(env,{eventId:scheduled.eventId,environment:'outdoor'});assert.equal(changed.type,'OpenWaterSwim');assert.equal((await getScheduledWorkouts(a))[0].environment,'outdoor');
+ await movePlannedEvent(env,{eventId:scheduled.eventId,date:'2026-10-12'});assert.equal((await getScheduledWorkouts(a))[0].environment,'outdoor');
+});
 test('an export outage preserves the app plan; retry is idempotent, import does not duplicate it, and deletion survives offline',async()=>{
  const {a,env}=setup(),original=globalThis.fetch;let calls=0;
  try{

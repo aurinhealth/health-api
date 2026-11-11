@@ -41,6 +41,18 @@ test("a run goes onto the treadmill as VirtualRun; a bad place is refused", asyn
   assert.equal(calls.length, 1);
 });
 
+test("a planned swim stays a swim: open water and back to the pool", async () => {
+  const { raw, env, calls, fetchImpl } = await setup("Swim");
+  assert.equal((await setPlannedEnvironment(env, { eventId: "88", environment: "outdoor" }, fetchImpl)).type, "OpenWaterSwim");
+  let payload = JSON.parse(raw.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.equal(plannedEventWorkout(payload).sport, "swim");
+  assert.equal(plannedEventWorkout(payload).environment, "outdoor");
+  assert.equal((await setPlannedEnvironment(env, { eventId: "88", environment: "indoor" }, fetchImpl)).type, "Swim");
+  payload = JSON.parse(raw.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.equal(plannedEventWorkout(payload).environment, "indoor");
+  assert.deepEqual(calls.map(c => JSON.parse(c.body).type), ["OpenWaterSwim", "Swim"]);
+});
+
 test("food for another day gets its meal's usual time, today keeps the time of logging", () => {
   assert.equal(mealConsumedAt("2099-01-01", "breakfast"), "2099-01-01T07:00:00");
   assert.equal(mealConsumedAt("2099-01-01", "snack_am"), "2099-01-01T10:00:00");

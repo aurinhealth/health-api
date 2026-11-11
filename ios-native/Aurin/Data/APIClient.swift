@@ -394,7 +394,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func movePlanned(eventId: String, to date: String) async throws {
-        let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)])
+        let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)], repeatable: true)
     }
 
     /// Another day and the time of day: time "" leaves the day without one,
@@ -402,7 +402,7 @@ final class APIClient: @unchecked Sendable {
     func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
         var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
         if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
-        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body)
+        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body, repeatable: true)
         return change
     }
 
@@ -412,7 +412,7 @@ final class APIClient: @unchecked Sendable {
 
     func setPlannedEnvironment(eventId: String, indoor: Bool) async throws {
         let _: JSONValue = try await send("/app/api/planned/environment", method: "POST",
-                                          body: ["eventId": JSONValue.string(eventId), "environment": .string(indoor ? "indoor" : "outdoor")])
+                                          body: ["eventId": JSONValue.string(eventId), "environment": .string(indoor ? "indoor" : "outdoor")], repeatable: true)
     }
 
     /// How a session went (RPE 1–10 and a note) for the coach.
@@ -801,12 +801,21 @@ final class APIClient: @unchecked Sendable {
 
     /// timeout: longer for AI that reads photos, which may wait in line on the
     /// server behind the user's other AI calls (src/ai-usage.js claimAiSlot).
-    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B, timeout: TimeInterval? = nil) async throws -> T {
+    /// repeatable: a write that does the same when sent twice (set a place, move
+    /// to a day) goes once more when the connection dropped under it. On mobile
+    /// data iOS often reuses a connection the network has already closed, and
+    /// unlike a GET it does not resend a POST by itself.
+    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B, timeout: TimeInterval? = nil, repeatable: Bool = false) async throws -> T {
         var request = makeRequest(path, method: method)
         if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await load(request)
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await load(request)
+        } catch let error as URLError where repeatable && error.code == .networkConnectionLost {
+            (data, response) = try await load(request)
+        }
         try check(response, data)
         do {
             return try decoder.decode(T.self, from: data)
