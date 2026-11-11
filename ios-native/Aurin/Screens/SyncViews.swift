@@ -538,7 +538,7 @@ struct OthersConsentSheet: View {
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Jen typy, které zaškrtneš: spánek, tep, klidový tep, okysličení krve, dechovou frekvenci a kroky.")
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("Vypnout to můžeš kdykoli. Co už v Apple Health je, tam zůstane.")
+            Text("Vypnout to můžeš kdykoli a zápis tím skončí. Co už v Apple Health je, tam zůstane i po smazání účtu a mohou to číst aplikace, kterým čtení Apple Health povolíš.")
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             Button { backfill.toggle() } label: {
                 HStack(spacing: 12) {
