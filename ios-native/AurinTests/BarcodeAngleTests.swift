@@ -1,4 +1,6 @@
+import CoreImage
 import CoreVideo
+import Vision
 import XCTest
 @testable import Aurin
 
@@ -71,5 +73,44 @@ final class BarcodeAngleTests: XCTestCase {
         for i in 7...12 { bits += r[d[i]] }
         bits += "101"
         return bits.map { $0 == "1" }
+    }
+}
+
+/// Bars too blurred or bent to read (Petr's photo of a can, 2026-11-11): the
+/// digits printed under them find the code.
+final class BarcodeDigitsTests: XCTestCase {
+    func testDigitsOnALine() {
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["4 006795 304763"]), "4006795304763")
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["4  006795  304763>"]), "4006795304763")
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["Lot 12", "4 C06795 304763"]), "4006795304763")
+        XCTAssertEqual(VisionBarcodeReader.printedCode(["e 500 g 4006795304763"]), "4006795304763")
+    }
+
+    func testOtherNumbersAreNoCode() {
+        // A wrong check digit, a date, a batch, 12 digits.
+        XCTAssertNil(VisionBarcodeReader.printedCode(["4 006795 304764"]))
+        XCTAssertNil(VisionBarcodeReader.printedCode(["Best before 31.12.2026", "L 20261231"]))
+        XCTAssertNil(VisionBarcodeReader.printedCode(["0 36000 29145 2"]))
+        XCTAssertNil(VisionBarcodeReader.printedCode(["Cola"]))
+    }
+
+    func testMisreadLettersOnlyNextToDigits() {
+        XCTAssertEqual(VisionBarcodeReader.digitsMisread("4 C06795 Cola l2"), "4 006795 Cola 12")
+    }
+
+    func testPhotoOfTheCan() async throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "BarcodeOnCan", withExtension: "jpg"))
+        let data = try Data(contentsOf: url)
+        let image = try XCTUnwrap(CIImage(data: data))
+        let lines = VisionBarcodeReader.textLines(VNImageRequestHandler(ciImage: image))
+        try XCTSkipIf(lines.isEmpty, "Vision reads no text in this simulator")
+        let code = await BarcodeScanSheet.barcode(in: data)
+        XCTAssertEqual(code, "4006795304763", "Text read: \(lines)")
+    }
+
+    func testWindowTurnedUpright() {
+        // The window in the middle of the picture stays in the middle, its sides swapped.
+        XCTAssertEqual(VisionBarcodeReader.uprightRegion(CGRect(x: 0.25, y: 0.125, width: 0.5, height: 0.75)),
+                       CGRect(x: 0.125, y: 0.25, width: 0.75, height: 0.5))
     }
 }

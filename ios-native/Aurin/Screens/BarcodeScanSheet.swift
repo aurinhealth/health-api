@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import PhotosUI
 import SwiftUI
 import Vision
@@ -545,12 +546,20 @@ struct BarcodeScanSheet: View {
     }
 
     /// Vision reads the same codes as the camera, off the main thread.
-    nonisolated private static func barcode(in data: Data) async -> String? {
+    /// When the bars can't be read (a blurred photo, a code bent round a can,
+    /// Petr 2026-11-11), the digits printed under them are.
+    nonisolated static func barcode(in data: Data) async -> String? {
         await Task.detached(priority: .userInitiated) {
+            // Upright as the photo is seen, so its digits read left to right.
+            guard let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else { return nil }
+            let handler = VNImageRequestHandler(ciImage: image)
             let request = VNDetectBarcodesRequest()
             request.symbologies = BarcodeScanner.visionSymbologies
-            try? VNImageRequestHandler(data: data).perform([request])
-            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }.map(VisionBarcodeReader.likeTheCamera)
+            try? handler.perform([request])
+            if let code = request.results?.compactMap(\.payloadStringValue).first(where: { !$0.isEmpty }) {
+                return VisionBarcodeReader.likeTheCamera(code)
+            }
+            return VisionBarcodeReader.printedCode(handler)
         }.value
     }
 
@@ -858,8 +867,8 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
     /// Set before the camera starts.
     var onCode: (@Sendable (String) -> Void)?
     private let lock = NSLock()
-    /// The window in the frame, in Vision's terms (origin bottom left).
-    private var region = CGRect(x: 0, y: 0, width: 1, height: 1)
+    /// The window as the metadata output's rectOfInterest.
+    private var window = CGRect(x: 0, y: 0, width: 1, height: 1)
     private var resting = false
     var paused: Bool {
         get { lock.withLock { resting } }
@@ -867,24 +876,38 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
     }
     /// Only on `queue`.
     private var last = Date.distantPast
+    private var lastText = Date.distantPast
 
     /// `rect`: the window as the metadata output's rectOfInterest.
     func readOnlyInside(_ rect: CGRect) {
-        let region = Self.visionRegion(rect)
-        lock.withLock { self.region = region }
+        lock.withLock { window = rect }
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         let now = Date()
         guard !paused, now.timeIntervalSince(last) >= 0.1, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         last = now
-        if let code = Self.code(in: pixels, region: lock.withLock { region }) { onCode?(code) }
+        let window = lock.withLock { self.window }
+        if let code = Self.code(in: pixels, region: Self.visionRegion(window)) { onCode?(code); return }
+        // Bars too blurred or bent to read (a can, a dim kitchen): the digits
+        // under them, a slower read, so less often. The phone is upright, so
+        // the picture is turned to read a code held along the screen.
+        guard now.timeIntervalSince(lastText) >= 0.6 else { return }
+        lastText = now
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .right)
+        if let code = Self.printedCode(handler, region: Self.uprightRegion(window)) { onCode?(code) }
     }
 
     /// The metadata output's rect (the camera's unrotated picture, origin top
     /// left) in Vision's terms: the same picture, origin bottom left.
     static func visionRegion(_ rect: CGRect) -> CGRect {
         CGRect(x: rect.minX, y: 1 - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// The window in the frame turned upright (orientation .right, the back
+    /// camera with the phone upright), in Vision's terms.
+    static func uprightRegion(_ rect: CGRect) -> CGRect {
+        CGRect(x: 1 - rect.maxY, y: 1 - rect.maxX, width: rect.height, height: rect.width)
     }
 
     /// The code in the frame's region, whichever way it lies.
@@ -899,6 +922,54 @@ final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferD
     /// UPC-A as AVFoundation reports it: EAN-13 with a leading 0 (TN2325).
     static func likeTheCamera(_ code: String) -> String {
         code.count == 12 ? "0" + code : code
+    }
+
+    /// The digits printed under the bars, read as text.
+    static func printedCode(_ handler: VNImageRequestHandler, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> String? {
+        printedCode(textLines(handler, region: region))
+    }
+
+    /// The text in the region, one line per row, top first.
+    static func textLines(_ handler: VNImageRequestHandler, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> [String] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.regionOfInterest = region
+        try? handler.perform([request])
+        return LabelReader.rows((request.results ?? []).compactMap { o in o.topCandidates(1).first.map { (o.boundingBox, $0.string) } })
+    }
+
+    /// "4 006795 304763" on a line of text: groups of digits that together
+    /// make 13 with a matching check digit (EAN-13, most foods here). Not 12:
+    /// an EAN-13 with one digit missed would pass as UPC-A one time in ten.
+    /// Not 8: a date or a batch number has 8 digits too.
+    static func printedCode(_ lines: [String]) -> String? {
+        for line in lines.map(digitsMisread) {
+            // Anything but a digit parts the groups ("304763>" too).
+            let groups = line.split { !$0.isASCII || !$0.isNumber }.map(String.init)
+            for start in groups.indices {
+                var digits = ""
+                for group in groups[start...] {
+                    digits += group
+                    if digits.count > 13 { break }
+                    if digits.count == 13, let code = BarcodeScanSheet.typedCode(digits) { return code }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// A blurred 0 or 1 read as a letter ("4 C06795"), only next to digits;
+    /// the check digit catches a wrong guess.
+    static func digitsMisread(_ line: String) -> String {
+        let chars = Array(line)
+        let zero: Set<Character> = ["O", "o", "Q", "D", "C"], one: Set<Character> = ["I", "l", "|"]
+        return String(chars.indices.map { i -> Character in
+            let c = chars[i]
+            guard zero.contains(c) || one.contains(c) else { return c }
+            let byDigit = (i > 0 && chars[i - 1].isASCII && chars[i - 1].isNumber) || (i + 1 < chars.count && chars[i + 1].isASCII && chars[i + 1].isNumber)
+            return byDigit ? (zero.contains(c) ? "0" : "1") : c
+        })
     }
 }
 
