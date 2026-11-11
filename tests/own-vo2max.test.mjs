@@ -27,10 +27,10 @@ test("a ride: ACSM cycling VO2 at the average power, extrapolated by the heart-r
 });
 
 test("a run or brisk walk: ACSM from speed and climb; a treadmill, a hilly run or an everyday walk not", () => {
-  // 12 km/h = 200 m/min, flat: 43.5 ml/kg/min at 70 % of the reserve.
+  // 12 km/h = 200 m/min, flat: 0.93 × 40 + 3.5 = 40.7 ml/kg/min at 70 % of the reserve.
   const run = workoutEstimate({ date: "2026-10-01", kind: "run", minutes: 45, avgHr: 148, speed: 200 / 60, distance: 9000, gain: 0 }, athlete);
   assert.equal(run.sport, "run");
-  near(run.value, 60.6);
+  near(run.value, 56.6);
   // Some climb raises the cost and the estimate, a lot of it drops the run.
   assert.ok(workoutEstimate({ date: "2026-10-01", kind: "run", minutes: 45, avgHr: 148, speed: 200 / 60, distance: 9000, gain: 90 }, athlete).value > run.value);
   assert.equal(workoutEstimate({ date: "2026-10-01", kind: "run", minutes: 45, avgHr: 148, speed: 200 / 60, distance: 9000, gain: 300 }, athlete), null);
@@ -58,8 +58,8 @@ test("the HUNT activity index is measured from every sport, Swim and Gym include
 test("the resting layer: HUNT with BMI, Uth without height or weight", () => {
   const base = { age: 32, sex: "male", height: 180, weight: 87.5, restHr: 55, maxHr: 192, index: 14.5 };
   const male = restingEstimate(base);
-  // 92.05 − 0.327·32 − 0.933·27.0 − 0.167·55 + 0.257·14.5
-  near(male.value, 50.9, 0.2);
+  // 92.05 − 0.327·32 − 0.933·27.0 − 0.167·55 + 0.257·14.5 − 2 (calibration)
+  near(male.value, 48.9, 0.2);
   assert.equal(male.model, "hunt");
   assert.ok(restingEstimate({ ...base, sex: "female" }).value < male.value);
   assert.ok(restingEstimate({ ...base, restHr: 65 }).value < male.value);

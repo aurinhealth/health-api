@@ -32,7 +32,7 @@ import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { activityKindOf } from "./activity-match.js";
 import { zoneOffsetMs } from "./user-time.js";
 
-export const MODEL_VERSION = 1;
+export const MODEL_VERSION = 2;
 export const WINDOW_DAYS = 56;
 export const ACTIVITY_DAYS = 42;
 export const HALF_LIFE_DAYS = 21;
@@ -44,6 +44,14 @@ export const REST_WEIGHT = 1;
 export const DEFAULT_RIDE_FACTOR = 1.05;
 export const RIDE_FACTOR_RANGE = [1, 1.1];
 export const WEEKLY_CHANGE = 1;
+// Calibration from one consenting user's year of Apple Health (2026-11-11,
+// 96 days with an Apple Watch value; checked on the year before): the ACSM
+// running equation read 4.8 high (trained runners use less oxygen per metre
+// than it assumes), the HUNT layer 4.5 (its coefficients come from a secondary
+// source). Both are moved part of the way only: the Apple Watch reads low in
+// fit people, and the full correction turned the year before 2 below the watch.
+export const RUN_ECONOMY = 0.93;
+export const REST_OFFSET = 2;
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -123,7 +131,7 @@ export function workoutEstimate(s, athlete) {
     const v = s.speed * 60, climb = s.gain > 0 && s.distance > 0 ? s.gain / s.distance : 0;
     // Gain only: on a loop half the distance climbs and the descent gives back part of it.
     const grade = climb / 2;
-    if (v >= 134 && v <= 400) { sport = "run"; vo2 = 0.2 * v + 0.9 * v * grade + 3.5; }
+    if (v >= 134 && v <= 400) { sport = "run"; vo2 = RUN_ECONOMY * (0.2 * v + 0.9 * v * grade) + 3.5; }
     // Only a brisk walk well into the reserve: an everyday walk (stops, slow
     // pace, a heart rate barely above rest) came out 20 or more below the watch.
     else if (v >= 80 && v <= 110 && hrr >= 0.45) { sport = "walk"; vo2 = 0.1 * v + 1.8 * v * grade + 3.5; }
@@ -170,7 +178,7 @@ export function restingEstimate({ age, sex, height, weight, restHr, maxHr, index
   if (age >= 15 && age <= 100 && bmi >= 14 && bmi <= 60) {
     const x = { age, bmi, restHr, index: index || 0 };
     const value = sex === "male" || sex === "female" ? hunt(HUNT[sex], x) : (hunt(HUNT.male, x) + hunt(HUNT.female, x)) / 2;
-    return { value: round1(clamp(value, 15, 90)), model: "hunt", bmi: round1(bmi) };
+    return { value: round1(clamp(value - REST_OFFSET, 15, 90)), model: "hunt", bmi: round1(bmi) };
   }
   if (maxHr > restHr + 20) return { value: round1(clamp(15.3 * maxHr / restHr, 15, 90)), model: "uth", bmi: null };
   return null;
