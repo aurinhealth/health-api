@@ -410,8 +410,11 @@ async function pushIntervals(env, row, { fetchImpl, absent = false }) {
 // reads back, apple-health.js and index.js googleExerciseActivity). A known
 // record (its resource name) is patched instead of made again.
 const GOOGLE_EXERCISE = /^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[^/?#]+$/;
-const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'EXERCISE');
-const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL_RUNNING', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'INDOOR_BIKING', MountainBikeRide: 'MOUNTAIN_BIKING', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
+// Only names from Google's Exercise.ExerciseType list: any other one is refused
+// with HTTP 400 (INDOOR_BIKING for a Wahoo indoor ride, 2026-11-10). OTHER keeps
+// the workout's own name, the other types get Google's.
+const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'OTHER');
+const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'STATIONARY_BIKE', MountainBikeRide: 'MOUNTAIN_BIKE', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
 export const utcOffset = at => Math.round(zoneOffsetMs(at) / 1000) + 's';
 export function googleExercise(activity) {
   const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : zonedTime(activity.startLocal));
@@ -477,6 +480,8 @@ async function pushGoogle(env, row, { fetchImpl, googleToken, pollMs = 1000 }) {
     response = await write(point);
   }
   const data = await response.json().catch(() => ({}));
+  // Google's reason (which field), for the log: the error text alone does not say.
+  if (response.status === 400) console.warn('Google Health refused the workout', JSON.stringify(data.error || {}).slice(0, 300));
   if (!response.ok) throw new Error('Google Health HTTP ' + response.status);
   if (data.error) throw new Error('Google operation failed');
   if (data.done === false) {

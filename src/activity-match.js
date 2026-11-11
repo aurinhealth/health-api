@@ -10,7 +10,7 @@ export function activityKindOf(type) {
   const t = String(type || "").toLowerCase();
   if (/weight|strength/.test(t)) return "strength";
   if (/ride|cycl|bik/.test(t)) return "ride";
-  if (/run/.test(t)) return "run";
+  if (/run/.test(t) || t === "treadmill") return "run";
   if (/walk|hike/.test(t)) return "walk";
   if (/swim/.test(t)) return "swim";
   return "other";
