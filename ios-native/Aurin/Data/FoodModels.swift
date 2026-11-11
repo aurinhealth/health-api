@@ -477,3 +477,25 @@ struct NutrientDetail: Decodable, Equatable, Identifiable {
 
     var id: String { key }
 }
+
+/// Which foods food search lists first (world-foods.js MARKETS): cz for
+/// products sold in Czechia and Slovakia, intl for food tables and English
+/// names. Settings > Výživa > Region potravin; automatic follows the iPhone's region.
+enum FoodRegion {
+    static let key = "foodRegion"
+    static let automatic = "auto"
+    static var phone: String {
+        let region = Locale.current.region?.identifier
+        return region == "CZ" || region == "SK" ? "cz" : "intl"
+    }
+    static var market: String {
+        let chosen = UserDefaults.standard.string(forKey: key) ?? automatic
+        return chosen == automatic ? phone : chosen
+    }
+    static func title(_ market: String) -> String {
+        market == "cz" ? "Česko a Slovensko" : "Mezinárodní"
+    }
+    static var options: [(String, String)] {
+        [(automatic, L10n.tr("Automaticky") + " (" + L10n.tr(title(phone)) + ")"), ("cz", title("cz")), ("intl", title("intl"))]
+    }
+}
