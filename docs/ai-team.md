@@ -120,8 +120,8 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
   if that fails too. The hunt for the cause of an outage goes straight to Fable 5.2 at effort high.
 - `physiotherapist` runs on Opus 5.5, not Sonnet 5.5: a missed red flag for pain or injury is hard to
   spot later.
-- `qa-tester` runs on Opus 5.5 since 2026-11-11: on Sonnet 5.5 it missed bugs the owner then found,
-  and the customer check needs judgement, not only running tests.
+- `qa-tester` runs on Opus 5.5 since 2026-11-11: the owner kept finding bugs the tester missed, and
+  the customer check needs judgement, not only running tests.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
@@ -175,8 +175,9 @@ A role does not see the thread's history, so every brief carries what it needs, 
   and the papers for the accountant: `finance-controller`. Tax decisions stay with the accountant.
 - Every screen, flow or mockup users will see: `qa-tester` runs the customer check (a first-time
   customer's questions, each answered by the app itself or reported as a bug). A mockup goes to the
-  owner only after `ios-designer` (app and watch) or `visual-designer` reviewed it and the customer
-  check passed or its findings were fixed.
+  owner only after the design review (`ios-designer` for app and watch mockups, which the PM or
+  `visual-designer` makes; `visual-designer` for the rest) and the customer check passed. The PM gives
+  `qa-tester` the mockup as PNG images; after fixes `qa-tester` checks the new version again.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
@@ -211,12 +212,15 @@ and they are not always right.
 5. Round 2, leads' meeting, only when the task touches two or more teams: each lead sees the other
    teams' records and answers "Souhlas" or "Konflikt" with one fix, and writes a handoff where work
    passes to another team. Kontrola checks the proposals (Security reviews engineering proposals,
-   Věda reviews coach advice, the Tester reproduces claims). If a conflict stays, the PM writes down
+   Věda reviews coach advice, the Tester reproduces claims and runs the customer check on every screen
+   or mockup users will see). If a conflict stays, the PM writes down
    both options and why.
 6. Critic: `critic` looks for the "but" in every proposal (risks, costs, MDR, privacy, edge cases, a
    simpler alternative, weak evidence) and rates it Drží / Drží s úpravou / Nedrží with a sourced
    objection. It has no veto; the author of the proposal answers and the owner sees both.
 7. The PM merges, removes duplicates, settles conflicts and ranks by severity.
+   Every mockup in the owner's document has passed the design review and the customer check first,
+   in every task, also when Round 2 does not run.
 8. The owner gets one document with numbered points (severity, who found it, owner team
    ("Vlastník"), proposal, effort, sources) and approves them ("1, 3, 5 yes, 2 no").
 9. Only approved points are implemented, each in its own pull request.

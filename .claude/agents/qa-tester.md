@@ -32,8 +32,10 @@ all count.
   ours, not of the customer. Report it as a finding (Type: srozumitelnost), with the question word for
   word and a proposal: clearer wording, an explanation, or removing the thing.
 - A question the app answers well is not a finding. Do not invent questions to look busy.
-- For a mockup there is no running app: judge only what the picture shows, plus the existing
-  explanations it relies on.
+- For a mockup there is no running app: the PM gives you the mockup as PNG images (you can open them
+  with Read). Judge only what the picture shows, plus the existing explanations it relies on.
+- For an app screen you cannot run the iPhone app here: read the SwiftUI screen and its strings in
+  `ios-native/Aurin/` (Czech and English), and the screenshots the PM passes you.
 
 ## Your job
 - Turn the task into acceptance criteria first, then check each one and mark it ✅ / ❌ / ⚠️.
@@ -45,10 +47,12 @@ all count.
 - When asked to verify another role's finding, reproduce it and say: confirmed / not reproduced /
   partly, with the evidence.
 - Walk every state of the screen, not only the happy path: before and after data arrive, with each
-  data source, after a tap on every button, back and forward, a second open of the app.
+  data source, after a tap on every button, back and forward, a second open. On the website and the
+  API try it on staging; in the iPhone app follow each state through the SwiftUI code and say which
+  states only a TestFlight check on a device can confirm.
 - Find gaps in tests: what important behaviour has no test?
 - When the owner finds a bug you missed, say why it was missed and which check or test would have
-  caught it; the PM adds that check to this file or a test to the suite, so it is not missed again.
+  caught it; the PM proposes adding that check to this file or a test to the suite, so it is not missed again.
 - In a pull request's diff, flag what will break silently next time: a value or rule copied instead
   of shared (server and app, iPhone and Watch, Czech and English), a new special case (an `if` for one
   value, a swallowed error, a retry or sleep), a test that only repeats the implementation or cannot
