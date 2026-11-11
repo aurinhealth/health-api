@@ -243,11 +243,13 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var unit: String { perPortion ? "portion" : nutrition_basis == "ml" ? "ml" : "g" }
 
     /// The amount offered first: the one last logged, else a serving, else the package, else 100.
-    var defaultAmount: Double {
-        if let last_amount { return last_amount }
+    var defaultAmount: Double { last_amount ?? firstAmount }
+
+    /// A serving, else the package up to 500, else 100.
+    var firstAmount: Double {
         if perPortion { return 1 }
         if let s = usableServing { return s }
-        if let q = Self.leadingNumber(quantity), q > 0, q <= 500 { return q }
+        if let q = Self.size(quantity, unit: unit), q <= 500 { return q }
         return 100
     }
 
@@ -259,15 +261,17 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         return Double(digits)
     }
 
-    /// A size in the food's own unit: 1000 from "1 kg" for grams, 500 from
-    /// "0,5 l" for ml. nil for "2 x 125 g", where the first number is a count.
+    /// A size in the food's own unit: 1000 from "1 kg", 500 from "0,5 l",
+    /// 330 from "33 cl". nil for "2 x 125 g", where the first number is a count.
     static func size(_ value: JSONValue?, unit: String) -> Double? {
         guard let n = leadingNumber(value), n > 0 else { return nil }
         guard case .string(let s) = value else { return n }
         let text = s.lowercased()
         if text.contains("x") || text.contains("×") { return nil }
-        if unit == "g", text.range(of: #"\d\s*kg"#, options: .regularExpression) != nil { return n * 1000 }
-        if unit == "ml", text.range(of: #"\d\s*l\b"#, options: .regularExpression) != nil { return n * 1000 }
+        // g and ml are taken as 1:1, so a drink counted per 100 g in "1 l" is 1000.
+        if text.range(of: #"\d\s*(kg|l)\b"#, options: .regularExpression) != nil { return n * 1000 }
+        if text.range(of: #"\d\s*dl\b"#, options: .regularExpression) != nil { return n * 100 }
+        if text.range(of: #"\d\s*cl\b"#, options: .regularExpression) != nil { return n * 10 }
         return n
     }
 
