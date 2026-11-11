@@ -433,22 +433,29 @@ struct TabHeader<Extra: View>: View {
             .font(Typo.sentence(30, relativeTo: .title))
             .foregroundStyle(Palette.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
-        if let month {
+        let withChevron = HStack(alignment: .firstTextBaseline, spacing: 6) {
+            text
+            Image(systemName: "chevron.down")
+                .scaledFont(13, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(Palette.muted)
+        }
+        if let month, !model.demo {
             Button(action: month) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    text
-                    Image(systemName: "chevron.down")
-                        .scaledFont(13, weight: .semibold, cap: .denseCap)
-                        .foregroundStyle(Palette.muted)
-                }
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
+                withChevron
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(model.demo || model.dayLocked)
             .accessibilityLabel(Fmt.monthTitleSpoken(date))
             .accessibilityHint(L10n.tr("Otevře kalendář měsíce"))
             .accessibilityAddTraits(.isHeader)
+        } else if month != nil {
+            // The sample day has no month to show: the same look, nothing to tap
+            // (a disabled button would grey the month out).
+            withChevron
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Fmt.monthTitleSpoken(date))
+                .accessibilityAddTraits(.isHeader)
         } else {
             text
                 .accessibilityLabel(Fmt.monthTitleSpoken(date))
