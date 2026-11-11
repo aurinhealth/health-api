@@ -1,6 +1,7 @@
 // Synchronizace routes of the dashboard API (sync-destinations.js).
 import { syncLocalWorkout } from "./local-workouts.js";
 import { kickForward, appleForwardList, appleForwardDone } from "./watch-forward.js";
+import { appleHealthForward } from "./apple-health-forward.js";
 import { googleToken } from "./index.js";
 import { syncOverview, DESTINATIONS, saveSyncPrefs, googleMissingScopes, sendActivity, activitySends, retrySend } from "./sync-destinations.js";
 import { L } from "./lang.js";
@@ -32,6 +33,11 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/sync/forward/apple'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     return Response.json({status:'ok',workouts:await appleForwardList(env)},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Health data from other apps the iPhone writes to Apple Health (apple-health-forward.js).
+  if(url.pathname==='/app/api/sync/forward/apple/health'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json({status:'ok',...await appleHealthForward(env,{days:url.searchParams.get('days')})},{headers:{'Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/sync/forward/apple'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});

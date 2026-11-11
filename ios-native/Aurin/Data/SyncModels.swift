@@ -53,6 +53,8 @@ struct SyncPrefs: Codable, Equatable {
     var forward: [String]? = nil
     /// Sent once, with an app just turned on: its last 14 days go too.
     var backfill: Bool? = nil
+    /// Sent once, with the yes to Apple Health's data from other apps (src/sync-destinations.js OTHER_TYPES).
+    var consent: Bool? = nil
 
     static let off = SyncPrefs(pushPlanned: false, pushActivities: false, pullActivities: false, health: .some([]))
 }
@@ -126,6 +128,7 @@ enum SyncApp {
         case "weight": return L10n.tr("Váha")
         case "bodyFat": return L10n.tr("Tělesný tuk")
         case "restingHR": return L10n.tr("Klidový tep")
+        case "heartRate": return L10n.tr("Tep")
         case "hrv": return "HRV"
         case "sleep": return L10n.tr("Spánek")
         case "steps": return L10n.tr("Kroky")
@@ -232,6 +235,11 @@ extension APIClient {
         return r.workouts
     }
 
+    /// Health data from other apps due in Apple Health (src/apple-health-forward.js).
+    func forwardedHealth(days: Int) async throws -> ForwardedHealth {
+        try await get("/app/api/sync/forward/apple/health?days=\(days)")
+    }
+
     /// One of them written to Apple Health ("sent") or found there already ("same").
     func forwardedWorkoutDone(key: String, status: String) async throws {
         struct Response: Decodable { let status: String }
@@ -259,4 +267,20 @@ struct ForwardedWorkout: Decodable, Equatable {
     /// Metres.
     let distance: Double?
     let kcal: Double?
+}
+
+/// GET /app/api/sync/forward/apple/health: what Google Health sent Aurin from the
+/// user's watch, by type; a type not switched on is missing.
+struct ForwardedHealth: Decodable {
+    struct Night: Decodable { let key: String; let start: String; let end: String; let stages: [Stage] }
+    struct Stage: Decodable { let type: String; let start: String; let end: String }
+    struct Daily: Decodable { let date: String; let value: Double }
+    struct Sample: Decodable { let start: String; let value: Double }
+    struct Interval: Decodable { let start: String; let end: String; let value: Double }
+    var sleep: [Night]? = nil
+    var restingHR: [Daily]? = nil
+    var spO2: [Daily]? = nil
+    var respiration: [Daily]? = nil
+    var heartRate: [Sample]? = nil
+    var steps: [Interval]? = nil
 }

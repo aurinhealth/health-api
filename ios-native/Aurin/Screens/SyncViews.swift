@@ -71,6 +71,7 @@ final class SyncSettingsStore {
             }
             var local = prefs
             local.backfill = nil
+            local.consent = nil
             AppleHealthExport.shared.setPrefs(local)
         }
         guard !demo else { return }
@@ -87,6 +88,10 @@ final class SyncSettingsStore {
             // An app's workouts just turned on for Apple Health: the first ones now.
             if id == "apple", AppleHealthExport.forwards(saved.prefs) {
                 Task { await AppleHealthExport.shared.writeForwarded(api: api, force: true) }
+            }
+            // Health data from other apps just allowed: the first now (with the last 14 days, maybe).
+            if id == "apple", prefs.consent == true {
+                Task { await AppleHealthExport.shared.writeOthers(api: api, days: prefs.backfill == true ? 14 : 2) }
             }
         } catch {
             // Apple Health keeps its switches on the iPhone anyway.
@@ -505,6 +510,60 @@ struct ForwardConsentSheet: View {
     }
 }
 
+/// The yes before data from other apps goes to Apple Health, with the last 14 days if wanted.
+struct OthersConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let go: (Bool) -> Void
+    /// Off at first: a ticked box is no consent (GDPR, Planet49).
+    @State private var backfill = false
+
+    private var since: String {
+        Calendar.current.date(byAdding: .day, value: -14, to: Date())
+            .map { $0.formatted(Date.FormatStyle().weekday(.abbreviated).month(.abbreviated).day().locale(L10n.locale)) } ?? ""
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                IntegrationIcon(id: "google", size: 40)
+                Image(systemName: "arrow.right").scaledFont(15, weight: .semibold).foregroundStyle(Palette.faint)
+                IntegrationIcon(id: "apple", size: 40)
+            }
+            .padding(.top, 8)
+            Text("Posílat data z dalších aplikací do Apple Health?")
+                .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            // Exactly what goes (the privacy policy says the same).
+            Text("Aurin zapíše do Apple Health na tomhle iPhonu, co mu posílá Google Health z tvých hodinek.")
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Jen typy, které zaškrtneš: spánek, tep, klidový tep, okysličení krve, dechovou frekvenci a kroky.")
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Text("Vypnout to můžeš kdykoli. Co už v Apple Health je, tam zůstane.")
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Button { backfill.toggle() } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: backfill ? "checkmark.square.fill" : "square")
+                        .font(.title3).foregroundStyle(backfill ? Palette.blue : Palette.faint)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Poslat i posledních 14 dní").font(.body).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.f("Od %@", since)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            PrimaryButton(title: L10n.f("Poslat do %@", L10n.tr("Apple Health"))) { go(backfill) }
+            Button("Teď ne") { dismiss() }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(24)
+        .presentationDetents([.large])
+        .glassSheetBackground(Palette.settingsBackground)
+    }
+}
+
 // MARK: - Zdravotní data
 
 struct SyncHealthView: View {
@@ -512,7 +571,13 @@ struct SyncHealthView: View {
     let sync: SyncSettingsStore
     var saved: () async -> Void = {}
 
+    /// The choice waiting for the yes to Apple Health's data from other apps.
+    @State private var asking: SyncHealth?
+
     private var destination: SyncDestination? { sync.destination(id) }
+
+    /// Apple Health's types that come from other apps, not from what is logged in Aurin.
+    static let others = ["sleep", "heartRate", "restingHR", "spO2", "respiration", "steps"]
 
     var body: some View {
         SettingsPage(title: "Zdravotní data") {
@@ -523,25 +588,50 @@ struct SyncHealthView: View {
                     SettingsToggle(title: "Vše", isOn: Binding(get: { types.allSatisfy(destination.prefs.health.allows) },
                                                               set: { on in set(on ? all(destination) : .some(kept(destination))) }))
                 }
-                SettingsGroup(footer: footer) {
-                    ForEach(Array(Self.listed(destination).enumerated()), id: \.element) { index, type in
-                        if index > 0 { SettingsDivider() }
-                        Button { toggle(type, in: destination) } label: {
-                            HStack(spacing: 12) {
-                                Text(verbatim: SyncApp.healthName(type)).font(.body).foregroundStyle(Palette.ink)
-                                Spacer(minLength: 8)
-                                if destination.prefs.health.allows(type) {
-                                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
-                                }
-                            }
-                            .padding(.horizontal, 16).frame(minHeight: 50)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                let listed = Self.listed(destination)
+                let own = listed.filter { !Self.others.contains($0) }, others = listed.filter(Self.others.contains)
+                if others.isEmpty {
+                    rows(own, destination)
+                } else {
+                    SettingsGroup(title: L10n.tr("Zapsané v Aurinu")) { rowList(own, destination) }
+                    SettingsGroup(title: L10n.tr("Z tvých dalších aplikací"),
+                                  footer: L10n.tr("Z hodinek, které posílají do Google Health. Nikdy nic z toho, co Aurin přečetl z Apple Health.")) {
+                        rowList(others, destination)
                     }
                 }
-                .disabled(sync.working == id)
             }
+        }
+        .disabled(sync.working == id)
+        .sheet(item: Binding(get: { asking.map(Asking.init) }, set: { asking = $0?.health })) { ask in
+            OthersConsentSheet { backfill in
+                asking = nil
+                set(ask.health, consent: true, backfill: backfill)
+            }
+        }
+    }
+
+    private struct Asking: Identifiable { let health: SyncHealth; var id: String { "others" } }
+
+    private func rows(_ types: [String], _ destination: SyncDestination) -> some View {
+        SettingsGroup(footer: footer) { rowList(types, destination) }
+    }
+
+    @ViewBuilder
+    private func rowList(_ types: [String], _ destination: SyncDestination) -> some View {
+        ForEach(Array(types.enumerated()), id: \.element) { index, type in
+            if index > 0 { SettingsDivider() }
+            Button { toggle(type, in: destination) } label: {
+                HStack(spacing: 12) {
+                    Text(verbatim: SyncApp.healthName(type)).font(.body).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    if destination.prefs.health.allows(type) {
+                        Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                    }
+                }
+                .padding(.horizontal, 16).frame(minHeight: 50)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -579,9 +669,15 @@ struct SyncHealthView: View {
         set(.some(destination.healthTypes.filter { chosen.contains($0) }))
     }
 
-    private func set(_ health: SyncHealth) {
+    private func set(_ health: SyncHealth, consent: Bool = false, backfill: Bool = false) {
         guard var prefs = destination?.prefs else { return }
+        // Apple Health: the first type from other apps asks for the yes first (Google's terms).
+        if id == "apple", !consent, Self.others.contains(where: health.allows), !Self.others.contains(where: prefs.health.allows) {
+            asking = health
+            return
+        }
         prefs.health = health
+        if consent { prefs.consent = true; prefs.backfill = backfill ? true : nil }
         Task { [prefs] in
             await sync.save(id, prefs)
             if health.any { await saved() }
