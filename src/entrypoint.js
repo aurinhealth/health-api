@@ -34,6 +34,7 @@ import {buildMilestones} from './app-milestones.js';
 import { buildShareWeek, mondayOf } from './share-week.js';
 import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
+import {buildDays,DAYS_MAX} from './app-days.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile,effectiveProfile} from './energy-profile.js';
@@ -80,7 +81,7 @@ import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck, heartSince } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -1579,7 +1580,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const swap=swapOffer(state,date);
       // "Is this still true?" about a pain or an illness comes right after the push's swap, so an
       // old knee pain does not wait behind every other card (audit 4.6).
-      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
+      // Chest symptoms: the latest day with a training since they were told, so the coach asks how it went.
+      const since=heartSince(state),trainedOn=since?(inputs.week?.days||[]).filter(d=>d.date>since&&d.date<=date&&d.daily?.training?.completed?.length).map(d=>d.date).sort().pop()||null:null;
+      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date,{trainedOn})||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -2976,6 +2979,39 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle});
       keepUsualWake(env,ctx,date,profile,body.sleep?.tonight);
       return Response.json(body,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // Today's day strip and month calendar (app-days.js): readiness, sleep,
+  // strain and HRV per day, at most a month (31 days) and back to 90 days before today
+  // (the 91 days of daily rows each day's 60-day baseline reads). The range
+  // ending today shares Today's cached Google/Apple rows and is kept two
+  // minutes as they are; a past one six hours (a sync of new data bumps the
+  // cache version).
+  if(url.pathname==='/app/api/days'&&request.method==='GET'){
+    try{
+      const today=localToday(),valid=v=>validTrainingDay(v);
+      let end=valid(url.searchParams.get('end'))&&url.searchParams.get('end')<today?url.searchParams.get('end'):today;
+      if(end<shiftDate(today,-90))end=shiftDate(today,-90);
+      let start=valid(url.searchParams.get('start'))?url.searchParams.get('start'):shiftDate(end,-6);
+      if(start>end)start=end;
+      if(start<shiftDate(end,-(DAYS_MAX-1)))start=shiftDate(end,-(DAYS_MAX-1));
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const result=await cached(env,ctx,'days:'+start+':'+end+':'+today,async()=>{
+        const from=shiftDate(start,-14),to=shiftDate(end,1);
+        const [health,fitness,sleep,profile,checkin]=await Promise.all([
+          googleHealthFor(env,ctx,end).catch(()=>({})),
+          cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
+          read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
+          dashboardProfile(env).catch(()=>null),
+          end===today?readinessCheckin(env.DB,today).catch(()=>null):null
+        ]);
+        const days=buildDays({start,end,today,google:Array.isArray(health.wellness)?health.wellness:[],intervals:Array.isArray(fitness.wellness)?fitness.wellness:[],sessions:sleep.sessions,profile,checkin});
+        // A failed read is not kept: the next open asks again.
+        return Array.isArray(health.wellness)&&Object.keys(sleep||{}).length?days:{...days,degraded:true};
+      },{ttl:end<today?CLOSED_DAY_TTL_SECONDS:120});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

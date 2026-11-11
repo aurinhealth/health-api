@@ -130,6 +130,7 @@ extension AppModel {
         if demo {
             today = nil; training = nil; health = nil; food = nil
             calendar = [:]
+            dayValues = [:]
             demo = false
         }
         errorMessage = nil
@@ -183,6 +184,7 @@ extension AppModel {
         healthScreen.clear()
         trainingScreen.clear()
         calendar = [:]
+        dayValues = [:]
         fetched = [:]
     }
 

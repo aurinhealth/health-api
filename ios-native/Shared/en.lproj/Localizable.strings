@@ -4179,6 +4179,24 @@
 "Spustit rozcvičku" = "Start warm-up";
 "Spustit protažení" = "Start stretching";
 "Spustit posilku" = "Start gym";
+"HRV" = "HRV";
+"Otevře kalendář měsíce" = "Opens the month calendar";
+"Připravenost se ukáže po první noci s hodinkami." = "Readiness shows after your first night with a watch.";
+"Průměr %@." = "Average %@.";
+"Tento měsíc zatím bez zaznamenaných nocí." = "No nights recorded this month yet.";
+"Průměrně %@ %% potřeby spánku." = "On average %@%% of your sleep need.";
+"Tento měsíc zatím bez námahy." = "No strain this month yet.";
+"Průměrná námaha %@ z 21." = "Average strain %@ of 21.";
+"Tento měsíc zatím bez HRV." = "No HRV this month yet.";
+"Kroužek je připravenost 0 až 100." = "The ring is readiness from 0 to 100.";
+"Kroužek je spánek proti potřebě, plný při 100 %." = "The ring is sleep against your need, full at 100%.";
+"Kroužek je námaha dne 0 až 21." = "The ring is the day's strain from 0 to 21.";
+"Šipka je HRV proti obvyklému rozmezí." = "The arrow is HRV against your usual range.";
+"připravenost %@" = "readiness %@";
+"námaha %@" = "strain %@";
+"HRV %@ ms, nad obvyklým rozmezím" = "HRV %@ ms, above your usual range";
+"HRV %@ ms, pod obvyklým rozmezím" = "HRV %@ ms, below your usual range";
+"HRV %@ ms, v obvyklém rozmezí" = "HRV %@ ms, within your usual range";
 
 /* Coach thinking steps (CoachSteps.swift) */
 "Odpověď za %lld s, %@" = "Answered in %lld s, %@";

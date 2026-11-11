@@ -25,7 +25,7 @@ const ROUTE_NAMES = {
   "GET /app/api/training": "Trénink", "GET /app/api/food/week": "Jídlo za týden", "GET /app/api/journal/today": "Deník",
   "GET /app/api/sync/prefs": "Nastavení synchronizace", "GET /app/api/week-plan": "Plán týdne", "POST /app/api/food/photo": "Jídlo z fotky",
   "GET /app/api/admin/waitlist": "Čekací listina (správa)", "POST /app/api/admin/waitlist/decide": "Schválení zájemce (správa)",
-  "GET /app/api/food-today": "Jídlo dnes", "GET /app/api/gym": "Posilovna", "POST /app/api/gym": "Uložení série", "GET /app/api/health": "Zdraví",
+  "GET /app/api/food-today": "Jídlo dnes", "GET /app/api/gym": "Posilovna", "POST /app/api/gym": "Uložení série", "GET /app/api/health": "Zdraví", "GET /app/api/days": "Kalendář dnů",
   "GET /app/api/week": "Týden", "POST /app/api/food/log": "Zápis jídla", "POST /app/api/food/search": "Hledání jídla",
   "POST /app/api/onboarding": "Úvodní nastavení", "POST /app/api/planned/delete": "Smazání plánu", "POST /app/api/workouts/schedule": "Naplánování tréninku",
   "POST /app/api/calendar-free": "Volný čas v kalendáři", "POST /app/api/coach": "Chat s koučem",
