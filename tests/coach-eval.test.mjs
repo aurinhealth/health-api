@@ -768,6 +768,10 @@ test('late evening (Petr 2026-11-10, 23:49): Today\'s sentence gets the hour, th
   let now = null;
   await runScenario({}, s68, { ask: async (_env, _m, ctx) => { now = ctx.now; return { status: 'ok', answer: 'Je pozdě, jdi spát.', actions: [] }; } });
   assert.equal(now, COACH_EVAL_DATE + ' 23:40');
+  // Run 62: "dej přednost spánku" says sleep.
+  const bed = check => checkReply(s68, { answer: check, actions: [] }).find(c => /jde spát/.test(c.name)).ok;
+  for (const good of ['Dnes už bych netrénoval; ve 23:40 dej přednost spánku.', 'Jdi si lehnout.', 'Ulehni a zítra uvidíme.', 'Jdi na kutě.']) assert.equal(bed(good), true, good);
+  assert.equal(bed('Dnes už bych netrénoval. Chybí ti 4 h spánku.'), false);
   // Run 60: the easy spin offered at 23:40 fails, ruling it out does not.
   const spin = check => checkReply(s68, { answer: check, actions: [] }).find(c => /šlapání/.test(c.name)).ok;
   assert.equal(spin('Dnes už bych šel spát. Pokud chceš, dal bych jen 20 minut velmi lehkého šlapání.'), false);
