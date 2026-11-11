@@ -1623,7 +1623,7 @@
 "zápis jídla" = "food logging";
 "Oprávnění Google jsou rozšířená." = "Google permissions are extended.";
 "Do Apple Health jde jen to, co v Aurinu sám zapíšeš." = "Only what you enter in Aurin yourself goes to Apple Health.";
-"Váhu a jídlo zapsané v Aurinu." = "The weight and food entered in Aurin.";
+"Váhu, jídlo a vodu zapsané v Aurinu." = "The weight, food and water entered in Aurin.";
 "Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše." = "From Google Health and Apple Health to Intervals.icu wellness. Aurin never overwrites what is already there from elsewhere.";
 "Odesláno do %@ %@" = "Sent to %@ %@";
 "aplikace" = "app";

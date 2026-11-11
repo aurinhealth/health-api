@@ -640,7 +640,7 @@ struct SyncHealthView: View {
     private var footer: String? {
         switch id {
         case "apple": return "Do Apple Health jde jen to, co v Aurinu sám zapíšeš."
-        case "google": return "Váhu a jídlo zapsané v Aurinu."
+        case "google": return "Váhu, jídlo a vodu zapsané v Aurinu."
         case "intervals": return "Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
         default: return nil
         }

@@ -82,7 +82,8 @@ test("workouts from other apps: off at first, each turned on with its own start,
   // Google Health takes Wahoo's (not Apple Health's: its app reads Apple Health), Apple Health Wahoo's and Google's, Wahoo none.
   assert.deepEqual((await saveSyncPrefs(d, 7, "google", { forward: ["wahoo", "apple", "google"] }, { now: NOW })).forward, ["wahoo"]);
   assert.deepEqual(await forwardSince(d, 7, "google"), { wahoo: new Date(NOW).toISOString() });
-  assert.deepEqual((await readSyncPrefs(d, 7, "google")).health, "all");
+  // Google's old "all" (and no choice yet) means weight and food: water waits for its tick.
+  assert.deepEqual((await readSyncPrefs(d, 7, "google")).health, ["weight", "nutrition"]);
   assert.deepEqual((await saveSyncPrefs(d, 7, "apple", { forward: ["google", "wahoo"] })).forward, ["wahoo", "google"]);
   assert.equal((await saveSyncPrefs(d, 7, "wahoo", { forward: ["google"] })).forward, undefined);
   // Each destination keeps its own: Intervals.icu's is still off.
@@ -117,7 +118,7 @@ test("the overview lists the destinations the app can send to; never Strava", as
   const google = overview.destinations.find(x => x.id === "google");
   // Weight writing is the extra Google permission not given yet.
   assert.deepEqual(google.missingScopes, ["weightWrite"]);
-  assert.deepEqual(google.healthTypes, ["weight", "nutrition"]);
+  assert.deepEqual(google.healthTypes, ["weight", "nutrition", "water"]);
   overview = await syncOverview({ ...env, STRAVA_CLIENT_ID: "183664", STRAVA_CLIENT_SECRET: "s", STRAVA_TOKEN: "{}" });
   assert.deepEqual(overview.destinations.map(x => x.id), ["apple", "google", "intervals"]);
   assert.deepEqual(googleMissingScopes({ GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite] }, { pushActivities: true, health: "all" }), ["activityWrite"]);

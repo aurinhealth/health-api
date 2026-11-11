@@ -34,11 +34,11 @@ const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 // workouts: Apple Health's workouts watch-forward.js copies there.
 // Apple Health: what the iPhone writes from the app's own entries, and with
 // the user's yes what other apps sent to Aurin (OTHER_TYPES). Google
-// Health: weight (weight-sync.js, with the weight-writing permission) and
-// the food log (food-google-sync.js).
+// Health: weight (weight-sync.js, with the weight-writing permission), the
+// food log and the plain water logged in Aurin (food-google-sync.js).
 export const HEALTH_TYPES = {
   apple: ['weight', 'nutrition', 'water', 'sleep', 'heartRate', 'restingHR', 'spO2', 'respiration', 'steps'],
-  google: ['weight', 'nutrition'],
+  google: ['weight', 'nutrition', 'water'],
   intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max', 'workouts'],
   wahoo: []
 };
@@ -66,9 +66,12 @@ export const SUPPORTS = {
 // permission, the weight, and its workouts came in; writing workouts there
 // needs a permission nobody has yet, so it starts off. Apple Health got
 // nothing.
+// Google Health's "all" from before water was there still means weight and
+// food: water starts only once the user ticks it (or Vše, saved as the list).
+const GOOGLE_BEFORE_WATER = ['weight', 'nutrition'];
 const DEFAULTS = {
   apple: { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] },
-  google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: 'all' },
+  google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: GOOGLE_BEFORE_WATER },
   intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: [] },
   // Whoever connects Wahoo wants the plan on the head unit and the rides back.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
@@ -169,6 +172,7 @@ const fromRow = (destination, row) => {
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
   // Apple Health's "all" chosen before other apps' data was there, or without its yes: Aurin's own types only.
   if (destination === 'apple' && health === 'all' && !splitHealth(stored).others.consent) health = HEALTH_TYPES.apple.filter(type => !OTHER_TYPES.includes(type));
+  if (destination === 'google' && health === 'all') health = GOOGLE_BEFORE_WATER;
   return { prefs: normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) }), since };
 };
 
@@ -196,6 +200,7 @@ export async function saveSyncPrefs(db, userId, destination, input, { now = Date
   // A source kept on keeps its start; one turned on now starts now, or
   // BACKFILL_DAYS before when the user also wanted the last two weeks.
   let health = next.health, started = [], stopped = [];
+  if (destination === 'google' && health === 'all') health = [...HEALTH_TYPES.google];
   if (FORWARD_TO[destination]) {
     const { since: before, consent } = await forwardEntries(db, userId, destination);
     const at = new Date(now).toISOString(), from = new Date(now - (input?.backfill === true ? BACKFILL_DAYS * 86400000 : 0)).toISOString();
@@ -266,7 +271,7 @@ export function googleMissingScopes(env, prefs) {
   const extras = grantedExtras(env), missing = [];
   if ((prefs.pushActivities || prefs.forward?.length) && !extras.activityWrite) missing.push('activityWrite');
   if (healthAllowed(prefs, 'weight') && !extras.weightWrite) missing.push('weightWrite');
-  if (healthAllowed(prefs, 'nutrition') && !hasGoogleScope(env, HEALTH_PERMISSIONS.nutritionWrite)) missing.push('nutritionWrite');
+  if ((healthAllowed(prefs, 'nutrition') || healthAllowed(prefs, 'water')) && !hasGoogleScope(env, HEALTH_PERMISSIONS.nutritionWrite)) missing.push('nutritionWrite');
   return missing;
 }
 

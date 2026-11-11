@@ -5,7 +5,9 @@ import { readSyncPrefs, healthAllowed, utcOffset } from "./sync-destinations.js"
 // online. Known Google records are patched, not recreated, on edits.
 const BASE='https://health.googleapis.com/v4/';
 const COLLECTION='users/me/dataTypes/nutrition-log/dataPoints';
-const RESOURCE=/^users\/[^/]+\/dataTypes\/nutrition-log\/dataPoints\/[^/?#]+$/;
+// Water logged in Aurin goes the same way, as the drink's id negated (entry_id < 0).
+const DRINKS='users/me/dataTypes/hydration-log/dataPoints';
+const RESOURCE=/^users\/[^/]+\/dataTypes\/(nutrition|hydration)-log\/dataPoints\/[^/?#]+$/;
 const MEALS={breakfast:'BREAKFAST',snack_am:'SNACK',snack_pm:'SNACK',snack_late:'SNACK',snack:'SNACK',lunch:'LUNCH',dinner:'DINNER'};
 const today=()=>localToday();
 async function ensure(db){await db.prepare(`CREATE TABLE IF NOT EXISTS food_google_exports (
@@ -19,13 +21,20 @@ export function foodGooglePayload(row){
   // A time without an offset (food-log.js mealConsumedAt) is the user's wall
   // clock: their time zone makes it an instant, DST included. The offsets put
   // it on that day in Google Health, which otherwise shows it at UTC.
-  const stamp=String(row.consumed_at||''),date=row.consumed_date;
-  const at=!stamp.startsWith(date)?NaN:/[Zz]|[+-]\d\d:\d\d$/.test(stamp)?Date.parse(stamp):/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(stamp)?zonedTime(stamp):NaN;
-  const start=new Date(Number.isFinite(at)?at:Date.parse(date+'T12:00:00Z'));
-  return {nutritionLog:{interval:{startTime:start.toISOString(),startUtcOffset:utcOffset(start),endTime:new Date(+start+60000).toISOString(),endUtcOffset:utcOffset(new Date(+start+60000))},
+  return {nutritionLog:{interval:minute(row.consumed_at,row.consumed_date),
     foodDisplayName:row.recipe_title,mealType:MEALS[note.mealType]||'SNACK',energy:{kcal:Number(row.kcal)||0},
     totalCarbohydrate:{grams:Number(row.carbs_g)||0},totalFat:{grams:Number(row.fat_g)||0},
     nutrients:[{nutrient:'PROTEIN',quantity:{grams:Number(row.protein_g)||0}},...extraNutrients(row,note)]}};
+}
+function minute(consumedAt,date){
+  const stamp=String(consumedAt||'');
+  const at=!stamp.startsWith(date)?NaN:/[Zz]|[+-]\d\d:\d\d$/.test(stamp)?Date.parse(stamp):/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(stamp)?zonedTime(stamp):NaN;
+  const start=new Date(Number.isFinite(at)?at:Date.parse(date+'T12:00:00Z')),end=new Date(+start+60000);
+  return {startTime:start.toISOString(),startUtcOffset:utcOffset(start),endTime:end.toISOString(),endUtcOffset:utcOffset(end)};
+}
+// A glass of water logged in Aurin (fluids.js fluid_log; consumed_at is the wall clock).
+export function drinkGooglePayload(row){
+  return {hydrationLog:{interval:minute(row.consumed_at,row.date),amountConsumed:{milliliters:Number(row.ml)||0}}};
 }
 // Fibre, sugars and sodium when the meal has them (micronutrients.js); Google takes
 // grams, and salt on EU labels is sodium × 2.5. Unknown fibre is a 0 with a flag.
@@ -43,15 +52,31 @@ export async function queueFoodGoogle(db,id,{deleted=false}={}){
   // Food from another app via Apple or Google Health is not sent on to Google
   // (apple-food.js), nor is such a food moved in Aurin: the original is still there.
   if(row?.source==='apple-health'||row?.source==='google-health'||/"from_app"/.test(String(row?.note||'')))return {status:'skipped'};
-  const desired=row?JSON.stringify({date:row.consumed_date,payload:foodGooglePayload(row)}):null;
+  await enqueue(db,Number(id),row?JSON.stringify({date:row.consumed_date,payload:foodGooglePayload(row)}):null);
+  return {status:row&&row.consumed_date>today()?'planned':'queued'};
+}
+async function enqueue(db,entryId,desired){
   await db.prepare(`INSERT INTO food_google_exports(user_id,entry_id,desired_json) VALUES(?,?,?)
     ON CONFLICT(user_id,entry_id) DO UPDATE SET desired_json=excluded.desired_json,revision=revision+1,
     status=CASE WHEN food_google_exports.status IN ('uncertain','operation','syncing') THEN food_google_exports.status ELSE 'queued' END,
-    message=NULL,updated_at=CURRENT_TIMESTAMP`).bind(db.userId,Number(id),desired).run();
-  return {status:row&&row.consumed_date>today()?'planned':'queued'};
+    message=NULL,updated_at=CURRENT_TIMESTAMP`).bind(db.userId,entryId,desired).run();
+}
+// Settings → Synchronizace → Google Health → Voda: the plain water the user
+// logged in Aurin over the last 14 days (as Apple Health gets it), never a
+// drink another app sent. A changed or deleted glass is queued again.
+async function queueDrinks(db){
+  const from=new Date(Date.parse(today()+'T00:00:00Z')-13*86400000).toISOString().slice(0,10);
+  const drinks=(await db.prepare("SELECT id,date,consumed_at,ml FROM fluid_log WHERE user_id=? AND date>=? AND date<=? AND source IS NULL AND kind='water' LIMIT 500").bind(db.userId,from,today()).all().catch(()=>({results:[]}))).results||[];
+  const known=new Map(((await db.prepare("SELECT entry_id,desired_json FROM food_google_exports WHERE user_id=? AND entry_id<0 AND desired_json IS NOT NULL AND json_extract(desired_json,'$.date')>=?").bind(db.userId,from).all()).results||[]).map(r=>[r.entry_id,r.desired_json]));
+  for(const drink of drinks){
+    const desired=JSON.stringify({date:drink.date,payload:drinkGooglePayload(drink)});
+    if(known.get(-drink.id)!==desired)await enqueue(db,-drink.id,desired);
+    known.delete(-drink.id);
+  }
+  for(const entryId of known.keys())await enqueue(db,entryId,null);
 }
 export async function foodGoogleStatus(db){
-  await ensure(db);return (await db.prepare('SELECT entry_id,status,message,desired_json FROM food_google_exports WHERE user_id=? ORDER BY entry_id DESC LIMIT 500').bind(db.userId).all()).results.map(r=>({id:r.entry_id,status:r.desired_json&&JSON.parse(r.desired_json).date>today()?'planned':r.status,message:r.message}));
+  await ensure(db);return (await db.prepare('SELECT entry_id,status,message,desired_json FROM food_google_exports WHERE user_id=? AND entry_id>0 ORDER BY entry_id DESC LIMIT 500').bind(db.userId).all()).results.map(r=>({id:r.entry_id,status:r.desired_json&&JSON.parse(r.desired_json).date>today()?'planned':r.status,message:r.message}));
 }
 export async function retryFoodGoogle(db,id){
   await ensure(db);
@@ -73,15 +98,17 @@ export async function backfillFoodGoogle(db){
 export async function processFoodGoogle(env,{token,fetcher=fetch}={}){
   const db=env.DB;await ensure(db);
   // Settings → Synchronizace → Google Health: food left out stays only in the app (queued).
-  if(!healthAllowed(await readSyncPrefs(db,db.userId??env.USER_ID,'google'),'nutrition'))return {status:'off'};
+  const prefs=await readSyncPrefs(db,db.userId??env.USER_ID,'google'),food=healthAllowed(prefs,'nutrition'),water=healthAllowed(prefs,'water');
+  if(!food&&!water)return {status:'off'};
   if(Array.isArray(env.CONNECTED_PROVIDERS)&&!env.CONNECTED_PROVIDERS.includes('google')){
     await db.prepare("UPDATE food_google_exports SET status='disconnected',message='Google není připojené.' WHERE user_id=? AND status='queued'").bind(db.userId).run();
     return {status:'disconnected'};
   }
-  const rows=(await db.prepare(`SELECT * FROM food_google_exports WHERE user_id=? AND
+  if(water)await queueDrinks(db);
+  const rows=(await db.prepare(`SELECT * FROM food_google_exports WHERE user_id=? AND (entry_id>0 OR ?) AND (entry_id<0 OR ?) AND
     (status IN ('queued','operation','disconnected') OR (status='syncing' AND updated_at<datetime('now','-5 minutes')))
     AND (desired_json IS NULL OR json_extract(desired_json,'$.date')<=? OR remote_name IS NOT NULL OR operation_name IS NOT NULL)
-    ORDER BY updated_at,entry_id LIMIT 20`).bind(db.userId,today()).all()).results;
+    ORDER BY updated_at,entry_id LIMIT 20`).bind(db.userId,water?1:0,food?1:0,today()).all()).results;
   let access=null,synced=0;
   for(const row of rows){
     const requested=row.desired_json?JSON.parse(row.desired_json):null,planned=requested?.date>today();
@@ -100,7 +127,8 @@ export async function processFoodGoogle(env,{token,fetcher=fetch}={}){
       const polling=Boolean(row.operation_name);
       method=polling?'GET':desired?(row.remote_name?'PATCH':'POST'):'POST';
       if(polling&&!/^operations\/[^?#]+$/.test(row.operation_name))throw new Error(L('Neplatná Google operace.', 'Invalid Google operation.'));
-      const path=polling?row.operation_name:desired?(row.remote_name||COLLECTION):COLLECTION+':batchDelete';
+      const collection=row.entry_id<0?DRINKS:COLLECTION;
+      const path=polling?row.operation_name:desired?(row.remote_name||collection):collection+':batchDelete';
       const body=polling?undefined:JSON.stringify(desired?desired.payload:{names:[row.remote_name]});
       const response=await fetcher(BASE+path,{method,headers:{Authorization:'Bearer '+access,'Content-Type':'application/json',Accept:'application/json'},body,signal:AbortSignal.timeout(15000)});
       responseReceived=true;const data=await response.json().catch(()=>({}));
