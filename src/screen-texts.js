@@ -409,7 +409,11 @@ export function checkedText(facts, answer, fallbackAdvice = null) {
 
 // Late in the evening: no walk or training in the advice; past bedtime it
 // says bed, with no food tip and no bedtime that has already passed.
-const LATE_MOVES = /walk|\bruns?\b|\bjog|\brides?\b|\bswim|\bgym\b|workout|training|yoga|procházk|projdi|\bběh|\bběž|jízd|\bjeď|odjeď|plav|posil|trénink|jóg/i;
+// "běž spát" is go to sleep, so "běž" is no move. A clause that rules the move
+// out ("Trénink už vynech", "skip the walk") is no advice to move (eval run 60, S67).
+const LATE_MOVES = /walk|\bruns?\b|\bjog|\brides?\b|\bswim|\bgym\b|workout|training|yoga|procházk|projdi|\bběh|jízd|\bjeď|odjeď|plav|posil|trénink|jóg/i;
+const RULED_OUT = /\b(?:skip|no|not|don't|without|cancel)\b|vynech|zruš|odlož|\bbez\b|už\s+ne|(?<!\p{L})ne(?:trénuj|jezd|jeď|běhej|plav|posiluj|choď)/iu;
+const advisesMove = advice => String(advice).split(/[.;,!?]/).some(clause => LATE_MOVES.test(clause) && !RULED_OUT.test(clause));
 const BED_WORDS = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni/i;
 const FOOD_WORDS = /protein|carb|\beat\b|snack|meal|food|bílkovin|sacharid|\bjez|\bsněz|jídl|svač/i;
 // Past bedtime a sentence that names the bedtime without saying it has passed aims at it.
@@ -418,7 +422,7 @@ const aimsPastBedtime = (facts, s) => facts?.evening === "bed" && Boolean(facts.
 export function lateAdvice(facts, advice) {
   const late = facts?.evening;
   if (!late || !advice) return advice;
-  if (!LATE_MOVES.test(advice) && (late !== "bed" || (BED_WORDS.test(advice) && !FOOD_WORDS.test(advice) && !aimsPastBedtime(facts, advice)))) return advice;
+  if (!advisesMove(advice) && (late !== "bed" || (BED_WORDS.test(advice) && !FOOD_WORDS.test(advice) && !aimsPastBedtime(facts, advice)))) return advice;
   return late === "bed" ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.") : L("Už jen zklidni: 5–10 minut lehkého protažení a do postele.", "Just wind down: 5–10 minutes of easy stretching, then bed.");
 }
 

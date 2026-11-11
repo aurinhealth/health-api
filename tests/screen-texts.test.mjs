@@ -342,6 +342,11 @@ test("late advice: a walk or training gives way, bed and winding down stay", () 
   const bed = { evening: "bed", bedtimeTonight: "21:10" };
   for (const advice of ["Get to sleep by 21:10.", "Jdi spát ve 21:10.", "A protein snack before sleep.", "Projdi se 10 minut a pak do postele.", "Zaplavej si.", "A short swim, then bed."]) assert.equal(lateAdvice(bed, advice), "Je pozdě, jdi teď spát.", advice);
   assert.equal(lateAdvice(bed, "Your 21:10 bedtime has passed, go to bed now."), "Your 21:10 bedtime has passed, go to bed now.");
+  // Eval run 60, S67: good wind-down advice stays, a move that is ruled out is no move.
+  const wind = { evening: "wind-down" };
+  for (const advice of ["Už netrénuj; dej si 5–10 minut lehkého protažení a pak běž spát.", "Trénink už vynech; dej si 5–10 minut klidného protažení a pak do postele.", "Skip the walk tonight, just stretch and go to bed."]) assert.equal(lateAdvice(wind, advice), advice, advice);
+  assert.equal(lateAdvice(wind, "Trénink už vynech, ale dej si 30 min procházku."), "Už jen zklidni: 5–10 minut lehkého protažení a do postele.");
+  assert.equal(lateAdvice(bed, "Skip the walk and go to bed now."), "Skip the walk and go to bed now.");
   // The text itself never aims at a bedtime that has passed: it is not shown.
   assert.throws(() => checkedText(bed, JSON.stringify({ text: "Skip extra training and aim for your 21:10 bedtime.", advice: "Go to bed now." })), /late/);
   assert.equal(checkedText(bed, JSON.stringify({ text: "Your 21:10 bedtime is gone.", advice: "Go to bed now." })).text, "Your 21:10 bedtime is gone.");
