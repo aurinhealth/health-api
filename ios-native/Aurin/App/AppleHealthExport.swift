@@ -28,6 +28,7 @@ final class AppleHealthExport {
     private(set) var viaGoogle: Set<String>
 
     @ObservationIgnored private let store = HKHealthStore()
+    @ObservationIgnored private var askingNutrients = false
     private static let prefsKey = "appleHealth.export"
     private static let writtenKey = "appleHealth.written"
     private static let viaGoogleKey = "appleHealth.viaGoogle"
@@ -471,8 +472,13 @@ final class AppleHealthExport {
             totals.append(("sugar", .dietarySugar, .gram(), ownSum(\.sugar) * mine))
             totals.append(("sodium", .dietarySodium, .gramUnit(with: .milli), ownSum(\.salt) * 400 * mine))
             // Switched on before these were written: iOS asks once, for these alone.
+            // Not while food goes to Google Health, and once even when two loads come together.
             let undecided = Self.nutrientTypes.filter { store.authorizationStatus(for: $0) == .notDetermined }
-            if !undecided.isEmpty { _ = try? await store.requestAuthorization(toShare: undecided, read: []) }
+            if mine > 0, !undecided.isEmpty, !askingNutrients {
+                askingNutrients = true
+                _ = try? await store.requestAuthorization(toShare: undecided, read: [])
+                askingNutrients = false
+            }
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []
