@@ -75,7 +75,7 @@ struct ProOffer: Identifiable, Equatable {
         var plans: [ProOffer] = []
         if let c = commitment {
             plans.append(ProOffer(kind: .yearMonthly, title: L10n.tr("Ročně, placeno měsíčně"), price: c.monthly, unit: L10n.tr("/měs."),
-                                  note: L10n.f("12 plateb · %@", c.total), trial: trial, total: c.total,
+                                  note: L10n.f("12 plateb, celkem %@", c.total), trial: trial, total: c.total,
                                   save: saving(amount(c.monthly), months: 1, against: month)))
         }
         plans.append(ProOffer(kind: .yearOnce, title: L10n.tr("Ročně, placeno najednou"), price: yearly, unit: L10n.tr("/rok"),
@@ -239,7 +239,7 @@ struct PaywallView: View {
             carouselClock { time in ScreenCarousel(time: time) }
                 .frame(maxHeight: .infinity)
             if withTrial {
-                Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF · VYZKOUŠEJ 7 DNÍ ZDARMA"))
+                Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF, VYZKOUŠEJ 7 DNÍ ZDARMA"))
                     .scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
                     .padding(.bottom, 8)
             }
@@ -274,7 +274,7 @@ struct PaywallView: View {
                 .frame(maxHeight: .infinity, alignment: .top)
             if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
             Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
-                 + (chosen.kind == .yearMonthly ? " · " + L10n.tr("12 měsíců") : ""))
+                 + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
                 .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
             bottom(more: false)
         }
@@ -362,11 +362,9 @@ struct PaywallView: View {
     private var finePrint: some View {
         VStack(spacing: 3) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 6) {
+            HStack(spacing: 16) {
                 Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                Text(verbatim: "·")
                 Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
-                Text(verbatim: "·")
                 Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
             }
         }
@@ -988,9 +986,8 @@ struct AllProPlans: View {
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 12)
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: 16) {
                     Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                    Text(verbatim: "·")
                     Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 }
                 .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)
@@ -1027,13 +1024,13 @@ struct AllProPlans: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "Měsíčně · zrušíš kterýkoli měsíc  199 Kč/měs.": a small row, selectable like a card.
+    /// "Měsíčně, zrušíš kterýkoli měsíc  199 Kč/měs.": a small row, selectable like a card.
     private func monthlyRow(_ o: ProOffer) -> some View {
         let on = selected == o.kind
         return Button { selected = o.kind } label: {
             HStack(spacing: 8) {
                 (Text(verbatim: o.title).font(.subheadline.weight(.medium))
-                 + Text(verbatim: " · " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
+                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
                 Spacer(minLength: 4)
                 (Text(verbatim: o.price).font(Typo.number(18)) + Text(verbatim: o.unit).font(.caption2))
                     .lineLimit(1).fixedSize()

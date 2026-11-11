@@ -120,7 +120,7 @@ struct MyWorkoutsView: View {
                             if w.fromFriend && !w.seen { Circle().fill(Palette.amberBar).frame(width: 7, height: 7).accessibilityLabel("Nový") }
                             Text(w.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                         }
-                        Text(([w.fromName].compactMap { $0 } + [w.template.summary]).joined(separator: " · "))
+                        Text(([w.fromName].compactMap { $0 } + [w.template.summary]).joined(separator: ", "))
                             .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
@@ -336,7 +336,7 @@ struct SharedWorkoutView: View {
                     Text(share.own ? L10n.tr("Tvůj sdílený trénink") : share.fromName.map { L10n.f("%@ ti posílá trénink", $0) } ?? L10n.tr("Trénink od přítele"))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 24)
                     Text(share.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
-                    Text(([L10n.tr(LibrarySport.find(share.sport)?.label ?? "Posilovna")] + [share.template.summary]).joined(separator: " · "))
+                    Text(([L10n.tr(LibrarySport.find(share.sport)?.label ?? "Posilovna")] + [share.template.summary]).joined(separator: ", "))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 4)
                     if share.template.isEndurance {
                         endurance(share)
@@ -380,7 +380,7 @@ struct SharedWorkoutView: View {
     @ViewBuilder
     private func gym(_ share: SharedWorkout) -> some View {
                 if let groups = share.groups, !groups.isEmpty {
-                    Text(groups.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 4)
+                    Text(groups.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 4)
                 }
                 VStack(spacing: 0) {
                     ForEach(Array(share.exercises.enumerated()), id: \.offset) { i, e in

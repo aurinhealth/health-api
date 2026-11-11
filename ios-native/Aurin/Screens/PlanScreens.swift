@@ -679,7 +679,7 @@ struct ActivePlanContent: View {
         let phase = active.phaseLabel ?? active.template.weeks.first { $0.week == active.week }?.phaseLabel ?? ""
         VStack(alignment: .leading, spacing: 0) {
         SectionLabel(text: active.paused == true ? L10n.tr("pozastaveno")
-                     : active.started ? L10n.f("Týden %@ z %@", String(active.week), String(active.weeksCount)) + " · " + phase
+                     : active.started ? L10n.f("Týden %@ z %@", String(active.week), String(active.weeksCount)) + ", " + phase
                      : L10n.f("Začíná %@", Fmt.dayMonth(active.firstDay ?? active.startDate)))
             .padding(.top, 24)
         Text(active.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
@@ -697,7 +697,7 @@ struct ActivePlanContent: View {
         adjustTiles.padding(.top, 10)
 
         if active.started, active.paused != true, let week {
-            SectionLabel(text: L10n.f("Tento týden · %@–%@", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
+            SectionLabel(text: L10n.f("Tento týden (%@–%@)", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
             PlanSessionList(detail: week, sport: active.template.sport, changed: reload)
                 .padding(.top, 10)
         }
@@ -749,7 +749,7 @@ struct ActivePlanContent: View {
             }
             PlanAdjustTile(symbol: "calendar", title: L10n.tr("Dny a čas"), subtitle: daysText, color: Palette.green, action: editPlanDays)
             if let editSports, let sports = active.sports {
-                PlanAdjustTile(symbol: "figure.mixed.cardio", title: L10n.tr("Sporty"), subtitle: sports.map(PlanSportChips.name).joined(separator: " · "), color: Palette.amber, action: editSports)
+                PlanAdjustTile(symbol: "figure.mixed.cardio", title: L10n.tr("Sporty"), subtitle: sports.map(PlanSportChips.name).joined(separator: ", "), color: Palette.amber, action: editSports)
             }
             if active.template.race == nil {
                 PlanAdjustTile(symbol: "arrow.uturn.backward", title: L10n.tr("Změnit začátek"),
@@ -761,18 +761,18 @@ struct ActivePlanContent: View {
         }
     }
 
-    /// "6 h 30 · jen tento týden": this week's free time on the plan's days.
+    /// "6 h 30, jen tento týden": this week's free time on the plan's days.
     private func weekTimeText(_ week: PlanWeekDetail) -> String {
         let total: String
         if let time = week.time { total = FreeTime.total(time.days, days: preview?.days) } else { total = L10n.plural("%lld dní", week.weekDays ?? week.sessions.count) }
-        return week.time?.own == true ? total + " · " + L10n.tr("jen tento týden") : total
+        return week.time?.own == true ? total + ", " + L10n.tr("jen tento týden") : total
     }
 
-    /// "Út Čt So Ne · dva týdny": the plan's weekdays.
+    /// "Út Čt So Ne, dva týdny": the plan's weekdays.
     private var daysText: String {
         let days: [String] = (preview?.days ?? []).map { Fmt.weekdaysFromMonday[$0] }
         let text = days.joined(separator: " ")
-        return preview?.time?.daysB != nil ? text + " · " + L10n.tr("dva týdny") : text
+        return preview?.time?.daysB != nil ? text + ", " + L10n.tr("dva týdny") : text
     }
 
     /// A running race: the goal and the estimate today, checked every Monday:
@@ -982,7 +982,7 @@ struct GoalLine: View {
         .accessibilityLabel(Text(verbatim: L10n.f("Odhad %@, cíl %@", raceTime(now), raceTime(goal))))
     }
 
-    /// "Week 1" … "today · week 5" under today … "race"; an end's word gives
+    /// "Week 1" … "today, week 5" under today … "race"; an end's word gives
     /// way when today's label comes close to it.
     private var weekLabels: some View {
         GeometryReader { geo in
@@ -995,7 +995,7 @@ struct GoalLine: View {
                 if at < w - 100 {
                     Text("závod").frame(width: w, alignment: .trailing)
                 }
-                Text(verbatim: L10n.f("dnes · týden %@", String(week))).fixedSize()
+                Text(verbatim: L10n.f("dnes, týden %@", String(week))).fixedSize()
                     .position(x: min(max(at, 50), w - 50), y: 7)
             }
             .scaledFont(chartText, cap: .denseCap)
@@ -1156,7 +1156,7 @@ struct PlanWeekContent: View {
 
     var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { " · " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
+                SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { ", " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
                 Text(week.phaseLabel).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     HStack(spacing: 26) {
@@ -1270,8 +1270,8 @@ struct PlanSessionList: View {
 
     private func subtitle(_ s: PlanWeekDetail.Session) -> String {
         var text: String = Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date)
-        text += " · " + planDuration(s.length)
-        if let load = s.workout?.target_load { text += " · " + Fmt.int(load) + " TSS" }
+        text += ", " + planDuration(s.length)
+        if let load = s.workout?.target_load { text += ", " + Fmt.int(load) + " TSS" }
         return text
     }
 
@@ -1446,7 +1446,7 @@ struct WeekDaysSheet: View {
                                     .scaledFont(20).foregroundStyle(out ? Palette.faint : s.done == true ? Palette.green : Palette.amberBar)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(s.name).font(.body).foregroundStyle(out ? Palette.faint : Palette.ink).strikethrough(out)
-                                    Text(Fmt.weekdayShort(s.date) + " · " + (s.done == true ? L10n.tr("hotovo") : out ? L10n.tr("vypadne") : planDuration(s.length)))
+                                    Text(Fmt.weekdayShort(s.date) + ", " + (s.done == true ? L10n.tr("hotovo") : out ? L10n.tr("vypadne") : planDuration(s.length)))
                                         .font(Typo.caption).foregroundStyle(Palette.muted)
                                 }
                                 Spacer()
@@ -1526,7 +1526,7 @@ struct PlanResultContent: View {
 
     var body: some View {
                 VStack(alignment: .leading, spacing: 0) {
-                    SectionLabel(text: result.name + " · " + Fmt.dayMonth(result.startDate) + "–" + Fmt.dayMonth(result.endDate)).padding(.top, 24)
+                    SectionLabel(text: result.name + ", " + Fmt.dayMonth(result.startDate) + "–" + Fmt.dayMonth(result.endDate)).padding(.top, 24)
                     Text("Plán splněn").font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                     if let start = result.ftpStart, let end = result.ftpEnd {
                         Card {
@@ -1538,7 +1538,7 @@ struct PlanResultContent: View {
                                     Text(Fmt.int(end) + " W").font(Typo.number(52)).foregroundStyle(Palette.ink)
                                 }
                                 let gain = end - start
-                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign)
+                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W, " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign)
                                     .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
                             }
                             .frame(maxWidth: .infinity)
@@ -1557,7 +1557,7 @@ struct PlanResultContent: View {
                                     Text(verbatim: "/100 m").font(Typo.caption).foregroundStyle(Palette.muted)
                                 }
                                 let gain = start - end
-                                Text(L10n.f(gain >= 0 ? "o %@ s rychleji na 100 m · %@" : "o %@ s pomaleji na 100 m · %@", Fmt.int(abs(gain)), (gain >= 0 ? "−" : "+") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign))
+                                Text(L10n.f(gain >= 0 ? "o %@ s rychleji na 100 m (%@)" : "o %@ s pomaleji na 100 m (%@)", Fmt.int(abs(gain)), (gain >= 0 ? "−" : "+") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign))
                                     .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
                             }
                             .frame(maxWidth: .infinity)
