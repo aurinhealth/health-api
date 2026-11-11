@@ -25,7 +25,16 @@ export function foodGooglePayload(row){
   return {nutritionLog:{interval:{startTime:start.toISOString(),startUtcOffset:utcOffset(start),endTime:new Date(+start+60000).toISOString(),endUtcOffset:utcOffset(new Date(+start+60000))},
     foodDisplayName:row.recipe_title,mealType:MEALS[note.mealType]||'SNACK',energy:{kcal:Number(row.kcal)||0},
     totalCarbohydrate:{grams:Number(row.carbs_g)||0},totalFat:{grams:Number(row.fat_g)||0},
-    nutrients:[{nutrient:'PROTEIN',quantity:{grams:Number(row.protein_g)||0}}]}};
+    nutrients:[{nutrient:'PROTEIN',quantity:{grams:Number(row.protein_g)||0}},...extraNutrients(row,note)]}};
+}
+// Fibre, sugars and sodium when the meal has them (micronutrients.js); Google takes
+// grams, and salt on EU labels is sodium × 2.5. Unknown fibre is a 0 with a flag.
+function extraNutrients(row,note){
+  const out=[],put=(nutrient,v)=>{const g=Number(v);if(v!=null&&v!==''&&Number.isFinite(g)&&g>=0)out.push({nutrient,quantity:{grams:Math.round(g*1000)/1000}});};
+  if(note.fiber_unknown!==true)put('DIETARY_FIBER',row.fiber_g);
+  put('SUGAR',note.sugar_g);
+  if(note.salt_g!=null&&note.salt_g!=='')put('SODIUM',Number(note.salt_g)/2.5);
+  return out;
 }
 export async function queueFoodGoogle(db,id,{deleted=false}={}){
   await ensure(db);

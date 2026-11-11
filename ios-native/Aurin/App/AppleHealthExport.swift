@@ -4,8 +4,8 @@ import Observation
 
 /// Writing to Apple Health (Zdroje dat → Apple Health → Aurin posílá): done
 /// workouts logged in Aurin as HKWorkout, and the chosen health data the
-/// app itself has: the weight typed in, the day's food (energy and macros)
-/// and water. Under Tréninky z jiných aplikací also Wahoo's and Google
+/// app itself has: the weight typed in, the day's food (energy, macros,
+/// fibre, sugars and sodium) and water. Under Tréninky z jiných aplikací also Wahoo's and Google
 /// Health's workouts, which the server lists (writeForwarded). The "Jak to šlo?" rating of a done workout goes on its workout
 /// there as its effort (iOS 18). iOS asks for write permission only for the
 /// types switched on.
@@ -99,10 +99,14 @@ final class AppleHealthExport {
         if prefs.health.allows("nutrition") {
             types.formUnion([HKQuantityType(.dietaryEnergyConsumed), HKQuantityType(.dietaryProtein),
                              HKQuantityType(.dietaryCarbohydrates), HKQuantityType(.dietaryFatTotal)])
+            types.formUnion(nutrientTypes)
         }
         if prefs.health.allows("water") { types.insert(HKQuantityType(.dietaryWater)) }
         return types
     }
+
+    /// Fibre, sugars and sodium of the food log (2026-11), beside the macros.
+    static let nutrientTypes: Set<HKSampleType> = [HKQuantityType(.dietaryFiber), HKQuantityType(.dietarySugar), HKQuantityType(.dietarySodium)]
 
     /// The iOS permission sheet for what these preferences write.
     func requestAccess(_ next: SyncPrefs) async throws {
@@ -460,6 +464,15 @@ final class AppleHealthExport {
             totals.append(("protein", .dietaryProtein, .gram(), ((food.macros.protein.eaten ?? 0) - theirs(\.protein)) * mine))
             totals.append(("carbs", .dietaryCarbohydrates, .gram(), ((food.macros.carbs.eaten ?? 0) - theirs(\.carbs)) * mine))
             totals.append(("fat", .dietaryFatTotal, .gram(), ((food.macros.fat.eaten ?? 0) - theirs(\.fat)) * mine))
+            // Fibre, sugars and salt of Aurin's own meals; salt is sodium × 2.5 (EU labels).
+            let own = entries.filter { $0.app == nil }
+            func ownSum(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double { own.reduce(0.0) { $0 + ($1[keyPath: key] ?? 0) } }
+            totals.append(("fiber", .dietaryFiber, .gram(), ownSum(\.fiber) * mine))
+            totals.append(("sugar", .dietarySugar, .gram(), ownSum(\.sugar) * mine))
+            totals.append(("sodium", .dietarySodium, .gramUnit(with: .milli), ownSum(\.salt) * 400 * mine))
+            // Switched on before these were written: iOS asks once, for these alone.
+            let undecided = Self.nutrientTypes.filter { store.authorizationStatus(for: $0) == .notDetermined }
+            if !undecided.isEmpty { _ = try? await store.requestAuthorization(toShare: undecided, read: []) }
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []

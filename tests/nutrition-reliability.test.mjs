@@ -44,6 +44,11 @@ test('Google food timestamp follows the consumed date and meal mapping uses Goog
   const p=foodGooglePayload({consumed_date:'2026-09-28',consumed_at:'2026-10-04T12:00:00Z',recipe_title:'Jogurt',kcal:120,protein_g:15,carbs_g:9,fat_g:3,note:'{"mealType":"snack_pm"}'});
   assert.ok(p.nutritionLog.interval.startTime.startsWith('2026-09-28'));assert.equal(p.nutritionLog.mealType,'SNACK');assert.equal(p.nutritionLog.nutrients[0].quantity.grams,15);
 });
+test('Google food carries fibre, sugars and sodium when known, nothing for unknown fibre',()=>{
+  const n=row=>foodGooglePayload({consumed_date:'2026-11-01',recipe_title:'X',kcal:100,protein_g:5,...row}).nutritionLog.nutrients;
+  assert.deepEqual(n({fiber_g:4,note:'{"sugar_g":7.5,"salt_g":1.25}'}).slice(1),[{nutrient:'DIETARY_FIBER',quantity:{grams:4}},{nutrient:'SUGAR',quantity:{grams:7.5}},{nutrient:'SODIUM',quantity:{grams:0.5}}]);
+  assert.deepEqual(n({fiber_g:0,note:'{"fiber_unknown":true}'}).map(x=>x.nutrient),['PROTEIN']);
+});
 test('a meal logged at a local time goes to Google at that time in the user\'s zone, across DST',()=>{
   const at=(stamp,zone='Europe/Prague')=>withTimeZone(zone,()=>foodGooglePayload({consumed_date:stamp.slice(0,10),consumed_at:stamp,recipe_title:'Snídaně',kcal:300,note:'{"mealType":"breakfast"}'}).nutritionLog.interval.startTime);
   assert.equal(at('2026-10-19T07:30:00'),'2026-10-19T05:30:00.000Z');
