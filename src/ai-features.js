@@ -8,6 +8,7 @@ export const COACH_CHAT_FEATURE = "assistant";
 export const AI_FEATURES = {
   [COACH_CHAT_FEATURE]: { name: "chat s koučem" },
   "screen-text": { name: "věty kouče na obrazovkách" },
+  "coach-check": { name: "kontrola odpovědi kouče" },
   reflection: { name: "poznámka po tréninku" },
   "coach-notes": { name: "poznámky kouče" },
   "week-revision": { name: "revize týdne" },

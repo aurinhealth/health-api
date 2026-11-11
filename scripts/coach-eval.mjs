@@ -59,6 +59,9 @@ const lines = [
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
   ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
+// The AI checker (coach-checker.js): what it cost and how long it took.
+const checked = results.filter(r => r.checker?.ms != null), times = checked.map(r => r.checker.ms).sort((a, b) => a - b);
+if (checked.length) lines.push(`AI kontrolor: ${checked.length} odpovědí, ${checked.reduce((sum, r) => sum + (r.checker.usd || 0), 0).toFixed(3)} USD, medián ${(times[times.length >> 1] / 1000).toFixed(1)} s`, "");
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
 const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
