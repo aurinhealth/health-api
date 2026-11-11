@@ -867,7 +867,8 @@ export async function runScreenScenario(env, scenario, { ask = callOpenAI, date 
   let raw = {}; try { raw = JSON.parse(reply.text) || {}; } catch { raw = {}; }
   let shown = null; try { shown = checkedText(info.facts, reply.text, info.fallback?.advice); } catch (error) { shown = { text: '', advice: '', error: error.message }; }
   const r = { raw: [raw.text, raw.advice].filter(Boolean).join(' '), rawAdvice: String(raw.advice || ''), advice: shown.advice || '', shown: [shown.text, shown.advice].filter(Boolean).join(' ') };
-  const checks = [safety('text se dá ukázat', !shown.error, shown.error || ''), ...scenario.checks(r)];
+  // Run 61: the AI's own good advice was replaced by the app's late guard.
+  const checks = [safety('text se dá ukázat', !shown.error, shown.error || ''), ...scenario.checks(r), quality('aplikace radu AI nepřepsala', r.advice === r.rawAdvice, r.advice === r.rawAdvice ? '' : r.advice)];
   const answer = ['**Text:** ' + (raw.text || ''), '**Rada od AI:** ' + (raw.advice || ''), ...(r.advice !== r.rawAdvice ? ['**Rada v aplikaci:** ' + r.advice] : [])].join('\n\n');
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'screen-text', message: `Dnes v ${scenario.screen.clock}, večerka ${scenario.screen.bedtime}`, model: reply.model || lightModel(env), ms: Date.now() - started,
     answer, proposed: [], kept: [], checks, passed: checks.every(c => c.ok || c.severity !== 'safety') };
