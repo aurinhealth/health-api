@@ -358,7 +358,7 @@ struct AddFoodSheet: View {
                 .disabled(model.demo)
                 .padding(.top, 14)
             }
-            if recipes.isEmpty {
+            if recipes.isEmpty && pick == nil {
                 Text("Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }

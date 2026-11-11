@@ -97,7 +97,8 @@ struct RecipeEditorView: View {
         .sheet(isPresented: $picking) {
             // The same search as logging a meal: own foods first, then the catalog and AI.
             AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), pick: { product, amount in
-                items.append(Item(product: product, amount: FoodAmountView.text(amount)))
+                // No thousands separator: Item.value reads "1500", not "1,500" or "1 500".
+                items.append(Item(product: product, amount: amount.formatted(.number.grouping(.never).precision(.fractionLength(0...1)).locale(L10n.locale))))
                 picking = false
             })
         }
