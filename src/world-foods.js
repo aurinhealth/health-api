@@ -246,15 +246,16 @@ async function namesFound(bucket, version, query, start, language, market) {
   for (const r of rows) {
     const ws = r.t.split(' ');
     if (!query.every(q => ws.some(w => w.startsWith(q)))) continue;
-    const product = toProduct(r, language);
     // The market's rank first (scripts/build-world-foods.mjs rankOf and
     // intlRankOf; a version built before ri has only r), then a name that
     // starts with the query, then a shorter name. A node holds both markets'
-    // best, so every row is scored, not the first few hundred.
+    // best, so every row is scored, not the first few hundred; only the
+    // results kept become products.
     const rank = (market === 'intl' ? r.ri ?? r.r : r.r) ?? 4;
-    hits.push({ product, score: rank * 1e6 + (fold(product.name).startsWith(start) ? 0 : 1) * 1000 + Math.min(product.name.length, 999), at: hits.length });
+    const name = language === 'en' ? (r.en || r.n) : (r.cs || r.en || r.n);
+    hits.push({ r, score: rank * 1e6 + (fold(name).startsWith(start) ? 0 : 1) * 1000 + Math.min(name.length, 999), at: hits.length });
   }
-  return hits.sort((a, b) => a.score - b.score || a.at - b.at).slice(0, RESULTS).map(h => h.product);
+  return hits.sort((a, b) => a.score - b.score || a.at - b.at).slice(0, RESULTS).map(h => toProduct(h.r, language));
 }
 
 // catalog_key -> { fe, ca, ..., x } for the keys that have values (x: 1 marks
