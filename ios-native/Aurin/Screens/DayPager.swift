@@ -103,14 +103,12 @@ private struct DaySwipe: ViewModifier {
             .offset(x: drag)
             .background(alignment: .top) {
                 if showsNeighbour, drag != 0, let page {
-                    Group {
-                        if let view = neighbour(page) { view } else { DayPlaceholder() }
-                    }
-                    .environment(\.dayPage, page)
-                    .frame(width: width)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                    .offset(x: drag > 0 ? drag - width : drag + width)
+                    NeighbourDay(page: page, neighbour: neighbour)
+                        .equatable()
+                        .frame(width: width)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .offset(x: drag > 0 ? drag - width : drag + width)
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -138,7 +136,7 @@ private struct DaySwipe: ViewModifier {
         guard !model.demo else { return }
         nearby = []
         let days = [AppModel.shift(shown, by: -1), canGoForward ? AppModel.shift(shown, by: 1) : nil].compactMap { $0 }
-        let read = await Task.detached(priority: .utility) { SavedDays(days.map { DayPage.saved($0) }) }.value
+        let read = await Task.detached(priority: .userInitiated) { SavedDays(days.map { DayPage.saved($0) }) }.value
         guard !Task.isCancelled else { return }
         nearby = read.pages
     }
@@ -146,9 +144,9 @@ private struct DaySwipe: ViewModifier {
     /// The swiped-to day stays where the finger left it, not empty cards for
     /// the moment until the screen shows it.
     @ViewBuilder private var comingDay: some View {
-        if let page, page.date == coming, let view = neighbour(page) {
-            view
-                .environment(\.dayPage, page)
+        if let page, page.date == coming, page.hasSaved {
+            NeighbourDay(page: page, neighbour: neighbour)
+                .equatable()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         } else {
@@ -181,7 +179,9 @@ private struct DaySwipe: ViewModifier {
         }
         // The day drawn beside goes on screen as it is, not read from the disk again.
         let landing = page?.date == target ? page : nil
-        withAnimation(.snappy(duration: 0.22)) { drag = (forward ? -1 : 1) * width } completion: {
+        // A curve that ends when it says: the spring's "logically complete"
+        // came some points short of the edge, and the jump showed both days at once.
+        withAnimation(.easeOut(duration: 0.22)) { drag = (forward ? -1 : 1) * width } completion: {
             coming = target
             var instant = Transaction()
             instant.disablesAnimations = true
@@ -193,6 +193,27 @@ private struct DaySwipe: ViewModifier {
                 if coming == target { coming = nil }
             }
         }
+    }
+}
+
+/// The day beside as drawn. Equal while it is the same saved day, so a drag
+/// (a new offset every frame) does not build the whole day again each time:
+/// its closures made SwiftUI see a new view on every frame, and the swipe
+/// dropped to about 30 frames a second.
+private struct NeighbourDay: View, Equatable {
+    let page: DayPage
+    let neighbour: (DayPage) -> AnyView?
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.page.date == b.page.date && a.page.todayData == b.page.todayData
+            && a.page.foodData == b.page.foodData && (a.page.health == nil) == (b.page.health == nil)
+    }
+
+    var body: some View {
+        Group {
+            if let view = neighbour(page) { view } else { DayPlaceholder() }
+        }
+        .environment(\.dayPage, page)
     }
 }
 
