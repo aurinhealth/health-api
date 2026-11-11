@@ -75,7 +75,7 @@ test("the slow report says what the request waited for: D1, Intervals, AI, anoth
   assert.ok(work.waits.intervals >= 140 && work.waits.intervals < 260, String(work.waits.intervals));
   assert.ok(work.waits.d1 >= 100);
   const slow = slowness({ ...work, started: Date.now() - 3200 });
-  assert.match(slow, /^3\d{3} ms, 1 dotazů, 1 řádků; čekání: D1 \d+ ms, Intervals \d+ ms$/);
+  assert.match(slow, /^3\d{3} ms, 1 dotazů, 1 řádků; databáze: SQL 0 ms, souběžně 0; čekání: D1 \d+ ms, Intervals \d+ ms$/);
   assert.match(serverTiming(work), /, intervals;dur=\d+$/);
   // Waiting for the coach inputs another request is computing.
   const store = { match: async () => undefined, put: async () => {} };
@@ -85,4 +85,31 @@ test("the slow report says what the request waited for: D1, Intervals, AI, anoth
   const second = timed(async s => { const p = cached(env, null, "coach-inputs:x", async () => ({ again: true }), { store }); await pause(120); release({ a: 1 }); await p; return s; });
   const waited = await second; await first;
   assert.ok(waited.waits.shared >= 100, JSON.stringify(waited.waits));
+});
+
+test("a slow request says which database it waited for, how much was SQL and how many requests ran alongside", async () => {
+  const { databaseSummary } = await import("../src/request-timing.js");
+  const { scopedDb, retryingDb, PERSONAL_TABLES } = await import("../src/tenancy.js");
+  const { routedUserDb } = await import("../src/user-data-routing.js");
+  const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const slowDb = ms => ({ prepare: () => { const s = { bind: () => s, all: async () => { await pause(ms); return { results: [], meta: { rows_read: 1, duration: 2 } }; }, first: async () => { await pause(ms); return null; } }; return s; } });
+  const core = slowDb(30), user = slowDb(120);
+  let other;
+  const work = await timed(async store => {
+    other = timed(() => pause(50));
+    const db = scopedDb(routedUserDb(core, user, PERSONAL_TABLES), 7);
+    await db.prepare("SELECT value FROM sync_preferences WHERE user_id=?").bind(7).all();
+    await retryingDb(core).prepare("SELECT id FROM users WHERE id=?").bind(7).all();
+    return store;
+  });
+  await other;
+  assert.ok(work.waits.d1user >= 100 && work.waits.d1core >= 25 && work.waits.d1core < 100, JSON.stringify(work.waits));
+  assert.equal(work.sqlMs, 4);
+  assert.equal(work.peers, 1);
+  assert.match(databaseSummary(work), /^databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms, souběžně 1$/);
+  const slow = slowness({ ...work, started: Date.now() - 3200 });
+  assert.match(slow, /^3\d{3} ms, 2 dotazů, 2 řádků; databáze: účet \d+ ms, hlavní \d+ ms, SQL 4 ms, souběžně 1; čekání: D1 \d+ ms$/);
+  // The morning report still reads the total and what it waited for.
+  const { parseSlow } = await import("../src/ops-report-html.js");
+  assert.deepEqual({ ...parseSlow(slow), ms: null }, { ms: null, rows: 2, waited: "D1" });
 });
