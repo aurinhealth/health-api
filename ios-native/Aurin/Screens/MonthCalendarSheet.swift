@@ -178,7 +178,7 @@ struct MonthCalendarSheet: View {
     private var legend: String {
         switch chosen {
         case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.")
-        case .sleep: return L10n.tr("Kroužek je spánek proti potřebě, plný při 100 %, zelený od 85 %, oranžový od 70 %.")
+        case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený.")
         case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21.")
         case .hrv: return L10n.tr("Šipka je HRV proti obvyklému rozmezí.")
         }
@@ -207,8 +207,9 @@ struct DayMark: Equatable {
         case .sleep:
             guard let s = values?.sleep else { return }
             fill = min(Double(s.percent) / 100, 1)
-            // As Bevel (Petr, 2026-11-11): the night's colour by how much of
-            // the need it covered, the bands of sleep performance (85 and 70 %).
+            // A colour by state as Bevel (Petr, 2026-11-11): how much of the
+            // need the night covered, in WHOOP's sleep performance bands (85 and
+            // 70 %), only a guide; rust as on a red readiness.
             color = s.percent >= 85 ? Palette.green : s.percent >= 70 ? Palette.amber : Palette.rust
             spoken = Fmt.hoursMinutesLong(Double(s.minutes)) + ", " + L10n.f("%@ %% potřeby", String(s.percent))
         case .strain:
