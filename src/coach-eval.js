@@ -564,7 +564,7 @@ export const COACH_EVAL_SCENARIOS = [
   // S68: the chat at 23:40 with the day's VO2max not ridden.
   { id: 'S68', title: 'Pozdě večer v chatu, VO2max neodjeté', message: 'Co mám ještě dneska udělat?', now: '23:40',
     // Quality only: this change leaves the chat's prompt as it is, the run shows how it does late.
-    checks: r => [quality('žádný trénink na dnešek', !r.kept.some(a => a.type === 'workout' && a.date === r.date)), quality('řekne, ať jde spát', says(r, /spát|spánek|přednost spánku|postel|vyspi|lehni/i)),
+    checks: r => [quality('žádný trénink na dnešek', !r.kept.some(a => a.type === 'workout' && a.date === r.date)), quality('řekne, ať jde spát', says(r, /spát|spánek|přednost spánku|postel|vyspi|lehn|na kutě/i)),
       quality('nenavrhne procházku', !says(r, /(?<!(?:žádn|bez|ne)\p{L}*\s+)procházk/iu)),
       // Run 60: three times "jen 20 minut velmi lehkého šlapání" at 23:40.
       quality('nenabídne na večer ani lehké šlapání', !offersSpin(r.answer), r.answer)] },
