@@ -217,18 +217,17 @@ private struct NeighbourDay: View, Equatable {
     }
 }
 
-/// A day the phone has not saved: its cards, empty.
+/// A day the phone has not saved: its cards, empty (the month and the week
+/// above stay on screen).
 private struct DayPlaceholder: View {
     var body: some View {
         VStack(spacing: 12) {
-            block(36).padding(.trailing, 160)
-            block(150).padding(.top, 20)
+            block(150).padding(.top, 24)
             HStack(spacing: 12) { block(104); block(104) }
             block(96)
             block(96)
         }
         .padding(.horizontal, 24)
-        .padding(.top, 16)
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

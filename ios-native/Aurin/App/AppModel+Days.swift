@@ -12,7 +12,7 @@ extension AppModel {
         let account = scope
         do {
             let result = try await api.days(start: start, end: last)
-            guard stillSignedIn(account) else { return }
+            guard stillSignedIn(account), result.degraded != true else { return }
             for day in result.days { dayValues[day.date] = day }
         } catch {
             // Without signal the days already here stay (the request is in ErrorLog).
