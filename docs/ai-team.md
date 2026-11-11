@@ -25,7 +25,7 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Kontrola: Věda | Questionnaires & Habits Scientist | `behaviour-scientist` | no | Sonnet 5.5 |
 | Kontrola: Bezpečnost a právo | Privacy, Compliance & Legal, owner | `privacy-compliance` | no | Opus 5.5 |
 | Kontrola: Bezpečnost a právo | Security (red team) | `security-red-team` | yes, staging.aurin.health or local only | Opus 5.5; Fable 5.2 (high) for risky changes |
-| Kontrola: Testování | Tester (QA), owner | `qa-tester` | yes, tests, local and staging only | Sonnet 5.5 |
+| Kontrola: Testování | Tester (QA), owner | `qa-tester` | yes, tests, local and staging only | Opus 5.5 |
 | Kontrola: Finance | Finance Controller, owner | `finance-controller` | read-only commands | Sonnet 5.5 |
 | Kontrola: Finance | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands | Opus 5.5 |
 | Kontrola: Finance | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging | Opus 5.5 |
@@ -120,6 +120,8 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
   if that fails too. The hunt for the cause of an outage goes straight to Fable 5.2 at effort high.
 - `physiotherapist` runs on Opus 5.5, not Sonnet 5.5: a missed red flag for pain or injury is hard to
   spot later.
+- `qa-tester` runs on Opus 5.5 since 2026-11-11: on Sonnet 5.5 it missed bugs the owner then found,
+  and the customer check needs judgement, not only running tests.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
@@ -171,6 +173,10 @@ A role does not see the thread's history, so every brief carries what it needs, 
   query that `privacy-compliance` checked and the owner approved; the PM runs it, read-only).
 - The monthly overview of income and costs, invoice and payment checks, AI spend against the limits
   and the papers for the accountant: `finance-controller`. Tax decisions stay with the accountant.
+- Every screen, flow or mockup users will see: `qa-tester` runs the customer check (a first-time
+  customer's questions, each answered by the app itself or reported as a bug). A mockup goes to the
+  owner only after `ios-designer` (app and watch) or `visual-designer` reviewed it and the customer
+  check passed or its findings were fixed.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
