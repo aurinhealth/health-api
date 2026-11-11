@@ -72,7 +72,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   if (typeof patch.memoryOff === 'boolean') state.memoryOff = patch.memoryOff;
   // "Still true": the coach asks again in two weeks at the soonest (a lasting
   // illness is not asked about every three days), chest symptoms in two days.
-  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) Object.assign(state.memoryMeta[patch.keep], { check: shiftDate(date, heartSymptom(patch.keep) ? HEART_KEEP_DAYS : Math.max(checkDays(patch.keep) || 0, KEEP_DAYS)), keptAt: date });
+  if (patch.keep != null && state.memories.includes(patch.keep) && (state.memoryMeta[patch.keep]?.check || heartSymptom(patch.keep))) state.memoryMeta[patch.keep] = Object.assign(state.memoryMeta[patch.keep] || { at: date }, { check: shiftDate(date, heartSymptom(patch.keep) ? HEART_KEEP_DAYS : Math.max(checkDays(patch.keep) || 0, KEEP_DAYS)), keptAt: date });
   // Settings → Oznámení: the morning readiness, the coach's own messages, the
   // water push and hiding the values in them (push.js hidesValues), on until turned off.
   if (patch.notify && typeof patch.notify === 'object') {

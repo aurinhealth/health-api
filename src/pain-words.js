@@ -20,9 +20,23 @@ const ILLNESS_WORDS = word(ILLNESS_PARTS), PREGNANCY_WORDS = word(PREGNANCY_PART
 // irregular heartbeat: the coach asks the next day and after the next training
 // whether it is still there (Petr 2026-11-11), not in a week like other pains.
 // "Hrudník" alone is the gym's chest, no symptom.
-const HEART = /(?<!\p{L})(?:zatm[ěe]l|zatm[ěe]n|mdl[oe]|omdl|faint|black(?:ed|ing)?\s?out|bušen\p{L}*\s+srdce|buseni\s+srdce|palpitac|palpitation|nepravideln\p{L}*\s+tep|irregular\s+heart|(?:srdce|tep)\s+(?:\p{L}+\s+){0,2}vynech|vynechal\p{L}*\s+úder|skipped\s+(?:a\s+)?beat|missed\s+(?:a\s+)?beat)/iu;
-const CHEST = /(?<!\p{L})(?:hrud|chest)/iu, CHEST_FEEL = /(?<!\p{L})(?:bol|pích|pich|tlak\s+na\s+hrudi|tlačí|tlaci|svír|svir|hurt|pain|pressure|tight|stab|sting)/iu;
-export const heartSymptom = text => HEART.test(String(text || '')) || (CHEST.test(String(text || '')) && CHEST_FEEL.test(String(text || '')));
+const E = '(?!\\p{L})';
+const HEART = new RegExp('(?<!\\p{L})(?:' + [
+  'zatm[ěe]l', 'zatm[ěe]n', 'mdl[oe]b', 'omdl', 'faint', 'passed\\s+out', 'black(?:ed|ing)?\\s?out', 'vision\\s+(?:went\\s+)?(?:dim|dark|black|blurr)', 'dimmed\\s+vision',
+  'závra[ťt]', 'zavrat', 'zatočil\\p{L}*\\s+(?:se\\s+)?(?:mi\\s+)?hlav', 'motal\\p{L}*\\s+(?:se\\s+)?(?:mi\\s+)?hlav', 'dizz', 'light-?\\s?headed',
+  'buš\\p{L}*\\s+(?:mi\\s+)?srdce', 'srdce\\s+(?:mi\\s+)?buš', 'splašen\\p{L}*\\s+(?:tep|srdce)', '(?:racing|pounding)\\s+heart', 'heart\\s+(?:was\\s+|is\\s+)?(?:racing|pounding)', 'palpita',
+  'nepravideln\\p{L}*\\s+tep', 'irregular\\s+(?:heart|pulse)', '(?:srdce|tep)\\s+(?:\\p{L}+\\s+){0,4}vynech', 'vynech\\p{L}*\\s+(?:\\p{L}+\\s+){0,2}(?:srdce|úder)',
+  'skip\\p{L}*\\s+(?:a\\s+)?(?:heart)?beats?' + E, 'heart\\s+skips', 'missed\\s+(?:a\\s+)?(?:heart)?beat',
+  'dušnost', 'dušn[ýáé]' + E, 'breathless', 'short(?:ness)?\\s+of\\s+breath'
+].join('|') + ')', 'iu');
+// The chest with a feeling of pain or pressure in the same clause, a few words apart;
+// gym words ("chest press", "chest day", "hrudní páteř", "chest strap") are no symptom.
+const CHEST_PART = '(?:hrud\\p{L}*|chest)';
+const CHEST_FEEL = '(?:bol(?:í|i|el|ela|elo|est|esti|ístk\\p{L}*)|pích\\p{L}*|pich\\p{L}*|tlak|tlač(?:í|il\\p{L}*)|tlaci|svír\\p{L}*|svir\\p{L}*|sevř\\p{L}*|pál(?:í|il\\p{L}*|en\\p{L}*)|hurt(?:s|ing)?|pains?|painful|ache[sd]?|aching|pressure|tight(?:ness)?|stab(?:s|bing|bed)?|sting(?:s|ing)?|burn(?:s|ing)?)' + E;
+const NEAR = '[^\\S\\n]*(?:[^\\s,.;!?]+[^\\S\\n]+){0,4}';
+const CHEST = new RegExp('(?<!\\p{L})(?:' + CHEST_PART + E + NEAR + CHEST_FEEL + '|' + CHEST_FEEL.replace(E, '') + E + NEAR + CHEST_PART + E + ')', 'iu');
+const GYM_CHEST = /(?:chest|hrud\p{L}*)\s+(?:press|day|fly|flies|workouts?|exercises?|strap|páteř\p{L}*|pater\p{L}*)|(?:bench|tlak\p{L}*)\s+(?:\p{L}+\s+){0,2}(?:na\s+)?hrudník\p{L}*/giu;
+export const heartSymptom = text => { const t = String(text || ''); return HEART.test(t) || CHEST.test(t.replace(GYM_CHEST, ' ')); };
 export const checkDays = text => heartSymptom(text) ? 1 : !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
 
 // The body parts a remembered pain can name, the sports whose intensity it
