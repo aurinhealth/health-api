@@ -44,6 +44,8 @@ final class SyncSettingsStore {
                     // or Google there turned them off (a new yes is needed).
                     var local = AppleHealthExport.shared.prefs
                     local.forward = apple.prefs.forward
+                    // "All" from before other apps' data, or without its yes: what the server says.
+                    if local.health == .all { local.health = apple.prefs.health }
                     AppleHealthExport.shared.setPrefs(local)
                     replace("apple", prefs: local)
                 } else {

@@ -167,6 +167,8 @@ const fromRow = (destination, row) => {
   try { stored = JSON.parse(row.health_json || '[]'); } catch { stored = []; }
   let { health, since } = splitHealth(stored);
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
+  // Apple Health's "all" chosen before other apps' data was there, or without its yes: Aurin's own types only.
+  if (destination === 'apple' && health === 'all' && !splitHealth(stored).others.consent) health = HEALTH_TYPES.apple.filter(type => !OTHER_TYPES.includes(type));
   return { prefs: normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) }), since };
 };
 

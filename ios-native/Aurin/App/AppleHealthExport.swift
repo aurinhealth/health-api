@@ -391,7 +391,7 @@ final class AppleHealthExport {
                     default: return nil
                     }
                 }
-                add(key, "\(night.end)|\(stages.count)") {
+                add(key, night.end + "|" + night.stages.map { $0.type + $0.start }.joined(separator: ",")) {
                     nights.append(key)
                     let parts = stages.isEmpty ? [(HKCategoryValueSleepAnalysis.asleepUnspecified, start, end)] : stages
                     return parts.enumerated().map { index, part in

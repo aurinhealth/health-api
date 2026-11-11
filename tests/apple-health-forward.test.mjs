@@ -43,7 +43,7 @@ test("other apps' health data goes to Apple Health only after the yes, and only 
   assert.deepEqual(out.sleep[0].stages.map(s => s.type), ["core", "deep"]);
   assert.deepEqual(out.restingHR, [{ date: "2026-11-11", value: 52 }]);
   assert.deepEqual(out.heartRate, [{ start: "2026-11-11T08:00:00.000Z", value: 61.2 }]);
-  assert.deepEqual(out.steps.map(s => s.value), [900, 1200]);
+  assert.deepEqual(out.steps.map(s => s.value), [1200, 900]);
   // Saving again keeps the first yes; turning every such type off ends it.
   await saveSyncPrefs(d, 7, "apple", { health: ["sleep"] }, { now: NOW + 86400000 });
   assert.equal(await othersSince(d, 7), "2026-10-28T12:00:00.000Z");
@@ -57,4 +57,12 @@ test("without backfill sending starts at the yes; days are capped", async () => 
   const d = db(), env = { DB: d, USER_ID: 7 };
   await saveSyncPrefs(d, 7, "apple", { health: ["steps"], consent: true }, { now: Date.parse("2026-11-11T08:30:00Z") });
   assert.deepEqual((await appleHealthForward(env, { now: NOW, days: 99 })).steps, []);
+});
+
+test("Apple Health's 'all' without the yes reads as Aurin's own types", async () => {
+  const d = db();
+  await saveSyncPrefs(d, 7, "apple", { health: "all" }, { now: NOW });
+  assert.deepEqual((await readSyncPrefs(d, 7, "apple")).health, ["weight", "nutrition", "water"]);
+  await saveSyncPrefs(d, 7, "apple", { health: "all", consent: true }, { now: NOW });
+  assert.equal((await readSyncPrefs(d, 7, "apple")).health, "all");
 });

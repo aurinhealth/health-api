@@ -29,7 +29,8 @@ const DAILY = {
   respiration: ['daily-respiratory-rate', 'breathsPerMinute', 4, 40]
 };
 
-// GET /app/api/sync/forward/apple/health?days=2: what is due, by type.
+// GET /app/api/sync/forward/apple/health?days=2: what is due, by type. The reads
+// follow idx_health_datapoints_user_day; newest first, so a cap keeps the latest.
 export async function appleHealthForward(env, { days = 2, now = Date.now() } = {}) {
   const db = env.DB, userId = env.USER_ID ?? db.userId;
   const prefs = await readSyncPrefs(db, userId, 'apple');
@@ -39,8 +40,8 @@ export async function appleHealthForward(env, { days = 2, now = Date.now() } = {
   const floor = Math.max(Date.parse(start), now - Math.min(MAX_DAYS, Math.max(1, Number(days) || 2)) * 86400000);
   const since = new Date(floor).toISOString();
   const rows = (type, extra = '') => db.prepare(`SELECT data_type, external_id, sample_time, start_time, end_time, value_numeric, payload_json FROM health_datapoints
-    WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = ? AND COALESCE(start_time, sample_time) >= ? AND (record_role IS NULL OR record_role != 'duplicate') ${extra}
-    ORDER BY COALESCE(start_time, sample_time) LIMIT 5000`).bind(userId, type, since).all().then(r => r.results || []).catch(() => []);
+    WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = ? AND COALESCE(sample_time, end_time, start_time) >= ? AND (record_role IS NULL OR record_role != 'duplicate') ${extra}
+    ORDER BY COALESCE(sample_time, end_time, start_time) DESC LIMIT 5000`).bind(userId, type, since).all().then(r => r.results || []).catch(() => []);
   const out = {};
   const want = new Set(types);
   if (want.has('sleep')) {
@@ -74,10 +75,10 @@ export async function appleHealthForward(env, { days = 2, now = Date.now() } = {
     // Five-minute averages: the samples, or the rows they were packed into (heart-rate-compaction.js).
     const [raw, packed] = await Promise.all([
       db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket, AVG(CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)) AS avg, COUNT(*) AS n
-        FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate' AND sample_time >= ? GROUP BY bucket ORDER BY bucket LIMIT 5000`)
+        FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate' AND COALESCE(sample_time, end_time, start_time) >= ? AND (record_role IS NULL OR record_role != 'duplicate') GROUP BY bucket ORDER BY bucket DESC LIMIT 5000`)
         .bind(userId, since).all().then(r => r.results || []).catch(() => []),
       db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg, json_extract(payload_json, '$.n') AS n
-        FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate-5min' AND sample_time >= ? ORDER BY sample_time LIMIT 5000`)
+        FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate-5min' AND COALESCE(sample_time, end_time, start_time) >= ? ORDER BY COALESCE(sample_time, end_time, start_time) DESC LIMIT 5000`)
         .bind(userId, since).all().then(r => r.results || []).catch(() => [])
     ]);
     out.heartRate = pickBuckets(raw, packed).map(b => ({ start: new Date(Number(b.bucket) * 1000).toISOString(), value: Math.round(n(b.avg) * 10) / 10 }))
