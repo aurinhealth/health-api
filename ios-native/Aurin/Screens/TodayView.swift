@@ -311,7 +311,7 @@ struct DataAgePill: View {
 }
 
 /// The days on Dnes, Zdraví and Jídlo (Petr, 2026-11-11, as Bevel): seven at
-/// a time with the shown day in the middle, one strip from four months back to
+/// a time with the shown day in the middle (today at the right end), one strip from four months back to
 /// today (on Jídlo two weeks ahead) that a finger slides through freely. A
 /// swipe of the day below moves it by one day, never a whole week. A dot in
 /// the readiness colour under each day (/app/api/days, the shown week from
@@ -333,7 +333,10 @@ struct WeekStrip: View {
     /// The day picked, at once: the strip moves while the day below still loads.
     private var shown: String { model.demo ? date : (model.selectedDate ?? today) }
     /// Four months back, further when an older day is on screen.
-    private var days: [String] { ISODay.range(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), lastDay) }
+    /// (ISODay.range stops at 400 days, so never more than that.)
+    private var days: [String] {
+        ISODay.range(max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -399)), lastDay)
+    }
 
     var body: some View {
         Group {

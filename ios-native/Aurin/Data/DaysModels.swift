@@ -18,6 +18,8 @@ struct DaysRange: Decodable, Equatable {
     let start: String
     let end: String
     let days: [DayValues]
+    /// A read failed on the server: the days are not kept, asked again later.
+    var degraded: Bool? = nil
 }
 
 extension APIClient {
