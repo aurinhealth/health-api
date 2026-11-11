@@ -253,28 +253,30 @@ enum CoachSuggestions {
     static let fallback = ["Jak mám dnes trénovat?", "Necítím se dobře, uprav mi týden.", "Co sníst před večerním tréninkem?", "Proč mám nízkou připravenost?"]
 
     /// `limit`: three on the empty chat; more as the pool under an answer (CoachView.followUps).
-    static func forDay(today: TodaySnapshot?, sessions: [WeekSession], date: String, limit: Int = 3) -> [String] {
+    /// `language`: the one the athlete writes to the coach in (CoachView.followUps); the app's otherwise.
+    static func forDay(today: TodaySnapshot?, sessions: [WeekSession], date: String, limit: Int = 3, language: String = L10n.language) -> [String] {
+        let tr = { (text: String) in L10n.tr(text, in: language) }
         var out: [String] = []
         let tomorrow = AppModel.shift(date, by: 1) ?? ""
         if let done = sessions.last(where: { $0.date == date && $0.status == "done" && ["ride", "run", "strength"].contains($0.sport) }) {
             switch done.sport {
-            case "ride": out.append(L10n.tr("Jak se mi povedla dnešní jízda?"))
-            case "run": out.append(L10n.tr("Jak se mi povedl dnešní běh?"))
-            default: out.append(L10n.tr("Jak se mi povedla dnešní posilovna?"))
+            case "ride": out.append(tr("Jak se mi povedla dnešní jízda?"))
+            case "run": out.append(tr("Jak se mi povedl dnešní běh?"))
+            default: out.append(tr("Jak se mi povedla dnešní posilovna?"))
             }
-            out.append(L10n.tr("Co mám dát zítra?"))
-            out.append(L10n.tr("Co sníst po tréninku?"))
+            out.append(tr("Co mám dát zítra?"))
+            out.append(tr("Co sníst po tréninku?"))
         }
         if let zone = today?.readiness.zone, zone == "red" || zone == "yellow" {
-            out.append(L10n.tr("Proč mám nízkou připravenost?"))
-            if sessions.contains(where: { $0.date == date && $0.status == "planned" }) { out.append(L10n.tr("Mám dnešní trénink zkrátit?")) }
-            out.append(L10n.tr("Necítím se dobře, uprav mi týden."))
+            out.append(tr("Proč mám nízkou připravenost?"))
+            if sessions.contains(where: { $0.date == date && $0.status == "planned" }) { out.append(tr("Mám dnešní trénink zkrátit?")) }
+            out.append(tr("Necítím se dobře, uprav mi týden."))
         }
         if let key = sessions.first(where: { $0.date == tomorrow && $0.status == "planned" && hard($0) }) {
-            out.append(L10n.f("Jak na zítřejší %@?", key.title))
-            out.append(L10n.tr("Co sníst dnes večer?"))
+            out.append(L10n.f("Jak na zítřejší %@?", in: language, key.title))
+            out.append(tr("Co sníst dnes večer?"))
         }
-        for q in fallback.map(L10n.tr) where !out.contains(q) { out.append(q) }
+        for q in fallback.map(tr) where !out.contains(q) { out.append(q) }
         var seen = Set<String>()
         return Array(out.filter { seen.insert($0).inserted }.prefix(limit))
     }

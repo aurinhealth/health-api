@@ -315,8 +315,11 @@ struct CoachView: View {
               input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let last = lastAnswer, last.food == nil else { return [] }
         let asked = Set(messages.filter(\.mine).map { $0.text.lowercased() })
-        let pool = (current?.questions.map(L10n.tr) ?? [])
-            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8)
+        // In the language the athlete writes in, as the coach answers: Czech
+        // questions to Czech messages in an English app, and the other way round.
+        let language = messages.last(where: \.mine).flatMap { L10n.written($0.text) } ?? L10n.language
+        let pool = (current?.questions.map { L10n.tr($0, in: language) } ?? [])
+            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8, language: language)
         var seen = Set<String>()
         return Array(pool.filter { !asked.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }.prefix(3))
     }
