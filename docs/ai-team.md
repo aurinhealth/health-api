@@ -152,11 +152,12 @@ A role does not see the thread's history, so every brief carries what it needs, 
 5. **Report:** the common findings format, short, with sources.
 
 ## Who checks what
-- A new request from the owner that starts a team run or a new thread: `prompter` first turns it into
+- Every request from the owner (since 2026-11-11, his wish): `prompter` first turns it into
   a task brief (the order of "How the PM briefs a role"), before `research-analyst`. Where an answer
   would change the work, it first returns up to 3 questions with a recommended answer; the PM asks
   the owner and gives the answers back to `prompter`, which then writes the final brief. It follows Anthropic's
-  guide "Prompting Claude Fable 5.2". Quick answers, small fixes and follow-ups skip it.
+  guide "Prompting Claude Fable 5.2". This includes small fixes, quick questions and
+  follow-ups in a thread; for those the brief is a few lines.
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
   "Rychlost a náklady" paragraph (speed, D1 rows, Cloudflare limits) for its description.
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
