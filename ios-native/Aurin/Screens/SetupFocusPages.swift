@@ -155,7 +155,7 @@ struct SetupTimePage: View {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Kde posiluješ?").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                            Text("Posilovna, doma nebo obojí · vybavení").font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text("Vybavení: posilovna, doma nebo obojí").font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer(minLength: 8)
                         Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)

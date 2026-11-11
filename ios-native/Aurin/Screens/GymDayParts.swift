@@ -123,14 +123,14 @@ extension GymDayParts {
 
     func minutes(_ part: GymDayPart, day: GymDay) -> Int { routine(part, day: day)?.minutes ?? 0 }
 
-    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min", "Rotoped · Bez limitu".
+    /// "Automaticky, 6 min", "Legs, 7 min", "Rotoped, 10 min", "Rotoped, Bez limitu".
     func subtitle(_ part: GymDayPart, day: GymDay) -> String {
         if part.isCardio {
             let c = choice(part)
-            return GymCardio.name(c.type) + " · " + GymCardio.length(c.minutes)
+            return GymCardio.name(c.type) + ", " + GymCardio.length(c.minutes)
         }
         let name = routine(part, day: day)?.name?.nilIfBlank ?? L10n.tr("Automaticky")
-        return name + " · \(minutes(part, day: day)) min"
+        return name + ", \(minutes(part, day: day)) min"
     }
 }
 
@@ -263,7 +263,7 @@ struct GymPartsCard: View {
         case .exercises:
             let count = day.exercises.count
             let word = L10n.plural("%lld cviků", count)
-            return day.plannedMinutes.map { word + " · \($0) min" } ?? word
+            return day.plannedMinutes.map { word + ", \($0) min" } ?? word
         default:
             return parts.subtitle(part, day: day)
         }

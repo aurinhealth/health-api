@@ -38,7 +38,7 @@ struct AssistantResult: Decodable, Equatable {
     struct SportChanges: Decodable, Equatable {
         let removed: [String]?
 
-        /// "Nenavrhovat kolo · Zpět" under the answer.
+        /// "Nenavrhovat kolo, Zpět" under the answer.
         var chips: [CoachMemoryChip] { (removed ?? []).map { CoachMemoryChip(kind: .sportOff, text: $0) } }
     }
 
@@ -272,7 +272,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "rest": return L10n.f("Odstranit %@ (%@)", name, day)
         case "workout":
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "swim": "plavání", "gym": "posilovna"][sport ?? ""] ?? "trénink")
-            return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
+            return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { ", " + Fmt.duration(Int($0)) } ?? "") + ", " + day
         case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
         case "activity_delete": return L10n.tr("Smazat aktivitu")
@@ -292,15 +292,15 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     }
 
     /// The line under the title of a change of a done activity:
-    /// "Běh 07:02 + Běh 07:31", "Jízda 18:10 · út 14. 10.", "Posilovna · 17:30 → 18:00".
+    /// "Běh 07:02 + Běh 07:31", "Jízda 18:10, út 14. 10.", "Posilovna, 17:30 → 18:00".
     var detail: String? {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
         switch type {
-        case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: " · ")
+        case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: ", ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
-        case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: " · ")
+        case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
-        case "week_sport": return day.map { $0 + " · " + L10n.tr("jen tento týden") }
+        case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
         default: return nil
         }
     }

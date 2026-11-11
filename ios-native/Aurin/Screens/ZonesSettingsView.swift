@@ -188,10 +188,10 @@ struct ZonesSettingsView: View {
     static let pools = [("25", "25 m"), ("50", "50 m"), ("22.86", "25 yd"), ("33.33", "33⅓ m")]
     static let openWaterOptions = [("off", "Vypnuto"), ("races", "Před závody"), ("season", "V sezóně")]
 
-    /// "automaticky · 25 m": the pool of the last pool swim until one is picked.
+    /// "automaticky, 25 m": the pool of the last pool swim until one is picked.
     private func poolOptions(_ t: TrainingProfileResponse) -> [(String, String)] {
         let last = t.resolved.poolLengthSource == "auto" ? t.resolved.poolLength.flatMap { n in Self.pools.first { Double($0.0) == n }?.1 } : nil
-        return [("", last.map { L10n.tr("automaticky") + " · " + $0 } ?? L10n.tr("automaticky"))] + Self.pools
+        return [("", last.map { L10n.tr("automaticky") + ", " + $0 } ?? L10n.tr("automaticky"))] + Self.pools
     }
 
     @ViewBuilder
@@ -889,7 +889,7 @@ struct ZonesSettingsView: View {
     }
 }
 
-/// "Z tréninků: max 196 · Použít": puts the seen maximum into the field.
+/// "Z tréninků: max 196, Použít": puts the seen maximum into the field.
 struct MaxHeartSuggestion: View {
     let bpm: Double
     let use: () -> Void
@@ -943,7 +943,7 @@ struct HeartZoneStrip: View {
     }
 }
 
-/// "Z2 Aerobní · 87,7 % · 5:14–5:55".
+/// "Z2 Aerobní, 87,7 %, 5:14–5:55".
 struct ZoneRow: View {
     let name: String
     let percent: String?
@@ -964,7 +964,7 @@ struct ZoneRow: View {
     }
 }
 
-/// "Předvolba · Vlastní" where the zones have no preset picker (running heart rate, swimming).
+/// "Předvolba, Vlastní" where the zones have no preset picker (running heart rate, swimming).
 struct PresetLabelRow: View {
     let value: String
 
@@ -979,7 +979,7 @@ struct PresetLabelRow: View {
     }
 }
 
-/// A zone in edit mode: "Z2 Vytrvalost · 56–75 % FTP · [161] – 220 W". The
+/// A zone in edit mode: "Z2 Vytrvalost, 56–75 % FTP, [161] – 220 W". The
 /// start is typed (from Z2 on); the end follows from the next zone's start.
 struct ZoneStartRow: View {
     let name: String

@@ -187,12 +187,13 @@ export function rideFactor(estimates, previous = null) {
 }
 
 // HUNT 3 Fitness Study reference (Loe et al. 2013, PLoS ONE 8:e64319, table
-// 4): mean VO2peak of healthy Norwegians by age group (20–29 … 70+), as a
-// straight line through the groups' middles (least squares): men 43.95 at 50
-// and 0.384 less a year, women 35.2 and 0.318. A line, not the table's steps:
+// 2): mean VO2peak of healthy Norwegians by age group (20–29 … 70+; men 54.4,
+// 49.1, 47.2, 42.6, 39.2, 35.3, women 43.0, 40.0, 38.4, 34.4, 31.1, 28.3), as a
+// straight line through the groups' middles 25 … 75 (least squares): men 44.63
+// at 50 and 0.371 less a year, women 35.87 and 0.298. A line, not the table's steps:
 // between 35 and 45 the men's means differ by 2 ml/kg/min only, so a table
 // would move the age by 5 years for 1 ml/kg/min.
-const NORMS = { male: { at50: 43.95, perYear: 0.3837 }, female: { at50: 35.2, perYear: 0.3183 } };
+const NORMS = { male: { at50: 44.63, perYear: 0.3709 }, female: { at50: 35.87, perYear: 0.2977 } };
 const normOf = (sex, age) => NORMS[sex].at50 - NORMS[sex].perYear * (age - 50);
 // Fitness age (NTNU's idea): the age whose average VO2max equals this one, kept to 20–90.
 export function fitnessAge(vo2, sex) {
@@ -203,29 +204,59 @@ export function fitnessAge(vo2, sex) {
 }
 export const normVo2 = (age, sex) => round1(sex === "male" || sex === "female" ? normOf(sex, age) : (normOf("male", age) + normOf("female", age)) / 2);
 
-// Composite age, WHOOP-style: half of the fitness age's difference from the
-// real age, plus years for the habits behind fitness and recovery. The
-// weights are Aurin's own, not from a study (to be tuned on testers' data):
-// sleep length and regularity, activity minutes (moderate + 2 × vigorous a
-// week), gym sessions a week, steps, resting heart rate and body fat or BMI.
-// Each part is capped, the whole at ±8 years; needs at least three parts.
-export function compositeAge({ age, sex, fitness, sleepHours, sleepSpreadMin, activityMinutes, gymPerWeek, steps, restHr, bodyFat, bmi }) {
-  if (!(age > 0) || fitness == null) return null;
+// Composite age ("Aurin age"): the real age plus years for fitness and the
+// habits behind it, each from a published dose-response (docs/methodology.md
+// 2.11). An effect size (HR) becomes years by the Gompertz rule (adult risk
+// doubles about every 8 years: years = 8 · log2 HR), halved because the studies
+// are observational (Aurin's choice), then capped:
+// - VO2max against the norm for age and sex, 0.87 per MET (Kodama 2009), ±4;
+//   resting heart rate (1.09 per 10 bpm, Zhang 2016), activity minutes
+//   (moderate + 2 × vigorous a week; 0.69 at 150, 0.61 from 450, Arem 2015) and
+//   steps (0.47 at the plateau, Paluch 2022) are one causal chain with VO2max,
+//   so they count a quarter each; the cluster ±5.
+// - Gym at least weekly 0.85 (Momma 2022), −1. Sleep under 7 hours up to 1.12
+//   (Cappuccio 2010), regular sleep (spread of mid-sleep ≤ 30 min) up to 0.70
+//   (Windred 2024); sleep ±1.5. Waist over 94 / 80 cm 1.11 per 10 cm (Jayedi
+//   2020), +2; only a waist the user entered, never BMI or a scale's body fat.
+// The whole ±8; needs VO2max and two of sleep, gym and waist.
+const toYears = hr => 0.5 * 8 * Math.log2(hr);
+export function compositeAge(input) {
+  const result = compositeYears(input);
+  if (!result) return null;
+  // What each habit could still gain: the age again with that habit at its
+  // target (7 h of regular sleep, gym weekly, 300 activity minutes, the step
+  // plateau, a waist at the limit), the biggest first; under 0.3 years left out.
+  const has = k => input[k] != null;
+  const targets = {
+    sleep: has("sleepHours") || has("sleepSpreadMin") ? { ...(has("sleepHours") && { sleepHours: Math.max(7, input.sleepHours) }), ...(has("sleepSpreadMin") && { sleepSpreadMin: Math.min(30, input.sleepSpreadMin) }) } : null,
+    strength: has("gymPerWeek") ? { gymPerWeek: Math.max(1, input.gymPerWeek) } : null,
+    activity: has("activityMinutes") ? { activityMinutes: Math.max(300, input.activityMinutes) } : null,
+    steps: has("steps") ? { steps: Math.max(input.age >= 60 ? 7000 : 9000, input.steps) } : null,
+    waist: has("waist") ? { waist: Math.min(input.waist, input.sex === "female" ? 80 : 94) } : null
+  };
+  const gains = Object.entries(targets).filter(([, t]) => t).map(([k, t]) => [k, round1(result.value - (compositeYears({ ...input, ...t })?.value ?? result.value))]).filter(([, g]) => g >= 0.3).sort((a, b) => b[1] - a[1]);
+  return { ...result, gains: Object.fromEntries(gains) };
+}
+function compositeYears({ age, sex, vo2max, sleepHours, sleepSpreadMin, activityMinutes, gymPerWeek, steps, restHr, waist }) {
+  if (!(age > 0) || !(vo2max > 0)) return null;
   const parts = {};
-  if (sleepHours != null) parts.sleep = sleepHours < 6 ? 1.5 : sleepHours < 7 ? 1.5 * (7 - sleepHours) : sleepHours > 9.5 ? 0.5 : 0;
-  if (sleepSpreadMin != null) parts.sleepRegularity = sleepSpreadMin <= 30 ? -0.5 : sleepSpreadMin <= 60 ? 0 : sleepSpreadMin <= 90 ? 0.5 : 1;
-  if (activityMinutes != null) parts.activity = activityMinutes < 150 ? 2 * (1 - activityMinutes / 150) : activityMinutes < 300 ? -1.5 * (activityMinutes - 150) / 150 : -1.5;
-  if (gymPerWeek != null) parts.strength = gymPerWeek >= 2 ? -1 : gymPerWeek >= 1 ? -0.5 : 0.5;
-  if (steps != null) parts.steps = steps >= 10000 ? -1 : steps >= 7500 ? -(steps - 7500) / 2500 : steps >= 5000 ? (7500 - steps) / 2500 : 1.5;
-  if (restHr != null) parts.restingHeartRate = clamp((restHr - (sex === "female" ? 63 : 60)) * 0.1, -1.5, 1.5);
-  const fatFrom = sex === "female" ? 28 : 20;
-  if (bodyFat != null) parts.body = bodyFat <= fatFrom ? 0 : bodyFat <= fatFrom + 5 ? (bodyFat - fatFrom) / 5 : clamp(1 + (bodyFat - fatFrom - 5) / 5, 1, 2);
-  else if (bmi != null) parts.body = bmi <= 25 ? 0 : bmi <= 30 ? 1.5 * (bmi - 25) / 5 : 2;
-  const known = Object.keys(parts);
-  if (known.length < 3) return null;
-  const habits = clamp(known.reduce((sum, k) => sum + parts[k], 0), -8, 8);
-  const value = clamp(age + (fitness - age) / 2 + habits, Math.max(18, age - 15), Math.min(95, age + 15));
-  return { value: round1(value), parts: Object.fromEntries(known.map(k => [k, round2(parts[k])])) };
+  parts.vo2max = clamp(toYears(0.87) * (vo2max - normVo2(age, sex)) / 3.5, -4, 4);
+  if (restHr != null) parts.restingHeartRate = clamp(toYears(1.09) * (restHr - (sex === "female" ? 63 : 60)) / 10, -1, 1);
+  if (activityMinutes != null) parts.activity = Math.max(-1.5, activityMinutes <= 150 ? toYears(0.69) * activityMinutes / 150 : toYears(0.69) + (toYears(0.61) - toYears(0.69)) * Math.min(1, (activityMinutes - 150) / 300));
+  if (steps != null) parts.steps = Math.max(-1.5, toYears(0.47) * clamp((steps - 4000) / ((age >= 60 ? 7000 : 9000) - 4000), 0, 1));
+  const cluster = clamp(parts.vo2max + 0.25 * ((parts.restingHeartRate ?? 0) + (parts.activity ?? 0) + (parts.steps ?? 0)), -5, 5);
+  let others = 0, total = 0;
+  if (gymPerWeek != null) { others++; parts.strength = gymPerWeek >= 1 ? Math.max(-1, toYears(0.85)) : 0; total += parts.strength; }
+  if (sleepHours != null || sleepSpreadMin != null) {
+    others++;
+    if (sleepHours != null) parts.sleep = Math.min(1, toYears(1.12) * clamp(7 - sleepHours, 0, 1));
+    if (sleepSpreadMin != null) parts.sleepRegularity = Math.max(-1, toYears(0.7) * clamp((90 - sleepSpreadMin) / 60, 0, 1));
+    total += clamp((parts.sleep ?? 0) + (parts.sleepRegularity ?? 0), -1.5, 1.5);
+  }
+  if (waist != null) { others++; const over = waist - (sex === "female" ? 80 : 94); parts.waist = clamp(toYears(1.11) * over / 10, 0, 2); total += parts.waist; }
+  if (others < 2) return null;
+  const value = age + clamp(cluster + total, -8, 8);
+  return { value: round1(value), parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, round2(v)])) };
 }
 
 // Sleep of the nights: the mean hours asleep and the spread (SD, minutes) of
@@ -264,7 +295,7 @@ export function activityHabits(sessions, athlete, { weeks = ACTIVITY_DAYS / 7 } 
 }
 
 // The day's estimate from its inputs, or null when there is nothing to go on.
-// inputs = { date, age, sex, height, weight, bodyFat, profileMaxHr, restHrs:
+// inputs = { date, age, sex, height, weight, waist, profileMaxHr, restHrs:
 // [daily values of 30 days], sessions (sessionsFromRows, up to `date`),
 // sleep (nights of 30 days), steps, previous: { date, vo2max, rideFactor } }.
 export function estimateDay(inputs) {
@@ -306,8 +337,7 @@ export function estimateDay(inputs) {
   const value = limit == null ? raw : clamp(raw, prev.vo2max - limit, prev.vo2max + limit);
   const fit = fitnessAge(value, sex);
   const habitsActivity = activityHabits(recent, athlete), sleep = sleepHabits(inputs.sleep);
-  const bmi = resting?.bmi ?? (height > 100 && weight > 30 ? weight / (height / 100) ** 2 : null);
-  const composite = compositeAge({ age, sex, fitness: fit, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, bodyFat: n(inputs.bodyFat), bmi });
+  const composite = compositeAge({ age, sex, vo2max: value, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, waist: n(inputs.waist) });
   return {
     date, vo2max: round1(value), confidence, fitnessAge: fit, compositeAge: composite?.value ?? null, rideFactor: factor.value,
     details: {
@@ -315,7 +345,7 @@ export function estimateDay(inputs) {
       resting: resting ? { ...resting, weight: REST_WEIGHT, activityIndex: pa } : null,
       workouts: Object.fromEntries(Object.entries(bySport).map(([k, b]) => [k, { count: b.count, weight: round2(b.weight), mean: round1(b.sum / b.weight), median: round1(median(b.values)) }])),
       rideFactorLearned: factor.learned,
-      composite: composite ? { parts: composite.parts, sleep, activity: habitsActivity } : null
+      composite: composite ? { parts: composite.parts, gains: composite.gains, sleep, activity: habitsActivity } : null
     }
   };
 }
@@ -326,7 +356,7 @@ export function estimateDay(inputs) {
 // daily resting heart rate, weight and body fat), `sleepRows` (sleep rows as
 // sleepSessionFromRow reads them, already parsed) and the profile.
 export function inputsFromRows({ date, profile = {}, activityRows = [], dailyRows = [], nights = [], previous = null }) {
-  const end = shift(date, 1), restFrom = shift(date, -29), sleepFrom = shift(date, -29), fatFrom = shift(date, -180);
+  const end = shift(date, 1), restFrom = shift(date, -29), sleepFrom = shift(date, -29);
   const day = r => String(r.sample_time || r.start_time || "").slice(0, 10);
   const sorted = [...dailyRows].filter(r => day(r) && day(r) < end).sort((a, b) => String(a.sample_time).localeCompare(String(b.sample_time)));
   const latest = (type, lo, hi, since = null) => { const r = sorted.filter(x => x.data_type === type && n(x.value_numeric) >= lo && n(x.value_numeric) <= hi && (!since || day(x) >= since)).at(-1); return r ? n(r.value_numeric) : null; };
@@ -335,7 +365,7 @@ export function inputsFromRows({ date, profile = {}, activityRows = [], dailyRow
   const age = birth ? Number(date.slice(0, 4)) - Number(birth.slice(0, 4)) - (date.slice(5) < birth.slice(5) ? 1 : 0) : n(profile.age);
   return {
     date, age, sex: profile.sex === "male" || profile.sex === "female" ? profile.sex : null, height: n(profile.height),
-    weight: latest("weight", 30, 300), bodyFat: latest("body-fat", 3, 60, fatFrom),
+    weight: latest("weight", 30, 300),
     restHrs: sorted.filter(r => r.data_type === "daily-resting-heart-rate" && day(r) >= restFrom).map(r => n(r.value_numeric)),
     profileMaxHr: n(profile.hrmax), steps: n(profile.averageSteps),
     sessions: sessionsFromRows(activityRows.filter(r => r.record_role !== "duplicate")),

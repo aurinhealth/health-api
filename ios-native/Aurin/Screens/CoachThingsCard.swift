@@ -2,7 +2,7 @@ import SwiftUI
 
 // One coach card on Today (Petr, 2026-11-02): the check-in, the review after a
 // workout, the week check, the threshold test and the plan's proposal used to
-// be five cards one under another. Now "Coach · 3 things today": the most
+// be five cards one under another. Now "Coach, 3 things today": the most
 // important one open at the top, the others as rows. A tap opens a row in the
 // card with the same texts and buttons; a thing answered goes and the next
 // one moves up. A number (FTP) still changes only with Uložit.
@@ -151,7 +151,7 @@ struct CoachThingsCard: View {
     }
 
     private func header(count: Int) -> some View {
-        let title = count > 1 ? L10n.tr("Kouč") + " · " + L10n.plural("%lld věcí dnes", count) : L10n.tr("Kouč")
+        let title = count > 1 ? L10n.tr("Kouč") + ", " + L10n.plural("%lld věcí dnes", count) : L10n.tr("Kouč")
         return HStack(spacing: 6) {
             Image(systemName: "sparkles").scaledFont(12, weight: .semibold)
             Text(verbatim: title.uppercased(with: Fmt.locale)).font(.caption.weight(.semibold)).tracking(1.2)

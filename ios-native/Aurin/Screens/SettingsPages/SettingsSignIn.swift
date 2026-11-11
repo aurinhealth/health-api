@@ -86,12 +86,12 @@ struct PasskeysSettingsView: View {
         }
     }
 
-    /// "Přidán 12. 10. · naposledy dnes".
+    /// "Přidán 12. 10., naposledy dnes".
     static func when(_ key: PasskeyInfo) -> String? {
         guard let added = day(key.createdAt) else { return nil }
         let first = L10n.f("Přidán %@", added)
         guard let used = day(key.lastUsedAt) else { return first }
-        return first + " · " + L10n.f("naposledy %@", used)
+        return first + ", " + L10n.f("naposledy %@", used)
     }
 
     private static func day(_ text: String?) -> String? {

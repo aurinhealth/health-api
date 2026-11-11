@@ -102,7 +102,7 @@ extension APIClient {
 
     /// A proposal for the day (not saved): the length, and either a focus
     /// ("upper", "lower") or 1–5 muscle groups to work.
-    /// fromWeek: the focus is the week plan's role ("Posilovna · s rezervou"),
+    /// fromWeek: the focus is the week plan's role ("Posilovna, s rezervou"),
     /// which keeps a full body with lighter legs, not the athlete's "upper body".
     /// gymDays and weekSessions: the week plan's other gym days (all of their
     /// dates, and the rows of those built so far), so the days follow on from

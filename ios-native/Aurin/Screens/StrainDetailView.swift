@@ -73,7 +73,7 @@ struct StrainDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Kapitálky with the day and the serif title, as the other details (Petr, 2026-10-24).
-            SectionLabel(text: isToday ? L10n.tr("Trénink · dnes") : L10n.f("Trénink · %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
+            SectionLabel(text: isToday ? L10n.tr("Trénink dnes") : L10n.f("Trénink %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
                 .padding(.top, 24)
             Text(verbatim: L10n.tr("Námaha"))
                 .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
@@ -164,14 +164,14 @@ struct StrainDetailContent: View {
     }
 
     private func meta(_ s: WeekSession) -> String {
-        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
+        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: ", ")
     }
 
     private var movementMeta: String {
         var parts: [String] = []
         if let steps = today.steps.today { parts.append(L10n.plural("%@ kroků", Fmt.int(steps), Int(steps.rounded()))) }
         if let active = today.steps.activeMinutes { parts.append(L10n.f("%@ aktivních min", Fmt.int(active.today))) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     /// Planned TSS per day from tomorrow to Sunday (today's open sessions count today).
@@ -234,7 +234,7 @@ struct StrainDial: View {
 
     private var subtitle: String {
         let head: String? = target.map { L10n.f("cíl %@–%@", Fmt.int($0.low), Fmt.int($0.high)) } ?? planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
-        return (head.map { $0 + " · " } ?? "") + L10n.f("z %@", "21")
+        return (head.map { $0 + ", " } ?? "") + L10n.f("z %@", "21")
     }
 }
 

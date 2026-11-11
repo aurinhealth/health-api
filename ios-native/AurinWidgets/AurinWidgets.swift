@@ -257,7 +257,7 @@ struct ReadinessWidgetView: View {
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
-                    Text(L10n.f("Spánek %@ · námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
+                    Text(L10n.f("Spánek %@, námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
                     if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
@@ -269,10 +269,10 @@ struct ReadinessWidgetView: View {
                         if let word = W.zoneWord(s.zone) {
                             Text(word.capitalized(with: L10n.locale)).font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
                         }
-                        Text(L10n.f("Spánek %@ · námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain)))
+                        Text(L10n.f("Spánek %@, námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain)))
                             .font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
                     } else {
-                        Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { " · " + $0 } ?? ""))
+                        Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { ", " + $0 } ?? ""))
                             .font(.subheadline.weight(.medium)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
                     }
                 }
@@ -308,7 +308,7 @@ struct SleepWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
-                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
+                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { ", " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {

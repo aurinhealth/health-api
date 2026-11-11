@@ -365,7 +365,7 @@ struct BarcodeScanSheet: View {
                             .buttonStyle(.plain)
                         }
                         Text(product.name).font(Typo.sentence(27, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                        Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     NutritionCells(product: product, amount: amount)
                     if let labelNote {
@@ -390,7 +390,7 @@ struct BarcodeScanSheet: View {
                     }
                     MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                     Button { Task { await save(product) } } label: {
-                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + " · " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
+                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + ", " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }
@@ -457,19 +457,18 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    /// "1 sušenka = 19 g · 90 kcal"; a serving stored as 1 g (or none) gets "Upravit".
+    /// "1 sušenka = 19 g, 90 kcal"; a serving stored as 1 g (or none) gets "Upravit".
     @ViewBuilder
     private func servingLine(_ product: FoodProduct) -> some View {
         if product.perPortion {
             EmptyView()
         } else if let size = product.usableServing {
-            Text(L10n.f("1 %@ = %@ %@ · %@ kcal", product.servingName, FoodAmountView.text(size), product.unit, Fmt.int(product.kcal(for: size))))
+            Text(L10n.f("1 %@ = %@ %@, %@ kcal", product.servingName, FoodAmountView.text(size), product.unit, Fmt.int(product.kcal(for: size))))
                 .font(Typo.caption).foregroundStyle(Palette.muted)
         } else {
-            HStack(spacing: 8) {
+            HStack(spacing: 14) {
                 if let s = FoodProduct.size(product.serving_size, unit: product.unit) {
                     Text(L10n.f("1 porce = %@ %@", FoodAmountView.text(s), product.unit)).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: "·").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 Button { edit(product) } label: {
                     Label(L10n.tr(FoodProduct.size(product.serving_size, unit: product.unit) == nil ? "Nastavit porci" : "Upravit"), systemImage: "pencil")

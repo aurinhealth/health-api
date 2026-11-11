@@ -235,7 +235,7 @@ struct SettingsMenu: View {
     /// the app and iOS version at the end; the support page without one.
     private func contact() {
         let info = Bundle.main.infoDictionary
-        let version = "Aurin \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? "")) · iOS \(UIDevice.current.systemVersion)"
+        let version = "Aurin \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? "")), iOS \(UIDevice.current.systemVersion)"
         var mail = URLComponents(string: "mailto:support@aurin.health")!
         mail.queryItems = [URLQueryItem(name: "subject", value: "Aurin"), URLQueryItem(name: "body", value: "\n\n\n" + version)]
         openURL(mail.url!) { opened in

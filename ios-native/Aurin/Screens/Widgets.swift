@@ -145,7 +145,7 @@ struct StepsWidget: View {
 
     private var percent: String {
         guard let today = steps.today, steps.goal > 0 else { return "" }
-        return " · " + Fmt.int(today / steps.goal * 100) + Fmt.percentSign
+        return ", " + Fmt.int(today / steps.goal * 100) + Fmt.percentSign
     }
 }
 
@@ -185,7 +185,7 @@ struct HRVWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Srdce · HRV", color: Palette.green)
+            WidgetHeader(title: "Srdce a HRV", color: Palette.green)
             SizedWidgetBody(size: size, smallShowsChart: band == nil || hrv.value == nil) {
                 NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
                 if let band, let value = hrv.value {
@@ -209,7 +209,7 @@ struct HRVWidget: View {
     /// "30 dní" without a usual range, with the resting heart rate on the wider sizes.
     private var note: String {
         var text = status
-        if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
+        if size != .small, let rhr = restingHR { text += ", " + L10n.f("tep %@", Fmt.int(rhr)) }
         return text
     }
 

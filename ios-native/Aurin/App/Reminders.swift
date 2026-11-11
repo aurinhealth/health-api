@@ -236,7 +236,7 @@ enum Reminders {
                 guard let fireDay = calendar.date(byAdding: .day, value: at / 1440, to: day) else { continue }
                 addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Už máš dnešní prášek?"),
                         body: hidesValues ? L10n.tr("Ještě není zapsaný.")
-                            : L10n.f("Ještě není zapsaný. Obvykle ho bereš kolem %@.", clock(usual)) + " · " + L10n.f("%@. prášek z %@", String(number), String(pill.active)),
+                            : L10n.f("Ještě není zapsaný. Obvykle ho bereš kolem %@.", clock(usual)) + ", " + L10n.f("%@. prášek z %@", String(number), String(pill.active)),
                         category: pillCategory, info: ["date": date])
             }
         }

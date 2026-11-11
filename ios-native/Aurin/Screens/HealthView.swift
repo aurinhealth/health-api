@@ -184,7 +184,7 @@ struct PartsRow: View {
                 }
             }
             if !others.isEmpty {
-                Text(others.map { L10n.tr(ReadinessText.label($0.key)) + " " + Fmt.signed(Double($0.points)) }.joined(separator: " · "))
+                Text(others.map { L10n.tr(ReadinessText.label($0.key)) + " " + Fmt.signed(Double($0.points)) }.joined(separator: ", "))
                     .font(Typo.caption).foregroundStyle(others.contains { $0.points < 0 } ? Palette.rust : Palette.green)
             }
         }

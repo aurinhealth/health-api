@@ -13,7 +13,7 @@ struct QuickActionsSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Rychlé akce") {
-            SettingsGroup(title: L10n.f("Na ikoně · %d ze %d", shown.count, QuickAction.limit)) {
+            SettingsGroup(title: L10n.f("Na ikoně (%d ze %d)", shown.count, QuickAction.limit)) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, action in
                     if i > 0 { SettingsDivider() }
                     HStack(spacing: 0) {

@@ -45,7 +45,7 @@ struct CoachCheckInCard: View {
                 }
                 if advice.kind == "swap" || advice.kind == "easier_day", let from = advice.from, let to = advice.to {
                     let easier = advice.kind == "easier_day"
-                    // "VO2max 5×4 · 75 min → Lehká jízda · 45 min", as the push offered it.
+                    // "VO2max 5×4, 75 min → Lehká jízda, 45 min", as the push offered it.
                     HStack(spacing: 8) {
                         if easier { Text("Dnes:").foregroundStyle(Palette.muted) }
                         Text(verbatim: from).strikethrough(!easier).foregroundStyle(Palette.muted)
@@ -184,10 +184,10 @@ struct WeekRevisionCard: View {
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
     }
 
-    /// "Endurance · 90 min": a name that already ends in its minutes gets no second length.
+    /// "Endurance, 90 min": a name that already ends in its minutes gets no second length.
     private static func line(_ side: WeekRevision.Side?) -> String {
-        let named = side?.name?.range(of: #"·\s*\d+\s*min\s*$"#, options: .regularExpression) != nil
-        return [side?.name, named ? nil : side?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+        let named = side?.name?.range(of: #"[·,]\s*\d+\s*min\s*$"#, options: .regularExpression) != nil
+        return [side?.name, named ? nil : side?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: ", ")
     }
 
     private func decide(_ r: WeekRevision, apply: Bool) async {
@@ -227,7 +227,7 @@ struct DayReviewView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.today, title: "Kouč") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: L10n.tr("Kouč") + " · " + Fmt.dayHeading(date)).padding(.top, 24)
+                SectionLabel(text: L10n.tr("Kouč") + ", " + Fmt.dayHeading(date)).padding(.top, 24)
                 if loading {
                     CoachThinking(text: L10n.tr("Kouč čte tvůj den…")).padding(.top, 24)
                 } else if let error {

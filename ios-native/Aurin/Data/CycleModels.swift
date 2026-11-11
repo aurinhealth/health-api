@@ -203,9 +203,9 @@ enum CycleText {
     static func phase(_ phase: String?) -> String? {
         switch phase {
         case "menstrual": return L10n.tr("Menstruace")
-        case "follicular": return L10n.tr("Folikulární fáze · odhad")
-        case "ovulation": return L10n.tr("Ovulace · odhad")
-        case "luteal": return L10n.tr("Luteální fáze · odhad")
+        case "follicular": return L10n.tr("Folikulární fáze (odhad)")
+        case "ovulation": return L10n.tr("Ovulace (odhad)")
+        case "luteal": return L10n.tr("Luteální fáze (odhad)")
         default: return nil
         }
     }

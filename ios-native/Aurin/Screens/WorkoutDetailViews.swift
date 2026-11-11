@@ -61,7 +61,7 @@ struct WeekSessionsList: View {
                             if !candidates.isEmpty {
                                 Menu {
                                     ForEach(candidates) { activity in
-                                        Button(activity.title + (activity.time.map { " · " + ClockText.format($0) } ?? "")) {
+                                        Button(activity.title + (activity.time.map { ", " + ClockText.format($0) } ?? "")) {
                                             Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
                                         }
                                     }
@@ -254,7 +254,7 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(ClockText.format(t)) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -328,7 +328,7 @@ struct ActivityDetailView: View {
         DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
+                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
                     if session.status == "done" {
                         CoachPill(subject: .activity(model.liveSession(session))).padding(.trailing, 4)
@@ -1604,7 +1604,7 @@ struct ManualWorkoutSheet: View {
         let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
         let f = ISO8601DateFormatter()
         guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
-        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: " · ")
+        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: ", ")
     }
 
     @ViewBuilder private var heartCard: some View {

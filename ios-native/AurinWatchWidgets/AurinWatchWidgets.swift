@@ -249,7 +249,7 @@ enum Small {
                 return SmallValue(fraction: Double(r) / 100, color: C.stale, word: Days.weekday(s.date).uppercased(), text: "\(r)",
                                   line: name(.readiness) + " \(r), " + Days.weekday(s.date), symbol: symbol(m))
             case .sleep:
-                return SmallValue(fraction: 0, color: C.stale, word: tr("ČEKÁM", "WAITING"), text: "···",
+                return SmallValue(fraction: 0, color: C.stale, word: tr("ČEKÁM", "WAITING"), text: "–",
                                   line: tr("Spánek: čekám na noc", "Sleep: waiting for last night"), symbol: symbol(m))
             default:
                 return empty
@@ -713,7 +713,7 @@ struct WideView: View {
     /// "17:30, in 1 hr, 23 min" while it is still to come.
     @ViewBuilder private func startLine(_ s: WatchSnapshot.Session, on key: String) -> some View {
         if let start = Days.at(s.time, on: key), start > entry.date {
-            (Text((s.time ?? "") + ", " + tr("za ", "in ")) + until(start))
+            (Text((s.time ?? "") + " (" + tr("za ", "in ")) + until(start) + Text(")"))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         } else {
             Text(Days.join([s.time, s.minutes.map(Days.minutes)]))

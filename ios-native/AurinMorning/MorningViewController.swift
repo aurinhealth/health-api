@@ -54,15 +54,16 @@ struct Morning {
     var subtitle: String
     var body: String
 
-    /// "Readiness 78 · Good day for a hard workout" → "Good day for a hard workout".
+    /// "Readiness 78, Good day for a hard workout" → "Good day for a hard workout".
+    /// Older servers sent " · " between the two; both still read.
     var advice: String? {
-        guard let range = title.range(of: " · ") else { return nil }
+        guard let range = title.range(of: " · ") ?? title.range(of: ", ") else { return nil }
         return String(title[range.upperBound...])
     }
 
-    /// "Sleep 7:12 · HRV +4% · Resting HR −2" → [("Sleep", "7:12"), ("HRV", "+4%"), ("Resting HR", "−2")].
+    /// "Sleep 7:12, HRV +4%, Resting HR −2" → [("Sleep", "7:12"), ("HRV", "+4%"), ("Resting HR", "−2")].
     var night: [(label: String, value: String)] {
-        subtitle.components(separatedBy: " · ").compactMap { part in
+        subtitle.replacingOccurrences(of: " · ", with: ", ").components(separatedBy: ", ").compactMap { part in
             guard let space = part.lastIndex(of: " ") else { return nil }
             return (String(part[..<space]), String(part[part.index(after: space)...]))
         }
