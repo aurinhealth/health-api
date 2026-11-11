@@ -565,7 +565,9 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S68', title: 'Pozdě večer v chatu, VO2max neodjeté', message: 'Co mám ještě dneska udělat?', now: '23:40',
     // Quality only: this change leaves the chat's prompt as it is, the run shows how it does late.
     checks: r => [quality('žádný trénink na dnešek', !r.kept.some(a => a.type === 'workout' && a.date === r.date)), quality('řekne, ať jde spát', says(r, /spát|spánek|postel|vyspi|lehni/i)),
-      quality('nenavrhne procházku', !says(r, /(?<!(?:žádn|bez|ne)\p{L}*\s+)procházk/iu))] },
+      quality('nenavrhne procházku', !says(r, /(?<!(?:žádn|bez|ne)\p{L}*\s+)procházk/iu)),
+      // Run 60: three times "jen 20 minut velmi lehkého šlapání" at 23:40.
+      quality('nenabídne na večer ani lehké šlapání', !offersSpin(r.answer), r.answer)] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -834,6 +836,9 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
     answer: runs.map(describe).join('\n\n'), proposed: [], kept: [], checks, passed: true };
 }
 
+// S68: an easy spin or session offered for tonight, not ruled out, not for tomorrow.
+const offersSpin = text => String(text).split(/[.;,!?]/).some(c => /šlapán|protoč|vyjet|vyjeď|projeď|trenažér|lehk\p{L}* (?:běh|jízd)|spin/iu.test(c)
+  && !/(?<!\p{L})(?:ani|bez|žádn\p{L}*|vynech\p{L}*|zruš\p{L}*|pozdě|nedávej|nejezd\p{L}*|zítra|tomorrow|skip|no)(?!\p{L})/iu.test(c));
 // Words of moving or training, of bed and of food in the late texts (S66–S68).
 const LATE_MOVE = /walk|\bruns?\b|\brides?\b|\bgym\b|workout|procházk|\bběh|jízd|posil/i;
 const BED = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni/i;

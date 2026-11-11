@@ -409,7 +409,17 @@ export function checkedText(facts, answer, fallbackAdvice = null) {
 
 // Late in the evening: no walk or training in the advice; past bedtime it
 // says bed, with no food tip and no bedtime that has already passed.
-const LATE_MOVES = /walk|\bruns?\b|\bjog|\brides?\b|\bswim|\bgym\b|workout|training|yoga|procházk|projdi|\bběh|\bběž|jízd|\bjeď|odjeď|plav|posil|trénink|jóg/i;
+// "běž spát" is go to sleep, so "běž" is no move. A move ruled out right
+// before it ("skip the walk", "žádný běh") or right after it ("Trénink už
+// vynech") is no advice to move (eval run 60, S67); "don't skip the walk" is.
+const LATE_MOVES = /walk|(?<!\p{L})(?:runs?|jog\p{L}*|rides?|swim\p{L}*|gym|spin)(?!\p{L})|workout|training|yoga|procházk|projdi|projeď|odjeď|(?<!\p{L})jeď|(?<!\p{L})běh|zaběh|jízd|plav|posil|trénink|jóg|šlapán|trenažér/giu;
+const NOT_BEFORE = /(?<!\p{L})(?:skip|no|cancel|without|vynech\p{L}*|zruš|bez|žádn\p{L}*|ani)\s+(?:(?!(?:a|and|pak|then)\s)\p{L}+\s+){0,2}$/iu;
+const KEPT_BEFORE = /(?:don't|do not|no need to)\s+skip\s+(?:\p{L}+\s+){0,2}$/iu;
+const NOT_AFTER = /^\p{L}*\s+(?:(?:už|dnes|dneska|radši|today|tonight)\s+)?(?:vynech|zruš|odlož|přesuň|nech\s+(?:na|být)|is off|can wait|počká)/iu;
+const advisesMove = advice => String(advice).split(/[.;,!?]/).some(clause => [...clause.matchAll(LATE_MOVES)].some(m => {
+  const before = clause.slice(0, m.index), after = clause.slice(m.index);
+  return KEPT_BEFORE.test(before) || !(NOT_BEFORE.test(before) || NOT_AFTER.test(after));
+}));
 const BED_WORDS = /\bbed\b|sleep|postel|spát|spánek|\bspi\b|lehni/i;
 const FOOD_WORDS = /protein|carb|\beat\b|snack|meal|food|bílkovin|sacharid|\bjez|\bsněz|jídl|svač/i;
 // Past bedtime a sentence that names the bedtime without saying it has passed aims at it.
@@ -418,7 +428,7 @@ const aimsPastBedtime = (facts, s) => facts?.evening === "bed" && Boolean(facts.
 export function lateAdvice(facts, advice) {
   const late = facts?.evening;
   if (!late || !advice) return advice;
-  if (!LATE_MOVES.test(advice) && (late !== "bed" || (BED_WORDS.test(advice) && !FOOD_WORDS.test(advice) && !aimsPastBedtime(facts, advice)))) return advice;
+  if (!advisesMove(advice) && (late !== "bed" || (BED_WORDS.test(advice) && !FOOD_WORDS.test(advice) && !aimsPastBedtime(facts, advice)))) return advice;
   return late === "bed" ? L("Je pozdě, jdi teď spát.", "It's late, so go to bed now.") : L("Už jen zklidni: 5–10 minut lehkého protažení a do postele.", "Just wind down: 5–10 minutes of easy stretching, then bed.");
 }
 
