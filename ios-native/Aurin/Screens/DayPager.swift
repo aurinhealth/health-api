@@ -59,10 +59,11 @@ extension View {
 }
 
 /// A swipe right goes a day back, a swipe left a day forward, as far as the
-/// arrows go; off while the widgets are being edited. The page follows the
-/// finger with the next day beside it, as it was last seen; let go past a
-/// third of the screen (or with a flick) and it slides over, otherwise back.
-/// A day picked another way (the week, the arrows) slides in from its side.
+/// arrows go; off while the widgets are being edited. The days beside sit
+/// left and right of this one in a paging scroll view, as they were last
+/// seen, so the system moves the page (Petr, 2026-11-11: the swipe drawn by
+/// SwiftUI frame by frame ran at about 30 frames a second). A day picked
+/// another way (the week, the arrows) slides in from its side.
 private struct DaySwipe: ViewModifier {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var drawnAsNeighbour
@@ -71,82 +72,124 @@ private struct DaySwipe: ViewModifier {
     var enabled: Bool
     let neighbour: (DayPage) -> AnyView?
 
-    @State private var drag: CGFloat = 0
-    @State private var width: CGFloat = 390
-    /// The day beside, loaded once per direction.
-    @State private var page: DayPage?
-    /// Both days beside, read off the main thread once a day is on screen, so
-    /// the first frame of a swipe does not wait for the disk.
+    /// The page in sight: 0 the day before, 1 this day, 2 the day after.
+    @State private var position: Int? = 1
+    /// This day's height: the days beside are cut to it, so a longer one does
+    /// not leave an empty end under this one.
+    @State private var height: CGFloat?
+    /// Both days beside, read off the main thread once a day is on screen.
     @State private var nearby: [DayPage] = []
-    /// Off while a picked day slides in.
-    @State private var showsNeighbour = true
     /// After a swipe: the day coming, as it was drawn beside (or as empty
     /// cards) until it is here.
-    @State private var coming: String?
+    @State private var coming: DayPage?
+    /// A picked day's slide in from its side.
+    @State private var slide: CGFloat = 0
+    /// The pager's own width: the page that paging moves (on the closed iPhone
+    /// Duo containerRelativeFrame came out wider, see PageScroll).
+    @State private var width: CGFloat?
 
-    private var waiting: Bool { coming != nil && coming != date }
+    private var waiting: Bool { coming.map { $0.date != date } ?? false }
     private var shown: String { model.selectedDate ?? AppModel.localDate(Date()) }
     private var canGoForward: Bool { DayNavigator.canGoForward(model: model, date: shown, ahead: ahead) }
+    private var before: String? { AppModel.shift(shown, by: -1) }
+    private var after: String? { canGoForward ? AppModel.shift(shown, by: 1) : nil }
 
     @ViewBuilder func body(content: Content) -> some View {
-        if drawnAsNeighbour != nil {
+        // Not in the demo (and so not in the screenshots, which cannot draw it).
+        // iOS 18 and later: on iOS 17 the scroll view tells no end of a swipe
+        // (its position changes mid-drag), so there the week and the arrows.
+        if drawnAsNeighbour != nil || model.demo {
             content
-        } else {
+        } else if #available(iOS 18, *) {
             paged(content)
+        } else {
+            content
         }
     }
 
+    @available(iOS 18, *)
     private func paged(_ content: Content) -> some View {
-        content
-            .opacity(waiting ? 0 : 1)
-            .overlay(alignment: .top) { if waiting { comingDay } }
-            .offset(x: drag)
-            .background(alignment: .top) {
-                if showsNeighbour, drag != 0, let page {
-                    NeighbourDay(page: page, neighbour: neighbour)
-                        .equatable()
-                        .frame(width: width)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .offset(x: drag > 0 ? drag - width : drag + width)
-                }
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: 0) {
+                if let before { side(before).id(0) }
+                content
+                    // Only the swipe stops while editing or loading, not the
+                    // scroll views inside the day and its sheets.
+                    .environment(\.isScrollEnabled, true)
+                    .opacity(waiting ? 0 : 1)
+                    .overlay(alignment: .top) { if waiting { comingDay } }
+                    .offset(x: slide)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                    .containerRelativeFrame(.horizontal) { length, _ in width ?? length }
+                    .id(1)
+                if let after { side(after).id(2) }
             }
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .background {
-                // Not in the demo (and so not in the screenshots, which cannot draw it).
-                if !model.demo { HorizontalPan(enabled: enabled, changed: follow, ended: settle) }
+            .scrollTargetLayout()
+            // As tall as this day, with room for the cards' shadows above and below.
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, 24)
+        }
+        .padding(.vertical, -24)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $position)
+        .onAppear {
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { position = 1 }
+        }
+        .scrollDisabled(!enabled || model.dayLocked)
+        .onScrollPhaseChange { _, phase in
+            if phase == .idle { land() }
+        }
+        .onChange(of: date) { old, new in
+            // A swipe on its way: the days in between come and go unseen.
+            if let pending = coming {
+                if new == pending.date { coming = nil }
+                return
             }
-            .onChange(of: date) { old, new in
-                page = nil
-                if new == coming { coming = nil; return }
-                coming = nil
-                // Picked in the week or with the arrows: in from its side.
-                var instant = Transaction()
-                instant.disablesAnimations = true
-                withTransaction(instant) {
-                    showsNeighbour = false
-                    drag = (new > old ? 1 : -1) * width * 0.5
-                }
-                withAnimation(.snappy(duration: 0.3)) { drag = 0 } completion: { showsNeighbour = true }
+            // Picked in the week or with the arrows: in from its side.
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
+            withAnimation(.snappy(duration: 0.3)) { slide = 0 }
+        }
+        .task(id: date) { await preload() }
+    }
+
+    /// A day beside: as saved, cut to this day's height.
+    private func side(_ day: String) -> some View {
+        Group {
+            if let page = nearby.first(where: { $0.date == day }) {
+                NeighbourDay(page: page, neighbour: neighbour).equatable()
+            } else {
+                DayPlaceholder()
             }
-            .task(id: date) { await preload() }
+        }
+        .frame(height: height ?? 0, alignment: .top)
+        .clipped()
+        .containerRelativeFrame(.horizontal) { length, _ in width ?? length }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func preload() async {
-        guard !model.demo else { return }
         nearby = []
-        let days = [AppModel.shift(shown, by: -1), canGoForward ? AppModel.shift(shown, by: 1) : nil].compactMap { $0 }
+        let days = [before, after].compactMap { $0 }
         let read = await Task.detached(priority: .userInitiated) { SavedDays(days.map { DayPage.saved($0) }) }.value
         guard !Task.isCancelled else { return }
         nearby = read.pages
     }
 
-    /// The swiped-to day stays where the finger left it, not empty cards for
+    /// The swiped-to day stays as it was drawn beside, not empty cards for
     /// the moment until the screen shows it.
     @ViewBuilder private var comingDay: some View {
-        if let page, page.date == coming, page.hasSaved {
-            NeighbourDay(page: page, neighbour: neighbour)
+        if let coming, coming.hasSaved {
+            NeighbourDay(page: coming, neighbour: neighbour)
                 .equatable()
+                .frame(height: height, alignment: .top)
+                .clipped()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         } else {
@@ -154,52 +197,31 @@ private struct DaySwipe: ViewModifier {
         }
     }
 
-    private func follow(_ moved: CGFloat) {
-        let forward = moved < 0
-        // Less give where there is no day to go to.
-        guard !forward || canGoForward else { drag = moved * 0.15; return }
-        if let target = AppModel.shift(shown, by: forward ? 1 : -1), page?.date != target {
-            // Read here only when nothing was saved for it then (it may have loaded since).
-            if let ready = nearby.first(where: { $0.date == target }), ready.hasSaved {
-                page = ready
-            } else {
-                page = DayPage.saved(target)
-            }
+    /// The page came to rest beside this one: that day goes in the middle as
+    /// it is (no jump, the middle draws the same), and loads.
+    private func land() {
+        guard let at = position, at != 1 else { return }
+        let forward = at == 2
+        guard let target = forward ? after : before else { return }
+        let page = nearby.first { $0.date == target } ?? DayPage(date: target, selectedDate: target == AppModel.localDate(Date()) ? nil : target)
+        var instant = Transaction()
+        instant.disablesAnimations = true
+        withTransaction(instant) {
+            coming = page
+            position = 1
         }
-        drag = moved
-    }
-
-    private func settle(_ moved: CGFloat, _ speed: CGFloat) {
-        let forward = moved < 0
-        let far = abs(moved) > width / 3 || (abs(speed) > 600 && (speed < 0) == forward)
-        guard moved != 0, far, !model.dayLocked, !forward || canGoForward,
-              let target = AppModel.shift(shown, by: forward ? 1 : -1) else {
-            withAnimation(.snappy(duration: 0.25)) { drag = 0 }
-            return
-        }
-        // The day drawn beside goes on screen as it is, not read from the disk again.
-        let landing = page?.date == target ? page : nil
-        // A curve that ends when it says: the spring's "logically complete"
-        // came some points short of the edge, and the jump showed both days at once.
-        withAnimation(.easeOut(duration: 0.22)) { drag = (forward ? -1 : 1) * width } completion: {
-            coming = target
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) { drag = 0 }
-            Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead, saved: landing) }
-            // An answer that never comes: the old day back.
-            Task {
-                try? await Task.sleep(for: .seconds(8))
-                if coming == target { coming = nil }
-            }
+        Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead, saved: page.hasSaved ? page : nil) }
+        // An answer that never comes: the old day back.
+        Task {
+            try? await Task.sleep(for: .seconds(8))
+            if coming?.date == target { coming = nil }
         }
     }
 }
 
-/// The day beside as drawn. Equal while it is the same saved day, so a drag
-/// (a new offset every frame) does not build the whole day again each time:
-/// its closures made SwiftUI see a new view on every frame, and the swipe
-/// dropped to about 30 frames a second.
+/// The day beside as drawn. Equal while it is the same saved day, so it is
+/// not built again whenever the pager changes (its closures would make SwiftUI
+/// see a new view each time).
 private struct NeighbourDay: View, Equatable {
     let page: DayPage
     let neighbour: (DayPage) -> AnyView?
