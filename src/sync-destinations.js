@@ -259,9 +259,11 @@ const offered = (env, id) => id === 'wahoo' ? Boolean(String(env.WAHOO_CLIENT_ID
 
 // GET /app/api/sync/prefs: every destination with its state and preferences.
 export async function syncOverview(env) {
-  const destinations = [];
-  for (const id of DESTINATIONS.filter(d => offered(env, d))) {
-    const { stored, ...prefs } = await readSyncPrefs(env.DB, env.USER_ID, id);
+  const destinations = [], ids = DESTINATIONS.filter(d => offered(env, d));
+  // Side by side: when D1 is busy, each read in turn would wait in its queue again.
+  const read = await Promise.all(ids.map(id => readSyncPrefs(env.DB, env.USER_ID, id)));
+  for (const [i, id] of ids.entries()) {
+    const { stored, ...prefs } = read[i];
     const row = { id, connected: destinationConnected(env, id), stored, prefs, supports: SUPPORTS[id], healthTypes: HEALTH_TYPES[id] };
     // The apps whose workouts can go on there: the connected ones.
     if (FORWARD_TO[id]) row.forwardSources = FORWARD_TO[id].filter(source => destinationConnected(env, source) && offered(env, source));
@@ -410,8 +412,11 @@ async function pushIntervals(env, row, { fetchImpl, absent = false }) {
 // reads back, apple-health.js and index.js googleExerciseActivity). A known
 // record (its resource name) is patched instead of made again.
 const GOOGLE_EXERCISE = /^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[^/?#]+$/;
-const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'EXERCISE');
-const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL_RUNNING', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'INDOOR_BIKING', MountainBikeRide: 'MOUNTAIN_BIKING', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
+// Only names from Google's Exercise.ExerciseType list: any other one is refused
+// with HTTP 400 (INDOOR_BIKING for a Wahoo indoor ride, 2026-11-10). OTHER keeps
+// the workout's own name, the other types get Google's.
+const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'OTHER');
+const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'STATIONARY_BIKE', MountainBikeRide: 'MOUNTAIN_BIKE', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
 export const utcOffset = at => Math.round(zoneOffsetMs(at) / 1000) + 's';
 export function googleExercise(activity) {
   const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : zonedTime(activity.startLocal));
@@ -477,6 +482,8 @@ async function pushGoogle(env, row, { fetchImpl, googleToken, pollMs = 1000 }) {
     response = await write(point);
   }
   const data = await response.json().catch(() => ({}));
+  // Google's reason (which field), for the log: the error text alone does not say.
+  if (response.status === 400) console.warn('Google Health refused the workout', JSON.stringify(data.error || {}).slice(0, 300));
   if (!response.ok) throw new Error('Google Health HTTP ' + response.status);
   if (data.error) throw new Error('Google operation failed');
   if (data.done === false) {

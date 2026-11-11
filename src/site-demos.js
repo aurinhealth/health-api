@@ -914,8 +914,8 @@ html:not(.js) .stage1{display:none}
 .finder{position:absolute;left:18px;right:18px;top:68px;transition:opacity .4s}.js .finder:not(.in){opacity:0}
 .cam{position:relative;height:200px;border-radius:24px;background:#1D2020;overflow:hidden}
 .cam .bc{position:absolute;left:50%;top:50%;width:150px;height:84px;margin:-42px 0 0 -75px;border-radius:6px;background:#f6f3ec repeating-linear-gradient(90deg,#1b1a17 0 2px,transparent 2px 4px,#1b1a17 4px 7px,transparent 7px 9px,#1b1a17 9px 10px,transparent 10px 13px);background-size:100% 70%;background-repeat:no-repeat;background-position:center 30%;box-shadow:0 0 0 10px #f6f3ec}
-.cam .scan{position:absolute;left:24px;right:24px;height:2px;top:30%;background:#ff4a3d;box-shadow:0 0 12px #ff4a3d;animation:scan 1.4s ease-in-out infinite alternate}
-@keyframes scan{to{top:70%}}
+.cam .scan{position:absolute;left:24px;right:24px;height:2px;top:30%;background:#ff4a3d;box-shadow:0 0 12px #ff4a3d;will-change:transform;animation:scan 1.4s ease-in-out infinite alternate}
+@keyframes scan{to{transform:translateY(80px)}}
 .cr{position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.9)}.cr.tl{left:20px;top:20px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cr.tr{right:20px;top:20px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cr.bl{left:20px;bottom:20px;border-right:0;border-top:0;border-radius:0 0 0 14px}.cr.br{right:20px;bottom:20px;border-left:0;border-top:0;border-radius:0 0 14px 0}
 .aim{margin:18px 0 0;font-size:19px;text-align:center;color:color-mix(in srgb,var(--text) 85%,transparent)}
 .finder .pks{display:flex;justify-content:center;gap:8px;margin-top:12px}.finder .pk{display:flex;height:36px;padding:0 13px;font-size:13px;font-weight:500}

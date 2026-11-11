@@ -14,6 +14,7 @@ import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
+import { racePhase } from "./athlete-focus.js";
 import { sessionLoad } from "./training-load.js";
 import { MAX_MINUTES } from "./workout-model.js";
 import { sorePartsFor } from "./pain-words.js";
@@ -411,11 +412,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const lastWeekLoad=Math.round(rides.filter(a=>a.completed&&inWeek(a,shiftIso(monday,-7))).reduce((s,a)=>s+loadOf(a),0));
   const namedRecovery=rides.some(a=>inWeek(a,monday)&&/recovery week|deload|regenera[čc]n[íi] t[ýy]den|odpo[čc]inkov/i.test(String(a.name||"")+" "+String(a.description||"")));
   // Same rule as the calendar's week targets: after a week ≥ 125 % of maintenance (CTL × 7).
-  // Periodization from the main event in the settings: base more than 12
-  // weeks out, build in the last 12, taper in the final week, openers the day
-  // before and the race itself. A lighter taper week is not a recovery week.
+  // Periodization from the main event in the settings (racePhase): base, the
+  // build and the taper by the race's distance (12 weeks and the final week
+  // without one), openers the day before and the race itself. A lighter taper
+  // week is not a recovery week.
   const eventDays=focus?.event?.date?diffDays(focus.event.date,targetDate):null;
-  const eventPhase=eventDays==null||eventDays<0?null:eventDays===0?"race":eventDays===1?"openers":eventDays<=7?"taper":eventDays<=84?"build":"base";
+  const eventPhase=eventDays===1?"openers":racePhase(eventDays,focus?.event);
   const tapering=["race","openers","taper"].includes(eventPhase);
   // The same rule as the week plan and the gym (all sports from the Intervals.icu
   // wellness; this sport's rides when the wellness has no loads).

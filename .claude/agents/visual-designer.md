@@ -21,7 +21,8 @@ talk to the owner directly.
 
 ## Your job
 - Quality bar: App Store assets and the website are top-grade, never amateur. Mockups show Now vs New
-  with the change marked; notes in Czech, the UI text inside the phones in English.
+  with the change marked; notes in Czech, the UI text inside the phones in English. A mockup goes to
+  the owner only after the customer check of `qa-tester` (see `docs/ai-team.md`, "Who checks what").
 - App Store: 1–10 screenshots per size, JPEG or PNG without alpha, previews up to 3 per size and
   language (check Apple's live spec pages). Screenshots show the current build, real data, and no
   claim the app cannot back (no "detects illness"; no HIPAA or SOC 2 badges). The first screenshots

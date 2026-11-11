@@ -135,6 +135,13 @@ test("a done activity: the gym's own start in the user's zone, noon without one"
   assert.deepEqual(googleExercise(a).exercise, { interval: { startTime: "2026-10-10T16:05:00.000Z", startUtcOffset: "7200s", endTime: "2026-10-10T17:07:00.000Z", endUtcOffset: "7200s" }, exerciseType: "STRENGTH_TRAINING", displayName: "Push", activeDuration: "3720s", notes: "Bench 4 × 8" });
 });
 
+test("Google Health gets only exercise types from its own list", () => {
+  const a = normalizeActivity(activity);
+  // INDOOR_BIKING was refused with HTTP 400 for every Wahoo indoor ride (2026-11-10).
+  for (const [type, google] of [["VirtualRide", "STATIONARY_BIKE"], ["VirtualRun", "TREADMILL"], ["MountainBikeRide", "MOUNTAIN_BIKE"], ["Ride", "BIKING"]]) assert.equal(googleExercise({ ...a, type }).exercise.exerciseType, google, type);
+  assert.equal(googleExercise({ ...a, sport: "tennis" }).exercise.exerciseType, "OTHER");
+});
+
 test("Intervals.icu gets the activity as a manual one, recorded; a retry updates it", async () => {
   const d = db();
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };

@@ -7,9 +7,21 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 const current = new AsyncLocalStorage();
 
+// The requests and jobs this isolate is running now. Each keeps the most others
+// it ran alongside (`peers`): a small request that waits seconds for D1 while
+// the app's other requests compute in the same isolate shows it.
+const running = new Set();
+
 export function timed(fn) {
-  const store = { started: Date.now(), queries: 0, trips: 0, rowsRead: 0, dbMs: 0, waits: {}, open: {}, since: {} };
-  return current.run(store, () => fn(store));
+  const store = { started: Date.now(), queries: 0, trips: 0, rowsRead: 0, dbMs: 0, sqlMs: 0, sqlQueries: 0, peers: 0, waits: {}, open: {}, since: {} };
+  // A request the client gave up on may never finish: after a minute it no longer counts.
+  for (const other of running) if (store.started - other.started > 60000) running.delete(other);
+  running.add(store);
+  for (const other of running) other.peers = Math.max(other.peers, running.size - 1);
+  let result;
+  try { result = current.run(store, () => fn(store)); }
+  catch (error) { running.delete(store); throw error; }
+  return Promise.resolve(result).finally(() => running.delete(store));
 }
 
 // What a request waited for, in wall time: D1, Intervals.icu, the AI, Google,
@@ -17,6 +29,9 @@ export function timed(fn) {
 // computing (api-cache.js). Calls running side by side count once, so the
 // numbers say how much of the request's time each kind of waiting took.
 export const WAIT_KINDS = { d1: "D1", intervals: "Intervals", ai: "AI", google: "Google", shared: "jiný požadavek", other: "jiné služby" };
+// The D1 wait split by database (d1-retry.js target): the user's own data
+// database, the central one (accounts, sessions, AI usage) and the food catalogue.
+export const D1_TARGETS = { d1user: "účet", d1core: "hlavní", d1foods: "katalog" };
 export function beginWait(kind) {
   const store = current.getStore();
   if (!store?.waits) return () => {};
@@ -65,7 +80,12 @@ export function noteD1(result, ms) {
   const results = Array.isArray(result) ? result : [result];
   store.queries += results.length;
   store.trips += 1;
-  for (const r of results) store.rowsRead += Number(r?.meta?.rows_read) || 0;
+  for (const r of results) {
+    store.rowsRead += Number(r?.meta?.rows_read) || 0;
+    // What D1 itself spent running the SQL; the rest of the wait is the queue and the trip.
+    // first() has no meta: its SQL time is not known (sqlQueries says how many were).
+    if (r?.meta?.duration != null) { store.sqlMs += Number(r.meta.duration) || 0; store.sqlQueries += 1; }
+  }
   store.dbMs += ms;
 }
 
@@ -89,6 +109,18 @@ export function slowness(store, { cron = false } = {}) {
   const ms = elapsed(store), trips = store.trips ?? store.queries;
   if ((cron || ms < SLOW_REQUEST_MS) && trips < MANY_QUERIES && store.rowsRead < MANY_ROWS) return null;
   const queries = trips === store.queries ? `${trips} dotazů` : `${trips} dotazů (${store.queries} příkazů v dávkách)`;
-  const waits = waitSummary(store);
-  return `${ms} ms, ${queries}, ${store.rowsRead} řádků` + (waits ? `; čekání: ${waits}` : "");
+  const waits = waitSummary(store), databases = databaseSummary(store);
+  return `${ms} ms, ${queries}, ${store.rowsRead} řádků` + (databases ? `; ${databases}` : "") + (waits ? `; čekání: ${waits}` : "");
+}
+
+// "databáze: účet 8200 ms, hlavní 700 ms, SQL 90 ms (20 z 27 dotazů), souběžně 6": once D1 took
+// 100 ms or more, which database the request waited for, how much of it D1
+// spent running SQL (one account's slow database) and how many other requests
+// this isolate ran at the same time (the app's requests at once). It stands
+// before "čekání:", which the report reads (ops-report-html.js parseSlow).
+export function databaseSummary(store) {
+  if (!(store?.waits?.d1 >= 100)) return "";
+  const parts = Object.entries(D1_TARGETS).filter(([kind]) => store.waits[kind] > 0).map(([kind, name]) => `${name} ${store.waits[kind]} ms`);
+  parts.push(`SQL ${Math.round(store.sqlMs || 0)} ms (${store.sqlQueries || 0} z ${store.queries || 0} dotazů)`, `souběžně ${store.peers || 0}`);
+  return "databáze: " + parts.join(", ");
 }

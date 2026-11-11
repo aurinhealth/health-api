@@ -6,7 +6,7 @@
 import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
 import { sessionLoad, strengthLoad } from "./training-load.js";
-import { athleteFocus } from "./athlete-focus.js";
+import { athleteFocus, racePhase, DEFAULT_PHASES } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
 import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
@@ -80,12 +80,13 @@ export function formZone(tsb) {
 }
 
 // Periodization towards the main event, the same rule as the coach
-// (cycling-coach-v2.js): base, then 12 weeks of build, the final week taper.
+// (cycling-coach-v2.js, racePhase): base, then the build and the taper by the
+// race's distance; 11 weeks of build and the final week taper without one.
 export function eventPlan(event, date) {
   if (!event?.date) return event ? { ...event, phase: null, phases: [] } : null;
-  const left = daysBetween(date, event.date);
-  const buildFrom = shift(event.date, -84), taperFrom = shift(event.date, -7);
-  const phase = left <= 0 ? "race" : left <= 7 ? "taper" : left <= 84 ? "build" : "base";
+  const left = daysBetween(date, event.date), { buildDays, taperDays } = event.buildDays ? event : DEFAULT_PHASES;
+  const buildFrom = shift(event.date, -(taperDays + buildDays)), taperFrom = shift(event.date, -taperDays);
+  const phase = left <= 0 ? "race" : racePhase(left, event);
   const order = ["base", "build", "taper"];
   const now = phase === "race" ? 3 : order.indexOf(phase);
   const week = (from, to) => ({ week: Math.floor(daysBetween(from, date) / 7) + 1, weeks: Math.max(1, Math.ceil(daysBetween(from, to) / 7)) });

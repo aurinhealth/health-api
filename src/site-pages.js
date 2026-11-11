@@ -69,8 +69,9 @@ p{margin:0}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
 .wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
 
-/* Grain over the whole page: printed paper rather than a flat screen. */
-.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+/* Grain over the whole page: printed paper rather than a flat screen. Black noise at varying alpha darkens like
+   multiply did, without a blend mode that made every moving piece repaint the whole screen behind it. */
+.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -.333 -.333 -.333 0 .622'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* Shared pieces of the overview. */
 .eyebrow{font-size:var(--fs-12);font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
@@ -362,21 +363,21 @@ main:focus{outline:none}
   .js .sun{opacity:0;transform:translateY(40px);animation:lift 1.1s cubic-bezier(.16,1,.3,1) forwards}
   .sun .rg{animation:spread 4s linear infinite}.sun .rg:nth-child(3){animation-delay:-1.33s}.sun .rg:nth-child(4){animation-delay:-2.67s}
   @keyframes spread{from{transform:scale(.47);opacity:.9}to{transform:scale(1);opacity:0}}
-  .sun .mark{animation:bob 4.8s ease-in-out infinite}
-  @keyframes bob{50%{transform:translateY(-6px)}}
+  .sun .mark{will-change:transform;animation:bob 4.8s ease-in-out infinite}
+  @keyframes bob{50%{transform:translate3d(0,-6px,0)}}
   .js .lock .shackle{transform:translateY(-14px);transition:transform .5s cubic-bezier(.34,1.8,.5,1) .5s}.js .promise.in .lock .shackle{transform:none}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
   .js .part{transform:translate(-24px,24px) scale(.94);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .1s}
   .js .flip .part{transform:translate(24px,24px) scale(.94);clip-path:inset(0 0 0 100% round 22px)}
-  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
-  @keyframes float{50%{transform:translateY(-8px)}}
+  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);will-change:transform;animation:float 6s ease-in-out 1.2s infinite}
+  @keyframes float{50%{transform:translate3d(0,-8px,0)}}
   .js .auto .step.on .bar{display:block}
   .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
   .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
-  @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
+  @media (hover:none),(max-width:960px){.js .part.on,.js .flip .part.on{animation:none}}
   @supports (interpolate-size:allow-keywords){
     .faq{interpolate-size:allow-keywords}
     .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.16,1,.3,1),content-visibility .35s allow-discrete}
@@ -809,7 +810,7 @@ export function overviewPage(request) {
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own usual range.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen.', 7000],
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own usual range. One line under the number says what to do today, and the morning notification says the same, weighing the days before and tomorrow’s workout, and keeps the numbers off your lock screen. Tap the month for every day of it: readiness, sleep, strain or HRV.', 7000],
       ['html:strain', 'strainMade', 200, 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000],
       ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000],
       ['html:cycle', 'cycleOne', 300, 'Readiness that knows your cycle.', 'Turn on cycle tracking and, in the days before your period, your resting heart rate and temperature are weighed against your own days in that phase. A usual rise costs no points.', 7000]]],
@@ -889,17 +890,19 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch or Fitbit. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring.'],
-    ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit works with it too.'],
-    ['What does it cost?', `Nothing during testing. After the release, Aurin Intelligence (the coach, food from a photo, words or the web, and the reviews), every training plan beyond the free starter plan in each sport, vitamins and minerals, and your own macros and nutrient targets come with Aurin Pro: ${PRO_PRICE.year} a year with the first week free (${PRO_SAVE}% less than monthly) or ${PRO_PRICE.month} a month, shown in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.`],
-    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch or Fitbit. The Ultrahuman Ring, WHOOP and Wahoo connect directly. With only an iPhone you still get steps, training, food and the coach; readiness, HRV and sleep need a watch or ring you wear at night.'],
+    ['Which phones does Aurin run on?', 'Only iPhone; there’s no Android app. A Fitbit works too: its data comes through Google Health with your Google account.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
-    ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo, and each day the data of Today, Training and Food for the coach’s short summary there. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
-    ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
+    ['How soon does Aurin know me?', 'By the next morning if your watch or ring already has a few weeks of data: Aurin reads them when you connect. Starting fresh, Aurin first learns your usual range: readiness comes after 14 days of HRV or resting heart rate, and your usual sleep range after 7 nights.'],
+    ['Why is my readiness different from my watch’s?', 'Every app works out its own score. Aurin compares last night’s HRV, resting heart rate and sleep with your own usual range from the last weeks, so its number can differ from the one your watch shows. Follow how it moves from day to day rather than comparing the two.'],
+    ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
+    ['What does it cost?', `Nothing while we test. After the release, everything under Free stays free, and Aurin Pro is ${PRO_PRICE.year} a year with the first week free, or ${PRO_PRICE.month} a month. Cancel any time in Settings → Aurin Pro → Manage subscription; your data stays and the free part keeps working.`],
+    ['How do I get early access?', 'Leave your email <a href="#join">below</a>. Once we add you to the test, Apple’s TestFlight emails you a link: install TestFlight, open the link and Aurin installs for free. Once Aurin is in the App Store, you sign in with the same account and keep your data.'],
+    ['What does the AI coach see?', 'Only what it needs, and only once you allow AI features in Settings → Privacy &amp; data. When you ask the coach or log food from a photo, it gets the numbers that question needs, and once a day it reads your Today, Training and Food to write its short summary. That goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
+    ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data, pause your health data (Aurin deletes it and keeps your account) or delete your account with everything in it. Before any of them, Aurin asks you to confirm it’s you with Face ID or a code sent to your email, so nobody else can do it with your phone or your sign-in.'],
     ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
-    ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],
-    ['I’m missing something in Aurin. Can I suggest it?', 'Yes. In the app, open Settings → Help → Suggest a feature, write what would help you and send it.']]
+    ['Something doesn’t work, or something’s missing?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or Suggest a feature. You can also write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`]]
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
   // The hero says what the welcome's first page says, its last words in the coach's green italic.
   const headline = 'A coach that knows how you slept.';

@@ -19,7 +19,8 @@ your answer with the other roles' work. You never talk to the owner directly.
 - Hierarchy: what does the user see first, is it the most important thing, how many numbers and cards
   compete? What can be removed?
 - Clarity: does every number have a meaning the user understands (label, unit, good or bad, compared
-  to what)? Is the AI recommendation easy to find and act on?
+  to what)? Is the AI recommendation easy to find and act on? Do names, colours and states mean one
+  thing only? A mockup also gets the customer check of `qa-tester` before the owner sees it.
 - Apple platform: HIG, Liquid Glass (iOS 26+), system components over custom ones, Dynamic Type,
   dark mode, VoiceOver labels, contrast, tap targets, motion with Reduce Motion, haptics.
 - Watch: glanceable in 2 seconds, complications, what belongs on the wrist and what does not.
