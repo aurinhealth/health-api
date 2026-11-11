@@ -11,6 +11,12 @@ import { searchStaples } from './staples.js';
 export const WORLD_FOODS_FORMAT = 1;
 export const NODE_LIMIT = 1500;
 const RESULTS = 12;
+// Which foods come first: cz for Czech and Slovak phones (products sold there,
+// Czech names), intl for everyone else (food tables, English names, no country
+// first). The app sends it (Settings > Food > Food database); an older build
+// gets it from the app language.
+export const MARKETS = ['cz', 'intl'];
+export const marketOf = (value, language = lang()) => MARKETS.includes(value) ? value : String(language).toLowerCase().startsWith('en') ? 'intl' : 'cz';
 // A word in fewer foods than this is not offered as a typo fix (vocab/<x>.json).
 export const TYPO_MIN_FOODS = 20;
 const TTL_MS = 10 * 60 * 1000;
@@ -188,9 +194,10 @@ export function correctWord(word, vocab) {
 
 // Basic foods from the food tables come first (staples.js), then the catalogue
 // without them.
-export async function searchWorldFoods(env, { name = '', barcode = '', language = lang() } = {}) {
+export async function searchWorldFoods(env, { name = '', barcode = '', language = lang(), market } = {}) {
+  market = marketOf(market, language);
   // The basic foods need no R2: a failed catalogue read still lists them.
-  const found = await catalogueFoods(env, { name, barcode, language }).catch(error => {
+  const found = await catalogueFoods(env, { name, barcode, language, market }).catch(error => {
     if (barcode) throw error;
     console.error('world catalogue', error?.message);
     const typed = [...new Set(words(name))];
@@ -203,7 +210,7 @@ export async function searchWorldFoods(env, { name = '', barcode = '', language 
   return [...staples, ...found.foods.filter(p => !keys.has(p.catalog_key))];
 }
 
-async function catalogueFoods(env, { name, barcode, language }) {
+async function catalogueFoods(env, { name, barcode, language, market }) {
   const typed = [...new Set(words(name))], none = { foods: [], query: typed, typed };
   const bucket = env.FOOD_CATALOG_R2;
   if (!bucket) return none;
@@ -221,13 +228,13 @@ async function catalogueFoods(env, { name, barcode, language }) {
   const query = await Promise.all(typed.map(async w => w.length < 4 ? w : correctWord(w, await json(bucket, `${version}/vocab/${w[0]}.json`))));
   let start = fold(name).trim();
   typed.forEach((w, i) => { if (query[i] !== w) start = start.replace(new RegExp(`\\b${w}\\b`), query[i]); });
-  const found = await namesFound(bucket, version, query, start, language);
+  const found = await namesFound(bucket, version, query, start, language, market);
   // A fixed word that finds nothing: the words as typed.
   if (found.length || query.every((w, i) => w === typed[i])) return { foods: found, query, typed };
-  return { foods: await namesFound(bucket, version, typed, fold(name).trim(), language), query: typed, typed };
+  return { foods: await namesFound(bucket, version, typed, fold(name).trim(), language, market), query: typed, typed };
 }
 
-async function namesFound(bucket, version, query, start, language) {
+async function namesFound(bucket, version, query, start, language, market) {
   // The longest word narrows the most; a catalogue word needs 3 letters.
   const longest = query.reduce((a, b) => b.length > a.length ? b : a, '');
   if (longest.length < 3) return [];
@@ -240,10 +247,12 @@ async function namesFound(bucket, version, query, start, language) {
     const ws = r.t.split(' ');
     if (!query.every(q => ws.some(w => w.startsWith(q)))) continue;
     const product = toProduct(r, language);
-    // Rank first (sold in Czechia, Czech name, food tables, English name),
-    // then a name that starts with the query, then a shorter name.
-    hits.push({ product, score: (r.r ?? 4) * 1e6 + (fold(product.name).startsWith(start) ? 0 : 1) * 1000 + Math.min(product.name.length, 999), at: hits.length });
-    if (hits.length >= 400) break;
+    // The market's rank first (scripts/build-world-foods.mjs rankOf and
+    // intlRankOf; a version built before ri has only r), then a name that
+    // starts with the query, then a shorter name. A node holds both markets'
+    // best, so every row is scored, not the first few hundred.
+    const rank = (market === 'intl' ? r.ri ?? r.r : r.r) ?? 4;
+    hits.push({ product, score: rank * 1e6 + (fold(product.name).startsWith(start) ? 0 : 1) * 1000 + Math.min(product.name.length, 999), at: hits.length });
   }
   return hits.sort((a, b) => a.score - b.score || a.at - b.at).slice(0, RESULTS).map(h => h.product);
 }

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build, implausible } from '../scripts/build-world-foods.mjs';
 import { plan } from '../scripts/upload-world-foods.mjs';
-import { searchWorldFoods, barcodeKey, words, correctWord, NODE_LIMIT, WORLD_FOODS_FORMAT } from '../src/world-foods.js';
+import { searchWorldFoods, barcodeKey, words, correctWord, marketOf, NODE_LIMIT, WORLD_FOODS_FORMAT } from '../src/world-foods.js';
 // The catalogue alone: the basic foods listed before it have their own tests (staples.test.mjs).
 const catalogue = async (env, o) => (await searchWorldFoods(env, o)).filter(p => p.source !== 'table');
 
@@ -34,6 +34,15 @@ function release(dir) {
   // More foods than one index node holds, so "cho" splits by the next letter.
   db.exec('BEGIN');
   for (let i = 0; i < NODE_LIMIT + 300; i++) food.run(100 + i, 'off:c' + i, null, 'off', (i % 2 ? 'Chocapic ' : 'Chorizo ') + i, 'fr', null, 'g', 400, 10, 50, 10, null, null, null, null, null, 1);
+  // "milk": more Czech and Slovak products than a node holds, a food table
+  // and an English-named product that only the international rank keeps.
+  for (let i = 0; i < NODE_LIMIT + 10; i++) {
+    food.run(5000 + i, 'off:m' + i, null, 'off', 'Milk drink ' + i, 'cs', null, 'ml', 50, 3, 5, 1.5, null, null, null, null, null, 1);
+    market.run(5000 + i, i % 2 ? 'en:slovakia' : 'en:czech-republic');
+  }
+  food.run(7, 'fineli:2', null, 'fineli', 'Milk, skimmed', 'en', null, 'ml', 35, 3.4, 5, 0.1, 0, 5, 0.1, null, null, 1);
+  food.run(8, 'gtin:00041383090714', '41383090714', 'off', 'Lactose free milk', 'en', 'Lactaid', 'ml', 50, 3.3, 5, 2, null, 5, 0.1, null, null, 1);
+  name.run(8, 'en', 'Lactose free milk');
   db.exec('COMMIT');
   db.close();
   return path;
@@ -90,6 +99,19 @@ test('foods sold in Czechia come first and every query word must match', async (
   const yog = await catalogue(fixture.env, { name: 'yoghurt natural', language: 'en' });
   assert.deepEqual(yog.map(p => p.name), ['Yoghurt, natural']);
   assert.deepEqual(await catalogue(fixture.env, { name: 'jogurt cokolada' }), []);
+});
+
+test('the market picks what comes first: Czech and Slovak products, or food tables and English names', async () => {
+  const cz = await catalogue(fixture.env, { name: 'milk', language: 'cs', market: 'cz' });
+  assert.match(cz[0].name, /^Milk drink/);
+  assert.equal(cz.length, 12);
+  const intl = await catalogue(fixture.env, { name: 'milk', language: 'en', market: 'intl' });
+  assert.deepEqual(intl.slice(0, 2).map(p => p.name), ['Milk, skimmed', 'Lactose free milk']);
+  // No market sent (an older app): the app language decides.
+  assert.equal((await catalogue(fixture.env, { name: 'milk', language: 'en' }))[0].name, 'Milk, skimmed');
+  assert.match((await catalogue(fixture.env, { name: 'milk', language: 'cs' }))[0].name, /^Milk drink/);
+  assert.equal(fixture.meta.counts.slovak_market, (NODE_LIMIT + 10) / 2);
+  assert.deepEqual([marketOf('intl', 'cs'), marketOf('cz', 'en'), marketOf(undefined, 'en'), marketOf('xx', 'cs')], ['intl', 'cz', 'intl', 'cz']);
 });
 
 test('sources without a licence to pass data on and foods without values are left out', async () => {
