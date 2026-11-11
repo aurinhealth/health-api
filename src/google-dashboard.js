@@ -41,7 +41,7 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     // iPhone imports Apple Health), so the day keeps the baseline of its source.
     if(key==='hrv'&&String(item.hrvSource||'').startsWith('apple-health')&&row.source_family!=='apple-health')continue;
     if(key&&value!=null)item[key]=['steps','activeCalories'].includes(key)?(item[key]||0)+value:value;
-    // Apple Watch measures HRV as SDNN, Google (Fitbit, Pixel Watch) as RMSSD, and
+    // Apple Watch measures HRV as SDNN, Google Health watches (Fitbit) as RMSSD, and
     // the iPhone app says which it sent (apple-health.js metric), so an Apple day
     // is "apple-health:sdnn" or "apple-health:rmssd": the recovery model compares
     // each day only with days of the same source and measure. Resting heart rate

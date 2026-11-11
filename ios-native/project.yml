@@ -121,6 +121,8 @@ targets:
           - CFBundleURLName: health.aurin.app
             CFBundleURLSchemes:
               - aurin
+        # ProMotion: SwiftUI's own animations up to 120 frames a second, not 60.
+        CADisableMinimumFrameDurationOnPhone: true
         # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
         NSSupportsLiveActivities: true
         # Syncing without the app being opened (App/BackgroundRefresh.swift):

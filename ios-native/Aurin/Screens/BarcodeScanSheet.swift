@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import PhotosUI
 import SwiftUI
 import Vision
@@ -41,9 +42,15 @@ struct BarcodeScanSheet: View {
     /// "Vyfotit etiketu" for a code nobody knows: the values read from the
     /// label are saved with the code, so the next scan finds them.
     @State private var labelOpen = false
-    /// The label had no name: the front of the package, read for the name
-    /// and the brand of this food.
+    /// After the label, the front of the package, read by AI for the name
+    /// and the brand of this food: a label rarely names the food, and never
+    /// its brand (Petr, 2026-11-10).
     @State private var frontOf: FoodProduct?
+    /// The front was photographed, not skipped.
+    @State private var frontTaken = false
+    /// Whether the user has AI, asked once a code is unknown: only with AI is
+    /// the front read, and the card says so before the label.
+    @State private var aiAccess: Bool?
     /// The AI found nothing by the code: the field for what the food is shows.
     @State private var askName = false
     /// "Přidat a skenovat další": the last food added while the scanner stays
@@ -129,8 +136,12 @@ struct BarcodeScanSheet: View {
                 Task { await readLabel(image) }
             }
         }
-        .fullScreenCover(item: $frontOf) { product in
-            LabelCameraSheet(title: "PŘEDNÍ STRANA", hint: "Vyfoť přední stranu s názvem") { image in
+        // Skipped (or closed) with no name yet: the editor for it, once the cover is gone.
+        .fullScreenCover(item: $frontOf, onDismiss: {
+            if !frontTaken, let product, product.name == L10n.tr("Jídlo z fotky") { editing = product }
+        }) { product in
+            LabelCameraSheet(front: true) { image in
+                frontTaken = true
                 frontOf = nil
                 Task { await readFront(image, of: product) }
             }
@@ -226,7 +237,9 @@ struct BarcodeScanSheet: View {
             FinderCorners().stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round)).padding(10)
                 .allowsHitTesting(false)
         }
-        .frame(maxWidth: 320).frame(height: 230)
+        // Square: a code turned across the window fits as well as along it
+        // (230 high cut its ends off at 90°, Petr 2026-11-10).
+        .frame(maxWidth: 320).frame(height: 320)
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
     }
 
@@ -402,6 +415,10 @@ struct BarcodeScanSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.demo)
+                if aiAccess == true && !model.demo {
+                    Text("Potom přední stranu obalu: název a značka se doplní samy.").font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if askName {
                     Rectangle().fill(Palette.ink.opacity(0.08)).frame(height: 1)
                     // With a name AI can estimate the food when the code is nowhere on the web.
@@ -435,6 +452,9 @@ struct BarcodeScanSheet: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 28)
+        .task(id: state) {
+            if state == .notFound && aiAccess == nil && !model.demo { aiAccess = (try? await model.api.subscription())?.aiAccess }
+        }
     }
 
     /// "1 sušenka = 19 g · 90 kcal"; a serving stored as 1 g (or none) gets "Upravit".
@@ -526,12 +546,22 @@ struct BarcodeScanSheet: View {
     }
 
     /// Vision reads the same codes as the camera, off the main thread.
-    nonisolated private static func barcode(in data: Data) async -> String? {
+    /// When the bars can't be read (a blurred photo, a code bent round a can,
+    /// Petr 2026-11-11), the digits printed under them are.
+    nonisolated static func barcode(in data: Data) async -> String? {
         await Task.detached(priority: .userInitiated) {
+            // Upright as the photo is seen, so its digits read left to right.
+            guard let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else { return nil }
+            let handler = VNImageRequestHandler(ciImage: image)
             let request = VNDetectBarcodesRequest()
             request.symbologies = BarcodeScanner.visionSymbologies
-            try? VNImageRequestHandler(data: data).perform([request])
-            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
+            try? handler.perform([request])
+            if let code = request.results?.compactMap(\.payloadStringValue).first(where: { !$0.isEmpty }) {
+                return VisionBarcodeReader.likeTheCamera(code)
+            }
+            // The digits at most 2000 px across: a 48 MP photo read whole took seconds.
+            let scale = min(1, 2000 / max(image.extent.width, image.extent.height))
+            return VisionBarcodeReader.printedCode(VNImageRequestHandler(ciImage: image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))))
         }.value
     }
 
@@ -565,31 +595,40 @@ struct BarcodeScanSheet: View {
             let unnamed = p.name == L10n.tr("Jídlo z fotky")
             if name.count >= 2 && unnamed { p.name = name }
             show(p)
-            // A label rarely says what the food is called: the front of the package
-            // next, read by AI; without AI the name is typed.
-            if unnamed && name.count < 2 {
-                var ai = r.aiAccess
-                if ai == nil { ai = (try? await model.api.subscription())?.aiAccess }
-                if ai == true { frontOf = p } else { editing = p }
-            }
+            // The front of the package next, read by AI for the name and the
+            // brand, even when the label had a name: it is often a guess from
+            // the ingredients, and a label has no brand. Without AI an unnamed
+            // food gets its name typed.
+            if aiAccess == nil { aiAccess = r.aiAccess }
+            if aiAccess == nil { aiAccess = (try? await model.api.subscription())?.aiAccess }
+            if aiAccess == true {
+                // The values a moment on the card, and the label's camera fully
+                // closed: a cover opened while another closes does not show.
+                try? await Task.sleep(for: .milliseconds(700))
+                if state == .found && self.code == p.barcode && editing == nil && !saving {
+                    frontTaken = false
+                    frontOf = p
+                }
+            } else if unnamed && name.count < 2 { editing = p }
         } catch {
             self.error = error.localizedDescription
             state = .notFound
         }
     }
 
-    /// The name and the brand from the front; when AI can't read them, the
-    /// editor opens to type the name.
+    /// The name and the brand from the front, over what the label gave; when
+    /// AI can't read them, the editor opens to type them.
     private func readFront(_ image: UIImage, of product: FoodProduct) async {
         var p = product
         state = .searching
         error = nil
         if let jpeg = await image.jpegForUpload(), let front = try? await model.api.readPackageFront(jpeg) {
-            p.name = front.name
+            // A name the user typed stays; the front adds the brand.
+            if guess.trimmingCharacters(in: .whitespaces).count < 2 { p.name = front.name }
             p.brand = front.brand ?? p.brand
-            show(p)
+            show(p, keepAmount: true)
         } else {
-            show(p)
+            show(p, keepAmount: true)
             editing = p
         }
     }
@@ -689,7 +728,10 @@ struct BarcodeScanner: UIViewRepresentable {
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         var onCode: (String) -> Void
         var paused = false {
-            didSet { if paused != oldValue { candidate = nil } }
+            didSet {
+                if paused != oldValue { candidate = nil }
+                camera.pauseVision(paused)
+            }
         }
         let camera = BarcodeCamera()
         /// The code read last: a code counts once two reads in a row give
@@ -700,19 +742,23 @@ struct BarcodeScanner: UIViewRepresentable {
             self.onCode = onCode
             super.init()
             camera.setDelegate(self)
+            camera.onVisionCode { [weak self] code in self?.read(code) }
         }
 
         nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
             let code = metadataObjects.lazy.compactMap { ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }.first { !$0.isEmpty }
             guard let code else { return }
-            // The delegate queue is the main queue. The output reports the
-            // code on every frame: one is enough until the sheet scans again.
-            MainActor.assumeIsolated {
-                guard !paused else { return }
-                guard candidate == code else { candidate = code; return }
-                paused = true
-                onCode(code)
-            }
+            // The delegate queue is the main queue.
+            MainActor.assumeIsolated { read(code) }
+        }
+
+        /// A code from either reader. Both report it on every frame: one is
+        /// enough until the sheet scans again.
+        private func read(_ code: String) {
+            guard !paused else { return }
+            guard candidate == code else { candidate = code; return }
+            paused = true
+            onCode(code)
         }
     }
 }
@@ -722,11 +768,22 @@ struct BarcodeScanner: UIViewRepresentable {
 final class BarcodeCamera: @unchecked Sendable {
     private let session = AVCaptureSession()
     private let output = AVCaptureMetadataOutput()
+    /// The frames for Vision, next to AVFoundation's own reader.
+    private let frames = AVCaptureVideoDataOutput()
+    private let vision = VisionBarcodeReader()
     private let queue = DispatchQueue(label: "health.aurin.barcode")
     private var configured = false
 
     func setDelegate(_ delegate: AVCaptureMetadataOutputObjectsDelegate) {
         output.setMetadataObjectsDelegate(delegate, queue: .main)
+    }
+
+    /// Vision rests while the sheet looks a code up or reads a photo.
+    func pauseVision(_ paused: Bool) { vision.paused = paused }
+
+    /// A code Vision read, on the main thread.
+    func onVisionCode(_ found: @escaping @MainActor @Sendable (String) -> Void) {
+        vision.onCode = { code in DispatchQueue.main.async { MainActor.assumeIsolated { found(code) } } }
     }
 
     /// `running` comes on the main thread once the camera films, when the
@@ -750,6 +807,7 @@ final class BarcodeCamera: @unchecked Sendable {
         let rect = layer.metadataOutputRectConverted(fromLayerRect: layer.bounds).intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
         guard !rect.isNull, rect.width > 0.05, rect.height > 0.05 else { return }
         queue.async { [self] in output.rectOfInterest = rect }
+        vision.readOnlyInside(rect)
     }
 
     func stop() {
@@ -765,6 +823,12 @@ final class BarcodeCamera: @unchecked Sendable {
         session.addInput(input)
         session.addOutput(output)
         output.metadataObjectTypes = BarcodeScanner.symbologies.filter(output.availableMetadataObjectTypes.contains)
+        // Without the frames the scanner still reads codes held straight.
+        if session.canAddOutput(frames) {
+            frames.alwaysDiscardsLateVideoFrames = true
+            frames.setSampleBufferDelegate(vision, queue: vision.queue)
+            session.addOutput(frames)
+        }
         Self.zoomForCloseUp(device, width: 35 / 0.6)
         return true
     }
@@ -793,6 +857,122 @@ final class BarcodeCamera: @unchecked Sendable {
         let sharp = closest * 1.2
         guard distance < sharp else { return }
         device.videoZoomFactor = CGFloat(min(sharp / distance, 4, Double(device.activeFormat.videoMaxZoomFactor)))
+    }
+}
+
+/// The scanner's frames read by Vision, ten a second, on their own queue.
+/// AVFoundation's reader samples a code only along horizontal and vertical
+/// lines through the middle of the window (Apple TN2325), so a code held at
+/// an angle wasn't read (Petr, 2026-11-10); Vision finds one at any angle.
+final class VisionBarcodeReader: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    let queue = DispatchQueue(label: "health.aurin.barcode-vision")
+    /// Set before the camera starts.
+    var onCode: (@Sendable (String) -> Void)?
+    private let lock = NSLock()
+    /// The window as the metadata output's rectOfInterest.
+    private var window = CGRect(x: 0, y: 0, width: 1, height: 1)
+    private var resting = false
+    var paused: Bool {
+        get { lock.withLock { resting } }
+        set { lock.withLock { resting = newValue; if newValue { scanningSince = nil } } }
+    }
+    /// The first frame since the scanner last found a code (under `lock`).
+    private var scanningSince: Date?
+    /// Only on `queue`.
+    private var last = Date.distantPast
+    private var lastText = Date.distantPast
+
+    /// `rect`: the window as the metadata output's rectOfInterest.
+    func readOnlyInside(_ rect: CGRect) {
+        lock.withLock { window = rect }
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let now = Date()
+        guard !paused, now.timeIntervalSince(last) >= 0.1, let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        last = now
+        let (window, since) = lock.withLock { () -> (CGRect, Date) in
+            if scanningSince == nil { scanningSince = now }
+            return (self.window, scanningSince ?? now)
+        }
+        if let code = Self.code(in: pixels, region: Self.visionRegion(window)) { onCode?(code); return }
+        // Bars too blurred or bent to read (a can, a dim kitchen): the digits
+        // under them. A slower read, so only once the bars have failed for a
+        // while, and with a pause after each. The phone is upright, so the
+        // picture is turned to read a code held along the screen.
+        guard now.timeIntervalSince(since) >= 1.2, now.timeIntervalSince(lastText) >= 0.6 else { return }
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .right)
+        let code = Self.printedCode(handler, region: Self.uprightRegion(window))
+        lastText = Date()
+        if let code { onCode?(code) }
+    }
+
+    /// The metadata output's rect (the camera's unrotated picture, origin top
+    /// left) in Vision's terms: the same picture, origin bottom left.
+    static func visionRegion(_ rect: CGRect) -> CGRect {
+        CGRect(x: rect.minX, y: 1 - rect.maxY, width: rect.width, height: rect.height)
+    }
+
+    /// The window in the frame turned upright (orientation .right, the back
+    /// camera with the phone upright), in Vision's terms.
+    static func uprightRegion(_ rect: CGRect) -> CGRect {
+        CGRect(x: 1 - rect.maxY, y: 1 - rect.maxX, width: rect.height, height: rect.width)
+    }
+
+    /// The code in the frame's region, whichever way it lies.
+    static func code(in pixels: CVPixelBuffer, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> String? {
+        let request = VNDetectBarcodesRequest()
+        request.symbologies = BarcodeScanner.visionSymbologies
+        request.regionOfInterest = region
+        try? VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .up).perform([request])
+        return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }.map(likeTheCamera)
+    }
+
+    /// UPC-A as AVFoundation reports it: EAN-13 with a leading 0 (TN2325).
+    static func likeTheCamera(_ code: String) -> String {
+        code.count == 12 ? "0" + code : code
+    }
+
+    /// The digits printed under the bars, read as text.
+    static func printedCode(_ handler: VNImageRequestHandler, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> String? {
+        printedCode(textLines(handler, region: region))
+    }
+
+    /// The text in the region, one line per row, top first.
+    static func textLines(_ handler: VNImageRequestHandler, region: CGRect = CGRect(x: 0, y: 0, width: 1, height: 1)) -> [String] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.regionOfInterest = region
+        try? handler.perform([request])
+        return LabelReader.rows((request.results ?? []).compactMap { o in o.topCandidates(1).first.map { (o.boundingBox, $0.string) } })
+    }
+
+    /// "4 006795 304763" on a line of text, as EAN-13 prints it: one digit,
+    /// six and six (or 1 and 12, or all 13 together), with a matching check
+    /// digit. Only these layouts: other numbers in the window (a date, a
+    /// batch) never add up to a code. Not 12 digits (UPC-A): an EAN-13 with
+    /// one digit missed would pass one time in ten. Not 8: dates have 8 too.
+    static func printedCode(_ lines: [String]) -> String? {
+        for line in lines {
+            // The guard bars reach into the digit row and read as marks.
+            let tokens = String(line.map { "<>|‘’'\"`".contains($0) ? " " : $0 }).split(separator: " ").map { digitsMisread(String($0)) }
+            for start in tokens.indices {
+                for layout in [[1, 6, 6], [1, 12], [13]] where start + layout.count <= tokens.count {
+                    let group = tokens[start..<start + layout.count]
+                    guard zip(group, layout).allSatisfy({ $0.count == $1 && $0.allSatisfy { $0.isASCII && $0.isNumber } }) else { continue }
+                    if let code = BarcodeScanSheet.typedCode(group.joined()) { return code }
+                }
+            }
+        }
+        return nil
+    }
+
+    /// A blurred 0 read as a letter ("C06795") inside a group of digits; the
+    /// check digit catches a wrong guess. Not 1: a guard bar looks like one.
+    static func digitsMisread(_ token: String) -> String {
+        guard token.contains(where: { $0.isASCII && $0.isNumber }) else { return token }
+        return String(token.map { "OoQDC".contains($0) ? "0" : $0 })
     }
 }
 

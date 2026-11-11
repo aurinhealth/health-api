@@ -28,7 +28,9 @@ test("a message carries at most one checked photo, which reaches the AI but neve
   assert.match(route, /appendChatTurnIds\(env\.DB,answerChat,saved,answer,\{ghost\}\)/);
   assert.match(entry, /openChatForAnswer\(env\.DB,body\.chatId,saved,\{ghost\}\)/);
   assert.match(route, /const saved=image\?L\('\[Fotka\] ', '\[Photo\] '\)\+message:message;/);
-  assert.match(route, /askCoach\(env,message,coachCtx,\{focus,actions:true,task,onAnswer,image\}\)/);
+  assert.match(route, /askCoach\(env,message,coachCtx,\{focus,actions:true,task,onAnswer:checking\?null:onAnswer,image\}\)/);
+  // The live check's one rewrite sends the same photo.
+  assert.match(route, /\{role:'user',content:note\}\]\},\{focus,actions:true,task,image\}\)/);
   // A photo is never a food sentence and always gets the full context.
   assert.match(route, /!image&&isFoodLogMessage\(message\)/);
   const validCoachImage = new Function("const ASSISTANT_IMAGE_CHARS=2500000;return " + entry.match(/const validCoachImage=(image=>.+);$/m)[1])();

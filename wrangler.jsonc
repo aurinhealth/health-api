@@ -205,14 +205,16 @@
         "AI_MONTHLY_LIMIT_USD": "5",
         "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",
-        // Testing costs at most 5 USD of AI a day, the owner included (src/ai-total.js):
-        // room for a few full coach evaluations (about 0.65 USD each) and app testing.
-        "AI_TOTAL_DAILY_ALERT_USD": "3",
-        "AI_TOTAL_DAILY_LIMIT_USD": "5",
+        // Testing costs at most 10 USD of AI a day, the owner included (src/ai-total.js):
+        // room for full coach evaluations in 3 rounds with the answer checker (about 3 USD each) and app testing.
+        "AI_TOTAL_DAILY_ALERT_USD": "6",
+        "AI_TOTAL_DAILY_LIMIT_USD": "10",
         "AI_GROUP_BRAKES": { "paid": { "usd": 0.5 }, "gift": { "usd": 1 }, "trial": { "usd": 0.5 }, "testflight": { "usd": 0.5 }, "free": { "usd": 0.5 }, "new": { "usd": 0.5 }, "system": { "usd": 0.5 } },
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",
+        // The live answer check with the thinking steps (coach-checker.js): staging only until the release.
+        "COACH_CHECK": "true",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
         "WAHOO_CLIENT_ID": "W-nkdGNWUzPdr3a1rN2Z5Wvm7IOXPv_bjdGGmfbToFs",

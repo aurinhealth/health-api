@@ -1393,5 +1393,85 @@
 			<string>průměr %lld dnů</string>
 		</dict>
 	</dict>
+	<key>%lld dní v obvyklém rozmezí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld dny v obvyklém rozmezí</string>
+			<key>many</key>
+			<string>%lld dne v obvyklém rozmezí</string>
+			<key>one</key>
+			<string>%lld den v obvyklém rozmezí</string>
+			<key>other</key>
+			<string>%lld dní v obvyklém rozmezí</string>
+		</dict>
+	</dict>
+	<key>%lld pod ním</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld pod ním</string>
+			<key>many</key>
+			<string>%lld pod ním</string>
+			<key>one</key>
+			<string>%lld pod ním</string>
+			<key>other</key>
+			<string>%lld pod ním</string>
+		</dict>
+	</dict>
+	<key>%lld dní nad obvyklým rozmezím</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld dny nad obvyklým rozmezím</string>
+			<key>many</key>
+			<string>%lld dne nad obvyklým rozmezím</string>
+			<key>one</key>
+			<string>%lld den nad obvyklým rozmezím</string>
+			<key>other</key>
+			<string>%lld dní nad obvyklým rozmezím</string>
+		</dict>
+	</dict>
+	<key>%lld kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld kroky</string>
+			<key>many</key>
+			<string>%lld kroků</string>
+			<key>one</key>
+			<string>%lld krok</string>
+			<key>other</key>
+			<string>%lld kroků</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

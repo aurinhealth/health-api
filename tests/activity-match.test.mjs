@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import legacy from "../src/index.js";
-import { sameSession, pairSessions } from "../src/activity-match.js";
+import { sameSession, pairSessions, activityKindOf } from "../src/activity-match.js";
 import { activityFromRow, dedupeActivities } from "../src/coach-reflection.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -106,4 +106,10 @@ test("a watch workout just after midnight counts on that day, in the user's zone
   assert.deepEqual(await day("2026-10-07"), []);
   // In New York the same run was on the evening of 7 Oct.
   assert.deepEqual(await withTimeZone("America/New_York", () => day("2026-10-07")), ["Night run"]);
+});
+
+test("Google's treadmill is a run, its treadmill walk a walk", () => {
+  assert.equal(activityKindOf("TREADMILL"), "run");
+  assert.equal(activityKindOf("TREADMILL_WALK"), "walk");
+  assert.equal(activityKindOf("STATIONARY_BIKE"), "ride");
 });
