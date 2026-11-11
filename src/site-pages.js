@@ -377,7 +377,7 @@ main:focus{outline:none}
   .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
-  @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
+  @media (hover:none),(max-width:960px){.js .part.on,.js .flip .part.on{animation:none}}
   @supports (interpolate-size:allow-keywords){
     .faq{interpolate-size:allow-keywords}
     .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.16,1,.3,1),content-visibility .35s allow-discrete}
