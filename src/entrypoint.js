@@ -159,7 +159,7 @@ import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
-import { appUpdateRequired } from "./app-version.js";
+import { appUpdateRequired, appApiLevel } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs, dayStartUtc } from "./user-time.js";
@@ -606,8 +606,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       const sized = await limitBody(request, SIGNED_IN_BODY_LIMIT);
       if (sized.response) return sized.response;
       request = sized.request;
-      // Usage statistics from requests the app sends anyway (usage-stats.js); off with "Share usage data".
-      noteRequest(rawEnv.DB, ctx, { ...user, isReview: isReviewAccount(rawEnv, user) }, request.method, url.pathname);
     }
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
@@ -616,6 +614,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
     // No consent to health data yet: no health data comes in (health-pause.js consentRefusal).
     if (signedIn && user.healthConsent === false && !user.healthPaused && !user.isOwner) { const refused = consentRefusal(request.method, url.pathname); if (refused) return refused; }
+    // Usage statistics from requests the app sends anyway (usage-stats.js); off with "Share usage data".
+    // Only accounts using Aurin: with the health consent given and not paused.
+    if (signedIn && !user.healthPaused && user.healthConsent !== false) noteRequest(rawEnv.DB, ctx, { ...user, isReview: isReviewAccount(rawEnv, user) }, request.method, url.pathname, appApiLevel(request));
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }

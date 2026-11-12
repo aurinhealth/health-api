@@ -20,13 +20,16 @@ export const SERVER_NAMES = ['active', 'today', 'training', 'food', 'health', 'c
 export const APP_NAMES = [
   'onboarding.consent', 'onboarding.sources', 'onboarding.about', 'onboarding.sport', 'onboarding.goal',
   'onboarding.time', 'onboarding.notifications', 'onboarding.done',
-  'paywall.shown', 'paywall.offer', 'paywall.trial', 'purchase.start', 'purchase.cancel', 'coach.open'
+  'paywall.shown', 'paywall.offer', 'paywall.trial', 'purchase.start', 'purchase.cancel'
 ];
 const NAMES = [...SERVER_NAMES, ...APP_NAMES];
 const BIT = new Map(NAMES.map((name, index) => [name, 2 ** index]));
 export const MAX_EVENTS = 30;
 // Counts and returns are kept this long (privacy policy).
 export const KEEP_DAYS = 180;
+// Counting starts with the builds that have the switch (X-Aurin-Api 2, APIClient.apiLevel):
+// older apps show no notice and no switch (privacy review 2026-11-13).
+export const USAGE_MIN_API = 2;
 
 const ROUTES = new Map([
   ['GET /app/api/today', 'today'], ['GET /app/api/training', 'training'], ['GET /app/api/food-today', 'food'],
@@ -62,10 +65,10 @@ async function count(db, userId, name, day) {
   remember(userId, day, bit);
   if (!row) return false;
   const statements = [db.prepare('INSERT INTO usage_counts (day, name, users) VALUES (?, ?, 1) ON CONFLICT(day, name) DO UPDATE SET users = users + 1').bind(day, name)];
-  // The first count of the day is a return: days since sign-up, per sign-up week (Monday).
+  // The first count of the day is a return: on the sign-up day and 1, 7 and 30 days after, per sign-up week (Monday).
   if (name === 'active') statements.push(db.prepare(`INSERT INTO usage_retention (cohort_week, day_n, users)
     SELECT date(created_at, 'weekday 0', '-6 days'), CAST(julianday(?2) - julianday(date(created_at)) AS INTEGER), 1 FROM users
-    WHERE id = ?1 AND julianday(?2) - julianday(date(created_at)) BETWEEN 0 AND 90
+    WHERE id = ?1 AND CAST(julianday(?2) - julianday(date(created_at)) AS INTEGER) IN (0, 1, 7, 30)
     ON CONFLICT(cohort_week, day_n) DO UPDATE SET users = users + 1`).bind(userId, day));
   await db.batch(statements);
   return true;
@@ -74,16 +77,18 @@ async function count(db, userId, name, day) {
 // The owner and the App Review account are not counted.
 const counted = user => Boolean(user?.id) && !user.isOwner && !user.isReview;
 
-// Every signed-in request: the day's activity and the part of the app it loads.
-// Runs after the answer (waitUntil) and never breaks the request.
-export function noteRequest(db, ctx, user, method, pathname, now = new Date()) {
-  if (!db || !counted(user)) return;
+// Every signed-in request from an app with the switch: the day's activity and
+// the part of the app it loads. Starts after the route's own queries (a
+// timer, inside waitUntil) and never breaks the request.
+export function noteRequest(db, ctx, user, method, pathname, apiLevel, now = new Date()) {
+  if (!db || !counted(user) || !(Number(apiLevel) >= USAGE_MIN_API)) return;
   const day = utcDay(now);
   const names = ['active'];
   const route = ROUTES.get(`${method} ${pathname}`);
   if (route) names.push(route);
   if (names.every(name => alreadySeen(user.id, day, BIT.get(name)))) return;
-  const work = (async () => { for (const name of names) await count(db, user.id, name, day); })()
+  const work = new Promise(resolve => setTimeout(resolve, 0))
+    .then(async () => { for (const name of names) await count(db, user.id, name, day); })
     .catch(error => { if (!/no such table/i.test(String(error?.message))) console.error('Usage count failed', error.message); });
   ctx?.waitUntil ? ctx.waitUntil(work) : work;
   return work;

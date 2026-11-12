@@ -21,13 +21,13 @@ const day = iso => new Date(`${iso}T12:00:00Z`);
 
 test("each account adds one per name and day, however many requests", async () => {
   const db = setup();
-  for (let i = 0; i < 3; i++) await noteRequest(db, null, user(1), "GET", "/app/api/today", day("2026-11-03"));
-  await noteRequest(db, null, user(2), "GET", "/app/api/today", day("2026-11-04"));
-  await noteRequest(db, null, user(1), "POST", "/app/api/assistant", day("2026-11-03"));
+  for (let i = 0; i < 3; i++) await noteRequest(db, null, user(1), "GET", "/app/api/today", "2", day("2026-11-03"));
+  await noteRequest(db, null, user(2), "GET", "/app/api/today", "2", day("2026-11-04"));
+  await noteRequest(db, null, user(1), "POST", "/app/api/assistant", "2", day("2026-11-03"));
   // A restarted server (empty memory) still counts the account once.
   forgetSeen();
-  await noteRequest(db, null, user(1), "GET", "/app/api/today", day("2026-11-03"));
-  await noteRequest(db, null, user(1), "GET", "/app/api/sleep", day("2026-11-09"));
+  await noteRequest(db, null, user(1), "GET", "/app/api/today", "2", day("2026-11-03"));
+  await noteRequest(db, null, user(1), "GET", "/app/api/sleep", "2", day("2026-11-09"));
   assert.deepEqual(counts(db), [
     { day: "2026-11-03", name: "active", users: 1 }, { day: "2026-11-03", name: "coach", users: 1 }, { day: "2026-11-03", name: "today", users: 1 },
     { day: "2026-11-04", name: "active", users: 1 }, { day: "2026-11-04", name: "today", users: 1 },
@@ -42,12 +42,19 @@ test("each account adds one per name and day, however many requests", async () =
   assert.equal(db.sqlite.prepare("SELECT last_day FROM usage_users WHERE user_id = 1").get().last_day, "2026-11-09");
 });
 
+test("apps without the switch (X-Aurin-Api 1 or none) are not counted", async () => {
+  const db = setup();
+  await noteRequest(db, null, user(1), "GET", "/app/api/today", "1", day("2026-11-05"));
+  await noteRequest(db, null, user(1), "GET", "/app/api/today", null, day("2026-11-05"));
+  assert.deepEqual(counts(db), []);
+});
+
 test("Share usage data off: nothing is counted; the owner and App Review never are", async () => {
   const db = setup();
   consent(db, 1, "usage", "2026-11-13");
-  await noteRequest(db, null, user(1), "GET", "/app/api/today", day("2026-11-05"));
-  await noteRequest(db, null, { ...user(2), isOwner: true }, "GET", "/app/api/today", day("2026-11-05"));
-  await noteRequest(db, null, { ...user(2), isReview: true }, "GET", "/app/api/today", day("2026-11-05"));
+  await noteRequest(db, null, user(1), "GET", "/app/api/today", "2", day("2026-11-05"));
+  await noteRequest(db, null, { ...user(2), isOwner: true }, "GET", "/app/api/today", "2", day("2026-11-05"));
+  await noteRequest(db, null, { ...user(2), isReview: true }, "GET", "/app/api/today", "2", day("2026-11-05"));
   assert.deepEqual(counts(db), []);
   assert.deepEqual(retention(db), []);
 });
@@ -66,14 +73,15 @@ test("app steps only with the opt-in, only allowed names, and not when sharing i
 });
 
 test("names fit the day mask and say nothing about health", () => {
-  assert.ok(SERVER_NAMES.length + APP_NAMES.length <= 52);
+  // The isolate's cache works on 32-bit numbers.
+  assert.ok(SERVER_NAMES.length + APP_NAMES.length <= 31);
   for (const name of [...SERVER_NAMES, ...APP_NAMES]) assert.doesNotMatch(name, /cycle|journal|pause|sleep|weight|metric|illness|injury|sex/);
 });
 
 test("the owner's report and the cleanup after 180 days", async () => {
   const db = setup();
-  await noteRequest(db, null, user(1), "GET", "/app/api/today", day("2026-11-03"));
-  await noteRequest(db, null, user(2), "GET", "/app/api/today", day("2026-11-05"));
+  await noteRequest(db, null, user(1), "GET", "/app/api/today", "2", day("2026-11-03"));
+  await noteRequest(db, null, user(2), "GET", "/app/api/today", "2", day("2026-11-05"));
   consent(db, 2, "usage", "2026-11-13");
   const report = await usageReport(db, { days: 30, now: day("2026-11-13") });
   assert.equal(report.counts.filter(r => r.name === "active").length, 2);

@@ -214,6 +214,7 @@ struct PaywallView: View {
             Button("OK", role: .cancel) { close() }
         } message: { Text(thanks ?? "") }
         .task {
+            UsageEvents.note("paywall.shown")
             await store.load()
             if store.commitment == nil, plan == .yearMonthly { plan = .yearOnce }
         }
@@ -381,11 +382,13 @@ struct PaywallView: View {
     }
 
     private func go(_ next: Int) {
+        UsageEvents.note(next == 1 ? "paywall.offer" : "paywall.trial")
         if reduceMotion { step = next } else { withAnimation(.easeInOut(duration: 0.45)) { step = next } }
         started = Date()
     }
 
     private func buy() {
+        UsageEvents.note("purchase.start")
         let offer = chosen
         Task {
             do {
@@ -400,7 +403,7 @@ struct PaywallView: View {
                 case .pending:
                     notice = L10n.tr("Nákup čeká na schválení. Až ho App Store potvrdí, Aurin Pro se odemkne sám.")
                 case .cancelled:
-                    break
+                    UsageEvents.note("purchase.cancel")
                 }
             } catch {
                 notice = error.localizedDescription

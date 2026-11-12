@@ -8,6 +8,8 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     @State private var showAdd = false
     @State private var showSettings = false
+    /// Once, for an account set up before the usage statistics (UsageEvents.noticeKey).
+    @State private var usageNotice = false
     @State private var showCoach = false
     /// Sdílet in the header of Trénink, Jídlo and Zdraví (Dnes has its own).
     @State private var showShare = false
@@ -345,6 +347,17 @@ struct RootView: View {
                 }
                 // A fresh install takes back the settings the account kept.
                 if !model.demo { await SettingsBackup.restore(api: model.api) }
+                // The usage statistics told once in the app (privacy policy "Changes").
+                if !model.demo, !model.needsSetup, !UserDefaults.standard.bool(forKey: UsageEvents.noticeKey) {
+                    UserDefaults.standard.set(true, forKey: UsageEvents.noticeKey)
+                    usageNotice = true
+                }
+            }
+            .alert("Statistika používání", isPresented: $usageNotice) {
+                Button("OK", role: .cancel) {}
+                Button("Nastavení") { showSettings = true }
+            } message: {
+                Text("Aurin teď počítá, které části aplikace se používají, jako denní součty bez tvé identity, nikdy údaje o zdraví. Vypneš to v Nastavení → Soukromí a data → Sdílet data o používání.")
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
@@ -366,6 +379,7 @@ struct RootView: View {
                     Task {
                         let time = FinishInBackground("settings")
                         await SettingsBackup.send(api: api)
+                        await UsageEvents.send(api: api)
                         time.end()
                     }
                 }

@@ -84,7 +84,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const body=await request.json().catch(()=>null);
     if(!Array.isArray(body?.events)||body.events.length>MAX_EVENTS)return Response.json({message:L('Neplatný požadavek.','Invalid request.')},{status:400});
     ctx.waitUntil(recordAppEvents(env.RAW_DB,{...session.user,isReview:isReviewAccount(env,session.user)},body).catch(error=>{if(!/no such table/i.test(String(error?.message)))console.error('Usage events failed',error.message);}));
-    return new Response(null,{status:204,headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});
   }
   // Confirming it's you (step-up.js), which adding a passkey, changing the e-mail, the export, pausing health data and
   // deleting the account ask for once their own checks have passed.

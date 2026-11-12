@@ -175,7 +175,9 @@ export async function finishHealthPauses(db, { databaseForUser = null, budgetMs 
 const OPEN_WHILE_PAUSED = [
   /^\/app\/api\/me(\/apple)?$/, /^\/app\/api\/consent$/, /^\/app\/api\/account\//, /^\/app\/api\/passkeys(\/|$)/,
   /^\/app\/api\/subscription(\/|$)/, /^\/app\/api\/app-settings$/, /^\/app\/api\/profile\/photo$/,
-  /^\/app\/api\/push\/token$/, /^\/app\/api\/support\/report$/, /^\/app\/api\/health-pause$/
+  /^\/app\/api\/push\/token$/, /^\/app\/api\/support\/report$/, /^\/app\/api\/health-pause$/,
+  // The usage statistics' app steps: the server checks their own consent (usage-stats.js).
+  /^\/app\/api\/usage$/
 ];
 const CONNECTING = /^\/(oauth\/(google|intervals|ultrahuman|whoop|wahoo)|auth\/app\/connect)(\/|$)/;
 export function pausedRefusal(method, pathname) {
