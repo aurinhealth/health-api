@@ -270,8 +270,8 @@ struct TrainingModeView: View {
             Button("Pokračovat později") { live.reset(); dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         }
-        .confirmationDialog("Dokončit trénink?", isPresented: $confirmFinish, titleVisibility: .visible) {
-            Button("Dokončit trénink") { Task { await finish() } }
+        .confirmationDialog("Ukončit trénink?", isPresented: $confirmFinish, titleVisibility: .visible) {
+            Button("Ukončit trénink") { Task { await finish() } }
             Button("Zpět k tréninku", role: .cancel) {}
         } message: {
             Text("Ještě nemáš hotové všechny série.")

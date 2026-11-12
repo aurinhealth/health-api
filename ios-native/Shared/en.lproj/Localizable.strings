@@ -1957,7 +1957,7 @@
 "Prázdný trénink" = "Empty workout";
 "Rychlost" = "Speed";
 "Zahodit trénink?" = "Discard workout?";
-"Dokončit trénink?" = "Finish the workout?";
+"Ukončit trénink" = "End workout";
 "Ještě nemáš hotové všechny série." = "Some sets aren't done yet.";
 "Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Health." = "The workout leaves the day's plan; the logged sets and the workout saved to Apple Health will be deleted.";
 "Spárovat se záznamem z hodinek" = "Pair with the watch's record";
