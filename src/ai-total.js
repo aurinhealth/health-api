@@ -40,7 +40,7 @@ const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
 const central = env => env?.RAW_DB || null;
 const rounded = v => Math.round(Number(v || 0) * 1e5) / 1e5;
 
-export const GROUP_NAMES = { paid: "platící", gift: "pilot, dárky a ty", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", new: "nové účty", system: "úlohy serveru" };
+export const GROUP_NAMES = { paid: "platící", gift: "kódy a dárky", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", new: "nové účty", system: "úlohy serveru" };
 
 // The tables are made once per database and isolate, not on every model call.
 const ready = new WeakSet();
