@@ -301,8 +301,12 @@ struct TrainingModeView: View {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
                               title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name)), hideUsed: true) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
-                let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
-                Task { await swapExercise(item.name, for: alt) }
+                Task {
+                    // Never done here: the server's estimate (a similar exercise or the catalogue's start).
+                    let estimate = kg == nil && !model.demo ? await model.api.gymEstimate(exercise: name) : nil
+                    let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg ?? estimate)
+                    await swapExercise(item.name, for: alt)
+                }
             }
         }
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
@@ -2172,6 +2176,20 @@ struct TrainingModeView: View {
         }
     }
 
+    /// By sides: a weight changed on one side goes to the other side too
+    /// (GymSessionMath.otherSide), as its plan, with its drop sets following.
+    /// The other side's set of the same number keeps it as typed (not carried
+    /// over nor adjusted from that side's set before); its later sets carry on.
+    private func mirrorWeight(_ set: GymSet, kg: String, in next: inout GymDay) {
+        guard let exercise = next.exercises.first(where: { $0.sets.contains { $0.row == set.row } }) else { return }
+        let rows = GymSessionMath.otherSide(of: set, in: exercise, typed: typed.kg)
+        for row in rows {
+            next.followDrops(after: row, from: exercise.sets.first { $0.row == row }?.plannedKg, to: kg, keep: typed.kg)
+            next.set(row: row, column: 3, kg)
+        }
+        if let twin = rows.first { typed.kg.insert(twin) }
+    }
+
     /// The weight or reps of a ticked set changed afterwards.
     private func editDone(_ set: GymSet, kg: String, reps: String) async {
         guard var next = day else { return }
@@ -2179,6 +2197,7 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
         next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r, keepDrops: typed.kg)
+        if !k.isEmpty, LiftWeight.number(k) != set.kg.flatMap(LiftWeight.number) { mirrorWeight(set, kg: k, in: &next) }
         let old = day
         day = next
         refill(from: old)
@@ -2205,13 +2224,17 @@ struct TrainingModeView: View {
                     && s.plannedKg.flatMap(LiftWeight.number) == plan)
             }.map(\.row)
             for row in rows { next.set(row: row, column: 3, k) }
+            mirrorWeight(set, kg: k, in: &next)
             typed.kg.formUnion(rows)
         }
         if !r.isEmpty, reps != shown.reps {
             next.set(row: set.row, column: 4, r)
             typed.reps.insert(set.row)
         }
+        // The other side may be the set at hand: its field follows.
+        let old = day
         await saveDay(next)
+        refill(from: old)
     }
 
     /// Pokračovat v tréninku: the finished workout opens again where it was,
@@ -2362,6 +2385,12 @@ struct TrainingModeView: View {
         // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
         // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
         let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carried(set, in: $0)?.kg }
+        // A weight other than the field showed: by sides the other side takes it.
+        let machineLb = lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? "")
+        let showed = LiftWeight.kgText(LiftWeight.shown(set.kg ?? shown ?? set.plannedKg, machineLb: machineLb) ?? "", machineLb: machineLb)
+        if !k.isEmpty, LiftWeight.number(k) != LiftWeight.number(showed) {
+            mirrorWeight(set, kg: k, in: &next)
+        }
         next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: letter, keepDrops: typed.kg)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }

@@ -1401,7 +1401,7 @@ function progressionNote(estimate) {
 // actually lift drives the next session (own-history progression).
 export const FIRST_SESSION_LOAD = 0.6;
 const FIRST_SESSION_NOTE = () => L("první trénink: váha je opatrný odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě (RPE 7)", "first session: the weight is a careful estimate; adjust it so you have 2–3 reps in reserve (RPE 7)");
-const CATALOGUE_SCALE = { beginner: FIRST_SESSION_LOAD, regular: 0.8, experienced: 1 };
+export const CATALOGUE_SCALE = { beginner: FIRST_SESSION_LOAD, regular: 0.8, experienced: 1 };
 const NEW_EXERCISE_NOTE = () => L("nový cvik: váha je odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě", "new exercise: the weight is an estimate; adjust it so you have 2–3 reps in reserve");
 const TEST_SET_NOTE = () => L("zkušební série: začni lehčí vahou, se kterou zvládneš opakování s rezervou 3–4; podle ní nastav další série (RPE 7–8)", "test set: start with a lighter weight you can do with 3–4 reps in reserve; set the next sets from it (RPE 7–8)");
 // Core work keeps its own repetitions when a training plan sets them for the rest.

@@ -340,7 +340,10 @@ struct GymBuilderView: View {
         .sheet(item: Binding(get: { replacingAny.map { Named(name: $0) } }, set: { replacingAny = $0?.name })) { item in
             ExercisePicker(catalog: catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) },
                            used: Set(proposal?.exercises.map(\.name) ?? []), title: "Vybrat jiný cvik") { ex in
-                replace(item.name, with: GymAlternative(name: ex.name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil))
+                Task {
+                    let kg = model.demo ? nil : await model.api.gymEstimate(exercise: ex.name)
+                    replace(item.name, with: GymAlternative(name: ex.name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg))
+                }
             }
         }
         .sheet(isPresented: $adding) {
