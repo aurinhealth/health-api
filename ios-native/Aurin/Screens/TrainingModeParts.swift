@@ -19,14 +19,33 @@ enum GymSessionMath {
     /// kept the weight (keep: the rows of the sets whose change was declined).
     /// A set with its own plan keeps it: a weight or reps typed in ahead
     /// (typed), or a plan that differs from the set before's.
-    static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = [], typed: Typed = Typed()) -> (kg: String?, reps: String?)? {
-        guard let before = previous(set, in: exercise) else { return nil }
+    /// On a first try (no history, the plan's weight is a guess) the sets
+    /// before the first work set follow a warm-up done well off its plan.
+    static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = [], typed: Typed = Typed(),
+                        firstTry: Bool = false) -> (kg: String?, reps: String?)? {
+        guard let before = previous(set, in: exercise) else {
+            return firstTry && !typed.kg.contains(set.row) ? fromWarmup(set, in: exercise).map { ($0, nil) } : nil
+        }
         let sameKg = !typed.kg.contains(set.row) && set.plannedKg.flatMap(LiftWeight.number) == before.plannedKg.flatMap(LiftWeight.number)
         let sameReps = !typed.reps.contains(set.row)
             && repRange(set.plannedReps).map { [$0.lo, $0.hi] } == repRange(before.plannedReps).map { [$0.lo, $0.hi] }
         guard sameKg || sameReps else { return nil }
         if sameKg, !keep.contains(before.row), let change = adjustment(set, after: before) { return (change.kg, nil) }
         return (sameKg ? before.kg?.nilIfBlank : nil, sameReps ? before.reps?.nilIfBlank : nil)
+    }
+
+    /// The plan's weight scaled by how far the last warm-up done went off its
+    /// own plan (warm-up 35 for 22.5: work 35.5 → 55), when off by 15 % or
+    /// more; at most twice or half the plan, to the nearest 2.5 kg.
+    static func fromWarmup(_ set: GymSet, in exercise: GymExercise) -> String? {
+        guard !set.done, !set.drop, let plan = set.plannedKg.flatMap(LiftWeight.number), plan > 0,
+              let warmup = exercise.sets.last(where: { $0.warmup && $0.done && $0.row < set.row && ($0.side == nil || $0.side == set.side) }),
+              let done = warmup.kg.flatMap(LiftWeight.number), done > 0,
+              let planned = warmup.plannedKg.flatMap(LiftWeight.number), planned > 0 else { return nil }
+        let ratio = min(2, max(0.5, done / planned))
+        guard abs(ratio - 1) >= 0.15 else { return nil }
+        let kg = GymCoach.roundLoad(plan * ratio)
+        return kg > 0 ? GymCoach.kgText(kg) : nil
     }
 
     /// The rows of the sets to come whose weight or reps were typed in ahead.
