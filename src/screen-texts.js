@@ -351,7 +351,9 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const morning = fp => headline(screen, fp).split(":").slice(0, 2).join(":");
   const fits = cached && !stale && !holdBack(info.facts) && morning(row.fingerprint) === morning(info.fingerprint);
   const keptSafe = fits ? keptLate : null;
-  if (fits && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return keptLate;
+  // Background data moves the numbers often: at most one new text in GAP_MINUTES
+  // (meanwhile the last one, or the rule-based text when it no longer fits).
+  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return keptSafe || fallback();
   if (!info.ready) return keptSafe || fallback();
   const failedAt = sqlTime(row?.failed_at);
   if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return keptSafe || fallback();
@@ -420,6 +422,7 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
         return keptSafe || fallback();
       }
       if (!["empty", "pushes", "late"].includes(error?.message)) console.error("Screen text AI failed", error?.message || error);
+      if (limited) await letGo();
       await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, failed_at) VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET failed_at=excluded.failed_at`).bind(userId, day, screen, language, new Date(now).toISOString()).run().catch(() => {});
       return keptSafe || fallback();
