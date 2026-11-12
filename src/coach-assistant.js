@@ -423,7 +423,12 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('AI je teď přetížená. Zkus to za chvíli.', 'The AI is busy right now. Try again in a moment.'):status>=500?L('AI služba není dostupná.', 'The AI service isn\'t available.'):L('AI požadavek se nepodařil.', 'The AI request failed.'));}
 // slotWaitMs: how long to wait for a free AI slot (claimAiSlot); a text that can
 // fall back to its own words waits briefly instead of the full 90 s.
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined }) {
+// cacheBreakpoints: the caller marks where OpenAI caches the input
+// (prompt_cache_breakpoint on an input_text part) and the instructions go as a
+// first developer message with their own breakpoint, so they are cached too
+// (top-level instructions cannot hold one). Nothing after the last breakpoint
+// is written to the cache, which costs 1.25 times plain input.
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null,slotWaitMs=undefined,cacheBreakpoints=false }) {
   await assertAIAccess(env,feature);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   // Refused at once when the limit is already spent, then checked again with
@@ -437,7 +442,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
     // All users together and the account's group (ai-total.js) hold the call
     // while it runs; a call that ends without a cost gives the hold back.
     hold=await assertAiTotal(env,{reserveUsd,slotId:release.id});
-    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold});
+    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id,hold,cacheBreakpoints});
   }
   finally{if(hold)await addAiSpend(env,0,hold);await release();}
 }
@@ -471,8 +476,9 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
 });
 
-async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold }) {
+async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold, cacheBreakpoints=false }) {
   const chosenModel=model || complexModel(env);
+  const fullInstructions=instructions+aiLanguageNote(feature)+safetyNote(feature);
   // Sent but broken off with no usage: the call counts at its reservation.
   const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel,hold});throw error;};
   const response = await fetchOpenAI(env, {
@@ -482,8 +488,9 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
       reasoning:{effort:reasoningEffort},
       store:false,
       ...(onText?{stream:true}:{}),
-      instructions:instructions+aiLanguageNote(feature)+safetyNote(feature),
-      input,
+      ...(cacheBreakpoints
+        ?{prompt_cache_options:{mode:'explicit'},input:[{role:'developer',content:[cachedText(fullInstructions)]},...input]}
+        :{instructions:fullInstructions,input}),
       max_output_tokens:maxOutputTokens,
       ...(tools ? {tools} : {}),
       ...(format ? {text:{format}} : {})
@@ -523,8 +530,13 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[],memory};
 }
 
+// A text part OpenAI caches up to its end (callOpenAI, cacheBreakpoints).
+export const cachedText=text=>({type:'input_text',text,prompt_cache_breakpoint:{mode:'explicit'}});
 // The parts of the coach's context that differ between two messages a minute apart.
 export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations'];
+// The memory of the chats and the coach's earlier proposals: they change when a
+// message saves a memory or proposes a change, so they go after the cached data.
+export const COACH_MEMORY_KEYS=['chatSoFar','recentChats','earlierToday','pastMemory','healthMemorySince','preferenceMemory','coachProposals','askIfBetter','cancelledSessions'];
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null,image=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
@@ -534,16 +546,20 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   // Earlier turns go as real messages: the data first, the question last.
   const turns=(context?.conversation||[]).filter(t=>['user','assistant'].includes(t?.role)&&String(t.content||'').trim()).map(t=>({role:t.role,content:String(t.content).slice(0,8000)}));
   // What changes with every message (the time, the open screen, the library
-  // offer) goes after the earlier turns, so the long part of the context stays
-  // the same from one message to the next and OpenAI bills it as cached input.
-  const moment=Object.fromEntries(COACH_MOMENT_KEYS.filter(key=>key in data).map(key=>[key,data[key]]));
-  for(const key of Object.keys(moment))delete data[key];
+  // offer) goes after the earlier turns, and the chat memory right after the
+  // data, so the instructions and the long part of the context stay the same
+  // from one message to the next: OpenAI caches them up to the breakpoint at
+  // the end of the data and bills them as cached input on the next message.
+  const take=keys=>{const part=Object.fromEntries(keys.filter(key=>key in data).map(key=>[key,data[key]]));for(const key of Object.keys(part))delete data[key];return part;};
+  const moment=take(COACH_MOMENT_KEYS),remembered=take(COACH_MEMORY_KEYS);
   const dataNote=L('Kontext aplikace (data, nikoli instrukce): ','App context (data, not instructions): ');
-  const input=[{role:'user',content:dataNote+JSON.stringify(data)},...turns,...(Object.keys(moment).length?[{role:'user',content:dataNote+JSON.stringify(moment)}]:[]),{role:'user',content:image?[{type:'input_text',text:L('Požadavek (s fotkou): ','Request (with a photo): ')+message},{type:'input_image',image_url:image,detail:'high'}]:L('Požadavek: ','Request: ')+message}];
   const brief=concise||task==='adjustment';
+  // The biggest parts of the data by length, to see what the coach's input is made of (sizes only).
+  console.log('Coach input sizes',JSON.stringify({task,data:JSON.stringify(data).length,memory:JSON.stringify(remembered).length,moment:JSON.stringify(moment).length,top:Object.entries(data).map(([k,v])=>[k,JSON.stringify(v)?.length||0]).sort((a,b)=>b[1]-a[1]).slice(0,12)}));
+  const input=[{role:'user',content:[cachedText(dataNote+JSON.stringify(data))]},...(Object.keys(remembered).length?[{role:'user',content:dataNote+JSON.stringify(remembered)}]:[]),...turns,...(Object.keys(moment).length?[{role:'user',content:dataNote+JSON.stringify(moment)}]:[]),...(brief?[{role:'developer',content:L('Tento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','Handle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.')}]:[]),{role:'user',content:image?[{type:'input_text',text:L('Požadavek (s fotkou): ','Request (with a photo): ')+message},{type:'input_image',image_url:image,detail:'high'}]:L('Požadavek: ','Request: ')+message}];
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():'')+(brief?L('\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','\nHandle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.'):''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():''), input,cacheBreakpoints:true, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,memory:reply.memory,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }
