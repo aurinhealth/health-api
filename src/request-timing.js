@@ -74,12 +74,16 @@ export function waitSummary(store) {
   return Object.entries(WAIT_KINDS).filter(([kind]) => waits[kind] >= 100).map(([kind, name]) => `${name} ${waits[kind]} ms`).join(", ");
 }
 
-export function noteD1(result, ms) {
+// counted: the statement went through d1-batch.js, which counted its query
+// and trip itself (a batch of several callers' reads is one trip).
+export function noteD1(result, ms, { counted = false } = {}) {
   const store = current.getStore();
   if (!store) return;
   const results = Array.isArray(result) ? result : [result];
-  store.queries += results.length;
-  store.trips += 1;
+  if (!counted) {
+    store.queries += results.length;
+    store.trips += 1;
+  }
   for (const r of results) {
     store.rowsRead += Number(r?.meta?.rows_read) || 0;
     // What D1 itself spent running the SQL; the rest of the wait is the queue and the trip.
@@ -89,14 +93,15 @@ export function noteD1(result, ms) {
   store.dbMs += ms;
 }
 
-// The request or job running now (d1-batch.js notes it with each read it joins).
+// The request or job running now (d1-batch.js keeps each request's reads apart).
 export const timingStore = () => current.getStore() || null;
-// Reads of several callers went to D1 in one batch (d1-batch.js): each caller
-// still counts every statement as a query, but its reads in the batch as one trip.
-export function sharedTrip(stores) {
-  const count = new Map();
-  for (const store of stores) if (store) count.set(store, (count.get(store) || 0) + 1);
-  for (const [store, n] of count) store.trips = (store.trips ?? 0) - (n - 1);
+// d1-batch.js counts each trip it makes and the statements in it, and sets
+// `seen` when a call reaches it, so d1-retry.js does not count that call again.
+export const viaBatcher = { seen: false };
+export function countTrip(store, statements = 1) {
+  if (!store) return;
+  store.queries += statements;
+  store.trips += 1;
 }
 
 export const elapsed = store => Date.now() - store.started;

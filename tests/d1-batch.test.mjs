@@ -74,7 +74,7 @@ test("a statement that spoils the batch is asked alone, the others still answer,
   assert.deepEqual(trips.sort(), ["all SELECT x FROM no_such_table_here", "first SELECT v FROM t WHERE id=2"]);
 }));
 
-test("a D1 blip fails the whole batch, so d1-retry asks each read again", () => timed(async () => {
+test("a D1 blip or one heavy read failing the batch: each read is asked alone", () => timed(async () => {
   const { db, trips } = counted();
   let blips = 1;
   const batch = db.batch;
@@ -82,8 +82,32 @@ test("a D1 blip fails the whole batch, so d1-retry asks each read again", () => 
   const b = batchingD1(db);
   const read = id => withD1Retry(() => b.prepare("SELECT v FROM t WHERE id=?").bind(id).first(), { sleep: async () => {} });
   assert.deepEqual(await Promise.all([read(1), read(2)]), [{ v: "a" }, { v: "b" }]);
-  assert.deepEqual(trips, ["batch 2"]);
+  assert.deepEqual(trips, ["first SELECT v FROM t WHERE id=?", "first SELECT v FROM t WHERE id=?"], "after the failed batch each read is asked alone, none failed by the other");
 }));
+
+test("a write that returns rows (RETURNING) still goes after the reads started before it", () => timed(async () => {
+  const { db, trips } = counted();
+  const b = batchingD1(db);
+  const before = b.prepare("SELECT COUNT(*) AS n FROM t").first();
+  const also = b.prepare("SELECT v FROM t WHERE id=1").first();
+  const inserted = b.prepare("INSERT INTO t(v) VALUES('d') RETURNING id").first();
+  assert.deepEqual(trips, ["batch 2", "first INSERT INTO t(v) VALUES('d') RETURNING id"]);
+  assert.deepEqual(await inserted, { id: 4 });
+  await Promise.all([before, also]);
+}));
+
+test("reads without d1-retry (sign-in on the central database) count right: one trip per batch, never below zero", async () => {
+  const { db } = counted();
+  const b = batchingD1(db);
+  const work = await timed(async store => {
+    await Promise.all([1, 2, 3, 4].map(id => b.prepare("SELECT v FROM t WHERE id=?").bind(id).first()));
+    await withD1Retry(() => b.prepare("SELECT v FROM t WHERE id=1").first());
+    await withD1Retry(() => b.prepare("UPDATE t SET v='x' WHERE id=2").run());
+    return store;
+  });
+  assert.equal(work.trips, 3);
+  assert.equal(work.queries, 6);
+});
 
 test("two requests never share a trip, and a read outside a request goes alone", async () => {
   const { db, trips } = counted();
