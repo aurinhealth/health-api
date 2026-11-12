@@ -9,7 +9,7 @@ import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings, exerciseLiked } from "./exercise-feedback.js";
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
-import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
+import { gymExerciseCatalog, gymAlternatives, gymLoadEstimate, catalogueStartLoad } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
@@ -34,6 +34,12 @@ async function mainSportOf(env,training){
   const { loadEffectiveProfile }=await import('./profile-suggestions.js');
   const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);
   return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training?.history?.mainSport||'';
+}
+// "female", "male" or "" from the profile, for the catalogue's starting loads.
+async function athleteSexOf(env){
+  const { loadEffectiveProfile }=await import('./profile-suggestions.js');
+  const sex=(await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null))?.sex;
+  return sex==='female'||sex==='male'?sex:'';
 }
 // The minutes an own routine takes, for the length picker's "+N min".
 const ownMinutes=(training,kind)=>training[kind+'Routine']&&training[kind+'Routine']!=='auto'?myRoutinesView(training)[kind].find(r=>r.id===training[kind+'Routine'])?.minutes||null:null;
@@ -122,7 +128,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history,setup,taste]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
+    const [plan,history,setup,taste,sex]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env)]);
+    // An alternative never done before starts at the generator's catalogue load.
+    const start={sex,experience:setup?.experience||''};
     // The plan being built is sent along (not saved yet); else the saved day's.
     let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
@@ -134,14 +142,22 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
     if(Array.isArray(many)){
       const names=[...new Set(many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)))].slice(0,20);
-      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits).slice(0,3)
+      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits,start).slice(0,3)
         .map(a=>({name:a.name,sets:a.sets??null,reps:a.reps??null,kg:a.kg??null}))]));
       return Response.json({status:'ok',byExercise},{headers:{'Cache-Control':'no-store'}});
     }
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits)},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits,start)},{headers:{'Cache-Control':'no-store'}});
   }
   // The work sets of the last months by exercise and day (the app's exercise
   // history, "minule 82,5 kg × 6" and the suggested load of the next sets).
+  // The load of one exercise picked from the whole catalog in place of another
+  // ("Vybrat jiný cvik"): as an alternative's, from the history or the catalogue.
+  if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
+    const exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
+    const [history,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
+    const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''});
+    return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
+  }
   if(url.pathname==='/app/api/gym/history'&&request.method==='GET'){
     const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});

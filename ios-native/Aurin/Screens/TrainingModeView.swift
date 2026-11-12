@@ -301,8 +301,12 @@ struct TrainingModeView: View {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
                               title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name)), hideUsed: true) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
-                let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
-                Task { await swapExercise(item.name, for: alt) }
+                Task {
+                    // Never done here: the server's estimate (a similar exercise or the catalogue's start).
+                    let estimate = kg == nil && !model.demo ? await model.api.gymEstimate(exercise: name) : nil
+                    let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg ?? estimate)
+                    await swapExercise(item.name, for: alt)
+                }
             }
         }
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
