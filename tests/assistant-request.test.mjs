@@ -47,7 +47,7 @@ test("a message carries at most one checked photo, which reaches the AI but neve
     const last = calls[0].input.at(-1);
     assert.deepEqual(last.content, [{ type: "input_text", text: "Požadavek (s fotkou): Převeď mi to na tréninky." }, { type: "input_image", image_url: "data:image/jpeg;base64,/9j/4AAQ", detail: "high" }]);
     // Earlier photos are only their mark.
-    assert.equal(calls[0].input.filter(m => Array.isArray(m.content)).length, 1);
+    assert.equal(calls[0].input.filter(m => Array.isArray(m.content) && m.content.some(c => c.type === "input_image")).length, 1);
   } finally { globalThis.fetch = original; }
 });
 
