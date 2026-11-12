@@ -89,6 +89,16 @@ export function noteD1(result, ms) {
   store.dbMs += ms;
 }
 
+// The request or job running now (d1-batch.js notes it with each read it joins).
+export const timingStore = () => current.getStore() || null;
+// Reads of several callers went to D1 in one batch (d1-batch.js): each caller
+// still counts every statement as a query, but its reads in the batch as one trip.
+export function sharedTrip(stores) {
+  const count = new Map();
+  for (const store of stores) if (store) count.set(store, (count.get(store) || 0) + 1);
+  for (const [store, n] of count) store.trips = (store.trips ?? 0) - (n - 1);
+}
+
 export const elapsed = store => Date.now() - store.started;
 
 // For the browser's and the app's network inspector: total time and D1 work.
