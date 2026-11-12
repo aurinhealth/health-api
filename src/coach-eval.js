@@ -227,7 +227,7 @@ function gymBlock(r, { athlete = undefined, aimed = false } = {}) {
     const others = dates.filter(d => d !== a.date);
     try {
       const aim = !aimed ? {} : a.gymMuscles?.length ? { focusMuscles: a.gymMuscles } : a.gymFocus ? { focus: a.gymFocus } : {};
-      const plan = generateStrengthPlan(gymContext(a.date, athlete, built.slice()), { durationMinutes: a.minutes || 60, blockDates: others, weeklyGymDays: weeklyGymDays(a.date, [], others), ...aim });
+      const plan = generateStrengthPlan(gymContext(a.date, athlete, built.slice()), { durationMinutes: a.minutes || 60, blockDates: others, weeklyGymDays: weeklyGymDays(a.date, [], others), ...(a.gymAvoid?.length ? { excludeExercises: a.gymAvoid } : {}), ...aim });
       built.push(plannedSessionFromRows(a.date, plan.rows));
       return { date: a.date, plan, exercises: [...new Set(plan.rows.filter(x => x[0] === 'WORK').map(x => x[1]))], sets: plan.rows.filter(x => x[0] === 'WORK').length };
     } catch (error) { return { date: a.date, error: error.message, exercises: [], sets: 0 }; }
