@@ -178,6 +178,7 @@ struct AISpendingView: View {
         case "trial": "Týden zdarma"
         case "testflight": "TestFlight"
         case "free": "Bez nákupu"
+        case "owner": "Ty"
         case "new": "Nové účty"
         case "system": "Úlohy serveru"
         default: group

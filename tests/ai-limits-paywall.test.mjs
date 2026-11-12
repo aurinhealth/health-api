@@ -125,14 +125,15 @@ test("the brake is counted once when the group's day starts", async () => {
   });
 });
 
-test("the owner is held live like any account of the same purchase, on the test server only by the day's brake", async () => {
+test("the owner is held live by a group of its own, apart from the testers, on the test server only by the day's brake", async () => {
   const db = await accounts();
   await withOpenAI(async calls => {
-    const limits = { AI_GROUP_BRAKES: { testflight: { usd: 0.5 } } };
+    const limits = { AI_GROUP_BRAKES: { testflight: { usd: 0.5 }, owner: { usd: 0.5 } } };
     await ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true }));
-    await assert.rejects(ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true })), error => error.status === 429, "live: the owner with a TestFlight purchase is in the testers' group");
+    await assert.rejects(ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true })), error => error.status === 429, "live: the owner's own brake");
+    await ask(envFor(db, 10, limits));
     await ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true, ENVIRONMENT: "staging" }));
-    assert.equal(calls(), 2);
+    assert.equal(calls(), 3, "the testers' group is not touched by the owner's spending");
   });
 });
 
@@ -161,7 +162,8 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   const report = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
   assert.equal(report.today, 1.4);
   const counted = async owner => Object.fromEntries((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES, OWNER_EMAIL: owner })).groups.map(g => [g.group, g.accounts]));
-  assert.deepEqual([(await counted(" U7@example.com ")).gift, (await counted(" U7@example.com ")).free], [1, 1], "the owner counts like any account");
+  assert.deepEqual([(await counted("")).gift, (await counted("")).free], [1, 1]);
+  assert.deepEqual([(await counted(" U11@example.com ")).gift, (await counted(" U7@example.com ")).free], [0, 0], "the owner is a group of its own, not counted in the others");
   db.sqlite.prepare("UPDATE subscriptions SET testflight = 0").run();
   db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, testflight) VALUES (7, 'free', 1)").run();
   assert.deepEqual([(await counted("")).testflight, (await counted("")).free], [2, 0], "a TestFlight build without a purchase counts in testflight, not free");

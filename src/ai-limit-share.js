@@ -25,10 +25,13 @@ export const unpaidLimitShare = env => {
 //   (subscriptions.testflight, app-store.js saveAppInstall): the testers;
 // - "free": no purchase, an account older than NEW_ACCOUNT_DAYS (everyone of
 //   the pilot until the paywall is on);
+// - "owner": the owner's own account, apart from the testers, whatever it
+//   bought (the limits still follow the purchase, aiPaid);
 // - "new": no purchase, an account made in the last NEW_ACCOUNT_DAYS (open
 //   sign-up), counted apart, so accounts made in bulk never stop the pilot's AI;
-// - "system": a call of no account (a job of the server).
-export const AI_GROUPS = ["paid", "gift", "trial", "testflight", "free", "new", "system"];
+// - "system": a call of no account (a job of the server) and the coach
+//   evaluation on the test server (env.COACH_EVAL, coach-eval.js).
+export const AI_GROUPS = ["paid", "gift", "trial", "testflight", "free", "owner", "new", "system"];
 export const NEW_ACCOUNT_DAYS = 7;
 // users.created_at (CURRENT_TIMESTAMP) of an account made NEW_ACCOUNT_DAYS before now.
 export const newAccountSince = (now = Date.now()) => new Date(now - NEW_ACCOUNT_DAYS * 864e5).toISOString().replace("T", " ").slice(0, 19);
@@ -56,10 +59,9 @@ export async function inFreeWeek(env) {
   return groupOfSubscription(await subscriptionRow(env)) === "trial";
 }
 
-// The request's group, once per request. A failed read counts as "new" (the
-// fixed brake and half limits).
-export function aiGroup(env) {
-  if (!env?.DB || !(Number(env.USER_ID) > 0)) return Promise.resolve("system");
+// The group of the account's purchase, once per request. A failed read counts
+// as "new" (the fixed brake and half limits).
+function purchaseGroup(env) {
   if (!groupOnce.has(env)) groupOnce.set(env, (async () => {
     const group = groupOfSubscription(await subscriptionRow(env));
     if (group !== "paid" && group !== "gift" && await packMessagesLeft(env).catch(() => 0) > 0) return "paid";
@@ -70,8 +72,17 @@ export function aiGroup(env) {
   return groupOnce.get(env);
 }
 
+const noAccount = env => !env?.DB || !(Number(env.USER_ID) > 0) || env.COACH_EVAL === true;
+
+// The group the request's AI spending is counted in (ai-total.js).
+export function aiGroup(env) {
+  if (noAccount(env)) return Promise.resolve("system");
+  if (env.USER_IS_OWNER === true) return Promise.resolve("owner");
+  return purchaseGroup(env);
+}
+
 // Whether the account pays (or has Pro as a gift): the whole limits.
-export const aiPaid = async env => ["paid", "gift", "system"].includes(await aiGroup(env));
+export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(await purchaseGroup(env));
 
 // The share of the limits this account gets (1 or AI_UNPAID_LIMIT_SHARE), once per request.
 export async function aiLimitShare(env) {

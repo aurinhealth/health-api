@@ -978,7 +978,8 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   const scenario = scenarioById(String(body.id));
   if (!scenario) return Response.json({ status: 'error', message: 'Unknown scenario' }, { status: 404 });
   // The situation's own language, without touching the language the owner chose in the app.
-  try { return Response.json(await withLang(scenario.lang || 'cs', () => run(env, scenario)), { headers: { 'Cache-Control': 'no-store' } }); }
+  // Its AI spending counts as a job of the server, not as the owner's (ai-limit-share.js aiGroup).
+  try { return Response.json(await withLang(scenario.lang || 'cs', () => run({ ...env, COACH_EVAL: true }, scenario)), { headers: { 'Cache-Control': 'no-store' } }); }
   // 200, not 502: Cloudflare in front of staging.aurin.health swaps a 502 for its own "Bad gateway" page and the message is lost (run 57).
   catch (error) { return Response.json({ id: scenario.id, title: scenario.title, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
 }
