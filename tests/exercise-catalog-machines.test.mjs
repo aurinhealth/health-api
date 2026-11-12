@@ -106,6 +106,6 @@ test("every new machine and cable exercise has a video; photos only from the Fre
 });
 
 test("near-variant videos are marked as a similar exercise", () => {
-  const SIMILAR = ["Cable 30 Degree Shrug", "Smith Machine Sumo Romanian Deadlift", "Straight Bar Bench Mid Rows", "Machine Underhand Row", "Cable Single Leg Laying Leg Curl", "Cable Supinating Row"];
+  const SIMILAR = ["Cable 30 Degree Shrug", "Smith Machine Sumo Romanian Deadlift", "Straight Bar Bench Mid Rows", "Cable Single Leg Laying Leg Curl", "Cable Supinating Row"];
   for (const name of ADDED) assert.equal(techniqueFor(name).video.similar, SIMILAR.includes(name), name);
 });
