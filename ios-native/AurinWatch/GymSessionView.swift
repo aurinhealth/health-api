@@ -709,7 +709,8 @@ struct GymSessionView: View {
             .padding(.vertical, small ? 2 : 3)
             .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
             .accessibilityElement(children: .combine)
-            .accessibilityHint(W.tr("Na hodinkách: Nastavení, Soukromí a zabezpečení, Zdraví, Aurin.", "On the watch: Settings, Privacy & Security, Health, Aurin."))
+            // The watch lists no app there (Petr 2026-11-09): Aurin's access is in the iPhone's Health app.
+            .accessibilityHint(W.tr("V iPhonu: aplikace Zdraví, tvoje fotka, Aplikace, Aurin.", "On your iPhone: the Health app, your photo, Apps, Aurin."))
         } else {
             cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink, small: small)
         }
