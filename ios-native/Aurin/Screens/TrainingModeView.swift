@@ -78,6 +78,8 @@ struct TrainingModeView: View {
     /// A day from the watch came while this screen loaded: newer than the load.
     @State private var watchTook = false
     @State private var confirmClose = false
+    /// Dokončit in the header with sets still left.
+    @State private var confirmFinish = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
     /// Opened on a workout already finished: its summary, with the rating and
@@ -268,6 +270,12 @@ struct TrainingModeView: View {
             Button("Pokračovat později") { live.reset(); dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         }
+        .confirmationDialog("Dokončit trénink?", isPresented: $confirmFinish, titleVisibility: .visible) {
+            Button("Dokončit trénink") { Task { await finish() } }
+            Button("Zpět k tréninku", role: .cancel) {}
+        } message: {
+            Text("Ještě nemáš hotové všechny série.")
+        }
         .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         } message: {
@@ -348,7 +356,8 @@ struct TrainingModeView: View {
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil || activePart != nil {
                     if started {
-                        Button { Task { await finish() } } label: {
+                        // Sets still left here: asked first, a tap by mistake ends nothing.
+                        Button { if current(day) != nil { confirmFinish = true } else { Task { await finish() } } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 18).frame(height: 44).background(Palette.button, in: Capsule())
                         }
