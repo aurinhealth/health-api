@@ -9,6 +9,8 @@ import UIKit
 /// next exercise. The plan can be reordered, shortened or extended on the way.
 /// The screen stays on meanwhile.
 struct TrainingModeView: View {
+    /// The day whose finished workout goes on as it opens (GymSessionView).
+    static var resumeOnOpen: String?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let date: String
@@ -1286,8 +1288,9 @@ struct TrainingModeView: View {
                 closeButton
                 // Dokončit by mistake: back to the workout, the clock from its start.
                 if !model.demo {
+                    // Free once the workout is saved, not only after the sending (up to 30 s).
                     SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { Task { await resume() } }
-                        .disabled(saving)
+                        .disabled(closeLocked)
                 }
                 if !reopened {
                     Button(role: .destructive) { confirmDiscard = true } label: {
@@ -1840,6 +1843,11 @@ struct TrainingModeView: View {
                 startTapped = true
                 await live.continueWorkout(since: day.startedAt, weightKg: model.today?.weight?.latest)
                 syncActivity()
+            }
+            // Pokračovat v tréninku from the done workout's detail (GymSessionView): on at once.
+            if reopened, Self.resumeOnOpen == date {
+                Self.resumeOnOpen = nil
+                await resume()
             }
             // The muscles of Celkem dnes now, not only from the exercise screen:
             // back in a rest (the bar, the edge swipe) that screen isn't shown.
