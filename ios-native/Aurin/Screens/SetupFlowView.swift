@@ -32,6 +32,7 @@ struct SetupFlowView: View {
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
+    @State private var agreeSteps = false
     /// iOS has not asked about notifications yet: the page about them comes last.
     @State private var askNotifications = false
     /// The free week shown at the end (SetupProOffer).
@@ -152,12 +153,13 @@ struct SetupFlowView: View {
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) {
+            if page != .consent { UsageEvents.note("onboarding.\(page)") }
             if page == .about { await readAppleProfile() }
             if skippable { await loadFocus() }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         // The free week, once, after the last page (SetupProOffer); Today when it closes.
-        .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
+        .fullScreenCover(isPresented: $proOffer, onDismiss: { UsageEvents.note("onboarding.done"); Task { await model.finishSetup() } }) {
             PaywallView(close: { proOffer = false }, step: 2, notNow: true,
                         allowAI: proNeedsAI ? { [api = model.api] in try await api.allowAI() } : nil)
         }
@@ -226,6 +228,10 @@ struct SetupFlowView: View {
                      note: "Jde to kdykoli vypnout v Nastavení.",
                      isOn: $agreeAI)
         }
+        // The opt-in to the setup steps for the usage statistics (src/usage-stats.js), unticked.
+        checkbox("Sdílet kroky nastavení pro zlepšení Aurinu (nepovinné)",
+                 note: "Aurin také počítá denní používání z běžných požadavků. Vypneš to v Nastavení → Soukromí a data.",
+                 isOn: $agreeSteps)
         Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
     }
 
@@ -743,7 +749,12 @@ struct SetupFlowView: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.giveHealthConsent(ai: agreeAI)
+            try await model.api.giveHealthConsent(ai: agreeAI, usageEvents: agreeSteps)
+            UserDefaults.standard.set(true, forKey: UsageEvents.noticeKey)
+            if agreeSteps {
+                UsageEvents.setAllowed(true)
+                UsageEvents.note("onboarding.consent")
+            }
             if consentOnly { await model.finishSetup() }
             return true
         } catch {

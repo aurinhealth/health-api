@@ -77,6 +77,8 @@ export const PERSONAL_TABLES = {
   store_originals: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
+  // The last counted day for usage statistics (usage-stats.js).
+  usage_users: {},
   // The coach's daily sentence per screen (screen-texts.js).
   ai_screen_texts: {},
   // Sign-in: linked Apple IDs (apple-login.js) and passkeys (passkeys.js),

@@ -111,6 +111,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { noteRequest, forgetOldUsage } from "./usage-stats.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
@@ -158,7 +159,7 @@ import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
-import { appUpdateRequired } from "./app-version.js";
+import { appUpdateRequired, appApiLevel } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs, dayStartUtc } from "./user-time.js";
@@ -492,6 +493,8 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetEndedPurchases(env.DB).catch(error => console.error("Ended purchase cleanup failed", error.message));
     // Waitlist addresses a year after they joined, and all of them once Aurin is out (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB, { released: paywallOn(env) }).catch(error => console.error("Waitlist cleanup failed", error.message));
+    // Usage counts and returns older than the privacy policy says (usage-stats.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 8) await forgetOldUsage(env.DB).catch(error => console.error("Usage statistics cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetStaleRequestLimits(env.DB).catch(error => console.error("Request limit cleanup failed", error.message));
     // Apple sign-in tokens past their expiry: they cannot sign in anyway (apple-login.js).
@@ -611,6 +614,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
     // No consent to health data yet: no health data comes in (health-pause.js consentRefusal).
     if (signedIn && user.healthConsent === false && !user.healthPaused && !user.isOwner) { const refused = consentRefusal(request.method, url.pathname); if (refused) return refused; }
+    // Usage statistics from requests the app sends anyway (usage-stats.js); off with "Share usage data".
+    // Only accounts using Aurin: with the health consent given and not paused.
+    if (signedIn && !user.healthPaused && user.healthConsent !== false) noteRequest(rawEnv.DB, ctx, { ...user, isReview: isReviewAccount(rawEnv, user) }, request.method, url.pathname, appApiLevel(request));
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }

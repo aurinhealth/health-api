@@ -45,7 +45,8 @@ final class APIClient: @unchecked Sendable {
     /// The version of the server's API this app reads, sent as X-Aurin-Api.
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
-    static let apiLevel = 1
+    /// 2: the usage statistics' switch (the server counts only from these builds, src/usage-stats.js).
+    static let apiLevel = 2
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?
@@ -274,6 +275,27 @@ final class APIClient: @unchecked Sendable {
 
     func setAI(_ allowed: Bool) async throws {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
+    }
+
+    /// "Share usage data" (on unless turned off) and the opt-in to the setup
+    /// steps (src/usage-stats.js), from GET /app/api/me → consent.
+    func usageSharing() async throws -> (usage: Bool, steps: Bool) {
+        struct Consent: Decodable { let usage: Bool?; let usageEvents: Bool? }
+        struct Me: Decodable { let consent: Consent? }
+        let me: Me = try await get("/app/api/me")
+        return (me.consent?.usage ?? true, me.consent?.usageEvents ?? false)
+    }
+
+    func setUsageSharing(usage: Bool? = nil, steps: Bool? = nil) async throws {
+        var body: [String: JSONValue] = [:]
+        if let usage { body["usage"] = .bool(usage) }
+        if let steps { body["usageEvents"] = .bool(steps) }
+        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: body)
+    }
+
+    /// The setup steps waiting on the phone (UsageEvents), names only.
+    func sendUsageEvents(_ names: [String]) async throws {
+        let _: JSONValue = try await send("/app/api/usage", method: "POST", body: ["events": JSONValue.array(names.map { .string($0) })])
     }
 
     /// All the account's data as an NDJSON file in the temporary folder, to

@@ -4211,3 +4211,13 @@
 "Aurin zapíše do Apple Health na tomhle iPhonu, co mu posílá Google Health z tvých hodinek." = "Aurin will write to Apple Health on this iPhone what Google Health sends it from your watch.";
 "Jen typy, které zaškrtneš: spánek, tep, klidový tep, okysličení krve, dechovou frekvenci a kroky." = "Only the types you tick: sleep, heart rate, resting heart rate, blood oxygen, respiratory rate and steps.";
 "Vypnout to můžeš kdykoli a zápis tím skončí. Co už v Apple Health je, tam zůstane i po smazání účtu a mohou to číst aplikace, kterým čtení Apple Health povolíš." = "You can turn it off at any time, and writing stops. What is already in Apple Health stays there, also after you delete your account, and apps you allow to read Apple Health can read it.";
+
+/* Usage statistics (SettingsPrivacy, SetupFlowView consent page, RootView notice; src/usage-stats.js) */
+"Sdílet data o používání" = "Share usage data";
+"Aurin počítá, které části aplikace se každý den používají, z požadavků, které aplikace stejně posílá. Ukládají se jen denní součty, nikdy tvoje zdravotní data. Vypnutím tě přestaneme počítat." = "Aurin counts which parts of the app are used each day, from requests the app already sends. Only daily totals are kept, never your health data. Turn this off to stop being counted.";
+"Sdílet kroky nastavení" = "Share setup steps";
+"Posílat i to, kterými kroky nastavení projdeš a kdy si zobrazíš nebo začneš kupovat Aurin Pro, jen pro denní součty. Vypnuto, dokud to nezapneš." = "Also send which setup steps you finish and when you see or start buying Aurin Pro, only to count them in daily totals. Off unless you turn it on.";
+"Sdílet kroky nastavení pro zlepšení Aurinu (nepovinné)" = "Share setup steps to help improve Aurin (optional)";
+"Aurin také počítá denní používání z běžných požadavků. Vypneš to v Nastavení → Soukromí a data." = "Aurin also counts daily app use from its normal requests. Turn it off in Settings → Privacy & data.";
+"Statistika používání" = "Usage statistics";
+"Aurin teď počítá, které části aplikace se používají, jako denní součty bez tvé identity, nikdy údaje o zdraví. Vypneš to v Nastavení → Soukromí a data → Sdílet data o používání." = "Aurin now counts which parts of the app are used, as daily totals without your identity, never health data. Turn it off in Settings → Privacy & data → Share usage data.";

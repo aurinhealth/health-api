@@ -9,6 +9,9 @@ struct PrivacySettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var ai = false
     @State private var aiLoaded = false
+    @State private var usage = true
+    @State private var steps = false
+    @State private var usageLoaded = false
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
@@ -32,6 +35,16 @@ struct PrivacySettingsView: View {
             if !model.healthPaused {
                 SettingsGroup(footer: "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
                     SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
+                }
+            }
+            // Usage statistics (src/usage-stats.js): counts on the server, on unless
+            // turned off; the setup steps only when allowed.
+            SettingsGroup(footer: "Aurin počítá, které části aplikace se každý den používají, z požadavků, které aplikace stejně posílá. Ukládají se jen denní součty, nikdy tvoje zdravotní data. Vypnutím tě přestaneme počítat.") {
+                SettingsToggle(title: "Sdílet data o používání", isOn: Binding(get: { usage }, set: { setUsage($0) }), disabled: !usageLoaded || model.demo)
+            }
+            if usage {
+                SettingsGroup(footer: "Posílat i to, kterými kroky nastavení projdeš a kdy si zobrazíš nebo začneš kupovat Aurin Pro, jen pro denní součty. Vypnuto, dokud to nezapneš.") {
+                    SettingsToggle(title: "Sdílet kroky nastavení", isOn: Binding(get: { steps }, set: { setSteps($0) }), disabled: !usageLoaded || model.demo)
                 }
             }
             SettingsGroup {
@@ -76,6 +89,13 @@ struct PrivacySettingsView: View {
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
+        .task {
+            guard !model.demo, let sharing = try? await model.api.usageSharing() else { return }
+            usage = sharing.usage
+            steps = sharing.usage && sharing.steps
+            UsageEvents.setAllowed(steps)
+            usageLoaded = true
+        }
         // Shared or not, the export does not stay on the phone after the page.
         .onDisappear {
             guard exportURL != nil else { return }
@@ -119,6 +139,27 @@ struct PrivacySettingsView: View {
         ai = value
         Task {
             do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
+        }
+    }
+
+    /// "Share usage data" off also stops the setup steps (the server needs both).
+    private func setUsage(_ value: Bool) {
+        let before = (usage, steps)
+        usage = value
+        if !value { steps = false; UsageEvents.setAllowed(false) }
+        Task {
+            do { try await model.api.setUsageSharing(usage: value, steps: value ? nil : false); error = nil }
+            catch { (usage, steps) = before; UsageEvents.setAllowed(before.1); self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
+        }
+    }
+
+    private func setSteps(_ value: Bool) {
+        let before = steps
+        steps = value
+        UsageEvents.setAllowed(value)
+        Task {
+            do { try await model.api.setUsageSharing(steps: value); error = nil }
+            catch { steps = before; UsageEvents.setAllowed(before); self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 
