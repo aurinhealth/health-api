@@ -67,6 +67,7 @@ enum OutboxRefusal: LocalizedError {
     /// 5xx: maybe later.
     case retry(String)
     /// 426: this build is too old; the write waits for the new version and never counts as a failure.
+    /// Also 403 health_consent_required: the write waits until the consent is given.
     case outdated(String)
 
     var errorDescription: String? {

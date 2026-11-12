@@ -64,7 +64,7 @@ for (const sport of ["ride", "run"]) for (const [m, morning] of Object.entries(M
     ...(sit.goal ? { goal: sit.goal } : {}), ...(sit.focus ? { focus: sit.focus } : {}), ...(sit.athleteState ? { athleteState: sit.athleteState } : {}),
     ...(sit.availabilityMinutes ? { availabilityMinutes: sit.availabilityMinutes } : {})
   });
-  days.push({ label: [sport, m, l, s].join(" · "), sport, morning, load, sit, coach, kind: coach.recommendation.session.kind, minutes: coach.recommendation.session.durationMinutes });
+  days.push({ label: [sport, m, l, s].join(", "), sport, morning, load, sit, coach, kind: coach.recommendation.session.kind, minutes: coach.recommendation.session.durationMinutes });
 }
 
 const rule = (name, applies, holds) => test(name, () => {

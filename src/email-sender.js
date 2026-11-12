@@ -13,8 +13,10 @@ export function emailConfigured(env) {
   return Boolean(env?.EMAIL && typeof env.EMAIL.send === "function" && emailSender(env));
 }
 
+// The subject is a mail header: a line break in it (a screen name from a problem report's
+// diagnostics) would start a header of the sender's choosing (penetration test 2026-11-10).
 export async function sendEmail(env, { to, subject, text, html }) {
-  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject, text, html });
+  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject: String(subject ?? "").replace(/[\x00-\x1f\x7f]+/g, " "), text, html });
   return result?.messageId || null;
 }
 
@@ -84,6 +86,11 @@ export function stepUpCodeEmail(lang, code) {
   return { subject: t.subject(code), text: `${t.intro}\n\n${code}\n\n${t.outro}\n`, html: htmlEmail(lang === "en" ? "en" : "cs", [t.intro, t.outro], code) };
 }
 
+// A notice to the owner (Czech, as the owner reads them).
+export function ownerNoticeEmail(subject, paragraphs) {
+  return { subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail("cs", paragraphs) };
+}
+
 // When a security notice happened, in the user's own zone (user-time.js) and named,
 // "7 October 2026 at 10:00 CEST", so nobody abroad reads Prague time as their own.
 function noticeTime(en, date, zone) {
@@ -100,6 +107,24 @@ const CHANGED_TEXT = {
     body: (address, when) => [`The email you sign in to Aurin with changed to ${address} on ${when}. Sign-in codes no longer go to this address.`, "If this was not you, tell the app's administrator right away."]
   }
 };
+
+const EMAIL_TAKEN_TEXT = {
+  cs: {
+    subject: "Tahle adresa už má účet Aurin",
+    body: ["Někdo v Aurinu požádal o změnu e-mailu svého účtu na tuhle adresu. Ta už ale patří jinému účtu Aurin, takže se nic nezměnilo.", "Pokud o změnu žádáš ty, přihlas se do Aurinu rovnou touhle adresou. Jinak e-mail ignoruj."]
+  },
+  en: {
+    subject: "This address already has an Aurin account",
+    body: ["Someone asked in Aurin to change their account's email to this address. It already belongs to another Aurin account, so nothing changed.", "If it was you, sign in to Aurin with this address instead. Otherwise, ignore this email."]
+  }
+};
+
+// Goes to an address an e-mail change asked for that another account already uses, instead of a
+// code: the app is told the same as for any address, so it cannot learn which ones have an account.
+export function emailTakenEmail(lang) {
+  const t = EMAIL_TAKEN_TEXT[lang === "en" ? "en" : "cs"];
+  return { subject: t.subject, text: t.body.join("\n\n") + "\n", html: htmlEmail(lang === "en" ? "en" : "cs", t.body) };
+}
 
 // Goes to the old address, so a change nobody asked for does not go unnoticed.
 export function emailChangedEmail(lang, address, date = new Date(), zone = timeZone()) {

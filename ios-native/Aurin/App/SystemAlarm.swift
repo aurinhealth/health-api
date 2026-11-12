@@ -36,10 +36,10 @@ enum SystemAlarm {
                 }
                 cancelSaved(manager)
                 var ids: [String] = []
-                if let work, let id = try await schedule(manager, at: work, days: [.monday, .tuesday, .wednesday, .thursday, .friday], title: L10n.tr("Budík · pracovní den")) {
+                if let work, let id = try await schedule(manager, at: work, days: [.monday, .tuesday, .wednesday, .thursday, .friday], title: L10n.tr("Budík na pracovní den")) {
                     ids.append(id.uuidString)
                 }
-                if let weekend, let id = try await schedule(manager, at: weekend, days: [.saturday, .sunday], title: L10n.tr("Budík · víkend")) {
+                if let weekend, let id = try await schedule(manager, at: weekend, days: [.saturday, .sunday], title: L10n.tr("Budík na víkend")) {
                     ids.append(id.uuidString)
                 }
                 UserDefaults.standard.set(ids, forKey: idsKey)
@@ -80,7 +80,7 @@ enum SystemAlarm {
             UserDefaults.standard.removeObject(forKey: backupKey + "Time")
             guard let date, date > Date(), manager.authorizationState == .authorized else { return }
             let id = UUID()
-            guard (try? await manager.schedule(id: id, configuration: configuration(.fixed(date), title: L10n.tr("Budík · záloha hodinek")))) != nil else { return }
+            guard (try? await manager.schedule(id: id, configuration: configuration(.fixed(date), title: L10n.tr("Záložní budík hodinek")))) != nil else { return }
             UserDefaults.standard.set(id.uuidString, forKey: backupKey)
             UserDefaults.standard.set(date, forKey: backupKey + "Time")
         }
@@ -124,7 +124,7 @@ enum SystemAlarm {
                 for alarm in alarms where saved.contains(alarm.id.uuidString) {
                     guard case .relative(let relative)? = alarm.schedule, case .weekly(let days) = relative.repeats else { continue }
                     try? manager.cancel(id: alarm.id)
-                    let title = days.contains(.saturday) ? L10n.tr("Budík · víkend") : L10n.tr("Budík · pracovní den")
+                    let title = days.contains(.saturday) ? L10n.tr("Budík na víkend") : L10n.tr("Budík na pracovní den")
                     let id = UUID()
                     if (try? await manager.schedule(id: id, configuration: configuration(.relative(relative), title: title))) != nil {
                         ids.append(id.uuidString)

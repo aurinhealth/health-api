@@ -227,7 +227,7 @@ struct RecoveryRoutineView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.today, title: item.routine?.title ?? item.title) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Regenerace · dnes").padding(.top, 24)
+                SectionLabel(text: "Regenerace dnes").padding(.top, 24)
                 Text(verbatim: item.routine?.title ?? item.title)
                     .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -276,7 +276,7 @@ struct RecoveryRoutineView: View {
         let minutes = item.routine?.minutes.map { "\($0) min" }
         let count = exercises.count
         let moves = L10n.plural("%lld cviků", count)
-        return [minutes, moves].compactMap { $0 }.joined(separator: " · ")
+        return [minutes, moves].compactMap { $0 }.joined(separator: ", ")
     }
 
     private func exerciseRow(_ exercise: RecoveryToday.Exercise, active: Bool) -> some View {
@@ -535,9 +535,9 @@ struct RecoveryTimeContent: View {
                     .font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 4)
             }
             if RecoveryTime.waitsForGreener(zone) {
-                Text("odhad · tvrdý trénink až po zelenějším ránu").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)
+                Text("tvrdý trénink až po zelenějším ránu (odhad)").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)
             } else if time.ready != nil {
-                Text("tělo připravené na tvrdý trénink · odhad").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 6)
+                Text("tělo připravené na tvrdý trénink (odhad)").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 6)
             }
             bar.padding(.top, 18)
 
@@ -647,14 +647,14 @@ struct RecoveryTimeContent: View {
         case "sleep":
             let slept = c.minutes.map { String(format: "%d:%02d", $0 / 60, $0 % 60) } ?? ""
             guard let m = c.minutes, let need = c.need, need > 0 else { return slept }
-            return slept + " · " + L10n.f("%d %% potřeby", Int((Double(m) / Double(need) * 100).rounded()))
+            return slept + ", " + L10n.f("%d %% potřeby", Int((Double(m) / Double(need) * 100).rounded()))
         case "hrv":
-            return (c.value.map { "\($0) ms · " } ?? "") + L10n.tr("pod obvyklým rozmezím")
+            return (c.value.map { "\($0) ms, " } ?? "") + L10n.tr("pod obvyklým rozmezím")
         case "restingHR":
-            return (c.value.map { "\($0) bpm · " } ?? "") + L10n.tr("nad obvyklým rozmezím")
+            return (c.value.map { "\($0) bpm, " } ?? "") + L10n.tr("nad obvyklým rozmezím")
         default:
-            // "neděle · svaly", "včera · 74 TSS": no hours (Today audit 15).
-            return [c.date.map { RecoveryTime.dayName($0, today: today) }, c.kind == "gym" ? L10n.tr("svaly") : c.detail].compactMap { $0 }.joined(separator: " · ")
+            // "neděle, svaly", "včera, 74 TSS": no hours (Today audit 15).
+            return [c.date.map { RecoveryTime.dayName($0, today: today) }, c.kind == "gym" ? L10n.tr("svaly") : c.detail].compactMap { $0 }.joined(separator: ", ")
         }
     }
 }

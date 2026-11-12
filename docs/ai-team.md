@@ -14,18 +14,19 @@ builds the app; none of it runs inside the app (the in-app AI coach is one model
 | Kouč | Strength Coach | `strength-coach` | no | Sonnet 5.5 |
 | Kouč | Triathlon & Duathlon Coach | `triathlon-coach` | no | Sonnet 5.5 |
 | Kouč | Sports Nutritionist | `sports-nutritionist` | no | Sonnet 5.5 |
-| Kouč | Physiotherapist | `physiotherapist` | no | Sonnet 5.5 |
+| Kouč | Physiotherapist | `physiotherapist` | no | Opus 5.5 |
 | Marketing (team) | **Marketing, lead** | `marketing` | read-only commands, public web | Sonnet 5.5 |
-| Produkt a vývoj (led by the PM): Design | iOS & watchOS Designer, owner | `ios-designer` | no | Opus 5.5 |
-| Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Opus 5.5 |
+| Produkt a vývoj (led by the PM): Design | iOS & watchOS Designer, owner | `ios-designer` | no | Fable 5.2 (medium) |
+| Produkt a vývoj: Design | Visual & Web Designer | `visual-designer` | no; creates mockups in Figma | Fable 5.2 (medium) |
 | Produkt a vývoj: Data | Data & Integrations Engineer, owner | `data-engineer` | read-only commands | Opus 5.5 |
 | Produkt a vývoj: Data | Data Analyst | `data-analyst` | read-only commands | Sonnet 5.5 |
+| Produkt a vývoj | Prompter | `prompter` | no | Opus 5.5 (medium) |
 | Kontrola: Věda (team) | **Sport & Health Scientist, lead** | `health-scientist` | no | Opus 5.5 |
 | Kontrola: Věda | Sleep Scientist | `sleep-scientist` | no | Sonnet 5.5 |
 | Kontrola: Věda | Questionnaires & Habits Scientist | `behaviour-scientist` | no | Sonnet 5.5 |
 | Kontrola: Bezpečnost a právo | Privacy, Compliance & Legal, owner | `privacy-compliance` | no | Opus 5.5 |
 | Kontrola: Bezpečnost a právo | Security (red team) | `security-red-team` | yes, staging.aurin.health or local only | Opus 5.5; Fable 5.2 (high) for risky changes |
-| Kontrola: Testování | Tester (QA), owner | `qa-tester` | yes, tests, local and staging only | Sonnet 5.5 |
+| Kontrola: Testování | Tester (QA), owner | `qa-tester` | yes, tests, local and staging only | Opus 5.5 |
 | Kontrola: Finance | Finance Controller, owner | `finance-controller` | read-only commands | Sonnet 5.5 |
 | Kontrola: Finance | Monetization & Unit Economics Analyst | `monetization-analyst` | read-only commands | Opus 5.5 |
 | Kontrola: Finance | Performance & Cost Engineer | `performance-cost` | yes, tests, local and timing on staging | Opus 5.5 |
@@ -103,8 +104,9 @@ The owner approved this structure on 2026-11-10.
 ```
 
 ## Models
-Most work stays on Opus 5.5. Fable 5.2 is only for checks where a mistake costs money or user data;
-roles that mostly read and summarise run on Sonnet 5.5. The owner approved this on 2026-11-09.
+Most work stays on Opus 5.5. Fable 5.2 is for checks where a mistake costs money or user data and
+for design; roles that mostly read and summarise run on Sonnet 5.5. The owner approved this on
+2026-11-09.
 - The table above gives each role's model. In a cloud thread the roles in `.claude/agents/` are not
   loaded as sub agent types, so the thread starts each role as a general sub agent told to read its
   file, and passes the model from the table (`fable`, `opus`, `sonnet`, `haiku`) when it starts it.
@@ -112,8 +114,20 @@ roles that mostly read and summarise run on Sonnet 5.5. The owner approved this 
 - Risky changes are payments, subscriptions, accounts, sign-in, deleting user data and D1 migrations.
   For them `security-red-team` and the independent review below run on Fable 5.2 at effort high: the
   PM passes `fable` and `high` when it starts them, in local sessions too (that overrides the role file).
-- A bug that two fixes did not solve, or the hunt for the cause of an outage: the investigation goes
-  to a Fable 5.2 sub agent at effort high.
+- The security result in the pull request names the model that really answered. Claude Code may re-run
+  a request its safety filter flags as cybersecurity on an older model (Opus 4.8) and the transcript
+  shows it; if that happened, the PM says so and does not call it a Fable 5.2 check.
+- A bug that two fixes did not solve goes up in steps: first a test, build or request that shows the
+  bug, then Opus 5.5 at effort high, then a Fable 5.2 sub agent at effort medium, raised to high only
+  if that fails too. The hunt for the cause of an outage goes straight to Fable 5.2 at effort high.
+- `physiotherapist` runs on Opus 5.5, not Sonnet 5.5: a missed red flag for pain or injury is hard to
+  spot later.
+- `qa-tester` runs on Opus 5.5 since 2026-11-11: the owner kept finding bugs the tester missed, and
+  the customer check needs judgement, not only running tests.
+- Design runs on Fable 5.2 at effort medium since 2026-11-11 (the owner's request): `ios-designer`,
+  `visual-designer`, and every graphic design, mockup or visual for the owner, web, App Store or
+  social media. The PM never draws one itself; it starts a Fable 5.2 sub agent at effort medium
+  (`fable`, `medium`) to make it, and the design review runs on Fable 5.2 medium too.
 - Mechanical lookups (where something is used, a CI log, checking links): Haiku 5.5 at effort low.
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
@@ -138,6 +152,12 @@ A role does not see the thread's history, so every brief carries what it needs, 
 5. **Report:** the common findings format, short, with sources.
 
 ## Who checks what
+- Every request from the owner (since 2026-11-11, his wish): `prompter` first turns it into
+  a task brief (the order of "How the PM briefs a role"), before `research-analyst`. Where an answer
+  would change the work, it first returns up to 3 questions with a recommended answer; the PM asks
+  the owner and gives the answers back to `prompter`, which then writes the final brief. It follows Anthropic's
+  guide "Prompting Claude Fable 5.2". This includes small fixes, quick questions and
+  follow-ups in a thread; for those the brief is a few lines.
 - Every pull request that changes the server or how data loads: `performance-cost` writes the
   "Rychlost a náklady" paragraph (speed, D1 rows, Cloudflare limits) for its description.
 - Security, payments, user data and accounts: `security-red-team` and `privacy-compliance` review it.
@@ -145,7 +165,7 @@ A role does not see the thread's history, so every brief carries what it needs, 
   AI disclosures and other companies' names and logos: `privacy-compliance`.
 - AI features, AI limits, the paywall and prices: `monetization-analyst` checks they never block a
   normal user and that every user earns more than they cost.
-- Every request or point to discuss: `research-analyst` first researches competitors, medical and
+- Every request or point to discuss: `research-analyst`, after the task brief of `prompter`, researches competitors, medical and
   sport-science literature, guidelines, news and studies, each claim with a source. The other roles
   build their proposals on that brief.
 - Training, plans, workouts and the coach's training advice: the coach of each sport the change touches
@@ -165,6 +185,11 @@ A role does not see the thread's history, so every brief carries what it needs, 
   query that `privacy-compliance` checked and the owner approved; the PM runs it, read-only).
 - The monthly overview of income and costs, invoice and payment checks, AI spend against the limits
   and the papers for the accountant: `finance-controller`. Tax decisions stay with the accountant.
+- Every screen, flow or mockup users will see: `qa-tester` runs the customer check (a first-time
+  customer's questions, each answered by the app itself or reported as a bug). A mockup goes to the
+  owner only after the design review (`ios-designer` for app and watch mockups, which a Fable 5.2
+  sub agent makes as Models says; `visual-designer` for the rest) and the customer check passed. The PM gives
+  `qa-tester` the mockup as PNG images; after fixes `qa-tester` checks the new version again.
 - Every team run: `critic` reviews the proposals before the owner's document.
 - Social posts and replies on X: `marketing` drafts and reviews them. The Product Manager schedules
   posts in Typefully; replies under other people's posts the owner posts himself.
@@ -185,7 +210,8 @@ and they are not always right.
 
 ## How a task runs
 1. The owner gives a task (e.g. "audit the Today screen").
-2. The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
+2. `prompter` asks the owner (through the PM) the few questions that change the work, then turns the
+   request into a task brief (see Who checks what). The Product Manager restates it, asks what is unclear, proposes the roles and the scope, and starts
    only after the owner says yes. Then it briefs only the roles the task needs. It first judges whether
    the request makes sense (see "The owner's requests are input" below) and says so before the team
    spends credits on a request that is wrong or not needed.
@@ -199,12 +225,15 @@ and they are not always right.
 5. Round 2, leads' meeting, only when the task touches two or more teams: each lead sees the other
    teams' records and answers "Souhlas" or "Konflikt" with one fix, and writes a handoff where work
    passes to another team. Kontrola checks the proposals (Security reviews engineering proposals,
-   Věda reviews coach advice, the Tester reproduces claims). If a conflict stays, the PM writes down
+   Věda reviews coach advice, the Tester reproduces claims and runs the customer check on every screen
+   or mockup users will see). If a conflict stays, the PM writes down
    both options and why.
 6. Critic: `critic` looks for the "but" in every proposal (risks, costs, MDR, privacy, edge cases, a
    simpler alternative, weak evidence) and rates it Drží / Drží s úpravou / Nedrží with a sourced
    objection. It has no veto; the author of the proposal answers and the owner sees both.
 7. The PM merges, removes duplicates, settles conflicts and ranks by severity.
+   Every mockup in the owner's document has passed the design review and the customer check first,
+   in every task, also when Round 2 does not run.
 8. The owner gets one document with numbered points (severity, who found it, owner team
    ("Vlastník"), proposal, effort, sources) and approves them ("1, 3, 5 yes, 2 no").
 9. Only approved points are implemented, each in its own pull request.

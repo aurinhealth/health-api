@@ -195,6 +195,7 @@ test('passing remarks are not remembered and preferences are saved after the ans
 test('a reply cut off by the token limit keeps its answer and never shows raw JSON',async()=>{
   assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[],memory:{save:[],forget:[],update:[]}});
   assert.doesNotMatch(coachAnswerText('{"actions":[{"type":"rest"',{actions:true}).answer,/[{}]/);
+  assert.equal(coachAnswerText("Dnes 45 min · zóna 2 · 160 W").answer,"Dnes 45 min, zóna 2, 160 W");
   assert.equal(coachAnswerText('Obyčejný text',{actions:true}).answer,'Obyčejný text');
   const original=globalThis.fetch,calls=[];
   try{
@@ -216,16 +217,33 @@ test('earlier turns go to the model as messages with the data first and the ques
   globalThis.fetch=async(_,options)=>{body=JSON.parse(options.body);return Response.json({output_text:'Ok'});};
   try{
     await askCoach({OPENAI_API_KEY:'test'},'A co zítra?',{date:today,week:[],conversation:[{role:'user',content:'Mám dnes jet?'},{role:'assistant',content:'Ano, 60 min.\n\n[Návrhy: Připravit kolo 60 min na po 5. 10.]'}]},{task:'planning'});
-    assert.deepEqual(body.input.map(m=>m.role),['user','user','assistant','user']);
-    assert.match(body.input[0].content,/^Kontext aplikace/);assert.doesNotMatch(body.input[0].content,/conversation/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
+    assert.deepEqual(body.input.map(m=>m.role),['developer','user','user','assistant','user']);
+    assert.match(body.input[1].content[0].text,/^Kontext aplikace/);assert.doesNotMatch(body.input[1].content[0].text,/conversation/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
   }finally{globalThis.fetch=original;}
   // The time and the open screen go after the earlier turns, so the long context stays cacheable.
   try{
     globalThis.fetch=async(url,init)=>{body=JSON.parse(init.body);return Response.json({model:'gpt-6-sol',output:[{content:[{type:'output_text',text:'ok'}]}]});};
     await askCoach({OPENAI_API_KEY:'test'},'A co zítra?',{date:today,now:today+'T10:57',week:[],appContext:{screen:'today'},conversation:[{role:'user',content:'Mám dnes jet?'},{role:'assistant',content:'Ano.'}]},{task:'planning'});
-    assert.deepEqual(body.input.map(m=>m.role),['user','user','assistant','user','user']);
-    assert.doesNotMatch(body.input[0].content,/"now"|appContext/);assert.match(body.input[0].content,/"week"/);
-    assert.match(body.input[3].content,/^Kontext aplikace.*"now":".*T10:57".*"appContext"/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
+    assert.deepEqual(body.input.map(m=>m.role),['developer','user','user','assistant','user','user']);
+    assert.doesNotMatch(body.input[1].content[0].text,/"now"|appContext/);assert.match(body.input[1].content[0].text,/"week"/);
+    assert.match(body.input[4].content,/^Kontext aplikace.*"now":".*T10:57".*"appContext"/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
+  }finally{globalThis.fetch=original;}
+  // Cached up to the end of the instructions and the data (explicit breakpoints), and nothing after:
+  // the chat memory, the earlier turns, the moment and the brief note change between messages.
+  try{
+    const bodies=[];globalThis.fetch=async(url,init)=>{bodies.push(JSON.parse(init.body));return Response.json({model:'gpt-6-sol',output:[{content:[{type:'output_text',text:'ok'}]}]});};
+    const ctx={date:today,week:[{date:today}],preferenceMemory:['bez kola v pondělí'],coachProposals:[{type:'move'}],earlierToday:[{q:'x'}]};
+    await askCoach({OPENAI_API_KEY:'test'},'Přesuň to na zítra',{...ctx,now:today+'T10:57'},{task:'adjustment'});
+    await askCoach({OPENAI_API_KEY:'test'},'Naplánuj mi týden',{...ctx,now:today+'T10:59',preferenceMemory:['bez kola v pondělí','ráno běh'],coachProposals:[]},{task:'planning'});
+    for(const b of bodies){
+      assert.deepEqual(b.prompt_cache_options,{mode:'explicit'});assert.equal(b.instructions,undefined);
+      const marked=b.input.filter(m=>Array.isArray(m.content)&&m.content.some(c=>c.prompt_cache_breakpoint));
+      assert.deepEqual(marked.map(m=>m.role),['developer','user'],'two breakpoints: instructions, data');
+      assert.doesNotMatch(b.input[1].content[0].text,/preferenceMemory|coachProposals|earlierToday/);
+      for(const key of ["preferenceMemory","coachProposals","earlierToday"])assert.match(b.input[2].content,new RegExp(key));
+    }
+    assert.deepEqual(bodies[0].input.slice(0,2),bodies[1].input.slice(0,2),'the cached part is the same for both messages');
+    assert.match(bodies[0].input.at(-2).content,/stručně/);assert.doesNotMatch(JSON.stringify(bodies[1].input.slice(2)),/vyřiď stručně/);
   }finally{globalThis.fetch=original;}
   const move={type:'move',eventId:'planned:7',date:'2026-10-08',reason:'x',eventSnapshot:{name:'Long ride',date:'2026-10-06'}};
   assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Aktivní od pá 9. 10.)]');assert.equal(actionsNote([]),'');

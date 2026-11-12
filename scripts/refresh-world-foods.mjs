@@ -66,7 +66,7 @@ export function offRow(p) {
     basis_unit: String(p.unit || "").toLowerCase() === "ml" ? "ml" : "g",
     kcal: round(kcal), protein: round(protein), carbs: round(carbs), fat: round(fat),
     fiber: optional(v.fiber), sugars: optional(v.sugars), salt: optional(v.salt),
-    quantity: clean(p.quantity, 60), serving_size: clean(p.serving_size, 60), cz: p.cz ? 1 : 0
+    quantity: clean(p.quantity, 60), serving_size: clean(p.serving_size, 60), cz: p.cz ? 1 : 0, sk: p.sk ? 1 : 0
   };
 }
 
@@ -77,7 +77,7 @@ export function rowOf(r) {
     catalog_key: r.k, source_id: r.s, default_name: r.n, cs: r.cs ?? null, en: r.en ?? null, brand: r.br ?? null,
     barcode: r.b ?? null, basis_unit: r.u === "ml" ? "ml" : "g", kcal: r.e, protein: r.p, carbs: r.c, fat: r.f,
     fiber: r.fi ?? null, sugars: r.su ?? null, salt: r.sa ?? null, quantity: r.q ?? null, serving_size: r.ss ?? null,
-    cz: r.cz ? 1 : 0, ...(r.r != null ? { rank: r.r } : {})
+    cz: r.cz ? 1 : 0, sk: r.sk ? 1 : 0, ...(r.r != null ? { rank: r.r } : {})
   };
 }
 

@@ -18,7 +18,7 @@ test("running catalog: unique ids, lengths match names, every system covered", (
   assert.equal(new Set(RUNNING_WORKOUTS.map(w => w.id)).size, RUNNING_WORKOUTS.length);
   for (const w of RUNNING_WORKOUTS) {
     assert.equal(w.sport, "run");
-    const named = w.name.match(/· (\d+) min$/);
+    const named = w.name.match(/, (\d+) min$/);
     if (named) assert.ok(Math.abs(w.duration_minutes - Number(named[1])) <= 1, w.id);
     assert.match(w.intervals_description, /% Pace/);
   }

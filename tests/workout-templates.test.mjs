@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows } from "../src/workout-templates.js";
+import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows, previewPng } from "../src/workout-templates.js";
 import { scriptPolicy } from "../src/web-security.js";
 import { templateStrengthPlan, EXERCISES } from "../src/strength-generator.js";
 import { readRoutines, withRoutines } from "../src/stretching.js";
@@ -18,6 +18,12 @@ async function call(raw, id, method, path, body, name = "Petr Bouma") {
   const request = new Request(url, { method, headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
   const response = await handleWorkoutTemplatesApi(request, env(raw, id), url, session(name));
   return { status: response.status, body: await response.json() };
+}
+// A PNG as the app sends it: signature, IHDR with the size, IEND last (CRCs are not checked).
+function png(width = 1200, height = 630, tail = Buffer.alloc(0)) {
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); return Buffer.concat([len, Buffer.from(type), data, Buffer.alloc(4)]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width, 0); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 6;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", Buffer.from("pixels")), chunk("IEND", Buffer.alloc(0)), tail]).toString("base64");
 }
 const legs = { sport: "gym", name: "Nohy", minutes: 60, exercises: [{ name: "Pivot leg press", sets: 4, reps: "8-12" }, { name: "Prone leg curl Prime", sets: 3, reps: "10" }] };
 
@@ -57,7 +63,7 @@ test("own workouts are listed, edited and deleted", async () => {
 
 test("a shared link lands once in the friend's Od přátel, with the sender's first name only", async () => {
   const raw = createD1();
-  const image = Buffer.from("\x89PNG fake").toString("base64");
+  const image = png();
   const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image, date: "2099-01-05" });
   assert.equal(shared.status, 200);
   // The link is on aurin.health even when the app still talks to the old host.
@@ -88,7 +94,7 @@ test("a shared link lands once in the friend's Od přátel, with the sender's fi
 
 test("the link's page shows the workout and its preview image to anyone", async () => {
   const raw = createD1();
-  const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: Buffer.from("PNGDATA").toString("base64") });
+  const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: png() });
   const url = new URL(ORIGIN + "/t/" + shared.body.id);
   const pageResponse = await publicSharePage(new Request(url), raw, url);
   const html = await pageResponse.text();
@@ -97,7 +103,7 @@ test("the link's page shows the workout and its preview image to anyone", async 
   assert.match(html, /Petr ti posílá trénink/);
   assert.match(html, /4 × 8–12/);
   assert.match(html, new RegExp('og:image" content="' + ORIGIN + "/t/" + shared.body.id + '/og.png'));
-  assert.match(html, /· Aurin<\/title>/);
+  assert.match(html, /<title>Nohy<\/title>/);
   assert.match(html, /og:site_name" content="Aurin"/);
   assert.match(html, /Otevřít v Aurinu/);
   assert.match(html, /Aurin bude brzy v App Store/);
@@ -109,7 +115,9 @@ test("the link's page shows the workout and its preview image to anyone", async 
   const imageUrl = new URL(url + "/og.png");
   const image = await publicSharePage(new Request(imageUrl), raw, imageUrl);
   assert.equal(image.headers.get("content-type"), "image/png");
-  assert.equal(Buffer.from(await image.arrayBuffer()).toString(), "PNGDATA");
+  assert.equal(Buffer.from(await image.arrayBuffer()).toString("base64"), png());
+  // Anyone who sees the page can report it (App Review 1.2).
+  assert.match(html, /href="mailto:support@aurin\.health\?subject=Report%20workout%20[A-Za-z0-9]{10}">Nahlásit nevhodný obsah/);
   const missing = new URL(ORIGIN + "/t/AAAAAAAAAA");
   assert.equal((await publicSharePage(new Request(missing), raw, missing)).status, 404);
   assert.equal(await publicSharePage(new Request(new URL(ORIGIN + "/privacy")), raw, new URL(ORIGIN + "/privacy")), null);
@@ -121,6 +129,21 @@ test("the link's page shows the workout and its preview image to anyone", async 
   // Only the page's own script may run (web-security.js).
   for (const response of [pageResponse, evilPage]) assert.match(response.headers.get("Content-Security-Policy"), /script-src 'sha256-[^' ]+'$/);
   assert.equal(pageResponse.headers.get("Content-Security-Policy"), scriptPolicy(html));
+});
+
+test("a link keeps only the app's preview PNG, and a day's links are limited", async () => {
+  assert.equal(previewPng(png()), true);
+  for (const other of [png(800, 630), png(1200, 1200), png(1200, 630, Buffer.from("<html>")), Buffer.from("GIF89a" + "x".repeat(60)).toString("base64"), "not base64!", null]) assert.equal(previewPng(other), false);
+  const raw = createD1();
+  const gif = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image: Buffer.from("GIF89a" + "x".repeat(60)).toString("base64") });
+  assert.equal(raw.sqlite.prepare("SELECT image_png FROM workout_shares WHERE id=?").get(gif.body.id).image_png, null);
+  // An image stored before the check is not served.
+  raw.sqlite.prepare("UPDATE workout_shares SET image_png=? WHERE id=?").run(Buffer.from("<svg/>").toString("base64"), gif.body.id);
+  const old = new URL(ORIGIN + "/t/" + gif.body.id + "/og.png");
+  assert.equal((await publicSharePage(new Request(old), raw, old)).status, 404);
+  for (let i = 1; i < 20; i++) assert.equal((await call(raw, 1, "POST", "/app/api/shares", legs)).status, 200);
+  assert.equal((await call(raw, 1, "POST", "/app/api/shares", legs)).status, 429);
+  assert.equal((await call(raw, 2, "POST", "/app/api/shares", legs)).status, 200, "another athlete has their own limit");
 });
 
 test("planned for the athlete, a shared workout keeps its exercises and sets but not anyone's weights", () => {

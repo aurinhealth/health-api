@@ -137,7 +137,7 @@ export function templateFromStructure(sport, name, structure = []) {
   return cleanEnduranceTemplate({ sport, name, blocks: structure.slice(0, MAX_BLOCKS).map(b => Array.isArray(b.steps) ? { repeats: b.repeats || 1, steps: b.steps.slice(0, MAX_STEPS).map(step) } : { repeats: 1, steps: [step(b)] }) });
 }
 
-// "4× 8 min · 2 min 95 % / 2 min 105 %", per block, for the link page and the AI.
+// "4× 8 min, 2 min 95 % / 2 min 105 %", per block, for the link page and the AI.
 export function blockLines(template) {
   const unit = template.sport === "swim" ? " % CSS" : template.sport === "run" ? L(" % tempa", " % pace") : " % FTP";
   const length = s => s.meters != null ? s.meters + " m" : s.km != null ? String(s.km).replace(".", L(",", ".")) + " km" : s.seconds % 60 ? Math.floor(s.seconds / 60) + ":" + String(s.seconds % 60).padStart(2, "0") + " min" : s.seconds / 60 + " min";

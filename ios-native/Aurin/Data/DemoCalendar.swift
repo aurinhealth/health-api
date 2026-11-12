@@ -9,12 +9,12 @@ extension DemoData {
     static func calendar(around today: String, english: Bool = L10n.isEnglish) -> [CalendarDay] {
         // Per weekday (Monday first): what a usual week holds.
         let week: [[(String, String, Double, Double?, Double)]] = [
-            [("strength", "Posilovna · horní tělo", 55, nil, 320)],
+            [("strength", "Posilovna, dolní tělo", 60, nil, 360)],
             [("ride", "Sweet spot 3×12", 75, 38.5, 820), ("walk", "Chůze", 30, 2.6, 140)],
-            [("run", "Lehký běh", 45, 8.1, 560)],
-            [("strength", "Posilovna · dolní tělo", 60, nil, 360), ("walk", "Chůze", 25, 2.1, 110)],
-            [],
-            [("ride", "Dlouhá jízda", 180, 92, 2100)],
+            [("run", "Běh 14 km", 72, 14, 980)],
+            [("strength", "Posilovna, celé tělo", 45, nil, 300), ("walk", "Chůze", 25, 2.1, 110)],
+            [("ride", "Lehká jízda Z2", 72, 30, 700)],
+            [("run", "Dlouhý běh", 96, 17.5, 1350)],
             [("walk", "Procházka", 70, 5.8, 290)]
         ]
         return ISODay.range(ISODay.shift(today, -42), ISODay.shift(today, 14)).map { (date: String) -> CalendarDay in
@@ -36,7 +36,8 @@ extension DemoData {
                 let compliance: Int? = adherence == "good" ? 88 + day % 25 : adherence == "off" ? (day % 2 == 0 ? 72 : 134) : nil
                 return CalendarActivity(id: date + "-\(i)", sport: item.0, status: done ? "done" : "planned", title: english ? Self.english[item.1] ?? item.1 : item.1, date: date,
                                         time: time, minutes: item.2, km: item.3, kcal: done ? item.4 : nil,
-                                        activityId: nil, eventId: nil, adherence: adherence, compliance: compliance)
+                                        activityId: nil, eventId: nil, adherence: adherence,
+                                        sources: done && date == today ? [Self.origin(item.0)] : nil, compliance: compliance)
             }
             let real = list.filter { $0.status == "done" }
             let main = list.filter { $0.sport != "walk" }.max { ($0.minutes ?? 0) < ($1.minutes ?? 0) } ?? list.first
@@ -47,5 +48,12 @@ extension DemoData {
                                minutes: real.reduce(0) { $0 + ($1.minutes ?? 0) }, kcal: real.reduce(0) { $0 + ($1.kcal ?? 0) },
                                planned: list.count - real.count, activities: list, plan: plan)
         }
+    }
+
+    /// Who recorded a done sample session, as SourceLine shows it: the gym in
+    /// Aurin, the rest through Apple Health. Only on the sample day itself: a
+    /// source line on every past row makes long lists too tall to snapshot.
+    private static func origin(_ sport: String) -> ActivityDetail.Origin {
+        sport == "strength" ? ActivityDetail.Origin(name: "Aurin", logo: "aurin") : ActivityDetail.Origin(name: "Apple Health", logo: "apple")
     }
 }

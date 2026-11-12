@@ -127,11 +127,11 @@ export function coachNudge({ date, hour, zone = null, easier = null, recovery = 
 }
 
 // The swap the morning push offered, as a card on Today until it is answered:
-// "VO2max · 75 min → Lehká jízda · 45 min" with Vyměnit and Nechat.
+// "VO2max, 75 min → Lehká jízda, 45 min" with Vyměnit and Nechat.
 export function swapOffer(state = {}, date) {
   const n = state?.nudge;
   if (!n || n.status !== 'pending' || n.day !== date || !n.date || n.date < date) return null;
   const easy = easyName(n.sport);
-  const from = (n.name || n.what || L('Trénink', 'Session')) + (n.fromMinutes ? ' · ' + n.fromMinutes + ' min' : '');
-  return { kind: 'swap', id: date + ':swap', headline: n.title || L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"), date: n.day, from, to: easy + ' · ' + n.minutes + ' min' };
+  const from = (n.name || n.what || L('Trénink', 'Session')) + (n.fromMinutes ? ', ' + n.fromMinutes + ' min' : '');
+  return { kind: 'swap', id: date + ':swap', headline: n.title || L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"), date: n.day, from, to: easy + ', ' + n.minutes + ' min' };
 }

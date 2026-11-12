@@ -1,8 +1,8 @@
 import { L } from './lang.js';
-import { routedUserDb } from './user-data-routing.js';
+import { routedUserDb, TARGET_KIND } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
-import { allowClient, releaseClient } from './ip-rate-limit.js';
+import { allowClient, releaseClient, allowSite, releaseSite } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
@@ -194,15 +194,15 @@ function schemaStatement(statement, sql, schemaDone) {
 
 // A database blip (d1-retry.js) is tried again: a read after any of them, a
 // write only when it never ran.
-function retriedStatement(statement, sql) {
+function retriedStatement(statement, sql, target = null) {
   const read = readOnlySql(sql);
   return {
     [REAL]: statement?.[REAL] || statement,
-    bind: (...values) => retriedStatement(statement.bind(...values), sql),
-    run: (...args) => withD1Retry(() => statement.run(...args), { read }),
-    first: (...args) => withD1Retry(() => statement.first(...args), { read }),
-    all: (...args) => withD1Retry(() => statement.all(...args), { read }),
-    raw: (...args) => withD1Retry(() => statement.raw(...args), { read })
+    bind: (...values) => retriedStatement(statement.bind(...values), sql, target),
+    run: (...args) => withD1Retry(() => statement.run(...args), { read, target }),
+    first: (...args) => withD1Retry(() => statement.first(...args), { read, target }),
+    all: (...args) => withD1Retry(() => statement.all(...args), { read, target }),
+    raw: (...args) => withD1Retry(() => statement.raw(...args), { read, target })
   };
 }
 
@@ -210,8 +210,8 @@ function retriedStatement(statement, sql) {
 export function retryingDb(db) {
   if (!db?.prepare) return db;
   return {
-    prepare: query => retriedStatement(db.prepare(query), query),
-    batch: statements => withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }),
+    prepare: query => retriedStatement(db.prepare(query), query, "core"),
+    batch: statements => withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false, target: "core" }),
     exec: query => db.exec(query),
     dump: () => db.dump()
   };
@@ -338,14 +338,14 @@ export function scopedDb(db, userId, { memo = false } = {}) {
     prepare(query) {
       check(query);
       const statement = db.prepare(query);
-      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query);
+      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query, statement?.[TARGET_KIND] || null);
       return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
       for (const s of statements) if (s?.[GUARDED]) noteUnboundUser(s[GUARDED].sql, s[GUARDED].values, id);
       const forget = () => { if (reads) for (const s of statements) { if (s?.[GUARDED]) forgetWritten(reads, s[GUARDED].sql); else reads.clear(); } };
       forget();
-      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); } finally { forget(); }
+      try { return await withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false, target: statements[0]?.[REAL]?.[TARGET_KIND] || null }); } finally { forget(); }
     },
     exec(query) { check(query); reads?.clear(); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }
@@ -524,13 +524,14 @@ export function publicUser(row, env) {
 }
 
 // With sessionEpoch: the epoch a session cookie has to carry (dashboard-auth.js).
-// healthPaused: the user took back the consent to health data (health-pause.js),
-// read with the row by the consents' primary key.
+// healthPaused: the user took back the consent to health data (health-pause.js);
+// healthConsent: it is given (false: never given, null: no consents table).
+// Both read with the row by the consents' primary key.
 export async function findUser(db, id, env) {
-  const row = await db.prepare("SELECT id, email, name, role, disabled, session_epoch, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = users.id AND k.kind = 'health' AND k.withdrawn_at IS NOT NULL) AS health_paused FROM users WHERE id=?").bind(Number(id)).first()
+  const row = await db.prepare("SELECT id, email, name, role, disabled, session_epoch, (SELECT CASE WHEN k.withdrawn_at IS NULL THEN 'given' ELSE 'paused' END FROM user_consents k WHERE k.user_id = users.id AND k.kind = 'health') AS health FROM users WHERE id=?").bind(Number(id)).first()
     .catch(error => /no such table: user_consents/i.test(String(error?.message)) ? db.prepare("SELECT id, email, name, role, disabled, session_epoch FROM users WHERE id=?").bind(Number(id)).first() : Promise.reject(error));
   if (!row || row.disabled) return null;
-  return { ...publicUser(row, env), sessionEpoch: Number(row.session_epoch) || 0, healthPaused: Boolean(row.health_paused) };
+  return { ...publicUser(row, env), sessionEpoch: Number(row.session_epoch) || 0, healthPaused: row.health === 'paused', healthConsent: row.health === undefined ? null : row.health === 'given' };
 }
 
 // Signs the user out of every device: sessions carry the epoch and only the
@@ -616,10 +617,13 @@ export async function emailCodeAccess(db, env, email, now = Date.now()) {
 // release needs. Otherwise only invited addresses and the owner do.
 export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true";
 
-// New accounts one caller (a network, ip-rate-limit.js) may open by open sign-up, so
+// New accounts one caller (an IPv4 address or an IPv6 /64, ip-rate-limit.js) may open by open sign-up, so
 // one machine cannot make free accounts in bulk to use up the AI (ai-total.js).
 // Invited addresses and the owner are not counted.
 export const NEW_ACCOUNT_LIMITS = { hour: 3, day: 5 };
+// And a whole IPv6 /48 (callerSite): a free tunnel /48 is 65,536 /64s, while a mobile operator gives
+// each phone its own /64 from a shared block, so the site's cap is looser than one caller's.
+export const SITE_ACCOUNT_LIMITS = { hour: 20, day: 40 };
 // The sign-ins that claimed a place under NEW_ACCOUNT_LIMITS, so createAccount
 // gives it back when no account comes of it.
 const signupClaims = new WeakSet();
@@ -654,7 +658,13 @@ export async function mayCreateAccount(db, env, address, { request = null } = {}
   if (room && room.free < RESERVE_OPEN_BELOW) room = await openReserveShards(db, env, { capacity: room }).catch(() => room);
   if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
   if (!invited && request) {
-    if (!(await allowClient(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
+    const secret = sessionSecret(env), now = Date.now();
+    if (!(await allowSite(db, request, secret, "signup", now, SITE_ACCOUNT_LIMITS))) {
+      console.warn("New account refused: too many from one /48 today");
+      throw new SignupLimited();
+    }
+    if (!(await allowClient(db, request, secret, "signup", now, NEW_ACCOUNT_LIMITS))) {
+      await releaseSite(db, request, secret, "signup", now).catch(() => {});
       console.warn("New account refused: too many from one network today");
       throw new SignupLimited();
     }
@@ -676,7 +686,7 @@ export async function createAccount(db, env, address, name = null, { request = n
     // No account came of the place this network claimed: it gets it back.
     if (made !== "created" && request && signupClaims.has(request)) {
       signupClaims.delete(request);
-      await releaseClient(db, request, sessionSecret(env), "signup").catch(error => console.warn("Sign-up place not given back", error?.message || error));
+      await Promise.all([releaseSite(db, request, sessionSecret(env), "signup"), releaseClient(db, request, sessionSecret(env), "signup")]).catch(error => console.warn("Sign-up place not given back", error?.message || error));
     }
   }
 }

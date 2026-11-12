@@ -61,7 +61,7 @@ struct WeekSessionsList: View {
                             if !candidates.isEmpty {
                                 Menu {
                                     ForEach(candidates) { activity in
-                                        Button(activity.title + (activity.time.map { " · " + ClockText.format($0) } ?? "")) {
+                                        Button(activity.title + (activity.time.map { ", " + ClockText.format($0) } ?? "")) {
                                             Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
                                         }
                                     }
@@ -254,7 +254,7 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(ClockText.format(t)) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -328,7 +328,7 @@ struct ActivityDetailView: View {
         DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
+                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
                     if session.status == "done" {
                         CoachPill(subject: .activity(model.liveSession(session))).padding(.trailing, 4)
@@ -849,7 +849,14 @@ struct PlannedWorkoutView: View {
     @State private var plan: PlannedWorkout?
     @State private var moveDate = Date()
     @State private var moving = false
-    @State private var working = false
+    /// The change under way, so only its own button turns into a spinner.
+    @State private var working: Change?
+    enum Change: Equatable { case move, indoor, outdoor }
+    /// The place picked here, before the plan comes back with it.
+    @State private var environmentSet: String?
+    /// Bumped by a change the server took or refused: the haptic.
+    @State private var changed = 0
+    @State private var failed = 0
     @State private var error: String?
     @State private var confirmDelete = false
     @State private var rating = false
@@ -875,7 +882,7 @@ struct PlannedWorkoutView: View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { " · " + ClockText.format($0) } ?? ""))
+                    SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
                     if session.status != "done" { CoachPill(subject: .planned(session)) }
                 }
@@ -930,23 +937,29 @@ struct PlannedWorkoutView: View {
                     if moving {
                         DatePicker("Nový den", selection: $moveDate, in: Date()..., displayedComponents: .date)
                             .environment(\.locale, Fmt.locale)
-                        Button { Task { await move() } } label: { action("Přesunout na tento den", filled: true) }
+                        Button { Task { await move() } } label: { action("Přesunout na tento den", filled: true, busy: working == .move) }
                     } else {
                         Button { moving = true } label: { action("Přesunout na jiný den", filled: false) }
                     }
-                    if Self.endurance(session.sport) {
+                    if Self.endurance(session.sport), session.eventId != nil {
+                        // The place it is now is filled with a tick; a tap on the other one moves it there.
                         HStack(spacing: 10) {
-                            Button { Task { await environment(indoor: true) } } label: { action(session.sport == "swim" ? "Bazén" : "Uvnitř", filled: false) }
-                            Button { Task { await environment(indoor: false) } } label: { action(session.sport == "swim" ? "Volná voda" : "Venku", filled: false) }
+                            place(indoor: true, title: session.sport == "swim" ? "Bazén" : "Uvnitř")
+                            place(indoor: false, title: session.sport == "swim" ? "Volná voda" : "Venku")
                         }
                     }
                     Button(role: .destructive) { confirmDelete = true } label: {
                         Text("Smazat z plánu").font(Typo.bodyStrong).foregroundStyle(Palette.rust).frame(maxWidth: .infinity).frame(height: 46)
                     }
                 }
-                .disabled(working || model.demo)
+                .disabled(working != nil || model.demo)
                 .padding(.top, 10)
-                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.circle")
+                        .font(Typo.small).foregroundStyle(Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
+                }
             }
         }
         .sheet(isPresented: $rating, onDismiss: { ratingClosed += 1 }) { FeedbackSheet(session: session, workoutId: libraryId) }
@@ -956,11 +969,32 @@ struct PlannedWorkoutView: View {
         } message: {
             Text("Zmizí i z kalendáře v Intervals.icu.")
         }
+        .sensoryFeedback(.success, trigger: changed)
+        .sensoryFeedback(.error, trigger: failed)
         .task {
-            guard let id = session.eventId, !model.demo, plan == nil else { return }
-            let today = session.date == AppModel.localDate(Date())
-            plan = try? await model.api.plannedWorkout(eventId: id, date: today ? session.date : nil, time: today ? shownTime : nil)
+            guard plan == nil else { return }
+            await loadPlan()
         }
+    }
+
+    private func loadPlan() async {
+        guard let id = session.eventId, !model.demo else { return }
+        let today = session.date == AppModel.localDate(Date())
+        if let fresh = try? await model.api.plannedWorkout(eventId: id, date: today ? session.date : nil, time: today ? shownTime : nil) { plan = fresh }
+    }
+
+    /// "indoor" or "outdoor"; nil until the plan is loaded.
+    private var environmentNow: String? { environmentSet ?? plan?.workout.environment }
+
+    /// Uvnitř / Venku (Bazén / Volná voda): the current one filled with a tick.
+    private func place(indoor: Bool, title: String) -> some View {
+        let current = environmentNow == (indoor ? "indoor" : "outdoor")
+        return Button { Task { await environment(indoor: indoor) } } label: {
+            action(title, filled: current, busy: working == (indoor ? .indoor : .outdoor), tick: current)
+        }
+        // Until the plan says where it is, the Undo would not know where to go back.
+        .disabled(environmentNow == nil)
+        .accessibilityAddTraits(current ? .isSelected : [])
     }
 
     private func meta(_ title: String, _ value: String) -> some View {
@@ -986,7 +1020,7 @@ struct PlannedWorkoutView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(working)
+        .disabled(working != nil)
     }
 
     /// value "" leaves the day without a time. The screen stays open.
@@ -1006,30 +1040,61 @@ struct PlannedWorkoutView: View {
         }
     }
 
-    private func action(_ title: String, filled: Bool) -> some View {
-        Text(title).font(Typo.bodyStrong).foregroundStyle(filled ? Palette.onButton : Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 46)
-            .background(filled ? Palette.button : .clear, in: Capsule())
-            .overlay { Capsule().stroke(Palette.ink.opacity(filled ? 0 : 0.2), lineWidth: 1) }
+    /// busy: a spinner in place of the title while the server works on it.
+    private func action(_ title: String, filled: Bool, busy: Bool = false, tick: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            if busy {
+                ProgressView().tint(filled ? Palette.onButton : Palette.ink)
+            } else {
+                if tick { Image(systemName: "checkmark").font(Typo.caption.weight(.bold)) }
+                Text(title)
+            }
+        }
+        .font(Typo.bodyStrong).foregroundStyle(filled ? Palette.onButton : Palette.ink)
+        .frame(maxWidth: .infinity).frame(height: 46)
+        .background(filled ? Palette.button : .clear, in: Capsule())
+        .overlay { Capsule().stroke(Palette.ink.opacity(filled ? 0 : 0.2), lineWidth: 1) }
+        .animation(.snappy, value: busy)
+        .accessibilityLabel(busy ? L10n.tr("Ukládám…") : L10n.tr(title))
     }
 
-    private func run(_ work: () async throws -> Void) async {
-        working = true
-        defer { working = false }
+    /// Moved: the screen closes and the toast says where, with "Vrátit" (no
+    /// haptic: the screen is gone before it would play).
+    private func move() async {
+        let date = AppModel.localDate(moveDate)
+        working = .move
+        error = nil
+        defer { working = nil }
         do {
-            try await work()
-            async let training: Void = model.refreshTraining()
-            await model.refresh()
-            await training
+            let note = try await PlanSessionActions.move(model, session: session, to: date, time: nil)
+            let model: AppModel = self.model, session = self.session, time = shownTime
+            model.undoToast = PlanToast(title: L10n.f("Přesunuto na %@", Fmt.weekdayName(date)), note: note, cancelled: false, undo: {
+                do {
+                    // Back to the day and the time it had here (Čas may have changed it).
+                    if let eventId = session.eventId {
+                        let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: time ?? "")
+                    } else {
+                        try await PlanSessionActions.moveBack(model, session: session, from: date)
+                    }
+                } catch {
+                    model.notice = error.localizedDescription
+                }
+                async let training: Void = model.refreshTraining()
+                await model.refresh()
+                await training
+            })
+            Task { await reload(model) }
             dismiss()
         } catch {
+            failed += 1
             self.error = error.localizedDescription
         }
     }
 
-    private func move() async {
-        guard let id = session.eventId else { return }
-        await run { try await model.api.movePlanned(eventId: id, to: AppModel.localDate(moveDate)) }
+    private func reload(_ model: AppModel) async {
+        async let training: Void = model.refreshTraining()
+        await model.refresh()
+        await training
     }
 
     /// Gone from the screen now, from the server after "Zpět" had its 6 s.
@@ -1045,9 +1110,36 @@ struct PlannedWorkoutView: View {
         dismiss()
     }
 
+    /// The place changes on this screen: its button fills, the plan comes back
+    /// drawn for it (indoor FTP, no heat advice) and the toast offers "Vrátit".
     private func environment(indoor: Bool) async {
-        guard let id = session.eventId else { return }
-        await run { try await model.api.setPlannedEnvironment(eventId: id, indoor: indoor) }
+        guard let id = session.eventId, let before = environmentNow, before != (indoor ? "indoor" : "outdoor") else { return }
+        working = indoor ? .indoor : .outdoor
+        error = nil
+        defer { working = nil }
+        do {
+            try await model.api.setPlannedEnvironment(eventId: id, indoor: indoor)
+            environmentSet = indoor ? "indoor" : "outdoor"
+            changed += 1
+            let swim = session.sport == "swim"
+            let title = indoor ? (swim ? "Teď v bazénu" : "Teď uvnitř") : (swim ? "Teď ve volné vodě" : "Teď venku")
+            let model: AppModel = self.model
+            model.undoToast = PlanToast(title: L10n.tr(title), note: nil, cancelled: false, symbol: "checkmark", undo: {
+                do {
+                    try await model.api.setPlannedEnvironment(eventId: id, indoor: before == "indoor")
+                    environmentSet = before
+                    await loadPlan()
+                } catch {
+                    model.notice = error.localizedDescription
+                }
+                await reload(model)
+            })
+            await loadPlan()
+            Task { await reload(model) }
+        } catch {
+            failed += 1
+            self.error = error.localizedDescription
+        }
     }
 }
 
@@ -1108,13 +1200,26 @@ struct PlannedTimeSheet: View {
     }
 }
 
-/// "3× · 12 min 88–94 %" for one block of a structured workout.
+/// "3×, 12 min 88–94 %" for one block of a structured workout.
 struct StepBlockRow: View {
     let block: PlannedWorkout.Block
+    /// The bullet's centre above the text's baseline: half the footnote's x-height.
+    @ScaledMetric(relativeTo: .footnote) private var bulletLift: CGFloat = 3.5
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text((block.repeats ?? 1) > 1 ? "\(block.repeats!)×" : "·").font(Typo.number(18)).foregroundStyle(Palette.amber).frame(width: 30, alignment: .leading)
+            // "3×" or a bullet, at the right of its column, next to the text.
+            Group {
+                if let repeats = block.repeats, repeats > 1 {
+                    Text(verbatim: "\(repeats)×").font(Typo.number(18))
+                } else {
+                    Circle().frame(width: 5, height: 5)
+                        .alignmentGuide(.firstTextBaseline) { $0.height / 2 + bulletLift }
+                }
+            }
+            .foregroundStyle(Palette.amber)
+            .frame(width: 30, alignment: .trailing)
+            .accessibilityHidden((block.repeats ?? 1) <= 1)
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(Array((block.steps ?? []).enumerated()), id: \.offset) { _, step in
                     Text(describe(step)).font(Typo.small).foregroundStyle(Palette.secondary)
@@ -1127,21 +1232,26 @@ struct StepBlockRow: View {
     private func describe(_ s: PlannedWorkout.Step) -> String {
         var parts: [String] = []
         if s.rest == true {
-            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: " · ")
+            return [L10n.f("%@ pauza", Fmt.int(s.durationSeconds) + " s"), s.note].compactMap { $0 }.joined(separator: ", ")
         }
         // A swim: metres, the pace per 100 m.
         if let m = s.meters {
             parts.append(Fmt.int(m) + " m")
-            if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /100 m") }
+            if let slow = s.paceSlow, let fast = s.paceFast { parts.append(Self.range(ZonesSettingsView.pace(fast), ZonesSettingsView.pace(slow)) + " /100 m") }
             if let note = s.note { parts.append(note) }
-            return parts.joined(separator: " · ")
+            return parts.joined(separator: ", ")
         }
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
-        if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
-        else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + Fmt.percentSign) }
-        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(Units.pace(fast)) + "–" + ZonesSettingsView.pace(Units.pace(slow)) + " " + Units.paceUnit) }
+        if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Self.range(Fmt.int(lo), Fmt.int(hi)) + " W") }
+        else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Self.range(Fmt.int(lo), Fmt.int(hi)) + Fmt.percentSign) }
+        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(Self.range(ZonesSettingsView.pace(Units.pace(fast)), ZonesSettingsView.pace(Units.pace(slow))) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
+    }
+
+    /// "143 W" when both ends read the same, else "130–150 W".
+    static func range(_ low: String, _ high: String) -> String {
+        low == high ? low : low + "–" + high
     }
 }
 
@@ -1494,7 +1604,7 @@ struct ManualWorkoutSheet: View {
         let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
         let f = ISO8601DateFormatter()
         guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
-        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: " · ")
+        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: ", ")
     }
 
     @ViewBuilder private var heartCard: some View {

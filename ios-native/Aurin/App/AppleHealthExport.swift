@@ -4,8 +4,8 @@ import Observation
 
 /// Writing to Apple Health (Zdroje dat → Apple Health → Aurin posílá): done
 /// workouts logged in Aurin as HKWorkout, and the chosen health data the
-/// app itself has: the weight typed in, the day's food (energy and macros)
-/// and water. Under Tréninky z jiných aplikací also Wahoo's and Google
+/// app itself has: the weight typed in, the day's food (energy, macros,
+/// fibre, sugars and sodium) and water. Under Tréninky z jiných aplikací also Wahoo's and Google
 /// Health's workouts, which the server lists (writeForwarded). The "Jak to šlo?" rating of a done workout goes on its workout
 /// there as its effort (iOS 18). iOS asks for write permission only for the
 /// types switched on.
@@ -28,11 +28,12 @@ final class AppleHealthExport {
     private(set) var viaGoogle: Set<String>
 
     @ObservationIgnored private let store = HKHealthStore()
+    @ObservationIgnored private var askingNutrients = false
     private static let prefsKey = "appleHealth.export"
     private static let writtenKey = "appleHealth.written"
     private static let viaGoogleKey = "appleHealth.viaGoogle"
 
-    static let healthTypes = ["weight", "nutrition", "water"]
+    static let healthTypes = ["weight", "nutrition", "water", "sleep", "heartRate", "restingHR", "spO2", "respiration", "steps"]
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -77,6 +78,8 @@ final class AppleHealthExport {
     /// Signing out or another account: the next one writes what its own server settings say.
     func reset() {
         prefs = .off
+        UserDefaults.standard.removeObject(forKey: Self.othersWrittenKey)
+        UserDefaults.standard.removeObject(forKey: Self.othersAtKey)
         viaGoogle = []
         UserDefaults.standard.removeObject(forKey: Self.prefsKey)
         UserDefaults.standard.removeObject(forKey: Self.viaGoogleKey)
@@ -99,10 +102,21 @@ final class AppleHealthExport {
         if prefs.health.allows("nutrition") {
             types.formUnion([HKQuantityType(.dietaryEnergyConsumed), HKQuantityType(.dietaryProtein),
                              HKQuantityType(.dietaryCarbohydrates), HKQuantityType(.dietaryFatTotal)])
+            types.formUnion(nutrientTypes)
         }
         if prefs.health.allows("water") { types.insert(HKQuantityType(.dietaryWater)) }
+        for (type, sample) in otherTypes where prefs.health.allows(type) { types.insert(sample) }
         return types
     }
+
+    /// Health data from other apps (src/apple-health-forward.js) and Apple's type for each.
+    static let otherTypes: [(String, HKSampleType)] = [
+        ("sleep", HKCategoryType(.sleepAnalysis)), ("heartRate", HKQuantityType(.heartRate)), ("restingHR", HKQuantityType(.restingHeartRate)),
+        ("spO2", HKQuantityType(.oxygenSaturation)), ("respiration", HKQuantityType(.respiratoryRate)), ("steps", HKQuantityType(.stepCount))
+    ]
+
+    /// Fibre, sugars and sodium of the food log (2026-11), beside the macros.
+    static let nutrientTypes: Set<HKSampleType> = [HKQuantityType(.dietaryFiber), HKQuantityType(.dietarySugar), HKQuantityType(.dietarySodium)]
 
     /// The iOS permission sheet for what these preferences write.
     func requestAccess(_ next: SyncPrefs) async throws {
@@ -326,6 +340,128 @@ final class AppleHealthExport {
         }
     }
 
+    // MARK: Health data from other apps
+
+    @ObservationIgnored private var writingOthers = false
+    private static let othersAtKey = "appleHealth.othersAt"
+    private static let othersWrittenKey = "appleHealth.othersWritten"
+
+    /// What Google Health sent Aurin from the user's watch (src/apple-health-forward.js),
+    /// for the types ticked under Z tvých dalších aplikací. Each item keeps one
+    /// sync identifier, so a changed value replaces the earlier one; what did not
+    /// change is not written again. At most every half hour unless `days` asks.
+    func writeOthers(api: APIClient, days: Int? = nil) async {
+        let wanted = Self.otherTypes.filter { prefs.health.allows($0.0) && allowed($0.1) }
+        guard !wanted.isEmpty, isAvailable, api.hasSession, !writingOthers else { return }
+        let defaults = UserDefaults.standard
+        if days == nil, let at = defaults.object(forKey: Self.othersAtKey) as? Date, Date().timeIntervalSince(at) < 1800 { return }
+        writingOthers = true
+        defer { writingOthers = false }
+        guard let data = try? await api.forwardedHealth(days: days ?? 2) else { return }
+        defaults.set(Date(), forKey: Self.othersAtKey)
+        let on = Set(wanted.map(\.0))
+        var written = defaults.dictionary(forKey: Self.othersWrittenKey) as? [String: String] ?? [:]
+        var samples: [HKObject] = []
+        var changed: [String: String] = [:]
+        // Health shows where it came from, as text only (Google's watch, not this iPhone).
+        let device = HKDevice(name: nil, manufacturer: "Google", model: nil, hardwareVersion: nil, firmwareVersion: nil,
+                              softwareVersion: nil, localIdentifier: nil, udiDeviceIdentifier: nil)
+        func add(_ key: String, _ value: String, _ make: () -> [HKSample]) {
+            guard written[key] != value else { return }
+            samples.append(contentsOf: make())
+            changed[key] = value
+        }
+        func quantity(_ id: HKQuantityTypeIdentifier, _ unit: HKUnit, _ value: Double, _ start: Date, _ end: Date, _ key: String) -> HKSample {
+            HKQuantitySample(type: HKQuantityType(id), quantity: HKQuantity(unit: unit, doubleValue: value), start: start, end: end, device: device, metadata: metadata(key))
+        }
+        var nights: [String] = []
+        if on.contains("sleep") {
+            for night in data.sleep ?? [] {
+                guard let start = Self.serverTime.date(from: night.start) ?? Self.plainTime.date(from: night.start),
+                      let end = Self.serverTime.date(from: night.end) ?? Self.plainTime.date(from: night.end) else { continue }
+                let key = "other:sleep:" + night.key
+                let stages = night.stages.compactMap { stage -> (HKCategoryValueSleepAnalysis, Date, Date)? in
+                    guard let a = Self.serverTime.date(from: stage.start) ?? Self.plainTime.date(from: stage.start),
+                          let b = Self.serverTime.date(from: stage.end) ?? Self.plainTime.date(from: stage.end), b > a else { return nil }
+                    switch stage.type {
+                    case "deep": return (.asleepDeep, a, b)
+                    case "rem": return (.asleepREM, a, b)
+                    case "core": return (.asleepCore, a, b)
+                    case "awake": return (.awake, a, b)
+                    default: return nil
+                    }
+                }
+                add(key, night.end + "|" + night.stages.map { $0.type + $0.start }.joined(separator: ",")) {
+                    nights.append(key)
+                    let parts = stages.isEmpty ? [(HKCategoryValueSleepAnalysis.asleepUnspecified, start, end)] : stages
+                    return parts.enumerated().map { index, part in
+                        var meta = metadata(key + ":" + String(index))
+                        meta[Self.nightKey] = key
+                        return HKCategorySample(type: HKCategoryType(.sleepAnalysis), value: part.0.rawValue, start: part.1, end: part.2, device: device, metadata: meta)
+                    }
+                }
+            }
+        }
+        let daily: [(String, [ForwardedHealth.Daily]?, HKQuantityTypeIdentifier, HKUnit, Double)] = [
+            ("restingHR", data.restingHR, .restingHeartRate, .count().unitDivided(by: .minute()), 1),
+            ("spO2", data.spO2, .oxygenSaturation, .percent(), 0.01),
+            ("respiration", data.respiration, .respiratoryRate, .count().unitDivided(by: .minute()), 1)
+        ]
+        for (name, list, id, unit, scale) in daily where on.contains(name) {
+            for item in list ?? [] {
+                // A day's value at its morning, as the watch gives it after the night.
+                let at = Self.dayStart(item.date).addingTimeInterval(7 * 3600)
+                add("other:\(name):\(item.date)", String(item.value)) { [quantity(id, unit, item.value * scale, at, at, "other:\(name):\(item.date)")] }
+            }
+        }
+        if on.contains("heartRate") {
+            for item in data.heartRate ?? [] {
+                guard let at = Self.serverTime.date(from: item.start) ?? Self.plainTime.date(from: item.start) else { continue }
+                add("other:hr:" + item.start, String(item.value)) {
+                    [quantity(.heartRate, .count().unitDivided(by: .minute()), item.value, at, at, "other:hr:" + item.start)]
+                }
+            }
+        }
+        if on.contains("steps") {
+            for item in data.steps ?? [] {
+                guard let a = Self.serverTime.date(from: item.start) ?? Self.plainTime.date(from: item.start),
+                      let b = Self.serverTime.date(from: item.end) ?? Self.plainTime.date(from: item.end), b > a else { continue }
+                add("other:steps:" + item.start, String(item.value)) { [quantity(.stepCount, .count(), item.value, a, b, "other:steps:" + item.start)] }
+            }
+        }
+        guard !samples.isEmpty else { return }
+        // A night written again: its earlier stages go first (their number may have changed).
+        if !nights.isEmpty {
+            let predicate = HKQuery.predicateForObjects(withMetadataKey: Self.nightKey, allowedValues: nights)
+            _ = try? await store.deleteObjects(of: HKCategoryType(.sleepAnalysis), predicate: predicate)
+        }
+        let ok = await withCheckedContinuation { continuation in
+            store.save(samples) { ok, error in
+                if let error { print("Apple Health write failed", error.localizedDescription) }
+                continuation.resume(returning: ok)
+            }
+        }
+        guard ok else { return }
+        written.merge(changed) { $1 }
+        // Only the last few weeks are worth remembering.
+        let oldest = Date().addingTimeInterval(-20 * 86400)
+        written = written.filter { key, _ in
+            let stamp = String(key.split(separator: ":", maxSplits: 2).last ?? "")
+            let date = Self.serverTime.date(from: stamp) ?? Self.plainTime.date(from: stamp) ?? Self.dayStart(String(stamp.prefix(10)))
+            return date >= oldest
+        }
+        defaults.set(written, forKey: Self.othersWrittenKey)
+    }
+
+    /// Which night a sleep stage belongs to, to replace a night's stages together.
+    private static let nightKey = "AurinNight"
+    /// The server's times without milliseconds.
+    private static let plainTime: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     // MARK: Effort
 
     /// "Jak to šlo?" (1–10) of a done workout, on that workout in Apple Health as
@@ -460,6 +596,20 @@ final class AppleHealthExport {
             totals.append(("protein", .dietaryProtein, .gram(), ((food.macros.protein.eaten ?? 0) - theirs(\.protein)) * mine))
             totals.append(("carbs", .dietaryCarbohydrates, .gram(), ((food.macros.carbs.eaten ?? 0) - theirs(\.carbs)) * mine))
             totals.append(("fat", .dietaryFatTotal, .gram(), ((food.macros.fat.eaten ?? 0) - theirs(\.fat)) * mine))
+            // Fibre, sugars and salt of Aurin's own meals; salt is sodium × 2.5 (EU labels).
+            let own = entries.filter { $0.app == nil }
+            func ownSum(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double { own.reduce(0.0) { $0 + ($1[keyPath: key] ?? 0) } }
+            totals.append(("fiber", .dietaryFiber, .gram(), ownSum(\.fiber) * mine))
+            totals.append(("sugar", .dietarySugar, .gram(), ownSum(\.sugar) * mine))
+            totals.append(("sodium", .dietarySodium, .gramUnit(with: .milli), ownSum(\.salt) * 400 * mine))
+            // Switched on before these were written: iOS asks once, for these alone.
+            // Not while food goes to Google Health, and once even when two loads come together.
+            let undecided = Self.nutrientTypes.filter { store.authorizationStatus(for: $0) == .notDetermined }
+            if mine > 0, !undecided.isEmpty, !askingNutrients {
+                askingNutrients = true
+                _ = try? await store.requestAuthorization(toShare: undecided, read: [])
+                askingNutrients = false
+            }
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []

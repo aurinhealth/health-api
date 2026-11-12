@@ -20,7 +20,7 @@ import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
 import { ownerUnlimited } from "./staging.js";
 import { packMessagesLeft } from "./coach-packs.js";
-import { COACH_CHAT_FEATURE } from "./ai-features.js";
+import { COACH_CHAT_FEATURE, COACH_CHECK_FEATURE } from "./ai-features.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -30,7 +30,8 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 // Writing input into that cache costs more than plain input on the gpt-6
 // models (usage.input_tokens_details.cache_write_tokens, not part of
 // cached_tokens): CACHE_WRITE_FACTOR times the input price for the default
-// 30-minute cache (no prompt_cache_options is set).
+// 30-minute cache (no ttl is set; the coach chat marks its own breakpoints,
+// callOpenAI cacheBreakpoints).
 // The model of the coach and every complex task (complexModel, coach-assistant.js),
 // and the price an unknown model is counted at.
 export const DEFAULT_MODEL = "gpt-6-sol";
@@ -92,7 +93,7 @@ export const CARRIED_MONTH_FEATURE = "carried-over-month";
 export async function aiSpentToday(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), COACH_CHAT_FEATURE, COACH_CHECK_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
@@ -129,7 +130,7 @@ export async function aiAllowance(env) {
 export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = {}) {
   if (!tracked(env)) return;
   const share = await aiLimitShare(env);
-  const monthLimit = aiMonthlyLimitUsd(env, share), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env, share);
+  const monthLimit = aiMonthlyLimitUsd(env, share), dayLimit = feature === COACH_CHAT_FEATURE || feature === COACH_CHECK_FEATURE ? null : aiDailyLimitUsd(env, share);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.

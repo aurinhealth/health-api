@@ -65,6 +65,8 @@ struct TodayContent: View {
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
     @State private var editing = false
+    /// The month calendar (MonthCalendarSheet), from a tap on the month.
+    @State private var showMonth = false
     /// Nastavení → Kouč na obrazovkách: the coach's card on Dnes.
     @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
@@ -76,9 +78,24 @@ struct TodayContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !editing {
-                header
+            // The month and the week stay put while the day below is swiped
+            // (Petr, 2026-11-11, as Bevel); a day drawn beside has none.
+            if page == nil && !editing {
+                VStack(alignment: .leading, spacing: 0) { header }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
             }
+            day
+                .padding(.horizontal, 24)
+                .padding(.top, editing ? 16 : 0)
+                .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
+        }
+        .sheet(isPresented: $showMonth) { MonthCalendarSheet(date: today.date) }
+    }
+
+    /// The day under the week: what a swipe moves.
+    @ViewBuilder private var day: some View {
+        VStack(alignment: .leading, spacing: 0) {
             if wide && !editing {
                 // Petr, 2026-11-03: the three numbers and the coach's advice on the right,
                 // seen without scrolling; the readiness, food and the day on the left.
@@ -101,9 +118,6 @@ struct TodayContent: View {
                 board.padding(.top, editing ? 0 : 28)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
     }
 
     private var board: some View {
@@ -116,8 +130,8 @@ struct TodayContent: View {
     /// The month, the week and the data's state, across the whole width.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
-        TabHeader(date: today.date, share: openShare, coach: openCoach, settings: openSettings)
-        WeekStrip(date: today.date, week: today.week).padding(.top, 14)
+        TabHeader(date: today.date, share: openShare, month: { showMonth = true }, coach: openCoach, settings: openSettings)
+        WeekStrip(date: today.date).padding(.top, 14)
 
         if selectedDate == nil && !model.demo {
             DataAgePill()
@@ -218,7 +232,7 @@ extension View {
     }
 }
 
-/// "Apple Health · data ze včera 21:10 · obnovit" under the day when Apple
+/// "Apple Health, data ze včera 21:10, obnovit" under the day when Apple
 /// Health last reached the server more than 3 hours ago (its source named,
 /// Today audit 20), and the same for Google Health, Intervals.icu, Ultrahuman
 /// or WHOOP not reached for over 12 hours, when Settings → Zdroje dat turns
@@ -244,7 +258,7 @@ struct DataAgePill: View {
 
     private func lines(now: Date) -> [String] {
         var out: [String] = []
-        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health · " + text) }
+        if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: now) { out.append("Apple Health, " + text) }
         return out + Self.stale(model.today?.dataSources ?? [], now: now)
     }
 
@@ -252,7 +266,8 @@ struct DataAgePill: View {
         Button { Task { await model.refresh() } } label: {
             HStack(spacing: 6) {
                 Image(systemName: "clock").scaledFont(11, weight: .semibold)
-                Text(verbatim: line + L10n.tr(" · obnovit"))
+                Text(verbatim: line)
+                Text("obnovit").fontWeight(.bold).padding(.leading, 4)
             }
             .font(.footnote.weight(.medium))
             .foregroundStyle(Palette.amber)
@@ -267,12 +282,12 @@ struct DataAgePill: View {
         .disabled(model.loading || health.syncing)
     }
 
-    /// "Google Health · data ze včera 21:10" for each server source not reached
+    /// "Google Health, data ze včera 21:10" for each server source not reached
     /// for over 12 hours (IntegrationCard.stale, as in Settings).
     static func stale(_ sources: [DataSource], now: Date) -> [String] {
         sources.compactMap { source in
             guard let last = source.lastSuccessAt.flatMap(SourceActions.date), IntegrationCard.stale(last, now: now) else { return nil }
-            return (source.name ?? source.provider) + " · " + age(last: last, now: now)
+            return (source.name ?? source.provider) + ", " + age(last: last, now: now)
         }
     }
 
@@ -296,46 +311,84 @@ struct DataAgePill: View {
     }
 }
 
-/// Today's week, Monday to Sunday: a dot in the readiness colour under every
-/// day up to the shown one, today filled, an earlier day picked with a ring in
-/// its colour. A tap opens that day; later days are faint and do nothing.
+/// The days on Dnes, Zdraví and Jídlo (Petr, 2026-11-11, as Bevel): seven at
+/// a time with the shown day in the middle (today at the right end), one strip from four months back to
+/// today (on Jídlo two weeks ahead) that a finger slides through freely. A
+/// swipe of the day below moves it by one day, never a whole week. A dot in
+/// the readiness colour under each day (/app/api/days, the shown week from
+/// Today first), today in a filled circle, the shown day in a ring in its
+/// colour. A tap opens that day; later days are faint and do nothing.
 struct WeekStrip: View {
     @Environment(AppModel.self) private var model
+    /// The day on screen (the demo's sample day).
     let date: String
-    let week: [TodaySnapshot.WeekDay]?
     /// Food: the days of the next two weeks can be picked too.
     var ahead = false
+    /// The day in the strip's middle, as it scrolls.
+    @State private var centered: String?
+    /// The strip grows with the letter and the date.
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 68
 
     private var today: String { AppModel.localDate(Date()) }
     private var lastDay: String { ahead ? (AppModel.shift(today, by: AppModel.foodDaysAhead) ?? today) : today }
-
-    /// The server's week, or Monday to Sunday without zones (an older server).
-    private var days: [TodaySnapshot.WeekDay] {
-        if let week, week.count == 7 { return week }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        let parser = DateFormatters.iso(timeZone: calendar.timeZone)
-        let weekday = parser.date(from: date).map { (calendar.component(.weekday, from: $0) + 5) % 7 } ?? 0
-        let monday = AppModel.shift(date, by: -weekday) ?? date
-        return (0..<7).map { TodaySnapshot.WeekDay(date: AppModel.shift(monday, by: $0) ?? monday, zone: nil) }
+    /// The day picked, at once: the strip moves while the day below still loads.
+    private var shown: String { model.demo ? date : (model.selectedDate ?? today) }
+    /// Four months back, further when an older day is on screen.
+    /// (ISODay.range stops at 400 days, so never more than that.)
+    private var days: [String] {
+        ISODay.range(max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -399)), lastDay)
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(days, id: \.date) { day in
-                Button { Task { await pick(day.date) } } label: { cell(day) }
-                    .buttonStyle(.plain)
-                    .disabled(day.date > lastDay || model.demo || model.dayLocked)
-                    .frame(maxWidth: .infinity)
+        Group {
+            if model.demo {
+                // The sample day's week as one row: the screenshots cannot draw a scroll view.
+                HStack(spacing: 0) {
+                    ForEach(ISODay.range(ISODay.shift(date, -ISODay.weekdayIndex(date)), ISODay.shift(date, 6 - ISODay.weekdayIndex(date))), id: \.self) { day in
+                        Button {} label: { cell(day) }.buttonStyle(.plain).disabled(true).frame(maxWidth: .infinity)
+                    }
+                }
+            } else {
+                strip
             }
         }
         .padding(.horizontal, -6)
     }
 
-    /// The readiness of the days around date, when Dnes holds that week.
-    static func week(of date: String, in today: TodaySnapshot?) -> [TodaySnapshot.WeekDay]? {
-        guard let week = today?.week, week.contains(where: { $0.date == date }) else { return nil }
-        return week
+    // Moved only through its scrollPosition, never a ScrollViewProxy (see
+    // TrainingCalendarCard.strip: the iPhone Duo).
+    private var strip: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(days, id: \.self) { day in
+                    Button { Task { await pick(day) } } label: { cell(day) }
+                        .buttonStyle(.plain)
+                        .disabled(day > lastDay || model.dayLocked)
+                        .containerRelativeFrame(.horizontal, count: 7, spacing: 0)
+                        .id(day)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $centered, anchor: .center)
+        .frame(height: height)
+        .onAppear { centered = shown }
+        .onChange(of: shown) { _, day in withAnimation(.easeOut(duration: 0.25)) { centered = day } }
+        // The readiness dots of the months in sight, once each (a month a call).
+        .task(id: months) {
+            let oldest = ISODay.shift(today, -90)
+            for month in months { await model.loadDays(from: max(month, oldest), to: ISODay.monthEnd(month)) }
+        }
+    }
+
+    /// The months of the seven days in sight that the server still has (90 days back).
+    private var months: [String] {
+        let middle = centered ?? shown
+        let oldest = ISODay.monthStart(ISODay.shift(today, -90))
+        let list = [ISODay.shift(middle, -3), ISODay.shift(middle, 3)].map(ISODay.monthStart).filter { $0 >= oldest && $0 <= today }
+        return Array(Set(list)).sorted()
     }
 
     /// A day after today only on Food, as many days on as the arrows would go.
@@ -350,11 +403,17 @@ struct WeekStrip: View {
         }
     }
 
-    private func cell(_ day: TodaySnapshot.WeekDay) -> some View {
-        let isToday = day.date == today, selected = day.date == date, future = day.date > lastDay
-        let color = ReadinessText.pill(day.zone)?.1
+    /// The day's readiness zone: the week Today holds, then the days loaded.
+    private func zone(_ day: String) -> String? {
+        if let week = model.today?.week, let item = week.first(where: { $0.date == day }) { return item.zone }
+        return model.dayValues[day]?.readiness?.zone
+    }
+
+    private func cell(_ day: String) -> some View {
+        let isToday = day == today, selected = day == shown, future = day > lastDay
+        let color = ReadinessText.pill(zone(day))?.1
         return VStack(spacing: 5) {
-            Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
+            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
             ZStack {
                 if isToday && selected {
                     Circle().fill(Palette.ink)
@@ -363,7 +422,7 @@ struct WeekStrip: View {
                 } else if isToday {
                     Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
                 }
-                Text(verbatim: Fmt.dayNumber(day.date))
+                Text(verbatim: Fmt.dayNumber(day))
                     .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(isToday && selected ? Palette.background : selected ? (color ?? Palette.ink) : future ? Palette.faint : Palette.ink)
             }
@@ -372,7 +431,7 @@ struct WeekStrip: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.dayMonth(day.date))
+        .accessibilityLabel(Fmt.dayMonth(day))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -391,6 +450,8 @@ struct TabHeader<Extra: View>: View {
     var showToday: (() -> Void)? = nil
     /// Sdílet, only on Dnes.
     var share: (() -> Void)? = nil
+    /// The month calendar, only on Dnes: the month becomes a button with ⌄.
+    var month: (() -> Void)? = nil
     var coach: () -> Void
     var settings: () -> Void
     @ViewBuilder var extra: Extra
@@ -401,13 +462,8 @@ struct TabHeader<Extra: View>: View {
         // "Dnes" and the capsule are 8 pt apart: they never melt into one.
         ChromeGlassGroup(spacing: 4) {
             HStack(spacing: 8) {
-                Text(verbatim: Fmt.monthTitle(date))
-                    .font(Typo.sentence(30, relativeTo: .title))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                title
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
-                    .accessibilityLabel(Fmt.monthTitleSpoken(date))
-                    .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 4)
                 if let back = backToToday {
                     Button(action: back) {
@@ -428,6 +484,41 @@ struct TabHeader<Extra: View>: View {
         }
     }
 
+    @ViewBuilder private var title: some View {
+        let text = Text(verbatim: Fmt.monthTitle(date))
+            .font(Typo.sentence(30, relativeTo: .title))
+            .foregroundStyle(Palette.ink)
+            .lineLimit(1).minimumScaleFactor(0.7)
+        let withChevron = HStack(alignment: .firstTextBaseline, spacing: 6) {
+            text
+            Image(systemName: "chevron.down")
+                .scaledFont(13, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(Palette.muted)
+        }
+        if let month, !model.demo {
+            Button(action: month) {
+                withChevron
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Fmt.monthTitleSpoken(date))
+            .accessibilityHint(L10n.tr("Otevře kalendář měsíce"))
+            .accessibilityAddTraits(.isHeader)
+        } else if month != nil {
+            // The sample day has no month to show: the same look, nothing to tap
+            // (a disabled button would grey the month out).
+            withChevron
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Fmt.monthTitleSpoken(date))
+                .accessibilityAddTraits(.isHeader)
+        } else {
+            text
+                .accessibilityLabel(Fmt.monthTitleSpoken(date))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
     private var backToToday: (() -> Void)? {
         if !followsDay { return showToday }
         guard (page.map(\.selectedDate) ?? model.selectedDate) != nil else { return nil }
@@ -437,8 +528,8 @@ struct TabHeader<Extra: View>: View {
 
 extension TabHeader where Extra == EmptyView {
     init(date: String, followsDay: Bool = true, showToday: (() -> Void)? = nil, share: (() -> Void)? = nil,
-         coach: @escaping () -> Void, settings: @escaping () -> Void) {
-        self.init(date: date, followsDay: followsDay, showToday: showToday, share: share, coach: coach, settings: settings) { EmptyView() }
+         month: (() -> Void)? = nil, coach: @escaping () -> Void, settings: @escaping () -> Void) {
+        self.init(date: date, followsDay: followsDay, showToday: showToday, share: share, month: month, coach: coach, settings: settings) { EmptyView() }
     }
 }
 
@@ -541,7 +632,7 @@ enum DayNavigator {
 }
 
 /// The day in the pinned glass bar of Dnes, Zdraví and Jídlo once their
-/// header has scrolled away: "‹ Dnes · st 14. 10. ›", and an earlier (or
+/// header has scrolled away: "‹ Dnes, st 14. 10. ›", and an earlier (or
 /// later) day tinted, with "Dnes" next to it.
 struct DayBar: View {
     @Environment(AppModel.self) private var model
@@ -829,7 +920,7 @@ struct MorningCheckinCard: View {
     }
 }
 
-/// Sleep · Strain · HRV under the readiness number, each on a range bar:
+/// Sleep, Strain, HRV under the readiness number, each on a range bar:
 /// sleep against the night's need, the strain against today's goal, the HRV
 /// against the athlete's usual range (without a watch or ring, the steps
 /// against their goal).

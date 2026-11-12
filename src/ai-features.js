@@ -5,9 +5,13 @@
 // chat is the one feature the daily guard leaves out (ai-usage.js).
 // Settings → Aurin Pro in the app lists technique as free (Petr, 7 Nov 2026).
 export const COACH_CHAT_FEATURE = "assistant";
+// The check of a coach answer before the athlete sees it (coach-checker.js):
+// part of the chat, so the daily guard leaves it out too.
+export const COACH_CHECK_FEATURE = "coach-check";
 export const AI_FEATURES = {
   [COACH_CHAT_FEATURE]: { name: "chat s koučem" },
   "screen-text": { name: "věty kouče na obrazovkách" },
+  [COACH_CHECK_FEATURE]: { name: "kontrola odpovědi kouče" },
   reflection: { name: "poznámka po tréninku" },
   "coach-notes": { name: "poznámky kouče" },
   "week-revision": { name: "revize týdne" },

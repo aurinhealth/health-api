@@ -1016,7 +1016,8 @@ final class HealthReader: @unchecked Sendable {
 
     private func samples(_ type: HKSampleType, from: Date, to: Date, predicate extra: NSPredicate? = nil) async -> [HKSample] {
         await withCheckedContinuation { continuation in
-            var predicate: NSPredicate = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
+            // Never what Aurin wrote itself (other apps' data, notOurs): the server has it already.
+            var predicate: NSPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [HKQuery.predicateForSamples(withStart: from, end: to, options: []), Self.notOurs])
             if let extra { predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, extra]) }
             if let hidden = hiddenPredicate(type) { predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [predicate, hidden]) }
             let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
@@ -1030,7 +1031,7 @@ final class HealthReader: @unchecked Sendable {
 
     private func statistics(_ type: HKQuantityType, options: HKStatisticsOptions, from: Date, to: Date, step: DateComponents, predicate extra: NSPredicate? = nil) async -> [HKStatistics] {
         let range = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
-        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [range, extra, hiddenPredicate(type)].compactMap { $0 })
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [range, Self.notOurs, extra, hiddenPredicate(type)].compactMap { $0 })
         return await withCheckedContinuation { continuation in
             let query = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: predicate,
                                                     options: options, anchorDate: calendar.startOfDay(for: from), intervalComponents: step)

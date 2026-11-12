@@ -53,7 +53,10 @@ struct FoodWeekWidget: View {
             }
         }
         // Again when the day's food changes (a meal added on Jídlo).
-        .task(id: (date ?? "") + "|" + Fmt.int((page?.food ?? model.food)?.kcal)) { await load() }
+        // Not for a day drawn beside during a swipe (DayPager): no request for it.
+        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal)) {
+            if page == nil { await load() }
+        }
     }
 
     @ViewBuilder private func content(_ week: FoodWeek, target: Double) -> some View {
@@ -90,7 +93,7 @@ struct FoodWeekWidget: View {
         }
         var left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
         if let perDay = week.perDay {
-            left = left + Text(verbatim: " · " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
+            left = left + Text(verbatim: ", " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
             // Today's part of it: "1 150 kcal more today", or past it the rest is the days ahead's.
             if let today = week.todayLeft {
                 left = left + Text(verbatim: "\n") + (today > 0

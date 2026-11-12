@@ -232,7 +232,7 @@ struct MusclesWidget: View {
     // M with the rings.
     private func mediumRings(_ data: MuscleFatigue) -> some View {
         Card {
-            WidgetHeader(title: L10n.tr("Únava svalů · odpočaté na %"), color: Palette.amberBar)
+            WidgetHeader(title: L10n.tr("Odpočinutí svalů (%)"), color: Palette.amberBar)
             MuscleRingsRow(data: data)
         }
     }
@@ -281,7 +281,7 @@ struct MusclesView: View {
         DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title, coach: .muscles(date: model.selectedDate)) {
             VStack(alignment: .leading, spacing: 0) {
                 // Kapitálky and the serif title, as the other details (Petr, 2026-10-24).
-                SectionLabel(text: "Trénink · svaly").padding(.top, 24)
+                SectionLabel(text: "Svaly po tréninku").padding(.top, 24)
                 Text(verbatim: MuscleFatigue.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
                 Picker("Pohled", selection: $tab) {
                     Text("Odpočinek").tag(0)
@@ -399,9 +399,9 @@ struct MusclesView: View {
 
     private func reason(_ data: MuscleFatigue) -> String? {
         guard let r = data.recommend else { return nil }
-        guard let days = r.daysSince else { return L10n.f("%@ jsou tento měsíc ještě bez tréninku.", r.label) }
+        guard let days = r.daysSince else { return L10n.f("%@ jsou tento měsíc ještě bez tréninku.", L10n.tr(r.label)) }
         guard days >= 3 else { return nil }
-        return L10n.f("%@ naposledy před %@ dny.", r.label, String(days))
+        return L10n.f("%@ naposledy před %@ dny.", L10n.tr(r.label), String(days))
     }
 
     private func tiredRow(_ muscle: MuscleFatigue.Muscle, today: String) -> some View {
@@ -425,11 +425,11 @@ struct MusclesView: View {
         .accessibilityLabel(L10n.tr(muscle.label) + ", " + L10n.f("odpočaté na %@ %%", String(percent)) + ", " + muscle.readyText(today: today))
     }
 
-    /// "Barbell back squat, Běh 14 km · včera".
+    /// "Barbell back squat, Běh 14 km, včera".
     private func causes(_ muscle: MuscleFatigue.Muscle) -> String {
         let from = muscle.from ?? []
         guard let first = from.first else { return "" }
-        return from.map { L10n.tr($0.title) }.joined(separator: ", ") + " · " + L10n.tr(first.day)
+        return from.map { L10n.tr($0.title) }.joined(separator: ", ") + ", " + L10n.tr(first.day)
     }
 
     // MARK: Tento týden
@@ -759,7 +759,7 @@ struct MuscleDetailView: View {
     private func recentLine(_ r: MuscleDetailData.Recent) -> String {
         var parts = [L10n.tr(r.day), L10n.plural("%lld sérií", r.sets)]
         if let kg = r.kg, let reps = r.reps { parts.append(Units.weightText(kg, digits: kg.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 1) + " × " + String(Int(reps))) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder private func best(_ d: MuscleDetailData) -> some View {
@@ -772,7 +772,7 @@ struct MuscleDetailView: View {
                     Text(verbatim: Units.weightText(b.kg, digits: b.kg.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 1) + " × " + String(Int(b.reps)))
                         .font(Typo.sentence(18)).foregroundStyle(Palette.ink)
                 }
-                Text(verbatim: L10n.f("odhad maxima %@", Units.weightText(b.e1rm, digits: 0)) + (b.day.map { " · " + L10n.tr($0) } ?? ""))
+                Text(verbatim: L10n.f("odhad maxima %@", Units.weightText(b.e1rm, digits: 0)) + (b.day.map { ", " + L10n.tr($0) } ?? ""))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             .padding(.top, 10)

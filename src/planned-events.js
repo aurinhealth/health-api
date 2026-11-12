@@ -64,7 +64,7 @@ export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl =
 }
 
 // Outdoors or on the trainer: Intervals.icu tells them apart by the event type
-// (Ride / VirtualRide, Run / VirtualRun). A workout scheduled from the library
+// (Ride / VirtualRide, Run / VirtualRun, OpenWaterSwim / Swim). A workout scheduled from the library
 // keeps the environment on its link, so its steps are drawn for that place.
 export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
@@ -72,9 +72,10 @@ export async function setPlannedEnvironment(env, { eventId, environment }, fetch
   if (!["indoor", "outdoor"].includes(environment)) throw new Error(L("Vyber venku, nebo uvnitř.", "Choose outdoor or indoor."));
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
-  if (isStrengthEvent(payload)) throw new Error(L("Prostředí jde změnit jen u kola a běhu.", "The environment can only be changed for rides and runs."));
-  const run = /run/i.test(String(payload.type || ""));
-  const type = run ? (environment === "indoor" ? "VirtualRun" : "Run") : (environment === "indoor" ? "VirtualRide" : "Ride");
+  if (isStrengthEvent(payload)) throw new Error(L("Prostředí jde změnit jen u kola, běhu a plavání.", "The environment can only be changed for rides, runs and swims."));
+  // A swim stays a swim: the pool (Swim) or open water (OpenWaterSwim).
+  const kind = /swim/i.test(String(payload.type || "")) ? "swim" : /run/i.test(String(payload.type || "")) ? "run" : "ride";
+  const type = { swim: ["Swim", "OpenWaterSwim"], run: ["VirtualRun", "Run"], ride: ["VirtualRide", "Ride"] }[kind][environment === "indoor" ? 0 : 1];
   if(id.startsWith('local-'))return {...await editLocalWorkout(env,id,{type,indoor:environment==='indoor'},fetchImpl),environment,type};
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ type }) });
   if (!response.ok) throw new Error(L("Intervals.icu změnu odmítlo (HTTP ", "Intervals.icu rejected the change (HTTP ") + response.status + ").");

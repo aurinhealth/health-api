@@ -182,7 +182,7 @@ struct SubscriptionView: View {
         var firstPayment: String?
         if let week = store.freeWeek {
             let price = store.payments != nil ? store.commitment?.monthly : store.price(ProStore.yearlyID)
-            firstPayment = [PaywallView.weekday(week.end), price].compactMap { $0 }.joined(separator: " · ")
+            firstPayment = [PaywallView.weekday(week.end), price].compactMap { $0 }.joined(separator: ", ")
         }
         return ProPageState(hasPro: hasPro, unlocked: hasPro || status?.aiAccess == true, pilot: status?.pilot == true,
                             renewal: renewal(status), freeWeek: store.freeWeek, firstPayment: firstPayment,

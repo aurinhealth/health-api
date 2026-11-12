@@ -186,7 +186,7 @@ struct TargetPartsSheet: View {
     private func detail(_ item: FoodSnapshot.TargetParts.Item) -> String {
         let kcal = item.kind == "planned" ? L10n.f("asi %@ kcal", Fmt.int(item.kcal)) : Fmt.int(item.kcal) + " kcal"
         guard let minutes = item.minutes, minutes > 0 else { return kcal }
-        return Fmt.duration(Int(minutes.rounded())) + " · " + kcal
+        return Fmt.duration(Int(minutes.rounded())) + ", " + kcal
     }
 
     /// The activity's symbol by its type (Intervals.icu / Google Health names).

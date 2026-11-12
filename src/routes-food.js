@@ -61,12 +61,13 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     // Private saved foods first, then the common food-label catalogue, then
     // the read-only world catalogue in R2. A food users saved or corrected
-    // replaces the world record with the same barcode. A barcode none of them
+    // replaces the world record with the same barcode or catalogue key (a
+    // logged basic food is listed once). A barcode none of them
     // knows is asked of Open Food Facts live (open-food-facts.js), and where
     // each scan was found is counted for the morning report (ops-report.js).
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,catalogue]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),live=barcode&&!saved.length&&!catalogue.length?await lookupOpenFoodFacts(env,barcode):[],world=[...catalogue,...live],codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean));
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,catalogue]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode,market:body.market}).catch(error=>{console.error('world foods',error?.message);return [];})]),live=barcode&&!saved.length&&!catalogue.length?await lookupOpenFoodFacts(env,barcode):[],world=[...catalogue,...live],codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),keys=new Set(saved.map(p=>p.catalog_key).filter(Boolean));
       if(barcode){const counting=recordOpsEvent(env.RAW_DB||env.DB,'barcode',saved.length?'saved':catalogue.length?'world':live.length?'off-live':'missing');if(ctx?.waitUntil)ctx.waitUntil(counting);else await counting;}
-      const candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+      const candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode))&&!keys.has(p.catalog_key))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){console.error('Food search failed',error.message);return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.')},{status:500});}
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
@@ -106,7 +107,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zadej hodnoty ručně.', 'AI isn\'t available right now. Enter the values by hand.')},{status:503});
     try{
       const body=await request.json().catch(()=>({})),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24);
-      let r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
+      let r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE,market:body.market});
       // Not found on the web: with estimate=true and a name, typical values marked as an AI estimate.
       if(!r.product&&body.estimate===true&&name.trim().length>=2)r=await estimateFoodWithAI(env,{name,language:env.INTERFACE_LANGUAGE});
       if(!r.product)return Response.json({status:'not_found',message:L('AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).', 'The AI couldn\'t find the product with certainty. Enter the values from the label (or take a photo of it).')},{headers:{'Cache-Control':'no-store'}});
@@ -164,7 +165,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       const result=await saved.json();if(!saved.ok)throw new Error(L('Uložení selhalo.', 'Saving failed.'));
       let personal=null,warning=null;
       // The food for next time (and the shared catalogue) after the answer: the app waits only for the meal.
-      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
+      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true,last:amount.amount}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
         if(ctx?.waitUntil)ctx.waitUntil(saving);else personal=await saving;}
       const google=await queueFoodGoogleSafely(env,ctx,result.id);
       warning ||= google.status==='error'?google.message:null;

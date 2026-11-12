@@ -138,7 +138,7 @@ struct GymPartView: View {
     @ViewBuilder private var cardio: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                header(W.tr("KARDIO", "CARDIO") + " · " + (part == .cardioStart ? W.tr("ZAČÁTEK", "START") : W.tr("KONEC", "END")),
+                header(W.tr("KARDIO", "CARDIO") + ", " + (part == .cardioStart ? W.tr("ZAČÁTEK", "START") : W.tr("KONEC", "END")),
                        Self.machine(choice.type), color: W.amber)
                 if let started = run.started {
                     if let end = run.cardioEnd {
@@ -245,11 +245,11 @@ struct GymPartView: View {
         let color = W.green
         let left = run.holdEnd.map { $0.timeIntervalSince(now) } ?? Double(hold.item.seconds)
         var title = hold.item.name
-        if let side = hold.side { title += " · " + (side == "L" ? W.tr("levá", "left") : W.tr("pravá", "right")) }
-        if hold.item.rounds > 1 { title += " · \(hold.round)/\(hold.item.rounds)" }
+        if let side = hold.side { title += ", " + (side == "L" ? W.tr("levá", "left") : W.tr("pravá", "right")) }
+        if hold.item.rounds > 1 { title += ", \(hold.round)/\(hold.item.rounds)" }
         return ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                header((part == .warmup ? W.tr("ROZCVIČKA", "WARM-UP") : W.tr("PROTAŽENÍ", "STRETCHING")) + " · \(moveIndex)/\(routine.items.count)",
+                header((part == .warmup ? W.tr("ROZCVIČKA", "WARM-UP") : W.tr("PROTAŽENÍ", "STRETCHING")) + ", \(moveIndex)/\(routine.items.count)",
                        title, color: color)
                 HStack(spacing: 8) {
                     ring(left: left, total: Double(max(1, hold.item.seconds)), color: color,
@@ -272,7 +272,7 @@ struct GymPartView: View {
         let line = W.tr("\(count) \(count == 1 ? "cvik" : (2...4).contains(count) ? "cviky" : "cviků")", "\(count) \(count == 1 ? "move" : "moves")")
         return ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                header(W.tr("NA ŘADĚ", "UP NEXT") + " · " + name.uppercased(), name, color: W.green)
+                header(W.tr("NA ŘADĚ", "UP NEXT") + ": " + name.uppercased(), name, color: W.green)
                 Text(line).watchFont(12).foregroundStyle(W.secondary)
                 primary(W.tr("Start", "Start")) {
                     run.begun = true

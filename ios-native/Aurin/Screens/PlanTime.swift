@@ -218,7 +218,7 @@ struct TimeThisWeekSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Čas tento týden") {
-                Text(verbatim: Fmt.dayMonth(week.monday) + "–" + Fmt.dayMonth(ISODay.shift(week.monday, 6)) + (week.time?.weekB == true ? " · " + L10n.tr("Týden B") : ""))
+                Text(verbatim: Fmt.dayMonth(week.monday) + "–" + Fmt.dayMonth(ISODay.shift(week.monday, 6)) + (week.time?.weekB == true ? ", " + L10n.tr("Týden B") : ""))
                     .font(Typo.small).foregroundStyle(Palette.secondary)
                 FreeTimeEditor(minutes: $minutes, highlight: planDays)
                 HStack {
@@ -328,7 +328,7 @@ struct DaysAndTimeSheet: View {
         }
     }
 
-    /// "Long run · Automatic, now Saturday" or the chosen day.
+    /// "Long run, Automatic, now Saturday" or the chosen day.
     private var longRow: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {

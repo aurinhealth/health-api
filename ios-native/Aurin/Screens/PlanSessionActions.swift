@@ -232,14 +232,17 @@ final class PlanToast: Identifiable {
     let title: String
     let note: String?
     let cancelled: Bool
+    /// The sign in its circle, when not the move's arrow or the cancel's cross.
+    let symbol: String?
     private let undoAction: () async -> Void
     private let commitAction: (() async -> Void)?
     private var settled = false
 
-    init(title: String, note: String?, cancelled: Bool, undo: @escaping () async -> Void, commit: (() async -> Void)? = nil) {
+    init(title: String, note: String?, cancelled: Bool, symbol: String? = nil, undo: @escaping () async -> Void, commit: (() async -> Void)? = nil) {
         self.title = title
         self.note = note
         self.cancelled = cancelled
+        self.symbol = symbol
         self.undoAction = undo
         self.commitAction = commit
     }
@@ -260,7 +263,7 @@ struct PlanToastView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Image(systemName: toast.cancelled ? "xmark" : "arrow.right")
+                Image(systemName: toast.symbol ?? (toast.cancelled ? "xmark" : "arrow.right"))
                     .scaledFont(13, weight: .bold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent)
                     .frame(width: 30, height: 30)
@@ -352,7 +355,7 @@ struct MovePlannedSheet: View {
 
     private var subtitle: String {
         let parts: [String?] = [session.title, session.minutes.map { Fmt.duration($0) }]
-        return parts.compactMap { $0 }.joined(separator: " · ")
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     /// What the new day already holds, from the week's list.

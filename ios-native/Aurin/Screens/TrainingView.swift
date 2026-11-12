@@ -12,6 +12,9 @@ struct TrainingView: View {
     @State private var jumpDay: DayJump?
     /// Where today's Začít trénink is (NextSession writes, the floating copy reads).
     @State private var startSpot = StartSpot()
+    /// Scrolled down: the tab bar is two circles and the floating button sits between them.
+    @Environment(\.compactTabBar) private var compactBar
+    @Environment(\.wideLayout) private var wide
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -49,10 +52,10 @@ struct TrainingView: View {
             // The page's bottom from a background, which the floating button never moves.
             .background {
                 Color.clear.onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY.rounded() } action: { bottom in
-                    let floor = bottom > 0 ? bottom - StartButtonSpot.barZone : 0
-                    if startSpot.floor != floor { startSpot.floor = floor }
+                    startSpot.place(bottom: bottom, compact: compactBar)
                 }
             }
+            .onChange(of: compactBar) { _, compact in startSpot.place(bottom: startSpot.bottom, compact: compact) }
             .overlay(alignment: .bottom) {
                 floatingStartButton
             }
@@ -87,8 +90,9 @@ struct TrainingView: View {
     }
 
     /// Today's Začít trénink while its place in the card is under the tab bar
-    /// (or further down): the same button floats just above the bar. Not with
-    /// a hidden workout's bar there, nor over an undo toast.
+    /// (or further down): the same button floats just above the bar, or with the
+    /// bar scrolled to two circles in its row between them. Not with a hidden
+    /// workout's bar there, nor over an undo toast.
     private var floatingStart: String? {
         guard toast == nil, model.minimizedGym == nil, !model.immersive else { return nil }
         return startSpot.underBar
@@ -101,17 +105,21 @@ struct TrainingView: View {
             if let date = floatingStart {
                 NavigationLink(value: AppRoute.trainingMode(date)) {
                     Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .frame(maxWidth: .infinity).frame(height: compactBar ? StartButtonSpot.circle : 54)
                         .background(Palette.green, in: Capsule())
                         .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 28)
-                .padding(.bottom, StartButtonSpot.barZone + StartButtonSpot.gap)
+                // In the compact bar's row: between its circles, as wide as the bar (RootView).
+                .padding(.horizontal, compactBar ? StartButtonSpot.circle + StartButtonSpot.gap : 28)
+                .frame(maxWidth: compactBar && wide ? WideLayout.tabBarWidth : .infinity)
+                .padding(.horizontal, compactBar ? StartButtonSpot.barSide : 0)
+                .padding(.bottom, compactBar ? StartButtonSpot.barBottom : StartButtonSpot.barZone + StartButtonSpot.gap)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .animation(.snappy, value: floatingStart == nil)
+        .animation(.snappy, value: compactBar)
     }
 
     private func undo(_ t: PlanToast) {
@@ -266,7 +274,7 @@ struct StrainHero: View {
             } else {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(score.map { Fmt.decimal($0) } ?? "–")
-                        .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
+                        .font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(isAhead ? Palette.faint : Palette.ink)
                     if let note {
                         Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
@@ -297,7 +305,7 @@ struct StrainHero: View {
         if isToday { return L10n.tr("Námaha dnes") }
         if AppModel.shift(training.date, by: -1) == date { return L10n.tr("Námaha včera") }
         if AppModel.shift(training.date, by: 1) == date { return L10n.tr("Námaha zítra") }
-        return L10n.f("Námaha · %@", Fmt.dayShort(date, today: training.date))
+        return L10n.f("Námaha %@", Fmt.dayShort(date, today: training.date))
     }
 
     /// Today's from the training answer; a past day of the week as its bar, an
@@ -447,6 +455,9 @@ struct TodaySessions: View {
 
 /// Today's Začít trénink on Training floats above the tab bar while its place
 /// in the card is under the bar or further down (review 2026-11-02, point 3).
+/// Scrolled down, the bar is two circles and the button sits in their row, so
+/// it no longer covers the last exercise and its "why today" (design review
+/// 2026-11-10, point 11).
 enum StartButtonSpot {
     /// The tab bar (60 pt, Dynamic Type can grow it) and its gap above the
     /// bottom of the safe area (RootView).
@@ -454,6 +465,22 @@ enum StartButtonSpot {
     /// The floating button's gap above the bar. The card's button hands over
     /// at the same line, so the swap happens where the two would overlap.
     static let gap: CGFloat = 8
+    /// The compact bar (RootView, TabBar): its circles, its side and bottom gaps.
+    static let circle: CGFloat = 52
+    static let barSide: CGFloat = 20
+    static let barBottom: CGFloat = 8
+
+    /// The line the card's button hands over at, `gap` under it: the top of
+    /// the bar, so the card's button never shows under the bar or its circles.
+    static func floor(bottom: CGFloat, compact: Bool) -> CGFloat {
+        guard bottom > 0 else { return 0 }
+        return bottom - (compact ? barBottom + circle : barZone)
+    }
+}
+
+extension EnvironmentValues {
+    /// The tab bar is scrolled to its compact form (RootView), for Training's floating button.
+    @Entry var compactTabBar = false
 }
 
 /// Where today's Začít trénink is on Training: NextSession writes, TrainingView's
@@ -462,10 +489,18 @@ enum StartButtonSpot {
 final class StartSpot {
     /// The day of the button while it sits under the tab bar or further down.
     var underBar: String?
-    /// The top of the tab bar on screen (global), 0 before it is measured.
+    /// The line the card's button hands over at (global), 0 before it is measured.
     var floor: CGFloat = 0
+    /// The page's bottom (global), kept for when the bar changes its form.
+    @ObservationIgnored var bottom: CGFloat = 0
     /// The day whose button floats right now: its button in the card is hidden.
     var floating: String?
+
+    func place(bottom: CGFloat, compact: Bool) {
+        self.bottom = bottom
+        let floor = StartButtonSpot.floor(bottom: bottom, compact: compact)
+        if self.floor != floor { self.floor = floor }
+    }
 
     func report(_ day: String, under: Bool) {
         if under { if underBar != day { underBar = day } }
@@ -564,7 +599,7 @@ struct NextSession: View {
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: " · ")
+        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// Today: where the workout takes the day's strain ("námaha dnes ~13,4"), as
@@ -577,20 +612,20 @@ struct NextSession: View {
     }
 
     /// Two strains on one day: the loads add up on the saturating 0–21 curve
-    /// (strainScore in src/recovery-model.js), 21 · (1 − e^(−load / 225)).
+    /// (strainScore in src/recovery-model.js), 21, (1 − e^(−load / 225)).
     static func dayStrain(_ a: Double, adding b: Double) -> Double {
         let left = (1 - min(a, 20.9) / 21) * (1 - min(b, 20.9) / 21)
         return ((21 * (1 - left)) * 10).rounded() / 10
     }
 
     /// A gym plan as rows (Petr, 2026-10-30): exercises, sets and the main muscles in one
-    /// line, then each exercise with sets × reps · weight; five, the rest in the gym day.
+    /// line, then each exercise with sets × reps, weight; five, the rest in the gym day.
     private func exerciseList(_ lines: [TrainingSnapshot.Session.Line]) -> some View {
         // What is still left: sets ticked off in the gym day leave the count.
         let sets = lines.reduce(0) { $0 + Self.left($1) }
         let summary = [L10n.plural("%lld cviků", lines.count), L10n.plural("%lld sérií", sets)] + (session.muscles ?? []).prefix(3)
         return VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: summary.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
+            Text(verbatim: summary.joined(separator: ", ")).font(Typo.small).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 6)
             ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { _, line in
@@ -620,9 +655,9 @@ struct NextSession: View {
         }
     }
 
-    /// "8–10 · 16 kg": the heaviest planned set's reps and weight.
+    /// "8–10, 16 kg": the heaviest planned set's reps and weight.
     static func amount(_ line: TrainingSnapshot.Session.Line) -> String {
-        [line.reps, line.kg.map(EquipmentView.kg)].compactMap { $0 }.joined(separator: " · ")
+        [line.reps, line.kg.map(EquipmentView.kg)].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// The exercise's work sets not yet ticked off.
@@ -630,9 +665,9 @@ struct NextSession: View {
 
     private var detail: String? {
         if !session.exercises.isEmpty {
-            let shown = session.exercises.prefix(3).joined(separator: " · ")
+            let shown = session.exercises.prefix(3).joined(separator: ", ")
             let rest = session.exercises.count - 3
-            return rest > 0 ? shown + " · " + L10n.plural("a %lld dalších", rest) : shown
+            return rest > 0 ? shown + ", " + L10n.plural("a %lld dalších", rest) : shown
         }
         return session.description
     }
@@ -646,7 +681,7 @@ struct EventCard: View {
     var body: some View {
         Card {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr("Závod") + (event.date.map { " · " + Fmt.dayMonth($0) } ?? ""))
+                SectionLabel(text: L10n.tr("Závod") + (event.date.map { ", " + Fmt.dayMonth($0) } ?? ""))
                 Spacer()
             }
             HStack(alignment: .lastTextBaseline) {
@@ -686,7 +721,7 @@ struct EventCard: View {
     private func caption(_ phase: TrainingSnapshot.Phase) -> String {
         switch phase.state {
         case "done": return L10n.tr("hotovo")
-        case "now": return phase.week.map { w in L10n.f("teď · týden %@/%@", String(w), String(phase.weeks ?? w)) } ?? L10n.tr("teď")
+        case "now": return phase.week.map { w in L10n.f("teď, týden %@/%@", String(w), String(phase.weeks ?? w)) } ?? L10n.tr("teď")
         default: return phase.from.map { L10n.f("od %@", Fmt.dayMonth($0)) } ?? ""
         }
     }
@@ -696,7 +731,7 @@ struct EventCard: View {
 
 struct FormWidget: View {
     let form: TrainingSnapshot.Form
-    /// "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden", only when worth a line.
+    /// "Posledních 7 dní vs. obvyklých 28: Nad obvyklou, jednotvárný týden", only when worth a line.
     var loadNote: String? = nil
     var size: WidgetSize = .small
 
@@ -739,7 +774,7 @@ extension FormWidget {
         if monotony?.high == true {
             parts.append(parts.isEmpty ? L10n.tr("Jednotvárný týden") : L10n.tr("jednotvárný týden"))
         }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 }
 
@@ -936,11 +971,11 @@ struct ZonesWidget: View {
                 }
                 ZoneLegend(week: week)
                 // Why 62 + 28 makes 118 (chart review point 12).
-                Text("Intenzivní a maximální minuty se počítají dvakrát · WHO 150 min týdně")
+                Text("Intenzivní a maximální minuty se počítají dvakrát. WHO doporučuje 150 min týdně.")
                     .font(Typo.tiny).foregroundStyle(Palette.faint)
             } else {
                 // An answer from before the weeks were sent.
-                WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
+                WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + ", " + Fmt.hoursMinutesLong(zones.minutes))
                 ZoneBar(parts: parts)
             }
         }

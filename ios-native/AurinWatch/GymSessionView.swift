@@ -27,7 +27,7 @@ struct GymSessionView: View {
     @State private var now = Date()
     @State private var list = false
     @State private var summary = false
-    /// The exercise whose set − just removed: "Set removed · Undo" for 3 s.
+    /// The exercise whose set − just removed: "Set removed, Undo" for 3 s.
     @State private var removed: Int?
     /// Ended by itself after 30 min without a set: what was saved, until Done.
     @State private var autoSaved: AutoSaved?
@@ -307,7 +307,7 @@ struct GymSessionView: View {
         return true
     }
 
-    /// "Up next · Gym": the exercises came on after the part before and wait for Start gym.
+    /// "Up next, Gym": the exercises came on after the part before and wait for Start gym.
     private func gymReady(_ gym: WatchGym) -> some View {
         let left = gym.exercises.filter { $0.lifts.contains { !$0.done } }
         let sets = left.reduce(0) { $0 + $1.lifts.filter { !$0.done && !$0.warmup }.count }
@@ -317,11 +317,11 @@ struct GymSessionView: View {
         let setsLine = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
         return ScrollView {
             VStack(alignment: .leading, spacing: 5) {
-                Text(W.tr("NA ŘADĚ · POSILOVNA", "UP NEXT · GYM")).watchFont(12, .semibold).foregroundStyle(W.secondary)
+                Text(W.tr("NA ŘADĚ: POSILOVNA", "UP NEXT: GYM")).watchFont(12, .semibold).foregroundStyle(W.secondary)
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Text(verbatim: first.map { $0.shown ?? $0.name } ?? W.tr("Posilovna", "Gym")).watchFont(16, .semibold).foregroundStyle(W.ink)
                     .lineLimit(1).minimumScaleFactor(0.7)
-                Text(exercises + " · " + setsLine).watchFont(12).foregroundStyle(W.secondary)
+                Text(exercises + ", " + setsLine).watchFont(12).foregroundStyle(W.secondary)
                 Button {
                     gymWaits = false
                     workout.worked()
@@ -436,7 +436,7 @@ struct GymSessionView: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(W.tr("Technika a poznámka", "Technique and note"))
-            // "Last time 97.5 × 6 · aim: hard" (mockup "u cviku" 4); the tightest
+            // "Last time 97.5 × 6, aim: hard" (mockup "u cviku" 4); the tightest
             // fit keeps it only without the superset's line above.
             if let line = GymText.info(lift, machineLb: gym.machineLb(row: lift.row)), fit != .tight || supersetLine(gym, lift, e) == nil {
                 Text(line).watchFont(12).foregroundStyle(W.muted)
@@ -450,7 +450,7 @@ struct GymSessionView: View {
                     if removed == e {
                         // Three seconds to take a removed set back (watch audit B5).
                         Button { undoRemove(e) } label: {
-                            (Text(W.tr("Série odebrána · ", "Set removed · ")).foregroundColor(W.secondary)
+                            (Text(W.tr("Série odebrána. ", "Set removed. ")).foregroundColor(W.secondary)
                              + Text(W.tr("Vrátit", "Undo")).foregroundColor(W.amber))
                                 .watchFont(12, .semibold)
                                 .lineLimit(1).minimumScaleFactor(0.7)
@@ -516,17 +516,17 @@ struct GymSessionView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Mockup "supersérie": "SUPERSET A · 1/2 · then Seated row", or after the
+    /// Mockup "supersérie": "SUPERSET A, 1/2, then Seated row", or after the
     /// round's last exercise the rest that follows it; nil outside a superset.
     private func supersetLine(_ gym: WatchGym, _ lift: WatchGym.Lift, _ e: Int) -> String? {
         guard !lift.warmup, let group = gym.superset(of: e), let letter = gym.exercises[e].superset,
               let at = group.firstIndex(of: e) else { return nil }
-        var text = W.tr("SUPERSÉRIE", "SUPERSET") + " \(letter) · \(at + 1)/\(group.count)"
+        var text = W.tr("SUPERSÉRIE", "SUPERSET") + " \(letter), \(at + 1)/\(group.count)"
         if let next = gym.next(after: lift.row), next.exercise != e || next.turn != nil {
             switch next.turn {
-            case .partner?: text += W.tr(" · pak ", " · then ") + gym.exercises[next.exercise].title
-            case .round?: text += W.tr(" · pak pauza \(lift.rest) s", " · rest \(lift.rest) s after")
-            case nil: text += W.tr(" · pak pauza \(gym.restBefore(next.exercise)) s", " · rest \(gym.restBefore(next.exercise)) s after")
+            case .partner?: text += W.tr(", pak ", ", then ") + gym.exercises[next.exercise].title
+            case .round?: text += W.tr(", pak pauza \(lift.rest) s", ", rest \(lift.rest) s after")
+            case nil: text += W.tr(", pak pauza \(gym.restBefore(next.exercise)) s", ", rest \(gym.restBefore(next.exercise)) s after")
             }
         }
         return text
@@ -583,7 +583,7 @@ struct GymSessionView: View {
             let at = (numbers.firstIndex(of: lift.number) ?? 0) + 1
             text = (superset ? W.tr("Kolo", "Round") : W.tr("Série", "Set")) + " \(at)" + W.tr(" z ", " of ") + "\(numbers.count)"
         }
-        if side, let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
+        if side, let side = lift.side { text += ", " + (side == "L" ? "L" : W.tr("P", "R")) }
         return text
     }
 
@@ -599,7 +599,7 @@ struct GymSessionView: View {
         .buttonStyle(.plain)
     }
 
-    /// One set fewer, with "Set removed · Undo" for three seconds.
+    /// One set fewer, with "Set removed, Undo" for three seconds.
     private func removeSet(_ e: Int) {
         store.change(.removeSet, exercise: e)
         removed = e
@@ -807,7 +807,7 @@ struct GymSessionView: View {
                 Text(GymText.elapsed(workout.elapsed)).font(W.serif(40)).foregroundStyle(W.muted).monospacedDigit()
                 if let gym = store.gym, let lift = currentLift(in: gym),
                    let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
-                    Text(e.title + " · " + label(lift, in: e)).watchFont(12).foregroundStyle(W.muted)
+                    Text(e.title + ", " + label(lift, in: e)).watchFont(12).foregroundStyle(W.muted)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
                 Button {
@@ -858,7 +858,7 @@ struct GymSessionView: View {
                     .accessibilityValue(W.tr("zbývá ", "") + W.spoken(seconds: left.rounded(.up)) + W.tr("", " left"))
                     if let gym, let lift, let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(W.tr("Další · ", "Next · ") + e.title).watchFont(12).foregroundStyle(W.secondary)
+                            Text(W.tr("Další: ", "Next: ") + e.title).watchFont(12).foregroundStyle(W.secondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                             Text(GymText.weight(lift.kg ?? 0, machineLb: e.pounds == true) + " × \(lift.reps ?? 0)").watchFont(15, .semibold)
                                 .foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
@@ -1082,7 +1082,7 @@ struct GymSessionView: View {
     private var stillWorking: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
-                Text(W.tr("Posilovna", "Gym") + " · \(Int(workout.elapsed / 60)) min")
+                Text(W.tr("Posilovna", "Gym") + ", \(Int(workout.elapsed / 60)) min")
                     .watchFont(12, .semibold).foregroundStyle(W.amber).textCase(.uppercase)
                 Text(W.tr("Pořád cvičíš?", "Still working out?")).font(W.serif(24)).foregroundStyle(W.ink)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1115,7 +1115,7 @@ struct GymSessionView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(W.tr("Trénink uložen", "Workout saved"))
                     .watchFont(12, .semibold).foregroundStyle(W.green).textCase(.uppercase)
-                Text(W.tr("Posilovna", "Gym") + " · \(s.minutes) min").font(W.serif(24)).foregroundStyle(W.ink)
+                Text(W.tr("Posilovna", "Gym") + ", \(s.minutes) min").font(W.serif(24)).foregroundStyle(W.ink)
                 Text(W.tr("Konec při poslední sérii, ", "Ended at your last set, ") + W.dateFormatter("H:mm", posix: true).string(from: s.end) + ".")
                     .watchFont(13).foregroundStyle(W.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1325,11 +1325,11 @@ struct GymExerciseList: View {
         }
     }
 
-    /// "Bike · no limit", "5 moves", "6 min".
+    /// "Bike, no limit", "5 moves", "6 min".
     private func subtitle(_ part: GymDayPart, parts: GymDayParts, day: GymDay) -> String {
         if part.isCardio {
             let choice = parts.choice(part)
-            return GymPartView.machine(choice.type) + " · " + (choice.minutes > 0 ? "\(choice.minutes) min" : W.tr("bez limitu", "no limit"))
+            return GymPartView.machine(choice.type) + ", " + (choice.minutes > 0 ? "\(choice.minutes) min" : W.tr("bez limitu", "no limit"))
         }
         let routine = parts.moves(part, day: day)
         if part == .warmup {
@@ -1437,7 +1437,7 @@ struct GymOptionsView: View {
         var parts: [String] = []
         if let sets = o.sets { parts.append("\(sets) × " + (o.reps ?? "–")) }
         if let kg = o.kg, kg > 0 { parts.append(GymText.weight(kg)) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     private func load() async {
@@ -1473,7 +1473,7 @@ struct GymSummary: View {
                 HStack(spacing: 4) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text(row.name).watchFont(13, .semibold).foregroundStyle(W.ink).lineLimit(1)
-                        Text(W.number(part.kcal) + " kcal" + (part.heartRate.map { " · " + W.number($0) + " bpm" } ?? ""))
+                        Text(W.number(part.kcal) + " kcal" + (part.heartRate.map { ", " + W.number($0) + " bpm" } ?? ""))
                             .watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     Spacer(minLength: 4)
@@ -1557,7 +1557,7 @@ struct GymSummary: View {
                         HStack {
                             Text(e.title).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text("\(done.count) × \(done.last?.reps ?? 0) · " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
+                            Text("\(done.count) × \(done.last?.reps ?? 0), " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
                                 .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .watchFont(12)

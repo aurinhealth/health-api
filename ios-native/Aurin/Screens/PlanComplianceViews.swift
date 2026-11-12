@@ -220,8 +220,8 @@ struct PlanComplianceSheet: View {
         if step.status == "missing" { return L10n.tr("chybí") }
         let text = step.text ?? ""
         switch step.status {
-        case "under": return text + " · " + L10n.tr("pod pásmem")
-        case "over": return text + " · " + L10n.tr("nad pásmem")
+        case "under": return text + ", " + L10n.tr("pod pásmem")
+        case "over": return text + ", " + L10n.tr("nad pásmem")
         default: return text
         }
     }
@@ -369,14 +369,14 @@ struct GymComplianceSection: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "4 z 4 sérií · 80 kg × 8, 8, 7, 7", "0 ze 3 sérií · vynecháno".
+    /// "4 z 4 sérií, 80 kg × 8, 8, 7, 7", "0 ze 3 sérií, vynecháno".
     static func detail(_ e: PlanCompliance.Exercise) -> String {
         let count = L10n.isEnglish ? "\(e.doneSets) of \(e.plannedSets) " + (e.plannedSets == 1 ? "set" : "sets")
             : "\(e.doneSets) \(GymLiveActivity.preposition(e.plannedSets)) \(e.plannedSets) " + (e.plannedSets == 1 ? "série" : "sérií")
-        guard !e.sets.isEmpty else { return count + " · " + L10n.tr("vynecháno") }
+        guard !e.sets.isEmpty else { return count + ", " + L10n.tr("vynecháno") }
         let reps = e.sets.compactMap(\.reps).map { Fmt.int($0) }.joined(separator: ", ")
         let kgs = Set(e.sets.compactMap(\.kg))
         let load = kgs.isEmpty ? L10n.tr("vlastní váha") : kgs.count == 1 ? kgs.first.map { Fmt.int(Units.weight($0)) + " " + Units.weightUnit } : nil
-        return count + " · " + (load.map { $0 + " × " } ?? "") + reps
+        return count + ", " + (load.map { $0 + " × " } ?? "") + reps
     }
 }

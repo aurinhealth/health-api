@@ -124,7 +124,7 @@ struct ShareSheet: View {
             guard let item = pickedPhoto else { return }
             pickedPhoto = nil
             Task {
-                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                guard let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) else { return }
                 flowPhoto = SharePhoto.fitted(image)
                 photoFlow = .place(fromLibrary: true)
             }
@@ -299,7 +299,7 @@ struct ShareSheet: View {
         let date = (kind == .week ? week?.start : nil) ?? day?.date ?? food?.date ?? workout?.date ?? AppModel.localDate(Date())
         let title = kind == .week ? week.map { ShareText.range($0.start, $0.end) } ?? ShareText.date(date) : ShareText.date(date)
         guard let url = ShareExport.file(image, name: "Aurin-" + kind.rawValue + "-" + date) else { return }
-        ShareExport.present(url, title: "Aurin · " + title, image: image)
+        ShareExport.present(url, title: "Aurin: " + title, image: image)
     }
 
     private func shareToInstagram() {

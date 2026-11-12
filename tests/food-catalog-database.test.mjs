@@ -30,7 +30,7 @@ function database() {
 function setup() {
   const core=database(),foods=createD1(),shards=[database(),database()];
   foods.sqlite.exec(read('food-migrations/0001_catalog.sql'));
-  core.sqlite.exec("INSERT INTO users(id,email) VALUES(1,'owner@example.test'),(3,'user3@example.test'),(4,'user4@example.test'); INSERT INTO user_data_routes(user_id,shard_key) VALUES(1,'legacy'),(3,'data-001'),(4,'data-002'); INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,max_users) VALUES('data-001','USER_DATA_001','ready',1,10),('data-002','USER_DATA_002','ready',1,10); UPDATE schema_meta SET value='1' WHERE key='user_data_sharding_enabled'; INSERT INTO schema_meta(key,value) VALUES('tenancy_version','1')");
+  core.sqlite.exec("INSERT INTO users(id,email) VALUES(1,'owner@example.test'),(3,'user3@example.test'),(4,'user4@example.test'); INSERT INTO user_consents(user_id,kind,version,granted_at) VALUES(3,'health','2026-11-06','2026-11-06T08:00:00Z'),(4,'health','2026-11-06','2026-11-06T08:00:00Z'); INSERT INTO user_data_routes(user_id,shard_key) VALUES(1,'legacy'),(3,'data-001'),(4,'data-002'); INSERT INTO user_data_shards(shard_key,binding_name,state,accepting_new,max_users) VALUES('data-001','USER_DATA_001','ready',1,10),('data-002','USER_DATA_002','ready',1,10); UPDATE schema_meta SET value='1' WHERE key='user_data_sharding_enabled'; INSERT INTO schema_meta(key,value) VALUES('tenancy_version','1')");
   const env={DB:core,FOODS:foods,FOOD_CATALOG_ROUTING:'true',FOOD_CATALOG_DB_ID:'foods',USER_DATA_ROUTING:'true',USER_DATA_001:shards[0],USER_DATA_002:shards[1]};
   const databases={core,foods};
   const api={

@@ -131,7 +131,7 @@ test('simple, planning and block requests route to configurable Luna and Sol',as
     assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol','gpt-6-luna']);
     assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','low','low','low']);assert.deepEqual(calls.map(c=>c.max_output_tokens),[4000,16000,25000,6000]);
     // A quick question still sees the athlete's data.
-    assert.match(calls[3].input[0].content,/"ftp":265/);
+    assert.match(calls[3].input[0].content,/"ftp":265/);assert.equal(calls[3].prompt_cache_options,undefined,"Luna keeps the default cache");
     assert.ok(calls.every(c=>c.store===false));
     // The effort of complex answers can be raised on the server.
     await askCoach({...env,OPENAI_REASONING_EFFORT:'medium'},'Naplánuj zítřejší posilovnu',{});

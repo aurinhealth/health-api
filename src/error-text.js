@@ -5,7 +5,7 @@
 // guards of the user databases (tenancy.js, user-data-routing.js), a missing
 // secret, a request body that isn't JSON, Cloudflare's own runtime errors and
 // another service's answer quoted after its status ("Intervals.icu HTTP 500: {…}").
-const TECHNICAL = /\b(SQLITE_\w+|D1_\w+|no such (table|column)|Unscoped query|syntax error|constraint failed|UNIQUE constraint|FOREIGN KEY|TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|Cannot read propert|undefined|null is not|NaN|stack|at \w+ \(|SELECT |INSERT |UPDATE |DELETE FROM)\b|user id is required|central and user databases|must belong to one database|cannot be dumped|dump is not available|is not configured|Unexpected (token|end of JSON)|is not valid JSON|JSON at position|Too many subrequests|Network connection lost|internal error; reference|HTTP \d{3}: /;
+const TECHNICAL = /\b(SQLITE_\w+|D1_\w+|no such (table|column)|Unscoped query|syntax error|constraint failed|UNIQUE constraint|FOREIGN KEY|TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|Cannot read propert(?:y|ies)|undefined|null is not|NaN|stack|at \w+ \(|SELECT |INSERT |UPDATE |DELETE FROM)\b|user id is required|central and user databases|must belong to one database|cannot be dumped|dump is not available|is not configured|Unexpected (token|end of JSON)|is not valid JSON|JSON at position|Too many subrequests|Network connection lost|internal error; reference|HTTP \d{3}: /;
 
 export function technicalText(text) {
   return typeof text === "string" && TECHNICAL.test(text);

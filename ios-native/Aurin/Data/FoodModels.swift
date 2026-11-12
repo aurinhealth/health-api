@@ -182,11 +182,16 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// hasn't settled yet; reported_by_me when this user did.
     var reported: Bool?
     var reported_by_me: Bool?
+    /// The amount last logged of an own food, in its unit (src/personal-foods.js):
+    /// offered first, and what "+" in Poslední/Časté adds.
+    var last_amount: Double?
+    /// Who the values come from, as the row shows it ("USDA" for a basic food, src/staples.js).
+    var source_name: String?
 
     enum CodingKeys: String, CodingKey {
         case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
         case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key, serving_name, origin
-        case reported, reported_by_me
+        case reported, reported_by_me, last_amount, source_name
     }
 
     init(name: String, brand: String? = nil, calories_100g: Double? = nil, protein_100g: Double? = nil, carbs_100g: Double? = nil,
@@ -228,6 +233,8 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         origin = value(.origin)?.string
         reported = try? c.decodeIfPresent(Bool.self, forKey: .reported)
         reported_by_me = try? c.decodeIfPresent(Bool.self, forKey: .reported_by_me)
+        last_amount = value(.last_amount)?.number.flatMap { $0 > 0 ? $0 : nil }
+        source_name = value(.source_name)?.string?.nilIfBlank
     }
 
     var id: String { (barcode ?? "") + "|" + name + "|" + (brand ?? "") + "|" + (source ?? "") }
@@ -235,11 +242,14 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var perPortion: Bool { nutrition_basis == "portion" }
     var unit: String { perPortion ? "portion" : nutrition_basis == "ml" ? "ml" : "g" }
 
-    /// The amount offered first: a serving, else the package, else 100.
-    var defaultAmount: Double {
+    /// The amount offered first: the one last logged, else a serving, else the package, else 100.
+    var defaultAmount: Double { last_amount ?? firstAmount }
+
+    /// A serving, else the package up to 500, else 100.
+    var firstAmount: Double {
         if perPortion { return 1 }
         if let s = usableServing { return s }
-        if let q = Self.leadingNumber(quantity), q > 0, q <= 500 { return q }
+        if let q = Self.size(quantity, unit: unit), q <= 500 { return q }
         return 100
     }
 
@@ -251,15 +261,17 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         return Double(digits)
     }
 
-    /// A size in the food's own unit: 1000 from "1 kg" for grams, 500 from
-    /// "0,5 l" for ml. nil for "2 x 125 g", where the first number is a count.
+    /// A size in the food's own unit: 1000 from "1 kg", 500 from "0,5 l",
+    /// 330 from "33 cl". nil for "2 x 125 g", where the first number is a count.
     static func size(_ value: JSONValue?, unit: String) -> Double? {
         guard let n = leadingNumber(value), n > 0 else { return nil }
         guard case .string(let s) = value else { return n }
         let text = s.lowercased()
         if text.contains("x") || text.contains("×") { return nil }
-        if unit == "g", text.range(of: #"\d\s*kg"#, options: .regularExpression) != nil { return n * 1000 }
-        if unit == "ml", text.range(of: #"\d\s*l\b"#, options: .regularExpression) != nil { return n * 1000 }
+        // g and ml are taken as 1:1, so a drink counted per 100 g in "1 l" is 1000.
+        if text.range(of: #"\d\s*(kg|l)\b"#, options: .regularExpression) != nil { return n * 1000 }
+        if text.range(of: #"\d\s*dl\b"#, options: .regularExpression) != nil { return n * 100 }
+        if text.range(of: #"\d\s*cl\b"#, options: .regularExpression) != nil { return n * 10 }
         return n
     }
 
@@ -294,6 +306,9 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         }
         return out
     }
+
+    /// A basic food from a food composition table (src/staples.js): listed first, with a check mark.
+    var isTableFood: Bool { source == "table" }
 
     /// Values AI estimated, also once saved as the user's own food: "AI odhad".
     var isEstimate: Bool { source == "ai-estimate" || origin == "ai-estimate" }
@@ -465,4 +480,26 @@ struct NutrientDetail: Decodable, Equatable, Identifiable {
     var pro: Bool? = nil
 
     var id: String { key }
+}
+
+/// Which foods food search lists first (world-foods.js MARKETS): cz for
+/// products sold in Czechia and Slovakia, intl for food tables and English
+/// names. Settings > Výživa > Region potravin; automatic follows the iPhone's region.
+enum FoodRegion {
+    static let key = "foodRegion"
+    static let automatic = "auto"
+    static var phone: String {
+        let region = Locale.current.region?.identifier
+        return region == "CZ" || region == "SK" ? "cz" : "intl"
+    }
+    static var market: String {
+        let chosen = UserDefaults.standard.string(forKey: key) ?? automatic
+        return chosen == automatic ? phone : chosen
+    }
+    static func title(_ market: String) -> String {
+        market == "cz" ? "Česko a Slovensko" : "Mezinárodní"
+    }
+    static var options: [(String, String)] {
+        [(automatic, L10n.tr("Automaticky") + " (" + L10n.tr(title(phone)) + ")"), ("cz", title("cz")), ("intl", title("intl"))]
+    }
 }

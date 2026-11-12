@@ -57,6 +57,10 @@ final class APIClient: @unchecked Sendable {
     /// another device; AppModel shows the paused screen and stops Apple Health.
     var onHealthPaused: (@Sendable () -> Void)?
 
+    /// 403 health_consent_required (src/health-pause.js consentRefusal): the account
+    /// has not given the consent to health data; AppModel asks for it again.
+    var onHealthConsentRequired: (@Sendable () -> Void)?
+
     /// A client made without an address follows Nastavení → Testování → Server,
     /// also when it is switched while the client lives (AppDelegate's, Apple Health's).
     private let fixedBaseURL: URL?
@@ -160,6 +164,9 @@ final class APIClient: @unchecked Sendable {
                         case "progress": continuation.yield(.progress(object["message"] as? String ?? ""))
                         case "answer": continuation.yield(.answer(object["answer"] as? String ?? ""))
                         case "chat": if let id = object["chatId"] as? Int { continuation.yield(.chat(id)) }
+                        case "step":
+                            if let step = object["step"], let data = try? JSONSerialization.data(withJSONObject: step),
+                               let decoded = try? decoder.decode(CoachStep.self, from: data) { continuation.yield(.step(decoded)) }
                         case "error": throw APIError.message(object["message"] as? String ?? L10n.tr("Kouč teď neodpověděl."))
                         case "done":
                             let result = try JSONSerialization.data(withJSONObject: object["result"] ?? [:])
@@ -387,7 +394,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func movePlanned(eventId: String, to date: String) async throws {
-        let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)])
+        let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)], repeatable: true)
     }
 
     /// Another day and the time of day: time "" leaves the day without one,
@@ -395,7 +402,7 @@ final class APIClient: @unchecked Sendable {
     func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
         var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
         if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
-        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body)
+        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body, repeatable: true)
         return change
     }
 
@@ -405,7 +412,7 @@ final class APIClient: @unchecked Sendable {
 
     func setPlannedEnvironment(eventId: String, indoor: Bool) async throws {
         let _: JSONValue = try await send("/app/api/planned/environment", method: "POST",
-                                          body: ["eventId": JSONValue.string(eventId), "environment": .string(indoor ? "indoor" : "outdoor")])
+                                          body: ["eventId": JSONValue.string(eventId), "environment": .string(indoor ? "indoor" : "outdoor")], repeatable: true)
     }
 
     /// How a session went (RPE 1–10 and a note) for the coach.
@@ -491,14 +498,14 @@ final class APIClient: @unchecked Sendable {
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
     func searchFood(name: String, barcode: String? = nil) async throws -> [FoodProduct] {
-        var body: JSONObject = ["name": .string(name)]
+        var body: JSONObject = ["name": .string(name), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodSearchResponse = try await send("/app/api/food/search", method: "POST", body: body)
         return response.candidates ?? response.product.map { [$0] } ?? []
     }
 
     /// Foods saved before: the newest first, or the most often logged.
-    func personalFoods(frequent: Bool = false, limit: Int = 100) async throws -> [FoodProduct] {
+    func personalFoods(frequent: Bool = false, limit: Int = 50) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
         let response: Response = try await get("/app/api/food/personal?limit=\(limit)" + (frequent ? "&sort=frequent" : ""))
         return response.products ?? []
@@ -524,7 +531,7 @@ final class APIClient: @unchecked Sendable {
     /// estimate: when the web has no such product, typical values marked as
     /// an AI estimate (source "ai-estimate").
     func lookupFood(name: String, barcode: String? = nil, estimate: Bool = true) async throws -> FoodProduct? {
-        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate)]
+        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodLookupResponse = try await send("/app/api/food/ai-lookup", method: "POST", body: body)
         return response.status == "ok" ? response.product : nil
@@ -759,7 +766,8 @@ final class APIClient: @unchecked Sendable {
 
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
-    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426).
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426
+    /// and for 403 health_consent_required, which waits for the consent).
     /// The server's answer (the new entry's id, for a meal or drink).
     @discardableResult
     func sendQueued(_ item: OutboxItem) async throws -> Data {
@@ -779,6 +787,11 @@ final class APIClient: @unchecked Sendable {
                 throw OutboxRefusal.outdated(message)
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
+            // No health consent yet: the write waits for it instead of being dropped.
+            if json?["status"] as? String == "health_consent_required" {
+                onHealthConsentRequired?()
+                throw OutboxRefusal.outdated(message)
+            }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
@@ -788,12 +801,21 @@ final class APIClient: @unchecked Sendable {
 
     /// timeout: longer for AI that reads photos, which may wait in line on the
     /// server behind the user's other AI calls (src/ai-usage.js claimAiSlot).
-    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B, timeout: TimeInterval? = nil) async throws -> T {
+    /// repeatable: a write that does the same when sent twice (set a place, move
+    /// to a day) goes once more when the connection dropped under it. On mobile
+    /// data iOS often reuses a connection the network has already closed, and
+    /// unlike a GET it does not resend a POST by itself.
+    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B, timeout: TimeInterval? = nil, repeatable: Bool = false) async throws -> T {
         var request = makeRequest(path, method: method)
         if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await load(request)
+        let data: Data, response: URLResponse
+        do {
+            (data, response) = try await load(request)
+        } catch let error as URLError where repeatable && error.code == .networkConnectionLost {
+            (data, response) = try await load(request)
+        }
         try check(response, data)
         do {
             return try decoder.decode(T.self, from: data)
@@ -889,6 +911,7 @@ final class APIClient: @unchecked Sendable {
                 throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
+            if json?["status"] as? String == "health_consent_required" { onHealthConsentRequired?() }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }

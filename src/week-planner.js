@@ -25,15 +25,15 @@ export const ROLE_LABELS = bilingual({
   quality: "Kvalita (intervaly)",
   endurance: "Vytrvalost",
   recovery: "Lehce / regenerace",
-  gym_upper: "Posilovna · s rezervou",
-  gym_full: "Posilovna · celé tělo"
+  gym_upper: "Posilovna s rezervou",
+  gym_full: "Posilovna na celé tělo"
 }, {
   long: "Long workout",
   quality: "Quality (intervals)",
   endurance: "Endurance",
   recovery: "Easy / recovery",
-  gym_upper: "Gym · with reserve",
-  gym_full: "Gym · full body"
+  gym_upper: "Gym, with reserve",
+  gym_full: "Full-body gym"
 });
 // What the coach should do with the role (the coach keeps its readiness guardrails).
 export const ROLE_FOCUS = { long: "long_endurance", endurance: "endurance", recovery: "recovery", quality: null };
@@ -406,7 +406,7 @@ export function raceDayRole(x, date, eventDate) {
   const role = left === 1 ? "recovery" : x.sport === "gym" ? "gym_upper" : x.role === "long" ? "endurance" : x.role;
   return role === x.role ? x : { ...x, role, label: ROLE_LABELS[role], share: x.share != null && SHARE[x.role] ? x.share * SHARE[role] / SHARE[x.role] : SHARE[role], ...(x.sport === "gym" ? {} : { focus: ROLE_FOCUS[role] }) };
 }
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null, strained = false } = {}) {
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null, taperDays = 7, strained = false } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
@@ -416,8 +416,13 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   // so does a strained athlete (week-check.js strainOf).
   const hold = Number(rampRate) > 8 || Boolean(strained);
   const planned = Number(plan?.load) > 0 ? Number(plan.load) : null;
-  const target = Math.round(base * (rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
+  // The taper before the main race (its days by the distance, racePhase): the
+  // volume goes down by about 45 % (Bosquet 2007: 41–60 %), for the share of
+  // this week's days that fall in it; the intensity stays (ROLE_RANGE).
+  const taperFrom = eventDate ? new Date(Date.parse(eventDate + "T12:00:00Z") - taperDays * 86400000).toISOString().slice(0, 10) : null;
+  const taper = taperFrom ? 1 - .45 * [0, 1, 2, 3, 4, 5, 6].filter(i => dateOf(i) >= taperFrom && dateOf(i) < eventDate).length / 7 : 1;
+  const target = Math.round(base * Math.min(taper < 1 ? taper : Infinity, rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
   let committed = 0;
   for (let i = 0; i < 7; i++) { const d = info(dateOf(i)); committed += Number(d.done) || 0; if (dateOf(i) >= today) committed += Number(d.planned) || 0; }

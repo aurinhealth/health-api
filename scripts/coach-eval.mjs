@@ -48,19 +48,22 @@ for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
   if (rounds > 1) result.round = round;
   results.push(result);
   const failed = (result.checks || []).filter(c => !c.ok);
-  console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? " · " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
+  console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? ", " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
 }
 
 const mark = (r, severity) => { const list = (r.checks || []).filter(c => c.severity === severity); return list.length ? `${list.filter(c => c.ok).length}/${list.length}` : "–"; };
 const quote = text => String(text || "").split("\n").map(line => "> " + line).join("\n");
 const action = a => [a.type, a.kind, a.minutes ? a.minutes + " min" : "", a.date, a.eventId].filter(Boolean).join(" ");
 const lines = [
-  `# Coach evaluation · ${host}`, "",
+  `# Coach evaluation, ${host}`, "",
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
   ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
+// The AI checker (coach-checker.js): what it cost and how long it took.
+const checked = results.filter(r => r.checker?.ms != null), times = checked.map(r => r.checker.ms).sort((a, b) => a - b);
+if (checked.length) lines.push(`AI kontrolor: ${checked.length} odpovědí, ${checked.reduce((sum, r) => sum + (r.checker.usd || 0), 0).toFixed(3)} USD, medián ${(times[times.length >> 1] / 1000).toFixed(1)} s`, "");
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
-const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)} · ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
 // Stable = every check passed in every round (Petr 2026-11-06: a fail that passes on a rerun is still a flaw).
 if (rounds > 1) {
@@ -68,10 +71,10 @@ if (rounds > 1) {
   lines.push(`## Stabilita: všechny kontroly v ${rounds} kolech`, "", ...scenarios.map(s => { const all = results.filter(r => r.id === s.id), ok = all.filter(clean).length; return `- ${ok === all.length ? "✅" : "❌"} ${s.id} ${ok}/${all.length}`; }), "");
 }
 for (const r of results) {
-  lines.push(`## ${label(r)} · ${r.title}`, "");
+  lines.push(`## ${label(r)}, ${r.title}`, "");
   if (r.status !== "ok") { lines.push(`⚠️ ${r.status}: ${r.message || ""}`, ""); continue; }
   lines.push(`**Sportovec:** ${r.message}`, "", quote(r.answer), "");
-  if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")} · prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");
+  if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")}, prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");
   const failed = r.checks.filter(c => !c.ok);
   if (failed.length) lines.push(...failed.map(c => `- ${c.severity === "safety" ? "❌" : "⚠️"} ${c.name}${c.detail ? ` (${c.detail})` : ""}`), "");
 }

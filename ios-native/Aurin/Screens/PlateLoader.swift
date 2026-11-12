@@ -251,12 +251,12 @@ struct PlateLoaderSheet: View {
         .animation(.snappy, value: total)
     }
 
-    /// "25 + 5 na stranu + tyč 20 kg", "25 + 25 na stranu · stroj se nepočítá".
+    /// "25 + 5 na stranu + tyč 20 kg", "25 + 25 na stranu, stroj se nepočítá".
     private var summary: String {
         let side = plates.map(PlateLoad.text).joined(separator: " + ")
         let barText = PlateLoad.text(bar.weight)
         if plates.isEmpty { return bar.weight > 0 ? L10n.f("Prázdná tyč %@ %@", barText, Units.weightUnit) : L10n.tr("Bez kotoučů") }
-        if bar == .machine { return L10n.f("%@ na stranu · stroj se nepočítá", side) }
+        if bar == .machine { return L10n.f("%@ na stranu, stroj se nepočítá", side) }
         return bar.weight > 0 ? L10n.f("%@ na stranu + tyč %@ %@", side, barText, Units.weightUnit) : L10n.f("%@ na stranu", side)
     }
 
@@ -366,7 +366,7 @@ struct PlateLoaderSheet: View {
                 ForEach(choices, id: \.self) { choice in
                     switch choice {
                     case .none, .machine: Text(choice.name).tag(choice)
-                    default: Text(choice.name + " · " + PlateLoad.text(choice.weight) + " " + Units.weightUnit).tag(choice)
+                    default: Text(choice.name + ", " + PlateLoad.text(choice.weight) + " " + Units.weightUnit).tag(choice)
                     }
                 }
             }

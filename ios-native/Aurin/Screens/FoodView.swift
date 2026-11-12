@@ -113,15 +113,30 @@ struct FoodContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if editing {
-                board
-            } else {
-                content
+            // The same top as Dnes (TabHeader), with the barcode; the week reaches
+            // two weeks ahead. Both stay put while the day below is swiped; a
+            // day drawn beside has none.
+            if page == nil && !editing {
+                VStack(alignment: .leading, spacing: 0) {
+                    TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
+                        HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+                    }
+                    WeekStrip(date: food.date, ahead: true).padding(.top, 14)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
             }
+            VStack(alignment: .leading, spacing: 0) {
+                if editing {
+                    board
+                } else {
+                    content
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, editing ? 16 : 0)
+            .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-        .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
     }
 
     private var board: some View {
@@ -132,22 +147,15 @@ struct FoodContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        // The same top as Dnes (TabHeader), with the barcode; the week reaches two weeks ahead.
-        TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
-            HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
-        }
-        WeekStrip(date: food.date, week: WeekStrip.week(of: food.date, in: page.map(\.today) ?? model.today), ahead: true)
-            .padding(.top, 14)
-
         // A wide window: the day's numbers and the widgets on the left, the meals on the right.
         WideColumns {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
-                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 if let target = food.target {
                     // With its parts the target opens where the numbers come from.
                     let more = food.targetParts != nil ? " ›" : ""
                     let over = (food.kcal ?? 0).rounded() - target.rounded()
-                    Group {
+                    let label = Group {
                         if over >= 1 {
                             // Past the target (its workouts done and planned included): a calm note
                             // in rust, as a limit past on the macros, not the number in red.
@@ -161,7 +169,19 @@ struct FoodContent: View {
                                 .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
                         }
                     }
-                    .onTapGesture { if food.targetParts != nil { showingParts = true } }
+                    if food.targetParts != nil {
+                        // A real button, 44 pt tall to tap, read by VoiceOver as one (design review 2026-11-10, point 12).
+                        Button { showingParts = true } label: {
+                            label.frame(minWidth: 44, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.tr("Cíl dne"))
+                        .accessibilityValue(over >= 1
+                            ? L10n.f("%@ kcal navíc", Fmt.int(over)) + ", " + L10n.f("z %@ kcal", Fmt.int(target))
+                            : L10n.f("%@ kcal", Fmt.int(target)))
+                    } else {
+                        label
+                    }
                 }
             }
             .padding(.top, 30)
@@ -527,7 +547,7 @@ struct DrinksCard: View {
     }
 }
 
-/// "Káva 08:05 · 200 ml → 180".
+/// "Káva 08:05, 200 ml → 180".
 struct DrinkLine: View {
     let drink: FoodSnapshot.Drink
 
@@ -620,17 +640,17 @@ struct PendingFoodRow: View {
         .accessibilityLabel("Zahodit")
     }
 
-    /// "265 kcal · 100 g · dohledáno AI", or a photo's foods and their kcal.
+    /// "265 kcal, 100 g, dohledáno AI", or a photo's foods and their kcal.
     private var detail: String {
         if !item.items.isEmpty {
             let kcal = item.items.compactMap { $0.product.kcal(for: $0.amount) }.reduce(0, +)
-            return L10n.plural("%lld položek na fotce", item.items.count) + " · " + Fmt.int(kcal) + " kcal"
+            return L10n.plural("%lld položek na fotce", item.items.count) + ", " + Fmt.int(kcal) + " kcal"
         }
         guard let product = item.product else { return "" }
         let kcal = product.kcal(for: product.defaultAmount).map { Fmt.int($0) + " kcal" }
         let amount = product.perPortion ? L10n.tr("1 porce") : Fmt.int(product.defaultAmount) + " " + product.unit
         let source = item.query == nil ? L10n.tr("z fotky") : L10n.tr("dohledáno AI")
-        return [kcal, amount, source].compactMap { $0 }.joined(separator: " · ")
+        return [kcal, amount, source].compactMap { $0 }.joined(separator: ", ")
     }
 }
 

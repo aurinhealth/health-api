@@ -297,7 +297,7 @@ extension ShareDay {
             let minutes = workouts.compactMap(\.minutes).reduce(0, +)
             if minutes > 0 {
                 out.append(ShareMetric(key: "Trénink", label: "Trénink", value: Fmt.hoursMinutes(minutes), unit: "h",
-                                       sub: workouts.count == 1 ? workouts[0].title : workouts.map { L10n.tr($0.sportName) }.joined(separator: " · "),
+                                       sub: workouts.count == 1 ? workouts[0].title : workouts.map { L10n.tr($0.sportName) }.joined(separator: ", "),
                                        tone: .amber))
             }
         }
@@ -794,7 +794,7 @@ struct ShareActivityCard: View {
     private var graph: some View {
         let u = s.u
         let sub = [workout.value("Vzdálenost").map { $0.value + " " + $0.unit }, workout.value("Čas").map { $0.value + " h" }]
-            .compactMap { $0 }.joined(separator: " · ")
+            .compactMap { $0 }.joined(separator: ", ")
         let zoneColors = [s.t.zoneGrey, s.t.blue, s.t.green, s.t.amber, s.t.rust, s.t.indigo]
         let list = Array(stats.prefix(3))
         return ZStack(alignment: .topLeading) {

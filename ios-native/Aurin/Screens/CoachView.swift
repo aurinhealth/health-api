@@ -93,6 +93,8 @@ struct CoachView: View {
         var photoMark = false
         /// The seconds the answer took, for one given while the chat was open.
         var answeredIn: Int? = nil
+        /// The coach's thinking steps for an answer given while the chat was open.
+        var steps: [CoachStep] = []
         /// The stored answer on the server, which its thumb points to.
         var serverId: Int? = nil
         /// When the answer came: the time under the last one.
@@ -133,7 +135,7 @@ struct CoachView: View {
                             if !followUps.isEmpty { followUpList }
                             // Until the first words arrive: the coach's bubble with dots and what he is doing;
                             // then the same row under the words while the answer is finished (proposals, preview).
-                            if let progress, sending {
+                            if let progress, sending, !stepsShown {
                                 if waiting {
                                     CoachThinking(text: progress, since: askedAt).id("thinking")
                                 } else {
@@ -200,7 +202,7 @@ struct CoachView: View {
             .onChange(of: galleryItem) {
                 guard let item = galleryItem else { return }
                 Task {
-                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { photo = image }
+                    if let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) { photo = image }
                     galleryItem = nil
                 }
             }
@@ -313,8 +315,11 @@ struct CoachView: View {
               input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let last = lastAnswer, last.food == nil else { return [] }
         let asked = Set(messages.filter(\.mine).map { $0.text.lowercased() })
-        let pool = (current?.questions.map(L10n.tr) ?? [])
-            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8)
+        // In the language the athlete writes in, as the coach answers: Czech
+        // questions to Czech messages in an English app, and the other way round.
+        let language = messages.last(where: \.mine).flatMap { L10n.written($0.text) } ?? L10n.language
+        let pool = (current?.questions.map { L10n.tr($0, in: language) } ?? [])
+            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8, language: language)
         var seen = Set<String>()
         return Array(pool.filter { !asked.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }.prefix(3))
     }
@@ -417,6 +422,14 @@ struct CoachView: View {
     }
 
     /// The answer being prepared has no words yet (nor a food card).
+    /// The answer's thinking steps stand in for the waiting row: the bubble
+    /// shows them while the coach works; the row comes back under the words
+    /// for what follows them (the proposals, the workout preview).
+    private var stepsShown: Bool {
+        guard let last = messages.last, !last.mine, !last.steps.isEmpty else { return false }
+        return waiting || last.steps.contains(where: \.running)
+    }
+
     private var waiting: Bool {
         guard let last = messages.last, !last.mine else { return true }
         return last.text.isEmpty && last.food == nil
@@ -517,6 +530,8 @@ struct CoachView: View {
         let asked = Date()
         askedAt = asked
         defer { sending = false; progress = nil }
+        // An answer that failed or was cut keeps no steps: they would spin on without an end.
+        defer { edit(id) { if $0.answeredIn == nil { $0.steps = [] } } }
         // A switch to another app mid-answer: iOS gives about half a minute
         // more before the connection is frozen and lost.
         let background = FinishInBackground("Coach answer")
@@ -544,6 +559,7 @@ struct CoachView: View {
                 switch event {
                 case .progress(let p): progress = p
                 case .chat(let chat): savedIn = chat
+                case .step(let step): edit(id) { $0.steps = CoachStep.merged($0.steps, step) }
                 case .answer(let a):
                     if Date().timeIntervalSince(shownAt) >= 0.1 {
                         edit(id) { $0.text = a }
@@ -558,6 +574,7 @@ struct CoachView: View {
                     edit(id) {
                         if let a = result.answer ?? last { $0.text = a }
                         $0.answeredIn = max(1, Int(Date().timeIntervalSince(asked).rounded()))
+                        $0.steps = CoachStep.shown(result.steps ?? $0.steps, check: result.check?.status)
                         $0.serverId = result.messageId
                         $0.at = Date()
                         $0.actions = result.actions ?? []
@@ -946,7 +963,10 @@ struct BubbleView: View {
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
-            if !bubble.mine, !bubble.note, let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
+            if !bubble.mine, !bubble.note {
+                if !bubble.steps.isEmpty { CoachSteps(steps: bubble.steps, answeredIn: bubble.answeredIn) }
+                else if let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
+            }
             if let photo = bubble.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
                     .frame(width: 210, height: 210)
@@ -1051,9 +1071,8 @@ struct ActionCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark").font(.caption.weight(.bold))
                     Text(verbatim: change).font(Typo.caption.weight(.medium))
-                    Text("·")
                     Button { adjust("undo", nil) } label: { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.plain).padding(.leading, 6)
                 }
                 .foregroundStyle(Palette.green)
                 .disabled(adjusting != nil)
@@ -1063,9 +1082,8 @@ struct ActionCard: View {
                     if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(result).font(Typo.caption.weight(.medium))
                     if canUndo {
-                        Text("·")
-                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
-                            .buttonStyle(.plain)
+                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
+                            .buttonStyle(.plain).padding(.leading, 6)
                     }
                 }
                 .foregroundStyle(Palette.green)
@@ -1104,7 +1122,7 @@ struct ActionCard: View {
         .background(Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// Kratší · Delší · Lehčí · Těžší, then Jiný den with the days ahead; a
+    /// Kratší, Delší, Lehčí, Těžší, then Jiný den with the days ahead; a
     /// choice that doesn't fit the day is grey.
     @ViewBuilder private func quickChoices(_ quick: CoachAction.Quick) -> some View {
         HStack(spacing: 6) {
@@ -1209,14 +1227,14 @@ struct PlanProposalBlock: View {
         }
     }
 
-    /// "Závod: ne 21. 3. · 21,1 km", "Délka: 12 týdnů od 28. 12.", "Týdně: 4 běhy · 3–6 h".
+    /// "Závod: ne 21. 3., 21,1 km", "Délka: 12 týdnů od 28. 12.", "Týdně: 4 běhy, 3–6 h".
     private var rows: [(String, String)] {
         var out: [(String, String)] = []
         let day = { (d: String) in Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d) }
         let weeks = action.weeksCount ?? action.trainingPlan?.weeks.count ?? 0
         let length = L10n.plural("%lld týdnů", weeks)
         if let race = action.raceDate {
-            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + raceDistance($0) } ?? "")))
+            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { ", " + raceDistance($0) } ?? "")))
             out.append((L10n.tr("Délka"), action.startDate.map { L10n.plural("%lld týdnů od %@", weeks, Fmt.dayMonth(action.firstDay ?? $0)) } ?? length))
         } else {
             if let start = action.firstDay ?? action.startDate { out.append((L10n.tr("Začátek"), day(start))) }
@@ -1230,7 +1248,7 @@ struct PlanProposalBlock: View {
             }
             if let m = card.minutes, let lo = m.first, let hi = m.last, hi > 0 {
                 let h = { (x: Int) in String(format: "%.0f", (Double(x) / 60).rounded()) }
-                text += " · " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
+                text += ", " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
             }
             out.append((L10n.tr("Týdně"), text))
         }
@@ -1238,7 +1256,7 @@ struct PlanProposalBlock: View {
     }
 }
 
-/// The proposed session on the coach's card: "Naplánovat · Pá 16. 10.", its
+/// The proposed session on the coach's card: "Naplánovat Pá 16. 10.", its
 /// name, the profile with length, TSS and the hardest step, or the gym
 /// exercises with their sets and weights.
 struct WorkoutPreviewBlock: View {
@@ -1247,7 +1265,7 @@ struct WorkoutPreviewBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L10n.tr("Naplánovat") + (action.date.map { " · " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
                 Text(verbatim: workout.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -1266,7 +1284,11 @@ struct WorkoutPreviewBlock: View {
                         HStack {
                             Text(verbatim: e.name).foregroundStyle(Palette.ink)
                             Spacer(minLength: 8)
-                            Text(verbatim: "\(max(1, e.sets))×\(e.reps)" + (e.kg.isEmpty ? "" : " · \(e.kg) kg")).foregroundStyle(Palette.secondary).monospacedDigit()
+                            HStack(spacing: 12) {
+                                Text(verbatim: "\(max(1, e.sets))×\(e.reps)")
+                                if !e.kg.isEmpty { Text(verbatim: "\(e.kg) kg") }
+                            }
+                            .foregroundStyle(Palette.secondary).monospacedDigit()
                         }
                         .font(Typo.caption)
                         .padding(.vertical, 7)
@@ -1283,8 +1305,8 @@ struct WorkoutPreviewBlock: View {
         }
     }
 
-    /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
-    /// A swim: "45 min · 1 900 m · 1:48 /100 m" in the pool, "1 h · ≈ 2 000 m · by time outside" in open water.
+    /// "1 h, 62 TSS, 88–93 % FTP": the length, the load and the hardest step.
+    /// A swim: "45 min, 1 900 m, 1:48 /100 m" in the pool, "1 h, ≈ 2 000 m, by time outside" in open water.
     private func numbers(_ w: LibraryWorkout) -> String {
         var parts: [String] = []
         if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
@@ -1296,7 +1318,7 @@ struct WorkoutPreviewBlock: View {
                     let slow = top.paceSlow, let fast = top.paceFast {
                 parts.append(ZonesSettingsView.pace((slow + fast) / 2) + " /100 m")
             }
-            return parts.joined(separator: " · ")
+            return parts.joined(separator: ", ")
         }
         if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
         if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
@@ -1304,7 +1326,7 @@ struct WorkoutPreviewBlock: View {
             let lo = top.percentLow ?? hi
             parts.append((lo == hi ? "\(Int(hi))" : "\(Int(lo))–\(Int(hi))") + " % FTP")
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -1549,8 +1571,8 @@ struct CoachThinkingLine: View {
     }
 }
 
-/// One row wherever the app waits for AI: the dots, the step and "· 4 s" from
-/// 3 s. VoiceOver reads the step only, not the seconds.
+/// One row wherever the app waits for AI: the dots, the step and, from 3 s, a
+/// faint "4 s" after it as its own label. VoiceOver reads the step only, not the seconds.
 struct CoachWaitRow: View {
     let text: String
     var since: Date? = nil
@@ -1561,11 +1583,15 @@ struct CoachWaitRow: View {
             CoachDots(size: 6, spacing: 4)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let seconds = Int(context.date.timeIntervalSince(since ?? appeared))
-                (Text(verbatim: text).foregroundColor(Palette.muted)
-                    + Text(verbatim: seconds >= 3 ? " · " + L10n.f("%lld s", seconds) : "").foregroundColor(Palette.faint))
-                    .font(Typo.small)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.25), value: text)
+                HStack(spacing: 8) {
+                    Text(verbatim: text).foregroundStyle(Palette.muted)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.25), value: text)
+                    if seconds >= 3 {
+                        Text(verbatim: L10n.f("%lld s", seconds)).foregroundStyle(Palette.faint).monospacedDigit()
+                    }
+                }
+                .font(Typo.small)
             }
         }
         .accessibilityElement(children: .ignore)
