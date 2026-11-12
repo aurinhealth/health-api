@@ -12,11 +12,12 @@ import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
 import { gymExerciseCatalog, gymAlternatives, gymLoadEstimate, catalogueStartLoad } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
-import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
+import { getStrengthHistory, withHistoryOf, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
 import { assertTrainingAllowed, getAthleteState, usedMemories } from "./athlete-state.js";
 import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
-import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
+import { EXERCISE_INTELLIGENCE, historyFamily } from "./strength-intelligence.js";
+import { normalizeExerciseName } from "./strength-normalization.js";
 import { cleanGymRows, catalogNames, adjustGymPlan } from "./gym-adjust.js";
 import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan } from "./gym-plan-store.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
@@ -128,7 +129,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history,setup,taste,sex]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env)]);
+    const [plan,recent,setup,taste,sex]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env)]);
     // An alternative never done before starts at the generator's catalogue load.
     const start={sex,experience:setup?.experience||''};
     // The plan being built is sent along (not saved yet); else the saved day's.
@@ -136,10 +137,14 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
     // Only what the athlete's gym has (the active place's stations).
     const fits=n=>fitsEquipment(n,setup);
+    // The candidates' own sets older than the recent window too (withHistoryOf).
+    let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
+    const asked=(Array.isArray(many)?many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)).slice(0,20):[exercise]);
+    const candidates=asked.flatMap(name=>gymAlternatives(name,recent,inPlan,taste,fits).slice(0,Array.isArray(many)?3:8).map(a=>a.name));
+    const history=await withHistoryOf(env.DB,recent,[...new Set(candidates)].flatMap(historyFamily));
     // ?exercises=[...] (the Apple Watch, when the day's plan comes): three
     // for each exercise of the plan in one request, kept on the watch so a
     // swap works without the iPhone and offline. The same reads as one swap.
-    let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
     if(Array.isArray(many)){
       const names=[...new Set(many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)))].slice(0,20);
       const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits,start).slice(0,3)
@@ -152,7 +157,8 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // ("Vybrat jiný cvik"): as an alternative's, from the history or the catalogue.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
     const exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [history,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
+    const [recent,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
+    const history=await withHistoryOf(env.DB,recent,historyFamily(normalizeExerciseName(exercise)));
     const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
     return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
   }
