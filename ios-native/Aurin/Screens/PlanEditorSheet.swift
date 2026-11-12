@@ -92,9 +92,11 @@ struct PlanEditorSheet: View {
             }
             .sheet(item: Binding(get: { swapping.map { Named(name: $0) } }, set: { swapping = $0?.name })) { item in
                 if let date {
-                    AlternativesSheet(date: date, exercise: item.name, inPlan: day.exercises.map(\.name)) { name in
-                        day.replace(exercise: item.name, with: name)
-                    }
+                    // With the alternative's load (own history, else the catalogue's start), not empty.
+                    AlternativesSheet(date: date, exercise: item.name, inPlan: day.exercises.map(\.name), choose: { _ in },
+                                      chooseAlternative: { alt in
+                                          day.replace(exercise: item.name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
+                                      })
                 }
             }
             .sheet(item: $cardioEditing) { part in

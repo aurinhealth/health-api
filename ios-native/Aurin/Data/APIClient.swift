@@ -370,6 +370,15 @@ final class APIClient: @unchecked Sendable {
         return r.alternatives ?? []
     }
 
+    /// The load of an exercise picked from the whole catalog in place of
+    /// another (GET /app/api/gym/estimate): from the history, else the
+    /// catalogue's start. Nil when there is none or the request fails.
+    func gymEstimate(exercise: String) async -> Double? {
+        struct Response: Decodable { let kg: Double? }
+        let r: Response? = try? await get("/app/api/gym/estimate?exercise=" + Self.query(exercise))
+        return r?.kg.flatMap { $0 > 0 ? $0 : nil }
+    }
+
     func activityDetail(id: String) async throws -> ActivityDetail {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
