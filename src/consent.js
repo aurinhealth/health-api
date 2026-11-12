@@ -23,7 +23,11 @@ export const CONSENT_VERSION = '2026-11-06';
 // sends the AI box as ticked, so an AI consent to an older text ends there
 // unless it is ticked again.
 export const AI_CONSENT_VERSION = '2026-11-10';
-export const CONSENT_KINDS = ['health', 'ai'];
+// Usage statistics (usage-stats.js): 'usage' is on unless withdrawn (objection
+// to counting from the app's own requests), 'usage_events' is the opt-in to the
+// app sending its setup and subscription steps. Their text has its own version.
+export const USAGE_CONSENT_VERSION = '2026-11-13';
+export const CONSENT_KINDS = ['health', 'ai', 'usage', 'usage_events'];
 
 async function consentRows(db, userId) {
   try {
@@ -55,7 +59,9 @@ export async function consentStatus(env) {
     // screen instead of asking as for a new account.
     paused: !health && rows.some(r => r.kind === 'health' && r.withdrawn_at),
     needed: env.USER_IS_OWNER !== true && health?.version !== CONSENT_VERSION,
-    aiAllowed: Boolean(ai) || (env.USER_IS_OWNER === true && !aiWithdrawn)
+    aiAllowed: Boolean(ai) || (env.USER_IS_OWNER === true && !aiWithdrawn),
+    usage: !rows.some(r => r.kind === 'usage' && r.withdrawn_at),
+    usageEvents: Boolean(given('usage_events'))
   };
 }
 
@@ -66,7 +72,8 @@ export async function saveConsent(env, input = {}) {
   if (!userId) throw new Error(L('Přihlas se do aplikace.', 'Sign in to the app.'));
   if (input.health !== undefined && input.health !== true) throw new Error(L('Bez souhlasu se zpracováním údajů o zdraví aplikace fungovat nemůže. Souhlas odvoláš v Nastavení → Soukromí a data.', 'The app can\'t work without consent to process health data. To withdraw it, go to Settings → Privacy and data.'));
   if (input.ai !== undefined && typeof input.ai !== 'boolean') throw new Error(L('Neplatná volba souhlasu s AI.', 'Invalid AI consent choice.'));
-  if (input.health === undefined && input.ai === undefined) throw new Error(L('Chybí volba souhlasu.', 'No consent choice given.'));
+  for (const key of ['usage', 'usageEvents']) if (input[key] !== undefined && typeof input[key] !== 'boolean') throw new Error(L('Neplatná volba sdílení údajů o používání.', 'Invalid usage data choice.'));
+  if (input.health === undefined && input.ai === undefined && input.usage === undefined && input.usageEvents === undefined) throw new Error(L('Chybí volba souhlasu.', 'No consent choice given.'));
   if (input.ai !== undefined && !input.health && !(await consentStatus(env)).health) throw new Error(L('Nejdřív je potřeba souhlas se zpracováním údajů o zdraví.', 'Consent to process health data comes first.'));
   const now = new Date().toISOString();
   const grant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, kind === 'ai' ? AI_CONSENT_VERSION : CONSENT_VERSION, now);
@@ -74,6 +81,13 @@ export async function saveConsent(env, input = {}) {
   if (input.health === true) statements.push(grant('health'));
   if (input.ai === true) statements.push(grant('ai'));
   if (input.ai === false) statements.push(env.DB.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, 'ai', ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at").bind(userId, AI_CONSENT_VERSION, now, now));
+  const usageGrant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, USAGE_CONSENT_VERSION, now);
+  const usageWithdraw = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at').bind(userId, kind, USAGE_CONSENT_VERSION, now, now);
+  if (input.usage === true) statements.push(usageGrant('usage'));
+  // Turned off: nothing more is counted and the account's counted day is forgotten.
+  if (input.usage === false) statements.push(usageWithdraw('usage'), env.DB.prepare('DELETE FROM usage_users WHERE user_id = ?').bind(userId));
+  if (input.usageEvents === true) statements.push(usageGrant('usage_events'));
+  if (input.usageEvents === false) statements.push(usageWithdraw('usage_events'));
   await env.DB.batch(statements);
   return { status: 'ok', consent: await consentStatus(env) };
 }

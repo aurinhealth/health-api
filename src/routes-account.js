@@ -8,6 +8,8 @@ import { packMessagesLeft, packPurchases } from './coach-packs.js';
 import { coachAllowance } from "./coach-allowance.js";
 import { inFreeWeek } from "./ai-limit-share.js";
 import { consentStatus, saveConsent } from "./consent.js";
+import { recordAppEvents, MAX_EVENTS } from "./usage-stats.js";
+import { isReviewAccount } from "./app-review.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { appleIdentity, unlinkAppleIdentity, revokeApple } from "./apple-login.js";
@@ -74,6 +76,15 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(lock?.held)await resumeDone(env);
     if(resuming){await bumpCacheVersion(env.DB);reimportAfterPause(env,ctx);}
     return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+  }
+  // The app's setup and subscription steps for usage statistics, only with the
+  // opt-in consent (usage-stats.js). Same answer whatever was counted.
+  if(url.pathname==='/app/api/usage'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do aplikace.', 'Sign in to the app.')},{status:401});
+    const body=await request.json().catch(()=>null);
+    if(!Array.isArray(body?.events)||body.events.length>MAX_EVENTS)return Response.json({message:L('Neplatný požadavek.','Invalid request.')},{status:400});
+    ctx.waitUntil(recordAppEvents(env.RAW_DB,{...session.user,isReview:isReviewAccount(env,session.user)},body).catch(error=>{if(!/no such table/i.test(String(error?.message)))console.error('Usage events failed',error.message);}));
+    return new Response(null,{status:204,headers:{'Cache-Control':'no-store'}});
   }
   // Confirming it's you (step-up.js), which adding a passkey, changing the e-mail, the export, pausing health data and
   // deleting the account ask for once their own checks have passed.

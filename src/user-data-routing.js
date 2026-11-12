@@ -15,12 +15,15 @@ export const CENTRAL_PERSONAL_TABLES = new Set([
   // A shared workout is read by whoever has its link (workout-templates.js).
   'workout_shares',
   // The days waiting for the coach's night note, found without opening every user's database (coach-notes.js).
-  'coach_note_queue'
+  'coach_note_queue',
+  // The last counted day for usage statistics, counted from every request (usage-stats.js).
+  'usage_users'
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
   'account_deletions', 'health_pauses', 'user_data_routes', 'user_data_shards', 'ai_limit_memory', 'coach_pack_seen',
   'shared_foods', 'shared_recipes', 'workout_library', 'exercise_techniques',
+  'usage_counts', 'usage_retention',
   'auth_challenges', 'email_login_codes', 'review_code_failures', 'request_limits', 'd1_migrations'
 ]);
 const TARGET = Symbol('database target');

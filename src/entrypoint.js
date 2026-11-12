@@ -111,6 +111,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
+import { noteRequest, forgetOldUsage } from "./usage-stats.js";
 import { updateFitnessEstimate } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
@@ -492,6 +493,8 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetEndedPurchases(env.DB).catch(error => console.error("Ended purchase cleanup failed", error.message));
     // Waitlist addresses a year after they joined, and all of them once Aurin is out (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB, { released: paywallOn(env) }).catch(error => console.error("Waitlist cleanup failed", error.message));
+    // Usage counts and returns older than the privacy policy says (usage-stats.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 8) await forgetOldUsage(env.DB).catch(error => console.error("Usage statistics cleanup failed", error.message));
     // Request limits nobody has used for two days (ip-rate-limit.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 3) await forgetStaleRequestLimits(env.DB).catch(error => console.error("Request limit cleanup failed", error.message));
     // Apple sign-in tokens past their expiry: they cannot sign in anyway (apple-login.js).
@@ -603,6 +606,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       const sized = await limitBody(request, SIGNED_IN_BODY_LIMIT);
       if (sized.response) return sized.response;
       request = sized.request;
+      // Usage statistics from requests the app sends anyway (usage-stats.js); off with "Share usage data".
+      noteRequest(rawEnv.DB, ctx, { ...user, isReview: isReviewAccount(rawEnv, user) }, request.method, url.pathname);
     }
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
