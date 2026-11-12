@@ -148,16 +148,16 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     }
     return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits,start)},{headers:{'Cache-Control':'no-store'}});
   }
-  // The work sets of the last months by exercise and day (the app's exercise
-  // history, "minule 82,5 kg × 6" and the suggested load of the next sets).
   // The load of one exercise picked from the whole catalog in place of another
   // ("Vybrat jiný cvik"): as an alternative's, from the history or the catalogue.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
     const exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
     const [history,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
-    const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''});
+    const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
     return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
   }
+  // The work sets of the last months by exercise and day (the app's exercise
+  // history, "minule 82,5 kg × 6" and the suggested load of the next sets).
   if(url.pathname==='/app/api/gym/history'&&request.method==='GET'){
     const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});

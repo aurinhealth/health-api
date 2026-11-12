@@ -1,4 +1,4 @@
-import {EXERCISES,CATALOGUE_SCALE,startingLoadScale} from './strength-generator.js';
+import {EXERCISES,CATALOGUE_SCALE,FIRST_SESSION_LOAD,startingLoadScale} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad,resolveLoad} from './strength-intelligence.js';
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
@@ -357,10 +357,12 @@ export function gymLoadEstimate(exercise,history=[]){
 }
 // An exercise with no own or similar history starts where the generator
 // starts it: the catalogue's load, lighter for a woman and below the
-// experienced level (strength-generator.js workRows). start: {sex, experience}.
-export function catalogueStartLoad(exercise,{sex='',experience=''}={}){
+// experienced level, first-session light without any strength history
+// (strength-generator.js workRows). start: {sex, experience}.
+export function catalogueStartLoad(exercise,{sex='',experience=''}={},history=[]){
   const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!(def?.baseKg>0))return null;
-  return {kg:resolveLoad(name,def.baseKg*startingLoadScale(def.muscle,sex)*(CATALOGUE_SCALE[experience]??CATALOGUE_SCALE.regular)),source:'catalogue-default',reference:null};
+  const scale=history.length?CATALOGUE_SCALE[experience]??CATALOGUE_SCALE.regular:FIRST_SESSION_LOAD;
+  return {kg:resolveLoad(name,def.baseKg*startingLoadScale(def.muscle,sex)*scale),source:'catalogue-default',reference:null};
 }
 // Exercises the athlete gave a thumbs down (taste.disliked) are offered only
 // when nothing else fits; liked ones come first among equally similar ones.
@@ -373,7 +375,7 @@ export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=
   const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)&&fits(a.name));
   const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
   return ranked.slice(0,8).map(a=>{
-    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||catalogueStartLoad(a.name,start)||{kg:null,source:'no-reference'};
+    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||catalogueStartLoad(a.name,start,history)||{kg:null,source:'no-reference'};
     return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
   });
 }

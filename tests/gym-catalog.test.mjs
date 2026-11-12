@@ -26,9 +26,12 @@ test('a swapped-in exercise never done before still gets a weight (Petr 2026-11-
   assert.ok(alts.length>0);
   assert.ok(alts.filter(a=>EXERCISES[a.name].baseKg>0).every(a=>a.kg>0&&a.source==='catalogue-default'));
   // Lighter for a woman and below the experienced level, as the generator.
-  const male=catalogueStartLoad('Lat pulldown',{sex:'male',experience:'experienced'}).kg;
-  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'female',experience:'experienced'}).kg<male);
-  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'male',experience:'beginner'}).kg<male);
+  const some=[{workout_date:'2026-11-01',exercise:'Leg press',actual_kg:100,actual_reps:10,set_type:'WORK',completed:1}];
+  const male=catalogueStartLoad('Lat pulldown',{sex:'male',experience:'experienced'},some).kg;
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'female',experience:'experienced'},some).kg<male);
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'male',experience:'beginner'},some).kg<male);
+  // No strength history at all: the first session's light start, as the generator.
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'male',experience:'experienced'},[]).kg<male);
   // Own history still wins.
   const history=[{workout_date:'2026-11-01',exercise:'Barbell Floor Press',actual_kg:70,actual_reps:8,rpe:8,set_type:'WORK',completed:1}];
   const own=gymAlternatives('Barbell bench press',history).find(a=>a.name==='Barbell Floor Press');
