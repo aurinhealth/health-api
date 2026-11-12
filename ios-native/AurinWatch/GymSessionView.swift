@@ -709,8 +709,8 @@ struct GymSessionView: View {
             .padding(.vertical, small ? 2 : 3)
             .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
             .accessibilityElement(children: .combine)
-            // The watch lists no app there (Petr 2026-11-09): Aurin's access is in the iPhone's Health app.
-            .accessibilityHint(W.tr("V iPhonu: aplikace Zdraví, tvoje fotka, Aplikace, Aurin.", "On your iPhone: the Health app, your photo, Apps, Aurin."))
+            // The watch lists no app there (Petr 2026-11-09): Aurin's reading is allowed on the iPhone (Petr 2026-11-12).
+            .accessibilityHint(W.tr("V iPhonu: Nastavení, Soukromí a zabezpečení, Zdraví, Aurin.", "On your iPhone: Settings, Privacy & Security, Health, Aurin."))
         } else {
             cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink, small: small)
         }
