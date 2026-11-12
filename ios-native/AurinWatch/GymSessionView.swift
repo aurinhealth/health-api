@@ -58,6 +58,10 @@ struct GymSessionView: View {
     @State private var info: Info?
     /// The crown is on the tiles (not scrolling the screen).
     @FocusState private var crown: Bool
+    /// Until when the crown stays on the tiles without a turn (holdCrown).
+    @State private var crownUntil: Date?
+    /// The wrist lowered (Always On): the crown lets go of the tiles.
+    @Environment(\.isLuminanceReduced) private var dimmed
 
     private enum Field { case kg, reps }
 
@@ -220,8 +224,9 @@ struct GymSessionView: View {
         // A set done (here or on the iPhone): the exercises waiting for Start gym have begun.
         .onChange(of: store.gym?.setsDone ?? 0) { before, after in if after > before { gymWaits = false } }
         .onChange(of: exercise) { _, _ in workout.worked() }
-        .onChange(of: kg) { _, _ in workout.worked() }
-        .onChange(of: reps) { _, _ in workout.worked() }
+        .onChange(of: kg) { _, _ in workout.worked(); if crown { holdCrown() } }
+        .onChange(of: reps) { _, _ in workout.worked(); if crown { holdCrown() } }
+        .onChange(of: dimmed) { _, dimmed in if dimmed { crown = false } }
         // No set and no answer for 30 min: saved, ended at the last set.
         .onChange(of: workout.idleEnd) { _, idle in
             guard let idle, autoSaved == nil else { return }
@@ -632,7 +637,8 @@ struct GymSessionView: View {
     }
 
     private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double, small: Bool) -> some View {
-        let on = selected == field
+        // Lit only while the crown turns it (after a tap).
+        let on = selected == field && crown
         return VStack(spacing: 0) {
             Text(value).font(W.serif(small ? 22 : 28)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).watchFont(12).foregroundStyle(W.secondary)
@@ -751,9 +757,11 @@ struct GymSessionView: View {
             reps = Double(draft.reps)
         }
         putIn = [kg, reps]
-        // Each new set starts on the weight.
+        // Each new set starts on the weight, but the crown turns it only after
+        // a tap on a tile: the crown pressed against the hand during a set
+        // changed the weight unasked (Petr 2026-11-12).
         selected = .kg
-        focusCrown()
+        crown = false
     }
 
     /// The crown onto the tiles. Asked for while the screen before (the
@@ -766,6 +774,18 @@ struct GymSessionView: View {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             crown = true
+            holdCrown()
+        }
+    }
+
+    /// The crown lets go of the tiles 5 s after the tap or the last turn, so
+    /// a bent wrist later in the set doesn't move the weight.
+    private func holdCrown() {
+        let until = Date().addingTimeInterval(5)
+        crownUntil = until
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            if crownUntil == until { crown = false }
         }
     }
 
