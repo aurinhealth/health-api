@@ -462,19 +462,26 @@ struct TabHeader<Extra: View>: View {
         // "Dnes" and the capsule are 8 pt apart: they never melt into one.
         ChromeGlassGroup(spacing: 4) {
             HStack(spacing: 8) {
+                // The month keeps its full width and size on every day: "Dnes"
+                // gives way instead, down to its arrow (Petr, 2026-11-12: "Novem…").
                 title
                     .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                    .layoutPriority(1)
                 Spacer(minLength: 4)
                 if let back = backToToday {
                     Button(action: back) {
-                        Label("Dnes", systemImage: "arrow.uturn.backward")
-                            .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .lineLimit(1).fixedSize()
-                            .padding(.horizontal, 12).frame(height: 36)
-                            .contentShape(Capsule())
-                            .tapTarget(width: 44, height: 36)
+                        ViewThatFits(in: .horizontal) {
+                            Label("Dnes", systemImage: "arrow.uturn.backward")
+                                .lineLimit(1).fixedSize()
+                            Image(systemName: "arrow.uturn.backward")
+                        }
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 12).frame(height: 36)
+                        .contentShape(Capsule())
+                        .tapTarget(width: 44, height: 36)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Dnes")
                     .chromeGlass(in: Capsule())
                     .chromeShadow(0.08, radius: 6, y: 2)
                     .disabled(model.demo || (followsDay && model.dayLocked))
