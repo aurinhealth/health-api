@@ -2313,14 +2313,14 @@ struct TrainingModeView: View {
         }
     }
 
-    /// The letter chosen for the set before (not the plan's): the sets to come
-    /// take it too, as they take its weight and reps.
     /// GymSessionMath.carried with this workout's kept and typed sets; a
     /// first try of the exercise also follows its warm-up.
     private func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
         GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
     }
 
+    /// The letter chosen for the set before (not the plan's): the sets to come
+    /// take it too, as they take its weight and reps.
     private func carriedLetter(_ set: GymSet, in exercise: GymExercise) -> String? {
         guard set.work, !picked.contains(set.row), adjusted(set, in: exercise) == nil,
               let before = exercise.sets.last(where: { $0.work && $0.done && $0.row < set.row && $0.side == set.side }),

@@ -20,7 +20,8 @@ enum GymSessionMath {
     /// A set with its own plan keeps it: a weight or reps typed in ahead
     /// (typed), or a plan that differs from the set before's.
     /// On a first try (no history, the plan's weight is a guess) the sets
-    /// before the first work set follow a warm-up done well off its plan.
+    /// before the first work set follow a warm-up done well off its plan,
+    /// the warm-ups still to come included.
     static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = [], typed: Typed = Typed(),
                         firstTry: Bool = false) -> (kg: String?, reps: String?)? {
         guard let before = previous(set, in: exercise) else {
@@ -757,7 +758,7 @@ struct RestSetsList: View {
             .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
             .padding(.top, 12).padding(.bottom, 4)
             ForEach(exercise.sets) { s in
-                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep, typed: ahead)
+                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep, typed: ahead, firstTry: last == nil)
                 let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg, machineLb: pounds) ?? "–"
                 let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
                 Rectangle().fill(Palette.hairline).frame(height: 1)
