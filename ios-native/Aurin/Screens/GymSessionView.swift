@@ -166,7 +166,8 @@ struct GymSessionView: View {
                               session: doneSession,
                               save: { await save() })
                 // Dokončit by mistake today: back to the workout where it stopped.
-                if !model.demo, date == AppModel.localDate(Date()), day?.finishedAt != nil {
+                if !model.demo, date == AppModel.localDate(Date()), let day, day.finishedAt != nil,
+                   day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                     Button {
                         TrainingModeView.resumeOnOpen = date
                         model.push(.trainingMode(date))
