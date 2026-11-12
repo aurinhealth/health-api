@@ -375,9 +375,9 @@ struct BarcodeScanSheet: View {
                         Label(labelNote, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    DayLeftLine(day: model.writeDay, kcal: product.kcal(for: amount) ?? 0,
+                    if pick == nil { DayLeftLine(day: model.writeDay, kcal: product.kcal(for: amount) ?? 0,
                                 protein: product.grams(product.protein_100g, for: amount) ?? 0,
-                                carbs: product.grams(product.carbs_100g, for: amount) ?? 0)
+                                carbs: product.grams(product.carbs_100g, for: amount) ?? 0) }
                     VStack(alignment: .leading, spacing: 4) {
                         PortionWheel(product: product, amount: $amount, kind: Binding(get: { portionKind ?? .base }, set: { portionKind = $0 })).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
                         servingLine(product)
@@ -388,7 +388,7 @@ struct BarcodeScanSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     MissingMacrosLine(missing: product.missingMacros)
-                    if product.canSuggestNew && !model.demo {
+                    if product.canSuggestNew && !model.demo && pick == nil {
                         SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                     }
                     if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
@@ -635,8 +635,8 @@ struct BarcodeScanSheet: View {
         defer { saving = false }
         var p = product
         if p.barcode == nil { p.barcode = code }
+        // Picking: like the amount screen, no suggestion for everyone from here.
         if let pick {
-            if suggestNew { model.suggestNewFood(p) }
             dismiss()
             pick(p, value)
             return
