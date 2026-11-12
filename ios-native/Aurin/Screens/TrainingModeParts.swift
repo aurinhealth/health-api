@@ -41,6 +41,22 @@ enum GymSessionMath {
         }
     }
 
+    /// By sides, a weight changed by hand on one side: the rows that take it
+    /// too. The other side's set of the same number while still to come, and
+    /// that side's later work sets with the same plan (so they go on carrying
+    /// from it). Rows typed in by hand keep their own weight; reps and letters
+    /// stay per side.
+    static func otherSide(of set: GymSet, in exercise: GymExercise, typed: Set<Int> = []) -> [Int] {
+        guard set.work, let side = set.side,
+              let twin = exercise.sets.first(where: { $0.work && !$0.done && $0.number == set.number && $0.side != nil && $0.side != side && !typed.contains($0.row) })
+        else { return [] }
+        let plan = twin.plannedKg.flatMap(LiftWeight.number)
+        return exercise.sets.filter { s in
+            s.row == twin.row || (s.work && !s.done && s.side == twin.side && s.row > twin.row && !typed.contains(s.row)
+                && s.plannedKg.flatMap(LiftWeight.number) == plan)
+        }.map(\.row)
+    }
+
     /// The work set done just before this one, on the same side by sides.
     static func previous(_ set: GymSet, in exercise: GymExercise) -> GymSet? {
         guard set.work else { return nil }
