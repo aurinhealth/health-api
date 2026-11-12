@@ -167,6 +167,9 @@ private struct DaySwipe: ViewModifier {
                 DayPlaceholder()
             }
         }
+        // At its own height, then cut: a frame alone squeezed a taller day, and
+        // the readiness number shrank until the day landed (Petr, 2026-11-12).
+        .fixedSize(horizontal: false, vertical: true)
         .frame(height: height ?? 0, alignment: .top)
         .clipped()
         .containerRelativeFrame(.horizontal) { length, _ in width ?? length }
@@ -188,6 +191,7 @@ private struct DaySwipe: ViewModifier {
         if let coming, coming.hasSaved {
             NeighbourDay(page: coming, neighbour: neighbour)
                 .equatable()
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(height: height, alignment: .top)
                 .clipped()
                 .allowsHitTesting(false)
