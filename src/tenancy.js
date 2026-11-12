@@ -2,6 +2,7 @@ import { L } from './lang.js';
 import { routedUserDb, TARGET_KIND } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
+import { batchingD1 } from './d1-batch.js';
 import { allowClient, releaseClient, allowSite, releaseSite } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
@@ -356,8 +357,10 @@ export function scopedDb(db, userId, { memo = false } = {}) {
 // to the owner's legacy global credentials unless this is the owner.
 export function userEnv(env, user, { memo = false } = {}) {
   // CONSENT_REQUIRED: AI for this user runs only with their consent (consent.js).
-  const data = env.USER_DATA_DB || env.FOOD_CATALOG_DB ? routedUserDb(env.DB, env.USER_DATA_DB || env.DB, PERSONAL_TABLES, env.FOOD_CATALOG_DB || env.DB) : env.DB;
-  const scoped = { ...env, DB: scopedDb(data, user.id, { memo }), RAW_DB: retryingDb(env.DB), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
+  // Reads started side by side go to each database in one trip (d1-batch.js).
+  const core = batchingD1(env.DB);
+  const data = env.USER_DATA_DB || env.FOOD_CATALOG_DB ? routedUserDb(core, batchingD1(env.USER_DATA_DB || env.DB), PERSONAL_TABLES, batchingD1(env.FOOD_CATALOG_DB || env.DB)) : core;
+  const scoped = { ...env, DB: scopedDb(data, user.id, { memo }), RAW_DB: retryingDb(core), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;
