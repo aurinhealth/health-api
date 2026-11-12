@@ -272,7 +272,7 @@ struct TrainingModeView: View {
         }
         .confirmationDialog("Dokončit trénink?", isPresented: $confirmFinish, titleVisibility: .visible) {
             Button("Dokončit trénink") { Task { await finish() } }
-            Button("Zpět k tréninku", role: .cancel) {}
+            Button("Pokračovat v tréninku", role: .cancel) {}
         } message: {
             Text("Ještě nemáš hotové všechny série.")
         }
