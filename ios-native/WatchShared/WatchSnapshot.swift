@@ -75,6 +75,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         /// "07:00" on work days and at the weekend; nil without an alarm.
         var work: String?
         var weekend: String?
+        /// The days each rings (AlarmDays bits); nil = Monday to Friday and the weekend.
+        var workDays: Int?
+        var weekendDays: Int?
         /// Tonight: its evening, the wake time for the next morning (maybe
         /// set for that morning only), the bedtime and the minutes in bed.
         var evening: String?

@@ -69,6 +69,10 @@ export function ageFrom(birthDate, now = new Date()) {
 
 // Cleans a profile posted from the dashboard; unknown values become null.
 const clockText = v => { const m = String(v ?? "").trim().match(/^(\d{1,2}):(\d{2})$/); return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? m[1].padStart(2, "0") + ":" + m[2] : ""; };
+// The days an alarm rings, 0 = Sunday … 6 = Saturday (getUTCDay); without a
+// choice Monday to Friday for the work day alarm, Saturday and Sunday at the weekend.
+export const WORK_DAYS = [1, 2, 3, 4, 5], WEEKEND_DAYS = [0, 6];
+const weekdays = (v, fallback) => Array.isArray(v) ? [...new Set(v.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b) : [...fallback];
 
 // One night's own choice from the Spánek screen: the evening's date, how long
 // to sleep (5–12 h in minutes, null = the whole need) and a wake time for
@@ -86,7 +90,8 @@ export function sleepSettings(profile = {}) {
   const goal = num(profile.sleepGoal), once = sleepTonight(profile.sleepTonight);
   return {
     goal: goal >= 360 && goal <= 600 ? goal : null,
-    wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) },
+    wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend),
+      workdayDays: weekdays(profile.wakeDays, WORK_DAYS), weekendDays: weekdays(profile.wakeDaysWeekend, WEEKEND_DAYS) },
     // The usual wake times kept once worked out (profile-suggestions.js pinUsualWake).
     usual: { workday: minutes(profile.wakeUsual?.workday), weekend: minutes(profile.wakeUsual?.weekend) },
     tonight: once ? { date: once.date, minutes: once.minutes, wake: minutes(once.wake) } : null
@@ -130,6 +135,9 @@ export function normalizeProfile(p = {}) {
     sleepGoal: inRange(p.sleepGoal, 360, 600),
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
+    // The days each alarm rings (Friday off: no work day alarm that morning).
+    wakeDays: weekdays(p.wakeDays, WORK_DAYS),
+    wakeDaysWeekend: weekdays(p.wakeDaysWeekend, WEEKEND_DAYS),
     sleepTonight: sleepTonight(p.sleepTonight),
     // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
     meals: mealSlots(p.meals),

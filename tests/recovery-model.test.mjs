@@ -125,6 +125,12 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: odd }).wake, 360);
   // A set alarm keeps its own minute.
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: odd, wake: { workday: 362 } }).wake, 362);
+  // Own alarm days: Friday (the morning after 2026-10-08) off has no alarm and plans from the
+  // weekend's usual time, never kept as the work days' one; Friday on the weekend alarm takes its time.
+  const off = bedtimePlan({ date: '2026-10-08', need: 480, nights, wake: { workday: 362, workdayDays: [1, 2, 3, 4], weekendDays: [0, 6] } });
+  assert.deepEqual([off.wakeSource, off.wake, off.pin], ['usual', 390, null]);
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights, usual: { weekend: 480 }, wake: { workday: 362, workdayDays: [1, 2, 3, 4], weekendDays: [0, 6] } }).wake, 480);
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights, wake: { workday: 362, weekend: 450, workdayDays: [1, 2, 3, 4], weekendDays: [0, 5, 6] } }).wake, 450);
 });
 
 test('the usual wake time is kept once worked out: only the bedtime follows the nights', () => {

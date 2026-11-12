@@ -6,10 +6,12 @@ import AlarmKit
 
 /// The alarm set in Nastavení → Spánek, rung by iOS itself (AlarmKit, iOS 26):
 /// it sounds like the Clock app's alarm, also in silent mode and Focus. One
-/// alarm repeats on work days, one at the weekend; changing the times replaces
-/// them. Older iOS has no such API: the app only counts the bedtime from them.
+/// alarm repeats on work days, one at the weekend, each on its chosen days
+/// (AlarmDays); changing them replaces both. Older iOS has no such API: the app only counts the bedtime from them.
 enum SystemAlarm {
     private static let idsKey = "systemAlarmIDs"
+    /// Each alarm's title by its id: Snooze changed sets it again under the same one.
+    private static let titlesKey = "systemAlarmTitles"
 
     /// Whether this iPhone can have the app's alarm.
     static var supported: Bool {
@@ -19,9 +21,17 @@ enum SystemAlarm {
         return false
     }
 
+    /// The alarms of a saved profile (WatchAlarmBridge, the app's start).
+    static func sync(profile: JSONObject) async -> String? {
+        let wake = { (key: String) in profile[key]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+        return await sync(work: wake("wakeTime"), weekend: wake("wakeTimeWeekend"),
+                          workDays: AlarmDays.mask(profile["wakeDays"], fallback: AlarmDays.work),
+                          weekendDays: AlarmDays.mask(profile["wakeDaysWeekend"], fallback: AlarmDays.weekend))
+    }
+
     /// Sets the alarms ("07:00" on work days, "08:30" at the weekend, nil for
-    /// none). Returns what went wrong, nil when it is set.
-    static func sync(work: String?, weekend: String?) async -> String? {
+    /// none) on their days. Returns what went wrong, nil when it is set.
+    static func sync(work: String?, weekend: String?, workDays: Int = AlarmDays.work, weekendDays: Int = AlarmDays.weekend) async -> String? {
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
             do {
@@ -35,14 +45,15 @@ enum SystemAlarm {
                     }
                 }
                 cancelSaved(manager)
-                var ids: [String] = []
-                if let work, let id = try await schedule(manager, at: work, days: [.monday, .tuesday, .wednesday, .thursday, .friday], title: L10n.tr("Budík na pracovní den")) {
-                    ids.append(id.uuidString)
-                }
-                if let weekend, let id = try await schedule(manager, at: weekend, days: [.saturday, .sunday], title: L10n.tr("Budík na víkend")) {
-                    ids.append(id.uuidString)
+                var ids: [String] = [], titles: [String: String] = [:]
+                for (time, days, title) in [(work, workDays, L10n.tr("Budík na pracovní den")), (weekend, weekendDays, L10n.tr("Budík na víkend"))] {
+                    if let time, let id = try await schedule(manager, at: time, days: weekdays(days), title: title) {
+                        ids.append(id.uuidString)
+                        titles[id.uuidString] = title
+                    }
                 }
                 UserDefaults.standard.set(ids, forKey: idsKey)
+                UserDefaults.standard.set(titles, forKey: titlesKey)
                 return nil
             } catch {
                 return L10n.f("Budík se nepodařilo nastavit: %@", error.localizedDescription)
@@ -58,6 +69,7 @@ enum SystemAlarm {
         if #available(iOS 26, *) { cancelSaved(AlarmManager.shared) }
         #endif
         UserDefaults.standard.removeObject(forKey: idsKey)
+        UserDefaults.standard.removeObject(forKey: titlesKey)
     }
 
     private static let backupKey = "systemAlarmBackup"
@@ -104,8 +116,7 @@ enum SystemAlarm {
         // No profile (offline, signed out): the next start tries again.
         guard let api, api.hasSession, let profile = try? await api.profile() else { return }
         let wake = { (name: String) in profile[name]?.string.flatMap { $0.isEmpty ? nil : $0 } }
-        let work = wake("wakeTime"), weekend = wake("wakeTimeWeekend")
-        if work == nil && weekend == nil { cancel() } else { _ = await sync(work: work, weekend: weekend) }
+        if wake("wakeTime") == nil && wake("wakeTimeWeekend") == nil { cancel() } else { _ = await sync(profile: profile) }
         // The iPhone rings itself, so there is no watch's alarm to back up.
         if !defaults.bool(forKey: "systemAlarmOnWatch") { await backup(at: nil) }
         defaults.set(version, forKey: key)
@@ -120,17 +131,20 @@ enum SystemAlarm {
             let manager = AlarmManager.shared
             let saved = defaults.stringArray(forKey: idsKey) ?? []
             if !saved.isEmpty, manager.authorizationState == .authorized, let alarms = try? manager.alarms {
-                var ids: [String] = []
+                let oldTitles = defaults.dictionary(forKey: titlesKey) as? [String: String] ?? [:]
+                var ids: [String] = [], titles: [String: String] = [:]
                 for alarm in alarms where saved.contains(alarm.id.uuidString) {
                     guard case .relative(let relative)? = alarm.schedule, case .weekly(let days) = relative.repeats else { continue }
                     try? manager.cancel(id: alarm.id)
-                    let title = days.contains(.saturday) ? L10n.tr("Budík na víkend") : L10n.tr("Budík na pracovní den")
+                    let title = oldTitles[alarm.id.uuidString] ?? (days.contains(.saturday) ? L10n.tr("Budík na víkend") : L10n.tr("Budík na pracovní den"))
                     let id = UUID()
                     if (try? await manager.schedule(id: id, configuration: configuration(.relative(relative), title: title))) != nil {
                         ids.append(id.uuidString)
+                        titles[id.uuidString] = title
                     }
                 }
                 defaults.set(ids, forKey: idsKey)
+                defaults.set(titles, forKey: titlesKey)
             }
             if let time = backupTime, time > Date() { await backup(at: time) }
         }
@@ -158,10 +172,18 @@ enum SystemAlarm {
         for id in ids where id != backup { try? manager.cancel(id: id) }
     }
 
+    /// AlarmDays bits as AlarmKit's days.
+    @available(iOS 26, *)
+    private static func weekdays(_ days: Int) -> [Locale.Weekday] {
+        let all: [Locale.Weekday] = [.sunday, .monday, .tuesday, .wednesday, .thursday, .friday, .saturday]
+        return all.indices.filter { days & (1 << $0) != 0 }.map { all[$0] }
+    }
+
     @available(iOS 26, *)
     private static func schedule(_ manager: AlarmManager, at time: String, days: [Locale.Weekday], title: String) async throws -> UUID? {
         let parts = time.split(separator: ":").compactMap { Int($0) }
-        guard parts.count == 2 else { return nil }
+        // No day chosen: no alarm (an empty week would ring once).
+        guard parts.count == 2, !days.isEmpty else { return nil }
         let schedule = Alarm.Schedule.relative(.init(time: .init(hour: parts[0], minute: parts[1]), repeats: .weekly(days)))
         let id = UUID()
         _ = try await manager.schedule(id: id, configuration: configuration(schedule, title: title))
