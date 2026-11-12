@@ -536,7 +536,8 @@ export const cachedText=text=>({type:'input_text',text,prompt_cache_breakpoint:{
 export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations'];
 // The memory of the chats and the coach's earlier proposals: they change when a
 // message saves a memory or proposes a change, so they go after the cached data.
-export const COACH_MEMORY_KEYS=['chatSoFar','recentChats','earlierToday','pastMemory','healthMemorySince','preferenceMemory','coachProposals','askIfBetter','cancelledSessions'];
+// gymDay, sport and the two notes below follow the words of the message.
+export const COACH_MEMORY_KEYS=['chatSoFar','recentChats','earlierToday','pastMemory','healthMemorySince','preferenceMemory','coachProposals','askIfBetter','cancelledSessions','gymDay','sport','gymStations','sportsToSuggestChange'];
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null,image=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
@@ -556,10 +557,12 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const brief=concise||task==='adjustment';
   // The biggest parts of the data by length, to see what the coach's input is made of (sizes only).
   console.log('Coach input sizes',JSON.stringify({task,data:JSON.stringify(data).length,memory:JSON.stringify(remembered).length,moment:JSON.stringify(moment).length,top:Object.entries(data).map(([k,v])=>[k,JSON.stringify(v)?.length||0]).sort((a,b)=>b[1]-a[1]).slice(0,12)}));
-  const input=[{role:'user',content:[cachedText(dataNote+JSON.stringify(data))]},...(Object.keys(remembered).length?[{role:'user',content:dataNote+JSON.stringify(remembered)}]:[]),...turns,...(Object.keys(moment).length?[{role:'user',content:dataNote+JSON.stringify(moment)}]:[]),...(brief?[{role:'developer',content:L('Tento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','Handle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.')}]:[]),{role:'user',content:image?[{type:'input_text',text:L('Požadavek (s fotkou): ','Request (with a photo): ')+message},{type:'input_image',image_url:image,detail:'high'}]:L('Požadavek: ','Request: ')+message}];
+  // Only Sol gets the breakpoints: a light answer on Luna is cheap and keeps the default cache.
+  const cache=!light,dataText=dataNote+JSON.stringify(data);
+  const input=[{role:'user',content:cache?[cachedText(dataText)]:dataText},...(Object.keys(remembered).length?[{role:'user',content:dataNote+JSON.stringify(remembered)}]:[]),...turns,...(Object.keys(moment).length?[{role:'user',content:dataNote+JSON.stringify(moment)}]:[]),...(brief?[{role:'developer',content:L('Tento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','Handle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.')}]:[]),{role:'user',content:image?[{type:'input_text',text:L('Požadavek (s fotkou): ','Request (with a photo): ')+message},{type:'input_image',image_url:image,detail:'high'}]:L('Požadavek: ','Request: ')+message}];
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():''), input,cacheBreakpoints:true, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():''), input,cacheBreakpoints:cache, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,memory:reply.memory,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }
