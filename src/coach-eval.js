@@ -549,8 +549,10 @@ export const COACH_EVAL_SCENARIOS = [
   // a side-sport non-swimmer, and a race named without its distance.
   { id: 'S63', title: 'První den po nastavení, žádná historie', message: 'Co mám dnes dělat?', athlete: { fresh: true },
     checks: r => { const hard = kept(r, ['tempo', 'sweet_spot', 'threshold', 'vo2max']);
-      return [quality('řekne, že z hodinek zatím nemá data', says(r, /(?:zatím|ještě) (?:ne|ž[aá]dn)|v (?:(?:posledních|dostupných|tvých) ){0,2}datech (?:zatím )?nevidím (?:\S+ ){0,2}(?:jízd|běh|trénink|záznam|aktivit|měřen)|(?<!\p{L})(?:dat(?!um)\p{L}*|měření|údaj\p{L}* (?:\S+ ){0,2}(?:připravenost|spánk|tep|HRV|hodinek)\p{L}*) (?:\S+ ){0,4}chyb(?:í|ějí)(?!\p{L})|chybí (?:\S+ ){0,4}(?:dat(?!um)|měřen|histori|záznam)|bez (?:dat|historie)|nemám (?:\S+ )?(?:data|historii|záznam)|no (?:data|history)|not enough data|don't have (?:any )?(?:data|history)/iu)),
-        quality('bez náročné karty (tempo a výš) bez dat', !hard.length, hard.map(a => a.kind).join(', '))]; } },
+      return [quality('řekne, že z hodinek zatím nemá data', says(r, /(?:zatím|ještě) (?:ne|ž[aá]dn)|v (?:(?:posledních|dostupných|tvých) ){0,2}(?:datech|záznamech) (?:zatím )?nevidím (?:\S+ ){0,2}(?:jízd|běh|trénink|záznam|aktivit|měřen)|(?<!\p{L})(?:dat(?!um)\p{L}*|měření|údaj\p{L}* (?:\S+ ){0,2}(?:připravenost|spánk|tep|HRV|hodinek)\p{L}*) (?:\S+ ){0,4}chyb(?:í|ějí)(?!\p{L})|chybí (?:\S+ ){0,4}(?:dat(?!um)|měřen|histori|záznam)|bez (?:dat|historie)|nemám (?:\S+ )?(?:data|historii|záznam)|no (?:data|history)|not enough data|don't have (?:any )?(?:data|history)/iu)),
+        quality('bez náročné karty (tempo a výš) bez dat', !hard.length, hard.map(a => a.kind).join(', ')),
+        // Run 73: "Po pauze bez zaznamenaných jízd" for a new account.
+        quality('nový účet nenazve pauzou', !says(r, /pauz|\bbreak\b/i))]; } },
   { id: 'S64', title: 'Neplavec, plavání jako vedlejší sport chce do jezera', message: 'Zítra bych si šel zaplavat do jezera, připrav mi to.',
     athlete: { focus: { sport: 'cycling', sportLabel: 'Cyklistika', sports: ['ride', 'swim'], cannotSwim100m: true } }, context: () => ({ cannotSwim100m: true }),
     // The proposal, not the kept cards: the app's check already drops an open-water swim for a non-swimmer.
