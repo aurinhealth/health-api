@@ -247,16 +247,21 @@ struct CoachTextCard: View {
         do {
             var value = try await model.api.coachText(screen: screen)
             loaded = value
-            // The AI is still writing: asked again a moment later, at most twice.
+            // The AI is still writing (up to ~18 s on the server): asked again every 6 s, at most three times.
             var asked = 0
-            while value.writing == true && asked < 2 {
+            while value.writing == true && asked < 3 {
                 asked += 1
                 try await Task.sleep(for: .seconds(6))
                 value = try await model.api.coachText(screen: screen)
                 loaded = value
             }
-            // A text still being written is not kept, so the next opening asks again.
-            if value.writing != true { CoachTextMemory.values[key] = (value, Date(), model.dataRevision) }
+            // A text still being written is not kept, and an older one is
+            // dropped (it may no longer fit), so the next opening asks again.
+            if value.writing == true {
+                CoachTextMemory.values[key] = nil
+            } else {
+                CoachTextMemory.values[key] = (value, Date(), model.dataRevision)
+            }
         } catch {
             // The rule-based text stays.
         }

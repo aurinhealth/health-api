@@ -413,3 +413,47 @@ test("a slow AI is not waited for: the rule-based text at once, the new text wri
   assert.equal(done.writing, undefined);
   assert.equal(asked, 1);
 });
+
+test("the user's own change while a slow text is written: the old text never lands, the new state is written", async () => {
+  const env = owner();
+  let asked = 0, open = () => {};
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async () => { const n = ++asked; if (n === 1) await gate; return { text: JSON.stringify({ text: "Text " + n, advice: "" }) }; };
+  let checkin = null;
+  const load = async () => today(checkin ? { checkin } : {});
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start })).writing, true);
+  // A sick check-in meanwhile marks the texts stale and lets the claim go.
+  checkin = "sick";
+  await markScreenTextsStale(env);
+  open();
+  await Promise.all(work.splice(0));
+  const row = await env.DB.prepare("SELECT text FROM ai_screen_texts WHERE user_id=1").first();
+  assert.equal(row.text, null, "the text for the state before the change did not land");
+  const after = await screenText(env, { screen: "today", load, ask, later, now: start + 20000 });
+  assert.equal(after.text, "Text 2");
+  assert.equal(asked, 2);
+});
+
+test("a red morning arriving by sync right after a text: the rule-based text, not the old one, while the AI is slow", async () => {
+  const env = owner();
+  await env.DB.prepare("CREATE TABLE api_cache_versions (user_id INTEGER PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0, food INTEGER NOT NULL DEFAULT 0)").run();
+  let zone = "green", slow = false, open = () => {};
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async () => { if (slow) await gate; return { text: JSON.stringify({ text: "Zelený text", advice: "Jeď podle plánu." }) }; };
+  const load = async () => today({ readiness: { score: zone === "red" ? 30 : 80, zone } });
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start })).text, "Zelený text");
+  // The sync that brought the red morning moved the data version.
+  zone = "red"; slow = true;
+  await bumpCacheVersion(env.DB);
+  const shown = await screenText(env, { screen: "today", load, ask, later, now: start + 60000 });
+  assert.notEqual(shown.text, "Zelený text");
+  assert.equal(shown.source, "rules");
+  open();
+  await Promise.all(work.splice(0));
+});
