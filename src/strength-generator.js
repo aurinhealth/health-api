@@ -7,7 +7,7 @@ export function fitsEquipment(name,setup){const equipment=typeof setup==='string
 import { assignIntensities } from './gym-intensity.js';
 import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, priorMuscleSets, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
-import { normalizeExerciseName } from "./strength-normalization.js";
+import { normalizeExerciseName, exerciseAliases } from "./strength-normalization.js";
 import { painAreas } from './pain-words.js';
 import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
@@ -742,6 +742,77 @@ export function validateFocusMuscles(value){
   if(!Array.isArray(value)||value.length<1||value.length>7)return null;
   const unique=[...new Set(value.map(String))];
   return unique.length===value.length&&unique.every(id=>Object.hasOwn(FOCUS_GROUPS,id))&&groupCount(unique)<=5?unique:null;
+}
+
+// Exercises the athlete turned down in their own words or as the coach
+// remembers them: "Nechci floor press", "nahraď ten floor press", "bez
+// dřepů", "I don't want bench press", "instead of the floor press". The gym
+// card and the plan leave them out (Petr 2026-11-12: the card kept the floor
+// press the coach had just promised to drop). "Floor press" names every
+// exercise it is the core of (Barbell Floor Press); "nahraď to bench pressem"
+// is the replacement, not a refusal.
+const EQUIPMENT_PREFIX = /^(?:smith machine|ez bar|trap bar|barbell|dumbbell|db|kettlebell|cable|machine)\s+/;
+const CZ_END = '(?:u|em|y|ů|ech|a|e|i|ou)?(?!\\p{L})';
+let mentionPhrases = null;
+function exercisePhrases() {
+  if (mentionPhrases) return mentionPhrases;
+  const byPhrase = new Map();
+  const add = (phrase, name) => { const p = phrase.toLowerCase().replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim(); if (p.length < 4) return; if (!byPhrase.has(p)) byPhrase.set(p, new Set()); byPhrase.get(p).add(name); };
+  for (const name of Object.keys(EXERCISES)) {
+    for (const phrase of exerciseAliases(name)) {
+      add(phrase, name);
+      const core = phrase.toLowerCase().replace(EQUIPMENT_PREFIX, '');
+      if (core !== phrase.toLowerCase() && core.split(/[\s-]+/).length >= 2) add(core, name);
+    }
+  }
+  mentionPhrases = [...byPhrase].map(([phrase, names]) => ({ re: new RegExp('(?<!\\p{L})' + phrase.split(/[\s-]+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[\\s-]+') + CZ_END, 'giu'), names: [...names] }));
+  return mentionPhrases;
+}
+// The refusal words, each with how many words may stand before the exercise
+// and whether a list may follow ("bez floor pressu a dipů"): "nahraď mi ten
+// floor press", but "místo něj bench press" is the new one. Taste words
+// ("nesnáším", "hate") and loose verbs ("drop to 60 kg", "skip the warm-up")
+// are no refusal; the thumbs in the exercise sheet keep the taste.
+const REFUSALS = [
+  [/(?<!\p{L})(?:nechci|nechce[mšs]?|nedávej|nedavej|nepřidávej|vynech\p{L}*|vyhoď|vyhod\p{L}*|odeber\p{L}*|nahra[dď]\p{L}*|vym[eě][nň]\p{L}*)(?!\p{L})/giu, 3, true],
+  [/(?<!\p{L})(?:don'?t|do\s+not|doesn'?t|does\s+not)\s+want(?!\p{L})|(?<!\p{L})(?:remove|replace|swap(?:\s+out)?|exclude)(?!\p{L})/giu, 3, true],
+  [/(?<!\p{L})(?:bez|místo|misto|namísto|namisto|instead\s+of|without)(?!\p{L})/giu, 1, false]
+];
+const REPLACING = /^(?:nahra|vym[eě]n|replace|swap)/iu;
+// "Nechci vynechat bench press", "Don't remove the bench press", "Nechce, aby
+// se vynechal": a refusal word after a "no" keeps the exercise.
+const NEGATED = /(?<!\p{L})(?:nechci|nechce[mšs]?|ne(?:chtěj|chtej)\p{L}*|don'?t|do\s+not|doesn'?t|does\s+not|never|nikdy)(?!\p{L})[^.!?;\n]{0,20}$/iu;
+// The only words that may stand between the refusal and the exercise.
+const FILLER = /^(?:ten|ta|ty|té|te|tu|mi|si|mu|už|uz|dnes|dneska|v|ve|tréninku|treninku|plánu|planu|the|any|my|more|today|doing)$/iu;
+export function unwantedExercises(texts) {
+  const out = new Set();
+  for (const text of (Array.isArray(texts) ? texts : [texts]).map(t => String(t || '').replace(/[’`]/g, "'"))) {
+    for (const clause of text.split(/[.!?;\n]+|,?\s+(?:ale|but|a\s+pak|then)\s+/iu)) {
+      // Only a clause with a refusal word is searched for exercises.
+      if (!clause.trim() || !REFUSALS.some(([re]) => clause.search(re) >= 0)) continue;
+      // Every exercise named in the clause, the longest one where two overlap.
+      const found = exercisePhrases().flatMap(({ re, names }) => [...clause.matchAll(re)].map(m => ({ start: m.index, end: m.index + m[0].length, text: m[0], names })));
+      const spans = found.filter(s => !found.some(o => o.start <= s.start && o.end >= s.end && o.end - o.start > s.end - s.start)).sort((a, b) => a.start - b.start);
+      for (const [re, gap, list] of REFUSALS) {
+        for (const m of clause.matchAll(re)) {
+          if (NEGATED.test(clause.slice(0, m.index))) continue;
+          const replacing = REPLACING.test(m[0]);
+          let at = m.index + m[0].length, first = true;
+          for (const s of spans) {
+            if (s.start < at) continue;
+            const between = clause.slice(at, s.start).trim();
+            const words = between ? between.split(/\s+/) : [];
+            const ok = first ? words.length <= gap && words.every(w => FILLER.test(w)) : list && /^(?:a|and|ani|nor|or|nebo)$/iu.test(between);
+            if (!ok) break;
+            // "Nahraď to bench pressem": the instrumental is the replacement.
+            if (!(replacing && /(?:em|ou)$/iu.test(s.text))) for (const name of s.names) out.add(name);
+            at = s.end; first = false;
+          }
+        }
+      }
+    }
+  }
+  return [...out];
 }
 
 // Pain or an injury the coach remembers ("koleno bolí při dřepech") leaves out
@@ -1521,6 +1592,9 @@ export function generateStrengthPlan(context, options = {}) {
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };
+  // An exercise the athlete told the coach they do not want ("Nechce floor press").
+  const unwanted = unwantedExercises(context?.athleteState?.memories);
+  if (unwanted.length) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...unwanted] };
   // A machine that does not work, as the coach remembers (point 11).
   const broken = Array.isArray(context?.athleteState?.brokenStations) ? context.athleteState.brokenStations.filter(stationName) : [];
   if (broken.length) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...stationExercises(broken)] };
