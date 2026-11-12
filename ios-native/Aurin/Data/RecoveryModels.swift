@@ -172,6 +172,9 @@ struct CoachText: Decodable, Equatable {
     var reason: String? = nil
     /// The paywall is on for this account (src/subscription.js paywallOn).
     var paywall: Bool? = nil
+    /// The AI is still writing a new text (src/screen-texts.js FOREGROUND_WAIT_MS):
+    /// the rule-based text shows now and the card asks again a moment later.
+    var writing: Bool? = nil
 
     struct Basis: Decodable, Equatable, Hashable {
         let label: String

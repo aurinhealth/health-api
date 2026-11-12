@@ -39,6 +39,12 @@ export const SLOT_WAIT_MS = 3000;
 export const BACKGROUND_SLOT_WAIT_MS = 5000;
 const BACKGROUND_TIMEOUT_MS = 15000;
 const WRITING_MINUTES = 2;
+// A new text the screen needs now (the day's first, after the user's own
+// change, a new night or readiness zone, a red day) is waited for this long;
+// a slower AI (2026-11-11: up to 5 s of a 10 s answer) finishes in the
+// background and the screen shows the rule-based text, marked `writing`, so
+// the app asks again a moment later.
+export const FOREGROUND_WAIT_MS = 1500;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -353,12 +359,30 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
     if (Number(claim?.meta?.changes) === 1) later(write(true).catch(() => {}));
     return cached;
   }
-  return write(false);
+  if (!later) return write(false);
+  // One opening writes (basis_json.writing, also on a row made just for the
+  // claim); another one meanwhile gets the rule-based text and asks again.
+  const claim = await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, basis_json) VALUES (?, ?, ?, ?, json_object('writing', ?))
+    ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET basis_json=json_set(COALESCE(ai_screen_texts.basis_json,'{}'),'$.writing',?) WHERE COALESCE(json_extract(ai_screen_texts.basis_json,'$.writing'),0)<?`)
+    .bind(...key, now, now, now - WRITING_MINUTES * 60000).run().catch(() => null);
+  if (claim && Number(claim?.meta?.changes) !== 1) return { ...fallback(), writing: true };
+  const writing = write(false, true);
+  let timer;
+  const waited = await Promise.race([writing, new Promise(resolve => { timer = setTimeout(resolve, FOREGROUND_WAIT_MS, null); })]);
+  clearTimeout(timer);
+  if (waited) return waited;
+  later(writing);
+  return { ...fallback(), writing: true };
 
-  async function write(background) {
+  function letGo() {
+    return env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_remove(basis_json,'$.writing') WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
+  }
+  // limited: within the time a Worker gets after its answer (background, or
+  // a foreground write that may end up there).
+  async function write(background, limited = background) {
     try {
       const r = await ask(env, { ...screenRequest(env, screen, day, info.facts),
-        ...(background ? { slotWaitMs: BACKGROUND_SLOT_WAIT_MS, timeoutMs: BACKGROUND_TIMEOUT_MS } : { slotWaitMs: SLOT_WAIT_MS }) });
+        slotWaitMs: background ? BACKGROUND_SLOT_WAIT_MS : SLOT_WAIT_MS, ...(limited ? { timeoutMs: BACKGROUND_TIMEOUT_MS } : {}) });
       const { text, advice } = checkedText(info.facts, r.text, info.fallback?.advice);
       const createdAt = new Date(now).toISOString();
       // In the background only over the text it replaces: the user's own
@@ -366,7 +390,11 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       const written = await env.DB.prepare(`INSERT INTO ai_screen_texts (user_id, day, screen, lang, fingerprint, text, advice, basis_json, generations, failed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
         ON CONFLICT(user_id, day, screen, lang) DO UPDATE SET fingerprint=excluded.fingerprint, text=excluded.text, advice=excluded.advice, basis_json=excluded.basis_json, generations=ai_screen_texts.generations+1, failed_at=NULL, created_at=excluded.created_at` + (background ? " WHERE ai_screen_texts.fingerprint IS ? AND ai_screen_texts.created_at IS ?" : ""))
         .bind(userId, day, screen, language, info.fingerprint, text, advice || null, JSON.stringify({ chips: info.chips, basis: info.basis, version, checked: now }), createdAt, ...(background ? [row.fingerprint, row.created_at] : [])).run();
-      if (background && !Number(written?.meta?.changes)) return cached;
+      // Kept out by a newer state: the claim is let go, so that state is written at once.
+      if (background && !Number(written?.meta?.changes)) {
+        await letGo();
+        return cached;
+      }
       // The day's first text of a screen also deletes all the user's texts
       // older than KEEP_DAYS, of every screen and language, also one no longer
       // used (primary key user_id, day: a few rows; a later call finds none).
@@ -376,7 +404,7 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
       // Busy slots: not a failure; the next opening asks again (in the
       // background once the claim is let go).
       if (error?.busy) {
-        if (background) await env.DB.prepare("UPDATE ai_screen_texts SET basis_json=json_remove(basis_json,'$.writing') WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(...key).run().catch(() => {});
+        if (limited) await letGo();
         return keptLate || fallback();
       }
       if (!["empty", "pushes", "late"].includes(error?.message)) console.error("Screen text AI failed", error?.message || error);

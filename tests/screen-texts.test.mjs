@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, FOREGROUND_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
 import { bumpCacheVersion } from "../src/api-cache.js";
 
 const today = (extra = {}) => ({
@@ -382,4 +382,34 @@ test("late evening: a day of many texts still gets the late one, and a kept text
   const kept = await screenText(env2, { screen: "today", load, ask, now: start + 11 * 60000 });
   assert.equal(kept.text, "Text 3");
   assert.equal(kept.advice, "Je pozdě, jdi teď spát.");
+});
+
+test("a slow AI is not waited for: the rule-based text at once, the new text written after the answer, asked once (report 2026-11-12)", async () => {
+  const env = owner();
+  let asked = 0, open = () => {}, seen = null;
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async (_env, req) => { asked++; seen = req; await gate; return { text: JSON.stringify({ text: "Pomalý text", advice: "" }) }; };
+  const load = async () => today();
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  const t0 = Date.now();
+  const first = await screenText(env, { screen: "today", load, ask, later, now: start });
+  assert.ok(Date.now() - t0 < FOREGROUND_WAIT_MS + 1000, "answered after the short wait");
+  assert.equal(first.source, "rules");
+  assert.equal(first.text, "Regenerace je střední.");
+  assert.equal(first.writing, true, "the app asks again a moment later");
+  assert.equal(work.length, 1);
+  assert.ok(seen.timeoutMs && BACKGROUND_SLOT_WAIT_MS + seen.timeoutMs <= 25000, "fits the 30 s after the answer");
+  // Opened again while it is written: no second AI call.
+  const again = await screenText(env, { screen: "today", load, ask, later, now: start + 30000 });
+  assert.equal(again.writing, true);
+  assert.equal(asked, 1);
+  open();
+  await Promise.all(work.splice(0));
+  const done = await screenText(env, { screen: "today", load, ask, later, now: start + 60000 });
+  assert.equal(done.source, "ai");
+  assert.equal(done.text, "Pomalý text");
+  assert.equal(done.writing, undefined);
+  assert.equal(asked, 1);
 });
