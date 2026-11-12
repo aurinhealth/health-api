@@ -17,7 +17,7 @@
 // then repeats a read that hit a blip, and a statement that fails alone is
 // never joined again in this isolate. (Such a read asked again may already see
 // a write the request sent after the batch.)
-import { readOnlySql } from "./d1-retry.js";
+import { readOnlySql, transientD1Error } from "./d1-retry.js";
 import { countTrip, timingStore, viaBatcher } from "./request-timing.js";
 
 // Smaller trips keep one big read (a 90-day health read) from holding the others' answers.
@@ -53,7 +53,8 @@ export function batchingD1(binding) {
   function alone(read) {
     countTrip(read.store);
     started(() => read.statement[read.kind]()).then(read.resolve, failure => {
-      if (read.joined && NEVER_JOIN.size < NEVER_JOIN_LIMIT) NEVER_JOIN.add(read.sql);
+      // A blip (overloaded, reset) is no reason to stop joining the statement.
+      if (read.joined && !transientD1Error(failure) && NEVER_JOIN.size < NEVER_JOIN_LIMIT) NEVER_JOIN.add(read.sql);
       read.reject(failure);
     });
   }
