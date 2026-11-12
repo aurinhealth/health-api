@@ -17,6 +17,9 @@ struct BarcodeScanSheet: View {
     @State private var chosenMeal: String?
     private var target: String { chosenMeal ?? meal }
     var onLogged: () -> Void = {}
+    /// Picking an ingredient or a photo's item (AddFoodSheet pick): the food
+    /// comes back with its amount, nothing is logged.
+    var pick: ((FoodProduct, Double) -> Void)? = nil
     @State private var code: String?
     /// What the athlete says an unknown code is, for the AI estimate.
     @State private var guess = ""
@@ -388,14 +391,14 @@ struct BarcodeScanSheet: View {
                     if product.canSuggestNew && !model.demo {
                         SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                     }
-                    MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                    if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                     Button { Task { await save(product) } } label: {
-                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + ", " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
+                        Text(saving ? L10n.tr("Ukládám…") : (pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)) + ", " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }
                     .disabled(saving || amount <= 0 || product.calories_100g == nil)
-                    Button { Task { await save(product, next: true) } } label: {
+                    if pick == nil { Button { Task { await save(product, next: true) } } label: {
                         Label("Přidat a skenovat další", systemImage: "barcode.viewfinder")
                             .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                             .frame(maxWidth: .infinity).frame(height: 46)
@@ -403,7 +406,7 @@ struct BarcodeScanSheet: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .disabled(saving || amount <= 0 || product.calories_100g == nil)
+                    .disabled(saving || amount <= 0 || product.calories_100g == nil) }
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -632,6 +635,12 @@ struct BarcodeScanSheet: View {
         defer { saving = false }
         var p = product
         if p.barcode == nil { p.barcode = code }
+        if let pick {
+            if suggestNew { model.suggestNewFood(p) }
+            dismiss()
+            pick(p, value)
+            return
+        }
         if let message = await model.logFood(product: p, amount: value, meal: target) {
             error = message
         } else {

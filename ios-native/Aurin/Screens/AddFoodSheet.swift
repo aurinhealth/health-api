@@ -80,10 +80,12 @@ struct AddFoodSheet: View {
                     .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.25)).frame(height: 1) }
                     .padding(.top, 18)
 
+                    // Picking (a recipe's ingredient, a photo's item) has them too: the
+                    // food comes back through pick instead of being logged.
                     // One row, so the foods start higher (Petr vs Yazio 2026-11-09); while
                     // typing the results start right under the search. Dohledat AI is
                     // the row under the results: without words it can't look anything up.
-                    if pick == nil, query.isEmpty { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                    if query.isEmpty { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
                         Menu {
                             Button { photoMode = "portion" } label: { Label("Vyfotit", systemImage: "camera") }
@@ -132,18 +134,16 @@ struct AddFoodSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(lookingUp || model.demo)
-                                if pick == nil {
-                                    Button { path.append(.manual) } label: {
-                                        HStack {
-                                            Text("Zadat ručně").font(Typo.sentence(15))
-                                            Spacer()
-                                            Image(systemName: "pencil").foregroundStyle(Palette.muted)
-                                        }
-                                        .padding(.vertical, 14)
-                                        .contentShape(Rectangle())
+                                Button { path.append(.manual) } label: {
+                                    HStack {
+                                        Text("Zadat ručně").font(Typo.sentence(15))
+                                        Spacer()
+                                        Image(systemName: "pencil").foregroundStyle(Palette.muted)
                                     }
-                                    .buttonStyle(.plain)
+                                    .padding(.vertical, 14)
+                                    .contentShape(Rectangle())
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.top, 14)
@@ -177,9 +177,9 @@ struct AddFoodSheet: View {
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
                 case .amount(let product): FoodAmountView(product: product, meal: meal, pick: pick, done: finish)
-                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, done: finish)
+                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, pick: pick, done: finish)
                 case .items(let photoMeal): PhotoItemsView(meal: photoMeal, mealType: meal, done: finish)
-                case .manual: ManualFoodView(meal: meal, name: query, done: { dismiss() })
+                case .manual: ManualFoodView(meal: meal, name: query, pick: pick, done: { dismiss() })
                 case .recipe: RecipeEditorView(saved: { Task { await loadRecent() }; path.removeLast() })
                 }
             }
@@ -215,7 +215,7 @@ struct AddFoodSheet: View {
                 galleryItem = nil
             }
         }
-        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }) }
+        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }, pick: pick) }
         .fullScreenCover(item: Binding(get: { photoMode.map { Named(name: $0) } }, set: { photoMode = $0?.name })) { mode in
             if mode.name == "label" {
                 LabelCameraSheet { image in
@@ -498,7 +498,11 @@ struct AddFoodSheet: View {
     /// The food found (or the photo's list), to add.
     private func show(_ item: PendingFood) {
         shown = item.id
-        if item.items.count >= 2 {
+        if item.items.count >= 2, let pick {
+            // Picking: every food the photo shows comes back, with its amount.
+            item.items.forEach { pick($0.product, $0.amount) }
+            finish()
+        } else if item.items.count >= 2 {
             path.append(.items(model.pendingPhotoMeal(item)))
         } else if let product = item.product {
             path.append(item.query == nil ? .photo(product, item.note) : .amount(product))
@@ -859,10 +863,13 @@ struct ManualFoodView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var chosenMeal: String?
+    /// Picking an ingredient or a photo's item: the food comes back, nothing is logged.
+    var pick: ((FoodProduct, Double) -> Void)? = nil
 
-    init(meal: String, name: String = "", done: @escaping () -> Void = {}) {
+    init(meal: String, name: String = "", pick: ((FoodProduct, Double) -> Void)? = nil, done: @escaping () -> Void = {}) {
         self.meal = meal
         _name = State(initialValue: name)
+        self.pick = pick
         self.done = done
     }
 
@@ -885,9 +892,9 @@ struct ManualFoodView: View {
                     SettingsField(title: "Tuky", text: $fat, unit: "g")
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                 Button { Task { await save() } } label: {
-                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || number(kcal) == nil)
@@ -904,6 +911,7 @@ struct ManualFoodView: View {
     private func save() async {
         let product = FoodProduct(name: name.trimmingCharacters(in: .whitespaces), calories_100g: number(kcal), protein_100g: number(protein) ?? 0,
                                   carbs_100g: number(carbs) ?? 0, fat_100g: number(fat) ?? 0, nutrition_basis: "portion", source: "manual")
+        if let pick { pick(product, 1); return }
         saving = true
         defer { saving = false }
         if let message = await model.logFood(product: product, amount: 1, meal: target) { error = message } else { done() }
