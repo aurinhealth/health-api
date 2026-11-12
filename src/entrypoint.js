@@ -1,6 +1,7 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
+import { batchingD1 } from "./d1-batch.js";
 import { trainingSetup } from './onboarding.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
@@ -707,6 +708,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     }
 }
 
+// The central database with reads started side by side sent in one trip
+// (d1-batch.js): signing in reads the user, the route and the catalogue state at once.
+const batchedEnv = env => (env?.DB ? { ...env, DB: batchingD1(env.DB) } : env);
+
 export default {
   scheduled: worker.scheduled,
   async fetch(request, env, ctx) {
@@ -718,7 +723,7 @@ export default {
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
     return timed(async work => {
       try {
-        const answered = await worker.fetch(request, env, ctx);
+        const answered = await worker.fetch(request, batchedEnv(env), ctx);
         // The owner's report names why (the route's own error text), before it is made plain.
         if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
         // A database or code error never reaches the app word for word (error-text.js).
