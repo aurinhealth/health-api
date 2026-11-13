@@ -507,7 +507,8 @@ struct DrinksCard: View {
         .sensoryFeedback(.impact(weight: .light), trigger: adds)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.6), value: water.ml)
         .onChange(of: reached) { _, now in
-            guard now, animate, !reduceMotion else { return }
+            // The lively figures jump themselves at the goal.
+            guard now, animate, !reduceMotion, !figure.lively else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
         }
