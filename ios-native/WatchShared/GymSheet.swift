@@ -247,7 +247,9 @@ struct GymDay: Decodable, Equatable {
         row[11] = .string("FALSE")
         // The plan's letter of the set it copies, not what was chosen in it.
         if GymIntensity.letter(cell(row, 14)) == "F" || GymIntensity.letter(cell(row, 14)) == "PR" { row[14] = .string("H") }
-        if sided(list[offset]) {
+        // By the sets still to do, as the picker (GymExercise.sidesAhead).
+        let open = list[offset].filter { !Self.isDone(cell($0, 8)) && !Self.isWarmupRow($0) }
+        if sided(open.isEmpty ? list[offset] : open) {
             row[13] = .string("L"); list[offset].append(row)
             row[13] = .string("P"); list[offset].append(row)
         } else {
@@ -455,6 +457,13 @@ struct GymExercise: Equatable, Identifiable {
     }
     /// Done by sides (L and P rows).
     var bySides: Bool { sets.contains { $0.side != nil } }
+    /// How the sets still to do go: by sides or both at once. A set done by
+    /// sides before a switch back to both sides keeps its L and P rows, so
+    /// bySides alone would keep "Každá strana zvlášť" picked.
+    var sidesAhead: Bool {
+        let open = sets.filter { !$0.done && !$0.warmup }
+        return open.isEmpty ? bySides : open.contains { $0.side != nil }
+    }
 }
 
 struct GymSet: Equatable, Identifiable {

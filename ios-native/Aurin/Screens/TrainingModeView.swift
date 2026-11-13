@@ -510,7 +510,7 @@ struct TrainingModeView: View {
     /// "Obě strany najednou | Každá strana zvlášť": the next time the exercise
     /// comes, it comes the way it was done last (src/gym-sides.js).
     private func sidesPicker(_ exercise: GymExercise) -> some View {
-        Picker("", selection: Binding(get: { exercise.bySides }, set: { on in Task { await setSides(exercise, on) } })) {
+        Picker("", selection: Binding(get: { exercise.sidesAhead }, set: { on in Task { await setSides(exercise, on) } })) {
             Text("Obě strany najednou").tag(false)
             Text("Každá strana zvlášť").tag(true)
         }
