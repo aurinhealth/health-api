@@ -9,6 +9,8 @@ import UIKit
 /// next exercise. The plan can be reordered, shortened or extended on the way.
 /// The screen stays on meanwhile.
 struct TrainingModeView: View {
+    /// The day whose finished workout goes on as it opens (GymSessionView).
+    static var resumeOnOpen: String?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let date: String
@@ -76,11 +78,15 @@ struct TrainingModeView: View {
     /// A day from the watch came while this screen loaded: newer than the load.
     @State private var watchTook = false
     @State private var confirmClose = false
+    /// Dokončit in the header with sets still left.
+    @State private var confirmFinish = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
     /// Opened on a workout already finished: its summary, with the rating and
     /// Pokračovat v tréninku (Zahodit has no earlier day to go back to).
     @State private var reopened = false
+    /// Pokračovat v tréninku tapped while Dokončit still saves and sends.
+    @State private var resumeAfterFinish = false
     @State private var picking = false
     /// The heart rate sensors, from the heart in the header.
     @State private var sensors = false
@@ -264,6 +270,12 @@ struct TrainingModeView: View {
             Button("Pokračovat později") { live.reset(); dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         }
+        .confirmationDialog("Dokončit trénink?", isPresented: $confirmFinish, titleVisibility: .visible) {
+            Button("Dokončit trénink") { Task { await finish() } }
+            Button("Pokračovat v tréninku", role: .cancel) {}
+        } message: {
+            Text("Ještě nemáš hotové všechny série.")
+        }
         .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         } message: {
@@ -348,7 +360,8 @@ struct TrainingModeView: View {
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil || activePart != nil {
                     if started {
-                        Button { Task { await finish() } } label: {
+                        // Sets still left here: asked first, a tap by mistake ends nothing.
+                        Button { if current(day) != nil { confirmFinish = true } else { Task { await finish() } } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 18).frame(height: 44).background(Palette.button, in: Capsule())
                         }
@@ -1290,8 +1303,13 @@ struct TrainingModeView: View {
                 closeButton
                 // Dokončit by mistake: back to the workout, the clock from its start.
                 if !model.demo {
-                    SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { Task { await resume() } }
-                        .disabled(saving)
+                    // Tappable while the workout is still saved and sent: it goes on
+                    // once that is done (resume() over a finish() still sending
+                    // would leave the day finished on the server or in Apple Health).
+                    SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") {
+                        if saving { resumeAfterFinish = true } else { Task { await resume() } }
+                    }
+                    .disabled(resumeAfterFinish).opacity(resumeAfterFinish ? 0.4 : 1)
                 }
                 if !reopened {
                     Button(role: .destructive) { confirmDiscard = true } label: {
@@ -1822,6 +1840,9 @@ struct TrainingModeView: View {
         }
         loading = true
         defer { loading = false }
+        // Asked once, from GymSessionView: never again on a later opening.
+        let resumeAsked = Self.resumeOnOpen == date
+        Self.resumeOnOpen = nil
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
             watchTook = false
@@ -1844,6 +1865,10 @@ struct TrainingModeView: View {
                 startTapped = true
                 await live.continueWorkout(since: day.startedAt, weightKg: model.today?.weight?.latest)
                 syncActivity()
+            }
+            // Pokračovat v tréninku from the done workout's detail (GymSessionView): on at once.
+            if reopened, resumeAsked {
+                await resume()
             }
             // The muscles of Celkem dnes now, not only from the exercise screen:
             // back in a rest (the bar, the edge swipe) that screen isn't shown.
@@ -2072,6 +2097,8 @@ struct TrainingModeView: View {
 
     /// The cross: a workout changed here can be kept for later or thrown away.
     private func close() {
+        // Zavřít after Pokračovat v tréninku: the workout stays finished.
+        resumeAfterFinish = false
         if !finishedSession, let day, day != original, !day.exercises.isEmpty {
             confirmClose = true
         } else {
@@ -2154,7 +2181,13 @@ struct TrainingModeView: View {
             sendRows = nil
             closeReady = false
             sendStarted = Date()
-            defer { saving = false }
+            defer {
+                saving = false
+                if resumeAfterFinish {
+                    resumeAfterFinish = false
+                    Task { await resume() }
+                }
+            }
             do {
                 try await model.saveGym(day, date: date)
                 error = nil

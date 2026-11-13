@@ -164,6 +164,21 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
+                // Dokončit by mistake today: back to the workout where it stopped.
+                if !model.demo, date == AppModel.localDate(Date()), let day, day.finishedAt != nil,
+                   day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                    Button {
+                        TrainingModeView.resumeOnOpen = date
+                        model.push(.trainingMode(date))
+                    } label: {
+                        Label("Pokračovat v tréninku", systemImage: "play.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                            .frame(maxWidth: .infinity).frame(height: 54)
+                            .background(Palette.green, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 24)
+                }
                 // A session done live, logged by hand or from the watch can be rated too.
                 if !model.demo, !(day?.exerciseNames.isEmpty ?? true) {
                     Button { ratingDone = true } label: {
