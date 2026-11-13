@@ -130,6 +130,11 @@ final class AppModel {
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     var shownDay: String { selectedDate ?? Self.localDate(Date()) }
+    /// The day in a tab's month, week and day bar: the one picked, not the one
+    /// whose data is still on screen while it loads (DaySwipe shows that one
+    /// as saved or as empty cards), so the week and the numbers never show two
+    /// days. The demo shows its sample day.
+    func headerDay(_ drawn: String) -> String { demo ? drawn : shownDay }
     /// The "+" sheet is open: what it adds goes to today, whatever day the
     /// screens show (weight always did).
     var writesToday = false
