@@ -247,7 +247,9 @@ struct GymDay: Decodable, Equatable {
         row[11] = .string("FALSE")
         // The plan's letter of the set it copies, not what was chosen in it.
         if GymIntensity.letter(cell(row, 14)) == "F" || GymIntensity.letter(cell(row, 14)) == "PR" { row[14] = .string("H") }
-        if sided(list[offset]) {
+        // By the sets still to do, as the picker (GymExercise.sidesAhead).
+        let open = list[offset].filter { !Self.isDone(cell($0, 8)) && !Self.isWarmupRow($0) }
+        if sided(open.isEmpty ? list[offset] : open) {
             row[13] = .string("L"); list[offset].append(row)
             row[13] = .string("P"); list[offset].append(row)
         } else {
