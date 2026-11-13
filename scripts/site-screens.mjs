@@ -57,8 +57,9 @@ const source = (step, dark) => {
   return file && join(dir, file);
 };
 // A shot taken before the screen drew is one flat colour under the status bar; it would put an empty
-// phone on the site, so the old file stays and the run fails.
-const blank = png => Number(execFileSync(magick, [png, '-gravity', 'south', '-crop', '100%x85%+0+0', '+repage', '-format', '%[fx:standard_deviation]', 'info:']).toString()) < 0.01;
+// phone on the site, so the old file stays and the run fails. ImageMagick prints "-nan" for one flat
+// colour, which counts as blank too.
+const blank = png => !(Number(execFileSync(magick, [png, '-gravity', 'south', '-crop', '100%x85%+0+0', '+repage', '-format', '%[fx:standard_deviation]', 'info:']).toString()) >= 0.01);
 let missing = 0, dark = 0;
 const save = (png, name) => {
   if (blank(png)) { console.error(`${name}: ${png} is blank, the old ${name}.webp stays`); missing++; return 0; }

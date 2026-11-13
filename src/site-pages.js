@@ -798,7 +798,7 @@ export function overviewPage(request) {
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours',
-    muscles: 'Aurin’s muscles: legs and glutes tired, chest and back recovering, the rest rested'};
+    muscles: 'Aurin’s muscles: legs and glutes tired, the rest rested'};
   // In dark mode (DARK_SITE) each phone shows CI's dark shot of the same screen (scripts/site-screens.mjs).
   const shot = (name, lazy = true) => {
     const img = `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
