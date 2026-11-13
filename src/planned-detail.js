@@ -92,9 +92,11 @@ function docStep(s) {
   if (s.text) step.note = String(s.text).slice(0, 80);
   return step;
 }
+// A repeat block's text that only says "3x" again is no note.
+const blockNote = text => (text && !/^\s*\d{1,2}\s*[x×]\s*$/i.test(text) ? String(text) : null);
 export function structureFromWorkoutDoc(doc) {
   const steps = Array.isArray(doc?.steps) ? doc.steps : [];
-  return steps.map(s => Array.isArray(s.steps) ? { repeats: n(s.reps, 1), note: s.text || null, steps: s.steps.map(docStep).filter(Boolean) } : docStep(s)).filter(x => x && (!x.steps || x.steps.length));
+  return steps.map(s => Array.isArray(s.steps) ? { repeats: n(s.reps, 1), note: blockNote(s.text), steps: s.steps.map(docStep).filter(Boolean) } : docStep(s)).filter(x => x && (!x.steps || x.steps.length));
 }
 
 export function structureMinutes(structure) {

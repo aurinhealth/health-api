@@ -1244,6 +1244,12 @@ struct StepBlockRow: View {
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Self.range(Fmt.int(lo), Fmt.int(hi)) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Self.range(Fmt.int(lo), Fmt.int(hi)) + Fmt.percentSign) }
+        // Two steps at the same power can differ only in cadence (low-cadence sets).
+        switch s.cadence {
+        case .string(let c)?: parts.append(L10n.f("%@ ot/min", c))
+        case .number(let c)?: parts.append(L10n.f("%@ ot/min", Fmt.int(c)))
+        default: break
+        }
         if let slow = s.paceSlow, let fast = s.paceFast { parts.append(Self.range(ZonesSettingsView.pace(Units.pace(fast)), ZonesSettingsView.pace(Units.pace(slow))) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
         return parts.joined(separator: ", ")
