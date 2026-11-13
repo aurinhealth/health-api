@@ -51,6 +51,14 @@ test("unset share: everyone has the whole limits; the owner has any account's, n
   assert.equal(await coachAllowance(await account({ USER_IS_OWNER: true, ENVIRONMENT: "staging" })), null);
 });
 
+test("the owner's spending is a group of its own and the coach evaluation a job of the server; the limits still follow the purchase", async () => {
+  const owner = await account({ plan: "ai", environment: "Sandbox", USER_IS_OWNER: true });
+  assert.equal(await aiGroup(owner), "owner");
+  assert.equal(await aiLimitShare(owner), 0.5, "a TestFlight purchase: half, like the testers");
+  assert.equal(await aiGroup(await account({ plan: "ai", USER_IS_OWNER: true, COACH_EVAL: true })), "system");
+  assert.equal(await aiGroup(await account({ plan: "ai", environment: "Sandbox" })), "testflight");
+});
+
 test("the halved month stops AI at 3 USD", async () => {
   const env = await account();
   await ensureAiUsage(env.DB);
