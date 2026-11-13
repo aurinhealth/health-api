@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Spánek: tonight on a 24-hour dial (bedtime and wake time, both draggable),
 /// how long to sleep tonight, why the need is what it is, then the own sleep
-/// goal and the alarm on work days and at the weekend. The bedtime is the wake
+/// goal and the alarm on work days and at the weekend, each on the days chosen
+/// for it (a free Friday has none). The bedtime is the wake
 /// time minus the time in bed for tonight's sleep (the need: the goal plus the
 /// day's strain, low HRV and debt, minus naps; or the user's own length).
 struct SleepSettingsView: View {
@@ -41,6 +42,9 @@ struct SleepSettingsForm: View {
     @State private var workTime = SleepSettingsForm.clock("07:00")
     @State private var weekendAlarm = false
     @State private var weekendTime = SleepSettingsForm.clock("08:30")
+    /// The days each alarm rings (AlarmDays bits): Monday to Friday and the weekend unless chosen.
+    @State private var workDays = AlarmDays.work
+    @State private var weekendDays = AlarmDays.weekend
     @State private var original: JSONObject = [:]
     @State private var saved = false
     @AppStorage("systemAlarm") private var systemAlarm = false
@@ -61,7 +65,7 @@ struct SleepSettingsForm: View {
             if route { Color.clear.frame(height: 46) }
             if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
                 SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
-                             weekendMorning: Self.weekendMorning(after: tonight.date),
+                             weekendMorning: Self.weekendMorning(after: tonight.date, days: weekendDays),
                              onChoose: { minutes, wake in Task { await saveTonight(minutes: minutes, wake: wake) } },
                              onEveryDay: { wake, weekend in Task { await saveEveryDay(wake, weekend: weekend) } })
             }
@@ -82,9 +86,11 @@ struct SleepSettingsForm: View {
             }
 
             SettingsGroup(title: "Budík") {
-                alarmRow("Pracovní dny", subtitle: "pondělí až pátek", isOn: $workAlarm, time: $workTime, key: "work")
+                alarmRow("Pracovní dny", subtitle: Self.daysText(workDays, usual: AlarmDays.work, "pondělí až pátek"),
+                         isOn: $workAlarm, time: $workTime, days: $workDays, key: "work")
                 SettingsDivider()
-                alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime, key: "weekend")
+                alarmRow("Víkend", subtitle: Self.daysText(weekendDays, usual: AlarmDays.weekend, "sobota a neděle"),
+                         isOn: $weekendAlarm, time: $weekendTime, days: $weekendDays, key: "weekend")
             }
 
             if SystemAlarm.supported {
@@ -128,12 +134,26 @@ struct SleepSettingsForm: View {
         .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
         .onChange(of: snoozeOn) { _, _ in snoozeChanged() }
         .onChange(of: snoozeMinutes) { _, _ in snoozeChanged() }
+        // A day added to one alarm leaves the other, unless it was its last.
+        .onChange(of: workDays) { old, new in weekendDays = Self.without(new & ~old, in: weekendDays) }
+        .onChange(of: weekendDays) { old, new in workDays = Self.without(new & ~old, in: workDays) }
     }
 
-    private func alarmRow(_ title: String, subtitle: String, isOn: Binding<Bool>, time: Binding<Date>, key: String) -> some View {
+    static func without(_ added: Int, in days: Int) -> Int {
+        days & ~added == 0 ? days : days & ~added
+    }
+
+    /// "pondělí až pátek" for the usual days, else "Po–Čt" or "každou sobotu".
+    static func daysText(_ days: Int, usual: Int, _ text: String) -> String {
+        days == usual ? L10n.tr(text) : ReminderDays.summary(days)
+    }
+
+    private func alarmRow(_ title: String, subtitle: String, isOn: Binding<Bool>, time: Binding<Date>, days: Binding<Int>, key: String) -> some View {
         VStack(spacing: 0) {
             SettingsToggle(title: title, subtitle: subtitle, isOn: isOn.animation(.easeOut(duration: 0.2)))
             if isOn.wrappedValue {
+                ReminderWeekdayChips(days: days)
+                    .padding(.horizontal, 16).padding(.bottom, 4)
                 wheelRow("Vstávám v", value: ClockText.format(Self.text(time.wrappedValue)), key: key)
                 if open == key {
                     DatePicker("Vstávám v", selection: time, displayedComponents: .hourAndMinute)
@@ -186,6 +206,8 @@ struct SleepSettingsForm: View {
         goal = p["sleepGoal"]?.number.map { Int($0) } ?? 0
         if let w = p["wakeTime"]?.string { workAlarm = true; workTime = Self.clock(w) }
         if let w = p["wakeTimeWeekend"]?.string { weekendAlarm = true; weekendTime = Self.clock(w) }
+        workDays = AlarmDays.mask(p["wakeDays"], fallback: AlarmDays.work)
+        weekendDays = AlarmDays.mask(p["wakeDaysWeekend"], fallback: AlarmDays.weekend)
         original = changes
     }
 
@@ -193,7 +215,9 @@ struct SleepSettingsForm: View {
         [
             "sleepGoal": goal == 0 ? .null : .number(Double(goal)),
             "wakeTime": .string(workAlarm ? Self.text(workTime) : ""),
-            "wakeTimeWeekend": .string(weekendAlarm ? Self.text(weekendTime) : "")
+            "wakeTimeWeekend": .string(weekendAlarm ? Self.text(weekendTime) : ""),
+            "wakeDays": AlarmDays.json(workDays),
+            "wakeDaysWeekend": AlarmDays.json(weekendDays)
         ]
     }
 
@@ -238,14 +262,13 @@ struct SleepSettingsForm: View {
         await model.refresh()
     }
 
-    /// The morning after the evening `date` ("2026-10-15") is a Saturday or Sunday.
-    static func weekendMorning(after date: String?) -> Bool {
+    /// The morning after the evening `date` ("2026-10-15") is one of the weekend alarm's days.
+    static func weekendMorning(after date: String?, days: Int = AlarmDays.weekend) -> Bool {
         let f = DateFormatters.make("yyyy-MM-dd", timeZone: TimeZone(identifier: "UTC") ?? .gmt)
         guard let date, let day = f.date(from: date) else { return false }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!
-        let weekday = cal.component(.weekday, from: day.addingTimeInterval(86400))
-        return weekday == 1 || weekday == 7
+        return AlarmDays.has(days, cal.component(.weekday, from: day.addingTimeInterval(86400)))
     }
 
     static func text(minutes: Int) -> String {
@@ -264,14 +287,20 @@ struct SleepSettingsForm: View {
             alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend.")
             return
         }
-        if let problem = await SystemAlarm.sync(work: work, weekend: weekend) {
+        if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays) {
             alarmOK = false
             alarmNote = problem
             systemAlarm = false
         } else {
             var when: [String] = []
-            if let work { when.append(L10n.f("v pracovní dny v %@", ClockText.format(work))) }
-            if let weekend { when.append(L10n.f("o víkendu v %@", ClockText.format(weekend))) }
+            if let work {
+                when.append(workDays == AlarmDays.work ? L10n.f("v pracovní dny v %@", ClockText.format(work))
+                            : L10n.f("%@ v %@", ReminderDays.summary(workDays), ClockText.format(work)))
+            }
+            if let weekend {
+                when.append(weekendDays == AlarmDays.weekend ? L10n.f("o víkendu v %@", ClockText.format(weekend))
+                            : L10n.f("%@ v %@", ReminderDays.summary(weekendDays), ClockText.format(weekend)))
+            }
             let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when.joined()
             alarmOK = true
             alarmNote = L10n.f("Budík zvoní %@.", joined)

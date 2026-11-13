@@ -67,7 +67,12 @@ test("sleep settings: a goal of 6–10 h and alarm clock times", () => {
   assert.equal(p.wakeTime, "06:30");
   assert.equal(p.wakeTimeWeekend, "", "an impossible time is dropped");
   assert.equal(normalizeProfile({ sleepGoal: 200 }).sleepGoal, null);
-  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null }, usual: { workday: null, weekend: null }, tonight: null });
+  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null, workdayDays: [1, 2, 3, 4, 5], weekendDays: [0, 6] }, usual: { workday: null, weekend: null }, tonight: null });
+  // Own days: a free Friday, repeated and impossible days dropped.
+  const days = normalizeProfile({ wakeDays: [4, 1, 2, 3, 3, 9, "x"], wakeDaysWeekend: [6, 0] });
+  assert.deepEqual([days.wakeDays, days.wakeDaysWeekend], [[1, 2, 3, 4], [0, 6]]);
+  assert.deepEqual(normalizeProfile({ wakeDays: [] }).wakeDays, [], "no day is kept as none");
+  assert.deepEqual(sleepSettings(days).wake.workdayDays, [1, 2, 3, 4]);
   assert.deepEqual(sleepSettings({ wakeUsual: { workday: "06:00" } }).usual, { workday: 360, weekend: null }, "the kept usual wake time");
 });
 
@@ -82,7 +87,7 @@ test("sleep settings: tonight's own length and wake time", () => {
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
-      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
+      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", wakeDays: [1, 2, 3, 4, 5], wakeDaysWeekend: [0, 6], sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
       dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: null, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: {},
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });

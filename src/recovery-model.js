@@ -156,8 +156,11 @@ export function sleepNeedFor(input) {
 // than 3), the efficiency the median of asleep / in bed (0.8–0.97, 0.9
 // without data). `nights` are primary nights with their wake-up date and
 // local wake time in minutes after midnight (wakeMin). A wake time the
-// athlete set (input.wake: { workday, weekend } in minutes after midnight)
-// wins over the usual one, so the plan works without any recorded nights.
+// athlete set (input.wake: { workday, weekend } in minutes after midnight,
+// on workdayDays and weekendDays, 0 = Sunday; Monday–Friday and the weekend
+// without them) wins over the usual one, so the plan works without any
+// recorded nights. A morning on neither alarm's days (a free Friday) plans
+// from the weekend's usual wake time.
 // The usual one is worked out once per kind of morning and then kept
 // (input.usual, profile-suggestions.js pinUsualWake): only the bedtime moves
 // with the nights, the wake time never moves by itself. `pin` asks to keep it.
@@ -169,15 +172,16 @@ export function bedtimePlan(input) {
     return age >= -1 && age <= 13 && Number.isFinite(Number(n.wakeMin)) && Number(n.durationMin) > 0;
   });
   const set = input.wake || {}, validWake = v => v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) < 1440;
-  const chosen = [0, 6].includes(morning) && validWake(set.weekend) ? Number(set.weekend) : validWake(set.workday) ? Number(set.workday) : null;
-  const kind = [0, 6].includes(morning) ? "weekend" : "workday", kept = chosen == null && validWake(input.usual?.[kind]) ? Number(input.usual[kind]) : null;
+  const onWeekend = (set.weekendDays || [0, 6]).includes(morning), onWork = (set.workdayDays || [1, 2, 3, 4, 5]).includes(morning);
+  const chosen = onWeekend && validWake(set.weekend) ? Number(set.weekend) : (onWork || onWeekend) && validWake(set.workday) ? Number(set.workday) : null;
+  const calendarKind = [0, 6].includes(morning) ? "weekend" : "workday", kind = onWork && !onWeekend ? "workday" : "weekend", kept = chosen == null && validWake(input.usual?.[kind]) ? Number(input.usual[kind]) : null;
   if (!recent.length && chosen == null && kept == null) return null;
   const median = xs => { const v = [...xs].sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
   const alike = recent.filter(n => weekend(n.date) === [0, 6].includes(morning)), wakeNights = alike.length >= 3 ? alike : recent;
   // The usual wake time to 5 minutes, as the bedtime, and kept from then on.
   const wake = chosen != null ? Math.round(chosen) : kept != null ? Math.round(kept) : (Math.round(median(wakeNights.map(n => Number(n.wakeMin))) / 5) * 5) % 1440;
   // Kept once three mornings of the same kind say it (a weekend from work days would stick).
-  const pin = chosen == null && kept == null && alike.length >= 3 ? { kind, wake } : null;
+  const pin = chosen == null && kept == null && kind === calendarKind && alike.length >= 3 ? { kind, wake } : null;
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
   // At most an hour more in bed than the night's need (audit 2026-11-06,

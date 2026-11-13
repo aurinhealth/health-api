@@ -550,8 +550,8 @@ private struct ReminderEditSheet: View {
     }
 }
 
-/// Po–Ne chips; at least one day stays chosen.
-private struct ReminderWeekdayChips: View {
+/// Po–Ne chips; at least one day stays chosen. Also the alarm's days (Spánek).
+struct ReminderWeekdayChips: View {
     @Binding var days: Int
 
     var body: some View {

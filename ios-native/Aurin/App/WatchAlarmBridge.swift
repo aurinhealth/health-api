@@ -54,7 +54,7 @@ extension WatchBridge {
         guard (try? await api.saveProfile(profile)) != nil else { return false }
         update(profile: profile)
         if UserDefaults.standard.bool(forKey: "systemAlarm") {
-            _ = await SystemAlarm.sync(work: Self.wake(profile, "wakeTime"), weekend: Self.wake(profile, "wakeTimeWeekend"))
+            _ = await SystemAlarm.sync(profile: profile)
         }
         // The new bedtime for Today and Health, which come back to the watch.
         if let model = AppModel.live {
@@ -82,13 +82,9 @@ extension WatchBridge {
             await SystemAlarm.backup(at: nil)
             let api = AppModel.live?.api ?? APIClient()
             guard let profile = try? await api.profile() else { return }
-            if await SystemAlarm.sync(work: Self.wake(profile, "wakeTime"), weekend: Self.wake(profile, "wakeTimeWeekend")) == nil {
+            if await SystemAlarm.sync(profile: profile) == nil {
                 defaults.set(true, forKey: "systemAlarm")
             }
         }
-    }
-
-    private static func wake(_ profile: JSONObject, _ key: String) -> String? {
-        profile[key]?.string.flatMap { $0.isEmpty ? nil : $0 }
     }
 }

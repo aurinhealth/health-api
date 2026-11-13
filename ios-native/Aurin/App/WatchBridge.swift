@@ -300,6 +300,8 @@ final class WatchBridge: NSObject {
         let wakeText = { (key: String) in profile?[key]?.string.flatMap { $0.isEmpty ? nil : $0 } }
         let alarm = (profile != nil || tonight != nil) ? WatchSnapshot.Alarm(
             work: wakeText("wakeTime"), weekend: wakeText("wakeTimeWeekend"),
+            workDays: AlarmDays.mask(profile?["wakeDays"], fallback: AlarmDays.work),
+            weekendDays: AlarmDays.mask(profile?["wakeDaysWeekend"], fallback: AlarmDays.weekend),
             evening: tonight?.date, wake: tonight?.wake.map(clock), wakeOnce: tonight?.wakeOnce,
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,

@@ -39,10 +39,10 @@ final class WatchAlarm: NSObject, ObservableObject {
         W.day(morning).flatMap { alarm.wake(on: $0) }
     }
 
+    /// A morning of the weekend alarm: Saturday and Sunday, or the days chosen on the iPhone.
     static func weekend(_ morning: String) -> Bool {
         guard let day = W.day(morning) else { return false }
-        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: day)
-        return weekday == 1 || weekday == 7
+        return (WatchStore.shared.snapshot?.alarm ?? WatchSnapshot.Alarm()).weekendMorning(day)
     }
 
     /// Sets the session for the next wake time, or takes it away.

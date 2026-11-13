@@ -1095,6 +1095,7 @@
 "už ani jedno opakování" = "not a single rep left";
 "v plánu" = "in plan";
 "v pracovní dny v %@" = "on weekdays at %@";
+"%@ v %@" = "%@ at %@";
 "vah" = "weights";
 "venku" = "outdoor";
 "vláknina %@" = "fiber %@";
