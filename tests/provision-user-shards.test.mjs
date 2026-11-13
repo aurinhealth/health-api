@@ -69,5 +69,5 @@ test('cutover pins preexisting accounts once; rerunning activation does not pin 
 test('deploy SQL never goes through D1 import (--file takes the database offline)', () => {
   const script = readFileSync(new URL('../scripts/provision-user-shards.mjs',import.meta.url),'utf8');
   assert.doesNotMatch(script, /'d1', 'execute'[^\n]*'--file'/);
-  assert.match(script, /'--command', readFileSync\(file, 'utf8'\)/);
+  assert.match(script, /'--command=' \+ readFileSync\(file, 'utf8'\)/);
 });

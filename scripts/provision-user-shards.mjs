@@ -121,8 +121,9 @@ async function main() {
   // SQL goes as --command, not --file: wrangler sends --file through D1's import, which
   // takes the database offline ("long-running import") and ran on all 31 databases at
   // every deploy while users synced (2026-11-12). These files are small and idempotent.
+  // One --command=… argument: a file starting with a "-- comment" would otherwise be read as options.
   function executeSql(database, file) {
-    return wrangler(['d1', 'execute', database, '--remote', '--command', readFileSync(file, 'utf8')]);
+    return wrangler(['d1', 'execute', database, '--remote', '--command=' + readFileSync(file, 'utf8')]);
   }
   if (activate) {
     const file = '.wrangler/user-shards/activate.sql';
