@@ -52,8 +52,12 @@ test("the reason speaks of quality only when the pick is a hard session", () => 
 
 test("Doporučení trenéra builds the ride and run like the library's proposal (plan, role, free time, abilities)", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  // The ranked options (pickBase), kept under the data version by the route.
+  const base = src.slice(src.indexOf("async function pickBase"), src.indexOf("function loadCoachInputs("));
+  assert.match(base, /defaultDayCoach\(env,\{\.\.\.inputs,athleteState:athlete\},date,'ride',week\)/);
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /defaultDayCoach\(env,\{\.\.\.inputs,athleteState:athlete\},date,'ride',week\)/);
+  // The athlete's state (a memory from the chat changes no data version) is part of the key.
+  assert.match(route, /cached\(env,ctx,'pick-base:'\+date\+':'\+\(late\?'late:':''\)\+textHash\(JSON\.stringify\(athlete\?\?null\)\),\(\)=>pickBase\(env,ctx,internalAuth,date,athlete,late\?hour:null\)\)/);
   const helper = src.slice(src.indexOf("async function defaultDayCoach"), src.indexOf("// The athlete's ratings since a day"));
   for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /capabilitiesWithLevel\(env\.DB,sport\)/]) assert.match(helper, part);
 });
@@ -284,7 +288,10 @@ test("late evening the activity of the day is winding down, past bedtime bed, ne
 test("the pick route gives the hour and Today's bedtime only in the evening", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /hour>=17\|\|hour<4\?/);
+  // The evening is part of the kept options' key; the phase itself is by the clock of each ask.
+  assert.match(route, /late=hour>=17\|\|hour<4/);
+  assert.match(src.slice(src.indexOf("async function pickBase"), src.indexOf("function loadCoachInputs(")), /bedtime=hour!=null\?/);
+  assert.match(route, /evening=eveningPhase\(clock,bedtime\)/);
   assert.match(route, /ranked=lateOptions\(day,evening,/);
   assert.match(route, /signature=pickSignature\(day\)/, "the late card keeps the day's ready workouts");
   assert.match(route, /evening=await pickEvening\(env\.DB,env\.USER_ID,date\)/);

@@ -213,8 +213,9 @@ function reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done
 // What the athlete did lately, and today.
 export async function recentKinds(db, userId, today) {
   const from = new Date(Date.parse(today + "T00:00:00Z") - 60 * 86400000).toISOString().slice(0, 10);
-  const rows = (await db.prepare("SELECT data_type, source_family, start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
-    .bind(userId, from).all().catch(() => ({ results: [] }))).results || [];
+  const read = (await db.prepare("SELECT data_type, source_family, start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
+    .bind(userId, from).all().catch(() => ({ results: [], failed: true })));
+  const rows = read.results || [];
   const sports = new Set(), todayKinds = new Set(), done = [];
   for (const r of rows) {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch {}
@@ -228,7 +229,8 @@ export async function recentKinds(db, userId, today) {
   }
   const gym = await db.prepare("SELECT COUNT(*) AS n FROM strength_sets WHERE user_id=? AND workout_date>=?").bind(userId, from).first().catch(() => null);
   if (Number(gym?.n) > 0) sports.add("strength");
-  return { sports: [...sports], today: [...todayKinds], done };
+  // failed: the workouts could not be read (a kept day's activity reads them again).
+  return { sports: [...sports], today: [...todayKinds], done, ...(read.failed ? { failed: true } : {}) };
 }
 
 // The day each of ride, run and swim came back after 14 or more days without
