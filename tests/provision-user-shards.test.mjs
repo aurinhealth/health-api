@@ -65,3 +65,9 @@ test('cutover pins preexisting accounts once; rerunning activation does not pin 
   db.sqlite.exec('INSERT INTO users VALUES(3)'); db.sqlite.exec(ACTIVATION_SQL);
   assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM user_data_routes').get().n,2);
 });
+
+test('deploy SQL never goes through D1 import (--file takes the database offline)', () => {
+  const script = readFileSync(new URL('../scripts/provision-user-shards.mjs',import.meta.url),'utf8');
+  assert.doesNotMatch(script, /'d1', 'execute'[^\n]*'--file'/);
+  assert.match(script, /'--command', readFileSync\(file, 'utf8'\)/);
+});

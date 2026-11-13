@@ -118,10 +118,16 @@ async function main() {
     try { return execFileSync('npx', ['--yes', 'wrangler@4.147.0', ...args, '--config', configPath, ...envArgs], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); }
     catch (error) { throw new Error('Shard deployment command failed, exit ' + error.status); }
   }
+  // SQL goes as --command, not --file: wrangler sends --file through D1's import, which
+  // takes the database offline ("long-running import") and ran on all 31 databases at
+  // every deploy while users synced (2026-11-12). These files are small and idempotent.
+  function executeSql(database, file) {
+    return wrangler(['d1', 'execute', database, '--remote', '--command', readFileSync(file, 'utf8')]);
+  }
   if (activate) {
     const file = '.wrangler/user-shards/activate.sql';
     writeFileSync(file, ACTIVATION_SQL);
-    wrangler(['d1', 'execute', plan.core.database_name, '--remote', '--file', file]);
+    executeSql(plan.core.database_name, file);
     console.log('User data routing activated; existing histories remain on legacy DB.');
     return;
   }
@@ -130,7 +136,7 @@ async function main() {
   if (afterDeploy) {
     const files = readdirSync('after-deploy').filter(f => f.endsWith('.sql')).sort();
     for (const name of [plan.core.database_name, ...plan.shards.map(s => s.name)]) {
-      for (const file of files) wrangler(['d1', 'execute', name, '--remote', '--file', 'after-deploy/' + file]);
+      for (const file of files) executeSql(name, 'after-deploy/' + file);
       console.log('After-deploy changes applied to ' + name);
     }
     return;
@@ -140,16 +146,16 @@ async function main() {
   const registry = [];
   for (const shard of plan.shards) {
     console.log('Preparing user database ' + shard.name);
-    wrangler(['d1', 'execute', shard.name, '--remote', '--file', 'staging/schema.sql']);
+    executeSql(shard.name, 'staging/schema.sql');
     wrangler(['d1', 'migrations', 'apply', shard.name, '--remote']);
-    wrangler(['d1', 'execute', shard.name, '--remote', '--file', 'staging/user-data-shard.sql']);
+    executeSql(shard.name, 'staging/user-data-shard.sql');
     // On later deploys preserve operator capacity/drain settings. Re-registering
     // does not reopen a full database or change existing user assignments.
     registry.push(registrySql(shard));
   }
   const file = '.wrangler/user-shards/register.sql';
   writeFileSync(file, registry.join('\n') + '\n');
-  wrangler(['d1', 'execute', plan.core.database_name, '--remote', '--file', file]);
+  executeSql(plan.core.database_name, file);
   console.log('Prepared ' + plan.shards.length + ' user databases; no personal history was copied.');
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
