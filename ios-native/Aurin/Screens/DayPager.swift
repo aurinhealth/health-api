@@ -34,6 +34,14 @@ struct DayPage {
     }
 }
 
+/// The day picked and the day the screen draws (DaySwipe).
+private struct Days: Equatable {
+    /// AppModel.selectedDate: nil for today.
+    let picked: String?
+    let shown: String
+    let drawn: String
+}
+
 /// The days beside, read off the main thread (DaySwipe); read once, then handed over.
 private final class SavedDays: @unchecked Sendable {
     let pages: [DayPage]
@@ -143,17 +151,25 @@ private struct DaySwipe: ViewModifier {
         .onScrollPhaseChange { _, phase in
             if phase == .idle { land() }
         }
-        .onChange(of: date) { old, new in
-            // A swipe on its way: the days in between come and go unseen.
-            if let pending = coming {
-                if new == pending.date { coming = nil }
+        // The day picked and the day drawn: until the picked one is here, it
+        // stands as saved or as empty cards, never the day before under the
+        // new day in the week (Petr, 2026-11-12). One handler for both, so a
+        // swipe and a pick are told apart whichever changes first.
+        .onChange(of: Days(picked: model.selectedDate, shown: shown, drawn: date)) { old, new in
+            // Only a day picked, not today turning into the next day at
+            // midnight: the morning keeps last night's screen until it loads.
+            if new.picked != old.picked, new.shown != old.shown, coming?.date != new.shown {
+                // Picked in the week, the month or with the arrows: in from its side.
+                coming = new.shown == new.drawn ? nil
+                    : (nearby.first(where: { $0.date == new.shown }) ?? DayPage(date: new.shown, selectedDate: model.selectedDate))
+                var instant = Transaction()
+                instant.disablesAnimations = true
+                withTransaction(instant) { slide = (new.shown > old.shown ? 1 : -1) * 60 }
+                withAnimation(.snappy(duration: 0.3)) { slide = 0 }
                 return
             }
-            // Picked in the week or with the arrows: in from its side.
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
-            withAnimation(.snappy(duration: 0.3)) { slide = 0 }
+            // The day coming is here. Days swiped past come and go unseen.
+            if coming?.date == new.drawn { coming = nil }
         }
         .task(id: date) { await preload() }
     }
@@ -214,11 +230,10 @@ private struct DaySwipe: ViewModifier {
             coming = page
             position = 1
         }
-        Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead, saved: page.hasSaved ? page : nil) }
-        // An answer that never comes: the old day back.
         Task {
-            try? await Task.sleep(for: .seconds(8))
-            if coming?.date == target { coming = nil }
+            await model.showDay(offset: forward ? 1 : -1, ahead: ahead, saved: page.hasSaved ? page : nil)
+            // The day was not opened after all: this day stays in sight.
+            if shown != target, coming?.date == target { coming = nil }
         }
     }
 }
