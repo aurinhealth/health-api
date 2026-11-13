@@ -30,7 +30,7 @@ struct TodayView: View {
                     await model.refresh(announce: true)
                 }
                 .tabTopBar {
-                    DayBar(date: today.date)
+                    DayBar(date: model.headerDay(today.date))
                     Spacer(minLength: 0)
                     HeaderCapsule(share: { sharing = true }, coach: openCoach, settings: openSettings)
                 }
@@ -130,8 +130,8 @@ struct TodayContent: View {
     /// The month, the week and the data's state, across the whole width.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
-        TabHeader(date: today.date, share: openShare, month: { showMonth = true }, coach: openCoach, settings: openSettings)
-        WeekStrip(date: today.date).padding(.top, 14)
+        TabHeader(date: model.headerDay(today.date), share: openShare, month: { showMonth = true }, coach: openCoach, settings: openSettings)
+        WeekStrip(date: model.headerDay(today.date)).padding(.top, 14)
 
         if selectedDate == nil && !model.demo {
             DataAgePill()

@@ -27,7 +27,7 @@ struct FoodView: View {
                 }
                 .refreshable { await model.refreshFood() }
                 .tabTopBar {
-                    DayBar(date: food.date, ahead: true)
+                    DayBar(date: model.headerDay(food.date), ahead: true)
                     Spacer(minLength: 0)
                     HeaderCapsule(coach: actions.coach, settings: actions.settings) {
                         HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód") { scanning = true }
@@ -118,10 +118,10 @@ struct FoodContent: View {
             // day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) {
-                    TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
+                    TabHeader(date: model.headerDay(food.date), coach: actions.coach, settings: actions.settings) {
                         HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
                     }
-                    WeekStrip(date: food.date, ahead: true).padding(.top, 14)
+                    WeekStrip(date: model.headerDay(food.date), ahead: true).padding(.top, 14)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)

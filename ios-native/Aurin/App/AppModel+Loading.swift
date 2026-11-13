@@ -474,16 +474,18 @@ extension AppModel {
             return
         }
         let decoder = JSONDecoder()
+        // Only a copy of this very day: today's ("food") is yesterday's after midnight.
+        let day = date ?? Self.localDate(Date())
         if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", date)),
-           let value = try? decoder.decode(TodaySnapshot.self, from: saved.data) {
+           let value = try? decoder.decode(TodaySnapshot.self, from: saved.data), value.date == day {
             todayScreen.show(value, data: saved.data)
         }
         if food != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("food", date)),
-           let value = try? decoder.decode(FoodSnapshot.self, from: saved.data) {
+           let value = try? decoder.decode(FoodSnapshot.self, from: saved.data), value.date == day {
             foodScreen.show(value, data: saved.data)
         }
         if health != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("health", date)),
-           let value = try? decoder.decode(HealthSnapshot.self, from: saved.data) {
+           let value = try? decoder.decode(HealthSnapshot.self, from: saved.data), value.date == day {
             health = value
         }
         applyOutbox()

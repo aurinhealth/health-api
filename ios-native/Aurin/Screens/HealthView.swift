@@ -15,7 +15,7 @@ struct HealthView: View {
                     }
                     .refreshable { await model.refreshHealth() }
                     .tabTopBar {
-                        DayBar(date: health.date)
+                        DayBar(date: model.headerDay(health.date))
                         Spacer(minLength: 0)
                         HeaderCapsule(coach: actions.coach, settings: actions.settings)
                     }
@@ -82,8 +82,8 @@ struct HealthContent: View {
             // while the day below is swiped; a day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) {
-                    TabHeader(date: health.date, coach: actions.coach, settings: actions.settings)
-                    WeekStrip(date: health.date).padding(.top, 14)
+                    TabHeader(date: model.headerDay(health.date), coach: actions.coach, settings: actions.settings)
+                    WeekStrip(date: model.headerDay(health.date)).padding(.top, 14)
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)

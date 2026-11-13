@@ -25,21 +25,15 @@ struct DayPage {
         func read(_ screen: String) -> Data? {
             SnapshotCache.data(key: SnapshotCache.dayKey(screen, key))?.data
         }
-        let todayData = read("today"), foodData = read("food")
-        return DayPage(date: date, selectedDate: key,
-                       today: todayData.flatMap { try? decoder.decode(TodaySnapshot.self, from: $0) },
-                       health: read("health").flatMap { try? decoder.decode(HealthSnapshot.self, from: $0) },
-                       food: foodData.flatMap { try? decoder.decode(FoodSnapshot.self, from: $0) },
-                       todayData: todayData, foodData: foodData)
+        // Today's copy ("food") is the day it was last loaded as today: after
+        // midnight it is yesterday's, and another day's numbers never stand
+        // under this day (Petr, 2026-11-13).
+        let today = read("today").flatMap { data in (try? decoder.decode(TodaySnapshot.self, from: data)).flatMap { $0.date == date ? ($0, data) : nil } }
+        let food = read("food").flatMap { data in (try? decoder.decode(FoodSnapshot.self, from: data)).flatMap { $0.date == date ? ($0, data) : nil } }
+        let health = read("health").flatMap { try? decoder.decode(HealthSnapshot.self, from: $0) }.flatMap { $0.date == date ? $0 : nil }
+        return DayPage(date: date, selectedDate: key, today: today?.0, health: health, food: food?.0,
+                       todayData: today?.1, foodData: food?.1)
     }
-}
-
-/// The day picked and the day the screen draws (DaySwipe).
-private struct Days: Equatable {
-    /// AppModel.selectedDate: nil for today.
-    let picked: String?
-    let shown: String
-    let drawn: String
 }
 
 /// The days beside, read off the main thread (DaySwipe); read once, then handed over.
@@ -88,7 +82,7 @@ private struct DaySwipe: ViewModifier {
     /// Both days beside, read off the main thread once a day is on screen.
     @State private var nearby: [DayPage] = []
     /// After a swipe: the day coming, as it was drawn beside (or as empty
-    /// cards) until it is here.
+    /// cards), until the app has picked it.
     @State private var coming: DayPage?
     /// A picked day's slide in from its side.
     @State private var slide: CGFloat = 0
@@ -96,8 +90,13 @@ private struct DaySwipe: ViewModifier {
     /// Duo containerRelativeFrame came out wider, see PageScroll).
     @State private var width: CGFloat?
 
-    private var waiting: Bool { coming.map { $0.date != date } ?? false }
     private var shown: String { model.selectedDate ?? AppModel.localDate(Date()) }
+    /// The day the screen should show: the one swiped to, else the one picked.
+    /// Until the data drawn is that day, the screen shows it as saved or as
+    /// empty cards. Worked out from the days, not kept in step by hand, so the
+    /// week above and the numbers below never show two days (Petr, 2026-11-13).
+    private var wanted: String { coming?.date ?? shown }
+    private var waiting: Bool { date != wanted }
     private var canGoForward: Bool { DayNavigator.canGoForward(model: model, date: shown, ahead: ahead) }
     private var before: String? { AppModel.shift(shown, by: -1) }
     private var after: String? { canGoForward ? AppModel.shift(shown, by: 1) : nil }
@@ -111,7 +110,11 @@ private struct DaySwipe: ViewModifier {
         } else if #available(iOS 18, *) {
             paged(content)
         } else {
+            // No swipe, but the day picked is waited for in the same way.
             content
+                .opacity(waiting ? 0 : 1)
+                .overlay(alignment: .top) { if waiting { comingDay } }
+                .task(id: date) { await preload() }
         }
     }
 
@@ -151,25 +154,17 @@ private struct DaySwipe: ViewModifier {
         .onScrollPhaseChange { _, phase in
             if phase == .idle { land() }
         }
-        // The day picked and the day drawn: until the picked one is here, it
-        // stands as saved or as empty cards, never the day before under the
-        // new day in the week (Petr, 2026-11-12). One handler for both, so a
-        // swipe and a pick are told apart whichever changes first.
-        .onChange(of: Days(picked: model.selectedDate, shown: shown, drawn: date)) { old, new in
-            // Only a day picked, not today turning into the next day at
-            // midnight: the morning keeps last night's screen until it loads.
-            if new.picked != old.picked, new.shown != old.shown, coming?.date != new.shown {
-                // Picked in the week, the month or with the arrows: in from its side.
-                coming = new.shown == new.drawn ? nil
-                    : (nearby.first(where: { $0.date == new.shown }) ?? DayPage(date: new.shown, selectedDate: model.selectedDate))
-                var instant = Transaction()
-                instant.disablesAnimations = true
-                withTransaction(instant) { slide = (new.shown > old.shown ? 1 : -1) * 60 }
-                withAnimation(.snappy(duration: 0.3)) { slide = 0 }
-                return
-            }
-            // The day coming is here. Days swiped past come and go unseen.
-            if coming?.date == new.drawn { coming = nil }
+        // Another day picked: the swipe's page has done its part (the day
+        // picked is what the screen waits for now). Picked in the week, the
+        // month or with the arrows, the day slides in from its side.
+        .onChange(of: shown) { old, new in
+            let swiped = coming?.date == new
+            coming = nil
+            guard !swiped else { return }
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
+            withAnimation(.snappy(duration: 0.3)) { slide = 0 }
         }
         .task(id: date) { await preload() }
     }
@@ -201,11 +196,11 @@ private struct DaySwipe: ViewModifier {
         nearby = read.pages
     }
 
-    /// The swiped-to day stays as it was drawn beside, not empty cards for
-    /// the moment until the screen shows it.
+    /// The day waited for as saved (as it was drawn beside during a swipe),
+    /// else empty cards, until the screen shows it.
     @ViewBuilder private var comingDay: some View {
-        if let coming, coming.hasSaved {
-            NeighbourDay(page: coming, neighbour: neighbour)
+        if let page = coming ?? nearby.first(where: { $0.date == wanted }), page.date == wanted, page.hasSaved {
+            NeighbourDay(page: page, neighbour: neighbour)
                 .equatable()
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(height: height, alignment: .top)
