@@ -370,6 +370,15 @@ final class APIClient: @unchecked Sendable {
         return r.alternatives ?? []
     }
 
+    /// The load of an exercise picked from the whole catalog in place of
+    /// another (GET /app/api/gym/estimate): from the history, else the
+    /// catalogue's start. Nil when there is none or the request fails.
+    func gymEstimate(exercise: String) async -> Double? {
+        struct Response: Decodable { let kg: Double? }
+        let r: Response? = try? await get("/app/api/gym/estimate?exercise=" + Self.query(exercise))
+        return r?.kg.flatMap { $0 > 0 ? $0 : nil }
+    }
+
     func activityDetail(id: String) async throws -> ActivityDetail {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
@@ -498,7 +507,7 @@ final class APIClient: @unchecked Sendable {
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
     func searchFood(name: String, barcode: String? = nil) async throws -> [FoodProduct] {
-        var body: JSONObject = ["name": .string(name)]
+        var body: JSONObject = ["name": .string(name), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodSearchResponse = try await send("/app/api/food/search", method: "POST", body: body)
         return response.candidates ?? response.product.map { [$0] } ?? []
@@ -531,7 +540,7 @@ final class APIClient: @unchecked Sendable {
     /// estimate: when the web has no such product, typical values marked as
     /// an AI estimate (source "ai-estimate").
     func lookupFood(name: String, barcode: String? = nil, estimate: Bool = true) async throws -> FoodProduct? {
-        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate)]
+        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate), "market": .string(FoodRegion.market)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodLookupResponse = try await send("/app/api/food/ai-lookup", method: "POST", body: body)
         return response.status == "ok" ? response.product : nil

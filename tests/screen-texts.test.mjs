@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, FOREGROUND_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
 import { bumpCacheVersion } from "../src/api-cache.js";
 
 const today = (extra = {}) => ({
@@ -382,4 +382,78 @@ test("late evening: a day of many texts still gets the late one, and a kept text
   const kept = await screenText(env2, { screen: "today", load, ask, now: start + 11 * 60000 });
   assert.equal(kept.text, "Text 3");
   assert.equal(kept.advice, "Je pozdě, jdi teď spát.");
+});
+
+test("a slow AI is not waited for: the rule-based text at once, the new text written after the answer, asked once (report 2026-11-12)", async () => {
+  const env = owner();
+  let asked = 0, open = () => {}, seen = null;
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async (_env, req) => { asked++; seen = req; await gate; return { text: JSON.stringify({ text: "Pomalý text", advice: "" }) }; };
+  const load = async () => today();
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  const t0 = Date.now();
+  const first = await screenText(env, { screen: "today", load, ask, later, now: start });
+  assert.ok(Date.now() - t0 < FOREGROUND_WAIT_MS + 1000, "answered after the short wait");
+  assert.equal(first.source, "rules");
+  assert.equal(first.text, "Regenerace je střední.");
+  assert.equal(first.writing, true, "the app asks again a moment later");
+  assert.equal(work.length, 1);
+  assert.ok(seen.timeoutMs && BACKGROUND_SLOT_WAIT_MS + seen.timeoutMs <= 25000, "fits the 30 s after the answer");
+  // Opened again while it is written: no second AI call.
+  const again = await screenText(env, { screen: "today", load, ask, later, now: start + 30000 });
+  assert.equal(again.writing, true);
+  assert.equal(asked, 1);
+  open();
+  await Promise.all(work.splice(0));
+  const done = await screenText(env, { screen: "today", load, ask, later, now: start + 60000 });
+  assert.equal(done.source, "ai");
+  assert.equal(done.text, "Pomalý text");
+  assert.equal(done.writing, undefined);
+  assert.equal(asked, 1);
+});
+
+test("the user's own change while a slow text is written: the old text never lands, the new state is written", async () => {
+  const env = owner();
+  let asked = 0, open = () => {};
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async () => { const n = ++asked; if (n === 1) await gate; return { text: JSON.stringify({ text: "Text " + n, advice: "" }) }; };
+  let checkin = null;
+  const load = async () => today(checkin ? { checkin } : {});
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start })).writing, true);
+  // A sick check-in meanwhile marks the texts stale and lets the claim go.
+  checkin = "sick";
+  await markScreenTextsStale(env);
+  open();
+  await Promise.all(work.splice(0));
+  const row = await env.DB.prepare("SELECT text FROM ai_screen_texts WHERE user_id=1").first();
+  assert.equal(row.text, null, "the text for the state before the change did not land");
+  const after = await screenText(env, { screen: "today", load, ask, later, now: start + 20000 });
+  assert.equal(after.text, "Text 2");
+  assert.equal(asked, 2);
+});
+
+test("a red morning arriving by sync right after a text: the rule-based text, not the old one, while the AI is slow", async () => {
+  const env = owner();
+  await env.DB.prepare("CREATE TABLE api_cache_versions (user_id INTEGER PRIMARY KEY, version INTEGER NOT NULL DEFAULT 0, food INTEGER NOT NULL DEFAULT 0)").run();
+  let zone = "green", slow = false, open = () => {};
+  const gate = new Promise(resolve => { open = resolve; });
+  const ask = async () => { if (slow) await gate; return { text: JSON.stringify({ text: "Zelený text", advice: "Jeď podle plánu." }) }; };
+  const load = async () => today({ readiness: { score: zone === "red" ? 30 : 80, zone } });
+  const work = [];
+  const later = p => work.push(p);
+  const start = Date.now();
+  assert.equal((await screenText(env, { screen: "today", load, ask, later, now: start })).text, "Zelený text");
+  // The sync that brought the red morning moved the data version.
+  zone = "red"; slow = true;
+  await bumpCacheVersion(env.DB);
+  const shown = await screenText(env, { screen: "today", load, ask, later, now: start + 60000 });
+  assert.notEqual(shown.text, "Zelený text");
+  assert.equal(shown.source, "rules");
+  open();
+  await Promise.all(work.splice(0));
 });

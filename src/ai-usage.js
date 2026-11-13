@@ -30,7 +30,8 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 // Writing input into that cache costs more than plain input on the gpt-6
 // models (usage.input_tokens_details.cache_write_tokens, not part of
 // cached_tokens): CACHE_WRITE_FACTOR times the input price for the default
-// 30-minute cache (no prompt_cache_options is set).
+// 30-minute cache (no ttl is set; the coach chat marks its own breakpoints,
+// callOpenAI cacheBreakpoints).
 // The model of the coach and every complex task (complexModel, coach-assistant.js),
 // and the price an unknown model is counted at.
 export const DEFAULT_MODEL = "gpt-6-sol";

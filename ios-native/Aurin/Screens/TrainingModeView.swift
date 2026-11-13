@@ -301,8 +301,12 @@ struct TrainingModeView: View {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
                               title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name)), hideUsed: true) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
-                let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
-                Task { await swapExercise(item.name, for: alt) }
+                Task {
+                    // Never done here: the server's estimate (a similar exercise or the catalogue's start).
+                    let estimate = kg == nil && !model.demo ? await model.api.gymEstimate(exercise: name) : nil
+                    let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg ?? estimate)
+                    await swapExercise(item.name, for: alt)
+                }
             }
         }
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
@@ -566,7 +570,7 @@ struct TrainingModeView: View {
     private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
         // The sets to come show what the set before was done with.
-        let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: kept, typed: typed)
+        let carry = s.done ? nil : carried(s, in: exercise)
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg, machineLb: lb(exercise.name)) ?? ""
         let shownReps: String = Fmt.range((s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? "")
         // By sides the number shows on the L row only.
@@ -1244,7 +1248,7 @@ struct TrainingModeView: View {
 
     /// "80 kg × 8".
     private func plannedLine(_ set: GymSet, in exercise: GymExercise) -> String {
-        let carry = GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)
+        let carry = carried(set, in: exercise)
         let pounds = lb(exercise.name)
         let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) + " × " } ?? ""
         return weight + Fmt.range(carry?.reps ?? set.plannedReps ?? "")
@@ -1252,7 +1256,7 @@ struct TrainingModeView: View {
 
     /// The weight of plannedLine, as shown ("80"); "" with none.
     private func restKg(_ set: GymSet, in exercise: GymExercise) -> String {
-        let carry = GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)
+        let carry = carried(set, in: exercise)
         return LiftWeight.shown(carry?.kg ?? set.plannedKg, machineLb: lb(exercise.name)) ?? ""
     }
 
@@ -1693,7 +1697,7 @@ struct TrainingModeView: View {
     /// shows in the field until a number is typed).
     private func prefill(_ set: GymSet?, in exercise: GymExercise) {
         guard let set else { return }
-        let carry = GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)
+        let carry = carried(set, in: exercise)
         kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg, machineLb: lb(exercise.name)) ?? ""
         reps = set.reps ?? carry?.reps ?? ""
     }
@@ -1704,8 +1708,8 @@ struct TrainingModeView: View {
         guard let old, let exercise = day?.exercises[safe: index], let set = nextSet(exercise),
               let before = old.exercises.first(where: { $0.name == exercise.name && $0.sets.contains { $0.row == set.row } }),
               let was = before.sets.first(where: { $0.row == set.row }) else { return }
-        let wasCarry = GymSessionMath.carried(was, in: before, keep: kept, typed: typed)
-        let carry = GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)
+        let wasCarry = carried(was, in: before)
+        let carry = carried(set, in: exercise)
         let pounds = lb(exercise.name)
         if kg.isEmpty || kg == LiftWeight.shown(was.kg ?? wasCarry?.kg ?? was.plannedKg, machineLb: pounds) ?? "" {
             kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg, machineLb: pounds) ?? ""
@@ -2172,6 +2176,20 @@ struct TrainingModeView: View {
         }
     }
 
+    /// By sides: a weight changed on one side goes to the other side too
+    /// (GymSessionMath.otherSide), as its plan, with its drop sets following.
+    /// The other side's set of the same number keeps it as typed (not carried
+    /// over nor adjusted from that side's set before); its later sets carry on.
+    private func mirrorWeight(_ set: GymSet, kg: String, in next: inout GymDay) {
+        guard let exercise = next.exercises.first(where: { $0.sets.contains { $0.row == set.row } }) else { return }
+        let rows = GymSessionMath.otherSide(of: set, in: exercise, typed: typed.kg)
+        for row in rows {
+            next.followDrops(after: row, from: exercise.sets.first { $0.row == row }?.plannedKg, to: kg, keep: typed.kg)
+            next.set(row: row, column: 3, kg)
+        }
+        if let twin = rows.first { typed.kg.insert(twin) }
+    }
+
     /// The weight or reps of a ticked set changed afterwards.
     private func editDone(_ set: GymSet, kg: String, reps: String) async {
         guard var next = day else { return }
@@ -2179,6 +2197,7 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
         next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r, keepDrops: typed.kg)
+        if !k.isEmpty, LiftWeight.number(k) != set.kg.flatMap(LiftWeight.number) { mirrorWeight(set, kg: k, in: &next) }
         let old = day
         day = next
         refill(from: old)
@@ -2205,13 +2224,17 @@ struct TrainingModeView: View {
                     && s.plannedKg.flatMap(LiftWeight.number) == plan)
             }.map(\.row)
             for row in rows { next.set(row: row, column: 3, k) }
+            mirrorWeight(set, kg: k, in: &next)
             typed.kg.formUnion(rows)
         }
         if !r.isEmpty, reps != shown.reps {
             next.set(row: set.row, column: 4, r)
             typed.reps.insert(set.row)
         }
+        // The other side may be the set at hand: its field follows.
+        let old = day
         await saveDay(next)
+        refill(from: old)
     }
 
     /// Pokračovat v tréninku: the finished workout opens again where it was,
@@ -2313,6 +2336,12 @@ struct TrainingModeView: View {
         }
     }
 
+    /// GymSessionMath.carried with this workout's kept and typed sets; a
+    /// first try of the exercise also follows its warm-up.
+    private func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
+        GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
+    }
+
     /// The letter chosen for the set before (not the plan's): the sets to come
     /// take it too, as they take its weight and reps.
     private func carriedLetter(_ set: GymSet, in exercise: GymExercise) -> String? {
@@ -2328,7 +2357,7 @@ struct TrainingModeView: View {
         guard !set.done, let before = GymSessionMath.previous(set, in: exercise), !kept.contains(before.row),
               let change = GymSessionMath.adjustment(set, after: before),
               // Not when the set has its own weight (typed in ahead, the plan's own).
-              GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed)?.kg == change.kg,
+              carried(set, in: exercise)?.kg == change.kg,
               let kg = before.kg, let done = before.reps else { return nil }
         let goal = set.plannedReps ?? before.plannedReps ?? ""
         let text: String = !change.lighter ? L10n.f("Série %@ šla lehce, %@ z %@. Další těžší.", before.number, done, goal)
@@ -2347,16 +2376,22 @@ struct TrainingModeView: View {
 
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
-        let carried = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
-        if carried != nil { picked.insert(set.row) }
+        let letter = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
+        if letter != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg, machineLb: lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? ""))
         let r = reps.trimmingCharacters(in: .whitespaces)
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
         // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
         // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
-        let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { GymSessionMath.carried(set, in: $0, keep: kept, typed: typed)?.kg }
-        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried, keepDrops: typed.kg)
+        let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carried(set, in: $0)?.kg }
+        // A weight other than the field showed: by sides the other side takes it.
+        let machineLb = lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? "")
+        let showed = LiftWeight.kgText(LiftWeight.shown(set.kg ?? shown ?? set.plannedKg, machineLb: machineLb) ?? "", machineLb: machineLb)
+        if !k.isEmpty, LiftWeight.number(k) != LiftWeight.number(showed) {
+            mirrorWeight(set, kg: k, in: &next)
+        }
+        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: letter, keepDrops: typed.kg)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next

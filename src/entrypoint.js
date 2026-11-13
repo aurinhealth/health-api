@@ -1,6 +1,7 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
+import { batchingD1 } from "./d1-batch.js";
 import { trainingSetup } from './onboarding.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
@@ -699,6 +700,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     }
 }
 
+// The central database with reads started side by side sent in one trip
+// (d1-batch.js): signing in reads the user, the route and the catalogue state at once.
+const batchedEnv = env => (env?.DB ? { ...env, DB: batchingD1(env.DB) } : env);
+
 export default {
   scheduled: worker.scheduled,
   async fetch(request, env, ctx) {
@@ -710,7 +715,7 @@ export default {
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
     return timed(async work => {
       try {
-        const answered = await worker.fetch(request, env, ctx);
+        const answered = await worker.fetch(request, batchedEnv(env), ctx);
         // The owner's report names why (the route's own error text), before it is made plain.
         if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
         // A database or code error never reaches the app word for word (error-text.js).
@@ -3514,7 +3519,7 @@ async function workoutPreview(env,ctx,a){
   // Open water: the open-water swim of the length that fits, rendered by time outside.
   const lake=a.sport==='swim'&&a.openWater&&!a.workoutId?planWorkoutId('swim',{family:'swim-open-water'},a.minutes):null,lakeWorkout=lake?await getWorkout(env.DB,lake).catch(()=>null):null;
   const exact=lakeWorkout?{workoutId:lakeWorkout.id,resizeTo:lakeWorkout.duration_minutes}:a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:a.sport!=='gym'&&FOCUS_OF[a.kind]?{focus:FOCUS_OF[a.kind]}:a.sport==='gym'&&Array.isArray(a.gymMuscles)&&a.gymMuscles.length?{focusMuscles:a.gymMuscles}:a.sport==='gym'&&a.gymFocus?{focus:a.gymFocus}:{};
-  const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:a.sport==='swim'&&a.openWater?'outdoor':'auto',preview:true,userInitiated:true,fromCoach:true,...(a.insisted?{insisted:true}:{}),...(a.block||{}),...exact})}),env,ctx,internalUrl,{signedIn:true});
+  const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:a.sport==='swim'&&a.openWater?'outdoor':'auto',preview:true,userInitiated:true,fromCoach:true,...(a.insisted?{insisted:true}:{}),...(a.sport==='gym'&&a.gymAvoid?.length?{excludeExercises:a.gymAvoid}:{}),...(a.block||{}),...exact})}),env,ctx,internalUrl,{signedIn:true});
   const result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||L('Trénink se nepodařilo připravit.', 'The workout couldn\'t be prepared.'));
   if(a.sport==='gym'&&result.plan?.rows)result.muscles=Object.fromEntries([...new Set(result.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
   return result;

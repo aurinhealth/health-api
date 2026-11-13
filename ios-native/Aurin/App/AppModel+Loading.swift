@@ -119,7 +119,9 @@ extension AppModel {
                 WidgetBridge.update(today)
                 let client = api
                 scope.task { await WidgetBridge.followWeek(today, api: client) }
-                prefetchAround(Self.localDate(Date()))
+                // Yesterday's screens wait until the coach's cards have asked, so they do
+                // not queue in the account's database with them (report 2026-11-12).
+                prefetchAround(Self.localDate(Date()), after: .seconds(10))
                 await cycle
             }
             if let status = await status, stillSignedIn(account) { athleteStatus = status }
@@ -540,7 +542,8 @@ extension AppModel {
     /// The days before and after the one on screen kept on the phone in
     /// advance (each at most once an hour), with Food and Health when they
     /// were opened, so the next swipe or arrow opens at once.
-    func prefetchAround(_ date: String) {
+    /// after: a pause first (opening the app, while the coach's cards ask).
+    func prefetchAround(_ date: String, after pause: Duration = .zero) {
         let todayDate = Self.localDate(Date())
         let wantFood = food != nil, wantHealth = health != nil
         let api = api
@@ -555,6 +558,8 @@ extension AppModel {
             let today = stale("today"), food = wantFood && stale("food"), health = wantHealth && stale("health")
             guard today || food || health else { continue }
             scope.task(priority: .utility) {
+                if pause > .zero { try? await Task.sleep(for: pause) }
+                if Task.isCancelled { return }
                 if today { _ = try? await api.todayData(date: day) }
                 if food { _ = try? await api.foodData(date: day) }
                 if health { _ = try? await api.health(date: day) }

@@ -8,6 +8,7 @@ import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
 import { parseStrengthPlan } from './strength-history.js';
+import { unwantedExercises } from './strength-generator.js';
 import { planTemplates, getTemplate, planStart } from './training-plans.js';
 import { actionInstructions } from './private/coach-actions.js';
 import { MAX_MINUTES } from './workout-model.js';
@@ -254,7 +255,10 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
         // name and the next days' rule (never the same half twice) agree.
         const muscles=gymMusclesOf(a,context.userMessage),legs=muscles.filter(g=>LEG_GROUPS.includes(g)).length;
         const focus=muscles.length?(legs===muscles.length?'lower':legs?null:'upper'):gymFocusOf(a,context.userMessage);
-        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{})}];
+        // Exercises the athlete turned down in this chat ("Nechci floor press")
+        // stay out of the card, as the answer promises (Petr 2026-11-12).
+        const avoid=unwantedExercises([...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content),context.userMessage]);
+        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{}),...(avoid.length?{gymAvoid:avoid}:{})}];
       }
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(openWater?{openWater:true}:{}),...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }

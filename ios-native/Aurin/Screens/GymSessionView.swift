@@ -102,9 +102,8 @@ struct GymSessionView: View {
             TechniqueSheet(exercise: item.name, replace: { Task { try? await Task.sleep(for: .milliseconds(450)); alternativesFor = item.name } })
         }
         .sheet(item: Binding(get: { alternativesFor.map { Named(name: $0) } }, set: { alternativesFor = $0?.name })) { item in
-            AlternativesSheet(date: date, exercise: item.name) { replacement in
-                Task { await replace(item.name, with: replacement) }
-            }
+            AlternativesSheet(date: date, exercise: item.name, choose: { _ in },
+                              chooseAlternative: { alt in Task { await replace(item.name, with: alt) } })
         }
         .sheet(isPresented: $changing) {
             GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
@@ -404,8 +403,8 @@ struct GymSessionView: View {
         rating = true
     }
 
-    private func replace(_ exercise: String, with name: String) async {
-        day?.replace(exercise: exercise, with: name)
+    private func replace(_ exercise: String, with alt: GymAlternative) async {
+        day?.replace(exercise: exercise, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
         await save()
         await load()
     }

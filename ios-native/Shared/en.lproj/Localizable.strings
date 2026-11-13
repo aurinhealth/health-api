@@ -4194,6 +4194,10 @@
 "HRV %@ ms, nad obvyklým rozmezím" = "HRV %@ ms, above your usual range";
 "HRV %@ ms, pod obvyklým rozmezím" = "HRV %@ ms, below your usual range";
 "HRV %@ ms, v obvyklém rozmezí" = "HRV %@ ms, within your usual range";
+"Region potravin" = "Food region";
+"Česko a Slovensko" = "Czechia and Slovakia";
+"Mezinárodní" = "International";
+"Potraviny z tohoto regionu se ve vyhledávání ukážou první. Automaticky se řídí regionem iPhonu." = "Foods from this region show first in food search. Automatic follows your iPhone's region.";
 
 /* Coach thinking steps (CoachSteps.swift) */
 "Odpověď za %lld s, %@" = "Answered in %lld s, %@";
