@@ -259,6 +259,7 @@ struct SyncSendGroup: View {
         var names: [String] = []
         if export.prefs.health.allows("nutrition") && export.viaGoogle.contains("nutrition") { names.append("jídlo") }
         if export.prefs.health.allows("weight") && export.viaGoogle.contains("weight") { names.append("váhu") }
+        if export.prefs.health.allows("water") && export.viaGoogle.contains("water") { names.append("vodu") }
         if export.prefs.pushActivities && export.viaGoogle.contains("activities") { names.append("tréninky") }
         return names
     }
@@ -640,7 +641,7 @@ struct SyncHealthView: View {
     private var footer: String? {
         switch id {
         case "apple": return "Do Apple Health jde jen to, co v Aurinu sám zapíšeš."
-        case "google": return "Váhu a jídlo zapsané v Aurinu."
+        case "google": return "Váhu, jídlo a vodu zapsané v Aurinu."
         case "intervals": return "Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
         default: return nil
         }

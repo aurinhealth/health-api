@@ -23,7 +23,7 @@ final class AppleHealthExport {
     private(set) var prefs: SyncPrefs
 
     /// What the server already writes to Google Health ("activities", "weight",
-    /// "nutrition"). The Google Health iPhone app also reads Apple Health, so the
+    /// "nutrition", "water"). The Google Health iPhone app also reads Apple Health, so the
     /// same data written here too counted twice there: Google's copy wins.
     private(set) var viaGoogle: Set<String>
 
@@ -67,6 +67,7 @@ final class AppleHealthExport {
             if google.prefs.pushActivities && !missing.contains("activityWrite") { types.insert("activities") }
             if google.prefs.health.allows("weight") && !missing.contains("weightWrite") { types.insert("weight") }
             if google.prefs.health.allows("nutrition") && !missing.contains("nutritionWrite") { types.insert("nutrition") }
+            if google.prefs.health.allows("water") && !missing.contains("nutritionWrite") { types.insert("water") }
         }
         viaGoogle = types
         UserDefaults.standard.set(types.sorted(), forKey: Self.viaGoogleKey)
@@ -613,7 +614,7 @@ final class AppleHealthExport {
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []
-            let water = drinks.isEmpty ? (food.water.ml ?? 0) : drinks.filter { $0.kind == "water" && $0.app == nil }.reduce(0.0) { $0 + ($1.ml ?? 0) }
+            let water = viaGoogle.contains("water") ? 0 : drinks.isEmpty ? (food.water.ml ?? 0) : drinks.filter { $0.kind == "water" && $0.app == nil }.reduce(0.0) { $0 + ($1.ml ?? 0) }
             totals.append(("water", .dietaryWater, .literUnit(with: .milli), water))
         }
         var written = UserDefaults.standard.dictionary(forKey: Self.writtenKey) as? [String: Double] ?? [:]
