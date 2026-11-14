@@ -26,7 +26,7 @@ const memoryDb = () => {
       if (/FROM activity_undo WHERE user_id=\? AND created_at>=\? AND change_json LIKE/.test(sql)) { const like = a[2].slice(1, -1); return [...undo].reverse().find(u => u.created_at >= a[1] && u.change_json.includes(like)) || null; }
       return null;
     },
-    all: async () => /FROM coach_inbox/.test(sql) ? { results: inbox.filter(r => r.id > a[1]) } : { results: [] } }), run: async () => ({ meta: {} }) }) };
+    all: async () => /FROM coach_inbox/.test(sql) ? { results: inbox.filter(r => r.id !== a[1] && r.confirmed_at > a[2]) } : { results: [] } }), run: async () => ({ meta: {} }) }) };
   return { env: { DB: db, USER_ID: 1 }, db, inbox };
 };
 
@@ -62,9 +62,12 @@ test('the confirm keeps the undo only with Chat v1, and the chat undoes before t
 test('after a later change of the chat was undone, the text does not go one change further back', async () => {
   const { env, db, inbox } = memoryDb();
   await rememberChange(env, { kind: 'gym_plan', date: '2026-11-14', before: [['a']], after: [['b']], chatId: 7, draftId: 40, proposal: 'A' });
-  inbox.push({ id: 41, draft_json: JSON.stringify({ kind: 'coach_action', action: { type: 'gym_add', toExercise: 'Cable curl' }, chatId: 7, messageId: 3 }) });
+  inbox.push({ id: 41, confirmed_at: '2026-11-14 10:05:00', draft_json: JSON.stringify({ kind: 'coach_action', action: { type: 'gym_add', toExercise: 'Cable curl' }, chatId: 7, messageId: 3 }) });
   assert.equal((await lastUndoInChat(db, 7, '2026-11-14 00:00:00')).stale, true);
-  inbox[0] = { id: 41, draft_json: JSON.stringify({ kind: 'coach_action', action: { type: 'status', status: 'active' }, chatId: 7, messageId: 3 }) };
+  inbox[0] = { id: 41, confirmed_at: '2026-11-14 10:05:00', draft_json: JSON.stringify({ kind: 'coach_action', action: { type: 'status', status: 'active' }, chatId: 7, messageId: 3 }) };
+  assert.equal((await lastUndoInChat(db, 7, '2026-11-14 00:00:00')).stale, undefined);
+  // A card proposed later but confirmed before this change is no later change.
+  inbox[0] = { id: 41, confirmed_at: '2026-11-14 09:55:00', draft_json: JSON.stringify({ kind: 'coach_action', action: { type: 'gym_add', toExercise: 'Cable curl' }, chatId: 7, messageId: 3 }) };
   assert.equal((await lastUndoInChat(db, 7, '2026-11-14 00:00:00')).stale, undefined);
 });
 

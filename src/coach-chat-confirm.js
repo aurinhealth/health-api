@@ -90,11 +90,12 @@ export async function lastUndoInChat(db, chatId, since) {
   if (!Number.isInteger(Number(chatId)) || !Number(chatId)) return null;
   await db.prepare('CREATE TABLE IF NOT EXISTS activity_undo (user_id INTEGER NOT NULL, token TEXT NOT NULL, change_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, token))').run();
   const chat = '%"chatId":' + Number(chatId) + ',%';
-  const row = await db.prepare("SELECT token,change_json FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(db.userId, since, chat).first();
+  const row = await db.prepare("SELECT token,change_json,created_at FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(db.userId, since, chat).first();
   if (!row) return null;
   let c; try { c = JSON.parse(row.change_json); } catch { return null; }
   if (c.kind !== 'gym_plan' || c.chatId !== Number(chatId)) return null;
-  const later = c.draftId ? ((await db.prepare("SELECT draft_json FROM coach_inbox WHERE user_id=? AND status='confirmed' AND id>? AND draft_json LIKE ?").bind(db.userId, c.draftId, chat).all()).results || []) : [];
+  // Confirmed after this change was made (cards may be confirmed in any order).
+  const later = c.draftId ? ((await db.prepare("SELECT draft_json FROM coach_inbox WHERE user_id=? AND status='confirmed' AND id<>? AND confirmed_at>? AND draft_json LIKE ?").bind(db.userId, c.draftId, row.created_at, chat).all()).results || []) : [];
   const gymChange = a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a?.type) || (a?.type === 'workout' && a.sport === 'gym' && a.trim);
   const stale = later.some(r => { try { return gymChange(JSON.parse(r.draft_json).action); } catch { return false; } });
   return { token: row.token, proposal: c.proposal || '', ...(stale ? { stale: true } : {}) };
