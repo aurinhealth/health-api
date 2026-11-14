@@ -604,7 +604,7 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S71', title: 'Potvrzení výměn textem v chatu', message: 'Já ti je potvrzuju v chatu, tak to potvrď.', athlete: { gym: evalGym },
     conversation: date => [{ role: 'user', content: 'Uprav mi dnešní posilovnu, ať to není pořád stejné.' }, { role: 'assistant', content: `Vyměnil bych leg press za hack squat a lat pulldown za přítah na kladce, partie zůstanou stejné.\n\n[Návrhy: Vyměnit Pivot leg press → Hack squat (${date}); Vyměnit Lat pulldown → Seated cable row (${date})]` }],
     context: () => ({ confirmedInChat: [{ proposal: 'Vyměnit Pivot leg press → Hack squat', done: true }, { proposal: 'Vyměnit Lat pulldown → Seated cable row', done: true }] }),
-    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /hotov|vyměnil|vyměněn|upravil|upraven|změnil|je v plánu|máš v plánu|done/i)),
+    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /(?<!ne)hotov|vyměnil|vyměněn|upravil|upraven|změnil|(?<!ne)potvrzen|(?<!ne)potvrdil|je v plánu|máš v plánu|(?<!not )done|(?<!not )confirmed/i)),
       quality('stejné výměny znovu nenavrhne', !r.proposed.some(a => a.type === 'gym_swap' && ['Hack squat', 'Seated cable row'].includes(a.toExercise))),
       quality('nežádá klepnutí na kartu', !says(r, /klepn|ťukn|tukn|tlačítk|kart[ua]|\btap\b/i))] },
   // Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "tento cvik neumím přidat".
@@ -636,7 +636,8 @@ export const COACH_EVAL_SCENARIOS = [
       return [quality('jízda na dnešek kolem 2 h', ride && ride.minutes >= 110 && ride.minutes <= 130, ride ? String(ride.minutes) : r.kept.map(a => a.type).join(', ')),
         quality('původní jízda uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9511')),
         safety('žádná tvrdá jízda místo vytrvalosti', !ride || !isHardKind(ride.card ?? ride.kind))]; } },
-  { id: 'S78', title: 'Chat v1: těžší dnešní jízda', message: 'Cítím se skvěle, dej mi dnes místo vytrvalosti něco těžšího, třeba sweet spot.', athlete: { plan: EASY_RIDE_DAY }, context: () => ({ chatV1: true }),
+  // Rested (only an endurance ride three days ago), so a harder ride fits today (run 76: the default yesterday's sweet spot rightly held it back).
+  { id: 'S78', title: 'Chat v1: těžší dnešní jízda', message: 'Cítím se skvěle, dej mi dnes místo vytrvalosti něco těžšího, třeba sweet spot.', athlete: { plan: EASY_RIDE_DAY, done: WEEKEND_DONE }, context: () => ({ chatV1: true }),
     checks: r => { const ride = r.kept.find(a => a.type === 'workout' && a.sport === 'ride' && a.date === r.date);
       return [quality('těžší jízda na dnešek', ride && ['sweet_spot', 'tempo', 'threshold'].includes(ride.card ?? ride.kind), ride ? String(ride.card ?? ride.kind) : ''),
         quality('původní jízda uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9511'))]; } },
