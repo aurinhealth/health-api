@@ -149,7 +149,8 @@ test('a plan of another focus goes back with its calendar event, only with Chat 
   const { env, db } = memoryDb(), before = [['a'], ['full body']], after = [['a'], ['upper']];
   db.plans.set('2026-11-14', JSON.stringify(after));
   const token = await rememberChange(env, { kind: 'gym_plan', date: '2026-11-14', before, after, event: { name: 'Celé tělo', type: 'WeightTraining', start_date_local: '2026-11-14T17:00:00' }, chatId: 7, draftId: 60, proposal: 'Horní polovina místo dosavadního plánu' });
-  // The event can't be stored in this test database: the plan still goes back.
-  assert.equal((await undoActivityChange(env, token)).kind, 'gym_plan');
-  assert.equal(db.plans.get('2026-11-14'), JSON.stringify(before));
+  // The event can't be stored in this test database: the plan goes forward again and the token stays.
+  await assert.rejects(undoActivityChange(env, token), /zkus to znovu/);
+  assert.equal(db.plans.get('2026-11-14'), JSON.stringify(after));
+  assert.ok(db.undo.some(u => u.token === token));
 });
