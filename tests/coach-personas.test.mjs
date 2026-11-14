@@ -108,3 +108,22 @@ test('run 75: what the athlete ate or wrote, a soy-protein yogurt and the machin
     assert.equal(check('P07', 2, bad, swaps), false, bad);
   assert.deepEqual(personaTurn(personaById('P06'), 3, []).context(), { chatV1: true });
 });
+
+test('checker calibration: every answer builds its persona context, a flag counts only on a planted fault', async () => {
+  const { COACH_CALIBRATION } = await import('../src/coach-calibration.js');
+  const { runCalibration } = await import('../src/coach-eval.js');
+  assert.ok(COACH_CALIBRATION.filter(c => c.expect === 'ok').length >= 20 && COACH_CALIBRATION.filter(c => c.expect === 'flag').length >= 15);
+  assert.equal(new Set(COACH_CALIBRATION.map(c => c.id)).size, COACH_CALIBRATION.length);
+  const seen = [];
+  const check = async (env, input, opts) => { seen.push(opts.model); return { flags: /VO2max 5×4 na 290/.test(input.answer) ? [{ cat: 'UNSAFE', quote: 'x', why: 'y' }] : [], model: opts.model, ms: 1, usd: 0 }; };
+  for (const item of COACH_CALIBRATION) {
+    const [pid, turn] = item.persona.split('.'), p = personaById(pid), s = personaTurn(p, Number(turn), item.conversation);
+    const r = await withLang(p.lang || 'cs', () => runCalibration({}, item, s, 'sol', { check }));
+    assert.equal(r.status, 'ok', item.id);
+    if (item.id === 'F01') assert.equal(r.correct, true);
+    if (item.expect === 'ok') assert.equal(r.correct, true, item.id);
+  }
+  assert.ok(seen.every(m => m === 'gpt-6-sol'));
+  const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
+  assert.equal(list.calibration.length, COACH_CALIBRATION.length);
+});

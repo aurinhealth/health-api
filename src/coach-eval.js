@@ -4,7 +4,7 @@
 // automatically. Safety checks fail the run; quality checks are for reading.
 // Only the test server answers, and only the "Coach evaluation" workflow
 // (coach-eval.yml) may call it: its GitHub token has an audience of its own.
-import { askCoach, callOpenAI, coachContext, assistantTask, coachInstructionsFor, safetyNote, lightModel } from './coach-assistant.js';
+import { askCoach, callOpenAI, coachContext, assistantTask, coachInstructionsFor, safetyNote, lightModel, complexModel } from './coach-assistant.js';
 import { composeWorkout } from './ai-workout-compose.js';
 import { workoutLoadCheck } from './ai-workout-pick.js';
 import { usageCost } from './ai-usage.js';
@@ -32,6 +32,7 @@ import { screenFacts, screenRequest, checkedText } from './screen-texts.js';
 import { checkCoachAnswer } from './coach-checker.js';
 import { COACH_PERSONAS, personaById, personaTurn } from './coach-personas.js';
 import { capabilityCoverage } from './coach-capabilities.js';
+import { COACH_CALIBRATION } from './coach-calibration.js';
 
 export const COACH_EVAL_AUDIENCE = 'aurin-coach-eval';
 export const COACH_EVAL_WORKFLOWS = new Set(['aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main']);
@@ -1082,7 +1083,15 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   if (principal?.kind !== 'coach-eval') return Response.json({ status: 'error', message: 'Unauthorized' }, { status: 401 });
   if (request.method !== 'POST') return Response.json({ status: 'error', message: 'Use POST.' }, { status: 405 });
   const body = await request.json().catch(() => ({}));
-  if (!body?.id) return Response.json({ status: 'ok', scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
+  // One calibration answer read by the checker on the light (luna) or the coach's (sol) model.
+  if (body?.calibrate) {
+    const item = COACH_CALIBRATION.find(c => c.id === String(body.calibrate));
+    if (!item) return Response.json({ status: 'error', message: 'Unknown calibration item' }, { status: 404 });
+    const persona = personaById(item.persona.split('.')[0]), s = personaTurn(persona, Number(item.persona.split('.')[1]), item.conversation);
+    try { return Response.json(await withLang(s.lang || 'cs', () => runCalibration({ ...env, COACH_EVAL: true }, item, s, body.model === 'sol' ? 'sol' : 'luna')), { headers: { 'Cache-Control': 'no-store' } }); }
+    catch (error) { return Response.json({ id: item.id, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
+  }
+  if (!body?.id) return Response.json({ status: 'ok', calibration: COACH_CALIBRATION.map(c => c.id), scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
     ...COACH_PERSONAS.map(p => ({ id: p.id, title: p.title, lang: p.lang || 'cs', turns: p.turns.length }))], coverage: evalCoverage() });
   // A persona's message `turn` with the conversation so far, which the workflow keeps.
   const persona = personaById(String(body.id));
@@ -1093,6 +1102,15 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   try { return Response.json(await withLang(scenario.lang || 'cs', () => run({ ...env, COACH_EVAL: true }, scenario)), { headers: { 'Cache-Control': 'no-store' } }); }
   // 200, not 502: Cloudflare in front of staging.aurin.health swaps a 502 for its own "Bad gateway" page and the message is lost (run 57).
   catch (error) { return Response.json({ id: scenario.id, title: scenario.title, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
+}
+
+// The checker on one calibration answer: did it flag what it should (F) and leave alone what is right (C)?
+export async function runCalibration(env, item, scenario, model, { check = checkCoachAnswer } = {}) {
+  const date = scenario.date, { ctx } = scenarioContext(scenario, date, date + ' ' + scenario.now);
+  ctx.userMessage = scenario.message;
+  const r = await check(env, { context: ctx, message: scenario.message, answer: item.answer, actions: item.actions }, { model: model === 'sol' ? complexModel(env) : lightModel(env) });
+  const flagged = r.flags.length > 0;
+  return { id: item.id, status: 'ok', persona: item.persona, expect: item.expect, why: item.why, model: r.model, ms: r.ms, usd: r.usd, flags: r.flags, correct: item.expect === 'flag' ? flagged : !flagged };
 }
 
 // The conversation a persona's message continues: user and coach messages only, as the chat keeps them.
