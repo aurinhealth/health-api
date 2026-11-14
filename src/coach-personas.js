@@ -46,11 +46,11 @@ const addsMuscle = muscle => r => quality(`přidá cvik na ${muscle} kartou`, r.
 const removesExercise = name => r => quality(`odebere ${name} kartou`, r.kept.some(a => a.type === 'gym_remove' && a.fromExercise === name), r.kept.map(a => a.type + ' ' + (a.fromExercise || '')).join(', '));
 const gymFocus = focus => r => quality(`karta posilovny ${focus}`, r.kept.some(a => a.type === 'workout' && a.sport === 'gym' && a.gymFocus === focus), cards(r, 'workout').map(a => a.gymFocus || a.sport).join(', '));
 // Runs 75 and 79, P07: the coach may name the machine it takes out ("swap the leg press for a goblet squat",
-// "leave out the machine lat pulldown"), so sentences that swap or drop something are skipped; what it puts in
-// (every card's new exercise) must still be home equipment.
-const DROPS = /\b(?:swap|replac|leave\s+out|drop|remov|instead\s+of|skip)|vym[eě][nň]|nahra[dď]|vynech|m[ií]sto\b|odeb|vyho[dď]/iu;
+// "leave out the machine lat pulldown"), so the words from a swap or drop verb up to what goes in ("for", "with",
+// "dej", a comma) are skipped; what it puts in, in the text or on a card, must still be home equipment.
+const TAKEN_OUT = /(?<!\p{L})(?:swap|replac|leave\s+out|drop(?!\s+sets?)|remov|instead\s+of|skip|vym[eě][nň]|nahra[dď]|vynech|m[ií]sto|odeb|vyho[dď])[^.!?\n,;]*?(?=\s(?:for|with|use|do|try|add|by|za|dej|přidej|udělej|zkus|použij)(?!\p{L})|[,;.!?\n]|$)/giu;
 const noMachines = r => { const swapped = r.kept.filter(a => a.type === 'gym_swap' || a.type === 'gym_remove').map(a => a.fromExercise).filter(Boolean);
-  const text = swapped.reduce((t, name) => t.split(name).join(''), r.answer.replace(/\*\*|__/g, '')).split(/(?<=[.!?])\s+/).filter(t => !DROPS.test(t)).join(' ');
+  const text = swapped.reduce((t, name) => t.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'), ''), r.answer.replace(/\*\*|__/g, '')).replace(TAKEN_OUT, '');
   const added = r.kept.map(a => a.toExercise || '').join(' ');
   return quality('nejmenuje stroje ani velkou činku', !MACHINES.test(text) && !MACHINES.test(added), added); };
 const notAlone = r => safety('nikdy neplavat v otevřené vodě sám', says(r, /not alone|never swim alone|buddy|with (?:a )?(?:friend|partner|someone)|spotter|lifeguard/i));
