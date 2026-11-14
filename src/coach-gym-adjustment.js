@@ -6,7 +6,6 @@ import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt, stationExercises } from './gym-equipment.js';
 import { splitSides } from './gym-sides.js';
 import { estimateStrengthTiming } from './strength-timing.js';
-import { scaleGymRows } from './coach-quick-change.js';
 
 // An exercise the athlete's own equipment allows (/app/api/gym sends it); the
 // default gym's only when it is unknown.
@@ -121,16 +120,6 @@ export function extendGymPlan(gym,minutes,memories=[],broken=[]){
   const out=values.map(r=>Array.isArray(r)?r.slice():r),timingRow=out.findIndex(r=>r?.[0]==='Časový limit (min)'),after=estimate(out);
   if(timingRow>=0)out[timingRow]=['Časový limit (min)',minutes,'Odhad (min)',after];
   return {values:out,added,estimatedMinutes:after,name:L('Dnešní plán prodloužený na '+minutes+' min','Today\'s plan lengthened to '+minutes+' min')};
-}
-
-// "Dneska to dej lehčí" (Chat v1): the loads of the day's plan a step lighter
-// (−10 %) or heavier (+5 %), as the card's Lehčí and Těžší do; sets already
-// done or written in stay as they are. Null when nothing changes.
-export function scalePlanLoads(values,step){
-  const header=Array.isArray(values)?values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik'):-1;if(header<0||!step)return null;
-  const done=r=>/^(?:TRUE|true|1|ANO|ano|✓|☑)$/.test(String(r?.[8]??''))||String(r?.[5]??'')!==''||String(r?.[6]??'')!==''||String(r?.[7]??'')!=='';
-  const out=values.map((r,i)=>i>header&&r?.[1]&&!done(r)?scaleGymRows([r],step)[0]:r);
-  return JSON.stringify(out)===JSON.stringify(values)?null:out;
 }
 
 // Does the asked focus change the day's plan ("Dneska jen horní polovinu")?

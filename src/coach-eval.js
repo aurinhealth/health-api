@@ -626,16 +626,16 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S77', title: 'Chat v1: prodloužit dnešní jízdu', message: 'Dneska mám víc času, prodluž mi tu jízdu na dvě hodiny.', athlete: { plan: EASY_RIDE_DAY }, context: () => ({ chatV1: true }),
     checks: r => { const ride = r.kept.find(a => a.type === 'workout' && a.sport === 'ride' && a.date === r.date);
       return [quality('jízda na dnešek kolem 2 h', ride && ride.minutes >= 110 && ride.minutes <= 130, ride ? String(ride.minutes) : r.kept.map(a => a.type).join(', ')),
-        quality('původní jízda pryč (rest)', r.kept.some(a => a.type === 'rest' && a.eventId === 'planned:9511')),
+        quality('původní jízda uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9511')),
         safety('žádná tvrdá jízda místo vytrvalosti', !ride || !isHardKind(ride.card ?? ride.kind))]; } },
   { id: 'S78', title: 'Chat v1: těžší dnešní jízda', message: 'Cítím se skvěle, dej mi dnes místo vytrvalosti něco těžšího, třeba sweet spot.', athlete: { plan: EASY_RIDE_DAY }, context: () => ({ chatV1: true }),
     checks: r => { const ride = r.kept.find(a => a.type === 'workout' && a.sport === 'ride' && a.date === r.date);
       return [quality('těžší jízda na dnešek', ride && ['sweet_spot', 'tempo', 'threshold'].includes(ride.card ?? ride.kind), ride ? String(ride.card ?? ride.kind) : ''),
-        quality('původní jízda pryč (rest)', r.kept.some(a => a.type === 'rest' && a.eventId === 'planned:9511'))]; } },
+        quality('původní jízda uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9511'))]; } },
   { id: 'S79', title: 'Chat v1: prodloužit dnešní běh', message: 'Prodluž mi dnešní běh na hodinu, cítím se dobře.', athlete: { ...RUNNER, plan: EASY_RUN_DAY, done: RUNS_DONE }, context: () => ({ chatV1: true }),
     checks: r => { const run = r.kept.find(a => a.type === 'workout' && a.sport === 'run' && a.date === r.date);
       return [quality('běh na dnešek kolem hodiny', run && run.minutes >= 50 && run.minutes <= 65, run ? String(run.minutes) : r.kept.map(a => a.type).join(', ')),
-        quality('původní běh pryč (rest)', r.kept.some(a => a.type === 'rest' && a.eventId === 'planned:9501')),
+        quality('původní běh uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9501')),
         safety('lehký běh zůstane lehký', !run || !isHardKind(run.card ?? run.kind))]; } },
   { id: 'S80', title: 'Chat v1: lehčí váhy dnešní posilovny', message: 'Dneska to v posilovně dej lehčí, cviky nech.', athlete: { gym: evalGym }, context: () => ({ chatV1: true }),
     checks: r => { const cards = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym');

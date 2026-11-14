@@ -915,7 +915,7 @@ test('S77 to S80 (Chat v1): longer or harder ride and run as a new card with a r
   const own = (id, reply) => failed(id, reply).filter(f => scenarioById(id).checks({ answer: '', kept: [], proposed: [], memory: {}, date }).some(c => f === c.severity + ':' + c.name));
   const ride = (minutes, kind) => ({ type: 'workout', sport: 'ride', date, minutes, kind }), rest = { type: 'rest', eventId: 'planned:9511' };
   assert.deepEqual(own('S77', { answer: 'Dnešní Endurance 90 min ruším a dnes dám místo ní 2 h vytrvalosti.', kept: [ride(120, 'endurance'), rest], proposed: [], memory: {} }), []);
-  assert.ok(own('S77', { answer: 'Jasně.', kept: [ride(120, 'endurance')], proposed: [], memory: {} }).includes('quality:původní jízda pryč (rest)'));
+  assert.ok(own('S77', { answer: 'Jasně.', kept: [ride(120, 'endurance')], proposed: [], memory: {} }).includes('quality:původní jízda uvolní den (rest nebo přesun)'));
   assert.deepEqual(own('S78', { answer: 'Dnešní Endurance 90 min ruším a dnes dám místo ní sweet spot 2×15.', kept: [ride(75, 'sweet_spot'), rest], proposed: [], memory: {} }), []);
   const run = { type: 'workout', sport: 'run', date, minutes: 60, kind: 'endurance' };
   assert.deepEqual(own('S79', { answer: 'Dnešní Lehký běh 40 min ruším a dnes dám místo něj hodinu lehkého běhu.', kept: [run, { type: 'rest', eventId: 'planned:9501' }], proposed: [], memory: {} }), []);

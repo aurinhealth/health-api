@@ -3,10 +3,11 @@ import { L } from './lang.js';
 import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
-import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted,scalePlanLoads } from './coach-gym-adjustment.js';
+import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
+import { scalePlanLoads, weightsName } from './coach-quick-change.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { unwantedExercises } from './strength-generator.js';
 import { planTemplates, getTemplate, planStart } from './training-plans.js';
@@ -65,8 +66,11 @@ const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|ud[eě]lej\s+z\s+toho|make\s+it\s+a
 const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
 const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
 // "Dej to dneska lehčí" / "Make it heavier" for the gym: −1 or +1 load step, 0
-// when the message asks for no such thing or also for another length.
-const LIGHTER=/(?:lehč|lehc|odleh[čc]|ni[žz][šs][íi]\s+v[áa]h|m[ée]n[ěe]\s+v[áa]h|easier|lighter)/iu,HEAVIER=/(?:t[ěe][žz][šs]|vy[šs][šs][íi]\s+v[áa]h|v[íi]c\s+v[áa]h|harder|heavier)/iu;
+// when the message asks for no such thing or also for another length. Only
+// phrases about the session's weights: "Mám dneska těžší den" is not one.
+const NOT_LOAD=String.raw`(?!\p{L})(?!\s+(?:den|dn[eyí]|noc|t[ýy]d|tr[ée]nin|ve[čc]er|r[áa]no|day|night|week|session|workout|training))`,LOAD=String.raw`(?:v[áa]h|z[áa]t[ěe][žz]|kil|weights?|loads?)`;
+const LIGHTER=new RegExp(String.raw`(?:(?<!\p{L})(?:dej|ud[ěe]lej|nastav)\s+(?:\p{L}+\s+){0,3}?(?:leh[čck])\p{L}*${NOT_LOAD}|(?:leh[čc]|ni[žz]š|men[šs])\p{L}*\s+${LOAD}|(?:m[ée]n[ěe]|m[íi][ňn])\s+${LOAD}|(?<!\p{L})(?:ub[eě]r|sni[žz])\p{L}*\s+(?:\p{L}+\s+)?${LOAD}|(?<!\p{L})odleh[čc]i(?!\p{L})|make\s+it\s+(?:lighter|easier)|go\s+lighter|lighter\s+${LOAD}|(?:lower|less|reduce|drop)\s+(?:the\s+)?${LOAD})`,'iu');
+const HEAVIER=new RegExp(String.raw`(?:(?<!\p{L})(?:dej|ud[ěe]lej|nastav)\s+(?:\p{L}+\s+){0,3}?(?:t[ěe][žz][šsk])\p{L}*${NOT_LOAD}|(?:t[ěe][žz]š|vy[šs]š|v[ěe]t[šs])\p{L}*\s+${LOAD}|(?:v[íi]c|v[íi]ce)\s+${LOAD}|(?<!\p{L})(?:zvy[šs]|zv[ěe]t[šs])\p{L}*\s+(?:\p{L}+\s+)?${LOAD}|make\s+it\s+(?:heavier|harder)|go\s+heavier|heavier\s+${LOAD}|(?:higher|more|increase|raise)\s+(?:the\s+)?${LOAD})`,'iu');
 export const gymLoadAsked=message=>{const m=String(message||'');if(LENGTH_OR_ADD.test(m))return 0;const down=LIGHTER.test(m),up=HEAVIER.test(m);return down===up?0:down?-1:1;};
 export const replaceAsked=message=>{const m=String(message||'');return INSTEAD.test(m)?!ADD_ASK.test(m):REPLACE_ASK.test(m)&&!LENGTH_OR_ADD.test(m);};
 // The safety inputs the week review sets, for the chat path too: each day's
@@ -286,9 +290,9 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
           const values=context.gymPlan.values;
           if(context.chatV1&&replaceAsked(context.userMessage)&&focusChanges(values,{focus,muscles}))return planStarted(values)?[]:[{...session,replace:{source:values}}];
           // Lighter or heavier weights of the same plan (Chat v1), not another length.
-          const load=context.chatV1?gymLoadAsked(context.userMessage):0,scaled=load?scalePlanLoads(values,load):null;
-          if(scaled)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,loadStep:load,workoutName:load<0?L('Dnešní plán s lehčími vahami','Today\'s plan with lighter weights'):L('Dnešní plán s těžšími vahami','Today\'s plan with heavier weights'),trim:{values:scaled,source:values,removed:[]}}];
-          const trimmed=trimGymPlan(values,a.minutes);
+          // Cut to the asked length first, then the weights (review of #1091).
+          const trimmed=trimGymPlan(values,a.minutes),load=context.chatV1?gymLoadAsked(context.userMessage):0,base=trimmed?.values||values,scaled=load?scalePlanLoads(base,load):null;
+          if(scaled)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,loadStep:load,workoutName:weightsName(load),trim:{values:scaled,base,source:values,removed:trimmed?.removed||[],weights:true}}];
           if(trimmed)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:values,removed:trimmed.removed}}];
           const longer=context.chatV1?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;
           return longer?[{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:longer.name,trim:{values:longer.values,source:values,removed:[],added:longer.added}}]:[];

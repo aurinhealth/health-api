@@ -3611,7 +3611,7 @@ async function workoutPreview(env,ctx,a){
   // The day's own plan shortened (coach-actions.js): its rows as they will be saved.
   if(a.sport==='gym'&&a.trim){
     const rows=a.trim.values.slice(a.trim.values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik')+1).filter(r=>r?.[1]);
-    return {status:'ok',plan:{planName:a.workoutName,rationale:a.trim.removed.length?L('Vynechávám: ','Leaving out: ')+a.trim.removed.join(', '):a.trim.added?.length?L('Přidávám: ','Adding: ')+a.trim.added.join(', '):null,rows},muscles:Object.fromEntries([...new Set(rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]))};
+    return {status:'ok',plan:{planName:a.workoutName,rationale:[a.trim.removed.length?L('Vynechávám: ','Leaving out: ')+a.trim.removed.join(', '):a.trim.added?.length?L('Přidávám: ','Adding: ')+a.trim.added.join(', '):null,a.loadStep?(a.loadStep<0?L('Váhy lehčí o ','Weights lighter by '):L('Váhy těžší o ','Weights heavier by '))+Math.abs(a.loadStep)+L(Math.abs(a.loadStep)===1?' krok':' kroky',Math.abs(a.loadStep)===1?' step':' steps'):null].filter(Boolean).join('. ')||null,rows},muscles:Object.fromEntries([...new Set(rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]))};
   }
   const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
   // The library workout named in the answer, at the proposed length; without one
