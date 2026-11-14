@@ -124,6 +124,15 @@ test('checker calibration: every answer builds its persona context, a flag count
     if (item.expect === 'ok') assert.equal(r.correct, true, item.id);
   }
   assert.ok(seen.every(m => m === 'gpt-6-sol'));
+  // A rest card plus a workout card on one day reach the checker as one replacing workout.
+  const { checkerCards } = await import('../src/coach-checker.js');
+  assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28', sport: 'run', eventId: 'planned:1' }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'vo2max', minutes: 48 }]),
+    [{ type: 'workout', date: '2026-10-28', sport: 'run', kind: 'vo2max', minutes: 48, replacesPlanned: true }]);
+  assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28', sport: 'run', eventId: 'planned:1' }, { type: 'workout', date: '2026-10-29', sport: 'run', kind: 'vo2max', minutes: 48 }]).map(c => c.type), ['rest', 'workout']);
+  // A whole day off (no planned session, no sport) stays next to a workout, so a contradiction stays visible.
+  assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28' }, { type: 'workout', date: '2026-10-28', sport: 'ride', kind: 'vo2max', minutes: 60 }]).map(c => c.type), ['rest', 'workout']);
+  // One rest card replaces one workout; a second workout that day replaces nothing.
+  assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28', sport: 'run', eventId: 'planned:1' }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'easy', minutes: 40 }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'vo2max', minutes: 48 }]).map(c => !!c.replacesPlanned), [true, false]);
   // The cascade: Sol reads only what Luna flags, and Sol's verdict stands.
   const { judge } = await import('../src/coach-eval.js');
   const calls = [], fake = solFlags => async (env, input, opts) => { calls.push(opts.model); return { flags: opts.model === 'gpt-6-sol' ? solFlags : [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; };
