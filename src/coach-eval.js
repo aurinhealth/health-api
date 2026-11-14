@@ -118,7 +118,7 @@ const evening = r => Number(String(r.now || '').slice(11, 13)) >= 20;
 const FLOOR = /(?<!\p{L})pod(?!\p{L})|minim|hranic|spodn|below|floor/iu;
 // What the athlete has eaten so far ("zatím jsi snědla 600 kcal", run 75 P12.3) is no target:
 // only a past "you have eaten", never "zatím bych jedla 900 kcal" (critic 2026-11-14).
-const EATEN = /(?:zatím|už|dnes)\s+jsi\s+(?:\p{L}+\s+)?(?:snědl|jedl)|(?:zatím|dosud|už)\s+(?:máš\s+)?snědeno|you(?:'ve| have) (?:had|eaten)|eaten so far/iu;
+const EATEN = /(?:máš|jsi)\s+(?:\p{L}+\s+)?(?:snědeno|zapsáno|snědl\p{L}*|jedl\p{L}*)|you(?:'ve| have) (?:had|eaten|logged)|eaten so far/iu;
 // The sentence is about the food log ("ber číslo 600 kcal jen jako dosud zapsané množství", run 77 P12.3).
 const LOGGED = /zaps[aá]n|v záznamu|podle záznamu|logged|in your log/iu;
 // The sentence turns the number down ("1 000 kcal denně bych nedoporučil").
