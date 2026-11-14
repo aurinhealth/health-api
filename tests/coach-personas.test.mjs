@@ -101,7 +101,7 @@ test('run 75: what the athlete ate or wrote, a soy-protein yogurt and the machin
   assert.equal(check('P07', 3, 'Aim for RPE 8–9. I’d swap out the two machine leg exercises and leave out the lat pulldown, since you’re training at home.', swaps), true);
   assert.equal(check('P07', 2, 'Swap the leg press for a goblet squat. Then finish with cable rows.', swaps), false);
   assert.equal(check('P07', 2, 'Do cable flyes instead.', [{ type: 'gym_add', toExercise: 'Cable fly' }]), false);
-  for (const bad of ['Swap the leg press for a barbell back squat.', 'Instead of the lunges, use the Smith machine.', 'Místo dřepů dej leg press.', 'Skip the goblet squat and do barbell squats.', 'Do a drop set on the cable row.', '- Swap the leg press for a goblet squat\n- Finish with cable rows'])
+  for (const bad of ['Swap the leg press for a barbell back squat.', 'Instead of the lunges, use the Smith machine.', 'Místo dřepů dej leg press.', 'Skip the goblet squat and do barbell squats.', 'Do a drop set on the cable row.', 'Swap the lunges to a Smith squat.', 'Swap the lunges and go heavy on the leg press.', 'Swap goblet squats → leg press.', 'Replace lunges: Smith machine squat.', '- Swap the leg press for a goblet squat\n- Finish with cable rows'])
     assert.equal(check('P07', 2, bad, swaps), false, bad);
   assert.deepEqual(personaTurn(personaById('P06'), 3, []).context(), { chatV1: true });
 });

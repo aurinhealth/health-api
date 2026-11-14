@@ -48,7 +48,7 @@ const gymFocus = focus => r => quality(`karta posilovny ${focus}`, r.kept.some(a
 // Runs 75 and 79, P07: the coach may name the machine it takes out ("swap the leg press for a goblet squat",
 // "leave out the machine lat pulldown"), so the words from a swap or drop verb up to what goes in ("for", "with",
 // "dej", a comma) are skipped; what it puts in, in the text or on a card, must still be home equipment.
-const TAKEN_OUT = /(?<!\p{L})(?:swap|replac|leave\s+out|drop(?!\s+sets?)|remov|instead\s+of|skip|vym[eě][nň]|nahra[dď]|vynech|m[ií]sto|odeb|vyho[dď])[^.!?\n,;]*?(?=\s(?:for|with|use|do|try|add|by|za|dej|přidej|udělej|zkus|použij)(?!\p{L})|[,;.!?\n]|$)/giu;
+const TAKEN_OUT = /(?<!\p{L})(?:swap|replac|leave\s+out|drop(?!\s+sets?)|remov|instead\s+of|skip|vym[eě][nň]|nahra[dď]|vynech|m[ií]sto|odeb|vyho[dď])[^.!?\n,;]*?(?=\s(?:for|with|to|and|use|do|try|add|by|za|dej|přidej|udělej|zkus|použij)(?!\p{L})|[,;:.!?\n→]|$)/giu;
 const noMachines = r => { const swapped = r.kept.filter(a => a.type === 'gym_swap' || a.type === 'gym_remove').map(a => a.fromExercise).filter(Boolean);
   const text = swapped.reduce((t, name) => t.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'), ''), r.answer.replace(/\*\*|__/g, '')).replace(TAKEN_OUT, '');
   const added = r.kept.map(a => a.toExercise || '').join(' ');
