@@ -13,7 +13,7 @@ test('a clear yes in the text confirms, a question, a no, a later, a change or a
   for(const m of ['Jo','Yes please','Jasně, díky'])assert.equal(chatConfirmation(m),'weak',m);
   assert.equal(chatConfirmation('Ano, potvrzuju'),'strong');
   // Second review: a change, a later or something else after the verb, and a bare "Ok".
-  for(const m of ['Udělej to lehčí','Udělej to kratší','Proveď to s menší vahou','Go ahead and make it harder','Udělej to tak, aby to bylo do 30 minut','Do it in 30 minutes','Udělej to pro příští týden','Do it next week','Do it after lunch','Potvrď je potom','Potvrzuju, že jsem to udělal','Confirmed that my knee hurts','Potvrď mi, kolik sérií mám','Confirm what exactly','Souhlasím, i když mě bolí rameno','I agree it is hard','Ok','Okay','Beru','Potvrzuju a přidej to až zítra a vynech dřep'])
+  for(const m of ['Udělej to lehčí','Udělej to kratší','Proveď to s menší vahou','Go ahead and make it harder','Udělej to tak, aby to bylo do 30 minut','Do it in 30 minutes','Udělej to pro příští týden','Do it next week','Do it after lunch','Potvrď je potom','Potvrzuju, že jsem to udělal','Confirmed that my knee hurts','Potvrď mi, kolik sérií mám','Confirm what exactly','Souhlasím, i když mě bolí rameno','I agree it is hard','Ok','Okay','Beru','Ty jo','Potvrzuju a přidej to až zítra a vynech dřep'])
     assert.equal(chatConfirmation(m),false,m);
   // Review of #1087: each of these confirmed before.
   for(const m of ['Mám to potvrdit?','Ne, nechci to','Potvrď jen první','S prvním návrhem souhlasím','Souhlasím s tou výměnou leg pressu','ok a co zítra?','Zatím ne, počkej','Don\'t confirm it','Nesouhlasím',

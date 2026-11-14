@@ -26,7 +26,8 @@ export function chatConfirmation(message) {
   if (more.length > 1 || (more.length && (!ADD.test(more[0]) || /,|(?<!\p{L})(?:a|and|ale|but)(?!\p{L})/u.test(more[0])))) return false;
   const words = head.split(/[^\p{L}']+/u).filter(Boolean);
   if (!words.length || !words.every(w => STRONG.has(w) || WEAK.has(w) || FILLER.has(w))) return false;
-  return words.some(w => STRONG.has(w)) ? 'strong' : words.some(w => WEAK.has(w)) ? 'weak' : false;
+  // A bare yes opens the message ("Ty jo" is wonder, not a yes).
+  return words.some(w => STRONG.has(w)) ? 'strong' : WEAK.has(words[0]) ? 'weak' : false;
 }
 
 // The changes a yes in the text may make: today's training plan only. A rest,
