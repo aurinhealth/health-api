@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'S77', 'S78', 'S79', 'S80', 'S81', 'S82', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'S77', 'S78', 'S79', 'S80', 'S81', 'S82', ...Array.from({ length: 9 }, (_, i) => 'S' + (83 + i)), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -150,7 +150,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 116);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 125);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -930,4 +930,25 @@ test('S81 and S82 (Chat v1): a ride undone by text is not proposed again, a fail
   assert.deepEqual(own('S81', { answer: 'Hotovo, jízda je zase jako předtím: Endurance 90 min.', kept: [], proposed: [], memory: {} }), []);
   assert.deepEqual(own('S82', { answer: 'Vrátit to nešlo, trénink se mezitím změnil. Můžeš ho přesunout ručně.', kept: [], proposed: [], memory: {} }), []);
   assert.ok(own('S82', { answer: 'Vráceno, běh je zpátky.', kept: [], proposed: [], memory: {} }).includes('quality:netvrdí, že je to vrácené'));
+});
+
+test('S83 to S91 (Chat v1): cancel, move, another sport or kind and a harder swim, with their own cards', () => {
+  const own = (id, reply) => failed(id, reply).filter(f => scenarioById(id).checks({ answer: '', kept: [], proposed: [], memory: {}, date }).some(c => f === c.severity + ':' + c.name));
+  const reply = kept => ({ answer: 'Hotovo.', kept, proposed: kept, memory: {} }), tomorrow = new Date(Date.parse(date + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10);
+  assert.deepEqual(own('S83', reply([{ type: 'rest', eventId: 'planned:9511', date }])), []);
+  assert.ok(own('S83', reply([{ type: 'rest', eventId: 'planned:9511', date }, { type: 'workout', sport: 'ride', date, minutes: 30 }])).includes('quality:bez nové karty tréninku'));
+  assert.deepEqual(own('S84', reply([{ type: 'rest', eventId: 'planned:9201', date }])), []);
+  assert.deepEqual(own('S85', reply([{ type: 'move', eventId: 'planned:9201', date: tomorrow }])), []);
+  assert.deepEqual(own('S86', reply([{ type: 'move', eventId: 'planned:9401', date: tomorrow }])), []);
+  assert.deepEqual(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'endurance' }, { type: 'rest', eventId: 'planned:9501' }])), []);
+  assert.ok(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'vo2max' }, { type: 'rest', eventId: 'planned:9501' }])).includes('safety:jízda zůstane lehká'));
+  assert.ok(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, workoutId: '12', card: 'vo2max' }, { type: 'rest', eventId: 'planned:9501' }])).includes('safety:jízda zůstane lehká'), 'a hard library ride too');
+  assert.ok(own('S89', reply([{ type: 'workout', sport: 'ride', date, minutes: 45, workoutId: '7', card: 'threshold' }, { type: 'rest', eventId: 'planned:9511' }])).length > 0);
+  assert.deepEqual(own('S88', reply([{ type: 'workout', sport: 'run', date, minutes: 40 }, { type: 'rest', eventId: 'planned:9401' }])), []);
+  assert.deepEqual(own('S89', reply([{ type: 'workout', sport: 'ride', date, minutes: 45, kind: 'recovery' }, { type: 'rest', eventId: 'planned:9511' }])), []);
+  assert.deepEqual(own('S90', reply([{ type: 'workout', sport: 'swim', date, minutes: 50 }, { type: 'move', eventId: 'planned:9201', date: tomorrow }])), []);
+  const later = new Date(Date.parse(date + 'T12:00:00Z') + 2 * 86400000).toISOString().slice(0, 10);
+  assert.deepEqual(own('S91', reply([{ type: 'workout', sport: 'swim', date: later, minutes: 60, kind: 'threshold' }, { type: 'rest', eventId: 'planned:9202' }])), []);
+  assert.deepEqual(own('S91', reply([{ type: 'workout', sport: 'swim', date: later, minutes: 60, workoutId: '31', card: 'vo2max' }, { type: 'rest', eventId: 'planned:9202' }])), [], 'a hard library swim counts');
+  assert.ok(own('S91', reply([{ type: 'workout', sport: 'swim', date, minutes: 45, kind: 'threshold' }])).includes('safety:dnes nic těžkého po včerejším CSS'));
 });

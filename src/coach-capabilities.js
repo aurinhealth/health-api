@@ -14,16 +14,16 @@ const row = (intent, object, sport, state, scenarios = []) => ({ id: `${intent}.
 
 export const COACH_CAPABILITIES = [
   // Cancel and move a planned session.
-  row('cancel', 'session', 'ride', 'green'), row('cancel', 'session', 'run', 'green', ['P02.1']), row('cancel', 'session', 'swim', 'green'), row('cancel', 'session', 'gym', 'tired', ['P19.3']),
-  row('move', 'session', 'ride', 'green', ['P18.2']), row('move', 'session', 'run', 'green', ['P02.2']), row('move', 'session', 'swim', 'green'), row('move', 'session', 'gym', 'green'),
+  row('cancel', 'session', 'ride', 'green', ['S83']), row('cancel', 'session', 'run', 'green', ['P02.1']), row('cancel', 'session', 'swim', 'green', ['S84']), row('cancel', 'session', 'gym', 'tired', ['P19.3']),
+  row('move', 'session', 'ride', 'green', ['P18.2']), row('move', 'session', 'run', 'green', ['P02.2']), row('move', 'session', 'swim', 'green', ['S85']), row('move', 'session', 'gym', 'green', ['S86']),
   // Another sport instead, another kind within the sport.
-  row('swap_sport', 'session', 'ride', 'green', ['P16.3']), row('swap_sport', 'session', 'run', 'green'), row('swap_sport', 'session', 'swim', 'green', ['P04.1', 'P04.3']), row('swap_sport', 'session', 'gym', 'green'),
-  row('swap_type', 'session', 'ride', 'green'), row('swap_type', 'session', 'run', 'green', ['P17.1']), row('swap_type', 'session', 'swim', 'green'), row('swap_type', 'session', 'gym', 'green', ['P07.1']),
+  row('swap_sport', 'session', 'ride', 'green', ['P16.3']), row('swap_sport', 'session', 'run', 'green', ['S87']), row('swap_sport', 'session', 'swim', 'green', ['P04.1', 'P04.3']), row('swap_sport', 'session', 'gym', 'green', ['S88']),
+  row('swap_type', 'session', 'ride', 'green', ['S89']), row('swap_type', 'session', 'run', 'green', ['P17.1']), row('swap_type', 'session', 'swim', 'green', ['S90']), row('swap_type', 'session', 'gym', 'green', ['P07.1']),
   // Length and intensity of a session.
   row('shorten', 'session', 'ride', 'cycle', ['P10.2']), row('shorten', 'session', 'run', 'green', ['P02.3', 'P17.2']), row('shorten', 'session', 'swim', 'green', ['P04.2']), row('shorten', 'session', 'gym', 'green', ['P06.3']),
   row('lengthen', 'session', 'ride', 'green', ['S77']), row('lengthen', 'session', 'run', 'green', ['S79']), row('lengthen', 'session', 'swim', 'green', ['P05.3']), row('lengthen', 'session', 'gym', 'green', ['S74']),
   row('easier', 'session', 'ride', 'red', ['P09.3']), row('easier', 'session', 'run', 'green', ['P02.3']), row('easier', 'session', 'swim', 'green', ['P05.2']), row('easier', 'session', 'gym', 'green', ['S80']),
-  row('harder', 'session', 'ride', 'green', ['S78']), row('harder', 'session', 'run', 'green', ['P17.1']), row('harder', 'session', 'swim', 'green'), row('harder', 'session', 'gym', 'green', ['P07.3']),
+  row('harder', 'session', 'ride', 'green', ['S78']), row('harder', 'session', 'run', 'green', ['P17.1']), row('harder', 'session', 'swim', 'green', ['S91']), row('harder', 'session', 'gym', 'green', ['P07.3']),
   // Exercises of a gym session (health-api #1087).
   row('add', 'exercise', 'gym', 'green', ['S72', 'P06.1']), row('remove', 'exercise', 'gym', 'pain', ['S73', 'P06.2']), row('focus', 'session', 'gym', 'green', ['P07.1', 'S75']),
   // Undo and confirm by text.
