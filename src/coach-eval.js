@@ -1031,8 +1031,10 @@ const checkerSummary = c => ({ model: c.model || null, ms: c.ms ?? null, usd: c.
 export async function judge(env, input, check = checkCoachAnswer) {
   const first = await check(env, input, { model: lightModel(env) });
   if (!first.flags.length) return first;
-  const second = await check(env, input, { model: complexModel(env) });
-  return { ...second, model: `${first.model} → ${second.model}`, ms: first.ms + second.ms, usd: first.usd == null && second.usd == null ? null : (first.usd || 0) + (second.usd || 0), luna: first.flags };
+  // Sol failing leaves Luna's finding standing.
+  const second = await check(env, input, { model: complexModel(env) }).catch(() => null);
+  if (!second) return first;
+  return { ...second, model: `${first.model} → ${second.model}`, ms: first.ms + second.ms, usd: first.usd == null && second.usd == null ? null : (first.usd || 0) + (second.usd || 0) };
 }
 
 // K01–K10: a fixed answer with the base situation's data, only through the checker.
