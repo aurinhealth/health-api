@@ -1262,6 +1262,16 @@ function choosePlan(context, options = {}) {
     lighterDay: false
   };
 
+  // The small muscles of an Upper Body session in turn. From 60 minutes
+  // (six exercises) biceps and triceps come first, so an upper day always
+  // has both arms: 75 minutes of Upper Body had no curl in 7 of 16
+  // sessions, as core and shoulders took the three free places (Petr 2026-11-14).
+  const upperSmall = () => {
+    const small = accessories.filter(g => g !== "calves");
+    if ((Number(options.maxExercises) || exerciseCountFor(options.durationMinutes)) < 6) return small;
+    return [...small.filter(g => g === "biceps" || g === "triceps"), ...small.filter(g => g !== "biceps" && g !== "triceps")];
+  };
+
   // Four and more gym days a week: a split. The part that rested longest comes
   // next (done and planned sessions within a week either side), legs not
   // before a key session. The athlete's own focus or poor recovery decide first.
@@ -1278,7 +1288,7 @@ function choosePlan(context, options = {}) {
     const rested = part => Math.min(99, ...[...gymDates].filter(([, list]) => partOf(list).has(part)).map(([d]) => daysBetween(d, context.date)));
     const allowed = parts.filter(p => !(protectLegs && (p === "legs" || p === "lower")));
     const part = allowed.slice().sort((a, b) => rested(b) - rested(a) || parts.indexOf(a) - parts.indexOf(b))[0];
-    const upperAccessories = accessories.filter(g => g !== "calves");
+    const upperAccessories = upperSmall();
     const template = {
       push: ["horizontalPush", "verticalPush", "lateralRaise", "triceps", ["horizontalPush", "verticalPush"], "core", "lateralRaise", "triceps"],
       pull: ["verticalPull", "horizontalPull", "rearDelts", "biceps", ["horizontalPull", "verticalPull"], "core", "forearms", "traps"],
@@ -1303,7 +1313,7 @@ function choosePlan(context, options = {}) {
     return {
       ...base,
       name: "Upper Body",
-      exercises: build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], ["horizontalPull", "verticalPull"], ...accessories.filter(g => g !== "calves").slice(0, 2), ["horizontalPush", "verticalPush"], ...accessories.filter(g => g !== "calves").slice(2)]),
+      exercises: build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], ["horizontalPull", "verticalPull"], ...upperSmall().slice(0, 2), ["horizontalPush", "verticalPush"], ...upperSmall().slice(2)]),
       rationale: (forceUpper
         ? L("Na tvoje přání šetřím nohy a trénink soustředím na horní část těla; cviky vybírám podle čerstvosti a nedávné svalové zátěže.", "As you asked, I'm sparing your legs and focusing on the upper body; exercises are chosen by freshness and recent muscle load.")
         : L("Velmi slabá regenerace dnes dočasně omezuje zatížení nohou. Dej přednost odpočinku, případný gym zkrať; nohy znovu zařadíme, až se stav zlepší.", "Very poor recovery temporarily limits leg loading today. Prioritize rest and keep any gym session short; legs come back once you've recovered.")) + sexNote,
