@@ -145,17 +145,13 @@ test('checker calibration: every answer builds its persona context, a flag count
     assert.deepEqual(h.flags.map(f => f.cat), ['NUMBERS']); assert.equal(h.model, 'claude-haiku-5-5'); assert.equal(h.usd, 0.00105);
     await assert.rejects(checkCoachAnswer({}, { context: {}, message: 'm', answer: 'a' }, { model: 'claude-haiku-5-5' }), /ANTHROPIC_API_KEY/);
   } finally { globalThis.fetch = realFetch; }
-  // The cascade: Sol reads only what Luna flags, and Sol's verdict stands.
+  // The judge: Haiku with the Anthropic key, Luna without it or when Haiku fails.
   const { judge } = await import('../src/coach-eval.js');
-  const calls = [], fake = solFlags => async (env, input, opts) => { calls.push(opts.model); return { flags: opts.model === 'gpt-6-sol' ? solFlags : [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; };
-  const cleared = await judge({}, { answer: 'a' }, fake([]));
-  assert.deepEqual(calls, ['gpt-6-luna', 'gpt-6-sol']);
-  assert.deepEqual(cleared.flags, []); assert.equal(cleared.usd, 0.002);
-  const solDown = await judge({}, { answer: 'a' }, async (env, input, opts) => { if (opts.model === 'gpt-6-sol') throw new Error('timeout'); return { flags: [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; });
-  assert.equal(solDown.flags.length, 1); assert.equal(solDown.model, 'gpt-6-luna');
-  calls.length = 0;
-  const clean = await judge({}, { answer: 'a' }, async (env, input, opts) => { calls.push(opts.model); return { flags: [], model: opts.model, ms: 1, usd: 0.001 }; });
-  assert.deepEqual(calls, ['gpt-6-luna']); assert.deepEqual(clean.flags, []);
+  const ok = async (env, input, opts) => ({ flags: [], model: opts.model, ms: 1, usd: 0.001 });
+  assert.equal((await judge({ ANTHROPIC_API_KEY: 'k' }, { answer: 'a' }, ok)).model, 'claude-haiku-5-5');
+  assert.equal((await judge({}, { answer: 'a' }, ok)).model, 'gpt-6-luna');
+  const down = await judge({ ANTHROPIC_API_KEY: 'k' }, { answer: 'a' }, async (env, input, opts) => { if (opts.model === 'claude-haiku-5-5') throw new Error('529'); return ok(env, input, opts); });
+  assert.equal(down.model, 'gpt-6-luna');
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
   assert.equal(list.calibration.length, COACH_CALIBRATION.length);
 });
