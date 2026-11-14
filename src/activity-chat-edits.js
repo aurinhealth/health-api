@@ -147,6 +147,11 @@ export async function undoActivityChange(env, token) {
   // A change of the day's gym plan from the coach (Chat v1): the plan as it
   // was, only while it is still as the change left it.
   if (change.kind === 'gym_plan') {
+    // As the confirm: not on a cancelled day, not while the status holds training.
+    const { assertTrainingAllowed, getAthleteState } = await import('./athlete-state.js');
+    assertTrainingAllowed(await getAthleteState(env.DB));
+    const cancelled = await env.DB.prepare('SELECT 1 AS c FROM gym_plan_cancellations WHERE user_id = ? AND workout_date = ?').bind(env.USER_ID, change.date).first().catch(() => null);
+    if (cancelled) throw fail(L('Trénink na ten den je zrušený, změnu už vrátit nejde.', 'The workout for that day is cancelled, the change can no longer be undone.'));
     const back = await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.before), env.USER_ID, change.date, JSON.stringify(change.after)).run();
     if (back.meta?.changes !== 1) throw fail(L('Plán se od té změny upravil, vrátit ho už nejde.', 'The plan has changed since, it can no longer be undone.'));
     await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();

@@ -2460,7 +2460,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // "Vrať to zpátky" (Chat v1): the last change of today's gym plan from this chat goes back first.
       const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message);
       const last=undoAsked?await lastUndoInChat(env.DB,body.chatId,dayStartSql(date)).catch(()=>null):null;
-      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu posilovny, kterou by šlo vrátit.','There is no change of the gym plan in this chat today that could be undone.')}:await undoActivityChange(env,last.token).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
+      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu posilovny, kterou by šlo vrátit.','There is no change of the gym plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await undoActivityChange(env,last.token).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
       if(undoneInChat?.done)madeInChat=[...madeInChat,{proposal:L('vráceno: ','undone: ')+undoneInChat.proposal,done:true}];
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
@@ -2538,8 +2538,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const contextMs=Date.now()-started,checking=coachCheckOn(env)&&!image;
       // Changes confirmed in the text stay made when the answer fails: the chat says so.
       const madeOnly=()=>({status:'ok',answer:madeInChatText(),actions:[],visuals:[],fallback:true});
-      let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}).catch(error=>{if(!confirmedInChat.some(c=>c.done))throw error;return madeOnly();}),check=null;
-      if(answer.status!=='ok'&&confirmedInChat.some(c=>c.done))answer=madeOnly();
+      let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}).catch(error=>{if(!madeInChat.some(c=>c.done))throw error;return madeOnly();}),check=null;
+      if(answer.status!=='ok'&&madeInChat.some(c=>c.done))answer=madeOnly();
       if(shows)step(writingStep('done'));
       if(checking&&answer.status==='ok'&&!answer.fallback){
         const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
@@ -2606,7 +2606,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved,{ghost}).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
       return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));
         // Changes a yes in the text already made stay made: the chat says so instead of an error.
-        if(madeInChat.some(c=>c.done)){console.error('Coach answer failed after chat confirmation',error.message);const text=madeInChatText();const ids=await remember(text);return {status:'ok',answer:text,...ids,actions:[],confirmedInChat:madeInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))};}
+        if(madeInChat.some(c=>c.done)){console.error('Coach answer failed after chat confirmation',error.message);const text=madeInChatText();const ids=await remember(text);return {status:'ok',answer:text,...ids,actions:[],confirmedInChat:madeInChat.filter(c=>c.done&&c.action).map(c=>({...c.action,draftId:c.draftId}))};}
         throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
@@ -2728,7 +2728,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const latest=await readGymPlan(env.DB,a.date),values=applyGymChange(latest.values,a);
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
-          result={status:'ok',date:a.date,values,...await gymUndo(env,draft,latest.values,values)};
+          result={status:'ok',date:a.date,values,...await gymUndo(env,draft,latest.values,values,row.id)};
         }
         else if(a.type==='week_sport'){
           assertTrainingAllowed(await getAthleteState(env.DB));
@@ -2768,7 +2768,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
             assertTrainingAllowed(await getAthleteState(env.DB));
             const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(a.trim.values),env.USER_ID,a.date,JSON.stringify(a.trim.source)).run();
             if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
-            result={status:'ok',date:a.date,values:a.trim.values,preview,...await gymUndo(env,draft,a.trim.source,a.trim.values)};
+            result={status:'ok',date:a.date,values:a.trim.values,preview,...await gymUndo(env,draft,a.trim.source,a.trim.values,row.id)};
           }else if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
             // Another focus (Chat v1): the new plan takes the place of the one the card was made against.
@@ -3557,9 +3557,10 @@ async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true,aiBudgetMs=null}
 // remembered (coach-quick-change.js).
 // Chat v1: "Vrátit" (the card's button, or the words in the chat) under a
 // confirmed change of the day's gym plan; its chat finds it again.
-async function gymUndo(env,draft,before,after){
+async function gymUndo(env,draft,before,after,draftId){
   if(!chatV1On(env))return {};
-  return {undo:await rememberChange(env,{kind:'gym_plan',date:draft.action.date,before,after,chatId:Number(draft.chatId)||null,proposal:actionSummary(draft.action)})};
+  // A token that could not be kept leaves the change made, without Vrátit.
+  return rememberChange(env,{kind:'gym_plan',date:draft.action.date,before,after,chatId:Number(draft.chatId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)}).then(undo=>({undo}),error=>{console.error('Gym undo not kept',error.message);return {};});
 }
 async function adjustCoachDraft(env,ctx,row,draft,body){
   const a=draft.action,chip=String(body.chip||'');
