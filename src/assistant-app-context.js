@@ -56,7 +56,7 @@ export function selectedSubject(subject,day){
   return {};
 }
 
-export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWeek,loadPrefs}) {
+export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWeek,loadPrefs,wanted=[]}) {
   const needsWeek=!(inputs.week?.days||[]).some(d=>d.date===appContext.weekStart);
   const [gym,extraWeek,prefs]=await Promise.all([
     appContext.sport==='gym'?(appContext.date===inputs.date?inputs.gym:loadGym(appContext.date)):null,
@@ -66,7 +66,7 @@ export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWe
   const days=[...(inputs.week?.days||[])];
   for(const day of extraWeek?.days||[])if(!days.some(d=>d.date===day.date))days.push(day);
   days.sort((a,b)=>a.date.localeCompare(b.date));
-  const selectedGym=todayGymContext(gym,appContext.date);
+  const selectedGym=todayGymContext(gym,appContext.date,[],[],wanted);
   const exercise=selectedGym?.exercises.some(e=>e.name===appContext.exercise)?appContext.exercise:null;
   const selectedDay=days.find(d=>d.date===appContext.date)?.daily?.training||null;
   return {appContext:{...appContext,exercise},selectedGym,gymPlan:gym,selectedDay,...selectedSubject(appContext.subject,selectedDay),

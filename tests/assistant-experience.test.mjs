@@ -6,6 +6,7 @@ import { getAthleteState,updateAthleteState } from '../src/athlete-state.js';
 import { buildCoachCouncil } from '../src/coach-engine.js';
 import { withLang } from '../src/lang.js';
 import { planValues } from '../src/gym-plan-store.js';
+import { parseStrengthPlan } from '../src/strength-history.js';
 import { todayGymContext,prepareGymSwap,applyGymSwap } from '../src/coach-gym-adjustment.js';
 import { validateCoachActions } from '../src/coach-actions.js';
 import { askCoach,assistantTask,aiFailureText } from '../src/coach-assistant.js';
@@ -168,4 +169,80 @@ test('a one-leg press replacing the leg press takes no weight from it (Coach eva
   const values=planValues({date,planName:'Celé tělo',rows:[1,2,3].map(n=>['WORK','Pivot leg press',String(n),'150','8-12','','','','FALSE','[Pauza 120 s]','','FALSE','',''])});
   const swap=prepareGymSwap({values,history},'Pivot leg press','Single-Leg Press','Leg press je obsazený.');
   assert.equal(swap.kg,null);assert.ok(swap.replacementRows.filter(r=>r[0]==='WORK').every(r=>r[3]===''),JSON.stringify(swap.replacementRows));
+});
+// Petr 2026-11-14: One Arm Dumbbell Bench Press (3 sets, each left and right)
+// swapped for DB bench press gave 6 work sets and lost the intensity labels.
+test('a swap keeps the sets of a one-sided exercise and their labels',()=>{
+  const row=(n,side,intensity)=>['WORK','One Arm Dumbbell Bench Press',String(n),'16','8–12','','','','FALSE','','','FALSE','',side,intensity];
+  const values=planValues({date,rows:[1,2,3].flatMap(n=>[row(n,'L',n===3?'H':'M'),row(n,'P',n===3?'H':'M')]).concat([row(4,'L','H')])});
+  const action=prepareGymSwap({values,history:[]},'One Arm Dumbbell Bench Press','DB bench press','Oboustranný tlak.');
+  // The weaker side's extra set stays with the one-sided exercise.
+  assert.equal(action.sets,3);
+  const work=todayGymContext({values:applyGymSwap(values,action)},date).exercises[0].sets;
+  assert.equal(work.length,3);assert.deepEqual(work.map(s=>s.set),[1,2,3]);
+  const parsed=applyGymSwap(values,action).filter(r=>r[0]==='WORK');
+  assert.deepEqual(parsed.map(r=>r[14]),['M','M','H']);assert.ok(parsed.every(r=>r[13]===''));
+  // Back to one-sided: each set left and right again.
+  const two=planValues({date,rows:[1,2,3].map(n=>['WORK','DB bench press',String(n),'20','6–10','','','','FALSE','','','FALSE','','','M'])});
+  const back=prepareGymSwap({values:two,history:[]},'DB bench press','One Arm Dumbbell Bench Press','Jednoruč.');
+  assert.equal(back.sets,3);assert.deepEqual(back.replacementRows.filter(r=>r[0]==='WORK').map(r=>r[13]),['L','P','L','P','L','P']);
+});
+
+// Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "neumím přidat"; a changed
+// exercise should go where it belongs, not just take the old place.
+test('the coach adds and removes an exercise, and the plan keeps a sensible order',async()=>{
+  const { prepareGymAdd,applyGymAdd,prepareGymRemove,applyGymRemove,placeExercise,applyGymChange }=await import('../src/coach-gym-adjustment.js');
+  const work=(name,n=3,kg='20')=>Array.from({length:n},(_,i)=>['WORK',name,String(i+1),kg,'8–12','','','','FALSE','','','FALSE','','','']);
+  const warm=name=>[1,2,3].map(i=>['WARMUP',name,String(i),'10',['8','5','3'][i-1],'','','','FALSE','[WARMUP]','','FALSE','','','']);
+  const values=planValues({date,rows:[...warm('Low row'),...work('Low row'),...work('Cable triceps extension'),...work('Lat pulldown')]});
+  const plan={values,history:[]};
+  const context=todayGymContext(plan,date,[],[],['biceps']);
+  assert.ok(context.addable.biceps.some(a=>a.name==='DB curl'));
+  const add=prepareGymAdd(plan,'DB curl','Biceps navíc.');
+  assert.equal(add.sets,3);assert.deepEqual([add.position,add.of],[4,4]);
+  const added=applyGymChange(values,add),names=rows=>[...new Set(parseStrengthPlan(rows).rows.map(r=>r.exercise))];
+  // The others keep their order; the curl goes behind them, with the small muscles.
+  assert.deepEqual(names(added),['Low row','Cable triceps extension','Lat pulldown','DB curl']);
+  assert.equal(parseStrengthPlan(added).rows.filter(r=>r.exercise==='DB curl').length,3);
+  // A one-sided exercise goes left and right, as the generator writes it.
+  assert.deepEqual(parseStrengthPlan(applyGymChange(values,prepareGymAdd(plan,'Dumbbell Concentration Curl','r'))).rows.filter(r=>r.exercise==='Dumbbell Concentration Curl').map(r=>r.side),['L','P','L','P','L','P']);
+  assert.throws(()=>applyGymAdd(added,add),/změnil|changed/);
+  assert.throws(()=>prepareGymAdd(plan,'Low row','r'),/už v plánu|already/);
+  assert.throws(()=>prepareGymAdd(plan,'DB curl','r',['Bolí mě loket']),/bolí|hurts/);
+  const remove=prepareGymRemove(plan,'Cable triceps extension','Bez tricepsu.');
+  assert.deepEqual(names(applyGymRemove(values,remove)),['Low row','Lat pulldown']);
+  assert.throws(()=>prepareGymRemove({values:applyGymRemove(values,remove)},'Lat pulldown','r'),/dva|two/);
+  const logged=structuredClone(values);logged[7+3][8]='TRUE';
+  assert.throws(()=>prepareGymRemove({values:logged},'Low row','r'),/Rozcvičený|warmed/);
+  // Only the changed exercise moves; the rest stays row for row (review of #1087).
+  const two=planValues({date,rows:[...warm('Low row'),...work('Low row'),...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown')]});
+  const moved=placeExercise(two,'Lat pulldown'),rows=parseStrengthPlan(moved).rows;
+  assert.deepEqual([...new Set(rows.map(r=>r.exercise))],['Low row','Lat pulldown','Cable triceps extension']);
+  // Behind Low row the second main lift keeps one warm-up set; Low row keeps its three.
+  assert.deepEqual(rows.filter(r=>r.type==='WARMUP').map(r=>r.exercise+r.setNo),['Low row1','Low row2','Low row3','Lat pulldown1']);
+  // A swap of an unrelated exercise leaves the others' rows as they were.
+  const swapPlan={values:two,history:[]},swap=prepareGymSwap(swapPlan,'Cable triceps extension','Cable overhead triceps extension','r');
+  const swapped=applyGymSwap(two,swap),keep=v=>v.filter(r=>['Low row','Lat pulldown'].includes(r[1]));
+  assert.deepEqual(keep(swapped),keep(two));
+  // A started exercise stays first.
+  const startedFirst=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown')]});startedFirst[7][8]='TRUE';
+  assert.equal(parseStrengthPlan(placeExercise(startedFirst,'Lat pulldown')).rows[0].exercise,'Cable triceps extension');
+  // Supersets with warm-ups and drop sets are not taken apart; nothing goes into the middle of one.
+  const sup=(type,name,n,letter)=>[type,name,String(n),'20','8–12','','','','FALSE','','','FALSE',letter,'',''];
+  const withSuper=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),sup('WORK','Lat pulldown',1,'A'),sup('WORK','Cable curl',1,'A'),sup('WORK','Lat pulldown',2,'A'),sup('DROP','Lat pulldown',3,''),sup('WORK','Cable curl',2,'A')]});
+  assert.deepEqual(placeExercise(withSuper,'Lat pulldown'),withSuper);
+  const intoSuper=applyGymAdd(withSuper,prepareGymAdd({values:withSuper,history:[]},'Low row','r'));
+  assert.deepEqual(intoSuper.filter(r=>r[1]!=='Low row'),withSuper);
+  assert.equal(intoSuper.findIndex(r=>r[1]==='Low row'),7);
+  // Removing one half of a superset leaves the other as a normal exercise.
+  const alone=applyGymRemove(withSuper,prepareGymRemove({values:withSuper},'Cable curl','r'));
+  assert.ok(alone.filter(r=>r[1]==='Lat pulldown').every(r=>r[12]===''));
+});
+
+test('add and remove cards pass the checks, an app before API 2 gets none',()=>{
+  const values=planValues({date,rows:[['WORK','Low row','1','20','8–12','','','','FALSE','','','FALSE','','',''],['WORK','Lat pulldown','1','40','8–12','','','','FALSE','','','FALSE','','',''],['WORK','Cable triceps extension','1','15','8–12','','','','FALSE','','','FALSE','','','']]});
+  const context={athleteState:'active',userMessage:'Přidej tam biceps a vynech triceps',gymPlan:{values,history:[]},week:[]};
+  const actions=[{type:'gym_add',date,toExercise:'DB curl',reason:'Biceps navíc.'},{type:'gym_remove',date,fromExercise:'Cable triceps extension',reason:'Bez tricepsu.'},{type:'gym_add',date,toExercise:'DB curl',reason:'Znovu.'}];
+  assert.deepEqual(validateCoachActions(actions,context,date).map(a=>a.type),['gym_add','gym_remove']);
+  assert.deepEqual(validateCoachActions(actions,{...context,oldAppCards:true},date),[]);
 });

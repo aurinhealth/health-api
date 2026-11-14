@@ -50,7 +50,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -104,7 +104,7 @@ import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRec
 import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
 import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
 import { nightDetail } from "./night-detail.js";
-import { applyGymSwap } from './coach-gym-adjustment.js';
+import { applyGymChange } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
 import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
@@ -158,13 +158,14 @@ import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
-import { appUpdateRequired } from "./app-version.js";
+import { appUpdateRequired, appApiLevel } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs, dayStartUtc } from "./user-time.js";
 import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, weekHealthDate, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
+import { chatConfirmation, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
@@ -2434,10 +2435,28 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The goal and the preferences are the athlete's saved ones: the request
     // cannot replace them (they would reach the prompt word for word).
     const goal=null,preferences={};
+    // A push reply carries the app's API level it was sent from (coach-push-reply.js).
+    const oldAppCards=(level=>level!==null&&level!==undefined&&!(Number(level)>=2))(appApiLevel(request)??body.appApi);
+    let madeInChat=[];
+    const madeInChatText=()=>L('Hotovo: ','Done: ')+madeInChat.filter(c=>c.done).map(c=>c.proposal).join('; ')+L('. Na zbytek zprávy teď neumím odpovědět, zkus to prosím znovu.','. I couldn\'t answer the rest of your message now, please try again.');
     const answerMessage=async (onAnswer,onProgress=()=>{},onStep=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       // The thinking steps with the athlete's numbers (coach-steps.js); the app shows them as they come.
       const steps=stepList(),step=s=>{if(steps.add(s))onStep(s);};
+      // "Potvrzuju": the open cards under the last answer go through as if
+      // tapped, before the data is read, so the answer sees the changed plan.
+      // Not from a push reply (the cards are not on the lock screen), and a bare
+      // "Jo" after a question in the answer answers the question, not the cards.
+      const yes=ghost||body.pushReply?false:chatConfirmation(message);
+      const drafts=yes&&!(yes==='weak'&&answerAsks(conversation))?await openDraftsOfLastAnswer(env.DB,body.chatId,dayStartSql(date)).catch(()=>[]):[];
+      if(drafts.length)onProgress(L('Provádím potvrzené změny…', 'Making the confirmed changes…'));
+      const confirmedInChat=await confirmInChat(drafts,async draftId=>{
+        const actionUrl=new URL('https://internal/app/api/assistant/action');
+        const r=await handleDashboardApi(new Request(actionUrl,{method:'POST',headers:{Origin:actionUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId,decision:'confirm'})}),env,ctx,actionUrl,{signedIn:true});
+        const out=await r.json().catch(()=>({}));
+        return {ok:r.ok&&out.status==='ok'&&out.action!=null,message:out.message};
+      });
+      madeInChat=confirmedInChat;
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
       // there is one, then the model writing. Never a step the model writes.
@@ -2452,7 +2471,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           recentCoachProposals(env).catch(()=>[])
         ]);
         const internalJson=async path=>{const response=await handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));if(!response.ok)throw new Error(L('Vybraný trénink se nepodařilo načíst.', 'The selected workout couldn\'t be loaded.'));return response.json();};
-        selected=await selectedAssistantContext(appContext,loaded,{loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
+        selected=await selectedAssistantContext(appContext,loaded,{wanted:requestedMuscles(message),loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
         loaded.week=selected.week;
         inputs=loaded;focus=loaded.focus;Object.assign(preferences,prefs);
         // Each day's time budget comes from its own week's plan.
@@ -2498,6 +2517,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const libraryAsk=searched?chatLibraryQuery({message,date,inputs,sport,todayCoach:coachCtx.gymDay?null:coachCtx.cyclingCoachV2,availabilityMinutes}):null;
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
+      if(confirmedInChat.length)coachCtx.confirmedInChat=confirmedInChat.map(({proposal,done,reason})=>({proposal,done,...(reason?{reason}:{})}));
+      // An iPhone app before API 2 cannot show the add and remove cards (app-version.js).
+      if(oldAppCards)coachCtx.oldAppCards=true;
       onProgress(L('Kouč píše…', 'The coach is writing…'));
       // With the live check on, the athlete sees the answer only after the
       // checker read it (coach-checker.js), so nothing streams. A photo message
@@ -2506,9 +2528,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const shows=steps.list.length>0;
       if(shows)step(writingStep());
       const contextMs=Date.now()-started,checking=coachCheckOn(env)&&!image;
-      let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}),check=null;
+      // Changes confirmed in the text stay made when the answer fails: the chat says so.
+      const madeOnly=()=>({status:'ok',answer:madeInChatText(),actions:[],visuals:[],fallback:true});
+      let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}).catch(error=>{if(!confirmedInChat.some(c=>c.done))throw error;return madeOnly();}),check=null;
+      if(answer.status!=='ok'&&confirmedInChat.some(c=>c.done))answer=madeOnly();
       if(shows)step(writingStep('done'));
-      if(checking&&answer.status==='ok'){
+      if(checking&&answer.status==='ok'&&!answer.fallback){
         const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
         // The app keeps the check step only when the check passed or rewrote the answer (check.status).
         const onPhase=phase=>{if(!shows)return;if(phase==='check')step(checkStep());else if(phase==='rewrite'){step(checkStep('done'));step(refineStep());}else if(phase==='done'){step(checkStep('done'));if(steps.list.some(s=>s.id==='refine'))step(refineStep('done'));}};
@@ -2516,8 +2541,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // The answer is written; the app keeps the line under it while the proposals are checked.
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
-      coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
-      const actions=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),proposals=[];await ensureCoachInboxTable(env.DB);
+      coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;
+      coachCtx.oldAppCards=oldAppCards;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
+      const checked=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),actions=notConfirmedAgain(checked,confirmedInChat),proposals=[];await ensureCoachInboxTable(env.DB);
       // What the coach saved from the athlete's words is kept at once and shown
       // under the answer with Undo. What the answer says no longer holds is only
       // proposed: the athlete confirms it under the answer (Forget / Update), so
@@ -2539,7 +2565,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // the days it trains on and the running plan it would end.
       for(const a of actions)if(a.type==='plan')a.trainingPlan=await coachPlanPreview(env,ctx,a).catch(error=>{console.error('Plan preview failed',error.message);return null;});
       // A proposal the checks dropped leaves no "below is the workout" without a card.
-      const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
+      const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-checked.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
       await saveMemory();
       const changes=keeps?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
@@ -2557,7 +2583,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // A ghost chat left while its answer was written keeps no proposal either.
       for(const action of ghost&&!chatId?[]:actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{}),...(ghost?{ghost:true}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
@@ -2570,7 +2596,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The app learns the chat first: when the connection drops, the answer
       // the server finishes is loaded from it instead of asked (and counted) again.
       if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved,{ghost}).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
-      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));throw error;});
+      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));
+        // Changes a yes in the text already made stay made: the chat says so instead of an error.
+        if(madeInChat.some(c=>c.done)){console.error('Coach answer failed after chat confirmation',error.message);const text=madeInChatText();const ids=await remember(text);return {status:'ok',answer:text,...ids,actions:[],confirmedInChat:madeInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))};}
+        throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
@@ -2596,7 +2625,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }
     const stateRead=getAthleteState(env.DB).catch(()=>null);
     const askUrl=new URL('/app/api/assistant',url.origin);
-    const response=await handleDashboardApi(new Request(askUrl,{method:'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},body:JSON.stringify({message:text,chatId,mode:'coach',appContext:{view:'today',date:localToday()}})}),env,ctx,askUrl,session).catch(error=>{console.error('Push reply failed',error.message);return null;});
+    const response=await handleDashboardApi(new Request(askUrl,{method:'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},body:JSON.stringify({message:text,chatId,mode:'coach',appContext:{view:'today',date:localToday()},pushReply:true,appApi:appApiLevel(request)})}),env,ctx,askUrl,session).catch(error=>{console.error('Push reply failed',error.message);return null;});
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
@@ -2685,10 +2714,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
         if(a.type==='status'){result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});await syncedPlans(env).catch(()=>null);}
-        else if(a.type==='gym_swap'){
+        else if(['gym_swap','gym_add','gym_remove'].includes(a.type)){
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
           assertTrainingAllowed(await getAthleteState(env.DB));
-          const latest=await readGymPlan(env.DB,a.date),values=applyGymSwap(latest.values,a);
+          const latest=await readGymPlan(env.DB,a.date),values=applyGymChange(latest.values,a);
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
           result={status:'ok',date:a.date,values};
@@ -2757,7 +2786,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }

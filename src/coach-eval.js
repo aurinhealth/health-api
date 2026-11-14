@@ -589,6 +589,23 @@ export const COACH_EVAL_SCENARIOS = [
       quality('zruší nebo přesune dnešní VO2max', removesToday(r)),
       quality('pár dní volna, ne stopka do vyšetření', says(r, /(?:2|3|dva|dvě|tři|pár|několik)\s*(?:(?:–|-|až)\s*(?:3|tři)\s*)?dn/i) && !unconditionalStop(r.answer), r.answer),
       quality('uloží potíže do paměti', (r.memory.save || []).some(m => heartSymptom(m.text)), JSON.stringify(r.memory.save || []))] },
+  // Petr 2026-11-14: a yes in the text did nothing and the same cards came again.
+  // The app confirms the open cards first (coach-chat-confirm.js); the answer says it is done.
+  { id: 'S71', title: 'Potvrzení výměn textem v chatu', message: 'Já ti je potvrzuju v chatu, tak to potvrď.', athlete: { gym: evalGym },
+    conversation: date => [{ role: 'user', content: 'Uprav mi dnešní posilovnu, ať to není pořád stejné.' }, { role: 'assistant', content: `Vyměnil bych leg press za hack squat a lat pulldown za přítah na kladce, partie zůstanou stejné.\n\n[Návrhy: Vyměnit Pivot leg press → Hack squat (${date}); Vyměnit Lat pulldown → Seated cable row (${date})]` }],
+    context: () => ({ confirmedInChat: [{ proposal: 'Vyměnit Pivot leg press → Hack squat', done: true }, { proposal: 'Vyměnit Lat pulldown → Seated cable row', done: true }] }),
+    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /hotov|vyměnil|vyměněn|upravil|upraven|změnil|je v plánu|máš v plánu|done/i)),
+      quality('stejné výměny znovu nenavrhne', !r.proposed.some(a => a.type === 'gym_swap' && ['Hack squat', 'Seated cable row'].includes(a.toExercise))),
+      quality('nežádá klepnutí na kartu', !says(r, /klepn|ťukn|tukn|tlačítk|kart[ua]|\btap\b/i))] },
+  // Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "tento cvik neumím přidat".
+  { id: 'S72', title: 'Přidat cvik na biceps do dnešní posilovny', message: 'Plán je dobrý, ale chtěl bych tam ještě něco na biceps.', athlete: { gym: evalGym },
+    checks: r => { const adds = r.kept.filter(a => a.type === 'gym_add');
+      return [quality('přidá cvik na biceps kartou', adds.some(a => EXERCISES[a.toExercise]?.muscle === 'biceps'), adds.map(a => a.toExercise).join(', ')),
+        quality('neříká, že přidat nejde', !says(r, /neum[íi]m (?:\S+ ){0,3}přidat|nelze (?:\S+ ){0,2}přidat|nejde (?:\S+ ){0,2}přidat|can'?t add|cannot add/i)),
+        quality('nemění ostatní cviky ani celý trénink', !r.kept.some(a => ['gym_swap', 'gym_remove', 'rest', 'workout'].includes(a.type)), r.kept.map(a => a.type).join(', '))]; } },
+  { id: 'S73', title: 'Vynechat jeden cvik z dnešní posilovny', message: 'Dneska bych vynechal ten leg curl, zbytek nech.', athlete: { gym: evalGym },
+    checks: r => [quality('odebere leg curl kartou', r.kept.some(a => a.type === 'gym_remove' && a.fromExercise === 'Seated leg curl'), r.kept.map(a => a.type + ' ' + (a.fromExercise || '')).join(', ')),
+      quality('zbytek nechá', !r.kept.some(a => ['gym_swap', 'gym_add', 'rest', 'workout'].includes(a.type) || (a.type === 'gym_remove' && a.fromExercise !== 'Seated leg curl')), r.kept.map(a => a.type).join(', '))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -782,7 +799,7 @@ export function scenarioById(id) { return COACH_EVAL_SCENARIOS.find(s => s.id ==
 // The coach's context for a situation, built as the chat builds it.
 export function scenarioContext(scenario, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW) {
   const a = evalAthlete(date, scenario.athlete || {}), conversation = scenario.conversation ? scenario.conversation(date) : [];
-  const ctx = coachContext({ ...a, now, checkin: null });
+  const ctx = coachContext({ ...a, now, checkin: null, message: scenario.message });
   Object.assign(ctx, { userInitiated: true, athleteState: 'active', preferenceMemory: ['Kolo nejradši venku', 'Posilovna 2× týdně', ...(a.athleteState.memories || [])], conversation, appContext: { view: 'today', date } });
   // A machine said to be broken brings the station list, as in the chat (point 11).
   if (BROKEN_WORDS.test(scenario.message)) ctx.gymStations = stationList();
