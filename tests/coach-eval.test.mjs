@@ -848,7 +848,7 @@ test('the AI checker reads each answer as a warning and K01–K10 test the check
   const result = await runScenario({}, scenarioById('S02'), { ask: ask(czech), check: flagged, date, now });
   const check = result.checks.find(c => c.name === 'AI kontrolor bez nálezu');
   assert.equal(check.ok, false);assert.equal(check.severity, 'quality');assert.ok(check.detail.includes('bojuje s virem'));
-  assert.equal(result.passed, true);assert.equal(result.checker.usd, 0.004); // Luna, then Sol on its finding
+  assert.equal(result.passed, true);assert.equal(result.checker.usd, 0.002);
   // A failing checker is a warning too; without an OpenAI key (and no test checker) it does not run.
   const broken = await runScenario({}, scenarioById('S02'), { ask: ask(czech), check: async () => { throw new Error('timeout'); }, date, now });
   assert.ok(broken.checks.find(c => c.name === 'AI kontrolor bez nálezu').detail.includes('timeout'));
