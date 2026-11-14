@@ -104,7 +104,8 @@ export const COACH_PERSONAS = [
   { id: 'P06', title: 'Silový sportovec přidá a ubere cvik', date: '2026-10-24', now: '16:00', athlete: LIFTER,
     turns: [{ message: 'Přidej mi do dnešní posilovny biceps.', checks: [addsMuscle('biceps')] },
       { message: 'A odeber z toho bench press, bolí mě rameno.', checks: [removesExercise('DB bench press')] },
-      { message: 'Ať je to celé do 45 minut.', checks: [r => quality('zkrátí posilovnu kartou', r.kept.some(a => a.type.startsWith('gym_') || (a.type === 'workout' && a.sport === 'gym' && a.minutes <= 45)), r.kept.map(a => a.type).join(', '))] },
+      // The plan takes about 41 min (todayGym.estimatedMinutes): a card, or the plain "už se vejde" (run 77).
+      { message: 'Ať je to celé do 45 minut.', checks: [r => quality('zkrátí posilovnu kartou, nebo řekne, že se už vejde', r.kept.some(a => a.type.startsWith('gym_') || (a.type === 'workout' && a.sport === 'gym' && a.minutes <= 45)) || /vejde|vejdeš|stihneš|zvládneš|už\s+(?:je|trvá|má)|do\s+45\s+min(?:ut)?\s+(?:už\s+)?(?:je|trvá)|fits|already/i.test(r.answer), r.kept.map(a => a.type).join(', '))] },
       // A typed confirmation tests the answer only: the eval applies no cards.
       { message: 'Potvrzuju.', checks: [noTrainingCard('jen potvrzení')] }] },
   { id: 'P07', title: 'Posilovna doma s jednoručkami, vymění typ (EN)', lang: 'en', date: '2026-10-25', now: '10:00', athlete: { ...LIFTER, setup: { equipment: 'dumbbells' } },

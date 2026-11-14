@@ -19,7 +19,9 @@ export function todayGymContext(gym,date,memories=[],broken=[],wanted=[]){
   const parsed=parseStrengthPlan(gym.values);
   if(parsed.date!==date)return null;
   const work=parsed.rows.filter(r=>r.type==='WORK'),names=[...new Set(work.map(r=>r.exercise))];
-  return {date,exercises:names.map(name=>({name,muscle:EXERCISES[name]?.muscle,pattern:EXERCISES[name]?.pattern,
+  // How long the plan takes, so "do 45 minut" can be answered with "už se vejde".
+  let estimatedMinutes=null;try{estimatedMinutes=estimateStrengthTiming(gym.values.slice(parsed.headerRow).filter(r=>r?.[1]),EXERCISES,90).estimatedMinutes||null;}catch{}
+  return {date,estimatedMinutes,exercises:names.map(name=>({name,muscle:EXERCISES[name]?.muscle,pattern:EXERCISES[name]?.pattern,
     sets:work.filter(r=>r.exercise===name).map(r=>({set:r.setNo,kg:r.plannedKg,reps:r.plannedReps,completed:r.completed,actualKg:r.actualKg,actualReps:r.actualReps,rpe:r.rpe,toFailure:r.toFailure,superset:r.superset})),
     alternatives:findExerciseAlternatives(name).filter(a=>EXERCISES[a.name]&&fits(a.name,gym)&&!painful.has(a.name)&&!names.includes(a.name)).slice(0,4).map(a=>({name:a.name,muscle:a.muscle,pattern:a.pattern,reps:EXERCISES[a.name].reps}))})),
     ...(wanted.length?{addable:Object.fromEntries(wanted.filter(g=>FOCUS_GROUPS[g]).map(g=>[g,FOCUS_GROUPS[g].exercises.filter(n=>EXERCISES[n]&&fits(n,gym)&&!painful.has(n)&&!names.includes(n)).slice(0,4).map(n=>({name:n,sets:addSets(n),reps:EXERCISES[n].reps}))]))}:{})};
