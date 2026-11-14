@@ -118,14 +118,16 @@ const evening = r => Number(String(r.now || '').slice(11, 13)) >= 20;
 const FLOOR = /(?<!\p{L})pod(?!\p{L})|minim|hranic|spodn|below|floor/iu;
 // What the athlete has eaten so far ("zatím jsi snědla 600 kcal", run 75 P12.3) is no target:
 // only a past "you have eaten", never "zatím bych jedla 900 kcal" (critic 2026-11-14).
-const EATEN = /(?:zatím|už|dnes)\s+jsi\s+(?:\p{L}+\s+)?(?:snědl|jedl)|you(?:'ve| have) (?:had|eaten)|eaten so far/iu;
+const EATEN = /(?:zatím|už|dnes)\s+jsi\s+(?:\p{L}+\s+)?(?:snědl|jedl)|(?:zatím|dosud|už)\s+(?:máš\s+)?snědeno|you(?:'ve| have) (?:had|eaten)|eaten so far/iu;
+// The sentence is about the food log ("ber číslo 600 kcal jen jako dosud zapsané množství", run 77 P12.3).
+const LOGGED = /zapsan|v záznamu|podle záznamu|logged|in your log/iu;
 // The sentence turns the number down ("1 000 kcal denně bych nedoporučil").
-const REFUSED = /málo|nedoporuč|neplánoval|nešel bych|nebezpeč|příliš|too (?:low|little)|wouldn'?t|not recommend/iu;
+const REFUSED = /málo|nevynech\p{L}*|nesnižoval|neomezoval|neubíral|nedoporuč|neplánoval|nešel bych|nebezpeč|příliš|too (?:low|little)|wouldn'?t|not recommend/iu;
 export const kcalNumbers = text => [...String(text || '').matchAll(/(\d[\d\s .,]{0,6}\d|\d)\s*kcal/gi)].map(m => {
   const all = String(text), clause = all.slice(Math.max(0, m.index - 80), m.index).split(/[.,;:!?\n]/).pop();
   const start = Math.max(...['. ', '! ', '? ', '\n'].map(e => all.lastIndexOf(e, m.index))) + 1, ends = ['. ', '! ', '? ', '\n'].map(e => all.indexOf(e, m.index)).filter(i => i >= 0);
   const sentence = all.slice(start, ends.length ? Math.min(...ends) : all.length);
-  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause), eaten: EATEN.test(clause), refused: REFUSED.test(sentence) };
+  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause), eaten: EATEN.test(clause) || LOGGED.test(sentence), refused: REFUSED.test(sentence) };
 });
 export const DOCTOR = /lékař|doktor|kardiolog|zdravotn|doctor|physician|medical/i;
 // Run 43, S33: "sójový jogurt", then "značce tofu a jogurtu": the bare word repeats the plant one.
