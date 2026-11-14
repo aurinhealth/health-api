@@ -51,7 +51,7 @@ test('the gym plan goes back only while it is as the change left it, once', asyn
 
 test('the confirm keeps the undo only with Chat v1, and the chat undoes before the coach reads the plan', () => {
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(src, /async function gymUndo\(env,draft,before,after,draftId\)\{\n\s*if\(!chatV1On\(env\)\)return \{\};/);
+  assert.match(src, /async function gymUndo\(env,draft,before,after,draftId,extra=\{\}\)\{\n\s*if\(!chatV1On\(env\)\)return \{\};/);
   assert.match(src, /result=\{status:'ok',date:a\.date,values,\.\.\.await gymUndo\(env,draft,latest\.values,values,row\.id\)\}/);
   assert.match(src, /preview,\.\.\.await gymUndo\(env,draft,a\.trim\.source,a\.trim\.values,row\.id\)\}/);
   const undo = src.indexOf('const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message)'), reads = src.indexOf("onProgress(L('Kouč čte tvoje data…'");
@@ -140,4 +140,16 @@ test('the ride and run cards keep an undo only with Chat v1, for the app\'s own 
   assert.match(src, /async function plannedUndo\(env,draft,change,draftId\)\{\n\s*if\(!chatV1On\(env\)/);
   assert.match(src, /const own=id\.startsWith\('local-'\)&&!isStrengthEvent\(payload\)&&!payload\.after&&!payload\.next;/);
   assert.match(src, /for\(const token of last\.tokens\|\|\[last\.token\]\)await undoActivityChange/);
+});
+
+test('a plan of another focus goes back with its calendar event, only with Chat v1', async () => {
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.match(src, /const oldEvent=a\.replace&&chatV1On\(env\)\?/);
+  assert.match(src, /if\(a\.replace&&oldEvent\)Object\.assign\(result,await gymUndo\(env,draft,a\.replace\.source,\(await readGymPlan\(env\.DB,a\.date\)\)\.values,row\.id,\{event:JSON\.parse\(oldEvent\.event_json\)\}\)\)/);
+  const { env, db } = memoryDb(), before = [['a'], ['full body']], after = [['a'], ['upper']];
+  db.plans.set('2026-11-14', JSON.stringify(after));
+  const token = await rememberChange(env, { kind: 'gym_plan', date: '2026-11-14', before, after, event: { name: 'Celé tělo', type: 'WeightTraining', start_date_local: '2026-11-14T17:00:00' }, chatId: 7, draftId: 60, proposal: 'Horní polovina místo dosavadního plánu' });
+  // The event can't be stored in this test database: the plan still goes back.
+  assert.equal((await undoActivityChange(env, token)).kind, 'gym_plan');
+  assert.equal(db.plans.get('2026-11-14'), JSON.stringify(before));
 });

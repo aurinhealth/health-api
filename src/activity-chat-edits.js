@@ -156,6 +156,11 @@ export async function undoActivityChange(env, token) {
     const back = await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.before), env.USER_ID, change.date, JSON.stringify(change.after)).run();
     if (back.meta?.changes !== 1) throw fail(L('Plán se od té změny upravil, vrátit ho už nejde.', 'The plan has changed since, it can no longer be undone.'));
     await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
+    // A plan of another focus put back: its calendar event as it was too (name, length).
+    if (change.event) {
+      const { storeLocalEvent, syncLocalWorkout } = await import('./local-workouts.js');
+      await storeLocalEvent(env.DB, change.event, { key: 'health-strength-' + change.date }).then(local => syncLocalWorkout(env, local.id)).catch(error => console.error('Gym event not put back', error?.message));
+    }
     return { status: 'ok', kind: 'gym_plan', date: change.date, values: change.before, proposal: change.proposal || null };
   }
   // A planned workout of the app (local-workouts.js) back where it was, only
