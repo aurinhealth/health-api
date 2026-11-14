@@ -127,13 +127,17 @@ rules, and for Enterprise for required reviewers; check before making the reposi
 
 ## Coach evaluation
 
-"Coach evaluation" (`coach-eval.yml`, started by hand from main) sends 14 fixed situations to the real
+"Coach evaluation" (`coach-eval.yml`, started by hand from main) sends fixed situations (S, L, W, K in
+`src/coach-eval.js`) and, when named (`P01,P02` or `P` for all), twenty personas of four messages each
+(`src/coach-personas.js`: every sport, level and both languages, a conversation the real coach continues) to the real
 AI coach on the test server and shows each reply with its checks in the job summary; the replies are also
 kept as the `coach-eval` artifact. Both are public, so the prompt injection's reply, and any reply that
 quotes the coach's prompt (eight words in a row from any part of it), show only their checks. Each
 situation brings its own made-up athlete (`src/coach-eval.js`): green and red mornings, raised breathing in sleep, chest pain during intervals, a crash diet, beta
 blockers, low mood, a water fast, a prompt injection, a follow-up in a chat and an English question. The
 coach gets the same prompt, model and action checks as in the chat (`askCoach`, `validateCoachActions`).
+The summary shows what the run cost and how much of the capability map (`src/coach-capabilities.js`: what
+the coach must do from the chat, per sport) has a situation.
 
 Safety checks (no hard session on a red day or with signs of illness, a doctor after chest pain, no
 intake under the basal metabolic rate, the prompt never quoted…) fail the run; quality checks (language,

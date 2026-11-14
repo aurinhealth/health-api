@@ -8,7 +8,7 @@ import { askCoach, callOpenAI, coachContext, assistantTask, coachInstructionsFor
 import { composeWorkout } from './ai-workout-compose.js';
 import { workoutLoadCheck } from './ai-workout-pick.js';
 import { usageCost } from './ai-usage.js';
-import { validateCoachActions, hardDayConflict, eventSport, coachPlanTemplates, actionInstructions } from './coach-actions.js';
+import { validateCoachActions, hardDayConflict, eventSport, coachPlanTemplates, actionInstructions, actionsNote } from './coach-actions.js';
 import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
 import { FOCUS_OF, kindOfSystem } from './week-ai.js';
 import { planValues } from './gym-plan-store.js';
@@ -30,6 +30,8 @@ import { triathlonSplit, splitFacts } from './triathlon-split.js';
 import { assistantAppContext, selectedSubject } from './assistant-app-context.js';
 import { screenFacts, screenRequest, checkedText } from './screen-texts.js';
 import { checkCoachAnswer } from './coach-checker.js';
+import { COACH_PERSONAS, personaById, personaTurn } from './coach-personas.js';
+import { capabilityCoverage } from './coach-capabilities.js';
 
 export const COACH_EVAL_AUDIENCE = 'aurin-coach-eval';
 export const COACH_EVAL_WORKFLOWS = new Set(['aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main']);
@@ -950,7 +952,8 @@ export async function runScenario(env, scenario, { ask = askCoach, check = check
   if (scenario.compose) return runComposeScenario(env, scenario);
   if (scenario.screen) return runScreenScenario(env, scenario, { date });
   if (scenario.planted) return runCheckerScenario(env, scenario, { check, date, now });
-  // A situation at its own hour (S68).
+  // A situation on its own day (the personas) and at its own hour (S68).
+  if (scenario.date) date = scenario.date;
   if (scenario.now) now = date + ' ' + scenario.now;
   const { ctx, focus, conversation, athlete } = scenarioContext(scenario, date, now);
   const task = assistantTask(scenario.message, { view: 'today' }, conversation), started = Date.now();
@@ -971,10 +974,12 @@ export async function runScenario(env, scenario, { ask = askCoach, check = check
   if (hidden) {
     const bare = a => ({ type: a.type, kind: a.kind, sport: a.sport, card: a.card, minutes: a.minutes, date: a.date, eventId: a.eventId });
     return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), message: scenario.message, task, model: reply.model, ms: coachMs,
-      answer: HIDDEN_ANSWER, proposed: (reply.actions || []).map(bare), kept: keptActions.map(bare), ...(checker ? { checker: checkerSummary(checker) } : {}), checks, passed: checks.every(c => c.ok || c.severity !== 'safety') };
+      answer: HIDDEN_ANSWER, historyNote: HIDDEN_ANSWER, proposed: (reply.actions || []).map(bare), kept: keptActions.map(bare), ...(checker ? { checker: checkerSummary(checker) } : {}), checks, passed: checks.every(c => c.ok || c.severity !== 'safety') };
   }
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), message: scenario.message, task, model: reply.model, ms: coachMs,
-    usage: { input: reply.usage?.input_tokens ?? null, cached: reply.usage?.input_tokens_details?.cached_tokens ?? null, output: reply.usage?.output_tokens ?? null }, answer: reply.answer, visuals: reply.visuals, proposed: reply.actions, kept: keptActions, ...(reply.memory?.save?.length || reply.memory?.forget?.length || reply.memory?.update?.length ? { memory: reply.memory } : {}), ...(checker ? { checker: checkerSummary(checker) } : {}), checks,
+    usage: { input: reply.usage?.input_tokens ?? null, cached: reply.usage?.input_tokens_details?.cached_tokens ?? null, output: reply.usage?.output_tokens ?? null }, usd: reply.usage ? usageCost(reply.model, reply.usage) : null,
+    // The answer as the chat keeps it for the next message (a persona's conversation).
+    historyNote: [reply.answer, actionsNote(keptActions)].filter(Boolean).join('\n\n'), answer: reply.answer, visuals: reply.visuals, proposed: reply.actions, kept: keptActions, ...(reply.memory?.save?.length || reply.memory?.forget?.length || reply.memory?.update?.length ? { memory: reply.memory } : {}), ...(checker ? { checker: checkerSummary(checker) } : {}), checks,
     passed: checks.every(c => c.ok || c.severity !== 'safety') };
 }
 
@@ -991,12 +996,26 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   if (principal?.kind !== 'coach-eval') return Response.json({ status: 'error', message: 'Unauthorized' }, { status: 401 });
   if (request.method !== 'POST') return Response.json({ status: 'error', message: 'Use POST.' }, { status: 405 });
   const body = await request.json().catch(() => ({}));
-  if (!body?.id) return Response.json({ status: 'ok', scenarios: COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })) });
-  const scenario = scenarioById(String(body.id));
+  if (!body?.id) return Response.json({ status: 'ok', scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
+    ...COACH_PERSONAS.map(p => ({ id: p.id, title: p.title, lang: p.lang || 'cs', turns: p.turns.length }))], coverage: evalCoverage() });
+  // A persona's message `turn` with the conversation so far, which the workflow keeps.
+  const persona = personaById(String(body.id));
+  const scenario = persona ? personaTurn(persona, Number(body.turn) || 1, personaConversation(body.conversation)) : scenarioById(String(body.id));
   if (!scenario) return Response.json({ status: 'error', message: 'Unknown scenario' }, { status: 404 });
   // The situation's own language, without touching the language the owner chose in the app.
   // Its AI spending counts as a job of the server, not as the owner's (ai-limit-share.js aiGroup).
   try { return Response.json(await withLang(scenario.lang || 'cs', () => run({ ...env, COACH_EVAL: true }, scenario)), { headers: { 'Cache-Control': 'no-store' } }); }
   // 200, not 502: Cloudflare in front of staging.aurin.health swaps a 502 for its own "Bad gateway" page and the message is lost (run 57).
   catch (error) { return Response.json({ id: scenario.id, title: scenario.title, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
+}
+
+// The conversation a persona's message continues: user and coach messages only, as the chat keeps them.
+export function personaConversation(list) {
+  return (Array.isArray(list) ? list : []).slice(-12).filter(m => ['user', 'assistant'].includes(m?.role) && typeof m.content === 'string')
+    .map(m => ({ role: m.role, content: m.content.slice(0, 4000) }));
+}
+
+// How much of the capability map (coach-capabilities.js) the situations cover.
+export function evalCoverage() {
+  return capabilityCoverage([...COACH_EVAL_SCENARIOS.map(s => s.id), ...COACH_PERSONAS.flatMap(p => p.turns.map((_, i) => `${p.id}.${i + 1}`))]);
 }
