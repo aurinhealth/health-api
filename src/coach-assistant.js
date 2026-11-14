@@ -484,14 +484,22 @@ const claudePart=part=>{
   if(part.type==='input_image'){const m=/^data:([^;]+);base64,(.*)$/.exec(part.image_url||'');return {type:'image',source:m?{type:'base64',media_type:m[1],data:m[2]}:{type:'url',url:part.image_url}};}
   return {type:'text',text:part.text,...(part.prompt_cache_breakpoint?{cache_control:{type:'ephemeral'}}:{})};
 };
-export const claudeMessages=input=>input.map(m=>({role:m.role==='assistant'?'assistant':'user',content:(Array.isArray(m.content)?m.content:[m.content]).map(claudePart)}));
+// A developer note (answer briefly) goes into the system prompt, where Claude weighs it as an instruction.
+export const claudeMessages=input=>input.filter(m=>m.role!=='developer').map(m=>({role:m.role==='assistant'?'assistant':'user',content:(Array.isArray(m.content)?m.content:[m.content]).map(claudePart)}));
+const developerNotes=input=>input.filter(m=>m.role==='developer').map(m=>Array.isArray(m.content)?m.content.map(p=>p.text||'').join(''):String(m.content||'')).filter(Boolean);
 async function claudeResponse(env,{fullInstructions,input,maxOutputTokens,format,model,reasoningEffort,feature,timeoutMs,slotId,hold}){
   if(!env.COACH_EVAL||!env.ANTHROPIC_API_KEY)throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
-  const sonnet=model.startsWith('claude-sonnet');
-  const response=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
-    headers:{'x-api-key':env.ANTHROPIC_API_KEY,'anthropic-version':'2026-10-21','content-type':'application/json',...(sonnet?{'anthropic-beta':'server-side-fallback-2026-07-01'}:{})},
-    body:JSON.stringify({model,max_tokens:maxOutputTokens,system:[{type:'text',text:fullInstructions,cache_control:{type:'ephemeral'}}],messages:claudeMessages(input),
-      output_config:{effort:['low','medium','high'].includes(reasoningEffort)?reasoningEffort:'low',...(format?{format:{type:'json_schema',schema:format.schema}}:{})},...(sonnet?{fallbacks:'default'}:{})})});
+  // No refusal fallback: the comparison must measure the model it names. A busy
+  // Claude is asked again twice, like OpenAI (fetchOpenAI).
+  const signal=AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),notes=developerNotes(input);
+  const body=JSON.stringify({model,max_tokens:maxOutputTokens,system:[{type:'text',text:fullInstructions,cache_control:{type:'ephemeral'}},...notes.map(text=>({type:'text',text}))],messages:claudeMessages(input),
+    output_config:{effort:['low','medium','high'].includes(reasoningEffort)?reasoningEffort:'low',...(format?{format:{type:'json_schema',schema:format.schema}}:{})}});
+  let response;
+  for(let attempt=0;;attempt++){
+    response=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal,headers:{'x-api-key':env.ANTHROPIC_API_KEY,'anthropic-version':'2026-10-21','content-type':'application/json'},body});
+    if(![429,500,502,503,504,529].includes(response.status)||attempt>=AI_RETRY_DELAYS_MS.length)break;
+    await new Promise(resolve=>setTimeout(resolve,AI_RETRY_DELAYS_MS[attempt]));
+  }
   const data=await response.json().catch(()=>({}));
   if(!response.ok){console.error('Claude '+response.status,String(data?.error?.message||'').slice(0,300));const failure=new Error(aiFailureText(response.status));failure.ai=true;failure.status=response.status;throw failure;}
   const u=data.usage||{},read=u.cache_read_input_tokens||0,written=u.cache_creation_input_tokens||0;
