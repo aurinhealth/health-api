@@ -21,15 +21,18 @@ const SCHEMA = {
 // The plan cards as the athlete sees them, without the empty fields.
 const card = a => Object.fromEntries(['type', 'date', 'sport', 'kind', 'minutes', 'reason'].filter(k => a?.[k] !== undefined && a[k] !== '' && a[k] !== 0).map(k => [k, a[k]]));
 
-// A rest card and a workout card on the same day and sport replace the planned session:
-// the checker sees one workout that replaces it, not two contradicting cards (calibration run 83).
+// A rest card that clears a planned session and a workout card on the same day and sport
+// replace that session: the checker sees one workout that replaces it, not two
+// contradicting cards (calibration run 83). A rest card without a planned session or
+// a sport (a whole day off) stays as it is.
 export const checkerCards = actions => {
-  const workouts = actions.filter(a => a?.type === 'workout');
-  const replaced = a => a?.type === 'rest' && workouts.some(w => w.date === a.date && (!a.sport || !w.sport || w.sport === a.sport));
-  return actions.filter(a => !replaced(a)).map(a => {
-    const c = card(a);
-    return a?.type === 'workout' && actions.some(r => replaced(r) && r.date === a.date && (!r.sport || !a.sport || r.sport === a.sport)) ? { ...c, replacesPlanned: true } : c;
-  });
+  const used = new Set(), pairs = new Map();
+  for (const r of actions) {
+    if (r?.type !== 'rest' || !r.eventId || !r.date || !r.sport) continue;
+    const w = actions.find(a => a?.type === 'workout' && !used.has(a) && a.date === r.date && a.sport === r.sport);
+    if (w) { used.add(w); pairs.set(r, w); }
+  }
+  return actions.filter(a => !pairs.has(a)).map(a => used.has(a) ? { ...card(a), replacesPlanned: true } : card(a));
 };
 
 // model: another model than the light one (the calibration compares them).
