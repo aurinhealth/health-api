@@ -128,17 +128,18 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
 // provider's copy was deleted, so it is made anew).
 export async function restoreLocalWorkout(env,id,link=null,fetchImpl=fetch){
   const db=env.DB,row=await localWorkout(db,id);if(!row||row.status!=='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
-  // A delete still being sent would write its old id back over the restore.
-  const running=await db.prepare("SELECT 1 AS r FROM workout_exports WHERE user_id=? AND local_id=? AND status='running' AND updated_at>=datetime('now','-5 minutes')").bind(db.userId,row.id).first();
-  if(running)throw new Error(L('Trénink se právě posílá, zkus to za chvíli.', 'The workout is being sent right now, try again in a moment.'));
   // Intervals.icu keeps the deleted id: it is sent anew and matched by
   // external_id. Wahoo drops its ids once the delete is through, and keeps
   // them (and its copy) when the delete failed, so its copy is updated.
-  const [back]=await db.batch([db.prepare("UPDATE local_workouts SET status='scheduled',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND status='deleted'").bind(db.userId,row.id),
+  // One transaction: its first statement fails (malformed JSON) and so rolls
+  // back the rest unless the workout is still the deleted one read above and
+  // no export of it is running, which would write its old id back over this.
+  await db.batch([db.prepare("SELECT json(CASE WHEN EXISTS(SELECT 1 FROM local_workouts WHERE user_id=? AND id=? AND status='deleted' AND revision=?) AND NOT EXISTS(SELECT 1 FROM workout_exports WHERE user_id=? AND local_id=? AND status='running' AND updated_at>=datetime('now','-5 minutes')) THEN '1' ELSE 'restore refused' END) AS ok").bind(db.userId,row.id,row.revision,db.userId,row.id),
+    db.prepare("UPDATE local_workouts SET status='scheduled',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND status='deleted'").bind(db.userId,row.id),
     await projection(db,row.id,JSON.parse(row.event_json)),
     db.prepare("UPDATE workout_exports SET remote_id=CASE WHEN provider='intervals' THEN NULL ELSE remote_id END,status='pending',attempts=0,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=?").bind(db.userId,row.id),
-    ...(link?[db.prepare('INSERT OR IGNORE INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)').bind(db.userId,link.sport,link.workout_id,link.family??null,link.scheduled_date,link.environment,link.intervals_external_id,row.id,'scheduled')]:[])]);
-  if(back?.meta?.changes!==1)throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
+    ...(link?[db.prepare('INSERT OR IGNORE INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)').bind(db.userId,link.sport,link.workout_id,link.family??null,link.scheduled_date,link.environment,link.intervals_external_id,row.id,'scheduled')]:[])
+  ]).catch(()=>{throw new Error(L('Trénink se mezitím změnil nebo se právě posílá, zkus to za chvíli.', 'The workout has changed or is being sent right now, try again in a moment.'));});
   return {status:'ok',eventId:row.id,sync:await syncLocalWorkout(env,row.id,fetchImpl)};
 }
 export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal,pairedWith}={}){
