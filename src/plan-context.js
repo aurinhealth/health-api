@@ -206,12 +206,12 @@ export function gymPlanSummary(rows){
 // where it is shown, not for the long reads (milestones) that only count days.
 export async function trainingGymPlans(env,from,to,{summary=false}={}){
   await ensureGymPlans(env.DB);
-  const [plans,cancelled,unpaired]=await Promise.all([
+  const [plans,cancelled,unpaired,types]=await Promise.all([
     env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
     env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
-    unpairedGymDays(env.DB,env.USER_ID,from,to)
+    unpairedGymDays(env.DB,env.USER_ID,from,to),gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}))
   ]);
-  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={},types=await gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}));
+  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={};
   for(const r of plans.results||[]){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}

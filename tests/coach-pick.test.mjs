@@ -101,7 +101,9 @@ test("the lines of a workout and a gym plan", () => {
 test("Aktivita dne asks for the ready workouts only when the options change, the AI only for the best", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /storedDetails\(env\.DB,env\.USER_ID,date,signature\)/);
+  // The stored workouts count only for the day's signature (read alongside the ranking).
+  assert.match(route, /signing=baseLoading\.then\(b=>pickSignature\(b\.day\)\)/);
+  assert.match(route, /storedDetails\(env\.DB,env\.USER_ID,date,signing\)/);
   assert.match(route, /o\.best\|\|!less\.includes\(o\.kind\)/);
   const helper = src.slice(src.indexOf("async function pickDetails"), src.indexOf("async function workoutPreview"));
   assert.match(helper, /ai:ai&&o\.best===true/);

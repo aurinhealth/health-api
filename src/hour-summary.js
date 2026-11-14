@@ -102,10 +102,14 @@ export async function wearFromSummary(db, userId, from, to) {
 // the summary: one per hour and source, the zones as an interval of their minutes.
 // null while the summary is not complete from `from` on.
 export async function dashboardRowsFromSummary(db, userId, from, to) {
-  const ready = await summaryFrom(db, userId).catch(() => null);
+  // The month's hours are read alongside the mark (one database trip, not two in a
+  // row); they are dropped while the summary does not reach back that far yet.
+  const [ready, read] = await Promise.all([summaryFrom(db, userId).catch(() => null),
+    db.prepare(`SELECT hour, source_family, steps, energy, zone_light, zone_moderate, zone_vigorous, zone_peak FROM health_hour_summary
+    WHERE user_id = ? AND hour >= ? AND hour < ? ORDER BY hour`).bind(userId, from, to).all().then(r => r, error => ({ error }))]);
   if (!ready || ready > from) return null;
-  const rows = (await db.prepare(`SELECT hour, source_family, steps, energy, zone_light, zone_moderate, zone_vigorous, zone_peak FROM health_hour_summary
-    WHERE user_id = ? AND hour >= ? AND hour < ? ORDER BY hour`).bind(userId, from, to).all()).results || [];
+  if (read.error) throw read.error;
+  const rows = read.results || [];
   const intervals = [], zones = [];
   const plus = (time, min) => new Date(Date.parse(time) + min * 60000).toISOString();
   for (const r of rows) {

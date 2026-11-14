@@ -2,7 +2,7 @@ import { L, bilingual } from './lang.js';
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import {trainingHistory,starterPlan,experienceChoices} from './training-history.js';
-import { weekWithCalendar } from './calendar-free.js';
+import { weekFree, withCalendarFree, ensureCalendarFree } from './calendar-free.js';
 import { MAX_MINUTES } from './workout-model.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -105,12 +105,19 @@ export function sanitizeSessions(raw, days) {
 // calendar's free time (calendar-free.js) unless `calendar` is false.
 export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
   await ensure(db);
-  const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
+  // The calendar's table exists only once the iPhone sent one: a read of a missing
+  // table would fail the whole trip (d1-batch.js asks each read alone then).
+  if (date) { await ensureWeekOverrides(db); if (calendar) await ensureCalendarFree(db); }
+  // Every read side by side: one database trip instead of four in a row (the
+  // setup row counts only for automatic availability, which most have).
+  const [row, setup, override, free] = await Promise.all([db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first(),
+    db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null),
+    date ? db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first() : null,
+    date && calendar ? weekFree(db, date) : null]);
   let defaults; try { defaults = sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { defaults = sanitizeWeekPlan({}); }
   // Onboarding does not collect availability. Until the athlete saves a time
   // budget in Plan, use current history or the documented starting template.
   if(defaults.availabilityMode==='auto'||defaults.availability.every(day=>day.minutes==null)){
-    const setup=await db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null);
     if(setup?.completed_at){
       let training={};try{training=JSON.parse(setup.training_json||'{}');}catch{}
       const automatic=starterPlan(await trainingHistory(db),experienceChoices(training));
@@ -119,10 +126,8 @@ export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
   }
   if (!date) return defaults;
   defaults = usualFor(defaults, date);
-  await ensureWeekOverrides(db);
-  const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
   const prefs = override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week', ...(defaults.weekB ? { weekB: true } : {}) } : { ...defaults, source: 'default' };
-  return calendar ? weekWithCalendar(db, prefs, date) : prefs;
+  return calendar ? withCalendarFree(prefs, weekStartOf(date), free) : prefs;
 }
 
 export async function saveWeekPlan(db, input, date = null) {
