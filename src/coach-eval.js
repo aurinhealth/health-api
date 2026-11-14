@@ -618,6 +618,10 @@ export const COACH_EVAL_SCENARIOS = [
       return [quality('nový plán horní poloviny místo dnešního', cards.some(a => a.replace && (a.gymFocus === 'upper' || (a.gymMuscles || []).length && !(a.gymMuscles || []).some(g => ['quads', 'hamstrings', 'hips', 'calves'].includes(g)))), cards.map(a => (a.gymFocus || '') + (a.replace ? ' replace' : '') + (a.trim ? ' trim' : '')).join(', ')),
         quality('řekne, že dosavadní plán nahradí', says(r, /nahrad|nahradí|místo (?:\S+ ){0,3}plánu|místo celého|replac|instead/i)),
         quality('nemění cviky po jednom', !r.kept.some(a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a.type)), r.kept.map(a => a.type).join(', '))]; } },
+  { id: 'S76', title: 'Chat v1: vrátit poslední změnu posilovny textem', message: 'Vrať to zpátky.', athlete: { gym: evalGym },
+    context: () => ({ chatV1: true, undoneInChat: { proposal: 'Vyměnit Pivot leg press za Hack squat (14. 11.)', done: true } }),
+    checks: r => [quality('řekne, že je plán zase jako předtím', says(r, /vr[áa]cen|vr[áa]til|zp[áa]tky|zp[ěe]t|p[ůu]vodn|jako p[řr]edt[íi]m|undone|back/i)),
+      quality('stejnou výměnu znovu nenavrhne', !r.kept.some(a => a.type === 'gym_swap' && a.toExercise === 'Hack squat'), r.kept.map(a => a.type + ' ' + (a.toExercise || '')).join(', '))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

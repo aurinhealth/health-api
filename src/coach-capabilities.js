@@ -27,7 +27,7 @@ export const COACH_CAPABILITIES = [
   // Exercises of a gym session (health-api #1087).
   row('add', 'exercise', 'gym', 'green', ['S72', 'P06.1']), row('remove', 'exercise', 'gym', 'pain', ['S73', 'P06.2']), row('focus', 'session', 'gym', 'green', ['P07.1', 'S75']),
   // Undo and confirm by text.
-  row('undo', 'session', 'ride', 'green'), row('undo', 'session', 'run', 'green', ['P17.3']), row('undo', 'session', 'swim', 'green'), row('undo', 'session', 'gym', 'green'),
+  row('undo', 'session', 'ride', 'green'), row('undo', 'session', 'run', 'green', ['P17.3']), row('undo', 'session', 'swim', 'green'), row('undo', 'session', 'gym', 'green', ['S76']),
   row('confirm', 'answer', 'ride', 'green', ['P09.4', 'P18.4']), row('confirm', 'answer', 'run', 'green', ['P02.4']), row('confirm', 'answer', 'swim', 'green', ['P04.4']), row('confirm', 'answer', 'gym', 'green', ['S71', 'P06.4', 'P07.4']),
   // Plan a week.
   row('plan_week', 'week', 'ride', 'new', ['P01.3']), row('plan_week', 'week', 'run', 'new'), row('plan_week', 'week', 'swim', 'green'), row('plan_week', 'week', 'gym', 'green', ['P16.1']),

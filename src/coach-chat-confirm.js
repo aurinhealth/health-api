@@ -68,3 +68,35 @@ export const notConfirmedAgain = (actions, confirmed) => {
   const done = new Set(confirmed.filter(c => c.done).map(c => c.proposal));
   return actions.filter(a => !done.has(actionSummary(a)));
 };
+
+// "Vrať to zpátky" in the chat (Chat v1): the last change of today's gym plan
+// confirmed in this chat goes back, as its card's "Vrátit" does. Read as an
+// allow-list like the yes: only undo words and fillers, no question.
+const UNDO = new Set(['vrat', 'vratit', 'vratte', 'vratime', 'undo', 'revert']);
+const UNDO_FILLER = new Set([...FILLER, 'zpatky', 'zpet', 'back', 'tu', 'tuhle', 'tuto', 'tenhle', 'ten', 'posledni', 'zmenu', 'change', 'that', 'last', 'puvodni', 'puvodne', 'jak', 'bylo', 'was', 'as', 'radsi', 'nakonec', 'mi', 'me', 'na', 'plan', 'dekuju', 'dekuji']);
+// "Dej to zpátky", "Put it back": a putting-back verb only together with back.
+const BACK = new Set(['zpatky', 'zpet', 'back']), PUT = new Set(['dej', 'put']);
+export function chatUndo(message) {
+  const m = plain(message).trim();
+  if (!m || m.length > 200 || m.includes('?')) return false;
+  const words = m.split(/[^\p{L}']+/u).filter(Boolean), back = words.some(w => BACK.has(w));
+  const verb = w => UNDO.has(w) || (back && PUT.has(w));
+  return words.some(verb) && words.every(w => verb(w) || UNDO_FILLER.has(w));
+}
+// The last change of today's gym plan confirmed in this chat that can still
+// go back. Stale when a later change of this chat's plan was confirmed (its
+// undo used already): an older one goes back only by its own card's button.
+export async function lastUndoInChat(db, chatId, since) {
+  if (!Number.isInteger(Number(chatId)) || !Number(chatId)) return null;
+  await db.prepare('CREATE TABLE IF NOT EXISTS activity_undo (user_id INTEGER NOT NULL, token TEXT NOT NULL, change_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, token))').run();
+  const chat = '%"chatId":' + Number(chatId) + ',%';
+  const row = await db.prepare("SELECT token,change_json,created_at FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(db.userId, since, chat).first();
+  if (!row) return null;
+  let c; try { c = JSON.parse(row.change_json); } catch { return null; }
+  if (c.kind !== 'gym_plan' || c.chatId !== Number(chatId)) return null;
+  // Confirmed after this change was made (cards may be confirmed in any order).
+  const later = c.draftId ? ((await db.prepare("SELECT draft_json FROM coach_inbox WHERE user_id=? AND status='confirmed' AND id<>? AND confirmed_at>? AND draft_json LIKE ?").bind(db.userId, c.draftId, row.created_at, chat).all()).results || []) : [];
+  const gymChange = a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a?.type) || (a?.type === 'workout' && a.sport === 'gym' && a.trim);
+  const stale = later.some(r => { try { return gymChange(JSON.parse(r.draft_json).action); } catch { return false; } });
+  return { token: row.token, proposal: c.proposal || '', ...(stale ? { stale: true } : {}) };
+}
