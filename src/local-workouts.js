@@ -123,6 +123,18 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   }
   const sync=await syncLocalWorkout(env,row.id,fetchImpl);return {status:'ok',eventId:row.id,sync};
 }
+// "Vrátit" of a workout the coach took off the plan (activity-chat-edits.js
+// planned): back as it was, with its library link, and sent out again (the
+// provider's copy was deleted, so it is made anew).
+export async function restoreLocalWorkout(env,id,link=null,fetchImpl=fetch){
+  const db=env.DB,row=await localWorkout(db,id);if(!row||row.status!=='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
+  const back=await db.prepare("UPDATE local_workouts SET status='scheduled',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND status='deleted'").bind(db.userId,row.id).run();
+  if(back.meta?.changes!==1)throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
+  await db.batch([await projection(db,row.id,JSON.parse(row.event_json)),
+    db.prepare("UPDATE workout_exports SET remote_id=NULL,status='pending',attempts=0,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND status!='running'").bind(db.userId,row.id),
+    ...(link?[db.prepare('INSERT OR IGNORE INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)').bind(db.userId,link.sport,link.workout_id,link.family??null,link.scheduled_date,link.environment,link.intervals_external_id,row.id,'scheduled')]:[])]);
+  return {status:'ok',eventId:row.id,sync:await syncLocalWorkout(env,row.id,fetchImpl)};
+}
 export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal,pairedWith}={}){
   const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json),duration=Number(minutes??event.moving_time/60);

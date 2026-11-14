@@ -9,7 +9,7 @@ import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './co
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
-import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
+import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent,localWorkout} from './local-workouts.js';
 import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
 import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict,goalCheck} from './race-estimate.js';
@@ -90,7 +90,7 @@ import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
-import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
+import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
 import { easierDayCard } from './night-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
@@ -2457,10 +2457,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         return {ok:r.ok&&out.status==='ok'&&out.action!=null,message:out.message};
       });
       madeInChat=confirmedInChat;
-      // "Vrať to zpátky" (Chat v1): the last change of today's gym plan from this chat goes back first.
+      // "Vrať to zpátky" (Chat v1): the last change of the plan from this chat today goes back first.
       const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message);
       const last=undoAsked?await lastUndoInChat(env.DB,body.chatId,dayStartSql(date)).catch(()=>null):null;
-      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu posilovny, kterou by šlo vrátit.','There is no change of the gym plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await undoActivityChange(env,last.token).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
+      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu, kterou by šlo vrátit.','There is no change of the plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await (last.tokens||[last.token]).reduce((done,token)=>done.then(()=>undoActivityChange(env,token)),Promise.resolve()).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
       if(undoneInChat?.done)madeInChat=[...madeInChat,{proposal:L('vráceno: ','undone: ')+undoneInChat.proposal,done:true}];
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
@@ -2778,6 +2778,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           }else{
             if(!preview.workout?.id)throw new Error(L('Trénink se nepodařilo připravit. Požádej o nový návrh.', 'The workout couldn\'t be prepared. Ask for a new proposal.'));
             result={...await scheduleWorkoutInIntervals(env,env.DB,{workoutId:preview.workout.id,date:a.date,confirm:true,environment:preview.environment||preview.workout.environment||'outdoor'}),preview};
+            // A new one only: a workout already in the plan stays when this is undone.
+            if(result.status==='ok'&&result.eventId){const id=String(result.eventId).replace(/^planned:/,''),made=await localWorkout(env.DB,id).catch(()=>null);if(made)Object.assign(result,await plannedUndo(env,draft,{op:'add',id,start:JSON.parse(made.event_json).start_date_local},row.id));}
           }
         }else{
           const id=a.eventId.replace(/^planned:/,''),event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
@@ -2789,8 +2791,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
             if(!latest.ok)throw new Error(L('Aktuální trénink se nepodařilo ověřit v Intervals.icu.', 'The current workout couldn\'t be verified in Intervals.icu.'));
             const live=await latest.json();if(live.name!==a.eventSnapshot.name||String(live.start_date_local).slice(0,10)!==a.eventSnapshot.date)throw new Error(L('Trénink se v Intervals.icu změnil. Požádej o nový návrh.', 'The workout has changed in Intervals.icu. Ask for a new proposal.'));
           }
-          if(a.type==='move')result=await movePlannedEvent(env,a);
-          else if(a.type==='rest')result=await deletePlannedEvent(env,a);
+          // Chat v1: the app's own ride, run or swim can go back ("Vrátit"); a
+          // gym day or a joined pair only by hand.
+          const own=id.startsWith('local-')&&!isStrengthEvent(payload)&&!payload.after&&!payload.next;
+          if(a.type==='move'){
+            result=await movePlannedEvent(env,a);
+            const moved=own?await localWorkout(env.DB,id).catch(()=>null):null;
+            if(moved)Object.assign(result,await plannedUndo(env,draft,{op:'move',id,from:payload.start_date_local,to:JSON.parse(moved.event_json).start_date_local},row.id));
+          }
+          else if(a.type==='rest'){
+            const link=own?await env.DB.prepare('SELECT sport,workout_id,family,scheduled_date,environment,intervals_external_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?').bind(env.USER_ID,id).first().catch(()=>null):null;
+            result=await deletePlannedEvent(env,a);
+            if(own)Object.assign(result,await plannedUndo(env,draft,{op:'delete',id,start:payload.start_date_local,link},row.id));
+          }
         }
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
@@ -3557,6 +3570,11 @@ async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true,aiBudgetMs=null}
 // remembered (coach-quick-change.js).
 // Chat v1: "Vrátit" (the card's button, or the words in the chat) under a
 // confirmed change of the day's gym plan; its chat finds it again.
+// The same for a planned ride, run or swim of the app (activity-chat-edits.js planned).
+async function plannedUndo(env,draft,change,draftId){
+  if(!chatV1On(env)||!change.start&&!change.from)return {};
+  return rememberChange(env,{kind:'planned',...change,chatId:Number(draft.chatId)||null,messageId:Number(draft.messageId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)}).then(undo=>({undo}),error=>{console.error('Planned undo not kept',error.message);return {};});
+}
 async function gymUndo(env,draft,before,after,draftId){
   if(!chatV1On(env))return {};
   // A token that could not be kept leaves the change made, without Vrátit.

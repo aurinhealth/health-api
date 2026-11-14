@@ -2,7 +2,8 @@
 // confirms (coach-actions.js activity_delete, activity_merge, activity_time).
 // They stay in Aurin: the watch, Apple or Google Health and Intervals.icu keep
 // their records. Each change can be undone ("Vrátit") with the token it returns,
-// and so can a change of the day's gym plan in Chat v1 (kind gym_plan).
+// and so can a change of the day's gym plan in Chat v1 (kind gym_plan) and a
+// ride, run or swim the coach added, moved or took off the app's plan (kind planned).
 //
 // - Delete hides the activity the way activity-edits.js does (record_role
 //   'duplicate', matched_activity_id 'deleted'), whatever its source, so it is
@@ -156,6 +157,23 @@ export async function undoActivityChange(env, token) {
     if (back.meta?.changes !== 1) throw fail(L('Plán se od té změny upravil, vrátit ho už nejde.', 'The plan has changed since, it can no longer be undone.'));
     await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
     return { status: 'ok', kind: 'gym_plan', date: change.date, values: change.before, proposal: change.proposal || null };
+  }
+  // A planned workout of the app (local-workouts.js) back where it was, only
+  // while it is still as the change left it and its day has not passed.
+  if (change.kind === 'planned') {
+    const { localWorkout, restoreLocalWorkout } = await import('./local-workouts.js');
+    const { deletePlannedEvent, movePlannedEvent } = await import('./planned-events.js');
+    const { localToday } = await import('./user-time.js');
+    const row = await localWorkout(env.DB, change.id), start = String(parse(row?.event_json).start_date_local || '');
+    const changed = () => fail(L('Trénink se od té změny upravil, vrátit ho už nejde.', 'The workout has changed since, it can no longer be undone.'));
+    if (String(change.op === 'move' ? change.from : change.start).slice(0, 10) < localToday()) throw fail(L('Ten den už je pryč, změnu už vrátit nejde.', 'That day has passed, the change can no longer be undone.'));
+    if (change.op !== 'add') { const { assertTrainingAllowed, getAthleteState } = await import('./athlete-state.js'); assertTrainingAllowed(await getAthleteState(env.DB)); }
+    if (change.op === 'add') { if (row?.status !== 'scheduled' || start !== change.start) throw changed(); await deletePlannedEvent(env, { eventId: change.id }); }
+    else if (change.op === 'delete') { if (row?.status !== 'deleted' || start !== change.start) throw changed(); await restoreLocalWorkout(env, change.id, change.link || null); }
+    else if (change.op === 'move') { if (row?.status !== 'scheduled' || start !== change.to) throw changed(); await movePlannedEvent(env, { eventId: change.id, date: change.from.slice(0, 10), time: change.from.slice(11, 16) || null }); }
+    else throw changed();
+    await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
+    return { status: 'ok', kind: 'planned', op: change.op, proposal: change.proposal || null };
   }
   for (const r of change.rows || []) batch.push(env.DB.prepare('UPDATE health_datapoints SET record_role = ?, matched_activity_id = ?, match_confidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(r.record_role, r.matched_activity_id, r.match_confidence, r.id, env.USER_ID));
   if (change.kind === 'merge') batch.push(env.DB.prepare("DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'local' AND data_type = 'activity' AND external_id = ?").bind(env.USER_ID, change.created));
