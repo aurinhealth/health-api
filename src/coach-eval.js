@@ -589,6 +589,14 @@ export const COACH_EVAL_SCENARIOS = [
       quality('zruší nebo přesune dnešní VO2max', removesToday(r)),
       quality('pár dní volna, ne stopka do vyšetření', says(r, /(?:2|3|dva|dvě|tři|pár|několik)\s*(?:(?:–|-|až)\s*(?:3|tři)\s*)?dn/i) && !unconditionalStop(r.answer), r.answer),
       quality('uloží potíže do paměti', (r.memory.save || []).some(m => heartSymptom(m.text)), JSON.stringify(r.memory.save || []))] },
+  // Petr 2026-11-14: a yes in the text did nothing and the same cards came again.
+  // The app confirms the open cards first (coach-chat-confirm.js); the answer says it is done.
+  { id: 'S71', title: 'Potvrzení výměn textem v chatu', message: 'Já ti je potvrzuju v chatu, tak to potvrď.', athlete: { gym: evalGym },
+    conversation: date => [{ role: 'user', content: 'Uprav mi dnešní posilovnu, ať to není pořád stejné.' }, { role: 'assistant', content: `Vyměnil bych leg press za hack squat a lat pulldown za přítah na kladce, partie zůstanou stejné.\n\n[Návrhy: Vyměnit Pivot leg press → Hack squat (${date}); Vyměnit Lat pulldown → Seated cable row (${date})]` }],
+    context: () => ({ confirmedInChat: [{ proposal: 'Vyměnit Pivot leg press → Hack squat', done: true }, { proposal: 'Vyměnit Lat pulldown → Seated cable row', done: true }] }),
+    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /hotov|vyměnil|vyměněn|upravil|upraven|změnil|je v plánu|máš v plánu|done/i)),
+      quality('stejné výměny znovu nenavrhne', !r.proposed.some(a => a.type === 'gym_swap' && ['Hack squat', 'Seated cable row'].includes(a.toExercise))),
+      quality('nežádá klepnutí na kartu', !says(r, /klepn|ťukn|tukn|tlačítk|kart[ua]|\btap\b/i))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

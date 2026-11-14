@@ -165,6 +165,7 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, weekHealthDate, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
+import { chatConfirmation, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain } from "./coach-chat-confirm.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
@@ -2438,6 +2439,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       // The thinking steps with the athlete's numbers (coach-steps.js); the app shows them as they come.
       const steps=stepList(),step=s=>{if(steps.add(s))onStep(s);};
+      // "Potvrzuju": the open cards under the last answer go through as if
+      // tapped, before the data is read, so the answer sees the changed plan.
+      const drafts=!ghost&&chatConfirmation(message)?await openDraftsOfLastAnswer(env.DB,body.chatId).catch(()=>[]):[];
+      if(drafts.length)onProgress(L('Provádím potvrzené změny…', 'Making the confirmed changes…'));
+      const confirmedInChat=await confirmInChat(drafts,async draftId=>{
+        const actionUrl=new URL('https://internal/app/api/assistant/action');
+        const r=await handleDashboardApi(new Request(actionUrl,{method:'POST',headers:{Origin:actionUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId,decision:'confirm'})}),env,ctx,actionUrl,{signedIn:true});
+        const out=await r.json().catch(()=>({}));
+        return {ok:r.ok&&out.status==='ok'&&out.action!=null,message:out.message};
+      });
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
       // there is one, then the model writing. Never a step the model writes.
@@ -2498,6 +2509,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const libraryAsk=searched?chatLibraryQuery({message,date,inputs,sport,todayCoach:coachCtx.gymDay?null:coachCtx.cyclingCoachV2,availabilityMinutes}):null;
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
+      if(confirmedInChat.length)coachCtx.confirmedInChat=confirmedInChat.map(({proposal,done,reason})=>({proposal,done,...(reason?{reason}:{})}));
       onProgress(L('Kouč píše…', 'The coach is writing…'));
       // With the live check on, the athlete sees the answer only after the
       // checker read it (coach-checker.js), so nothing streams. A photo message
@@ -2517,7 +2529,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The answer is written; the app keeps the line under it while the proposals are checked.
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
-      const actions=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),proposals=[];await ensureCoachInboxTable(env.DB);
+      const checked=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),actions=notConfirmedAgain(checked,confirmedInChat),proposals=[];await ensureCoachInboxTable(env.DB);
       // What the coach saved from the athlete's words is kept at once and shown
       // under the answer with Undo. What the answer says no longer holds is only
       // proposed: the athlete confirms it under the answer (Forget / Update), so
@@ -2539,7 +2551,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // the days it trains on and the running plan it would end.
       for(const a of actions)if(a.type==='plan')a.trainingPlan=await coachPlanPreview(env,ctx,a).catch(error=>{console.error('Plan preview failed',error.message);return null;});
       // A proposal the checks dropped leaves no "below is the workout" without a card.
-      const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
+      const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-checked.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
       await saveMemory();
       const changes=keeps?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
@@ -2557,7 +2569,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // A ghost chat left while its answer was written keeps no proposal either.
       for(const action of ghost&&!chatId?[]:actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{}),...(ghost?{ghost:true}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
-      return {...answer,chatId,messageId,actions:proposals,coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>c.action)}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
