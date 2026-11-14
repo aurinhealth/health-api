@@ -1026,10 +1026,21 @@ const flagText = f => `${f.cat}: „${f.quote}“ (${f.why})`;
 const checkerCheck = c => quality('AI kontrolor bez nálezu', !c.error && !c.flags.length, c.error ? 'kontrolor selhal: ' + c.error : c.flags.map(flagText).join(' | '));
 const checkerSummary = c => ({ model: c.model || null, ms: c.ms ?? null, usd: c.usd ?? null, flags: c.flags, ...(c.error ? { error: c.error } : {}) });
 
+// The eval's judge: Luna reads every answer, Sol reads again only what Luna flags and its verdict stands.
+// Calibration run 81: both caught 17 of 18 faults, Luna's one false alarm in 20 Sol did not raise; Sol costs about 20× more.
+export async function judge(env, input, check = checkCoachAnswer) {
+  const first = await check(env, input, { model: lightModel(env) });
+  if (!first.flags.length) return first;
+  // Sol failing leaves Luna's finding standing.
+  const second = await check(env, input, { model: complexModel(env) }).catch(() => null);
+  if (!second) return first;
+  return { ...second, model: `${first.model} → ${second.model}`, ms: first.ms + second.ms, usd: first.usd == null && second.usd == null ? null : (first.usd || 0) + (second.usd || 0) };
+}
+
 // K01–K10: a fixed answer with the base situation's data, only through the checker.
 export async function runCheckerScenario(env, scenario, { check = checkCoachAnswer, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW } = {}) {
   const { base, cat, answer } = scenario.planted, { ctx } = scenarioContext(scenarioById(base), date, now);
-  const c = await check(env, { context: ctx, message: scenario.message, answer, actions: [] }).catch(error => ({ error: error.message, flags: [] }));
+  const c = await judge(env, { context: ctx, message: scenario.message, answer, actions: [] }, check).catch(error => ({ error: error.message, flags: [] }));
   const checks = [quality(cat ? `kontrolor najde ${cat}` : 'kontrolor nic nenajde', !c.error && (cat ? c.flags.some(f => f.cat === cat) : !c.flags.length), c.error ? 'kontrolor selhal: ' + c.error : c.flags.map(flagText).join(' | '))];
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'checker', message: scenario.message, model: c.model, ms: c.ms, answer, proposed: [], kept: [], checker: checkerSummary(c), checks, passed: true };
 }
@@ -1053,7 +1064,7 @@ export async function runScenario(env, scenario, { ask = askCoach, check = check
   // The AI checker's findings are a warning for now (quality): one model judging another can be wrong.
   // Without an OpenAI key (the unit tests) there is no checker.
   const checker = env.OPENAI_API_KEY || check !== checkCoachAnswer
-    ? await check(env, { context: ctx, message: scenario.message, answer: reply.answer, actions: keptActions }).catch(error => ({ error: error.message, flags: [] })) : null;
+    ? await judge(env, { context: ctx, message: scenario.message, answer: reply.answer, actions: keptActions }, check).catch(error => ({ error: error.message, flags: [] })) : null;
   const hidden = scenario.hideAnswer || quotesInstructions(reply.answer);
   // A hidden answer keeps hidden: the findings show only their categories.
   if (hidden && checker) checker.flags = checker.flags.map(f => ({ cat: f.cat, quote: '…', why: '…' }));
@@ -1083,12 +1094,12 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   if (principal?.kind !== 'coach-eval') return Response.json({ status: 'error', message: 'Unauthorized' }, { status: 401 });
   if (request.method !== 'POST') return Response.json({ status: 'error', message: 'Use POST.' }, { status: 405 });
   const body = await request.json().catch(() => ({}));
-  // One calibration answer read by the checker on the light (luna) or the coach's (sol) model.
+  // One calibration answer read by the checker on the light (luna) or the coach's (sol) model, or by the eval's judge (cascade).
   if (body?.calibrate) {
     const item = COACH_CALIBRATION.find(c => c.id === String(body.calibrate));
     if (!item) return Response.json({ status: 'error', message: 'Unknown calibration item' }, { status: 404 });
     const persona = personaById(item.persona.split('.')[0]), s = personaTurn(persona, Number(item.persona.split('.')[1]), item.conversation);
-    try { return Response.json(await withLang(s.lang || 'cs', () => runCalibration({ ...env, COACH_EVAL: true }, item, s, body.model === 'sol' ? 'sol' : 'luna')), { headers: { 'Cache-Control': 'no-store' } }); }
+    try { return Response.json(await withLang(s.lang || 'cs', () => runCalibration({ ...env, COACH_EVAL: true }, item, s, ['sol', 'cascade'].includes(body.model) ? body.model : 'luna')), { headers: { 'Cache-Control': 'no-store' } }); }
     catch (error) { return Response.json({ id: item.id, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
   }
   if (!body?.id) return Response.json({ status: 'ok', calibration: COACH_CALIBRATION.map(c => c.id), scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
@@ -1108,7 +1119,8 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
 export async function runCalibration(env, item, scenario, model, { check = checkCoachAnswer } = {}) {
   const date = scenario.date, { ctx } = scenarioContext(scenario, date, date + ' ' + scenario.now);
   ctx.userMessage = scenario.message;
-  const r = await check(env, { context: ctx, message: scenario.message, answer: item.answer, actions: item.actions }, { model: model === 'sol' ? complexModel(env) : lightModel(env) });
+  const input = { context: ctx, message: scenario.message, answer: item.answer, actions: item.actions };
+  const r = model === 'cascade' ? await judge(env, input, check) : await check(env, input, { model: model === 'sol' ? complexModel(env) : lightModel(env) });
   const flagged = r.flags.length > 0;
   return { id: item.id, status: 'ok', persona: item.persona, expect: item.expect, why: item.why, model: r.model, ms: r.ms, usd: r.usd, flags: r.flags, correct: item.expect === 'flag' ? flagged : !flagged };
 }

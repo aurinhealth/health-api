@@ -16,7 +16,7 @@ on:
         required: false
         default: "1"
       calibrate:
-        description: "Only the AI checker's calibration on answers with a known verdict: luna, sol or both (about 0.03 USD luna, 0.6 USD sol); empty = the normal run"
+        description: "Only the AI checker's calibration on answers with a known verdict: luna, sol, both or cascade, the eval's judge (about 0.03 USD luna, 0.3 USD cascade, 0.6 USD sol); empty = the normal run"
         required: false
         default: ""
 

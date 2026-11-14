@@ -124,6 +124,17 @@ test('checker calibration: every answer builds its persona context, a flag count
     if (item.expect === 'ok') assert.equal(r.correct, true, item.id);
   }
   assert.ok(seen.every(m => m === 'gpt-6-sol'));
+  // The cascade: Sol reads only what Luna flags, and Sol's verdict stands.
+  const { judge } = await import('../src/coach-eval.js');
+  const calls = [], fake = solFlags => async (env, input, opts) => { calls.push(opts.model); return { flags: opts.model === 'gpt-6-sol' ? solFlags : [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; };
+  const cleared = await judge({}, { answer: 'a' }, fake([]));
+  assert.deepEqual(calls, ['gpt-6-luna', 'gpt-6-sol']);
+  assert.deepEqual(cleared.flags, []); assert.equal(cleared.usd, 0.002);
+  const solDown = await judge({}, { answer: 'a' }, async (env, input, opts) => { if (opts.model === 'gpt-6-sol') throw new Error('timeout'); return { flags: [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; });
+  assert.equal(solDown.flags.length, 1); assert.equal(solDown.model, 'gpt-6-luna');
+  calls.length = 0;
+  const clean = await judge({}, { answer: 'a' }, async (env, input, opts) => { calls.push(opts.model); return { flags: [], model: opts.model, ms: 1, usd: 0.001 }; });
+  assert.deepEqual(calls, ['gpt-6-luna']); assert.deepEqual(clean.flags, []);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
   assert.equal(list.calibration.length, COACH_CALIBRATION.length);
 });
