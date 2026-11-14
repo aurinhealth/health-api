@@ -60,13 +60,15 @@ if (calibrate) {
 const scenarios = list.scenarios.filter(s => wanted.length ? wanted.includes(s.id) || (s.turns && wanted.includes("P")) : !s.turns);
 // A persona is four answers with a growing conversation: at most 2 rounds of them (critic 2026-11-14, 20 personas × 5 rounds would be 800 calls).
 if (rounds > 2 && scenarios.some(s => s.turns)) { console.log(`Personas: ${rounds} rounds lowered to 2.`); rounds = 2; }
+// COACH_EVAL_COACH (haiku or sonnet): the coach on Anthropic's Claude instead of OpenAI, to compare.
+const coach = ["haiku", "sonnet"].includes(String(process.env.COACH_EVAL_COACH || "").trim()) ? { coach: String(process.env.COACH_EVAL_COACH).trim() } : {};
 const results = [];
 const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
 // A persona (P01–P20) is a conversation: each message goes with the coach's earlier answers.
 for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
   const conversation = [];
   for (let turn = 1; turn <= (s.turns || 1); turn++) {
-    const result = await call(s.turns ? { id: s.id, turn, conversation } : { id: s.id }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
+    const result = await call(s.turns ? { id: s.id, turn, conversation, ...coach } : { id: s.id, ...coach }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
     // An error page knows no situation: keep its id, so the summary names it (run 56 printed "undefined").
     result.id ??= s.turns ? `${s.id}.${turn}` : s.id; result.title ??= s.title;
     if (rounds > 1) result.round = round;
@@ -82,13 +84,15 @@ const mark = (r, severity) => { const list = (r.checks || []).filter(c => c.seve
 const quote = text => String(text || "").split("\n").map(line => "> " + line).join("\n");
 const action = a => [a.type, a.kind, a.minutes ? a.minutes + " min" : "", a.date, a.eventId].filter(Boolean).join(" ");
 const lines = [
-  `# Coach evaluation, ${host}`, "",
+  `# Coach evaluation, ${host}${coach.coach ? `, kouč ${coach.coach}` : ""}`, "",
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
   ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
 // The AI checker (coach-checker.js): what it cost and how long it took.
 // What the run cost on OpenAI (the coach's answers and the checker).
 const coachUsd = results.reduce((sum, r) => sum + (r.usd || 0), 0), checkerUsd = results.reduce((sum, r) => sum + (r.checker?.usd || 0), 0);
+const coachTimes = results.filter(r => r.ms != null && r.task !== "checker").map(r => r.ms).sort((a, b) => a - b);
+if (coachTimes.length) lines.push(`Kouč: ${coachTimes.length} odpovědí, ${(coachUsd / coachTimes.length).toFixed(4)} USD na odpověď, medián ${(coachTimes[coachTimes.length >> 1] / 1000).toFixed(1)} s`, "");
 lines.push(`Cena běhu: kouč ${coachUsd.toFixed(2)} USD + kontrolor ${checkerUsd.toFixed(2)} USD = ${(coachUsd + checkerUsd).toFixed(2)} USD`, "");
 // How much of the capability map the situations cover, each sport on its own (coach-capabilities.js).
 if (list.coverage) {

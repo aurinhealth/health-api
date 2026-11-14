@@ -212,3 +212,23 @@ test('sessions cancelled for an illness are kept for the coach, at most 21 days'
   s=await getAthleteState(db,{date:'2026-10-24'});
   assert.deepEqual(s.cancelled.map(c=>c.name),['Long ride']);
 });
+test('the coach evaluation can run the coach on Claude: Haiku for short tasks, Sonnet for plans, same schema',async()=>{
+  const original=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,headers:options.headers,body});return Response.json({model:body.model,stop_reason:'end_turn',content:[{type:'text',text:'{"answer":"Dnes lehce.","visuals":[],"actions":[],"memory":{"save":[],"forget":[],"update":[]}}'}],usage:{input_tokens:100,cache_read_input_tokens:900,cache_creation_input_tokens:0,output_tokens:50}});};
+  try{
+    const env={OPENAI_API_KEY:'test',ANTHROPIC_API_KEY:'k',COACH_EVAL:true,COACH_EVAL_COACH:'sonnet'};
+    const quick=await askCoach(env,'Díky!',{});
+    const plan=await askCoach(env,'Naplánuj zítřejší posilovnu',{},{actions:true});
+    assert.deepEqual(calls.map(c=>c.body.model),['claude-haiku-5-5','claude-sonnet-5-5']);
+    assert.ok(calls.every(c=>c.url==='https://api.anthropic.com/v1/messages'&&c.headers['x-api-key']==='k'));
+    assert.equal(calls[1].body.output_config.format.type,'json_schema');assert.equal(calls[1].body.messages[0].role,'user');
+    assert.equal(calls[1].body.messages[0].content[0].cache_control?.type,'ephemeral','the data stays cached');
+    assert.equal(plan.answer,'Dnes lehce.');assert.equal(plan.usage.input_tokens,1000);assert.equal(plan.usage.input_tokens_details.cached_tokens,900);
+    assert.equal(quick.model,'claude-haiku-5-5');
+    // Outside the evaluation the setting does nothing: the app stays on OpenAI.
+    calls.length=0;
+    globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,body});return Response.json({model:body.model,output_text:'Odpověď'});};
+    await askCoach({OPENAI_API_KEY:'test',ANTHROPIC_API_KEY:'k',COACH_EVAL_COACH:'sonnet'},'Díky!',{});
+    assert.equal(calls[0].url,'https://api.openai.com/v1/responses');
+  }finally{globalThis.fetch=original;}
+});
