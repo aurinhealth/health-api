@@ -62,8 +62,10 @@ export const chatV1On = env => env?.CHAT_V1 === 'true';
 // when they ask for another length or one more exercise (review of #1088:
 // "Prodluž mi to a přidej něco na nohy" replaced a full-body plan). "Místo"
 // says it even beside a length ("Místo nohou záda, mám hodinu").
-const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
+const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|(?<!\p{L})(?:swap|vym[eě][nň]|proho[dď])\p{L}*|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
 const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
+const LENGTH_ASK=/(?:prodl|del[sš]|d[ée]le|longer|extend|more\s+time|v[íi]c\s+[čc]asu|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin(?!k)|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L})))/iu,
+  SHORTEN_ASK=/(?:zkra[tť]|zkr[aá]t|krat[sš]|(?<!\p{L})(?:do|max(?:imáln[eě])?|nejv[ýy][šs]|under|within|at\s+most|shorter)\s+\d+\s*(?:min|h(?!\p{L})|hod))/iu;
 const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
 // "Dej to dneska lehčí" / "Make it heavier" for the gym: −1 or +1 load step, 0
 // when the message asks for no such thing or also for another length. Only
@@ -294,7 +296,8 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
           const trimmed=trimGymPlan(values,a.minutes),load=context.chatV1?gymLoadAsked(context.userMessage):0,base=trimmed?.values||values,scaled=load?scalePlanLoads(base,load):null;
           if(scaled)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,loadStep:load,workoutName:weightsName(load),trim:{values:scaled,base,source:values,removed:trimmed?.removed||[],weights:true}}];
           if(trimmed)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:values,removed:trimmed.removed}}];
-          const longer=context.chatV1?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;
+          // Only on an ask for more time: a card of another focus at the plan's own length is no lengthening (persona run 77, P07.1).
+          const longer=context.chatV1&&LENGTH_ASK.test(String(context.userMessage||''))&&!SHORTEN_ASK.test(String(context.userMessage||''))?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;
           return longer?[{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:longer.name,trim:{values:longer.values,source:values,removed:[],added:longer.added}}]:[];
         }
         return [session];

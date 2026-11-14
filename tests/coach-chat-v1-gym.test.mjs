@@ -182,3 +182,19 @@ test('the weight chips always scale the unscaled plan and never logged sets', as
   assert.equal(bench(easier.trim.values), '22.5');
   for (const a of [harder, heavier, easier]) assert.equal(a.trim.values[i][3], '150', 'the logged set keeps its load');
 });
+
+test('persona run 77: "swap upper for lower" replaces the plan, a card at another length without asking is no lengthening, todayGym says how long the plan takes', async () => {
+  assert.equal(replaceAsked("Swap today's upper body for lower body."), true);
+  assert.equal(replaceAsked('Vyměň dnešní horní polovinu za nohy.'), true);
+  const ctx = { ...base, chatV1: true, gymPlan: { values: full } };
+  const [swap] = validateCoachActions([gymAction({ minutes: 60, gymFocus: 'lower' })], { ...ctx, userMessage: "Swap today's upper body for lower body." }, date, { userInitiated: true });
+  assert.ok(swap.replace, 'a plan of the other focus in its place');
+  assert.equal(swap.trim, undefined);
+  // A longer card the athlete did not ask for is not lengthened.
+  assert.deepEqual(validateCoachActions([gymAction({ minutes: 60 })], { ...ctx, userMessage: 'Co dneska v posilovně?' }, date, { userInitiated: true }).filter(a => a.trim?.added), []);
+  assert.ok(validateCoachActions([gymAction({ minutes: 60 })], { ...ctx, userMessage: 'Dneska mám víc času, klidně hodinu.' }, date, { userInitiated: true }).some(a => a.trim?.added?.length));
+  // "Do 45 minut" asks for a shorter session, never more exercises.
+  assert.deepEqual(validateCoachActions([gymAction({ minutes: 45 })], { ...ctx, userMessage: 'Ať je to celé do 45 minut.' }, date, { userInitiated: true }).filter(a => a.trim?.added), []);
+  const { todayGymContext } = await import('../src/coach-gym-adjustment.js');
+  assert.equal(todayGymContext({ values: full }, date).estimatedMinutes, minutesOf(full));
+});
