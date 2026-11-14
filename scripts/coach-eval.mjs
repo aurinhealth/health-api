@@ -38,6 +38,24 @@ async function call(body) {
 
 const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
+// COACH_EVAL_CALIBRATE (luna, sol or both): only the checker's calibration (coach-calibration.js), no coach answers.
+const calibrate = String(process.env.COACH_EVAL_CALIBRATE || "").trim();
+if (calibrate) {
+  const models = calibrate === "both" ? ["luna", "sol"] : [calibrate === "sol" ? "sol" : "luna"], out = [], lines = [`# Kalibrace AI kontrolora, ${host}`, ""];
+  for (const model of models) {
+    const rows = [];
+    for (const id of list.calibration || []) { const r = await call({ calibrate: id, model }).catch(error => ({ id, status: "error", message: error.message })); r.id ??= id; r.run = model; rows.push(r); out.push(r);
+      console.log(r.status === "ok" ? `${model} ${id} ${r.correct ? "ok" : "CHYBA"} ${(r.flags || []).map(f => f.cat).join(",")}` : `${model} ${id} ${r.status}: ${r.message || ""}`); }
+    const ok = rows.filter(r => r.status === "ok"), faults = ok.filter(r => r.expect === "flag"), clean = ok.filter(r => r.expect === "ok");
+    const usd = ok.reduce((sum, r) => sum + (r.usd || 0), 0), times = ok.map(r => r.ms).sort((a, b) => a - b);
+    lines.push(`## ${model}`, "", `Chytil chyb: ${faults.filter(r => r.correct).length}/${faults.length}`, `Falešné poplachy: ${clean.filter(r => !r.correct).length}/${clean.length}`,
+      `Cena ${usd.toFixed(3)} USD, medián ${times.length ? (times[times.length >> 1] / 1000).toFixed(1) : "–"} s${rows.length - ok.length ? `, chyb serveru ${rows.length - ok.length}` : ""}`, "",
+      ...ok.filter(r => !r.correct).map(r => `- ${r.id} (${r.persona}, ${r.expect === "flag" ? "nechytil" : "falešný poplach"}: ${r.why})${(r.flags || []).map(f => ` ${f.cat}: „${f.quote}“ (${f.why})`).join(";")}`), "");
+  }
+  writeFileSync("coach-eval.json", JSON.stringify(out, null, 2));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n"); else console.log(lines.join("\n"));
+  process.exit(out.some(r => r.status !== "ok") ? 1 : 0);
+}
 // Empty = every S, L, W and K situation; the personas only when named, or "P" for all of them (each is four answers).
 const scenarios = list.scenarios.filter(s => wanted.length ? wanted.includes(s.id) || (s.turns && wanted.includes("P")) : !s.turns);
 // A persona is four answers with a growing conversation: at most 2 rounds of them (critic 2026-11-14, 20 personas × 5 rounds would be 800 calls).
