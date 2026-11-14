@@ -193,6 +193,8 @@ test('persona run 77: "swap upper for lower" replaces the plan, a card at anothe
   // A longer card the athlete did not ask for is not lengthened.
   assert.deepEqual(validateCoachActions([gymAction({ minutes: 60 })], { ...ctx, userMessage: 'Co dneska v posilovně?' }, date, { userInitiated: true }).filter(a => a.trim?.added), []);
   assert.ok(validateCoachActions([gymAction({ minutes: 60 })], { ...ctx, userMessage: 'Dneska mám víc času, klidně hodinu.' }, date, { userInitiated: true }).some(a => a.trim?.added?.length));
+  // "Do 45 minut" asks for a shorter session, never more exercises.
+  assert.deepEqual(validateCoachActions([gymAction({ minutes: 45 })], { ...ctx, userMessage: 'Ať je to celé do 45 minut.' }, date, { userInitiated: true }).filter(a => a.trim?.added), []);
   const { todayGymContext } = await import('../src/coach-gym-adjustment.js');
   assert.equal(todayGymContext({ values: full }, date).estimatedMinutes, minutesOf(full));
 });
