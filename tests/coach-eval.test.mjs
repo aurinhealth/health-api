@@ -150,7 +150,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 87);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 107);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');

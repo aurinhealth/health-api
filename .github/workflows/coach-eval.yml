@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       scenarios:
-        description: "Situations to run, e.g. S02,S04 (empty = all)"
+        description: "Situations to run, e.g. S02,S04 P01,P02 or P for all personas (4 messages each, about 0.2 USD per persona); empty = all S, L, W, K"
         required: false
         default: ""
       repeat:
