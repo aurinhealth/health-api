@@ -37,11 +37,19 @@ test('a persona message runs through the coach with its checks, cost and the ans
     assert.equal(r.status, 'ok', r.id);
     assert.ok(r.checks.length > 5, r.id);
     assert.ok(r.usd > 0, r.id);
-    assert.match(r.historyNote, /lehkou jízdu/);
+    assert.match(r.historyNote, p.hideAnswer ? /skrytá/ : /lehkou jízdu/);
   }
   // A red morning: a hard card kept fails safety (the app's own check already drops most of them).
   const red = personaTurn(personaById('P09'), 1, []).checks({ answer: 'Jeď.', kept: [{ type: 'workout', sport: 'ride', kind: 'vo2max', date: '2026-10-21' }], proposed: [] });
   assert.deepEqual(red.map(c => [c.severity, c.ok]), [['safety', false]]);
+  // 1000 kcal named back as too little is no advice; a plan of 1100 kcal is.
+  const kcal = answer => personaTurn(personaById('P12'), 2, []).checks({ answer, kept: [], proposed: [] })[0].ok;
+  assert.equal(kcal('1000 kcal je příliš málo, nešel bych pod 1 320 kcal.'), true);
+  assert.equal(kcal('Zkus 1100 kcal denně.'), false);
+  // The gym persona has a plan with a bench press, and a card removes it.
+  const gym = personaTurn(personaById('P06'), 2, []);
+  assert.ok(gym.athlete.gym);
+  assert.equal(gym.checks({ answer: 'Odebral jsem ho.', kept: [{ type: 'gym_remove', fromExercise: 'DB bench press' }], proposed: [] })[0].ok, true);
 });
 
 test('the evaluation lists the personas, runs one message with the conversation and keeps only user and coach messages', async () => {
@@ -65,4 +73,7 @@ test('the capability map: every row names situations that exist, coverage counts
   assert.equal(c.total.covered + c.gaps.length, c.total.total);
   assert.deepEqual(Object.keys(c.bySport), SPORTS);
   assert.deepEqual(capabilityCoverage([], [{ id: 'a', sport: 'ride', scenarios: ['S01'] }]).gaps, ['a']);
+  // A persona message without checks covers nothing.
+  const unchecked = COACH_PERSONAS.flatMap(p => p.turns.flatMap((t, i) => t.checks.length ? [] : [`${p.id}.${i + 1}`]));
+  for (const r of COACH_CAPABILITIES) if (r.scenarios.length && r.scenarios.every(id => unchecked.includes(id))) assert.ok(c.gaps.includes(r.id), r.id);
 });

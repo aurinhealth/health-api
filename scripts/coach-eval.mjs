@@ -13,7 +13,7 @@ const host = process.env.COACH_EVAL_HOST || "staging.aurin.health";
 const { ACTIONS_ID_TOKEN_REQUEST_URL: oidcUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: oidcAuth } = process.env;
 if (!process.env.COACH_EVAL_TOKEN && !oidcUrl) { console.error("COACH_EVAL_TOKEN is missing."); process.exit(2); }
 const wanted = String(process.env.COACH_EVAL_SCENARIOS || "").split(/[,\s]+/).filter(Boolean);
-const rounds = Math.max(1, Math.min(5, Math.round(Number(process.env.COACH_EVAL_REPEAT) || 1)));
+let rounds = Math.max(1, Math.min(5, Math.round(Number(process.env.COACH_EVAL_REPEAT) || 1)));
 
 async function token() {
   if (!oidcUrl || !oidcAuth) return process.env.COACH_EVAL_TOKEN;
@@ -40,6 +40,8 @@ const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
 // Empty = every S, L, W and K situation; the personas only when named, or "P" for all of them (each is four answers).
 const scenarios = list.scenarios.filter(s => wanted.length ? wanted.includes(s.id) || (s.turns && wanted.includes("P")) : !s.turns);
+// A persona is four answers with a growing conversation: at most 2 rounds of them (critic 2026-11-14, 20 personas × 5 rounds would be 800 calls).
+if (rounds > 2 && scenarios.some(s => s.turns)) { console.log(`Personas: ${rounds} rounds lowered to 2.`); rounds = 2; }
 const results = [];
 const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
 // A persona (P01–P20) is a conversation: each message goes with the coach's earlier answers.
