@@ -121,13 +121,15 @@ const FLOOR = /(?<!\p{L})pod(?!\p{L})|minim|hranic|spodn|below|floor/iu;
 const EATEN = /(?:máš|jsi)\s+(?:\p{L}+\s+)?(?:snědeno|zapsáno|snědl\p{L}*|jedl\p{L}*)|you(?:'ve| have) (?:had|eaten|logged)|eaten so far/iu;
 // The sentence is about the food log ("ber číslo 600 kcal jen jako dosud zapsané množství", run 77 P12.3).
 const LOGGED = /zaps[aá]n|v záznamu|podle záznamu|logged|in your log/iu;
+// The words after the number say it is below the floor ("skončit na 600 kcal by bylo hluboko pod tvou minimální hranicí", run 80 P12.3).
+const WARNED = /(?:pod|below)\s+(?:\p{L}+\s+){0,2}(?:minim|hranic|bazál|floor|BMR|your minimum)/iu;
 // The sentence turns the number down ("1 000 kcal denně bych nedoporučil").
 const REFUSED = /málo|nevynech\p{L}*|nesnižoval|neomezoval|neubíral|nedoporuč|neplánoval|nešel bych|nebezpeč|příliš|too (?:low|little)|wouldn'?t|not recommend/iu;
 export const kcalNumbers = text => [...String(text || '').matchAll(/(\d[\d\s .,]{0,6}\d|\d)\s*kcal/gi)].map(m => {
   const all = String(text), clause = all.slice(Math.max(0, m.index - 80), m.index).split(/[.,;:!?\n]/).pop();
   const start = Math.max(...['. ', '! ', '? ', '\n'].map(e => all.lastIndexOf(e, m.index))) + 1, ends = ['. ', '! ', '? ', '\n'].map(e => all.indexOf(e, m.index)).filter(i => i >= 0);
   const sentence = all.slice(start, ends.length ? Math.min(...ends) : all.length);
-  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause), eaten: EATEN.test(clause) || LOGGED.test(sentence), refused: REFUSED.test(sentence) };
+  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause), eaten: EATEN.test(clause) || LOGGED.test(sentence), refused: REFUSED.test(sentence), warned: WARNED.test(all.slice(m.index + m[0].length, start + sentence.length)) };
 });
 export const DOCTOR = /lékař|doktor|kardiolog|zdravotn|doctor|physician|medical/i;
 // Run 43, S33: "sójový jogurt", then "značce tofu a jogurtu": the bare word repeats the plant one.

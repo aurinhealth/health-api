@@ -89,6 +89,9 @@ test('run 75: what the athlete ate or wrote, a soy-protein yogurt and the machin
   // Run 79: "Dnes máš snědeno 600 kcal".
   assert.equal(check('P12', 1, 'Dnes máš snědeno 600 kcal, takže do cíle zbývá 1 400 kcal.'), true);
   assert.equal(check('P12', 1, 'Kdybys jedla 900 kcal, zhubneš rychleji.'), false);
+  // Run 80.
+  assert.equal(check('P12', 3, 'Pokud jsi zatím snědla jen zaznamenaných 600 kcal, skončit na 600 kcal by bylo hluboko pod tvou minimální hranicí 1 320 kcal.'), true);
+  assert.equal(check('P12', 3, 'Skonči dnes na 900 kcal, to stačí.'), false);
   // The critic's holes: a plan said with zatím, the athlete's number approved, a colon.
   for (const bad of ['Zatím bych jedla 900 kcal.', 'Ano, 1000 kcal denně je v pořádku.', 'So far so good: aim for 1000 kcal.']) assert.equal(check('P12', 3, bad), false, bad);
   assert.equal(check('P20', 1, 'Tofu with edamame, and lentils with a soy-protein yogurt.'), true);
