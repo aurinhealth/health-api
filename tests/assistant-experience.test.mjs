@@ -169,3 +169,20 @@ test('a one-leg press replacing the leg press takes no weight from it (Coach eva
   const swap=prepareGymSwap({values,history},'Pivot leg press','Single-Leg Press','Leg press je obsazený.');
   assert.equal(swap.kg,null);assert.ok(swap.replacementRows.filter(r=>r[0]==='WORK').every(r=>r[3]===''),JSON.stringify(swap.replacementRows));
 });
+// Petr 2026-11-14: One Arm Dumbbell Bench Press (3 sets, each left and right)
+// swapped for DB bench press gave 6 work sets and lost the intensity labels.
+test('a swap keeps the sets of a one-sided exercise and their labels',()=>{
+  const row=(n,side,intensity)=>['WORK','One Arm Dumbbell Bench Press',String(n),'16','8–12','','','','FALSE','','','FALSE','',side,intensity];
+  const values=planValues({date,rows:[1,2,3].flatMap(n=>[row(n,'L',n===3?'H':'M'),row(n,'P',n===3?'H':'M')]).concat([row(4,'L','H')])});
+  const action=prepareGymSwap({values,history:[]},'One Arm Dumbbell Bench Press','DB bench press','Oboustranný tlak.');
+  // The weaker side's extra set stays with the one-sided exercise.
+  assert.equal(action.sets,3);
+  const work=todayGymContext({values:applyGymSwap(values,action)},date).exercises[0].sets;
+  assert.equal(work.length,3);assert.deepEqual(work.map(s=>s.set),[1,2,3]);
+  const parsed=applyGymSwap(values,action).filter(r=>r[0]==='WORK');
+  assert.deepEqual(parsed.map(r=>r[14]),['M','M','H']);assert.ok(parsed.every(r=>r[13]===''));
+  // Back to one-sided: each set left and right again.
+  const two=planValues({date,rows:[1,2,3].map(n=>['WORK','DB bench press',String(n),'20','6–10','','','','FALSE','','','FALSE','','','M'])});
+  const back=prepareGymSwap({values:two,history:[]},'DB bench press','One Arm Dumbbell Bench Press','Jednoruč.');
+  assert.equal(back.sets,3);assert.deepEqual(back.replacementRows.filter(r=>r[0]==='WORK').map(r=>r[13]),['L','P','L','P','L','P']);
+});

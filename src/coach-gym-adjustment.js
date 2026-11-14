@@ -4,6 +4,7 @@ import { EXERCISES, fitsEquipment, painfulExercises } from './strength-generator
 import { findExerciseAlternatives, resolveLoad } from './strength-intelligence.js';
 import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt, stationExercises } from './gym-equipment.js';
+import { splitSides } from './gym-sides.js';
 
 // An exercise the athlete's own equipment allows (/app/api/gym sends it); the
 // default gym's only when it is unknown.
@@ -29,16 +30,22 @@ export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[],br
   if(painfulExercises(memories).avoid.has(toExercise))throw new Error(L('Náhrada zatěžuje partii, která tě podle paměti trenéra bolí.', 'The replacement loads a body part that hurts, as the coach remembers.'));
   if(stationExercises(broken).includes(toExercise))throw new Error(L('Stroj na tenhle cvik teď podle tebe nefunguje.', 'The machine for this exercise is out of order, as you said.'));
   if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error(L('Rozcvičený nebo rozepsaný cvik nelze nahradit.', 'An exercise that\'s warmed up or partly logged can\'t be replaced.'));
-  const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
+  // A one-sided exercise holds each set twice, left and right (gym-sides.js),
+  // and the weaker side one more: the swap keeps the sets, not the rows.
+  const all=source.filter(r=>r.type==='WORK'),sided=all.some(r=>r.side),work=sided?all.filter(r=>r.side===(all.filter(x=>x.side==='L').length<=all.filter(x=>x.side==='P').length?'L':'P')):all;
+  if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
   // The generator's estimate: own history, a similar exercise, or the catalogue's start.
   const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
   const rows=[];
   // Warm-ups at the equipment's step (a bar 17,5 kg, not 17; Revize 2026-10-16, nález 28).
-  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
-  for(const [i,set] of work.entries())rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE',set.note,video,set.toFailure?'TRUE':'FALSE',set.superset]);
+  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','','','']);}
+  // Each set keeps its options: to failure, superset and intensity (the labels).
+  for(const [i,set] of work.entries())rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE',set.note,video,set.toFailure?'TRUE':'FALSE',set.superset||'','',set.intensity||'']);
+  // A one-sided replacement goes left and right, as the generator writes it.
+  const replacementRows=splitSides(rows,{columns:15});
   return {type:'gym_swap',date:parsed.date,fromExercise,toExercise,reason,sets:work.length,reps:def.reps,kg:estimate.kg,
-    sourceSnapshot:source.map(r=>gym.values[r.planRow-1]),replacementRows:rows};
+    sourceSnapshot:source.map(r=>gym.values[r.planRow-1]),replacementRows};
 }
 
 // Change only the proposed exercise. Other exercises, logged results and header
