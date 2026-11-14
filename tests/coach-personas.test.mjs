@@ -92,5 +92,11 @@ test('run 75: what the athlete ate or wrote, a soy-protein yogurt and the machin
   assert.equal(check('P20', 1, 'Greek yogurt and eggs.'), false);
   assert.equal(check('P07', 2, 'Goblet squat for Pivot leg press.', [{ type: 'gym_swap', fromExercise: 'Pivot leg press', toExercise: 'Goblet squat' }]), true);
   assert.equal(check('P07', 2, 'Use the leg press.'), false);
+  // Run 79: the machine taken out may be named in the coach's own words, never put in.
+  const swaps = [{ type: 'gym_swap', fromExercise: 'Pivot leg press', toExercise: 'Goblet squat' }, { type: 'gym_remove', fromExercise: 'Lat pulldown' }];
+  assert.equal(check('P07', 2, 'Swap the leg press for a goblet squat. I’d leave out the lat pulldown because it needs a machine. Keep the dumbbell bench press.', swaps), true);
+  assert.equal(check('P07', 3, 'Aim for RPE 8–9. I’d swap out the two machine leg exercises and leave out the lat pulldown, since you’re training at home.', swaps), true);
+  assert.equal(check('P07', 2, 'Swap the leg press for a goblet squat. Then finish with cable rows.', swaps), false);
+  assert.equal(check('P07', 2, 'Do cable flyes instead.', [{ type: 'gym_add', toExercise: 'Cable fly' }]), false);
   assert.deepEqual(personaTurn(personaById('P06'), 3, []).context(), { chatV1: true });
 });
