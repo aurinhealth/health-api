@@ -15,6 +15,10 @@ on:
         description: "Rounds of the same situations, 1–5 (3 = is every reply stable?)"
         required: false
         default: "1"
+      coach:
+        description: "The coach on Anthropic's Claude to compare with OpenAI: haiku (all Haiku 5.5) or sonnet (Haiku for short tasks, Sonnet 5.5 for the rest); empty = today's coach"
+        required: false
+        default: ""
       calibrate:
         description: "Only the AI checker's calibration on answers with a known verdict: luna, sol, both, haiku (Anthropic, staging key) or judge, the eval's judge (about 0.03 USD luna, haiku or judge, 0.6 USD sol); empty = the normal run"
         required: false
@@ -57,6 +61,7 @@ jobs:
           COACH_EVAL_SCENARIOS: ${{ inputs.scenarios }}
           COACH_EVAL_REPEAT: ${{ inputs.repeat }}
           COACH_EVAL_CALIBRATE: ${{ inputs.calibrate }}
+          COACH_EVAL_COACH: ${{ inputs.coach }}
         run: node scripts/coach-eval.mjs
 
       - name: Keep the replies

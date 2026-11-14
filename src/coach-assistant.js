@@ -476,8 +476,36 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
 });
 
+// The coach on Anthropic's Claude, for the coach evaluation only (COACH_EVAL_COACH on
+// staging): the same instructions, data and reply schema as on OpenAI, to compare.
+export const EVAL_COACH_MODELS={haiku:['claude-haiku-5-5','claude-haiku-5-5'],sonnet:['claude-haiku-5-5','claude-sonnet-5-5']};
+const claudePart=part=>{
+  if(typeof part==='string')return {type:'text',text:part};
+  if(part.type==='input_image'){const m=/^data:([^;]+);base64,(.*)$/.exec(part.image_url||'');return {type:'image',source:m?{type:'base64',media_type:m[1],data:m[2]}:{type:'url',url:part.image_url}};}
+  return {type:'text',text:part.text,...(part.prompt_cache_breakpoint?{cache_control:{type:'ephemeral'}}:{})};
+};
+export const claudeMessages=input=>input.map(m=>({role:m.role==='assistant'?'assistant':'user',content:(Array.isArray(m.content)?m.content:[m.content]).map(claudePart)}));
+async function claudeResponse(env,{fullInstructions,input,maxOutputTokens,format,model,reasoningEffort,feature,timeoutMs,slotId,hold}){
+  if(!env.COACH_EVAL||!env.ANTHROPIC_API_KEY)throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
+  const sonnet=model.startsWith('claude-sonnet');
+  const response=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
+    headers:{'x-api-key':env.ANTHROPIC_API_KEY,'anthropic-version':'2026-10-21','content-type':'application/json',...(sonnet?{'anthropic-beta':'server-side-fallback-2026-07-01'}:{})},
+    body:JSON.stringify({model,max_tokens:maxOutputTokens,system:[{type:'text',text:fullInstructions,cache_control:{type:'ephemeral'}}],messages:claudeMessages(input),
+      output_config:{effort:['low','medium','high'].includes(reasoningEffort)?reasoningEffort:'low',...(format?{format:{type:'json_schema',schema:format.schema}}:{})},...(sonnet?{fallbacks:'default'}:{})})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok){console.error('Claude '+response.status,String(data?.error?.message||'').slice(0,300));const failure=new Error(aiFailureText(response.status));failure.ai=true;failure.status=response.status;throw failure;}
+  const u=data.usage||{},read=u.cache_read_input_tokens||0,written=u.cache_creation_input_tokens||0;
+  const usage={input_tokens:(u.input_tokens||0)+read+written,input_tokens_details:{cached_tokens:read,cache_write_tokens:written},output_tokens:u.output_tokens||0};
+  await recordAiUsage(env,{feature,model:data.model||model,usage,webSearches:0,slotId,hold});
+  if(data.stop_reason==='refusal')throw new Error(L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
+  const incomplete=data.stop_reason==='max_tokens',text=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  if(!text)throw new Error(L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
+  return {text,model:data.model||model,usage,citations:[],incomplete,incompleteReason:incomplete?'max_output_tokens':null};
+}
+
 async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId, hold, cacheBreakpoints=false }) {
   const chosenModel=model || complexModel(env);
+  if(chosenModel.startsWith('claude-'))return claudeResponse(env,{fullInstructions:instructions+aiLanguageNote(feature)+safetyNote(feature),input,maxOutputTokens,format,model:chosenModel,reasoningEffort,feature,timeoutMs,slotId,hold});
   const fullInstructions=instructions+aiLanguageNote(feature)+safetyNote(feature);
   // Sent but broken off with no usage: the call counts at its reservation.
   const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel,hold});throw error;};
@@ -541,7 +569,7 @@ export const COACH_MEMORY_KEYS=['chatSoFar','recentChats','earlierToday','pastMe
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null,image=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
-  const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
+  const light = task === 'simple' || task === 'quick', evalCoach = env.COACH_EVAL && EVAL_COACH_MODELS[env.COACH_EVAL_COACH], chosen = model || (evalCoach ? evalCoach[light ? 0 : 1] : light ? lightModel(env) : complexModel(env));
   const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory','ghostChat','confirmedInChat','undoneInChat'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
