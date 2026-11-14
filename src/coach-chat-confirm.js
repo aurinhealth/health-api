@@ -97,8 +97,10 @@ export async function lastUndoInChat(db, chatId, since) {
   // A ride or run changed by two cards of one answer (a new one and the old
   // one off the plan) goes back as a whole.
   if (c.kind === 'planned') {
+    // Its card's Vrátit was used: an older change stays (as for the gym below).
+    if (c.undone) return { token: row.token, tokens: [], proposal: c.proposal || '', stale: true };
     const rows = c.messageId ? ((await db.prepare("SELECT token,change_json FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC").bind(db.userId, since, chat).all()).results || []) : [];
-    const same = rows.map(r => { try { return { token: r.token, c: JSON.parse(r.change_json) }; } catch { return null; } }).filter(r => r && r.c.kind === 'planned' && r.c.messageId === c.messageId && r.c.chatId === Number(chatId));
+    const same = rows.map(r => { try { return { token: r.token, c: JSON.parse(r.change_json) }; } catch { return null; } }).filter(r => r && r.c.kind === 'planned' && !r.c.undone && r.c.messageId === c.messageId && r.c.chatId === Number(chatId));
     const all = same.length ? same : [{ token: row.token, c }];
     return { token: all[0].token, tokens: all.map(r => r.token), proposal: all.map(r => r.c.proposal).filter(Boolean).join(', ') };
   }

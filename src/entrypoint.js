@@ -2460,7 +2460,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // "Vrať to zpátky" (Chat v1): the last change of the plan from this chat today goes back first.
       const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message);
       const last=undoAsked?await lastUndoInChat(env.DB,body.chatId,dayStartSql(date)).catch(()=>null):null;
-      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu, kterou by šlo vrátit.','There is no change of the plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await (last.tokens||[last.token]).reduce((done,token)=>done.then(()=>undoActivityChange(env,token)),Promise.resolve()).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
+      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu, kterou by šlo vrátit.','There is no change of the plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await undoTokens(env,last);
       if(undoneInChat?.done)madeInChat=[...madeInChat,{proposal:L('vráceno: ','undone: ')+undoneInChat.proposal,done:true}];
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
@@ -3570,6 +3570,15 @@ async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true,aiBudgetMs=null}
 // remembered (coach-quick-change.js).
 // Chat v1: "Vrátit" (the card's button, or the words in the chat) under a
 // confirmed change of the day's gym plan; its chat finds it again.
+// "Vrať to" of the chat: each change of the last answer back, one by one; what
+// went back is said even when another part could not (activity-chat-edits.js).
+async function undoTokens(env,last){
+  const done=[],failed=[];
+  for(const token of last.tokens||[last.token])await undoActivityChange(env,token).then(r=>done.push(r?.proposal||last.proposal),error=>failed.push(error.message));
+  if(!done.length)return {proposal:last.proposal,done:false,reason:failed[0]};
+  await bumpCacheVersion(env.DB).catch(()=>null);
+  return {proposal:done.join(', '),done:true,...(failed.length?{reason:L('Část změny vrátit nešlo: ','Part of the change could not be undone: ')+failed[0]}:{})};
+}
 // The same for a planned ride, run or swim of the app (activity-chat-edits.js planned).
 async function plannedUndo(env,draft,change,draftId){
   if(!chatV1On(env)||!change.start&&!change.from)return {};

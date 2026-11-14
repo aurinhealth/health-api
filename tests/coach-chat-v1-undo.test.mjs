@@ -86,6 +86,7 @@ const plannedDb = () => {
     run: async () => {
       if (/^INSERT INTO activity_undo/.test(sql)) { undo.push({ token: a[1], change_json: a[2], created_at: '2026-11-14 10:00:00' }); return { meta: { changes: 1 } }; }
       if (/^DELETE FROM activity_undo/.test(sql)) { const i = undo.findIndex(u => u.token === a[1]); if (i >= 0) undo.splice(i, 1); return { meta: { changes: 1 } }; }
+      if (/^UPDATE activity_undo SET change_json = \? WHERE user_id = \? AND token = \? AND change_json = \?/.test(sql)) { const u = undo.find(x => x.token === a[2] && x.change_json === a[3]); if (u) u.change_json = a[0]; return { meta: { changes: u ? 1 : 0 } }; }
       if (/^UPDATE local_workouts SET status='deleted'/.test(sql)) { local.get(a[1]).status = 'deleted'; return { meta: { changes: 1 } }; }
       if (/^UPDATE local_workouts SET status='scheduled'.*AND status='deleted'/.test(sql)) { const r = local.get(a[1]); const ok = r?.status === 'deleted'; if (ok) r.status = 'scheduled'; return { meta: { changes: ok ? 1 : 0 } }; }
       if (/^INSERT INTO local_workouts/.test(sql)) { const r = local.get(a[1]); r.event_json = a[3]; r.status = 'scheduled'; return { meta: { changes: 1 } }; }
@@ -121,6 +122,8 @@ test('a ride the coach added, moved or took off the plan goes back, only while i
   assert.equal((await undoActivityChange(env, gone)).op, 'delete');
   assert.equal(db.local.get('local-old').status, 'scheduled');
   assert.equal(db.links[0][2], 'w1');
+  await assert.rejects(undoActivityChange(env, added), /už vrátit nejde/, 'once');
+  assert.equal((await lastUndoInChat(db, 7, '2026-11-14 00:00:00')).stale, true, 'the text does not go one change further back');
   // Moved by hand since: no undo.
   db.local.get('local-moved').event_json = JSON.stringify({ id: 'local-moved', type: 'Run', start_date_local: '2099-01-13T07:30:00' });
   await assert.rejects(undoActivityChange(env, moved), /od té změny upravil/);
@@ -136,5 +139,5 @@ test('the ride and run cards keep an undo only with Chat v1, for the app\'s own 
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
   assert.match(src, /async function plannedUndo\(env,draft,change,draftId\)\{\n\s*if\(!chatV1On\(env\)/);
   assert.match(src, /const own=id\.startsWith\('local-'\)&&!isStrengthEvent\(payload\)&&!payload\.after&&!payload\.next;/);
-  assert.match(src, /\(last\.tokens\|\|\[last\.token\]\)\.reduce/);
+  assert.match(src, /for\(const token of last\.tokens\|\|\[last\.token\]\)await undoActivityChange/);
 });
