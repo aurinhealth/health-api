@@ -247,7 +247,7 @@ const RUNNER = { focus: { sport: 'running', sportLabel: 'Běh' }, thresholds: { 
 const EASY_RUN_DAY = date => ({ [date]: [{ id: 'planned:9501', name: 'Lehký běh 40 min', type: 'Run', durationHours: 0.67, tss: 35 }], [shift(date, 3)]: [{ id: 'planned:9502', name: 'Dlouhý běh', type: 'Run', durationHours: 1.25, tss: 70 }] });
 const RUNS_DONE = date => ({ [shift(date, -2)]: [{ id: 'eval-run-1', name: 'Lehký běh', type: 'Run', durationHours: 0.5, tss: 30 }], [shift(date, -5)]: [{ id: 'eval-run-2', name: 'Lehký běh', type: 'Run', durationHours: 0.5, tss: 30 }] });
 const EASY_RIDE_DAY = date => ({ [date]: [{ id: 'planned:9511', name: 'Endurance 90 min', type: 'Ride', durationHours: 1.5, tss: 60 }], [shift(date, 2)]: [{ id: 'planned:9002', name: 'Long ride', type: 'Ride', durationHours: 3, tss: 170 }] });
-const cardsOf = r => r.kept.map(a => [a.type, a.sport, a.kind, a.date, a.eventId].filter(Boolean).join(' ')).join(', ') || 'bez karty';
+const cardsOf = r => r.kept.map(a => [a.type, a.sport, a.card ?? a.kind, a.date, a.eventId].filter(Boolean).join(' ')).join(', ') || 'bez karty';
 const SWIMMER = { focus: { sport: 'swimming', sportLabel: 'Plavání' }, thresholds: { swimCss: 105, swimZones: swimZones(105), poolLength: 25 },
   done: date => ({ [shift(date, -1)]: [{ id: 'eval-swim-1', name: 'CSS 10×100 m', type: 'Swim', durationHours: 1, tss: 70 }], [shift(date, -3)]: [{ id: 'eval-swim-2', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }],
     [shift(date, -6)]: [{ id: 'eval-swim-3', name: 'Technika 2 km', type: 'Swim', durationHours: 0.75, tss: 35 }], [shift(date, -8)]: [{ id: 'eval-swim-4', name: 'Vytrvalost 2,5 km', type: 'Swim', durationHours: 1, tss: 55 }] }),
@@ -665,23 +665,23 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S87', title: 'Chat v1: kolo místo běhu', message: 'Dneska místo běhu pojedu radši hodinu lehce na kole.', athlete: { ...RUNNER, plan: EASY_RUN_DAY, done: RUNS_DONE }, context: () => ({ chatV1: true }),
     checks: r => [quality('karta jízdy na dnešek', r.kept.some(a => a.type === 'workout' && a.sport === 'ride' && a.date === r.date), cardsOf(r)),
       quality('dnešní běh uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9501')),
-      safety('jízda zůstane lehká', !r.kept.some(a => a.type === 'workout' && a.sport === 'ride' && isHardKind(a.kind)))] },
+      safety('jízda zůstane lehká', !r.kept.some(a => a.type === 'workout' && a.sport === 'ride' && isHardKind(a.card ?? a.kind)))] },
   { id: 'S88', title: 'Chat v1: běh místo posilovny', message: 'Dneska místo posilovny půjdu radši na 40 minut lehce běhat.', athlete: LIFTER, context: () => ({ chatV1: true }),
     checks: r => [quality('karta běhu na dnešek', r.kept.some(a => a.type === 'workout' && a.sport === 'run' && a.date === r.date), cardsOf(r)),
       quality('dnešní posilovna uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9401'))] },
   { id: 'S89', title: 'Chat v1: jiný typ jízdy, regenerace místo vytrvalosti', message: 'Nohy mám dneska těžké, dej mi místo endurance jen regenerační jízdu.', athlete: { plan: EASY_RIDE_DAY }, context: () => ({ chatV1: true }),
     checks: r => { const ride = r.kept.find(a => a.type === 'workout' && a.sport === 'ride' && a.date === r.date);
-      return [quality('karta lehčí jízdy na dnešek', ride && ['recovery', 'endurance'].includes(ride.kind || 'endurance') && !isHardKind(ride.kind), cardsOf(r)),
+      return [quality('karta regenerační jízdy na dnešek', ride && (ride.card ?? ride.kind) === 'recovery', cardsOf(r)),
         quality('původní jízda uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9511'))]; } },
   { id: 'S90', title: 'Chat v1: jiný typ plavání, vytrvalost místo techniky', message: 'Místo techniky si dneska chci dát spíš vytrvalostní plavání, tak 2 km.', athlete: SWIMMER, context: () => ({ chatV1: true }),
-    checks: r => [quality('karta plavání na dnešek', r.kept.some(a => a.type === 'workout' && a.sport === 'swim' && a.date === r.date), cardsOf(r)),
+    checks: r => [quality('vytrvalostní karta plavání na dnešek', r.kept.some(a => a.type === 'workout' && a.sport === 'swim' && a.date === r.date && !isHardKind(a.card ?? a.kind)), cardsOf(r)),
       quality('původní plavání uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9201'))] },
   // Yesterday's CSS set was hard: a harder swim fits the day after tomorrow, not today.
   { id: 'S91', title: 'Chat v1: těžší plavání pozítří', message: 'Pozítří místo vytrvalosti 3 km mi dej v bazénu něco těžšího, cítím se silný.', athlete: SWIMMER, context: () => ({ chatV1: true }),
     checks: r => { const day = shift(r.date, 2), swim = r.kept.find(a => a.type === 'workout' && a.sport === 'swim' && a.date === day);
-      return [quality('těžší karta plavání na pozítří', swim && isHardKind(swim.kind), cardsOf(r)),
+      return [quality('těžší karta plavání na pozítří', swim && isHardKind(swim.card ?? swim.kind), cardsOf(r)),
         quality('původní plavání uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9202')),
-        safety('dnes nic těžkého po včerejším CSS', !r.kept.some(a => a.type === 'workout' && a.date === r.date && isHardKind(a.kind)))]; } },
+        safety('dnes nic těžkého po včerejším CSS', !r.kept.some(a => a.type === 'workout' && a.date === r.date && isHardKind(a.card ?? a.kind)))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

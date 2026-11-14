@@ -942,10 +942,13 @@ test('S83 to S91 (Chat v1): cancel, move, another sport or kind and a harder swi
   assert.deepEqual(own('S86', reply([{ type: 'move', eventId: 'planned:9401', date: tomorrow }])), []);
   assert.deepEqual(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'endurance' }, { type: 'rest', eventId: 'planned:9501' }])), []);
   assert.ok(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'vo2max' }, { type: 'rest', eventId: 'planned:9501' }])).includes('safety:jízda zůstane lehká'));
+  assert.ok(own('S87', reply([{ type: 'workout', sport: 'ride', date, minutes: 60, workoutId: '12', card: 'vo2max' }, { type: 'rest', eventId: 'planned:9501' }])).includes('safety:jízda zůstane lehká'), 'a hard library ride too');
+  assert.ok(own('S89', reply([{ type: 'workout', sport: 'ride', date, minutes: 45, workoutId: '7', card: 'threshold' }, { type: 'rest', eventId: 'planned:9511' }])).length > 0);
   assert.deepEqual(own('S88', reply([{ type: 'workout', sport: 'run', date, minutes: 40 }, { type: 'rest', eventId: 'planned:9401' }])), []);
   assert.deepEqual(own('S89', reply([{ type: 'workout', sport: 'ride', date, minutes: 45, kind: 'recovery' }, { type: 'rest', eventId: 'planned:9511' }])), []);
   assert.deepEqual(own('S90', reply([{ type: 'workout', sport: 'swim', date, minutes: 50 }, { type: 'move', eventId: 'planned:9201', date: tomorrow }])), []);
   const later = new Date(Date.parse(date + 'T12:00:00Z') + 2 * 86400000).toISOString().slice(0, 10);
   assert.deepEqual(own('S91', reply([{ type: 'workout', sport: 'swim', date: later, minutes: 60, kind: 'threshold' }, { type: 'rest', eventId: 'planned:9202' }])), []);
+  assert.deepEqual(own('S91', reply([{ type: 'workout', sport: 'swim', date: later, minutes: 60, workoutId: '31', card: 'vo2max' }, { type: 'rest', eventId: 'planned:9202' }])), [], 'a hard library swim counts');
   assert.ok(own('S91', reply([{ type: 'workout', sport: 'swim', date, minutes: 45, kind: 'threshold' }])).includes('safety:dnes nic těžkého po včerejším CSS'));
 });
