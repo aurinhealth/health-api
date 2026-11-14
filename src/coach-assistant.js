@@ -533,7 +533,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 // A text part OpenAI caches up to its end (callOpenAI, cacheBreakpoints).
 export const cachedText=text=>({type:'input_text',text,prompt_cache_breakpoint:{mode:'explicit'}});
 // The parts of the coach's context that differ between two messages a minute apart.
-export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations','confirmedInChat'];
+export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations','confirmedInChat','undoneInChat'];
 // The memory of the chats and the coach's earlier proposals: they change when a
 // message saves a memory or proposes a change, so they go after the cached data.
 // gymDay, sport and the two notes below follow the words of the message.
@@ -542,7 +542,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
   const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
-  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory','ghostChat','confirmedInChat'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
+  const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory,...(context.sportsToSuggestChange?{sportsToSuggestChange:context.sportsToSuggestChange}:{}),...['chatSoFar','recentChats','earlierToday','pastMemory','ghostChat','confirmedInChat','undoneInChat'].reduce((o,k)=>context[k]?{...o,[k]:context[k]}:o,{})} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
   const turns=(context?.conversation||[]).filter(t=>['user','assistant'].includes(t?.role)&&String(t.content||'').trim()).map(t=>({role:t.role,content:String(t.content).slice(0,8000)}));

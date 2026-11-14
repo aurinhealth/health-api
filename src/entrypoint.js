@@ -50,7 +50,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -165,7 +165,7 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, weekHealthDate, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
-import { chatConfirmation, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
+import { chatUndo, lastUndoInChat, chatConfirmation, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
@@ -190,7 +190,7 @@ import { morningMetrics } from "./journal-impact.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
-import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
+import { hideActivity, mergeActivities, setActivityTime, undoActivityChange, rememberChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
@@ -2457,6 +2457,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         return {ok:r.ok&&out.status==='ok'&&out.action!=null,message:out.message};
       });
       madeInChat=confirmedInChat;
+      // "Vrať to zpátky" (Chat v1): the last change of today's gym plan from this chat goes back first.
+      const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message);
+      const last=undoAsked?await lastUndoInChat(env.DB,body.chatId,dayStartSql(date)).catch(()=>null):null;
+      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu posilovny, kterou by šlo vrátit.','There is no change of the gym plan in this chat today that could be undone.')}:await undoActivityChange(env,last.token).then(()=>bumpCacheVersion(env.DB)).then(()=>({proposal:last.proposal,done:true}),error=>({proposal:last.proposal,done:false,reason:error.message}));
+      if(undoneInChat?.done)madeInChat=[...madeInChat,{proposal:L('vráceno: ','undone: ')+undoneInChat.proposal,done:true}];
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
       // there is one, then the model writing. Never a step the model writes.
@@ -2518,6 +2523,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const library=searched?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
       if(confirmedInChat.length)coachCtx.confirmedInChat=confirmedInChat.map(({proposal,done,reason})=>({proposal,done,...(reason?{reason}:{})}));
+      if(undoneInChat)coachCtx.undoneInChat=undoneInChat;
       // An iPhone app before API 2 cannot show the add and remove cards (app-version.js).
       if(oldAppCards)coachCtx.oldAppCards=true;
       // Chat v1 (coach vision 2026-11-14): its new changes only where the server has it on (staging until it ships).
@@ -2722,7 +2728,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const latest=await readGymPlan(env.DB,a.date),values=applyGymChange(latest.values,a);
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
-          result={status:'ok',date:a.date,values};
+          result={status:'ok',date:a.date,values,...await gymUndo(env,draft,latest.values,values)};
         }
         else if(a.type==='week_sport'){
           assertTrainingAllowed(await getAthleteState(env.DB));
@@ -2762,7 +2768,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
             assertTrainingAllowed(await getAthleteState(env.DB));
             const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(a.trim.values),env.USER_ID,a.date,JSON.stringify(a.trim.source)).run();
             if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
-            result={status:'ok',date:a.date,values:a.trim.values,preview};
+            result={status:'ok',date:a.date,values:a.trim.values,preview,...await gymUndo(env,draft,a.trim.source,a.trim.values)};
           }else if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
             // Another focus (Chat v1): the new plan takes the place of the one the card was made against.
@@ -3549,6 +3555,12 @@ async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true,aiBudgetMs=null}
 // One quick change of a coach's workout card: the action changed, its preview
 // built again, the draft saved. The same change a third time in a month is
 // remembered (coach-quick-change.js).
+// Chat v1: "Vrátit" (the card's button, or the words in the chat) under a
+// confirmed change of the day's gym plan; its chat finds it again.
+async function gymUndo(env,draft,before,after){
+  if(!chatV1On(env))return {};
+  return {undo:await rememberChange(env,{kind:'gym_plan',date:draft.action.date,before,after,chatId:Number(draft.chatId)||null,proposal:actionSummary(draft.action)})};
+}
 async function adjustCoachDraft(env,ctx,row,draft,body){
   const a=draft.action,chip=String(body.chip||'');
   if(a?.type!=='workout'||!QUICK_CHIPS.includes(chip))throw new Error(L('Tenhle návrh se upravit nedá.', 'This proposal can\'t be changed.'));
