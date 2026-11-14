@@ -604,7 +604,7 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S71', title: 'Potvrzení výměn textem v chatu', message: 'Já ti je potvrzuju v chatu, tak to potvrď.', athlete: { gym: evalGym },
     conversation: date => [{ role: 'user', content: 'Uprav mi dnešní posilovnu, ať to není pořád stejné.' }, { role: 'assistant', content: `Vyměnil bych leg press za hack squat a lat pulldown za přítah na kladce, partie zůstanou stejné.\n\n[Návrhy: Vyměnit Pivot leg press → Hack squat (${date}); Vyměnit Lat pulldown → Seated cable row (${date})]` }],
     context: () => ({ confirmedInChat: [{ proposal: 'Vyměnit Pivot leg press → Hack squat', done: true }, { proposal: 'Vyměnit Lat pulldown → Seated cable row', done: true }] }),
-    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /hotov|vyměnil|vyměněn|upravil|upraven|změnil|potvrzen|potvrdil|je v plánu|máš v plánu|done|confirmed/i)),
+    checks: r => [quality('řekne, že výměny jsou hotové', says(r, /(?<!ne)hotov|vyměnil|vyměněn|upravil|upraven|změnil|(?<!ne)potvrzen|(?<!ne)potvrdil|je v plánu|máš v plánu|(?<!not )done|(?<!not )confirmed/i)),
       quality('stejné výměny znovu nenavrhne', !r.proposed.some(a => a.type === 'gym_swap' && ['Hack squat', 'Seated cable row'].includes(a.toExercise))),
       quality('nežádá klepnutí na kartu', !says(r, /klepn|ťukn|tukn|tlačítk|kart[ua]|\btap\b/i))] },
   // Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "tento cvik neumím přidat".

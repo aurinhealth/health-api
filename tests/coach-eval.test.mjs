@@ -955,6 +955,7 @@ test('S83 to S91 (Chat v1): cancel, move, another sport or kind and a harder swi
 
 test('run 76: S71 counts "potvrzené" as done, S78 has no hard ride yesterday', () => {
   assert.ok(!failed('S71', { answer: 'Obě výměny jsou potvrzené: dnes máš místo leg pressu hack squat.', kept: [], proposed: [], memory: {} }).includes('quality:řekne, že výměny jsou hotové'));
+  assert.ok(failed('S71', { answer: 'Zatím nepotvrzeno, nejdřív to potvrď.', kept: [], proposed: [], memory: {} }).includes('quality:řekne, že výměny jsou hotové'));
   const { ctx } = scenarioContext(scenarioById('S78'), date, now);
   assert.ok(!JSON.stringify(ctx).includes('Sweet spot 3x15'));
 });
