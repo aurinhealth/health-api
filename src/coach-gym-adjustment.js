@@ -91,7 +91,9 @@ export function extendGymPlan(gym,minutes,memories=[],broken=[]){
   const header=gym.values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik');if(header<0||!parsed.rows.length)return null;
   const rowsOf=values=>values.slice(header+1).filter(r=>r?.[1]);
   const estimate=values=>estimateStrengthTiming(rowsOf(values),EXERCISES,minutes).estimatedMinutes;
-  const before=estimate(gym.values);if(before>=minutes-5)return null;
+  // Longer than the plan's own length and its estimate, or it is no lengthening.
+  const limit=Number(gym.values.find(r=>r?.[0]==='Časový limit (min)')?.[1])||0;
+  const before=estimate(gym.values);if(minutes<=limit||before>=minutes-5)return null;
   const painful=new Set([...painfulExercises(memories).avoid,...stationExercises(broken)]),inPlan=new Set(parsed.rows.map(r=>r.exercise));
   const work=parsed.rows.filter(r=>r.type==='WORK'),setsIn=g=>work.filter(r=>FOCUS_GROUPS[g].exercises.includes(r.exercise)).length;
   // The halves of the body the plan trains stay the only ones (an upper-body
@@ -128,8 +130,10 @@ export function focusChanges(values,{focus=null,muscles=[]}={}){
   let parsed;try{parsed=parseStrengthPlan(values);}catch{return false;}
   const groups=new Set(parsed.rows.filter(r=>r.type==='WORK').flatMap(r=>Object.keys(FOCUS_GROUPS).filter(g=>FOCUS_GROUPS[g].exercises.includes(r.exercise))));
   if(muscles.length)return muscles.some(g=>FOCUS_GROUPS[g]&&!groups.has(g));
-  if(focus==='upper')return LEGS.some(g=>groups.has(g));
-  if(focus==='lower')return [...groups].some(g=>!LEGS.includes(g)&&!CORE.includes(g));
+  const legs=LEGS.some(g=>groups.has(g)),upper=[...groups].some(g=>!LEGS.includes(g)&&!CORE.includes(g));
+  // A plan of neither half (core only) changes with either.
+  if(focus==='upper')return legs||!upper;
+  if(focus==='lower')return upper||!legs;
   return false;
 }
 export const planStarted=values=>{try{return parseStrengthPlan(values).rows.some(started);}catch{return true;}};

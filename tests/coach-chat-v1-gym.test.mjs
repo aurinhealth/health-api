@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validateCoachActions, actionSummary, chatV1On } from '../src/coach-actions.js';
+import { validateCoachActions, actionSummary, chatV1On, replaceAsked } from '../src/coach-actions.js';
+import { quickOptions } from '../src/coach-quick-change.js';
 import { extendGymPlan, focusChanges, planStarted } from '../src/coach-gym-adjustment.js';
 import { planValues } from '../src/gym-plan-store.js';
 import { estimateStrengthTiming } from '../src/strength-timing.js';
@@ -60,6 +61,35 @@ test('another focus is a change only when the plan does not have it yet', () => 
   assert.equal(focusChanges(full, { muscles: ['chest'] }), false);
   assert.equal(focusChanges(full, { muscles: ['biceps', 'chest'] }), true);
   assert.equal(focusChanges(full, {}), false);
+  // A core-only plan changes with either half.
+  const core = planValues({ date, planName: 'Břicho', rows: [...sets('Crunches', '', '15'), ...sets('Plank', '', '60')] });
+  assert.equal(focusChanges(core, { focus: 'lower' }), true);
+  assert.equal(focusChanges(core, { focus: 'upper' }), true);
+});
+
+test('a new plan only when the athlete asks for another focus instead, never for a length or an extra', () => {
+  for (const m of ['Dneska chci místo celého těla jen horní polovinu.', 'Radši dneska nohy.', 'Změň to na horní polovinu', 'Only upper body today instead']) assert.equal(replaceAsked(m), true, m);
+  for (const m of ['Prodluž mi to na 90 min a přidej něco na nohy', 'Prodluž mi to na 90 min, přidej ramena', 'Zkrať to na 30 min', 'Mám jen 50 min', 'Mám jen hodinu', 'Přidej tam jen biceps', 'Posuň mi dnešní posilovnu na večer', 'Make it longer, only upper body']) assert.equal(replaceAsked(m), false, m);
+  const ctx = { ...base, gymPlan: { values: full }, chatV1: true };
+  const [longer] = validateCoachActions([gymAction({ gymFocus: 'lower' })], { ...ctx, userMessage: 'Prodluž mi to na 90 min a přidej něco na nohy' }, date, { userInitiated: true });
+  assert.ok(longer.trim?.added?.length && !longer.replace, 'lengthened, not replaced');
+  const [shorter] = validateCoachActions([gymAction({ minutes: 30, gymFocus: 'upper' })], { ...ctx, userMessage: 'Zkrať to na 30 min' }, date, { userInitiated: true });
+  assert.ok(shorter.trim && !shorter.replace && !shorter.trim.added);
+});
+
+test("the plan's own length or less is never a lengthening", () => {
+  // Limit 45, estimate 40: 45 or 50 min re-proposed is no card for more exercises.
+  assert.equal(extendGymPlan({ values: full, history: [] }, 45), null);
+  const ctx = { ...base, gymPlan: { values: full }, chatV1: true, userMessage: 'Posuň mi dnešní posilovnu na večer' };
+  assert.deepEqual(validateCoachActions([gymAction({ minutes: 45 })], ctx, date, { userInitiated: true }), []);
+});
+
+test('a lengthened card is not shortened by a chip and a replacing card stays on its day', () => {
+  const quick = { today: date, budget: {}, planned: [], days: [] };
+  const [kept] = validateCoachActions([gymAction()], { ...base, gymPlan: { values: full }, chatV1: true, userMessage: 'Prodluž mi posilovnu na 90 minut.' }, date, { userInitiated: true });
+  assert.equal(quickOptions(kept, quick)?.shorter ?? false, false);
+  const [replace] = validateCoachActions([gymAction({ minutes: 60, gymFocus: 'upper' })], { ...base, gymPlan: { values: full }, chatV1: true, userMessage: 'Dneska místo celého těla jen horní polovinu.' }, date, { userInitiated: true });
+  assert.equal(quickOptions(replace, { ...quick, days: [{ date: '2026-11-15', fits: true }] })?.day ?? false, false);
 });
 
 test('with Chat v1 a longer session lengthens the plan; without it no card', () => {
@@ -90,8 +120,25 @@ test('with Chat v1 another focus replaces a plan not started; a started one keep
 
 test('the gym confirm replaces only the plan the card was made against, at its time', () => {
   const src = readFileSync(new URL('../src/routes-gym.js', import.meta.url), 'utf8');
-  assert.match(src, /JSON\.stringify\(current\.values\)!==JSON\.stringify\(body\.replaceSource\)\|\|planStarted\(current\.values\)/);
+  assert.match(src, /!current\.stored\|\|current\.cancelled\|\|JSON\.stringify\(current\.values\)!==JSON\.stringify\(body\.replaceSource\)\|\|planStarted\(current\.values\)/);
+  assert.match(src, /readGymPlan\(env\.DB,plan\.date,\{includeCancelled:true\}\)/);
+  assert.match(src, /if\(!await replaceStrengthPlanInDb\(env\.DB,plan,body\.replaceSource\)\)throw/);
   assert.match(src, /'health-strength-'\+plan\.date/);
   const entry = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
   assert.match(entry, /a\.replace\?\{replaceSource:a\.replace\.source\}:\{\}/);
+});
+
+test('the replacement is one conditional write: a plan changed meanwhile stays', async () => {
+  const { replaceStrengthPlanInDb } = await import('../src/gym-plan-store.js');
+  const stored = { json: JSON.stringify(full) };
+  const db = { userId: 1, prepare: sql => ({ bind: (...args) => ({ run: async () => {
+    if (/^UPDATE gym_plans/.test(sql)) { const ok = args[3] === stored.json; if (ok) stored.json = args[0]; return { meta: { changes: ok ? 1 : 0 } }; }
+    return { meta: {} };
+  }, all: async () => ({ results: [] }), first: async () => null }) }) };
+  const plan = { date, planName: 'Horní polovina', rows: sets('DB bench press', 26, '8-12') };
+  const logged = full.map(r => r.slice()); logged[8][8] = 'TRUE';
+  assert.equal(await replaceStrengthPlanInDb(db, plan, logged), false);
+  assert.equal(stored.json, JSON.stringify(full));
+  assert.equal(await replaceStrengthPlanInDb(db, plan, full), true);
+  assert.match(stored.json, /Horní polovina/);
 });
