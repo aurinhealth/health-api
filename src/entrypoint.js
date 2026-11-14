@@ -1044,9 +1044,9 @@ async function weekCheckState(env,inputs,today){
   // The effort given anywhere: the library workout's survey (its kind known),
   // "Jak to šlo?" and the RPE in Intervals.icu (the kind from the ride's
   // intensity or name). An effort of unknown kind counts only from 9.
-  const efforts=[];
-  for(const f of await recentWorkoutFeedback(env.DB,shiftDate(today,-3)).catch(()=>[]))if(Number(f.rpe)>0&&f.date<today)efforts.push({date:f.date,rpe:Number(f.rpe),kind:f.system?kindOfSystem(f.system):null});
-  for(const x of await listReflections(env.DB,{limit:8}).catch(()=>[]))if(Number(x.rpe)>0&&x.date>=shiftDate(today,-3)&&x.date<today&&!efforts.some(e=>e.date===x.date))efforts.push({date:x.date,rpe:Number(x.rpe),kind:null});
+  const efforts=[],[given,reflections]=await Promise.all([recentWorkoutFeedback(env.DB,shiftDate(today,-3)).catch(()=>[]),listReflections(env.DB,{limit:8}).catch(()=>[])]);
+  for(const f of given)if(Number(f.rpe)>0&&f.date<today)efforts.push({date:f.date,rpe:Number(f.rpe),kind:f.system?kindOfSystem(f.system):null});
+  for(const x of reflections)if(Number(x.rpe)>0&&x.date>=shiftDate(today,-3)&&x.date<today&&!efforts.some(e=>e.date===x.date))efforts.push({date:x.date,rpe:Number(x.rpe),kind:null});
   for(const d of days.filter(d=>d.date>=shiftDate(today,-3)&&d.date<today))for(const a of d.daily?.training?.completed||[]){
     const rpe=Number(a.rpe??a.payload?.icu_rpe??a.payload?.perceived_exertion);if(!(rpe>0)||efforts.some(e=>e.date===d.date))continue;
     const raw=Number(a.intensityFactor??a.payload?.icu_intensity),fi=raw>3?raw/100:raw;
@@ -1074,8 +1074,10 @@ async function weekCheckSessions(env,days){
 }
 // May `date` take a moved session: the athlete hasn't set it as a day off.
 async function weekCheckFreeOn(env,dates){
-  const plans=new Map(),free=new Set();
-  for(const date of dates){const w=mondayOfDate(date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);if(!p||availabilityOn(p,date).minutes!==0)free.add(date);}
+  // Each week's plan read side by side: one database trip, not one per week in a row.
+  const weeks=[...new Set(dates.map(mondayOfDate))];
+  const plans=new Map(await Promise.all(weeks.map(async w=>[w,await getWeekPlan(env.DB,w).catch(()=>null)]))),free=new Set();
+  for(const date of dates){const p=plans.get(mondayOfDate(date));if(!p||availabilityOn(p,date).minutes!==0)free.add(date);}
   return date=>free.has(date);
 }
 // The stretching put in place of a session: its length on the card.
@@ -1607,7 +1609,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/coach/check-in'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
-      const date=localToday(),state=await getAthleteState(env.DB),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
+      // Side by side: the state's read shares the inputs' first database trip.
+      const date=localToday(),[state,inputs]=await Promise.all([getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,date)]);
       // Night values outside the usual range come first (an easier day, with
       // today's hard ride or run swapped for an easy one), then the general break advice.
       const readinessOn=day=>readinessFor({date:day,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
@@ -1772,21 +1775,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // Sick, injured or on a break: no review that would plan sessions the
       // status pauses ("Upravit" would be refused by assertTrainingAllowed).
-      const athlete=await getAthleteState(env.DB).catch(()=>null);
+      // With the cache's data version in one database trip.
+      const [athlete]=await Promise.all([getAthleteState(env.DB).catch(()=>null),cacheVersion(env.DB)]);
       if(athlete?.status&&athlete.status!=='active')return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});
       const inputs=await loadCoachInputs(env,ctx,internalAuth,today),days=inputs.week?.days||[];
       const doneOn=d=>(days.find(x=>x.date===d)?.daily?.training?.completed||[]).filter(a=>['ride','run'].includes(sportOf(a)));
       // Today's sessions, else yesterday's when its revision still waits.
       let date=today,done=doneOn(today);
       if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:shownRevision(liveRevision(stored,days,today),{today})},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
-      const feedback=(await recentWorkoutFeedback(env.DB,date).catch(()=>[])).filter(f=>f.date===date);
+      // The day's feedback, efforts, ratings and stored revision: one database trip.
+      const [given,reflections,ratings,stored]=await Promise.all([recentWorkoutFeedback(env.DB,date).catch(()=>[]),listReflections(env.DB,{date}).catch(()=>[]),workoutRatings(env.DB,date).catch(()=>[]),readRevision(env.DB,date)]);
+      const feedback=given.filter(f=>f.date===date);
       // The effort given anywhere counts, not only on a library workout: the
       // "Jak to šlo?" rating (coach_reflections) and the RPE in Intervals.icu.
-      for(const r of await listReflections(env.DB,{date}).catch(()=>[]))if((r.rpe!=null||r.notes)&&!feedback.some(f=>r.workoutId&&f.workoutId===r.workoutId))feedback.push({date,workoutId:r.workoutId||null,name:null,system:null,sport:null,rpe:r.rpe,notes:r.notes||null,completedPercent:null});
+      for(const r of reflections)if((r.rpe!=null||r.notes)&&!feedback.some(f=>r.workoutId&&f.workoutId===r.workoutId))feedback.push({date,workoutId:r.workoutId||null,name:null,system:null,sport:null,rpe:r.rpe,notes:r.notes||null,completedPercent:null});
       for(const a of done){const rpe=Number(a.rpe??a.payload?.icu_rpe??a.payload?.perceived_exertion);if(rpe>0&&!feedback.some(f=>f.rpe!=null))feedback.push({date,workoutId:null,name:a.name||null,system:null,sport:sportOf(a),rpe,notes:null,completedPercent:null});}
       // "Sedělo ti sestavení tréninku?" of the day's rides and runs: a "Nesedělo" is never "went to plan".
-      const planFit=(await workoutRatings(env.DB,date).catch(()=>[])).filter(r=>['ride','run'].includes(r.sport)).map(r=>({sport:r.sport,rating:r.rating,text:r.text||null}));
-      const signature=revisionSignature(done,feedback,planFit),stored=await readRevision(env.DB,date);
+      const planFit=ratings.filter(r=>['ride','run'].includes(r.sport)).map(r=>({sport:r.sport,rating:r.rating,text:r.text||null}));
+      const signature=revisionSignature(done,feedback,planFit);
       // A decided revision stays decided; a waiting one is redone when a new session or rating came.
       if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:shownRevision(liveRevision(stored,days,today),{today})},{headers:{'Cache-Control':'no-store'}});
       const upcoming=await upcomingSessions(env,days.filter(x=>x.date>date&&x.date>=today&&x.date<=shiftDate(date,6)));
@@ -1848,16 +1854,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         await decideWeekCheck(env.DB,today,'applied',{summary:stored.summary,chips:stored.chips,changes});
         return Response.json({status:'ok',check:{...check,decidedAt:new Date().toISOString()}},noStore);
       }
-      const athlete=await getAthleteState(env.DB).catch(()=>null);
+      // The state, the day's check and the cache's data version in one database trip.
+      const [athlete,stored]=await Promise.all([getAthleteState(env.DB).catch(()=>null),readWeekCheck(env.DB,today),cacheVersion(env.DB)]);
       if(athlete?.status&&athlete.status!=='active')return Response.json({status:'ok',check:null},noStore);
-      const stored=await readWeekCheck(env.DB,today);
       // A decided check stays decided for the day.
       if(stored&&stored.status!=='pending')return Response.json({status:'ok',check:shownWeekCheck(stored,{today})},noStore);
       const inputs=await loadCoachInputs(env,ctx,internalAuth,today),to=shiftDate(today,6);
       const days=(inputs.week?.days||[]).filter(d=>d.date>=today&&d.date<=to);
-      const [state,sessions,freeOn]=await Promise.all([weekCheckState(env,inputs,today),weekCheckSessions(env,days),weekCheckFreeOn(env,Array.from({length:10},(_,i)=>shiftDate(today,i)))]);
       // The coach's own offer for today and a revision after a workout keep their sessions.
-      const revision=await readRevision(env.DB,today).catch(()=>null),taken=new Set([...(athlete?.nudge?.status==='pending'&&athlete.nudge.day===today?[athlete.nudge.eventId]:[]),...(revision?.status==='pending'?(revision.changes||[]).map(c=>c.eventId):[])]);
+      const [state,sessions,freeOn,revision]=await Promise.all([weekCheckState(env,inputs,today),weekCheckSessions(env,days),weekCheckFreeOn(env,Array.from({length:10},(_,i)=>shiftDate(today,i))),readRevision(env.DB,today).catch(()=>null)]);
+      const taken=new Set([...(athlete?.nudge?.status==='pending'&&athlete.nudge.day===today?[athlete.nudge.eventId]:[]),...(revision?.status==='pending'?(revision.changes||[]).map(c=>c.eventId):[])]);
       const list=sessions.map(s=>taken.has(s.id)?{...s,fixed:true}:s);
       const signature=checkSignature(list,state.strain,state.readiness);
       if(stored&&stored.signature===signature)return Response.json({status:'ok',check:shownWeekCheck(stored,{today})},noStore);
