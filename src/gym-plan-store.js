@@ -23,10 +23,11 @@ export function emptyPlanValues(date) {
 
 export async function readGymPlan(db, date, { includeCancelled = false } = {}) {
   await ensureGymPlans(db);
-  const row = await db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
+  // Both in one database trip.
+  const [row, cancellation] = await Promise.all([db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).first(),
+    db.prepare("SELECT event_json FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).first()]);
   let values = null;
   try { values = row?.values_json ? JSON.parse(row.values_json) : null; } catch { values = null; }
-  const cancellation = await db.prepare("SELECT event_json FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
   const visible = !cancellation || includeCancelled;
   return { date, values: visible && Array.isArray(values) && values.length ? values : emptyPlanValues(date), stored: visible && Boolean(values), cancelled: Boolean(cancellation), recoverable: Boolean(cancellation && values), cancelledEvent: includeCancelled && cancellation?.event_json ? JSON.parse(cancellation.event_json) : null };
 }

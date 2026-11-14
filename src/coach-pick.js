@@ -336,10 +336,11 @@ export function pickSignature(ranked) {
   return JSON.stringify([ranked.status, ranked.lowerTired ? 1 : 0, ...ranked.options.filter(o => DETAILED.has(o.kind)).map(o => [o.kind, o.title, o.best ? 1 : 0]), ...(isImperial() ? ["imperial"] : [])]);
 }
 
+// `signature` may still be on its way: the pick route reads the row alongside the day's ranking.
 export async function storedDetails(db, userId, date, signature) {
   await db.prepare(DETAILS_TABLE).run();
-  const row = await db.prepare("SELECT signature, details_json FROM coach_pick_details WHERE user_id=? AND date=?").bind(userId, date).first();
-  if (!row || row.signature !== signature) return null;
+  const [row, wanted] = await Promise.all([db.prepare("SELECT signature, details_json FROM coach_pick_details WHERE user_id=? AND date=?").bind(userId, date).first(), signature]);
+  if (!row || row.signature !== wanted) return null;
   try { return JSON.parse(row.details_json); } catch { return null; }
 }
 

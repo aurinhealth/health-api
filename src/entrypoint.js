@@ -21,7 +21,7 @@ import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { dayVerdict } from './day-verdict.js';
-import { cached, cachedOnly, keepCached, forgetCached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
+import { cached, cachedOnly, keepCached, forgetCached, bumpCacheVersion, cacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -818,12 +818,13 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
 // the last week's activities of any sport, tired legs (Trénink → Svaly), the
 // days before with a yellow or red readiness, the form, alcohol in yesterday's
 // journal, and tomorrow's planned sessions from Intervals.icu.
-// Today (/app/api/today) passes the training doses and tomorrow's day it already read.
-async function morningContext(env, { date, health, fitness, sleep, profile, read, doses: loaded, tomorrowDaily: next }) {
+// Today (/app/api/today) passes the training doses and tomorrow's day it already
+// read, and the journal it started reading with the rest.
+async function morningContext(env, { date, health, fitness, sleep, profile, read, doses: loaded, tomorrowDaily: next, journal: journaling }) {
   const tomorrowDate = shiftDate(date, 1);
   const [doses, journal, tomorrowDaily] = await Promise.all([
     loaded !== undefined ? loaded : loadTrainingDoses(env.DB).catch(() => null),
-    journalForCoach(env.DB, date).catch(() => null),
+    journaling !== undefined ? journaling : journalForCoach(env.DB, date).catch(() => null),
     next !== undefined ? next : read('/analysis/daily?date=' + tomorrowDate)
   ]);
   const activities = (doses?.activities || []).filter(a => a.date).map(a => ({ date: a.date, kind: a.kind, minutes: a.minutes }));
@@ -1365,17 +1366,21 @@ async function profileTriathlonSplit(env,profile,history){
   return triathlonSplit({year:history.sports,levels,sessions,minutes:hours?hours*60:history.weeklyMinutes||null});
 }
 // Parts of the coach's inputs that the push reads too (loadPushInputs), made one way for both.
-// The weeks: one at a time, cached and shared by every day of the week.
+// The weeks, each cached and shared by every day of the week. Side by side:
+// their reads share database trips (d1-batch.js), and the trip, not the SQL,
+// is what costs (2026-11-14: 9.9 s waiting for the account's database with
+// 13 ms of SQL); one week after another was some 4 trips per week in a row.
 function coachWeeks(env,ctx,weeks){
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
-  return (async()=>{const out=[];for(const w of weeks)out.push(await cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(r=>r.json().catch(()=>({})))));return out;})();
+  return Promise.all(weeks.map(w=>cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(r=>r.json().catch(()=>({}))))));
 }
 // The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
 function coachSleep(env,ctx,internalAuth,date){
   return app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-30),shiftDate(date,1)));
 }
-async function coachProfile(env,profile){
-  return profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,...(profile.readinessLocks?{readinessLocks:profile.readinessLocks}:{}),training:await trainingSetup(env.DB)}:null;
+// `training`: trainingSetup(env.DB) already started alongside the other reads (loadCoachInputsFresh).
+async function coachProfile(env,profile,training=null){
+  return profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,...(profile.readinessLocks?{readinessLocks:profile.readinessLocks}:{}),training:await (training||trainingSetup(env.DB))}:null;
 }
 // What the coach's push looks at (coachPush): this week and the next (only
 // today and later are read), fitness, Google Health, the 30 nights and the
@@ -1404,29 +1409,32 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   const json=r=>r.json().catch(()=>({}));
-  // The three weeks are the heavy part (every day's analysis). One week at a
-  // time, cached and shared by every day of that week, so the database is never
-  // asked for all of them at once; the rest loads alongside them. lite: each
+  // The three weeks are the heavy part (every day's analysis), cached and
+  // shared by every day of that week; the rest loads alongside them. lite: each
   // day's analysis with its food totals and targets, without the full food log
   // and meal recommendations (nothing of the coach read them; 2026-10-31).
   const weeksLoading=coachWeeks(env,ctx,weeks);
   // Drinks of the day, for the coach's food advice (coach-assistant.js nutritionContext).
+  // The small reads of the end (the athlete's state, the journal, the next
+  // test, the training setup) start here too: each awaited in turn after the
+  // rest cost a database trip of its own (morning report 2026-11-14).
+  const training=trainingSetup(env.DB);
   const extras=Promise.all([dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
-    date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null,sportReturns(env.DB,env.USER_ID,date).catch(()=>null)]);
+    date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null,sportReturns(env.DB,env.USER_ID,date).catch(()=>null),
+    getAthleteState(env.DB),journalForCoach(env.DB,date).catch(()=>null),getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)]);
   // Awaited below; a failure before that is not left unhandled.
-  weeksLoading.catch(()=>{});extras.catch(()=>{});
+  weeksLoading.catch(()=>{});extras.catch(()=>{});training.catch(()=>{});
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
     coachSleep(env,ctx,internalAuth,date).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
-  const [daily,fitness,gym,sleep,[profile,fluids,checkin,training,returns],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
+  const [daily,fitness,gym,sleep,[profile,fluids,checkin,doses,returns,athleteState,journal,nextTest],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
-  const athleteState=await getAthleteState(env.DB);
-  const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training,athleteState?.status).recoveryTime??null:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,returns,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  const regeneration=doses?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),doses,athleteState?.status).recoveryTime??null:null;
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile,training),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,returns,journal,upcomingTest:nextTest};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1542,16 +1550,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The athlete's state is read each time and is part of the key: a memory the
       // coach keeps from the chat (a sore knee) changes no data version. So is the
       // evening (Today's bedtime is only built from 17:00 to 4:00).
-      const athlete=await getAthleteState(env.DB).catch(()=>undefined);
+      // The cache's data version is read with it, and the day's stored workouts
+      // alongside the ranking: one database trip each instead of three in a row.
+      const [athlete]=await Promise.all([getAthleteState(env.DB).catch(()=>undefined),cacheVersion(env.DB)]);
       const clock=localNow().slice(11,16),hour=Number(clock.slice(0,2)),late=hour>=17||hour<4;
-      const base=await cached(env,ctx,'pick-base:'+date+':'+(late?'late:':'')+textHash(JSON.stringify(athlete??null)),()=>pickBase(env,ctx,internalAuth,date,athlete,late?hour:null));
+      const baseLoading=cached(env,ctx,'pick-base:'+date+':'+(late?'late:':'')+textHash(JSON.stringify(athlete??null)),()=>pickBase(env,ctx,internalAuth,date,athlete,late?hour:null));
+      const signing=baseLoading.then(b=>pickSignature(b.day));signing.catch(()=>{});
+      const detailsLoading=storedDetails(env.DB,env.USER_ID,date,signing).catch(()=>null);
+      const base=await baseLoading;
       const {day,planned,less,gym,forecast,bedtime,today,done}=base,state={chosen:base.chosen};
       // Late in the evening only winding down, past tonight's bedtime (as Today shows it) only bed: by the clock of each ask.
       const evening=eveningPhase(clock,bedtime),ranked=lateOptions(day,evening,{today,done});
       // The ready workouts stay while the options do (pickSignature, of the day's
       // ranking, so the late card keeps them too), and a sync that changes nothing asks the AI nothing.
       const signature=pickSignature(day);
-      let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
+      let details=await detailsLoading;
       // The best ride or run's AI workout (~5 s) is written after the answer:
       // the rules' workout shows at once, marked aiPending, and the AI's takes
       // its place unless the athlete has chosen meanwhile (coach-pick.js claimDetails).
@@ -2881,6 +2894,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // A gym plan alone: its sessions this week less the gym days already logged (one read of this week).
       const gymDays=syncing.then(p=>isToday&&!p.active&&p.gym?env.DB.prepare("SELECT COUNT(DISTINCT workout_date) AS n FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,mondayOfDate(date),date).first().then(r=>Number(r?.n)||0).catch(()=>null):null);
       const checking=connectionStatus(env).catch(()=>null);
+      // The journal for the morning advice below: after the rest it was two database trips of its own.
+      const journaling=isToday?journalForCoach(env.DB,date).catch(()=>null):null;
       // Today only: yesterday's sessions and tomorrow's plan for "Regenerace na dnes" (recovery-today.js).
       const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess,training,risks,gymDone]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(error=>missing('google-health',error?.message||error)),
@@ -2911,7 +2926,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // The morning push's advice (push.js), so Today's coach card says the same.
       // A failed context still keeps the athlete's status, so a paused athlete never sees a hard day.
-      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow}).catch(()=>({tomorrow:[],context:null}))])
+      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow,journal:journaling}).catch(()=>({tomorrow:[],context:null}))])
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       const body=withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
@@ -3367,12 +3382,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // makes (the cache version), so a new ride still shows up soon.
     const week = await cached(env, ctx, (lite ? 'week-api-lite:' : 'week-api:') + start, async () => {
     await ensureGymPlans(env.DB);
-    const cancelledGym=new Set((await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all()).results.map(r=>r.workout_date));
-    // Gym plans saved for the week (generated, confirmed or built by hand), so a
-    // day shows its plan even before or without an Intervals.icu event.
-    const gymPlans=new Map(((await env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all().catch(()=>({results:[]}))).results||[]).map(r=>{let v=[];try{v=JSON.parse(r.values_json);}catch{}const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);return [r.workout_date,rows.length?{name:String(v[2]?.[3]||'').slice(0,120),exercises:new Set(rows.map(x=>x[1])).size,sets:rows.filter(x=>String(x[0]||'WORK').toUpperCase()==='WORK').length}:null];}).filter(([,p])=>p));
+    // The week's gym cancellations, its saved gym plans (generated, confirmed or
+    // built by hand, so a day shows its plan even before or without an
+    // Intervals.icu event) and the profile: side by side, one database trip.
+    const [cancelledRows,gymRows,profile]=await Promise.all([env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all(),
+      env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all().catch(()=>({results:[]})),dashboardProfile(env)]);
+    const cancelledGym=new Set(cancelledRows.results.map(r=>r.workout_date));
+    const gymPlans=new Map((gymRows.results||[]).map(r=>{let v=[];try{v=JSON.parse(r.values_json);}catch{}const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);return [r.workout_date,rows.length?{name:String(v[2]?.[3]||'').slice(0,120),exercises:new Set(rows.map(x=>x[1])).size,sets:rows.filter(x=>String(x[0]||'WORK').toUpperCase()==='WORK').length}:null];}).filter(([,p])=>p));
     // Same calorie target as the day view: one Google Health read covers the week (dashboard-shared.js weekHealthDate).
-    const profile = await dashboardProfile(env), healthDate = weekHealthDate(start, localToday());
+    const healthDate = weekHealthDate(start, localToday());
     const health = profile && healthDate ? await googleHealthFor(env, ctx, healthDate).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
     // D1 runs one query at a time: three days at once keep its queue short
     // (all seven at once overloaded it when several weeks were asked together).

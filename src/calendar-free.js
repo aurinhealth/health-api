@@ -91,7 +91,9 @@ export function withCalendarFree(prefs, monday, free = {}) {
   return { ...prefs, availability, calendar: true };
 }
 
-export async function weekWithCalendar(db, prefs, date) {
+// The free time of the week of `date` (getWeekPlan starts it alongside its other reads).
+export function weekFree(db, date) {
   const monday = weekStartOf(date);
-  return withCalendarFree(prefs, monday, await calendarFree(db, monday, shift(monday, 6)));
+  return calendarFree(db, monday, shift(monday, 6));
 }
+

@@ -76,17 +76,20 @@ export async function googleDashboard(db,today){
   // instead of every steps and energy row ever saved (~60k rows per load).
   // An interval starts at most a day before it ends, hence the extra day.
   const recent='COALESCE(sample_time,end_time,start_time,\'\')';
+  // The daily values and the sync state are read alongside the summary (two database trips instead of four in a row).
+  const syncing=db.prepare("SELECT status,updated_at,details_json FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent') ORDER BY updated_at DESC LIMIT 1").bind(db.userId).first();
+  const dailyLoading=db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-skin-temperature-deviation','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery','daily-wrist-temperature') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-91),end).all();
+  syncing.catch(()=>{});dailyLoading.catch(()=>{});
   // Steps, energy and zone minutes from the hourly summary once it reaches back a
   // month (hour-summary.js): ~700 rows instead of ~45,000 minutes and buckets.
   const hours=await dashboardRowsFromSummary(db,db.userId,shift(-31),end).catch(()=>null);
-  const [daily,intervals,zones]=await Promise.all([
-    db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-skin-temperature-deviation','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery','daily-wrist-temperature') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-91),end).all(),
+  const [daily,intervals,zones]=await Promise.all([dailyLoading,
     hours?{results:hours.intervals}:db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('steps','active-energy-burned') AND start_time>=? AND start_time<? AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-32),end,shift(-31),end).all(),
     hours?{results:hours.zones}:db.prepare(`SELECT source_family,start_time,end_time,json_extract(payload_json,'$.timeInHeartRateZone.heartRateZoneType') AS zone FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND record_role='primary' AND data_type='time-in-heart-rate-zone' AND start_time>=? AND start_time<? AND NOT (source_family='google-wearables' AND json_extract(payload_json,'$.timeInHeartRateZone.heartRateZoneType')='LIGHT') LIMIT 20000`).bind(db.userId,shift(-31),end).all().catch(()=>({results:[]}))
   ]);
   const data={results:[...(daily.results||[]),...(intervals.results||[])]};
   const summary=googleHealthSummary(data.results||[],today,zones.results||[]);
-  const sync=await db.prepare("SELECT status,updated_at,details_json FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent') ORDER BY updated_at DESC LIMIT 1").bind(db.userId).first();
+  const sync=await syncing;
   let detail={};try{detail=JSON.parse(sync?.details_json||'{}');}catch{}
   return {...summary,sync:{status:sync?.status||'unknown',updatedAt:sync?.updated_at,error:detail.last_error?.message||null}};
 }
