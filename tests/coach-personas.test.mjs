@@ -133,6 +133,18 @@ test('checker calibration: every answer builds its persona context, a flag count
   assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28' }, { type: 'workout', date: '2026-10-28', sport: 'ride', kind: 'vo2max', minutes: 60 }]).map(c => c.type), ['rest', 'workout']);
   // One rest card replaces one workout; a second workout that day replaces nothing.
   assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28', sport: 'run', eventId: 'planned:1' }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'easy', minutes: 40 }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'vo2max', minutes: 48 }]).map(c => !!c.replacesPlanned), [true, false]);
+  // Haiku (another model family) answers through the Anthropic API with the checker's schema.
+  const { checkCoachAnswer } = await import('../src/coach-checker.js');
+  const realFetch = globalThis.fetch; let sentClaude = null;
+  globalThis.fetch = async (url, init) => { sentClaude = { url, headers: init.headers, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({ model: 'claude-haiku-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text: '{"flags":[{"cat":"NUMBERS","quote":"q","why":"w"}]}' }], usage: { input_tokens: 10000, output_tokens: 100 } }), { status: 200 }); };
+  try {
+    const h = await checkCoachAnswer({ ANTHROPIC_API_KEY: 'k' }, { context: {}, message: 'm', answer: 'a' }, { model: 'claude-haiku-5-5' });
+    assert.equal(sentClaude.url, 'https://api.anthropic.com/v1/messages'); assert.equal(sentClaude.headers['x-api-key'], 'k');
+    assert.equal(sentClaude.body.output_config.format.type, 'json_schema'); assert.ok(sentClaude.body.system.length > 100);
+    assert.deepEqual(h.flags.map(f => f.cat), ['NUMBERS']); assert.equal(h.model, 'claude-haiku-5-5'); assert.equal(h.usd, 0.00105);
+    await assert.rejects(checkCoachAnswer({}, { context: {}, message: 'm', answer: 'a' }, { model: 'claude-haiku-5-5' }), /ANTHROPIC_API_KEY/);
+  } finally { globalThis.fetch = realFetch; }
   // The cascade: Sol reads only what Luna flags, and Sol's verdict stands.
   const { judge } = await import('../src/coach-eval.js');
   const calls = [], fake = solFlags => async (env, input, opts) => { calls.push(opts.model); return { flags: opts.model === 'gpt-6-sol' ? solFlags : [{ cat: 'NUMBERS', quote: 'x', why: 'y' }], model: opts.model, ms: 1, usd: 0.001 }; };

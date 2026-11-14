@@ -38,10 +38,10 @@ async function call(body) {
 
 const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
-// COACH_EVAL_CALIBRATE (luna, sol, both or cascade, the eval's judge): only the checker's calibration (coach-calibration.js), no coach answers.
+// COACH_EVAL_CALIBRATE (luna, sol, both, haiku (Anthropic) or cascade, the eval's judge): only the checker's calibration (coach-calibration.js), no coach answers.
 const calibrate = String(process.env.COACH_EVAL_CALIBRATE || "").trim();
 if (calibrate) {
-  const models = calibrate === "both" ? ["luna", "sol"] : [["sol", "cascade"].includes(calibrate) ? calibrate : "luna"], out = [], lines = [`# Kalibrace AI kontrolora, ${host}`, ""];
+  const models = calibrate === "both" ? ["luna", "sol"] : [["sol", "cascade", "haiku"].includes(calibrate) ? calibrate : "luna"], out = [], lines = [`# Kalibrace AI kontrolora, ${host}`, ""];
   for (const model of models) {
     const rows = [];
     for (const id of list.calibration || []) { const r = await call({ calibrate: id, model }).catch(error => ({ id, status: "error", message: error.message })); r.id ??= id; r.run = model; rows.push(r); out.push(r);
