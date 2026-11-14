@@ -21,6 +21,9 @@ test("the cards start the athlete's state with their other first reads", () => {
   const revision = route("if(url.pathname==='/app/api/coach/revision'", "if(url.pathname==='/app/api/coach/week-check'");
   assert.match(revision, /\[athlete\]=await Promise\.all\(\[getAthleteState\(env\.DB\)\.catch\(\(\)=>null\),cacheVersion\(env\.DB\)\]\)/);
   assert.match(revision, /\[given,reflections,ratings,stored\]=await Promise\.all\(/);
+  // The week check's days off: every week's plan at once; its efforts: feedback and reflections at once.
+  assert.match(route("async function weekCheckFreeOn", "const stretchMinutes"), /Promise\.all\(weeks\.map\(/);
+  assert.match(route("async function weekCheckState", "async function weekCheckSessions"), /\[given,reflections\]=await Promise\.all\(\[recentWorkoutFeedback\(/);
 });
 
 test("the recent feedback names its workouts in the order of the feedback", async () => {

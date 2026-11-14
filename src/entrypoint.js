@@ -1043,9 +1043,9 @@ async function weekCheckState(env,inputs,today){
   // The effort given anywhere: the library workout's survey (its kind known),
   // "Jak to šlo?" and the RPE in Intervals.icu (the kind from the ride's
   // intensity or name). An effort of unknown kind counts only from 9.
-  const efforts=[];
-  for(const f of await recentWorkoutFeedback(env.DB,shiftDate(today,-3)).catch(()=>[]))if(Number(f.rpe)>0&&f.date<today)efforts.push({date:f.date,rpe:Number(f.rpe),kind:f.system?kindOfSystem(f.system):null});
-  for(const x of await listReflections(env.DB,{limit:8}).catch(()=>[]))if(Number(x.rpe)>0&&x.date>=shiftDate(today,-3)&&x.date<today&&!efforts.some(e=>e.date===x.date))efforts.push({date:x.date,rpe:Number(x.rpe),kind:null});
+  const efforts=[],[given,reflections]=await Promise.all([recentWorkoutFeedback(env.DB,shiftDate(today,-3)).catch(()=>[]),listReflections(env.DB,{limit:8}).catch(()=>[])]);
+  for(const f of given)if(Number(f.rpe)>0&&f.date<today)efforts.push({date:f.date,rpe:Number(f.rpe),kind:f.system?kindOfSystem(f.system):null});
+  for(const x of reflections)if(Number(x.rpe)>0&&x.date>=shiftDate(today,-3)&&x.date<today&&!efforts.some(e=>e.date===x.date))efforts.push({date:x.date,rpe:Number(x.rpe),kind:null});
   for(const d of days.filter(d=>d.date>=shiftDate(today,-3)&&d.date<today))for(const a of d.daily?.training?.completed||[]){
     const rpe=Number(a.rpe??a.payload?.icu_rpe??a.payload?.perceived_exertion);if(!(rpe>0)||efforts.some(e=>e.date===d.date))continue;
     const raw=Number(a.intensityFactor??a.payload?.icu_intensity),fi=raw>3?raw/100:raw;
@@ -1073,8 +1073,10 @@ async function weekCheckSessions(env,days){
 }
 // May `date` take a moved session: the athlete hasn't set it as a day off.
 async function weekCheckFreeOn(env,dates){
-  const plans=new Map(),free=new Set();
-  for(const date of dates){const w=mondayOfDate(date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);if(!p||availabilityOn(p,date).minutes!==0)free.add(date);}
+  // Each week's plan read side by side: one database trip, not one per week in a row.
+  const weeks=[...new Set(dates.map(mondayOfDate))];
+  const plans=new Map(await Promise.all(weeks.map(async w=>[w,await getWeekPlan(env.DB,w).catch(()=>null)]))),free=new Set();
+  for(const date of dates){const p=plans.get(mondayOfDate(date));if(!p||availabilityOn(p,date).minutes!==0)free.add(date);}
   return date=>free.has(date);
 }
 // The stretching put in place of a session: its length on the card.
