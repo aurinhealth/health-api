@@ -220,9 +220,9 @@ function journalDiscoveryView(settings) {
 // The sensitive items (mood, cannabis, medication) only with the consent;
 // sex never, neither as an answer nor as a finding.
 export async function journalForCoach(db, date) {
-  const settings = await getJournalSettings(db);
+  // Both in one database trip; the findings are a small row even when the journal is off.
+  const [settings, findings] = await Promise.all([getJournalSettings(db), getJournalFindings(db)]);
   if (!settings.enabled) return null;
-  const findings = await getJournalFindings(db);
   const yesterday = shiftDay(date, -1);
   const { entries, auto } = await journalDayData(db, yesterday, yesterday, settings);
   const shown = item => item && !NEVER_TO_AI.has(item.key) && (settings.shareSensitive || !isSensitive(item));

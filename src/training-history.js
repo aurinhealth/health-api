@@ -137,8 +137,6 @@ async function readActivities(db,userId,from,to){
 // days; every 7 days the whole two years count again (a service connected later
 // brings old activities, a deleted one takes them away). Nothing is stored
 // while there are no activities. A failed write keeps the weeks just counted.
-// Also returns the activities it read (from `from`), so trainingHistory does
-// not read them again.
 export async function trainingWeeks(db,userId,today){
   const thisMonday=mondayOfDate(today),first=shiftDate(thisMonday,-104*7);
   const ready=await ensureWeeks(db).then(()=>true,error=>{console.error('Training weeks unavailable',error.message);return false;});
@@ -147,7 +145,7 @@ export async function trainingWeeks(db,userId,today){
   const rebuild=!stored.length||stored.some(r=>r.built<shiftDate(today,-REBUILD_DAYS));
   const have=new Map(stored.map(r=>[r.week,r]));
   const todo=rebuild?all:all.filter(m=>!have.has(m)||(have.get(m).built<shiftDate(m,7+FRESH_DAYS)&&have.get(m).built<today));
-  if(!todo.length)return {weeks:stored,activities:[],from:null};
+  if(!todo.length)return {weeks:stored};
   const from=todo[0],to=shiftDate(thisMonday,-1);
   const activities=await readActivities(db,userId,from,to);
   const sets=(await db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<?").bind(userId,from,thisMonday).all().catch(()=>({results:[]}))).results||[];
@@ -161,7 +159,7 @@ export async function trainingWeeks(db,userId,today){
     try{for(let i=0;i<statements.length;i+=50)await (db.batch?db.batch(statements.slice(i,i+50)):Promise.all(statements.slice(i,i+50).map(s=>s.run())));}
     catch(error){console.error('Training weeks not stored',error.message);}
   }
-  return {weeks,activities,from};
+  return {weeks};
 }
 
 // Sessions and hours per sport of the weeks from `since` (triathlon-split.js).
@@ -179,10 +177,9 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   // Finished weeks (up to two years) from training_weeks; the last 12 weeks of
   // activities for the overall experience, the volume, the weekdays and a new
   // account's sport.
-  const {weeks,activities:read,from}=await trainingWeeks(db,userId,end);
-  // The weeks' read already covers the 84 days up to last Sunday when it went back that far.
-  const activities=from&&from<=daysBack(84)?[...read.filter(a=>a.date>=daysBack(84)),...await readActivities(db,userId,mondayOfDate(end),end)]:await readActivities(db,userId,daysBack(84),end);
-  const weight=await latestStoredWeight(db,userId).catch(()=>null);
+  // All three side by side: one database trip instead of three in a row (on
+  // the weekly rebuild the 84 days are read twice, once with the two years).
+  const [{weeks},activities,weight]=await Promise.all([trainingWeeks(db,userId,end),readActivities(db,userId,daysBack(84),end),latestStoredWeight(db,userId).catch(()=>null)]);
   const sportExperienceLevels=experienceFromWeeks(weeks,{weightKg:weight?.value_numeric});
   // Each sport's own level, without the lift from the other sports: the coach
   // engine's "new to this sport" (a fit cyclist who has hardly run is new to running).
