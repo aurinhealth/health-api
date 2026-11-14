@@ -142,3 +142,20 @@ test('the replacement is one conditional write: a plan changed meanwhile stays',
   assert.equal(await replaceStrengthPlanInDb(db, plan, full), true);
   assert.match(stored.json, /Horní polovina/);
 });
+
+test('lighter or heavier weights of the plan, done sets kept, only with Chat v1', async () => {
+  const { gymLoadAsked } = await import('../src/coach-actions.js');
+  const { scalePlanLoads } = await import('../src/coach-gym-adjustment.js');
+  assert.deepEqual(['Dneska to dej lehčí', 'Dej mi těžší váhy', 'Zkrať to a dej lehčí', 'Make it heavier', 'Je to těžké?'].map(gymLoadAsked), [-1, 1, 0, 1, 0]);
+  const done = full.map(r => r.slice()), i = done.findIndex(r => r[1] === 'Pivot leg press');
+  done[i][5] = '150'; done[i][6] = '10'; done[i][8] = 'TRUE';
+  const lighter = scalePlanLoads(done, -1);
+  assert.equal(lighter[i][3], '150', 'a done set keeps its load');
+  assert.equal(lighter.find(r => r[1] === 'DB bench press' && r[0] === 'WORK')[3], '22.5');
+  const ctx = { ...base, gymPlan: { values: full }, userMessage: 'Dneska to v posilovně dej lehčí, cviky nech.' };
+  assert.equal(validateCoachActions([gymAction({ minutes: 45 })], ctx, date, { userInitiated: true }).some(a => a.loadStep), false);
+  const [kept] = validateCoachActions([gymAction({ minutes: 45 })], { ...ctx, chatV1: true }, date, { userInitiated: true });
+  assert.equal(kept.loadStep, -1);
+  assert.deepEqual(kept.trim.source, full);
+  assert.match(actionSummary(kept), /lehčími vahami/);
+});

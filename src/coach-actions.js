@@ -3,7 +3,7 @@ import { L } from './lang.js';
 import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
-import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted } from './coach-gym-adjustment.js';
+import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted,scalePlanLoads } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
@@ -64,6 +64,10 @@ export const chatV1On = env => env?.CHAT_V1 === 'true';
 const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
 const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
 const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
+// "Dej to dneska lehčí" / "Make it heavier" for the gym: −1 or +1 load step, 0
+// when the message asks for no such thing or also for another length.
+const LIGHTER=/(?:lehč|lehc|odleh[čc]|ni[žz][šs][íi]\s+v[áa]h|m[ée]n[ěe]\s+v[áa]h|easier|lighter)/iu,HEAVIER=/(?:t[ěe][žz][šs]|vy[šs][šs][íi]\s+v[áa]h|v[íi]c\s+v[áa]h|harder|heavier)/iu;
+export const gymLoadAsked=message=>{const m=String(message||'');if(LENGTH_OR_ADD.test(m))return 0;const down=LIGHTER.test(m),up=HEAVIER.test(m);return down===up?0:down?-1:1;};
 export const replaceAsked=message=>{const m=String(message||'');return INSTEAD.test(m)?!ADD_ASK.test(m):REPLACE_ASK.test(m)&&!LENGTH_OR_ADD.test(m);};
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
@@ -281,6 +285,9 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
         if(planDate&&planDate===a.date){
           const values=context.gymPlan.values;
           if(context.chatV1&&replaceAsked(context.userMessage)&&focusChanges(values,{focus,muscles}))return planStarted(values)?[]:[{...session,replace:{source:values}}];
+          // Lighter or heavier weights of the same plan (Chat v1), not another length.
+          const load=context.chatV1?gymLoadAsked(context.userMessage):0,scaled=load?scalePlanLoads(values,load):null;
+          if(scaled)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,loadStep:load,workoutName:load<0?L('Dnešní plán s lehčími vahami','Today\'s plan with lighter weights'):L('Dnešní plán s těžšími vahami','Today\'s plan with heavier weights'),trim:{values:scaled,source:values,removed:[]}}];
           const trimmed=trimGymPlan(values,a.minutes);
           if(trimmed)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:values,removed:trimmed.removed}}];
           const longer=context.chatV1?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;

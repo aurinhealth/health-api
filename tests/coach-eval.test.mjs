@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'S77', 'S78', 'S79', 'S80', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -150,7 +150,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 110);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 114);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -908,4 +908,18 @@ test('S76 (Chat v1): an undo in the text is answered as done, the same swap not 
   assert.deepEqual(failed('S76', { answer: 'Hotovo, plán je zase jako předtím, s Pivot leg press.', kept: [], proposed: [], memory: {} }), []);
   const again = { type: 'gym_swap', fromExercise: 'Pivot leg press', toExercise: 'Hack squat' };
   assert.ok(failed('S76', { answer: 'Vráceno.', kept: [again], proposed: [again], memory: {} }).includes('quality:stejnou výměnu znovu nenavrhne'));
+});
+
+test('S77 to S80 (Chat v1): longer or harder ride and run as a new card with a rest, a lighter gym plan', () => {
+  // Only the situation's own checks (the common ones read the answer's wording).
+  const own = (id, reply) => failed(id, reply).filter(f => scenarioById(id).checks({ answer: '', kept: [], proposed: [], memory: {}, date }).some(c => f === c.severity + ':' + c.name));
+  const ride = (minutes, kind) => ({ type: 'workout', sport: 'ride', date, minutes, kind }), rest = { type: 'rest', eventId: 'planned:9511' };
+  assert.deepEqual(own('S77', { answer: 'Dnešní Endurance 90 min ruším a dnes dám místo ní 2 h vytrvalosti.', kept: [ride(120, 'endurance'), rest], proposed: [], memory: {} }), []);
+  assert.ok(own('S77', { answer: 'Jasně.', kept: [ride(120, 'endurance')], proposed: [], memory: {} }).includes('quality:původní jízda pryč (rest)'));
+  assert.deepEqual(own('S78', { answer: 'Dnešní Endurance 90 min ruším a dnes dám místo ní sweet spot 2×15.', kept: [ride(75, 'sweet_spot'), rest], proposed: [], memory: {} }), []);
+  const run = { type: 'workout', sport: 'run', date, minutes: 60, kind: 'endurance' };
+  assert.deepEqual(own('S79', { answer: 'Dnešní Lehký běh 40 min ruším a dnes dám místo něj hodinu lehkého běhu.', kept: [run, { type: 'rest', eventId: 'planned:9501' }], proposed: [], memory: {} }), []);
+  const { ctx } = scenarioContext(scenarioById('S80'), date, now);
+  const kept = validateCoachActions([{ type: 'workout', eventId: '', date, sport: 'gym', minutes: 45, status: '', statusUntil: '', reason: 'Lehčí', fromExercise: '', toExercise: '', workoutId: '', kind: '', activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', gymMuscles: [] }], { ...ctx, userMessage: scenarioById('S80').message }, date, { userInitiated: true });
+  assert.deepEqual(own('S80', { answer: 'Dnešní plán nechám, jen váhy dnes ubírám o 10 %.', kept, proposed: kept, memory: {} }), []);
 });
