@@ -28,6 +28,7 @@ import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
 import { syncGymActivity, removeGymActivity } from "./gym-session-activity.js";
+import { planStarted } from "./coach-gym-adjustment.js";
 import { matchActivities } from "./index.js";
 
 // The main sport: the profile's, else the one the training history shows.
@@ -367,10 +368,18 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         if(plan.spare)plan.spare={warmup:plan.spare.warmup?all.warmup:null,stretching:plan.spare.stretching?all.stretching:null};
         if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
-      if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
+      // A plan of another focus from the coach (Chat v1) replaces the day's plan,
+      // only the very plan the card was made against and only while none of it is done;
+      // its calendar event keeps its time.
+      const current=await readGymPlan(env.DB,plan.date);let startTime=draft.startTime||'00:00';
+      if(current.stored){
+        if(!body.replaceSource||JSON.stringify(current.values)!==JSON.stringify(body.replaceSource)||planStarted(current.values))throw new Error(body.replaceSource?L('Plán se mezitím změnil nebo už začal. Požádej o nový návrh.', 'The plan has changed or already started. Ask for a new proposal.'):L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
+        const event=await env.DB.prepare('SELECT event_json FROM local_workouts WHERE user_id=? AND event_key=?').bind(env.USER_ID,'health-strength-'+plan.date).first().catch(()=>null);
+        startTime=/T(\d{2}:\d{2})/.exec(JSON.parse(event?.event_json||'{}').start_date_local||'')?.[1]||startTime;
+      }
       const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
       if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
-      const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime:draft.startTime||'00:00'}).catch(error=>({status:'error',message:error.message}));
+      const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime}).catch(error=>({status:'error',message:error.message}));
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();
       return Response.json({status:'ok',intervals,eventId:intervals?.eventId!=null?'planned:'+intervals.eventId:null,message:L('Gym plán je uložený.', 'The gym plan is saved.')},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}

@@ -50,7 +50,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -2520,6 +2520,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(confirmedInChat.length)coachCtx.confirmedInChat=confirmedInChat.map(({proposal,done,reason})=>({proposal,done,...(reason?{reason}:{})}));
       // An iPhone app before API 2 cannot show the add and remove cards (app-version.js).
       if(oldAppCards)coachCtx.oldAppCards=true;
+      // Chat v1 (coach vision 2026-11-14): its new changes only where the server has it on (staging until it ships).
+      if(chatV1On(env))coachCtx.chatV1=true;
       onProgress(L('Kouč píše…', 'The coach is writing…'));
       // With the live check on, the athlete sees the answer only after the
       // checker read it (coach-checker.js), so nothing streams. A photo message
@@ -2763,7 +2765,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
             result={status:'ok',date:a.date,values:a.trim.values,preview};
           }else if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
-            const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId})}),env,ctx,confirmUrl,{signedIn:true});
+            // Another focus (Chat v1): the new plan takes the place of the one the card was made against.
+            const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId,...(a.replace?{replaceSource:a.replace.source}:{})})}),env,ctx,confirmUrl,{signedIn:true});
             const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
             result={...savedBody,preview};
           }else{
@@ -3595,7 +3598,7 @@ async function workoutPreview(env,ctx,a){
   // The day's own plan shortened (coach-actions.js): its rows as they will be saved.
   if(a.sport==='gym'&&a.trim){
     const rows=a.trim.values.slice(a.trim.values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik')+1).filter(r=>r?.[1]);
-    return {status:'ok',plan:{planName:a.workoutName,rationale:a.trim.removed.length?L('Vynechávám: ','Leaving out: ')+a.trim.removed.join(', '):null,rows},muscles:Object.fromEntries([...new Set(rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]))};
+    return {status:'ok',plan:{planName:a.workoutName,rationale:a.trim.removed.length?L('Vynechávám: ','Leaving out: ')+a.trim.removed.join(', '):a.trim.added?.length?L('Přidávám: ','Adding: ')+a.trim.added.join(', '):null,rows},muscles:Object.fromEntries([...new Set(rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]))};
   }
   const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
   // The library workout named in the answer, at the proposed length; without one
