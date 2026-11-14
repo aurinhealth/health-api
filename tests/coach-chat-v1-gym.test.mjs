@@ -146,9 +146,9 @@ test('the replacement is one conditional write: a plan changed meanwhile stays',
 test('lighter or heavier weights of the plan, done sets kept, only with Chat v1', async () => {
   const { gymLoadAsked } = await import('../src/coach-actions.js');
   const { scalePlanLoads } = await import('../src/coach-quick-change.js');
-  assert.deepEqual(['Dneska to dej lehčí', 'Dej mi těžší váhy', 'Zkrať to a dej lehčí', 'Make it heavier', 'Je to těžké?', 'Uber váhy', 'Víc váhy, cítím se silný', 'lighter weights please'].map(gymLoadAsked), [-1, 1, 0, 1, 0, -1, 1, -1]);
+  assert.deepEqual(['Dneska to dej lehčí', 'Dej mi těžší váhy', 'Zkrať to a dej lehčí', 'Make it heavier', 'Je to těžké?', 'Uber váhy', 'Víc váhy, cítím se silný', 'lighter weights please', 'Ubrat váhu'].map(gymLoadAsked), [-1, 1, 0, 1, 0, -1, 1, -1, -1]);
   // Not about the session's weights (review of #1091).
-  assert.deepEqual(['Mám dneska těžší den', 'Včera byl těžší trénink, jak dnes?', 'Lehčí den by se hodil', 'Dej mi těžší trénink zítra', 'I had a harder day', 'Měl jsem těžkou noc'].map(gymLoadAsked), [0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(['Mám dneska těžší den', 'Včera byl těžší trénink, jak dnes?', 'Lehčí den by se hodil', 'Dej mi těžší trénink zítra', 'I had a harder day', 'Měl jsem těžkou noc', 'Dej mi po tréninku lehčí jídlo'].map(gymLoadAsked), [0, 0, 0, 0, 0, 0, 0]);
   const done = full.map(r => r.slice()), i = done.findIndex(r => r[1] === 'Pivot leg press');
   done[i][5] = '150'; done[i][6] = '10'; done[i][8] = 'TRUE';
   const ticked = done.findIndex((r, j) => j > i && r[1] === 'Pivot leg press'); done[ticked][8] = 'Yes';
