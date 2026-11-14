@@ -29,7 +29,7 @@ import { swimZones } from './training-zones.js';
 import { triathlonSplit, splitFacts } from './triathlon-split.js';
 import { assistantAppContext, selectedSubject } from './assistant-app-context.js';
 import { screenFacts, screenRequest, checkedText } from './screen-texts.js';
-import { checkCoachAnswer } from './coach-checker.js';
+import { checkCoachAnswer, CLAUDE_JUDGE_MODEL } from './coach-checker.js';
 import { COACH_PERSONAS, personaById, personaTurn } from './coach-personas.js';
 import { capabilityCoverage } from './coach-capabilities.js';
 import { COACH_CALIBRATION } from './coach-calibration.js';
@@ -1094,12 +1094,12 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
   if (principal?.kind !== 'coach-eval') return Response.json({ status: 'error', message: 'Unauthorized' }, { status: 401 });
   if (request.method !== 'POST') return Response.json({ status: 'error', message: 'Use POST.' }, { status: 405 });
   const body = await request.json().catch(() => ({}));
-  // One calibration answer read by the checker on the light (luna) or the coach's (sol) model, or by the eval's judge (cascade).
+  // One calibration answer read by the checker on the light (luna) or the coach's (sol) model, Anthropic's Claude Haiku (haiku), or by the eval's judge (cascade).
   if (body?.calibrate) {
     const item = COACH_CALIBRATION.find(c => c.id === String(body.calibrate));
     if (!item) return Response.json({ status: 'error', message: 'Unknown calibration item' }, { status: 404 });
     const persona = personaById(item.persona.split('.')[0]), s = personaTurn(persona, Number(item.persona.split('.')[1]), item.conversation);
-    try { return Response.json(await withLang(s.lang || 'cs', () => runCalibration({ ...env, COACH_EVAL: true }, item, s, ['sol', 'cascade'].includes(body.model) ? body.model : 'luna')), { headers: { 'Cache-Control': 'no-store' } }); }
+    try { return Response.json(await withLang(s.lang || 'cs', () => runCalibration({ ...env, COACH_EVAL: true }, item, s, ['sol', 'cascade', 'haiku'].includes(body.model) ? body.model : 'luna')), { headers: { 'Cache-Control': 'no-store' } }); }
     catch (error) { return Response.json({ id: item.id, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
   }
   if (!body?.id) return Response.json({ status: 'ok', calibration: COACH_CALIBRATION.map(c => c.id), scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
@@ -1120,7 +1120,7 @@ export async function runCalibration(env, item, scenario, model, { check = check
   const date = scenario.date, { ctx } = scenarioContext(scenario, date, date + ' ' + scenario.now);
   ctx.userMessage = scenario.message;
   const input = { context: ctx, message: scenario.message, answer: item.answer, actions: item.actions };
-  const r = model === 'cascade' ? await judge(env, input, check) : await check(env, input, { model: model === 'sol' ? complexModel(env) : lightModel(env) });
+  const r = model === 'cascade' ? await judge(env, input, check) : await check(env, input, { model: model === 'sol' ? complexModel(env) : model === 'haiku' ? CLAUDE_JUDGE_MODEL : lightModel(env) });
   const flagged = r.flags.length > 0;
   return { id: item.id, status: 'ok', persona: item.persona, expect: item.expect, why: item.why, model: r.model, ms: r.ms, usd: r.usd, flags: r.flags, correct: item.expect === 'flag' ? flagged : !flagged };
 }
