@@ -3,7 +3,7 @@ import { L } from './lang.js';
 import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
-import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest } from './coach-gym-adjustment.js';
+import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
@@ -50,8 +50,21 @@ export function actionSummary(a){
   if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
   if(a.trim)return a.workoutName+' ('+shortDate(a.date)+')';
   const half=a.gymFocus?L({upper:' (horní polovina)',lower:' (nohy)'},{upper:' (upper body)',lower:' (legs)'})[a.gymFocus]:'';
-  return L('Připravit '+SPORT_NAMES()[a.sport]+half,'Prepare a '+SPORT_NAMES()[a.sport]+half)+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);
+  return L('Připravit '+SPORT_NAMES()[a.sport]+half,'Prepare a '+SPORT_NAMES()[a.sport]+half)+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date)+(a.replace?L(' místo dosavadního plánu',' instead of the current plan'):'');
 }
+// Chat v1 (coach vision, Petr 2026-11-14): the coach's new changes from the
+// chat reach users together, once the new eval passes; until then only a
+// server with CHAT_V1 (staging) offers them.
+export const chatV1On = env => env?.CHAT_V1 === 'true';
+// A new plan in place of the day's only when the athlete asks for another
+// focus instead of it ("Dneska místo celého těla jen horní polovinu"), never
+// when they ask for another length or one more exercise (review of #1088:
+// "Prodluž mi to a přidej něco na nohy" replaced a full-body plan). "Místo"
+// says it even beside a length ("Místo nohou záda, mám hodinu").
+const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
+const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
+const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
+export const replaceAsked=message=>{const m=String(message||'');return INSTEAD.test(m)?!ADD_ASK.test(m):REPLACE_ASK.test(m)&&!LENGTH_OR_ADD.test(m);};
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
 // `planFor(date)` returns the week plan (availability Monday..Sunday).
@@ -252,13 +265,6 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       if(a.sport==='gym'){
         // No gym today on a red morning or with signs of illness, not even shortened (S20).
         if(a.date===today&&(holdBackToday(context)||unwellNow(context.userMessage)))return [];
-        // A day that already has a gym plan gets that plan shortened, never a
-        // second one (it could not be saved next to it).
-        let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
-        if(planDate&&planDate===a.date){
-          const trimmed=trimGymPlan(context.gymPlan.values,a.minutes);if(!trimmed)return [];
-          return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:context.gymPlan.values,removed:trimmed.removed}}];
-        }
         // Named muscle groups set the half of the body too, so the card, its
         // name and the next days' rule (never the same half twice) agree.
         const muscles=gymMusclesOf(a,context.userMessage),legs=muscles.filter(g=>LEG_GROUPS.includes(g)).length;
@@ -266,7 +272,21 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
         // Exercises the athlete turned down in this chat ("Nechci floor press")
         // stay out of the card, as the answer promises (Petr 2026-11-12).
         const avoid=unwantedExercises([...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content),context.userMessage]);
-        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{}),...(avoid.length?{gymAvoid:avoid}:{})}];
+        const session={type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{}),...(avoid.length?{gymAvoid:avoid}:{})};
+        // A day that already has a gym plan gets that plan changed, never a
+        // second one (it could not be saved next to it): shortened, and in
+        // Chat v1 lengthened, or a new plan of another focus in its place
+        // while nothing of it is done yet.
+        let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
+        if(planDate&&planDate===a.date){
+          const values=context.gymPlan.values;
+          if(context.chatV1&&replaceAsked(context.userMessage)&&focusChanges(values,{focus,muscles}))return planStarted(values)?[]:[{...session,replace:{source:values}}];
+          const trimmed=trimGymPlan(values,a.minutes);
+          if(trimmed)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:values,removed:trimmed.removed}}];
+          const longer=context.chatV1?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;
+          return longer?[{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:longer.name,trim:{values:longer.values,source:values,removed:[],added:longer.added}}]:[];
+        }
+        return [session];
       }
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(openWater?{openWater:true}:{}),...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }

@@ -198,6 +198,8 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.aurin.health",
+        // Chat v1 (src/coach-actions.js chatV1On): on here, off on the live server until it ships.
+        "CHAT_V1": "true",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",

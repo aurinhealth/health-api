@@ -21,11 +21,11 @@ export const COACH_CAPABILITIES = [
   row('swap_type', 'session', 'ride', 'green'), row('swap_type', 'session', 'run', 'green', ['P17.1']), row('swap_type', 'session', 'swim', 'green'), row('swap_type', 'session', 'gym', 'green', ['P07.1']),
   // Length and intensity of a session.
   row('shorten', 'session', 'ride', 'cycle', ['P10.2']), row('shorten', 'session', 'run', 'green', ['P02.3', 'P17.2']), row('shorten', 'session', 'swim', 'green', ['P04.2']), row('shorten', 'session', 'gym', 'green', ['P06.3']),
-  row('lengthen', 'session', 'ride', 'green'), row('lengthen', 'session', 'run', 'green'), row('lengthen', 'session', 'swim', 'green', ['P05.3']), row('lengthen', 'session', 'gym', 'green'),
+  row('lengthen', 'session', 'ride', 'green'), row('lengthen', 'session', 'run', 'green'), row('lengthen', 'session', 'swim', 'green', ['P05.3']), row('lengthen', 'session', 'gym', 'green', ['S74']),
   row('easier', 'session', 'ride', 'red', ['P09.3']), row('easier', 'session', 'run', 'green', ['P02.3']), row('easier', 'session', 'swim', 'green', ['P05.2']), row('easier', 'session', 'gym', 'green'),
   row('harder', 'session', 'ride', 'green'), row('harder', 'session', 'run', 'green', ['P17.1']), row('harder', 'session', 'swim', 'green'), row('harder', 'session', 'gym', 'green', ['P07.3']),
   // Exercises of a gym session (health-api #1087).
-  row('add', 'exercise', 'gym', 'green', ['S72', 'P06.1']), row('remove', 'exercise', 'gym', 'pain', ['S73', 'P06.2']), row('focus', 'session', 'gym', 'green', ['P07.1']),
+  row('add', 'exercise', 'gym', 'green', ['S72', 'P06.1']), row('remove', 'exercise', 'gym', 'pain', ['S73', 'P06.2']), row('focus', 'session', 'gym', 'green', ['P07.1', 'S75']),
   // Undo and confirm by text.
   row('undo', 'session', 'ride', 'green'), row('undo', 'session', 'run', 'green', ['P17.3']), row('undo', 'session', 'swim', 'green'), row('undo', 'session', 'gym', 'green'),
   row('confirm', 'answer', 'ride', 'green', ['P09.4', 'P18.4']), row('confirm', 'answer', 'run', 'green', ['P02.4']), row('confirm', 'answer', 'swim', 'green', ['P04.4']), row('confirm', 'answer', 'gym', 'green', ['S71', 'P06.4', 'P07.4']),

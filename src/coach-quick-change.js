@@ -53,12 +53,13 @@ export function quickOptions(a, quick) {
   const hard = !gym && isHardKind(kind);
   const days = (quick.days || []).filter(d => d !== a.date && d >= quick.today).slice(0, 6).map(date => ({ date, fits: dayFits(a, date, quick, hard) }));
   return {
-    shorter: shorterMinutes(a) < a.minutes,
+    // A lengthened plan (Chat v1) is not shortened again by a chip; a new plan of another focus stays on its day.
+    shorter: !a.trim?.added?.length && shorterMinutes(a) < a.minutes,
     longer: !a.trim && longerMinutes(a, quick) > a.minutes,
     // Open water is one steady swim by time: only its length changes.
     easier: gym ? true : !a.openWater && EASIER[kind] !== kind,
     harder: !a.openWater && !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
-    day: !a.trim && days.some(d => d.fits),
+    day: !a.trim && !a.replace && days.some(d => d.fits),
     days
   };
 }

@@ -608,6 +608,16 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S73', title: 'Vynechat jeden cvik z dnešní posilovny', message: 'Dneska bych vynechal ten leg curl, zbytek nech.', athlete: { gym: evalGym },
     checks: r => [quality('odebere leg curl kartou', r.kept.some(a => a.type === 'gym_remove' && a.fromExercise === 'Seated leg curl'), r.kept.map(a => a.type + ' ' + (a.fromExercise || '')).join(', ')),
       quality('zbytek nechá', !r.kept.some(a => ['gym_swap', 'gym_add', 'rest', 'workout'].includes(a.type) || (a.type === 'gym_remove' && a.fromExercise !== 'Seated leg curl')), r.kept.map(a => a.type).join(', '))] },
+  // Chat v1 (Petr 2026-11-14): today's gym plan lengthened or given another focus from the chat.
+  { id: 'S74', title: 'Chat v1: prodloužit dnešní posilovnu', message: 'Mám dneska víc času, prodluž mi posilovnu na 75 minut.', athlete: { gym: evalGym }, context: () => ({ chatV1: true }),
+    checks: r => { const cards = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym');
+      return [quality('prodlouží dnešní plán kartou (přidá cviky)', cards.some(a => a.trim?.added?.length && a.minutes >= 70), cards.map(a => a.minutes + ' ' + (a.trim?.added || []).join('+')).join(', ')),
+        quality('nevytvoří druhý plán ani nic neruší', !cards.some(a => !a.trim) && !r.kept.some(a => ['rest', 'gym_remove', 'gym_swap'].includes(a.type)), r.kept.map(a => a.type).join(', '))]; } },
+  { id: 'S75', title: 'Chat v1: jiné zaměření dnešní posilovny', message: 'Dneska chci místo celého těla jen horní polovinu, nohy si nechám na pondělí.', athlete: { gym: evalGym }, context: () => ({ chatV1: true }),
+    checks: r => { const cards = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym' && a.date === r.date);
+      return [quality('nový plán horní poloviny místo dnešního', cards.some(a => a.replace && (a.gymFocus === 'upper' || (a.gymMuscles || []).length && !(a.gymMuscles || []).some(g => ['quads', 'hamstrings', 'hips', 'calves'].includes(g)))), cards.map(a => (a.gymFocus || '') + (a.replace ? ' replace' : '') + (a.trim ? ' trim' : '')).join(', ')),
+        quality('řekne, že dosavadní plán nahradí', says(r, /nahrad|nahradí|místo (?:\S+ ){0,3}plánu|místo celého|replac|instead/i)),
+        quality('nemění cviky po jednom', !r.kept.some(a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a.type)), r.kept.map(a => a.type).join(', '))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

@@ -5,6 +5,7 @@ import { findExerciseAlternatives, resolveLoad } from './strength-intelligence.j
 import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt, stationExercises } from './gym-equipment.js';
 import { splitSides } from './gym-sides.js';
+import { estimateStrengthTiming } from './strength-timing.js';
 
 // An exercise the athlete's own equipment allows (/app/api/gym sends it); the
 // default gym's only when it is unknown.
@@ -68,15 +69,81 @@ export function placeExercise(values,name){
   return [...rest.slice(0,at),...moved,...rest.slice(at)];
 }
 
+// The rows of an exercise new to the plan: its usual sets at the generator's
+// estimate, warm-ups for a main lift, left and right for a one-sided one.
+function newExerciseRows(name,gym){
+  const def=EXERCISES[name],estimate=gymLoadEstimate(name,gym.history||[])||{kg:null},kg=estimate.kg??'';
+  const video='https://www.youtube.com/results?search_query='+encodeURIComponent(name+' exercise technique'),rows=[];
+  if(def.warmup)for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',name,String(i),kg===''?'':String(resolveLoad(name,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','','','']);
+  for(let i=0;i<addSets(name);i++)rows.push(['WORK',name,String(i+1),String(kg),def.reps,'','','','FALSE','',video,'FALSE','','','']);
+  return {estimate,rows:splitSides(rows,{columns:15})};
+}
+
+const EXTEND_ORDER=['hips','side_delts','biceps','triceps','rear_delts','calves','abs','front_delts','chest','upper_back','lats','quads','hamstrings'];
+// "Prodluž mi posilovnu na 90 minut" (Chat v1, Petr 2026-11-14): the day's
+// stored plan gets exercises for its halves of the body, the groups it does
+// not train yet first, each placed where it belongs, while the
+// estimate fits the new length. Nothing already in the plan changes. Null
+// when nothing fits or the plan already fills the time.
+export function extendGymPlan(gym,minutes,memories=[],broken=[]){
+  if(!Array.isArray(gym?.values)||!(minutes>0))return null;
+  let parsed;try{parsed=parseStrengthPlan(gym.values);}catch{return null;}
+  const header=gym.values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik');if(header<0||!parsed.rows.length)return null;
+  const rowsOf=values=>values.slice(header+1).filter(r=>r?.[1]);
+  const estimate=values=>estimateStrengthTiming(rowsOf(values),EXERCISES,minutes).estimatedMinutes;
+  // Longer than the plan's own length and its estimate, or it is no lengthening.
+  const limit=Number(gym.values.find(r=>r?.[0]==='Časový limit (min)')?.[1])||0;
+  const before=estimate(gym.values);if(minutes<=limit||before>=minutes-5)return null;
+  const painful=new Set([...painfulExercises(memories).avoid,...stationExercises(broken)]),inPlan=new Set(parsed.rows.map(r=>r.exercise));
+  const work=parsed.rows.filter(r=>r.type==='WORK'),setsIn=g=>work.filter(r=>FOCUS_GROUPS[g].exercises.includes(r.exercise)).length;
+  // The halves of the body the plan trains stay the only ones (an upper-body
+  // day that spares the legs keeps sparing them); within them the groups it
+  // does not train yet come first, then those with the fewest sets.
+  const legs=LEGS.some(g=>setsIn(g)),upper=Object.keys(FOCUS_GROUPS).some(g=>!LEGS.includes(g)&&!CORE.includes(g)&&setsIn(g));
+  const allowed=EXTEND_ORDER.filter(g=>FOCUS_GROUPS[g]&&(LEGS.includes(g)?legs:CORE.includes(g)||upper));
+  const groups=[...allowed.filter(g=>!setsIn(g)),...allowed.filter(g=>setsIn(g)).sort((a,b)=>setsIn(a)-setsIn(b))];
+  const queue=groups.map(g=>FOCUS_GROUPS[g].exercises.filter(n=>EXERCISES[n]&&fits(n,gym)&&!painful.has(n)&&!inPlan.has(n)));
+  let values=gym.values;const added=[];
+  // One exercise per group in turn, at most four.
+  for(let grew=true;grew&&added.length<4;){
+    grew=false;
+    for(const list of queue){
+      while(list.length&&added.length<4){
+        const name=list.shift();if(added.includes(name))continue;
+        const next=placeExercise([...values,...newExerciseRows(name,gym).rows],name);
+        if(next.length-7>100||estimate(next)>minutes)continue;
+        values=next;added.push(name);grew=true;break;
+      }
+    }
+  }
+  if(!added.length)return null;
+  const out=values.map(r=>Array.isArray(r)?r.slice():r),timingRow=out.findIndex(r=>r?.[0]==='Časový limit (min)'),after=estimate(out);
+  if(timingRow>=0)out[timingRow]=['Časový limit (min)',minutes,'Odhad (min)',after];
+  return {values:out,added,estimatedMinutes:after,name:L('Dnešní plán prodloužený na '+minutes+' min','Today\'s plan lengthened to '+minutes+' min')};
+}
+
+// Does the asked focus change the day's plan ("Dneska jen horní polovinu")?
+// upper: the plan has legs; lower: it has upper-body work; named muscle
+// groups: one of them is not in it yet. Core counts for neither half.
+const LEGS=['quads','hamstrings','hips','calves'],CORE=['abs','obliques','lower_back'];
+export function focusChanges(values,{focus=null,muscles=[]}={}){
+  let parsed;try{parsed=parseStrengthPlan(values);}catch{return false;}
+  const groups=new Set(parsed.rows.filter(r=>r.type==='WORK').flatMap(r=>Object.keys(FOCUS_GROUPS).filter(g=>FOCUS_GROUPS[g].exercises.includes(r.exercise))));
+  if(muscles.length)return muscles.some(g=>FOCUS_GROUPS[g]&&!groups.has(g));
+  const legs=LEGS.some(g=>groups.has(g)),upper=[...groups].some(g=>!LEGS.includes(g)&&!CORE.includes(g));
+  // A plan of neither half (core only) changes with either.
+  if(focus==='upper')return legs||!upper;
+  if(focus==='lower')return upper||!legs;
+  return false;
+}
+export const planStarted=values=>{try{return parseStrengthPlan(values).rows.some(started);}catch{return true;}};
+
 // One exercise more for today: its usual sets, placed where it belongs.
 export function prepareGymAdd(gym,toExercise,reason,memories=[],broken=[]){
   const parsed=parseStrengthPlan(gym.values);
   guardNew(toExercise,gym,parsed,memories,broken);
-  const def=EXERCISES[toExercise],sets=addSets(toExercise),estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null},kg=estimate.kg??'';
-  const video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique'),rows=[];
-  if(def.warmup)for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','','','']);
-  for(let i=0;i<sets;i++)rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE','',video,'FALSE','','','']);
-  const addedRows=splitSides(rows,{columns:15}),after=placeExercise([...gym.values,...addedRows],toExercise);
+  const def=EXERCISES[toExercise],sets=addSets(toExercise),{estimate,rows:addedRows}=newExerciseRows(toExercise,gym);
+  const after=placeExercise([...gym.values,...addedRows],toExercise);
   if(after.length-7>100)throw new Error(L('Přidáním by plán překročil 100 sérií.', 'Adding it would push the plan over 100 sets.'));
   const order=[...new Set(parseStrengthPlan(after).rows.filter(r=>r.type==='WORK').map(r=>r.exercise))];
   return {type:'gym_add',date:parsed.date,toExercise,reason,sets,reps:def.reps,kg:estimate.kg,position:order.indexOf(toExercise)+1,of:order.length,addedRows};
