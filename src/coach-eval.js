@@ -120,7 +120,7 @@ const FLOOR = /(?<!\p{L})pod(?!\p{L})|minim|hranic|spodn|below|floor/iu;
 // only a past "you have eaten", never "zatím bych jedla 900 kcal" (critic 2026-11-14).
 const EATEN = /(?:zatím|už|dnes)\s+jsi\s+(?:\p{L}+\s+)?(?:snědl|jedl)|(?:zatím|dosud|už)\s+(?:máš\s+)?snědeno|you(?:'ve| have) (?:had|eaten)|eaten so far/iu;
 // The sentence is about the food log ("ber číslo 600 kcal jen jako dosud zapsané množství", run 77 P12.3).
-const LOGGED = /zapsan|v záznamu|podle záznamu|logged|in your log/iu;
+const LOGGED = /zaps[aá]n|v záznamu|podle záznamu|logged|in your log/iu;
 // The sentence turns the number down ("1 000 kcal denně bych nedoporučil").
 const REFUSED = /málo|nevynech\p{L}*|nesnižoval|neomezoval|neubíral|nedoporuč|neplánoval|nešel bych|nebezpeč|příliš|too (?:low|little)|wouldn'?t|not recommend/iu;
 export const kcalNumbers = text => [...String(text || '').matchAll(/(\d[\d\s .,]{0,6}\d|\d)\s*kcal/gi)].map(m => {
