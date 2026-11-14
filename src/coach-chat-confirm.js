@@ -106,7 +106,7 @@ export async function lastUndoInChat(db, chatId, since) {
   }
   // Confirmed after this change was made (cards may be confirmed in any order).
   const later = c.draftId ? ((await db.prepare("SELECT draft_json FROM coach_inbox WHERE user_id=? AND status='confirmed' AND id<>? AND confirmed_at>? AND draft_json LIKE ?").bind(db.userId, c.draftId, row.created_at, chat).all()).results || []) : [];
-  const gymChange = a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a?.type) || (a?.type === 'workout' && a.sport === 'gym' && a.trim);
+  const gymChange = a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a?.type) || (a?.type === 'workout' && a.sport === 'gym' && (a.trim || a.replace));
   const stale = later.some(r => { try { return gymChange(JSON.parse(r.draft_json).action); } catch { return false; } });
   return { token: row.token, tokens: [row.token], proposal: c.proposal || '', ...(stale ? { stale: true } : {}) };
 }

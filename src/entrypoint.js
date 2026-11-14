@@ -2772,9 +2772,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           }else if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
             // Another focus (Chat v1): the new plan takes the place of the one the card was made against.
+            const oldEvent=a.replace&&chatV1On(env)?await env.DB.prepare('SELECT event_json FROM local_workouts WHERE user_id=? AND event_key=?').bind(env.USER_ID,'health-strength-'+a.date).first().catch(()=>null):null;
             const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId,...(a.replace?{replaceSource:a.replace.source}:{})})}),env,ctx,confirmUrl,{signedIn:true});
             const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
             result={...savedBody,preview};
+            // The plan of the other focus can go back ("Vrátit"), its calendar event too.
+            if(a.replace&&oldEvent)Object.assign(result,await gymUndo(env,draft,a.replace.source,(await readGymPlan(env.DB,a.date)).values,row.id,{event:JSON.parse(oldEvent.event_json)}));
           }else{
             if(!preview.workout?.id)throw new Error(L('Trénink se nepodařilo připravit. Požádej o nový návrh.', 'The workout couldn\'t be prepared. Ask for a new proposal.'));
             result={...await scheduleWorkoutInIntervals(env,env.DB,{workoutId:preview.workout.id,date:a.date,confirm:true,environment:preview.environment||preview.workout.environment||'outdoor'}),preview};
@@ -3584,10 +3587,10 @@ async function plannedUndo(env,draft,change,draftId){
   if(!chatV1On(env)||!change.start&&!change.from)return {};
   return rememberChange(env,{kind:'planned',...change,chatId:Number(draft.chatId)||null,messageId:Number(draft.messageId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)}).then(undo=>({undo}),error=>{console.error('Planned undo not kept',error.message);return {};});
 }
-async function gymUndo(env,draft,before,after,draftId){
+async function gymUndo(env,draft,before,after,draftId,extra={}){
   if(!chatV1On(env))return {};
   // A token that could not be kept leaves the change made, without Vrátit.
-  return rememberChange(env,{kind:'gym_plan',date:draft.action.date,before,after,chatId:Number(draft.chatId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)}).then(undo=>({undo}),error=>{console.error('Gym undo not kept',error.message);return {};});
+  return rememberChange(env,{kind:'gym_plan',date:draft.action.date,before,after,...extra,chatId:Number(draft.chatId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)}).then(undo=>({undo}),error=>{console.error('Gym undo not kept',error.message);return {};});
 }
 async function adjustCoachDraft(env,ctx,row,draft,body){
   const a=draft.action,chip=String(body.chip||'');

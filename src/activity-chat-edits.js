@@ -155,6 +155,18 @@ export async function undoActivityChange(env, token) {
     if (cancelled) throw fail(L('Trénink na ten den je zrušený, změnu už vrátit nejde.', 'The workout for that day is cancelled, the change can no longer be undone.'));
     const back = await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.before), env.USER_ID, change.date, JSON.stringify(change.after)).run();
     if (back.meta?.changes !== 1) throw fail(L('Plán se od té změny upravil, vrátit ho už nejde.', 'The plan has changed since, it can no longer be undone.'));
+    // A plan of another focus put back: its calendar event as it was too (name,
+    // length). If that can't be saved, the plan goes forward again and the
+    // token stays, so Vrátit can be tried again. The export retries itself.
+    if (change.event) {
+      const { storeLocalEvent, syncLocalWorkout } = await import('./local-workouts.js');
+      const local = await storeLocalEvent(env.DB, change.event, { key: 'health-strength-' + change.date }).catch(async error => {
+        await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.after), env.USER_ID, change.date, JSON.stringify(change.before)).run().catch(() => null);
+        console.error('Gym event not put back', error?.message);
+        throw fail(L('Změnu se teď nepodařilo vrátit, zkus to znovu.', 'The change couldn\'t be undone right now, try again.'));
+      });
+      await syncLocalWorkout(env, local.id).catch(() => null);
+    }
     await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
     return { status: 'ok', kind: 'gym_plan', date: change.date, values: change.before, proposal: change.proposal || null };
   }
