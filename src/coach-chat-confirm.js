@@ -93,10 +93,20 @@ export async function lastUndoInChat(db, chatId, since) {
   const row = await db.prepare("SELECT token,change_json,created_at FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(db.userId, since, chat).first();
   if (!row) return null;
   let c; try { c = JSON.parse(row.change_json); } catch { return null; }
-  if (c.kind !== 'gym_plan' || c.chatId !== Number(chatId)) return null;
+  if (!['gym_plan', 'planned'].includes(c.kind) || c.chatId !== Number(chatId)) return null;
+  // A ride or run changed by two cards of one answer (a new one and the old
+  // one off the plan) goes back as a whole.
+  if (c.kind === 'planned') {
+    const rows = c.messageId ? ((await db.prepare("SELECT token,change_json FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC").bind(db.userId, since, chat).all()).results || []) : [];
+    const same = rows.map(r => { try { return { token: r.token, c: JSON.parse(r.change_json) }; } catch { return null; } }).filter(r => r && r.c.kind === 'planned' && !r.c.undone && r.c.messageId === c.messageId && r.c.chatId === Number(chatId));
+    // All of it went back by the cards' Vrátit: an older change stays (as for the gym below).
+    if (c.undone && !same.length) return { token: row.token, tokens: [], proposal: c.proposal || '', stale: true };
+    const all = same.length ? same : [{ token: row.token, c }];
+    return { token: all[0].token, tokens: all.map(r => r.token), proposal: all.map(r => r.c.proposal).filter(Boolean).join(', ') };
+  }
   // Confirmed after this change was made (cards may be confirmed in any order).
   const later = c.draftId ? ((await db.prepare("SELECT draft_json FROM coach_inbox WHERE user_id=? AND status='confirmed' AND id<>? AND confirmed_at>? AND draft_json LIKE ?").bind(db.userId, c.draftId, row.created_at, chat).all()).results || []) : [];
   const gymChange = a => ['gym_swap', 'gym_add', 'gym_remove'].includes(a?.type) || (a?.type === 'workout' && a.sport === 'gym' && a.trim);
   const stale = later.some(r => { try { return gymChange(JSON.parse(r.draft_json).action); } catch { return false; } });
-  return { token: row.token, proposal: c.proposal || '', ...(stale ? { stale: true } : {}) };
+  return { token: row.token, tokens: [row.token], proposal: c.proposal || '', ...(stale ? { stale: true } : {}) };
 }

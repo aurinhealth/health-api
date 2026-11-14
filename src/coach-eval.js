@@ -640,6 +640,15 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S80', title: 'Chat v1: lehčí váhy dnešní posilovny', message: 'Dneska to v posilovně dej lehčí, cviky nech.', athlete: { gym: evalGym }, context: () => ({ chatV1: true }),
     checks: r => { const cards = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym');
       return [quality('lehčí váhy dnešního plánu kartou', cards.some(a => a.loadStep < 0 && a.trim)), quality('cviky nemění', !r.kept.some(a => ['gym_swap', 'gym_add', 'gym_remove', 'rest'].includes(a.type)) && !cards.some(a => a.replace), r.kept.map(a => a.type).join(', '))]; } },
+  // Chat v1: a ride or run the coach changed goes back by text too (both cards of the answer).
+  { id: 'S81', title: 'Chat v1: vrátit prodlouženou jízdu textem', message: 'Vrať to zpátky, nakonec to nestihnu.', athlete: { plan: EASY_RIDE_DAY },
+    context: () => ({ chatV1: true, undoneInChat: { proposal: 'Jízda 120 min (14. 11.), Volno místo Endurance 90 min (14. 11.)', done: true } }),
+    checks: r => [quality('řekne, že je jízda zase jako předtím', says(r, /vr[áa]cen|vr[áa]til|zp[áa]tky|zp[ěe]t|p[ůu]vodn|jako p[řr]edt[íi]m|undone|back/i)),
+      quality('dlouhou jízdu znovu nenavrhne', !r.kept.some(a => a.type === 'workout' && a.sport === 'ride' && a.minutes >= 120), r.kept.map(a => a.type + ' ' + (a.minutes || '')).join(', '))] },
+  { id: 'S82', title: 'Chat v1: vrátit běh nejde, mezitím se změnil', message: 'Vrať ten přesun běhu.', athlete: { ...RUNNER, plan: EASY_RUN_DAY, done: RUNS_DONE },
+    context: () => ({ chatV1: true, undoneInChat: { proposal: 'Přesunout Lehký běh 40 min na 16. 11.', done: false, reason: 'Trénink se od té změny upravil, vrátit ho už nejde.' } }),
+    checks: r => [quality('řekne, že vrátit to nešlo, a proč', says(r, /ne[šs]lo|nejde|nelze|nepoda[řr]|upravil|změnil|zmenil|couldn|can.?t/i)),
+      quality('netvrdí, že je to vrácené', !says(r, /(?<!ne)(?:vr[áa]ceno|vr[áa]til jsem)/i))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

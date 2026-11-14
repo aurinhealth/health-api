@@ -34,7 +34,7 @@ test('the gym plan goes back only while it is as the change left it, once', asyn
   const { env, db } = memoryDb(), before = [['a'], ['before']], after = [['a'], ['after']];
   db.plans.set('2026-11-14', JSON.stringify(after));
   const token = await rememberChange(env, { kind: 'gym_plan', date: '2026-11-14', before, after, chatId: 7, draftId: 40, proposal: 'Přidat Cable curl 3× 10-12 (14. 11.)' });
-  assert.deepEqual(await lastUndoInChat(db, 7, '2026-11-14 00:00:00'), { token, proposal: 'Přidat Cable curl 3× 10-12 (14. 11.)' });
+  assert.deepEqual(await lastUndoInChat(db, 7, '2026-11-14 00:00:00'), { token, tokens: [token], proposal: 'Přidat Cable curl 3× 10-12 (14. 11.)' });
   assert.equal(await lastUndoInChat(db, 8, '2026-11-14 00:00:00'), null, 'another chat');
   assert.equal(await lastUndoInChat(db, 7, '2026-11-15 00:00:00'), null, 'not from an earlier day');
   // A set logged since: no undo.
@@ -77,4 +77,67 @@ test('a failed answer after an undo in the text still says what was done, with r
   assert.match(src, /if\(answer\.status!=='ok'&&madeInChat\.some\(c=>c\.done\)\)answer=madeOnly\(\);/);
   assert.match(src, /confirmedInChat:madeInChat\.filter\(c=>c\.done&&c\.action\)/);
   assert.match(src, /\.then\(undo=>\(\{undo\}\),error=>\{console\.error\('Gym undo not kept'/);
+});
+
+// The app's own planned ride, run or swim (local-workouts.js), as the coach's cards left it.
+const plannedDb = () => {
+  const undo = [], local = new Map(), links = [];
+  const db = { userId: 1, local, links, batch: async list => Promise.all(list.map(q => q.run())), prepare: sql => ({ bind: (...a) => ({
+    run: async () => {
+      if (/^INSERT INTO activity_undo/.test(sql)) { undo.push({ token: a[1], change_json: a[2], created_at: '2026-11-14 10:00:00' }); return { meta: { changes: 1 } }; }
+      if (/^DELETE FROM activity_undo/.test(sql)) { const i = undo.findIndex(u => u.token === a[1]); if (i >= 0) undo.splice(i, 1); return { meta: { changes: 1 } }; }
+      if (/^UPDATE activity_undo SET change_json = \? WHERE user_id = \? AND token = \? AND change_json = \?/.test(sql)) { const u = undo.find(x => x.token === a[2] && x.change_json === a[3]); if (u) u.change_json = a[0]; return { meta: { changes: u ? 1 : 0 } }; }
+      if (/^UPDATE local_workouts SET status='deleted'/.test(sql)) { local.get(a[1]).status = 'deleted'; return { meta: { changes: 1 } }; }
+      if (/^UPDATE local_workouts SET status='scheduled'.*AND status='deleted'/.test(sql)) { const r = local.get(a[1]); const ok = r?.status === 'deleted'; if (ok) r.status = 'scheduled'; return { meta: { changes: ok ? 1 : 0 } }; }
+      if (/^INSERT INTO local_workouts/.test(sql)) { const r = local.get(a[1]); r.event_json = a[3]; r.status = 'scheduled'; return { meta: { changes: 1 } }; }
+      if (/^INSERT OR IGNORE INTO workout_schedule_links/.test(sql)) { links.push(a); return { meta: { changes: 1 } }; }
+      return { meta: {} };
+    },
+    first: async () => {
+      if (/FROM activity_undo WHERE user_id = \? AND token = \?/.test(sql)) return undo.find(u => u.token === a[1]) || null;
+      if (/FROM local_workouts WHERE user_id=\? AND id=\?/.test(sql)) return local.get(a[1]) || null;
+      if (/FROM health_datapoints/.test(sql) && /planned-workout/.test(sql)) { const r = local.get(String(a[1]).replace(/^planned:/, '')); return r && r.status !== 'deleted' ? { id: 1, payload_json: r.event_json, start_time: JSON.parse(r.event_json).start_date_local } : null; }
+      if (/FROM activity_undo WHERE user_id=\? AND created_at>=\? AND change_json LIKE/.test(sql)) { const like = a[2].slice(1, -1); return [...undo].reverse().find(u => u.created_at >= a[1] && u.change_json.includes(like)) || null; }
+      return null;
+    },
+    all: async () => /FROM activity_undo/.test(sql) ? { results: [...undo].reverse().filter(u => u.change_json.includes(a[2].slice(1, -1))) } : { results: [] } }), run: async () => ({ meta: {} }) }) };
+  const add = (id, start) => local.set(id, { id, event_key: 'k:' + id, status: 'scheduled', revision: 1, event_json: JSON.stringify({ id, name: 'Endurance', type: 'Ride', start_date_local: start }) });
+  return { env: { DB: db, USER_ID: 1 }, db, add };
+};
+
+test('a ride the coach added, moved or took off the plan goes back, only while it is as the change left it', async () => {
+  const { env, db, add } = plannedDb(), start = '2099-01-10T17:00:00';
+  add('local-new', start); add('local-old', start); add('local-moved', '2099-01-12T07:30:00');
+  db.local.get('local-old').status = 'deleted';
+  const link = { sport: 'ride', workout_id: 'w1', family: null, scheduled_date: '2099-01-10', environment: 'outdoor', intervals_external_id: 'pfd-library:w1:2099-01-10:outdoor' };
+  const moved = await rememberChange(env, { kind: 'planned', op: 'move', id: 'local-moved', from: '2099-01-11T07:30:00', to: '2099-01-12T07:30:00', chatId: 7, messageId: 2, draftId: 49, proposal: 'Přesunout běh' });
+  const added = await rememberChange(env, { kind: 'planned', op: 'add', id: 'local-new', start, chatId: 7, messageId: 3, draftId: 50, proposal: 'Jízda 120 min' });
+  const gone = await rememberChange(env, { kind: 'planned', op: 'delete', id: 'local-old', start, link, chatId: 7, messageId: 3, draftId: 51, proposal: 'Volno místo Endurance' });
+  // Both cards of one answer go back together, the older move stays.
+  const last = await lastUndoInChat(db, 7, '2026-11-14 00:00:00');
+  assert.deepEqual(new Set(last.tokens), new Set([added, gone]));
+  assert.match(last.proposal, /Jízda 120 min/);
+  assert.equal((await undoActivityChange(env, added)).op, 'add');
+  assert.equal(db.local.get('local-new').status, 'deleted');
+  assert.equal((await undoActivityChange(env, gone)).op, 'delete');
+  assert.equal(db.local.get('local-old').status, 'scheduled');
+  assert.equal(db.links[0][2], 'w1');
+  await assert.rejects(undoActivityChange(env, added), /už vrátit nejde/, 'once');
+  assert.equal((await lastUndoInChat(db, 7, '2026-11-14 00:00:00')).stale, true, 'the text does not go one change further back');
+  // Moved by hand since: no undo.
+  db.local.get('local-moved').event_json = JSON.stringify({ id: 'local-moved', type: 'Run', start_date_local: '2099-01-13T07:30:00' });
+  await assert.rejects(undoActivityChange(env, moved), /od té změny upravil/);
+  db.local.get('local-moved').event_json = JSON.stringify({ id: 'local-moved', type: 'Run', start_date_local: '2099-01-12T07:30:00' });
+  assert.equal((await undoActivityChange(env, moved)).op, 'move');
+  assert.equal(JSON.parse(db.local.get('local-moved').event_json).start_date_local, '2099-01-11T07:30:00');
+  // A day already gone.
+  const old = await rememberChange(env, { kind: 'planned', op: 'add', id: 'local-new', start: '2020-01-01T10:00:00', chatId: 7, messageId: 4 });
+  await assert.rejects(undoActivityChange(env, old), /den už je pryč/);
+});
+
+test('the ride and run cards keep an undo only with Chat v1, for the app\'s own plan and not a gym day or a joined pair', () => {
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.match(src, /async function plannedUndo\(env,draft,change,draftId\)\{\n\s*if\(!chatV1On\(env\)/);
+  assert.match(src, /const own=id\.startsWith\('local-'\)&&!isStrengthEvent\(payload\)&&!payload\.after&&!payload\.next;/);
+  assert.match(src, /for\(const token of last\.tokens\|\|\[last\.token\]\)await undoActivityChange/);
 });
