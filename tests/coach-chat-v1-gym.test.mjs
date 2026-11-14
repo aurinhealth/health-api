@@ -142,3 +142,43 @@ test('the replacement is one conditional write: a plan changed meanwhile stays',
   assert.equal(await replaceStrengthPlanInDb(db, plan, full), true);
   assert.match(stored.json, /Horní polovina/);
 });
+
+test('lighter or heavier weights of the plan, done sets kept, only with Chat v1', async () => {
+  const { gymLoadAsked } = await import('../src/coach-actions.js');
+  const { scalePlanLoads } = await import('../src/coach-quick-change.js');
+  assert.deepEqual(['Dneska to dej lehčí', 'Dej mi těžší váhy', 'Zkrať to a dej lehčí', 'Make it heavier', 'Je to těžké?', 'Uber váhy', 'Víc váhy, cítím se silný', 'lighter weights please', 'Ubrat váhu'].map(gymLoadAsked), [-1, 1, 0, 1, 0, -1, 1, -1, -1]);
+  // Not about the session's weights (review of #1091).
+  assert.deepEqual(['Mám dneska těžší den', 'Včera byl těžší trénink, jak dnes?', 'Lehčí den by se hodil', 'Dej mi těžší trénink zítra', 'I had a harder day', 'Měl jsem těžkou noc', 'Dej mi po tréninku lehčí jídlo'].map(gymLoadAsked), [0, 0, 0, 0, 0, 0, 0]);
+  const done = full.map(r => r.slice()), i = done.findIndex(r => r[1] === 'Pivot leg press');
+  done[i][5] = '150'; done[i][6] = '10'; done[i][8] = 'TRUE';
+  const ticked = done.findIndex((r, j) => j > i && r[1] === 'Pivot leg press'); done[ticked][8] = 'Yes';
+  const lighter = scalePlanLoads(done, -1);
+  assert.equal(lighter[i][3], '150', 'a done set keeps its load');
+  assert.equal(lighter[ticked][3], '150', 'a set ticked Yes keeps its load');
+  assert.equal(lighter.find(r => r[1] === 'DB bench press' && r[0] === 'WORK')[3], '22.5');
+  const ctx = { ...base, gymPlan: { values: full }, userMessage: 'Dneska to v posilovně dej lehčí, cviky nech.' };
+  assert.equal(validateCoachActions([gymAction({ minutes: 45 })], ctx, date, { userInitiated: true }).some(a => a.loadStep), false);
+  const [kept] = validateCoachActions([gymAction({ minutes: 45 })], { ...ctx, chatV1: true }, date, { userInitiated: true });
+  assert.equal(kept.loadStep, -1);
+  assert.deepEqual(kept.trim.source, full);
+  assert.match(actionSummary(kept), /lehčími vahami/);
+  assert.equal(validateCoachActions([gymAction({ minutes: 45 })], { ...ctx, chatV1: true, userMessage: 'Mám dneska těžší den, co posilovna?' }, date, { userInitiated: true }).some(a => a.loadStep), false);
+});
+
+test('the weight chips always scale the unscaled plan and never logged sets', async () => {
+  const { quickChange } = await import('../src/coach-quick-change.js');
+  const logged = full.map(r => r.slice()), i = logged.findIndex(r => r[1] === 'Pivot leg press');
+  logged[i][5] = '150'; logged[i][6] = '10'; logged[i][8] = 'TRUE';
+  const [card] = validateCoachActions([gymAction({ minutes: 45 })], { ...base, chatV1: true, gymPlan: { values: logged }, userMessage: 'Dej mi dneska lehčí váhy.' }, date, { userInitiated: true });
+  const quick = { today: date, budget: {}, planned: [], days: [] }, bench = v => v.find(r => r[1] === 'DB bench press' && r[0] === 'WORK')[3];
+  const harder = quickChange(card, 'harder', quick).action;
+  assert.equal(harder.loadStep, 0);
+  assert.deepEqual(harder.trim.values, logged, 'lighter then heavier is the plan again');
+  assert.equal(harder.workoutName, 'Dnešní plán');
+  const heavier = quickChange(harder, 'harder', quick).action;
+  assert.equal(bench(heavier.trim.values), '27.5');
+  assert.match(heavier.workoutName, /těžšími/);
+  const easier = quickChange(quickChange(heavier, 'easier', quick).action, 'easier', quick).action;
+  assert.equal(bench(easier.trim.values), '22.5');
+  for (const a of [harder, heavier, easier]) assert.equal(a.trim.values[i][3], '150', 'the logged set keeps its load');
+});
