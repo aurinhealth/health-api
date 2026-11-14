@@ -45,7 +45,8 @@ final class APIClient: @unchecked Sendable {
     /// The version of the server's API this app reads, sent as X-Aurin-Api.
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
-    static let apiLevel = 1
+    /// 2: the coach's gym_add and gym_remove cards (src/coach-actions.js).
+    static let apiLevel = 2
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?

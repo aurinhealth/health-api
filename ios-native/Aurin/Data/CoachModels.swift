@@ -184,6 +184,11 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     let eventSnapshot: Snapshot?
     /// activity_kcal: the done activity, its calories now and the new ones.
     var activityName: String? = nil
+    /// gym_add: the sets and reps of the added exercise and where the plan puts it.
+    var sets: Int? = nil
+    var reps: String? = nil
+    var position: Int? = nil
+    var of: Int? = nil
     var fromKcal: Double? = nil
     var kcal: Double? = nil
     /// activity_merge: the second part; activity_time: the start now and the new one.
@@ -275,6 +280,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { ", " + Fmt.duration(Int($0)) } ?? "") + ", " + day
         case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
+        case "gym_add": return L10n.f("V posilovně přidat %@", toExercise ?? L10n.tr("cvik"))
+        case "gym_remove": return L10n.f("V posilovně odebrat %@", fromExercise ?? L10n.tr("cvik"))
         case "activity_delete": return L10n.tr("Smazat aktivitu")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
         case "activity_time": return L10n.tr("Upravit čas")
@@ -301,6 +308,11 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
         case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
+        // "3× 8–12, 5. cvik ze 6": the dose and the place the plan gives it.
+        case "gym_add":
+            let dose = sets.map { L10n.f("%d× %@", $0, reps ?? "") }
+            let place = position.flatMap { p in of.map { L10n.f("%d. cvik z %d", p, $0) } }
+            return [dose, place].compactMap { $0 }.joined(separator: ", ")
         default: return nil
         }
     }

@@ -3,7 +3,7 @@ import { L } from './lang.js';
 import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
-import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
+import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
@@ -22,7 +22,7 @@ export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','
 // The muscle groups a gym card can be built around (strength-generator.js
 // FOCUS_GROUPS, the same ids; a test keeps them equal).
 export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group','station','muscles','until'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']},station:{type:'string'},muscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},until:{type:'string'}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:[...Object.keys(ATHLETE_STATUSES),'']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group','station','muscles','until'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']},station:{type:'string'},muscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},until:{type:'string'}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','gym_add','gym_remove','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:[...Object.keys(ATHLETE_STATUSES),'']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
@@ -42,6 +42,8 @@ export function actionSummary(a){
   if(a.type==='activity_kcal')return L('Kalorie ','Calories of ')+(a.activityName||L('aktivity','the activity'))+' ('+shortDate(a.date)+'): '+a.kcal+' kcal';
   if(a.type==='plan')return L('Založit plán ','Start the plan ')+(a.planName||'')+(a.raceDate?L(' (závod ',' (race on ')+shortDate(a.raceDate)+')':a.startDate?L(' (od ',' (from ')+shortDate(a.firstDay||a.startDate)+')':'');
   if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
+  if(a.type==='gym_add')return L('Přidat ','Add ')+a.toExercise+' '+a.sets+'× '+a.reps+' ('+shortDate(a.date)+')';
+  if(a.type==='gym_remove')return L('Odebrat ','Remove ')+a.fromExercise+' ('+shortDate(a.date)+')';
   if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdenního plánu na ','Add a '+SPORT_NAMES()[a.sport]+' to the week plan on ')+shortDate(a.date);
   if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
   if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
@@ -105,9 +107,10 @@ const MUSCLE_WORDS=[
   [/přední\s+stehn\p{L}*|predni\s+stehn\p{L}*|quads?(?!\p{L})|quadriceps/iu,['quads']]
 ];
 const MUSCLE_ANY=new RegExp(MUSCLE_WORDS.map(([re])=>'(?:'+re.source+')').join('|'),'iu');
-// "na prsa a triceps", "for chest and arms", "procvičit záda", "chest day", "cviky na prsa".
+// "na prsa a triceps", "for chest and arms", "procvičit záda", "chest day", "cviky na prsa",
+// "přidej tam i ty bicepsy", "add some biceps" (Petr 2026-11-14).
 const MUSCLE_LIST='(?:'+MUSCLE_ANY.source+')(?:\\s*(?:,|a|and|i|\\+|&)\\s*(?:'+MUSCLE_ANY.source+'))*';
-const MUSCLE_WISH=new RegExp('(?:(?<!\\p{L})(?:na|for|on|train|training|work|hit|target)|procvi\\p{L}*|posíl\\p{L}*|posil\\p{L}*|zaměř\\p{L}*\\s+na|zamer\\p{L}*\\s+na)\\s+(?:(?:the|my|moje|mé|me|si)\\s+)?'+MUSCLE_LIST+'|'+MUSCLE_LIST+'\\s+(?:day|exercises?|workout|session|cviky|cvičení|cviceni|trénink|trenink)','giu');
+const MUSCLE_WISH=new RegExp('(?:(?<!\\p{L})(?:na|for|on|train|training|work|hit|target)|(?<!\\p{L})p[řr]id\\p{L}*(?:\\s+(?:tam|tu|sem|i|ty|ten|ještě|jeste|něco|neco|nějak\\p{L}*|nejak\\p{L}*)){0,4}|(?<!\\p{L})add(?:\\s+(?:some|more|a|an|also|in)){0,3}|procvi\\p{L}*|posíl\\p{L}*|posil\\p{L}*|zaměř\\p{L}*\\s+na|zamer\\p{L}*\\s+na)\\s+(?:(?:the|my|moje|mé|me|si)\\s+)?'+MUSCLE_LIST+'|'+MUSCLE_LIST+'\\s+(?:day|exercises?|workout|session|cviky|cvičení|cviceni|trénink|trenink)','giu');
 export function requestedMuscles(message){
   const out=[];
   for(const m of String(message||'').matchAll(MUSCLE_WISH))for(const [re,groups] of MUSCLE_WORDS)if(new RegExp(re.source,'giu').test(m[0]))for(const g of groups)if(!out.includes(g))out.push(g);
@@ -160,6 +163,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
       try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory,context.outOfOrder||[]);return swap.date===a.date?[swap]:[];}catch{return [];}
+    }
+    // One exercise more or less in the stored plan; an app too old to show the card gets none.
+    if(['gym_add','gym_remove'].includes(a.type)&&!context.oldAppCards&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
+      if(taken().some(x=>x.type===a.type&&(x.toExercise||x.fromExercise)===(a.type==='gym_add'?a.toExercise:a.fromExercise)))return [];
+      try{const change=a.type==='gym_add'?prepareGymAdd(context.gymPlan,a.toExercise,reason,context.preferenceMemory,context.outOfOrder||[]):prepareGymRemove(context.gymPlan,a.fromExercise,reason);return change.date===a.date?[change]:[];}catch{return [];}
     }
     // Calories of a done activity it was shown, set in Aurin only (activity-edits.js).
     if(a.type==='activity_kcal'){

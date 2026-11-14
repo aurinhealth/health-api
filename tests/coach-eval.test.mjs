@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -150,7 +150,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 85);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 87);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -880,4 +880,12 @@ test('S71: a confirmation in the text is answered as done, not with the same car
   assert.deepEqual(failedS71({ answer: 'Hotovo, obě výměny máš v plánu. Hack squat dej s rezervou 2 opakování.' }), []);
   assert.ok(failedS71({ answer: 'Výměny jsou připravené, potvrď je klepnutím na kartu.' }).includes('quality:nežádá klepnutí na kartu'));
   assert.ok(failedS71({ answer: 'Hotovo.', proposed: [{ type: 'gym_swap', toExercise: 'Hack squat' }] }).includes('quality:stejné výměny znovu nenavrhne'));
+});
+
+test('S72 and S73: an exercise added or left out by a card, nothing else changed', () => {
+  const add = { type: 'gym_add', toExercise: 'DB curl' }, remove = { type: 'gym_remove', fromExercise: 'Seated leg curl' };
+  assert.deepEqual(failed('S72', { answer: 'Přidám 3 série bicepsového zdvihu na konec.', kept: [add], proposed: [add], memory: {} }), []);
+  assert.ok(failed('S72', { answer: 'Tento cvik ale neumím přidat do stávajícího plánu.', kept: [], proposed: [], memory: {} }).includes('quality:neříká, že přidat nejde'));
+  assert.deepEqual(failed('S73', { answer: 'Leg curl dnes vynecháme.', kept: [remove], proposed: [remove], memory: {} }), []);
+  assert.ok(failed('S73', { answer: 'Vynechám ho.', kept: [remove, add], proposed: [remove, add], memory: {} }).includes('quality:zbytek nechá'));
 });

@@ -791,6 +791,10 @@
 "V oblíbených" = "In favorites";
 "V plánu" = "Planned";
 "V posilovně vyměnit %@ za %@" = "Swap %@ for %@ in the gym";
+"V posilovně přidat %@" = "Add %@ in the gym";
+"V posilovně odebrat %@" = "Remove %@ in the gym";
+"%d× %@" = "%1$d× %2$@";
+"%d. cvik z %d" = "exercise %1$d of %2$d";
 "V posteli" = "In bed";
 "V rychlé nabídce" = "In the quick menu";
 "V ukázce kouč den nehodnotí." = "The coach doesn't review days in the demo.";

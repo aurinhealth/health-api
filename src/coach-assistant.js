@@ -5,7 +5,7 @@ import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycli
 import { cycleShared } from "./cycle-model.js";
 import { withFocus, racePhase } from "./athlete-focus.js";
 import { brokenStations } from "./athlete-state.js";
-import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS } from './coach-actions.js';
+import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS, requestedMuscles } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
 import { strengthCoverage } from './strength-balance.js';
 import { todayGymContext,gymAdjustmentRequest } from './coach-gym-adjustment.js';
@@ -319,7 +319,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null,intensity:r.intensity||null,drop:String(r.type).toUpperCase()==='DROP'||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date,athleteState?.memoryOff?[]:athleteState?.memories,brokenStations(athleteState,date)),
+    todayGym:todayGymContext(gym,date,athleteState?.memoryOff?[]:athleteState?.memories,brokenStations(athleteState,date),requestedMuscles(message)),
     // Machines out of order, as the athlete told the coach (point 11): no exercise on them.
     ...(brokenStations(athleteState,date).length?{outOfOrder:brokenStations(athleteState,date)}:{}),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),

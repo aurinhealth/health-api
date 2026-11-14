@@ -6,6 +6,7 @@ import { getAthleteState,updateAthleteState } from '../src/athlete-state.js';
 import { buildCoachCouncil } from '../src/coach-engine.js';
 import { withLang } from '../src/lang.js';
 import { planValues } from '../src/gym-plan-store.js';
+import { parseStrengthPlan } from '../src/strength-history.js';
 import { todayGymContext,prepareGymSwap,applyGymSwap } from '../src/coach-gym-adjustment.js';
 import { validateCoachActions } from '../src/coach-actions.js';
 import { askCoach,assistantTask,aiFailureText } from '../src/coach-assistant.js';
@@ -185,4 +186,47 @@ test('a swap keeps the sets of a one-sided exercise and their labels',()=>{
   const two=planValues({date,rows:[1,2,3].map(n=>['WORK','DB bench press',String(n),'20','6–10','','','','FALSE','','','FALSE','','','M'])});
   const back=prepareGymSwap({values:two,history:[]},'DB bench press','One Arm Dumbbell Bench Press','Jednoruč.');
   assert.equal(back.sets,3);assert.deepEqual(back.replacementRows.filter(r=>r[0]==='WORK').map(r=>r[13]),['L','P','L','P','L','P']);
+});
+
+// Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "neumím přidat"; a changed
+// exercise should go where it belongs, not just take the old place.
+test('the coach adds and removes an exercise, and the plan keeps a sensible order',async()=>{
+  const { prepareGymAdd,applyGymAdd,prepareGymRemove,applyGymRemove,orderGymPlan,applyGymChange }=await import('../src/coach-gym-adjustment.js');
+  const work=(name,n=3,kg='20')=>Array.from({length:n},(_,i)=>['WORK',name,String(i+1),kg,'8–12','','','','FALSE','','','FALSE','','','']);
+  const warm=name=>[1,2,3].map(i=>['WARMUP',name,String(i),'10',['8','5','3'][i-1],'','','','FALSE','[WARMUP]','','FALSE','','','']);
+  const values=planValues({date,rows:[...warm('Low row'),...work('Low row'),...work('Cable triceps extension'),...work('Lat pulldown')]});
+  const plan={values,history:[]};
+  const context=todayGymContext(plan,date,[],[],['biceps']);
+  assert.ok(context.addable.biceps.some(a=>a.name==='DB curl'));
+  const add=prepareGymAdd(plan,'DB curl','Biceps navíc.');
+  assert.equal(add.sets,3);assert.deepEqual([add.position,add.of],[4,4]);
+  const added=applyGymChange(values,add),names=rows=>[...new Set(parseStrengthPlan(rows).rows.map(r=>r.exercise))];
+  // The big pulls first, the small muscles after.
+  assert.deepEqual(names(added),['Low row','Lat pulldown','Cable triceps extension','DB curl']);
+  assert.equal(parseStrengthPlan(added).rows.filter(r=>r.exercise==='DB curl').length,3);
+  // A one-sided exercise goes left and right, as the generator writes it.
+  assert.deepEqual(parseStrengthPlan(applyGymChange(values,prepareGymAdd(plan,'Dumbbell Concentration Curl','r'))).rows.filter(r=>r.exercise==='Dumbbell Concentration Curl').map(r=>r.side),['L','P','L','P','L','P']);
+  assert.throws(()=>applyGymAdd(added,add),/změnil|changed/);
+  assert.throws(()=>prepareGymAdd(plan,'Low row','r'),/už v plánu|already/);
+  assert.throws(()=>prepareGymAdd(plan,'DB curl','r',['Bolí mě loket']),/bolí|hurts/);
+  const remove=prepareGymRemove(plan,'Cable triceps extension','Bez tricepsu.');
+  assert.deepEqual(names(applyGymRemove(values,remove)),['Low row','Lat pulldown']);
+  assert.throws(()=>prepareGymRemove({values:applyGymRemove(values,remove)},'Lat pulldown','r'),/dva|two/);
+  const logged=structuredClone(values);logged[7+3][8]='TRUE';
+  assert.throws(()=>prepareGymRemove({values:logged},'Low row','r'),/Rozcvičený|warmed/);
+  // A second main lift keeps one warm-up set; a started exercise does not move.
+  const two=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown'),...warm('Low row'),...work('Low row')]});
+  const ordered=parseStrengthPlan(orderGymPlan(two)).rows;
+  assert.deepEqual([...new Set(ordered.map(r=>r.exercise))],['Lat pulldown','Low row','Cable triceps extension']);
+  assert.deepEqual(ordered.filter(r=>r.type==='WARMUP').map(r=>r.exercise+r.setNo),['Lat pulldown1','Lat pulldown2','Lat pulldown3','Low row1']);
+  const startedFirst=structuredClone(two);startedFirst[7][8]='TRUE';
+  assert.equal(parseStrengthPlan(orderGymPlan(startedFirst)).rows[0].exercise,'Cable triceps extension');
+});
+
+test('add and remove cards pass the checks, an app before API 2 gets none',()=>{
+  const values=planValues({date,rows:[['WORK','Low row','1','20','8–12','','','','FALSE','','','FALSE','','',''],['WORK','Lat pulldown','1','40','8–12','','','','FALSE','','','FALSE','','',''],['WORK','Cable triceps extension','1','15','8–12','','','','FALSE','','','FALSE','','','']]});
+  const context={athleteState:'active',userMessage:'Přidej tam biceps a vynech triceps',gymPlan:{values,history:[]},week:[]};
+  const actions=[{type:'gym_add',date,toExercise:'DB curl',reason:'Biceps navíc.'},{type:'gym_remove',date,fromExercise:'Cable triceps extension',reason:'Bez tricepsu.'},{type:'gym_add',date,toExercise:'DB curl',reason:'Znovu.'}];
+  assert.deepEqual(validateCoachActions(actions,context,date).map(a=>a.type),['gym_add','gym_remove']);
+  assert.deepEqual(validateCoachActions(actions,{...context,oldAppCards:true},date),[]);
 });

@@ -50,7 +50,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -104,7 +104,7 @@ import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRec
 import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
 import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
 import { nightDetail } from "./night-detail.js";
-import { applyGymSwap } from './coach-gym-adjustment.js';
+import { applyGymChange } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
 import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
@@ -158,7 +158,7 @@ import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, units, L } from "./lang.js";
-import { appUpdateRequired } from "./app-version.js";
+import { appUpdateRequired, appApiLevel } from "./app-version.js";
 import { compactOldData } from "./heart-rate-compaction.js";
 import { upkeepHourSummary } from "./hour-summary.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs, dayStartUtc } from "./user-time.js";
@@ -2463,7 +2463,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           recentCoachProposals(env).catch(()=>[])
         ]);
         const internalJson=async path=>{const response=await handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));if(!response.ok)throw new Error(L('Vybraný trénink se nepodařilo načíst.', 'The selected workout couldn\'t be loaded.'));return response.json();};
-        selected=await selectedAssistantContext(appContext,loaded,{loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
+        selected=await selectedAssistantContext(appContext,loaded,{wanted:requestedMuscles(message),loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
         loaded.week=selected.week;
         inputs=loaded;focus=loaded.focus;Object.assign(preferences,prefs);
         // Each day's time budget comes from its own week's plan.
@@ -2528,7 +2528,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // The answer is written; the app keeps the line under it while the proposals are checked.
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));
-      coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
+      coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;
+      // An iPhone app before API 2 cannot show the add and remove cards (app-version.js).
+      coachCtx.oldAppCards=(level=>level!==null&&!(Number(level)>=2))(appApiLevel(request));coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const checked=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),actions=notConfirmedAgain(checked,confirmedInChat),proposals=[];await ensureCoachInboxTable(env.DB);
       // What the coach saved from the athlete's words is kept at once and shown
       // under the answer with Undo. What the answer says no longer holds is only
@@ -2697,10 +2699,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
         if(a.type==='status'){result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});await syncedPlans(env).catch(()=>null);}
-        else if(a.type==='gym_swap'){
+        else if(['gym_swap','gym_add','gym_remove'].includes(a.type)){
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
           assertTrainingAllowed(await getAthleteState(env.DB));
-          const latest=await readGymPlan(env.DB,a.date),values=applyGymSwap(latest.values,a);
+          const latest=await readGymPlan(env.DB,a.date),values=applyGymChange(latest.values,a);
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
           result={status:'ok',date:a.date,values};
@@ -2769,7 +2771,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
