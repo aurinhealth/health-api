@@ -97,6 +97,3 @@ export function weekFree(db, date) {
   return calendarFree(db, monday, shift(monday, 6));
 }
 
-export async function weekWithCalendar(db, prefs, date) {
-  return withCalendarFree(prefs, weekStartOf(date), await weekFree(db, date));
-}

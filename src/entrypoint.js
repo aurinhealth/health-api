@@ -1555,7 +1555,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [athlete]=await Promise.all([getAthleteState(env.DB).catch(()=>undefined),cacheVersion(env.DB)]);
       const clock=localNow().slice(11,16),hour=Number(clock.slice(0,2)),late=hour>=17||hour<4;
       const baseLoading=cached(env,ctx,'pick-base:'+date+':'+(late?'late:':'')+textHash(JSON.stringify(athlete??null)),()=>pickBase(env,ctx,internalAuth,date,athlete,late?hour:null));
-      const detailsLoading=storedDetails(env.DB,env.USER_ID,date,baseLoading.then(b=>pickSignature(b.day))).catch(()=>null);
+      const signing=baseLoading.then(b=>pickSignature(b.day));signing.catch(()=>{});
+      const detailsLoading=storedDetails(env.DB,env.USER_ID,date,signing).catch(()=>null);
       const base=await baseLoading;
       const {day,planned,less,gym,forecast,bedtime,today,done}=base,state={chosen:base.chosen};
       // Late in the evening only winding down, past tonight's bedtime (as Today shows it) only bed: by the clock of each ask.

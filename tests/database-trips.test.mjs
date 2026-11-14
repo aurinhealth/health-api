@@ -18,7 +18,6 @@ import { readGymPlan } from "../src/gym-plan-store.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { storedDetails, storeDetails } from "../src/coach-pick.js";
 import { ensureOnboarding } from "../src/onboarding.js";
-import { ensureCalendarFree } from "../src/calendar-free.js";
 import { ensureJournal } from "../src/journal-store.js";
 
 const read = path => readFileSync(new URL("../" + path, import.meta.url), "utf8");
@@ -30,7 +29,7 @@ const migrations = readdirSync(new URL("../migrations/", import.meta.url)).filte
 async function counted() {
   const raw = createD1(); raw.sqlite.exec(schema);
   for (const name of migrations) { try { raw.sqlite.exec(read("migrations/" + name)); } catch { /* a column or table the schema already has */ } }
-  for (const ensure of [ensureOnboarding, ensureCalendarFree, ensureJournal]) await ensure(scopedDb(raw, 1));
+  for (const ensure of [ensureOnboarding, ensureJournal]) await ensure(scopedDb(raw, 1));
   let trips = 0;
   const prepare = raw.prepare, batch = raw.batch.bind(raw);
   const RAW = Symbol("raw");
