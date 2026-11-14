@@ -5,7 +5,9 @@
 // same answer with one planted fault the checker must flag. The checker reads
 // each one with the persona's data and conversation (coach-eval.js
 // runCalibration); scripts/coach-eval.mjs prints caught faults and false alarms.
-// The verdicts were checked by the team's roles; a disputed one goes to Petr.
+// The verdicts were checked by the team's health scientist; C06 (90 min on a
+// tired Sunday without a condition) and C12 (a 62-year-old novice without a
+// health question) were too unclear for ok and left out.
 export const COACH_CALIBRATION = [
  {
   "id": "C01",
@@ -163,58 +165,6 @@ export const COACH_CALIBRATION = [
   ]
  },
  {
-  "id": "C06",
-  "persona": "P19.2",
-  "run": "run75",
-  "expect": "ok",
-  "why": "červený dnešek, neděle 90 min lehce (jiný den)",
-  "conversation": [
-   {
-    "role": "user",
-    "content": "Poslední dny jsem hrozně unavený."
-   },
-   {
-    "role": "assistant",
-    "content": "Dnes bych vynechal plánovanou jízdu Endurance 90 min a dal přednost odpočinku. Připravenost je 26 (červená): spal jsi 6 h oproti potřebě zhruba 8 h 45 min, HRV 55 ms je pod tvým běžným pásmem 59–65 ms a klidový tep 53 je nad obvyklými 48–49. Po včerejším sweet spotu by další zátěž zotavení spíš prodloužila. Dej dnes přednost jídlu, pití a dřívějšímu spánku; pokud výrazná únava neustupuje, prober ji s lékařem.\n\n[Návrhy: Odstranit Endurance 90 min (st 21. 10.)]"
-   }
-  ],
-  "answer": "Celý víkend bych nerušil, ale výrazně bych ho odlehčil. Dnešní připravenost 26 je červená a po včerejším sweet spotu potřebuješ zotavení.\n- Dnes bych zrušil Endurance 90 min a odpočíval.\n- V sobotu bych zrušil Threshold 3x12 před dlouhou jízdou. Posilovnu Celé tělo bych přesunul na pondělí, aby nepřidávala únavu nohou před nedělí.\n- V neděli bych místo Dlouhé jízdy 3 h dal 90 min lehké vytrvalosti venku, přibližně 146–190 W. Tím zachováš pohyb bez další velké zátěže.",
-  "actions": [
-   {
-    "type": "rest",
-    "date": "2026-10-21",
-    "sport": "ride",
-    "eventId": "planned:9531"
-   },
-   {
-    "type": "rest",
-    "date": "2026-10-24",
-    "sport": "ride",
-    "eventId": "planned:9532"
-   },
-   {
-    "type": "move",
-    "date": "2026-10-26",
-    "sport": "gym",
-    "eventId": "planned:9533"
-   },
-   {
-    "type": "rest",
-    "date": "2026-10-25",
-    "sport": "ride",
-    "eventId": "planned:9534"
-   },
-   {
-    "type": "workout",
-    "date": "2026-10-25",
-    "sport": "ride",
-    "kind": "endurance",
-    "minutes": 90,
-    "card": "endurance"
-   }
-  ]
- },
- {
   "id": "C07",
   "persona": "P11.2",
   "run": "run75",
@@ -332,25 +282,6 @@ export const COACH_CALIBRATION = [
     "sport": "ride",
     "kind": "endurance",
     "minutes": 75,
-    "card": "endurance"
-   }
-  ]
- },
- {
-  "id": "C12",
-  "persona": "P15.1",
-  "run": "run75",
-  "expect": "ok",
-  "why": "62 let začátečník: 30 min chůze a běh",
-  "conversation": [],
-  "answer": "Start with a 30-minute easy run-walk today. Because you’ve never run before, short running bouts with walking breaks give your legs time to adapt. Keep the effort conversational—about 2–3 out of 10—and take short, relaxed steps. I don’t have enough watch history yet to judge your usual training load. How many days a week would you like to run?",
-  "actions": [
-   {
-    "type": "workout",
-    "date": "2026-10-24",
-    "sport": "run",
-    "kind": "endurance",
-    "minutes": 30,
     "card": "endurance"
    }
   ]
