@@ -116,13 +116,15 @@ const evening = r => Number(String(r.now || '').slice(11, 13)) >= 20;
 // names as the limit not to go below ("nešel bych pod … (1 330 kcal)"): the
 // clause before the number says pod, minimum, hranice or below.
 const FLOOR = /(?<!\p{L})pod(?!\p{L})|minim|hranic|spodn|below|floor/iu;
+// What the athlete has eaten so far ("zatím jsi snědla 600 kcal", run 75 P12.3) is no target.
+const EATEN = /sněd|jedl|zatím|eaten|so far|you(?:'ve| have) had/iu;
 export const kcalNumbers = text => [...String(text || '').matchAll(/(\d[\d\s .,]{0,6}\d|\d)\s*kcal/gi)].map(m => {
   const clause = String(text).slice(Math.max(0, m.index - 80), m.index).split(/[.,;!?\n]/).pop();
-  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause) };
+  return { kcal: Number(m[1].replace(/[\s .,]/g, '')), floor: FLOOR.test(clause), eaten: EATEN.test(clause) };
 });
 export const DOCTOR = /lékař|doktor|kardiolog|zdravotn|doctor|physician|medical/i;
 // Run 43, S33: "sójový jogurt", then "značce tofu a jogurtu": the bare word repeats the plant one.
-const PLANT_NAMED = /(?:sójov|rostlinn|ovesn|mandlov|kokosov|soya?|oat|almond|coconut|plant)\p{L}*\s+(jogurt|mlék|mléč|sýr|milk|yogh?urt|cheese)/giu;
+const PLANT_NAMED = /(?:sójov|rostlinn|ovesn|mandlov|kokosov|soya?|oat|almond|coconut|plant)[\p{L}-]*\s+(jogurt|mlék|mléč|sýr|milk|yogh?urt|cheese)/giu;
 export const veganFood = text => fitsEating([...String(text || '').matchAll(PLANT_NAMED)].map(m => m[1].toLowerCase())
   .reduce((t, stem) => t.replace(new RegExp('(?<!\\p{L})' + stem + '\\p{L}*', 'giu'), ''), String(text || '')), 'vegan');
 // Run 43, S21 and S24: "šetřil bych glykogen na pátek" is no reason for an easy day (Petr 2026-11-06, point 6).

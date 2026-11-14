@@ -77,3 +77,14 @@ test('the capability map: every row names situations that exist, coverage counts
   const unchecked = COACH_PERSONAS.flatMap(p => p.turns.flatMap((t, i) => t.checks.length ? [] : [`${p.id}.${i + 1}`]));
   for (const r of COACH_CAPABILITIES) if (r.scenarios.length && r.scenarios.every(id => unchecked.includes(id))) assert.ok(c.gaps.includes(r.id), r.id);
 });
+
+test('run 75: what the athlete ate or wrote, a soy-protein yogurt and the machine a card replaces are no findings; Chat v1 is on', () => {
+  const check = (id, turn, answer, kept = []) => personaTurn(personaById(id), turn, []).checks({ answer, kept, proposed: [] })[0].ok;
+  assert.equal(check('P12', 3, 'Zatím jsi snědla 600 kcal. Ani příjem 1 000 kcal denně bych neplánoval.'), true);
+  assert.equal(check('P12', 3, 'Dej si jen 900 kcal.'), false);
+  assert.equal(check('P20', 1, 'Tofu with edamame, and lentils with a soy-protein yogurt.'), true);
+  assert.equal(check('P20', 1, 'Greek yogurt and eggs.'), false);
+  assert.equal(check('P07', 2, 'Goblet squat for Pivot leg press.', [{ type: 'gym_swap', fromExercise: 'Pivot leg press', toExercise: 'Goblet squat' }]), true);
+  assert.equal(check('P07', 2, 'Use the leg press.'), false);
+  assert.deepEqual(personaTurn(personaById('P06'), 3, []).context(), { chatV1: true });
+});
