@@ -7,23 +7,26 @@ import { actionSummary } from './coach-actions.js';
 import { ensureCoachInboxTable } from './coach-inbox.js';
 
 const plain = s => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-// Verbs that confirm, anywhere in a sentence that is no question.
-const STRONG = /(?<!\p{L})(?:potvrzuj\p{L}*|potvrd(?:’|')?(?:te|im|it)?(?!\p{L})|souhlasim|souhlasime|(?:proved|udelej|zarid)\s+(?:to|je)(?!\p{L})|confirm(?:ed)?(?!\p{L})|i agree|go ahead|do it)/u;
-// A bare yes, only as the whole message: "Ano", "Jo, potvrzuju", "Yes please".
-const WEAK = /^(?:ano|jo|jasne|beru|yes|yep|yeah|sure|ok|okay)[\s,.!]*(?:(?:prosim|please|diky|thanks|potvrzuju|potvrzuji|souhlasim|udelej to|do it|go ahead)[\s,.!]*)?$/u;
-// A no, a doubt, a later, a change or a pick: the cards stay for a tap.
-const REFUSE = /(?<!\p{L})(?:ne|nech\p{L}*|ned\p{L}*|nem\p{L}*|nep\p{L}*|nes\p{L}*|nev\p{L}*|nikdy|pockej|zatim|radsi|ale|misto|bez|jinak|jine\p{L}*|zitra|pozdeji|vecer|rano|az|zpet|rozmysl\p{L}*|uvidim|mozna|no|not|never|don'?t|can'?t|cannot|won'?t|wait|later|tomorrow|tonight|instead|but|without|except|maybe|back)(?!\p{L})/u;
-const SELECT = /(?<!\p{L})(?:jen|jenom|pouze|prvn\p{L}*|druh\p{L}*|tret\p{L}*|posledn\p{L}*|jednu|jeden|jedn\p{L}*|s\s+(?:tou|tim|timhle|tou\s+\p{L}+)|only|first|second|third|last|one of|with the)(?!\p{L})/u;
-// "Souhlasím, že…" agrees with a sentence, not with the cards.
-const THAT = /souhlas\p{L}*,?\s+(?:ze|s tim,? ze)|agree that/u;
+// Read as an allow-list (review of #1087: every deny-list left holes such as
+// "Udělej to lehčí" or "Do it next week"): the message holds only confirming
+// words and fillers. One clause after "a"/"and" may ask to add something
+// ("…tak to potvrď a přidej tam biceps"); the coach answers that part.
+const STRONG = new Set(['potvrzuju', 'potvrzuji', 'potvrzujeme', 'potvrd', 'potvrdte', 'potvrdim', 'souhlasim', 'souhlasime', 'proved', 'provedte', 'udelej', 'udelejte', 'zarid', 'confirm', 'confirmed', 'agree', 'go', 'ahead', 'do']);
+const WEAK = new Set(['ano', 'jo', 'jasne', 'yes', 'yep', 'yeah', 'sure']);
+const FILLER = new Set(['to', 'je', 'ty', 'it', 'them', 'ja', 'ti', 'vam', 'tak', 'uz', 'v', 'chatu', 'tady', 'prosim', 'please', 'diky', 'dik', 'thanks', 'thank', 'you', 'i', 'oba', 'obe', 'vse', 'vsechno', 'both', 'all', 'of', 'zmeny', 'navrhy', 'the', 'changes', 'tedy', 'teda', 'klidne', 'super', 'fajn', 'great']);
+const ADD = /^(?:prid\p{L}*|add)(?!\p{L})/u;
 
 // 'strong' for a confirming verb, 'weak' for a bare yes (which a question in
 // the coach's last answer may have asked for something else), false otherwise.
 export function chatConfirmation(message) {
   const m = plain(message).trim();
-  if (!m || m.length > 300 || m.includes('?') || REFUSE.test(m) || SELECT.test(m) || THAT.test(m)) return false;
-  if (WEAK.test(m)) return 'weak';
-  return STRONG.test(m) ? 'strong' : false;
+  if (!m || m.length > 300 || m.includes('?')) return false;
+  const [head, ...more] = m.split(/[\s,]+(?:a|and)\s+(?=prid|add)/u);
+  // The add clause is one request: no second "a", "ale" or comma after it.
+  if (more.length > 1 || (more.length && (!ADD.test(more[0]) || /,|(?<!\p{L})(?:a|and|ale|but)(?!\p{L})/u.test(more[0])))) return false;
+  const words = head.split(/[^\p{L}']+/u).filter(Boolean);
+  if (!words.length || !words.every(w => STRONG.has(w) || WEAK.has(w) || FILLER.has(w))) return false;
+  return words.some(w => STRONG.has(w)) ? 'strong' : words.some(w => WEAK.has(w)) ? 'weak' : false;
 }
 
 // The changes a yes in the text may make: today's training plan only. A rest,

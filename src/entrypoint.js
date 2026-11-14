@@ -2437,6 +2437,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const goal=null,preferences={};
     // A push reply carries the app's API level it was sent from (coach-push-reply.js).
     const oldAppCards=(level=>level!==null&&level!==undefined&&!(Number(level)>=2))(appApiLevel(request)??body.appApi);
+    let madeInChat=[];
+    const madeInChatText=()=>L('Hotovo: ','Done: ')+madeInChat.filter(c=>c.done).map(c=>c.proposal).join('; ')+L('. Na zbytek zprávy teď neumím odpovědět, zkus to prosím znovu.','. I couldn\'t answer the rest of your message now, please try again.');
     const answerMessage=async (onAnswer,onProgress=()=>{},onStep=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       // The thinking steps with the athlete's numbers (coach-steps.js); the app shows them as they come.
@@ -2454,6 +2456,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const out=await r.json().catch(()=>({}));
         return {ok:r.ok&&out.status==='ok'&&out.action!=null,message:out.message};
       });
+      madeInChat=confirmedInChat;
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
       // there is one, then the model writing. Never a step the model writes.
@@ -2526,11 +2529,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(shows)step(writingStep());
       const contextMs=Date.now()-started,checking=coachCheckOn(env)&&!image;
       // Changes confirmed in the text stay made when the answer fails: the chat says so.
-      const madeOnly=()=>({status:'ok',answer:L('Hotovo: ','Done: ')+confirmedInChat.filter(c=>c.done).map(c=>c.proposal).join('; ')+L('. Na zbytek zprávy teď neumím odpovědět, zkus to prosím znovu.','. I couldn\'t answer the rest of your message now, please try again.'),actions:[],visuals:[]});
+      const madeOnly=()=>({status:'ok',answer:madeInChatText(),actions:[],visuals:[],fallback:true});
       let answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer:checking?null:onAnswer,image}).catch(error=>{if(!confirmedInChat.some(c=>c.done))throw error;return madeOnly();}),check=null;
       if(answer.status!=='ok'&&confirmedInChat.some(c=>c.done))answer=madeOnly();
       if(shows)step(writingStep('done'));
-      if(checking&&answer.status==='ok'){
+      if(checking&&answer.status==='ok'&&!answer.fallback){
         const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
         // The app keeps the check step only when the check passed or rewrote the answer (check.status).
         const onPhase=phase=>{if(!shows)return;if(phase==='check')step(checkStep());else if(phase==='rewrite'){step(checkStep('done'));step(refineStep());}else if(phase==='done'){step(checkStep('done'));if(steps.list.some(s=>s.id==='refine'))step(refineStep('done'));}};
@@ -2593,7 +2596,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The app learns the chat first: when the connection drops, the answer
       // the server finishes is loaded from it instead of asked (and counted) again.
       if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved,{ghost}).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
-      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));throw error;});
+      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));
+        // Changes a yes in the text already made stay made: the chat says so instead of an error.
+        if(madeInChat.some(c=>c.done)){console.error('Coach answer failed after chat confirmation',error.message);const text=madeInChatText();const ids=await remember(text);return {status:'ok',answer:text,...ids,actions:[],confirmedInChat:madeInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))};}
+        throw error;});
     };
     if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}

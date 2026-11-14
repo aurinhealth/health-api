@@ -52,11 +52,15 @@ export function placeExercise(values,name){
   if(!mine.length||mine.some(r=>String(r?.[12]||'').trim()))return values;
   const rest=values.filter((r,i)=>!own(r,i));
   const parsed=parseStrengthPlan(rest),done=new Set(parsed.rows.filter(started).map(r=>r.exercise)),seen=new Set();
+  // No place next to or inside a superset: none before an exercise in one,
+  // none right after a superset row whose group goes on below.
+  const grouped=new Set(parsed.rows.filter(r=>r.superset).map(r=>r.exercise));
+  const inside=i=>{const g=String(rest[i-1]?.[12]||'').trim();return g&&rest.slice(i).some(r=>String(r?.[12]||'').trim()===g);};
   let at=rest.length;
   for(let i=header+1;i<rest.length;i++){
     const other=String(rest[i]?.[1]||'').trim();
     if(!other||seen.has(other))continue;seen.add(other);
-    if(!done.has(other)&&!String(rest[i]?.[12]||'').trim()&&rank(other)>rank(name)){at=i;break;}
+    if(!done.has(other)&&!grouped.has(other)&&!inside(i)&&rank(other)>rank(name)){at=i;break;}
   }
   // A main lift before it already brought the body up to speed.
   const behindMain=rest.slice(header+1,at).some(isWarmup);
