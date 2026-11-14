@@ -68,7 +68,7 @@ test('another focus is a change only when the plan does not have it yet', () => 
 });
 
 test('a new plan only when the athlete asks for another focus instead, never for a length or an extra', () => {
-  for (const m of ['Dneska chci místo celého těla jen horní polovinu.', 'Radši dneska nohy.', 'Změň to na horní polovinu', 'Only upper body today instead']) assert.equal(replaceAsked(m), true, m);
+  for (const m of ['Dneska chci místo celého těla jen horní polovinu.', 'Radši dneska nohy.', 'Změň to na horní polovinu', 'Only upper body today instead', 'Dnes bych dal spíš horní polovinu', 'Udělej z toho leg day', 'Místo nohou dneska záda, mám hodinu']) assert.equal(replaceAsked(m), true, m);
   for (const m of ['Prodluž mi to na 90 min a přidej něco na nohy', 'Prodluž mi to na 90 min, přidej ramena', 'Zkrať to na 30 min', 'Mám jen 50 min', 'Mám jen hodinu', 'Přidej tam jen biceps', 'Posuň mi dnešní posilovnu na večer', 'Make it longer, only upper body']) assert.equal(replaceAsked(m), false, m);
   const ctx = { ...base, gymPlan: { values: full }, chatV1: true };
   const [longer] = validateCoachActions([gymAction({ gymFocus: 'lower' })], { ...ctx, userMessage: 'Prodluž mi to na 90 min a přidej něco na nohy' }, date, { userInitiated: true });

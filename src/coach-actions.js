@@ -59,10 +59,12 @@ export const chatV1On = env => env?.CHAT_V1 === 'true';
 // A new plan in place of the day's only when the athlete asks for another
 // focus instead of it ("Dneska místo celého těla jen horní polovinu"), never
 // when they ask for another length or one more exercise (review of #1088:
-// "Prodluž mi to a přidej něco na nohy" replaced a full-body plan).
-const REPLACE_ASK=/(?:m[ií]sto|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
+// "Prodluž mi to a přidej něco na nohy" replaced a full-body plan). "Místo"
+// says it even beside a length ("Místo nohou záda, mám hodinu").
+const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
 const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
-export const replaceAsked=message=>REPLACE_ASK.test(String(message||''))&&!LENGTH_OR_ADD.test(String(message||''));
+const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
+export const replaceAsked=message=>{const m=String(message||'');return INSTEAD.test(m)?!ADD_ASK.test(m):REPLACE_ASK.test(m)&&!LENGTH_OR_ADD.test(m);};
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
 // `planFor(date)` returns the week plan (availability Monday..Sunday).
