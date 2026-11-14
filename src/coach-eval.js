@@ -1029,7 +1029,7 @@ const checkerSummary = c => ({ model: c.model || null, ms: c.ms ?? null, usd: c.
 // K01–K10: a fixed answer with the base situation's data, only through the checker.
 export async function runCheckerScenario(env, scenario, { check = checkCoachAnswer, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW } = {}) {
   const { base, cat, answer } = scenario.planted, { ctx } = scenarioContext(scenarioById(base), date, now);
-  const c = await check(env, { context: ctx, message: scenario.message, answer, actions: [] }).catch(error => ({ error: error.message, flags: [] }));
+  const c = await check(env, { context: ctx, message: scenario.message, answer, actions: [] }, { model: complexModel(env) }).catch(error => ({ error: error.message, flags: [] }));
   const checks = [quality(cat ? `kontrolor najde ${cat}` : 'kontrolor nic nenajde', !c.error && (cat ? c.flags.some(f => f.cat === cat) : !c.flags.length), c.error ? 'kontrolor selhal: ' + c.error : c.flags.map(flagText).join(' | '))];
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'checker', message: scenario.message, model: c.model, ms: c.ms, answer, proposed: [], kept: [], checker: checkerSummary(c), checks, passed: true };
 }
@@ -1052,8 +1052,9 @@ export async function runScenario(env, scenario, { ask = askCoach, check = check
   const checks = checkReply(scenario, { answer: reply.answer, kept: keptActions, proposed: reply.actions || [], memory: reply.memory, task, model: reply.model }, now, date);
   // The AI checker's findings are a warning for now (quality): one model judging another can be wrong.
   // Without an OpenAI key (the unit tests) there is no checker.
+  // The eval judges with Sol: calibration run 81 caught as many faults as Luna with no false alarm.
   const checker = env.OPENAI_API_KEY || check !== checkCoachAnswer
-    ? await check(env, { context: ctx, message: scenario.message, answer: reply.answer, actions: keptActions }).catch(error => ({ error: error.message, flags: [] })) : null;
+    ? await check(env, { context: ctx, message: scenario.message, answer: reply.answer, actions: keptActions }, { model: complexModel(env) }).catch(error => ({ error: error.message, flags: [] })) : null;
   const hidden = scenario.hideAnswer || quotesInstructions(reply.answer);
   // A hidden answer keeps hidden: the findings show only their categories.
   if (hidden && checker) checker.flags = checker.flags.map(f => ({ cat: f.cat, quote: '…', why: '…' }));
