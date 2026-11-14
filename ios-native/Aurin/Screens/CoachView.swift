@@ -586,6 +586,12 @@ struct CoachView: View {
                             $0.text = ""
                         }
                     }
+                    // Cards confirmed by a yes in the text: shown as done, the plan reloaded.
+                    if let confirmed = result.confirmedInChat, !confirmed.isEmpty {
+                        let ids = Set(confirmed.compactMap(\.draftId))
+                        for i in messages.indices { for a in messages[i].actions where a.draftId.map(ids.contains) == true { messages[i].decided[a.draftId!] = L10n.tr("Hotovo.") } }
+                        Task { await model.refreshTraining(); await model.refresh() }
+                    }
                     // A sport turned off: Training and Aktivita dne without it.
                     if result.sportChanges?.removed?.isEmpty == false { Task { await model.refreshTraining(); await model.reloadToday() } }
                     if let chat = result.chatId {

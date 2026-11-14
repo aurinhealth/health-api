@@ -191,7 +191,7 @@ test('a swap keeps the sets of a one-sided exercise and their labels',()=>{
 // Petr 2026-11-14: "chtěl bych tam i něco na biceps" got "neumím přidat"; a changed
 // exercise should go where it belongs, not just take the old place.
 test('the coach adds and removes an exercise, and the plan keeps a sensible order',async()=>{
-  const { prepareGymAdd,applyGymAdd,prepareGymRemove,applyGymRemove,orderGymPlan,applyGymChange }=await import('../src/coach-gym-adjustment.js');
+  const { prepareGymAdd,applyGymAdd,prepareGymRemove,applyGymRemove,placeExercise,applyGymChange }=await import('../src/coach-gym-adjustment.js');
   const work=(name,n=3,kg='20')=>Array.from({length:n},(_,i)=>['WORK',name,String(i+1),kg,'8–12','','','','FALSE','','','FALSE','','','']);
   const warm=name=>[1,2,3].map(i=>['WARMUP',name,String(i),'10',['8','5','3'][i-1],'','','','FALSE','[WARMUP]','','FALSE','','','']);
   const values=planValues({date,rows:[...warm('Low row'),...work('Low row'),...work('Cable triceps extension'),...work('Lat pulldown')]});
@@ -201,8 +201,8 @@ test('the coach adds and removes an exercise, and the plan keeps a sensible orde
   const add=prepareGymAdd(plan,'DB curl','Biceps navíc.');
   assert.equal(add.sets,3);assert.deepEqual([add.position,add.of],[4,4]);
   const added=applyGymChange(values,add),names=rows=>[...new Set(parseStrengthPlan(rows).rows.map(r=>r.exercise))];
-  // The big pulls first, the small muscles after.
-  assert.deepEqual(names(added),['Low row','Lat pulldown','Cable triceps extension','DB curl']);
+  // The others keep their order; the curl goes behind them, with the small muscles.
+  assert.deepEqual(names(added),['Low row','Cable triceps extension','Lat pulldown','DB curl']);
   assert.equal(parseStrengthPlan(added).rows.filter(r=>r.exercise==='DB curl').length,3);
   // A one-sided exercise goes left and right, as the generator writes it.
   assert.deepEqual(parseStrengthPlan(applyGymChange(values,prepareGymAdd(plan,'Dumbbell Concentration Curl','r'))).rows.filter(r=>r.exercise==='Dumbbell Concentration Curl').map(r=>r.side),['L','P','L','P','L','P']);
@@ -214,13 +214,29 @@ test('the coach adds and removes an exercise, and the plan keeps a sensible orde
   assert.throws(()=>prepareGymRemove({values:applyGymRemove(values,remove)},'Lat pulldown','r'),/dva|two/);
   const logged=structuredClone(values);logged[7+3][8]='TRUE';
   assert.throws(()=>prepareGymRemove({values:logged},'Low row','r'),/Rozcvičený|warmed/);
-  // A second main lift keeps one warm-up set; a started exercise does not move.
-  const two=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown'),...warm('Low row'),...work('Low row')]});
-  const ordered=parseStrengthPlan(orderGymPlan(two)).rows;
-  assert.deepEqual([...new Set(ordered.map(r=>r.exercise))],['Lat pulldown','Low row','Cable triceps extension']);
-  assert.deepEqual(ordered.filter(r=>r.type==='WARMUP').map(r=>r.exercise+r.setNo),['Lat pulldown1','Lat pulldown2','Lat pulldown3','Low row1']);
-  const startedFirst=structuredClone(two);startedFirst[7][8]='TRUE';
-  assert.equal(parseStrengthPlan(orderGymPlan(startedFirst)).rows[0].exercise,'Cable triceps extension');
+  // Only the changed exercise moves; the rest stays row for row (review of #1087).
+  const two=planValues({date,rows:[...warm('Low row'),...work('Low row'),...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown')]});
+  const moved=placeExercise(two,'Lat pulldown'),rows=parseStrengthPlan(moved).rows;
+  assert.deepEqual([...new Set(rows.map(r=>r.exercise))],['Low row','Lat pulldown','Cable triceps extension']);
+  // Behind Low row the second main lift keeps one warm-up set; Low row keeps its three.
+  assert.deepEqual(rows.filter(r=>r.type==='WARMUP').map(r=>r.exercise+r.setNo),['Low row1','Low row2','Low row3','Lat pulldown1']);
+  // A swap of an unrelated exercise leaves the others' rows as they were.
+  const swapPlan={values:two,history:[]},swap=prepareGymSwap(swapPlan,'Cable triceps extension','Cable overhead triceps extension','r');
+  const swapped=applyGymSwap(two,swap),keep=v=>v.filter(r=>['Low row','Lat pulldown'].includes(r[1]));
+  assert.deepEqual(keep(swapped),keep(two));
+  // A started exercise stays first.
+  const startedFirst=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),...work('Lat pulldown')]});startedFirst[7][8]='TRUE';
+  assert.equal(parseStrengthPlan(placeExercise(startedFirst,'Lat pulldown')).rows[0].exercise,'Cable triceps extension');
+  // Supersets with warm-ups and drop sets are not taken apart; nothing goes into the middle of one.
+  const sup=(type,name,n,letter)=>[type,name,String(n),'20','8–12','','','','FALSE','','','FALSE',letter,'',''];
+  const withSuper=planValues({date,rows:[...work('Cable triceps extension'),...warm('Lat pulldown'),sup('WORK','Lat pulldown',1,'A'),sup('WORK','Cable curl',1,'A'),sup('WORK','Lat pulldown',2,'A'),sup('DROP','Lat pulldown',3,''),sup('WORK','Cable curl',2,'A')]});
+  assert.deepEqual(placeExercise(withSuper,'Lat pulldown'),withSuper);
+  const intoSuper=applyGymAdd(withSuper,prepareGymAdd({values:withSuper,history:[]},'Low row','r'));
+  assert.deepEqual(intoSuper.filter(r=>r[1]!=='Low row'),withSuper);
+  assert.equal(intoSuper.findIndex(r=>r[1]==='Low row'),7);
+  // Removing one half of a superset leaves the other as a normal exercise.
+  const alone=applyGymRemove(withSuper,prepareGymRemove({values:withSuper},'Cable curl','r'));
+  assert.ok(alone.filter(r=>r[1]==='Lat pulldown').every(r=>r[12]===''));
 });
 
 test('add and remove cards pass the checks, an app before API 2 gets none',()=>{

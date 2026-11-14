@@ -36,34 +36,32 @@ function guardNew(name,gym,parsed,memories,broken){
   if(stationExercises(broken).includes(name))throw new Error(L('Stroj na tenhle cvik teď podle tebe nefunguje.', 'The machine for this exercise is out of order, as you said.'));
 }
 
-// The order a session keeps after a change (Petr 2026-11-14: a swapped or
-// added exercise should not just take the old place): the big lifts with a
-// warm-up first, then other compound work, the small muscles, the core last,
-// as the generator builds it. Started exercises and supersets stay as they are;
-// only the first main lift keeps three warm-up sets, a later one keeps one.
+// The place of a swapped or added exercise (Petr 2026-11-14: it should not
+// just take the old place): before the first exercise not started yet that
+// comes later in the generator's order (big lifts with a warm-up, other
+// compound work, small muscles, core last), else at the end. Only this
+// exercise moves; the rest of the plan stays row for row. Behind another main
+// lift it keeps one warm-up set, as the generator writes a later main lift.
+// An exercise in a superset stays where it is.
 const rank=name=>{const d=EXERCISES[name];if(!d)return 2;if(d.muscle==='core'||d.pattern==='core')return 3;return d.warmup?0:d.fatigue>=0.8?1:2;};
-export function orderGymPlan(values){
+const isWarmup=r=>String(r?.[0]||'').toUpperCase()==='WARMUP';
+export function placeExercise(values,name){
   const header=values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik');if(header<0)return values;
-  const blocks=[];
-  for(const row of values.slice(header+1)){
-    const key=String(row?.[12]||'').trim()?'S:'+row[12]:'E:'+row?.[1],last=blocks.at(-1);
-    if(last&&(last.key===key||!row?.[1]))last.rows.push(row);else blocks.push({key,rows:[row]});
+  const own=(r,i)=>i>header&&String(r?.[1]||'').trim()===name;
+  const mine=values.filter(own);
+  if(!mine.length||mine.some(r=>String(r?.[12]||'').trim()))return values;
+  const rest=values.filter((r,i)=>!own(r,i));
+  const parsed=parseStrengthPlan(rest),done=new Set(parsed.rows.filter(started).map(r=>r.exercise)),seen=new Set();
+  let at=rest.length;
+  for(let i=header+1;i<rest.length;i++){
+    const other=String(rest[i]?.[1]||'').trim();
+    if(!other||seen.has(other))continue;seen.add(other);
+    if(!done.has(other)&&!String(rest[i]?.[12]||'').trim()&&rank(other)>rank(name)){at=i;break;}
   }
-  const parsed=parseStrengthPlan(values),done=new Set(parsed.rows.filter(started).map(r=>r.exercise));
-  for(const b of blocks){b.fixed=b.rows.some(r=>done.has(String(r?.[1]||'').trim()))||b.key.startsWith('S:');b.rank=Math.min(...b.rows.map(r=>rank(String(r?.[1]||'').trim())));}
-  const movable=blocks.filter(b=>!b.fixed).map((b,i)=>({b,i})).sort((x,y)=>x.b.rank-y.b.rank||x.i-y.i).map(x=>x.b);
-  const ordered=blocks.map(b=>b.fixed?b:movable.shift());
-  let firstMain=true;
-  const rows=ordered.flatMap(b=>{
-    const warm=b.rows.filter(r=>String(r?.[0]).toUpperCase()==='WARMUP');
-    if(!warm.length)return b.rows;
-    const keep=firstMain||b.fixed;firstMain=false;
-    if(keep||warm.length<=2)return b.rows;
-    // One ramp-up set before a later main lift: the middle one (65 %, 5 reps), per side.
-    const middle=new Set(warm.filter(r=>String(r[2])==='2'));
-    return b.rows.filter(r=>String(r?.[0]).toUpperCase()!=='WARMUP'||middle.has(r)).map(r=>middle.has(r)?[r[0],r[1],'1',...r.slice(3)]:r);
-  });
-  return [...values.slice(0,header+1),...rows];
+  // A main lift before it already brought the body up to speed.
+  const behindMain=rest.slice(header+1,at).some(isWarmup);
+  const warm=mine.filter(isWarmup),moved=behindMain&&warm.length>2?mine.filter(r=>!isWarmup(r)||String(r[2])==='2').map(r=>isWarmup(r)?[r[0],r[1],'1',...r.slice(3)]:r):mine;
+  return [...rest.slice(0,at),...moved,...rest.slice(at)];
 }
 
 // One exercise more for today: its usual sets, placed where it belongs.
@@ -74,7 +72,7 @@ export function prepareGymAdd(gym,toExercise,reason,memories=[],broken=[]){
   const video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique'),rows=[];
   if(def.warmup)for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','','','']);
   for(let i=0;i<sets;i++)rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE','',video,'FALSE','','','']);
-  const addedRows=splitSides(rows,{columns:15}),after=orderGymPlan([...gym.values,...addedRows]);
+  const addedRows=splitSides(rows,{columns:15}),after=placeExercise([...gym.values,...addedRows],toExercise);
   if(after.length-7>100)throw new Error(L('Přidáním by plán překročil 100 sérií.', 'Adding it would push the plan over 100 sets.'));
   const order=[...new Set(parseStrengthPlan(after).rows.filter(r=>r.type==='WORK').map(r=>r.exercise))];
   return {type:'gym_add',date:parsed.date,toExercise,reason,sets,reps:def.reps,kg:estimate.kg,position:order.indexOf(toExercise)+1,of:order.length,addedRows};
@@ -82,7 +80,7 @@ export function prepareGymAdd(gym,toExercise,reason,memories=[],broken=[]){
 export function applyGymAdd(values,action){
   const parsed=parseStrengthPlan(values);
   if(parsed.date!==action.date||parsed.rows.some(r=>r.exercise===action.toExercise))throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
-  const result=orderGymPlan([...values,...action.addedRows]);
+  const result=placeExercise([...values,...action.addedRows],action.toExercise);
   if(result.length-7>100)throw new Error(L('Přidáním by plán překročil 100 sérií.', 'Adding it would push the plan over 100 sets.'));
   return result;
 }
@@ -99,8 +97,11 @@ export function prepareGymRemove(gym,fromExercise,reason){
 export function applyGymRemove(values,action){
   const parsed=parseStrengthPlan(values),source=parsed.rows.filter(r=>r.exercise===action.fromExercise);
   if(parsed.date!==action.date||!source.length||source.some(started)||JSON.stringify(source.map(r=>values[r.planRow-1]))!==JSON.stringify(action.sourceSnapshot))throw new Error(L('Cvik se mezitím změnil nebo už začal. Požádej o nový návrh.', 'The exercise has changed or already started. Ask for a new proposal.'));
-  const drop=new Set(source.map(r=>r.planRow-1));
-  return orderGymPlan(values.filter((_,i)=>!drop.has(i)));
+  const drop=new Set(source.map(r=>r.planRow-1)),left=values.filter((_,i)=>!drop.has(i));
+  // A superset partner left alone is no superset any more.
+  const groups=new Map();for(const r of parseStrengthPlan(left).rows)if(r.superset)groups.set(r.superset,new Set([...(groups.get(r.superset)||[]),r.exercise]));
+  const header=left.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik');
+  return left.map((r,i)=>i>header&&groups.get(String(r?.[12]||'').trim())?.size===1?[...r.slice(0,12),'',...r.slice(13)]:r);
 }
 
 // The confirmed card's change of the stored plan (entrypoint.js, /app/api/assistant/action).
@@ -141,7 +142,7 @@ export function applyGymSwap(values,action){
   const indices=new Set(source.map(r=>r.planRow-1)),first=Math.min(...indices),result=[];
   values.forEach((row,i)=>{if(i===first)result.push(...action.replacementRows);if(!indices.has(i))result.push(row);});
   if(result.length-7>100)throw new Error(L('Náhradou by plán překročil 100 sérií.', 'The replacement would push the plan over 100 sets.'));
-  return orderGymPlan(result);
+  return placeExercise(result,action.toExercise);
 }
 
 // A change to a gym session: a change word plus a gym word ("Vyměň dřep",

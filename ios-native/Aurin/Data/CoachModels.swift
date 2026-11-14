@@ -29,6 +29,9 @@ struct AssistantResult: Decodable, Equatable {
     var steps: [CoachStep]? = nil
     /// The live check of the answer (src/coach-checker.js): passed, rewritten, fallback or skipped.
     var check: Check? = nil
+    /// The cards of the last answer that "potvrzuju" in this message confirmed
+    /// (src/coach-chat-confirm.js), each with its draftId.
+    var confirmedInChat: [CoachAction]? = nil
 
     struct Check: Decodable, Equatable {
         let status: String?
