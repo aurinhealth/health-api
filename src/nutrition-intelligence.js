@@ -1,5 +1,6 @@
 import { trendAdjustment } from "./energy-profile.js";
 import { refillMacros } from "./diet.js";
+import { carbsPerHour } from "./workout-explanation.js";
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
@@ -17,15 +18,14 @@ export const NUTRITION_DEFAULTS = {
   trainingCalorieCoverage: 0.7,
   maxTrainingAdjustment: 1400,
   fatMinimumPerKg: 0.7,
-  rideFuelingThresholdHours: 1.5,
-  rideCarbsPerHourEasy: 60,
-  rideCarbsPerHourHard: 90,
   rideFluidMlPerHour: 700
 };
 
-function activityCarbsPerHour(ride) {
+// The same g/h as the workout card and the calendars (CARBS table): a hard
+// ride reads as threshold, any other as endurance; 0 when water is enough.
+export function rideCarbsPerHour(ride) {
   if (!ride) return 0;
-  return ride.intensity ? NUTRITION_DEFAULTS.rideCarbsPerHourHard : NUTRITION_DEFAULTS.rideCarbsPerHourEasy;
+  return carbsPerHour(n(ride.durationHours) * 60, ride.intensity ? "threshold" : "endurance") || 0;
 }
 
 function classifyDay(context) {
@@ -86,9 +86,8 @@ export function buildNutritionPlan(context, options = {}) {
   const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend, options.goal || context?.goal);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
-  const plannedRideCarbs = durationHours >= defaults.rideFuelingThresholdHours
-    ? Math.round(durationHours * activityCarbsPerHour(next))
-    : 0;
+  const rideRate = rideCarbsPerHour(next);
+  const plannedRideCarbs = Math.round(durationHours * rideRate);
   // A known weight sets protein per kg; the fixed 176 g is only the fallback.
   const weightKnown = [options.weightKg, context?.weightKg, weightTrend?.latestKg].some(v => Number(v) > 0);
   const protein = Math.round(weightKnown ? weightKg * defaults.proteinPerKg : Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
@@ -104,7 +103,7 @@ export function buildNutritionPlan(context, options = {}) {
   const calorieTarget = Math.max(adaptiveBase.target, defaults.calorieTarget, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
-  const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * activityCarbsPerHour(next)))) : 0;
+  const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * rideRate))) : 0;
   const strengthPlan = options?.strengthPlan || context?.strength?.plannedWorkout || null;
   const strengthMinutes = Number(options?.strengthMinutes || estimateStrengthMinutes(strengthPlan));
   const strengthCalories = estimateStrengthCalories(weightKg, strengthMinutes);
@@ -157,7 +156,7 @@ export function buildNutritionPlan(context, options = {}) {
     },
     macros: { proteinGrams: protein, carbsGrams: adjustedCarbsFromCalories, fatGrams: fatFromMacros, caloriesFromMacros: finalCaloriesFromMacros },
     fueling: {
-      plannedRide: next ? { name: next.name, durationHours, intensity: !!next.intensity, carbsDuringRideGrams: plannedRideCarbs, carbsPerHourGrams: plannedRideCarbs && durationHours ? Math.round(plannedRideCarbs / durationHours) : 0, preRideCarbsGrams: preRideCarbs, fluidMl: durationHours ? Math.round(durationHours * defaults.rideFluidMlPerHour) : 0 } : null
+      plannedRide: next ? { name: next.name, durationHours, intensity: !!next.intensity, carbsDuringRideGrams: plannedRideCarbs, carbsPerHourGrams: rideRate, preRideCarbsGrams: preRideCarbs, fluidMl: durationHours ? Math.round(durationHours * defaults.rideFluidMlPerHour) : 0 } : null
     },
     context: { recentCyclingCaloriesLast3: recentCalories, recentRideHours: context?.cycling?.recentRideHours || 0, recentRideTss: context?.cycling?.recentRideTss || 0 }
   };
