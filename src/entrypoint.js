@@ -119,7 +119,7 @@ import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedR
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
-import { checkedCoachAnswer, coachCheckOn } from "./coach-checker.js";
+import { checkedCoachAnswer, coachCheckOn, claudeCheckOn, CLAUDE_JUDGE_MODEL } from "./coach-checker.js";
 import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
 import { accountRateLimit } from "./account-rate-limit.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
@@ -2545,7 +2545,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const rewrite=note=>askCoach(env,message,{...coachCtx,conversation:[...(coachCtx.conversation||[]),{role:'assistant',content:String(answer.answer||'')},{role:'user',content:note}]},{focus,actions:true,task,image});
         // The app keeps the check step only when the check passed or rewrote the answer (check.status).
         const onPhase=phase=>{if(!shows)return;if(phase==='check')step(checkStep());else if(phase==='rewrite'){step(checkStep('done'));step(refineStep());}else if(phase==='done'){step(checkStep('done'));if(steps.list.some(s=>s.id==='refine'))step(refineStep('done'));}};
-        ({answer,check}=await checkedCoachAnswer(env,answer,{context:coachCtx,message,rewrite,onPhase}));
+        // On Claude Haiku only with the AI consent that names Anthropic (consent.js).
+        const model=env.COACH_CHECK_CLAUDE==='true'&&claudeCheckOn(env,await consentStatus(env).catch(()=>null))?CLAUDE_JUDGE_MODEL:null;
+        ({answer,check}=await checkedCoachAnswer(env,answer,{context:coachCtx,message,rewrite,onPhase,model}));
       }
       // The answer is written; the app keeps the line under it while the proposals are checked.
       if(Array.isArray(answer.actions)&&answer.actions.length)onProgress(L('Kontroluji návrhy…', 'Checking the proposals…'));

@@ -49,13 +49,17 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/health-pause", method: "POST", body: ["confirm": JSONValue.string("PAUSE")], timeout: 60)
     }
 
+    /// The AI text this app shows (OpenAI and Anthropic named), sent with every AI
+    /// consent so the server records that version (src/consent.js AI_CONSENT_VERSION).
+    static let aiConsentVersion = "2026-11-14"
+
     /// The consent from the setup: health data, which covers the AI features too (as on the web).
     /// The health-data consent and the separate one to send what an AI feature
-    /// needs to OpenAI, as ticked on that page. Left unticked, an AI consent
+    /// needs to OpenAI and Anthropic, as ticked on that page. Left unticked, an AI consent
     /// given earlier ends, so after a new text it holds only when ticked again
     /// (legal review 2026-11-05, point 4).
     func giveHealthConsent(ai: Bool) async throws {
-        let body: [String: JSONValue] = ["health": .bool(true), "ai": .bool(ai)]
+        let body: [String: JSONValue] = ["health": .bool(true), "ai": .bool(ai), "aiVersion": .string(Self.aiConsentVersion)]
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: body)
     }
 }

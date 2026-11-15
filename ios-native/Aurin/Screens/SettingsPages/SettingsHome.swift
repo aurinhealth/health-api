@@ -326,7 +326,7 @@ struct JournalSensitiveConsentSheet: View {
     var body: some View {
         ConsentSheet(title: "Kouč vidí citlivé položky",
                      lead: "Tvoje odpovědi o náladě, úzkosti, konopí, CBD a lécích pomohou kouči vysvětlit tvou regeneraci.",
-                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat.",
+                     legal: "Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI a Anthropic, USA). Kdykoli ho vypneš a kouč je přestane dostávat.",
                      accept: accept) {
             ConsentSection("Co tím získáš")
             ConsentPoint("Rady, které počítají s léky, které bereš")

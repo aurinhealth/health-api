@@ -24,7 +24,7 @@ struct PrivacySettingsView: View {
                 SettingsDivider()
                 fact("nosign", Palette.amber, "Nikdy je neprodáme", "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš.")
                 SettingsDivider()
-                fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
+                fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI ani Anthropic se na nich neučí.")
                 SettingsDivider()
                 fact("tray.and.arrow.down", Palette.green, "Stáhneš, pozastavíš, nebo smažeš", "Všechno si stáhneš, zdravotní data pozastavíš, nebo smažeš účet, přímo tady.")
             }
