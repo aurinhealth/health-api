@@ -9,6 +9,7 @@ import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, MAX_CALORIE_TARGET, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { dayMacros, dietSummary } from "./diet.js";
+import { rideCarbsPerHour as rideCarbsPerHourFor } from "./nutrition-intelligence.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
@@ -214,7 +215,6 @@ const CONFIG = {
 
   // The rest-day baseline, weekly goal and target weight are personal: see
   // energyBaseline in energy-profile.js.
-  defaultRideCarbsPerHour: 90,
   preRideCarbsPerKg: 1.0,
   preRideWindowHours: 2,
   fluidMlPerHour: 700,
@@ -2286,7 +2286,7 @@ async function analysisDaily(
   if (actualRide) {
     fueling = calculateFueling(
       energy.currentWeight,
-      { durationHours: actualRide.durationHours || 0 }
+      actualRide
     );
     fueling.source = "actual";
   } else if (plannedRide) {
@@ -2441,8 +2441,13 @@ function calculateFueling(
     workout.durationHours ||
     0;
 
+  // The same g/h as the workout card (CARBS table via rideCarbsPerHour);
+  // hard = the 600 kcal/h rides of cyclingKcalPerHour.
   const rideCarbsPerHour =
-    CONFIG.defaultRideCarbsPerHour;
+    rideCarbsPerHourFor({
+      durationHours: duration,
+      intensity: workout.intensity ?? cyclingKcalPerHour(workout) > 500
+    });
 
   const rideCarbs =
     Math.round(
@@ -2481,8 +2486,9 @@ function calculateFueling(
 
     recommendation:
       (preRideCarbs != null ? `Before the ride: approximately ${preRideCarbs} g carbohydrate. ` : "") +
-      `During the ride: approximately ${rideCarbsPerHour} g carbohydrate/hour ` +
-      `(${rideCarbs} g total). ` +
+      (rideCarbsPerHour
+        ? `During the ride: approximately ${rideCarbsPerHour} g carbohydrate/hour (${rideCarbs} g total). `
+        : "During the ride: no carbohydrate needed, water is enough. ") +
       `Estimated fluid need: approximately ${fluid} ml.`
   };
 }

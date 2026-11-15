@@ -343,18 +343,20 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
 
 // Carbohydrate per hour (g/h) by the kind of session and its length, for the
 // app's fuelling advice and the calendars (Intervals.icu carbs_per_hour); null
-// when water is enough. Harder and longer sessions burn more glycogen.
+// when water is enough. Harder and longer sessions burn more glycogen. Up to
+// 45 min nothing is needed during the session (Burke et al. 2011, IOC;
+// Thomas et al. 2016, ACSM). The one source for every g/h the app shows.
 const CARBS = {
   //               ≤45  ≤75  ≤120 ≤180  >180 min
   ride: {
     recovery:     [0,   0,   30,  40,   50],
     endurance:    [0,   40,  50,  60,   75],
-    tempo:        [30,  50,  60,  70,   80],
-    sweet_spot:   [40,  60,  70,  80,   90],
-    threshold:    [40,  60,  75,  85,   90],
-    vo2max:       [40,  60,  75,  85,   90],
-    anaerobic:    [40,  55,  70,  80,   90],
-    sprint:       [20,  40,  50,  60,   70]
+    tempo:        [0,   50,  60,  70,   80],
+    sweet_spot:   [0,   60,  70,  80,   90],
+    threshold:    [0,   60,  75,  85,   90],
+    vo2max:       [0,   60,  75,  85,   90],
+    anaerobic:    [0,   55,  70,  80,   90],
+    sprint:       [0,   40,  50,  60,   70]
   },
   run: {
     recovery:     [0,   0,   0,   30,   40],
