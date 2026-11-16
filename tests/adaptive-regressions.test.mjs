@@ -24,12 +24,14 @@ test("nutrition target adapts only after enough weight samples", () => {
   const base={date:"2026-09-23",cycling:{plannedWorkouts:[],recentActivities:[]},strength:{plannedWorkout:null}};
   const unchanged=buildNutritionPlan({...base,weightTrend:{samples:3,weeklyRateKg:0.2}},{weightKg:88});
   assert.equal(unchanged.adaptiveCalorieAdjustment,0);
-  const reduced=buildNutritionPlan({...base,weightTrend:{samples:8,weeklyRateKg:0.05}},{weightKg:88});
+  const reduced=buildNutritionPlan({...base,weightTrend:{samples:8,weeklyRateKg:0.05}},{weightKg:88,goal:"lose_0.5"});
   assert.equal(reduced.adaptiveCalorieAdjustment,-250);
+  // No goal set: maintaining, so a steady weight is not cut.
+  assert.equal(buildNutritionPlan({...base,weightTrend:{samples:8,weeklyRateKg:0.05}},{weightKg:88}).adaptiveCalorieAdjustment,0);
 });
 
 test("nutrition target increases when weight loss is faster than range", () => {
   const base={date:"2026-09-23",cycling:{plannedWorkouts:[],recentActivities:[]},strength:{plannedWorkout:null}};
-  const plan=buildNutritionPlan({...base,weightTrend:{samples:10,weeklyRateKg:-0.9}},{weightKg:88});
+  const plan=buildNutritionPlan({...base,weightTrend:{samples:10,weeklyRateKg:-0.9}},{weightKg:88,goal:"lose_0.5"});
   assert.equal(plan.adaptiveCalorieAdjustment,225);
 });

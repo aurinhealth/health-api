@@ -10,7 +10,7 @@
 // drinks (Pití), the food diary and the activities; the athlete's own answer
 // wins over them.
 import { CATALOG, DEFAULT_PINNED, MOOD_LABEL_MASK, catalogItem, normalizeCustomItem } from "./journal-catalog.js";
-import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
+import { COFFEE, drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime, localToday } from "./user-time.js";
@@ -255,14 +255,13 @@ export async function autoDays(db, from, to) {
   const at = (date, key) => ((days[date] ||= {})[key] ||= {});
   const set = (date, key, yes) => { const e = at(date, key); e.yes = e.yes === true || yes; };
   const logged = new Set(), drinkTimes = {};
-  const drink = (date, time, kind, ml, name, alcohol) => {
+  const drink = (date, time, kind, ml, name, alcohol, water = hydrationMl(ml, kind)) => {
     logged.add(date);
     if (time) (drinkTimes[date] ||= []).push(time);
     if (alcohol) { const a = at(date, "alcohol"); a.amount = (a.amount || 0) + alcoholDrinks(kind, ml, name); a.time = later(a.time, time); return; }
-    const water = (days[date] ||= {}).__water || 0;
-    days[date].__water = water + Math.max(0, hydrationMl(ml, kind));
+    (days[date] ||= {}).__water = (days[date].__water || 0) + Math.max(0, water);
     if (/energ|red bull|monster|\bburn\b|rockstar/i.test(String(name || ""))) set(date, "energy_drink", true);
-    if (kind === "coffee" || (kind === "food" && /espresso|ristretto|lungo|káv|kav|coffee|latte|cappucc|kafe|americano|flat white/i.test(String(name || "")))) {
+    if (kind === "coffee" || (kind === "food" && COFFEE.test(String(name || "")))) {
       const c = at(date, "coffee_cups"); c.amount = (c.amount || 0) + 1; c.time = later(c.time, time);
     }
     const mg = caffeineMg(kind, ml, name);
@@ -295,7 +294,7 @@ export async function autoDays(db, from, to) {
     logged.add(row.consumed_date);
     const time = row.consumed_at ? clockOf(row.consumed_at) : null;
     const d = drinkFromFoodEntry(row);
-    if (d) { drink(row.consumed_date, time, "food", d.totalMl, d.name, d.alcohol); continue; }
+    if (d) { drink(row.consumed_date, time, "food", d.totalMl, d.name, d.alcohol, d.hydrationMl); continue; }
     if (time) { const m = at(row.consumed_date, "late_meal"); m.time = later(m.time, time); }
     if (time && time >= "18:00") dinner[row.consumed_date] = (dinner[row.consumed_date] || 0) + (Number(row.kcal) || 0);
   }

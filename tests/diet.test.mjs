@@ -23,8 +23,8 @@ test("balanced keeps the earlier split while losing weight", () => {
 test("auto protein follows the goal, the gym and a vegan diet", () => {
   assert.equal(autoProteinPerKg({ goal: "lose_0.5" }), 2.0);
   assert.equal(autoProteinPerKg({ goal: "maintain" }), 1.6);
-  // No goal yet: the default deficit.
-  assert.equal(autoProteinPerKg({}), 2.0);
+  // No goal yet: maintaining, as the calories (energy-profile.js).
+  assert.equal(autoProteinPerKg({}), 1.6);
   assert.equal(autoProteinPerKg({ goal: "gain_0.25" }), 1.8);
   assert.equal(autoProteinPerKg({ goal: "lose_0.5", mainSport: "strength" }), 2.2);
   assert.equal(autoProteinPerKg({ goal: "maintain", mainSport: "strength", dietEating: "vegan" }), 2.0);

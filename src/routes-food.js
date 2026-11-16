@@ -146,7 +146,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         const auto=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
         const target=waterGoal(auto,profile||{},await loadBuild(env.DB,profile,date,auto,localToday()).catch(error=>{console.error('Water build-up unavailable',error.message);return null;}));
         // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
-        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:hydrationMl(e.ml,e.kind)}));
+        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:e.hydrationMl??hydrationMl(e.ml,e.kind)}));
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
