@@ -77,10 +77,14 @@ enum GymSessionMath {
         }.map(\.row)
     }
 
-    /// The work set done just before this one, on the same side by sides.
+    /// The work set done just before this one, on the same side by sides. A
+    /// set done as T (technique, lighter on purpose) does not lead the sets
+    /// after it, unless they are T too: they go back to their own plan.
     static func previous(_ set: GymSet, in exercise: GymExercise) -> GymSet? {
         guard set.work else { return nil }
-        return exercise.sets.last { $0.work && $0.done && $0.row < set.row && $0.side == set.side }
+        let technique = GymIntensity.letter(set.intensity) == "T"
+        return exercise.sets.last { $0.work && $0.done && $0.row < set.row && $0.side == set.side
+            && (technique || GymIntensity.letter($0.intensity) != "T") }
     }
 
     /// A set's weight moved by how the set before went against the plan.
@@ -110,7 +114,7 @@ enum GymSessionMath {
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
-        // Rated easy (E or T) before a set planned at M or harder: the weight
+        // Rated easy (E) before a set planned at M or harder: the weight
         // was too light, also on a first try of an exercise, where the plan's
         // weight is only a guess or there is none.
         let easy = reserve >= 4 && planned <= 2.5

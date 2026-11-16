@@ -2379,7 +2379,7 @@ struct TrainingModeView: View {
     /// take it too, as they take its weight and reps.
     private func carriedLetter(_ set: GymSet, in exercise: GymExercise) -> String? {
         guard set.work, !picked.contains(set.row), adjusted(set, in: exercise) == nil,
-              let before = exercise.sets.last(where: { $0.work && $0.done && $0.row < set.row && $0.side == set.side }),
+              let before = GymSessionMath.previous(set, in: exercise),
               picked.contains(before.row) else { return nil }
         return before.intensity
     }

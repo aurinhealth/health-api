@@ -176,4 +176,32 @@ final class GymAdjustmentTests: XCTestCase {
         let ex = exercise(sets)
         XCTAssertEqual(GymSessionMath.carried(ex.sets[2], in: ex, firstTry: true)?.kg, "50")
     }
+
+    func testTechniqueSetGoesBackToThePlan() {
+        // Petr 2026-11-16: low row planned 62.5 × 5–8, set 1 done at 50 × 8 as T
+        // (technique). Set 2 is not "easy, heavier" (55): it keeps its plan, 62.5.
+        let done = GymSet(row: 1, warmup: false, number: "1", plannedKg: "62.5", plannedReps: "5–8", kg: "50", reps: "8",
+                          rpe: nil, done: true, note: nil, intensity: "T")
+        let next = GymSet(row: 2, warmup: false, number: "2", plannedKg: "62.5", plannedReps: "5–8", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "H")
+        let ex = exercise([done, next])
+        XCTAssertNil(GymSessionMath.previous(next, in: ex))
+        XCTAssertNil(GymSessionMath.carried(next, in: ex))
+    }
+
+    func testAfterATechniqueSetTheWorkSetBeforeLeads() {
+        let first = GymSet(row: 1, warmup: false, number: "1", plannedKg: "62.5", plannedReps: "5–8", kg: "62.5", reps: "8",
+                           rpe: nil, done: true, note: nil, intensity: "M")
+        let technique = GymSet(row: 2, warmup: false, number: "2", plannedKg: "62.5", plannedReps: "5–8", kg: "50", reps: "8",
+                               rpe: nil, done: true, note: nil, intensity: "T")
+        let next = GymSet(row: 3, warmup: false, number: "3", plannedKg: "62.5", plannedReps: "5–8", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "M")
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([first, technique, next]))?.kg, "62.5")
+    }
+
+    func testTechniqueSetsInARowFollowEachOther() {
+        let done = set(1, "1", kg: "50", reps: "12", done: true, letter: "T")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "T")
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([done, next]))?.kg, "50")
+    }
 }
