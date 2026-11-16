@@ -60,6 +60,10 @@ test("drinks logged as food count automatically; alcohol and foods in grams do n
   // "Přidat" logs a meal of one or more ingredients; the ml ones are drinks.
   const meal = drinkFromFoodEntry({ id: 2, recipe_title: "Snídaně", note: note({ amount: 1, unit: "portion", ingredients: [{ name: "Káva s mlékem", amount: 250, unit: "ml" }, { name: "Rohlík", amount: 43, unit: "g" }] }) });
   assert.equal(meal.ml, 250);
+  // A coffee counts at 0.9, as one logged as a drink (HYDRATION_FACTORS.coffee).
+  assert.equal(meal.hydrationMl, 225);
+  assert.equal(drinkFromFoodEntry({ id: 5, recipe_title: "Cappuccino", note: note({ amount: 200, unit: "ml" }) }).hydrationMl, 180);
+  assert.equal(drinkFromFoodEntry({ id: 6, recipe_title: "Pomerančový džus", note: note({ amount: 300, unit: "ml" }) }).hydrationMl, 300);
   const beer = drinkFromFoodEntry({ id: 3, recipe_title: "Pivo Plzeň", note: note({ amount: 500, unit: "ml" }) });
   assert.deepEqual([beer.ml, beer.alcohol, beer.totalMl], [0, true, 500]);
   assert.equal(drinkFromFoodEntry({ id: 4, recipe_title: "Jogurt", note: note({ amount: 150, unit: "g" }) }), null);

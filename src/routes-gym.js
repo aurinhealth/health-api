@@ -1,7 +1,7 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts, painfulExercises } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
@@ -10,10 +10,10 @@ import { exercisePreferences, recentWorkoutRatings, exerciseLiked } from "./exer
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
 import { gymExerciseCatalog, gymAlternatives, gymLoadEstimate, catalogueStartLoad } from "./gym-catalog.js";
-import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
+import { EXERCISE_STATIONS, stationSections, stationExercises } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, withHistoryOf, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
-import { assertTrainingAllowed, getAthleteState, usedMemories } from "./athlete-state.js";
+import { assertTrainingAllowed, getAthleteState, usedMemories, brokenStations } from "./athlete-state.js";
 import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE, historyFamily } from "./strength-intelligence.js";
@@ -130,14 +130,17 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,recent,setup,taste,sex]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env)]);
+    const [plan,recent,setup,taste,sex,state]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env),getAthleteState(env.DB).catch(()=>({}))]);
     // An alternative never done before starts at the generator's catalogue load.
     const start={sex,experience:setup?.experience||''};
     // The plan being built is sent along (not saved yet); else the saved day's.
     let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
-    // Only what the athlete's gym has (the active place's stations).
-    const fits=n=>fitsEquipment(n,setup);
+    // Only what the athlete's gym has (the active place's stations), and, as in
+    // the coach chat (todayGymContext), nothing loading a part the coach
+    // remembers as painful or a station the athlete said is broken.
+    const avoid=new Set([...painfulExercises(usedMemories(state)).avoid,...stationExercises(brokenStations(state,date))]);
+    const fits=n=>fitsEquipment(n,setup)&&!avoid.has(n);
     // The candidates' own sets older than the recent window too (withHistoryOf).
     let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
     const asked=(Array.isArray(many)?many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)).slice(0,20):[exercise]);

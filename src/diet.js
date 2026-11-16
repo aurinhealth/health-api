@@ -67,8 +67,8 @@ export function withoutProDiet(profile) {
 // muscle), +0.2 when the main sport is the gym, +0.2 on a vegan diet
 // (less leucine, lower digestibility of plant protein).
 export function autoProteinPerKg(profile = {}) {
-  // No goal yet: the calories default to losing 0.5 kg a week (energy-profile.js), so does the protein.
-  const goal = String(profile.goal || "lose_0.5");
+  // No goal yet: the calories default to maintaining (energy-profile.js), so does the protein.
+  const goal = String(profile.goal || "maintain");
   let perKg = goal.startsWith("lose") ? 2.0 : goal.startsWith("gain") ? 1.8 : 1.6;
   if (profile.mainSport === "strength") perKg += 0.2;
   if (profile.dietEating === "vegan") perKg += 0.2;

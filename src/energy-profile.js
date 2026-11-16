@@ -37,8 +37,9 @@ export const MAX_LOSS_SHARE = 0.01;
 // Below BMI 18.5 (WHO's underweight line) a losing goal plans maintenance
 // instead: no deficit for someone already light (onboarding review point 11).
 export const MIN_LOSS_BMI = 18.5;
+// No goal (or an unknown one) plans maintenance: no deficit nobody asked for.
 export function weeklyGoalKg(goalKey, weightKg, heightCm = null) {
-  const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek, kg = num(weightKg), m = num(heightCm) / 100;
+  const goal = (GOALS[goalKey] || GOALS.maintain).kgPerWeek, kg = num(weightKg), m = num(heightCm) / 100;
   if (goal < 0 && kg > 0 && m >= 1 && kg / (m * m) < MIN_LOSS_BMI) return 0;
   return goal < 0 && kg > 0 ? Math.max(goal, -kg * MAX_LOSS_SHARE) : goal;
 }
@@ -230,7 +231,7 @@ export function trendAdjustment(goalKey, trend, weightKg = null, heightCm = null
     return { adjustment: 0, reason: "within_target_range" };
   }
   // Below BMI 18.5 a losing goal plans maintenance: gaining is never cut back there.
-  if (rate > 0.25) return (GOALS[goalKey]?.kgPerWeek ?? -0.5) < 0 ? { adjustment: 0, reason: "within_target_range" } : { adjustment: step(rate), reason: "gaining_while_maintaining" };
+  if (rate > 0.25) return (GOALS[goalKey]?.kgPerWeek ?? 0) < 0 ? { adjustment: 0, reason: "within_target_range" } : { adjustment: step(rate), reason: "gaining_while_maintaining" };
   if (rate < -0.25) return { adjustment: step(rate), reason: "losing_while_maintaining" };
   return { adjustment: 0, reason: "within_target_range" };
 }
