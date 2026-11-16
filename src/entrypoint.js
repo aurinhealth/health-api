@@ -35,6 +35,9 @@ import {buildMilestones} from './app-milestones.js';
 import { buildShareWeek, mondayOf } from './share-week.js';
 import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
+import {buildHealthSeries,SERIES_METRICS,SERIES_RANGES} from './health-series.js';
+import {seriesRows} from './health-series-store.js';
+import {vo2maxView,aurinAgeView,estimateSeries,profileAge,withNorm,fitnessNormOf} from './health-estimates.js';
 import {buildDays,DAYS_MAX} from './app-days.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
@@ -114,7 +117,7 @@ import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
-import { updateFitnessEstimate } from "./own-vo2max-store.js";
+import { updateFitnessEstimate, fitnessEstimatesSince } from "./own-vo2max-store.js";
 import { ensureReviewSample } from "./review-sample.js";
 import { handleNativeAppleLogin, forgetUsedAppleTokens } from "./apple-login.js";
 import { ensureAssistantChats, chatContext, appendChatTurnIds, openChatForAnswer, dropEmptyChat, listChats, searchChats, readChat, deleteChat, startChatWithCoach, ownedChat, saveAnswerFeedback } from "./assistant-chats.js";
@@ -326,10 +329,13 @@ async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []
 const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
-  // Aurin's own VO2max and ages from the stored data, once a day at 4:47 UTC (a
+  // Aurin's own VO2max and ages from the stored data at 4:47 and 16:47 UTC (a
   // minute no five-minute job shares), for everyone who consented, whatever they
-  // connected; nothing is fetched from a service (own-vo2max-store.js).
-  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => h === 4 && m === 47), run: scoped => updateFitnessEstimate(scoped) },
+  // connected; nothing is fetched from a service (own-vo2max-store.js). The run
+  // after the user's noon works the day's row out again: the night and the
+  // morning sync often arrive after the first run, which used to keep the day's
+  // first value (in Europe 4:47 creates and 16:47 refreshes, in the Americas the other way round).
+  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => (h === 4 || h === 16) && m === 47), run: scoped => updateFitnessEstimate(scoped, { refresh: localHour() >= 12 }) },
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
   // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
@@ -3105,18 +3111,61 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [health,fitness,sleep,weight,profile,checkin,muscle]=await Promise.all([
+      const [health,fitness,sleep,weight,profile,checkin,muscle,estimates]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
         read('/health/weight'),dashboardProfile(env).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
         // Muscle mass from a scale through Apple Health (lean body mass).
-        env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
+        env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[]),
+        // Aurin's own VO2max and Aurin age (own-vo2max-store.js): 98 days for the 3-month change, at most 98 rows.
+        fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[])
       ]);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       const body=buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle});
+      // Only Aurin's estimate, never the watch's (T-SCI-1); null until the daily job has a row.
+      body.vo2max=vo2maxView({rows:estimates,age:profileAge(profile,date),sex:profile?.sex});
+      body.aurinAge=aurinAgeView({rows:withNorm(estimates,fitnessNormOf(profile)),age:profileAge(profile,date),norm:fitnessNormOf(profile)});
       keepUsualWake(env,ctx,date,profile,body.sleep?.tonight);
       return Response.json(body,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // A Health detail chart (health-series.js, DATA-6): one metric over 30 days,
+  // 3, 6 or 12 months with the usual band and state per point, loaded when the
+  // detail opens so /app/api/health stays light. Kept two minutes (a sync bumps
+  // the cache version). vo2max and aurinAge come from the daily estimates.
+  if(url.pathname==='/app/api/health/series'&&request.method==='GET'){
+    try{
+      const metric=url.searchParams.get('metric'),range=url.searchParams.get('range')||'30d',date=localToday();
+      if(!SERIES_RANGES[range]||!(SERIES_METRICS[metric]||metric==='vo2max'||metric==='aurinAge'))return Response.json({message:'Unknown metric or range'},{status:400});
+      const result=await cached(env,ctx,'health-series:'+metric+':'+range+':'+date,async()=>{
+        if(metric==='vo2max'||metric==='aurinAge'){
+          const [stored,profile]=await Promise.all([fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-Math.max(SERIES_RANGES[range],97)-1)),dashboardProfile(env).catch(()=>null)]);
+          const norm=fitnessNormOf(profile),rows=withNorm(stored,norm);
+          const view=metric==='vo2max'?vo2maxView({rows,age:profileAge(profile,date),sex:profile?.sex}):aurinAgeView({rows,age:profileAge(profile,date),norm});
+          const {series,...rest}=view||{};
+          return {status:'ok',metric,range,...(view?rest:{}),date,...(view?{estimateDate:view.date}:{}),weekly:SERIES_RANGES[range]>=91,points:estimateSeries({rows,key:metric==='vo2max'?'vo2max':'compositeAge',days:SERIES_RANGES[range],date})};
+        }
+        const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+        // Intervals.icu wellness reaches 90 days back (the cached read Health shares); a failed read is not kept.
+        const fitness=SERIES_METRICS[metric].steps?{}:await cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>null);
+        const rows=await seriesRows(env.DB,env.USER_ID,{metric,range,date,intervals:fitness?.wellness});
+        const series=buildHealthSeries({metric,range,date,rows});
+        return fitness===null||(fitness&&!SERIES_METRICS[metric].steps&&!Object.keys(fitness).length)?{...series,degraded:true}:series;
+      },{ttl:120});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // Aurin age (health-estimates.js): the newest stored value, what makes it up,
+  // the 90-day change and a year of daily values; at most 366 rows read.
+  if(url.pathname==='/app/api/health/aurin-age'&&request.method==='GET'){
+    try{
+      const date=localToday();
+      const [rows,profile]=await Promise.all([fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-365)),dashboardProfile(env).catch(()=>null)]);
+      const norm=fitnessNormOf(profile);
+      return Response.json({status:'ok',aurinAge:aurinAgeView({rows:withNorm(rows,norm),age:profileAge(profile,date),norm})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

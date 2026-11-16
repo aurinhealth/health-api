@@ -134,6 +134,9 @@ export function normalizeProfile(p = {}) {
     // Sleep: an own goal (6–10 h, in minutes) and the alarm on work days and
     // at the weekend ("HH:MM"); empty means the usual from recorded nights.
     sleepGoal: inRange(p.sleepGoal, 360, 600),
+    // The norm fitness age and Aurin age compare VO2max with: empty is FRIEND
+    // (the default), "hunt" the Norwegian HUNT 3 (own-vo2max.js).
+    fitnessNorm: p.fitnessNorm === "hunt" ? "hunt" : "",
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
     // The days each alarm rings (Friday off: no work day alarm that morning).
