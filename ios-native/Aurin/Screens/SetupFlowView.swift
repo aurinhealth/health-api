@@ -470,8 +470,8 @@ struct SetupFlowView: View {
             .padding(.horizontal, 16).padding(.bottom, 12)
     }
 
-    /// The plausible years of birth: from 100 years ago to 10 years ago.
-    private static var birthYears: ClosedRange<Int> { (currentYear - 100)...(currentYear - 10) }
+    /// The plausible years of birth: from 100 years ago to 16 years ago (the Terms: at least 16).
+    private static var birthYears: ClosedRange<Int> { (currentYear - 100)...(currentYear - 16) }
     /// Plausible heights and weights, in centimetres and kilograms.
     private static let heights: ClosedRange<Double> = 120...230
     private static let weights: ClosedRange<Double> = 30...250
