@@ -67,6 +67,8 @@ export const PERSONAL_TABLES = {
   ai_usage: {},
   // The weekly allowance of coach messages (coach-allowance.js).
   coach_messages: {},
+  // AI photos of food read this month without Pro (food-photo-trial.js).
+  food_photo_trial: { pk: ["user_id", "month"] },
   // What a deleted account of the same person used this week (ai-limit-memory.js).
   coach_carryover: {},
   // Extra coach messages bought in the app and how many were used (coach-packs.js).

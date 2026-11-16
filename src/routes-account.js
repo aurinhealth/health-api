@@ -6,6 +6,7 @@ import { subscriptionStatus } from "./subscription.js";
 import { appAccountToken, saveAppInstall, saveAppTransaction, storePurchase } from "./app-store.js";
 import { packMessagesLeft, packPurchases } from './coach-packs.js';
 import { coachAllowance } from "./coach-allowance.js";
+import { foodPhotoTrial } from "./food-photo-trial.js";
 import { inFreeWeek } from "./ai-limit-share.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
@@ -141,7 +142,9 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const status=await subscriptionStatus(env);
     // Coach message packs only where they can be used right away: not in the free week.
     const packsOnSale=status.checkoutAvailable&&!await inFreeWeek(env).catch(()=>false);
-    return Response.json({...status,packsOnSale,coachAllowance:await coachAllowance(env).catch(()=>null),appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+    // The month's free photos of food, only where they apply: the paywall on, no Pro (food-photo-trial.js).
+    const photoTrial=status.mode==='paid'&&status.plan!=='ai'?await foodPhotoTrial(env).catch(()=>null):null;
+    return Response.json({...status,packsOnSale,coachAllowance:await coachAllowance(env).catch(()=>null),photoTrial,appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
   }
   // Extra coach messages: how many are left and the purchases, for "Your purchases" (coach-packs.js).
   if(url.pathname==='/app/api/coach-packs'&&request.method==='GET'){

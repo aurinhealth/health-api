@@ -4,7 +4,8 @@ import Vision
 /// "Etiketa" for everyone (Free, ProContents.free): the nutrition table read on
 /// the iPhone with Apple's text recognition, nothing uploaded and no AI spent.
 /// AI reads the photo (src/food-photo.js) only when the phone missed a value
-/// and the user has AI: Aurin Pro, or everyone during the pilot.
+/// and the user has AI: Aurin Pro, everyone during the pilot, or a free photo
+/// left this month without Pro (SubscriptionStatus.photoAI).
 enum LabelReader {
     struct Reading {
         var product: FoodProduct
@@ -21,7 +22,7 @@ enum LabelReader {
         let values = LabelValues(lines: lines)
         if values.complete { return Reading(product: values.product) }
         // Asked only now: a whole table read on the phone works offline too.
-        if (try? await api.subscription())?.aiAccess == true {
+        if (try? await api.subscription())?.photoAI == true {
             let r = try await api.readFoodPhoto(jpeg, mode: "label")
             return Reading(product: r.product, note: r.note, warning: r.warning, aiAccess: true)
         }
