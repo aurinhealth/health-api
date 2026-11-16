@@ -159,13 +159,16 @@ test("every morning: accounts and AI against what Pro brings in, with a proposal
   const stats = await accountStats(env, "2026-10-28");
   assert.deepEqual([stats.accounts, stats.newWeek, stats.aiUsersWeek, stats.paidMonthly, stats.paidYearly, stats.gift, stats.trial], [4, 2, 2, 1, 0, 1, 1], "an offer code is the pilot or a gift, not revenue");
   assert.equal(stats.monthUsd, 3, "the owner and carried-over rows are not spending");
-  assert.deepEqual(stats.nearCap, [{ email: "free@x.cz", cost: 2.5, limit: 3 }], "an unpaid account at 83 % of its halved cap");
+  assert.deepEqual(stats.nearCap, [], "an unpaid account at 83 % of its small brake is the brake working");
+  db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) VALUES (5, '2026-10-28', 'assistant', 'gpt-6-sol', 5)").run();
+  const pilot = await accountStats(env, "2026-10-28");
+  assert.deepEqual(pilot.nearCap, [{ email: "pilot@x.cz", cost: 5, limit: 6 }], "a paying account (an offer code on the yearly product) at 83 % of the same brake");
 
   const limits = { monthly: 6, unpaidShare: 0.5, totalAlert: 10, totalLimit: 30 };
-  const daily = accountsReport(stats, limits);
+  const daily = accountsReport({ ...stats, nearCap: pilot.nearCap }, limits);
   assert.match(daily, /Platí: 1 \(měsíčně 1, ročně 0\), pilot a dárky 1, ve zkušebním týdnu 1/);
   assert.match(daily, /Pro vydělá asi 5\.90 \$ za měsíc, strop na účet 6\.00 \$, bez placení 3\.00 \$/);
-  assert.match(daily, /Návrhy\n- free@x\.cz má za měsíc 2\.50 \$ z 3\.00 \$ \(83 %\)\. Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z 6\.00 \$ na 8\.00 \$/);
+  assert.match(daily, /Návrhy\n- pilot@x\.cz má za měsíc 5\.00 \$ z 6\.00 \$ \(83 %\)\. Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z 6\.00 \$ na 8\.00 \$/);
   const quiet = { ...stats, nearCap: [] };
   assert.match(accountsReport(quiet, limits), /Návrhy\n- Limity stačí, není potřeba nic měnit\./, "the numbers come every day, quiet or not");
   const grouped = accountsReport({ ...quiet, groups: [{ grp: "paid", cost_usd: 1.2, brake_usd: 10 }, { grp: "free", cost_usd: 4, brake_usd: 5 }] }, limits);

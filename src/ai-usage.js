@@ -2,8 +2,9 @@
 // Every model call goes through callOpenAI (coach-assistant.js), which holds
 // a slot with the call's most possible cost while it runs, checks the limit
 // and records the real cost after. The monthly limit is the
-// user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
-// (default 5 USD a month), set high as an emergency brake. AI_DAILY_LIMIT_USD
+// user's AI budget, one for every account that bought Pro and a small one for the rest
+// (aiMonthlyLimitUsd), with a weekly part of it (aiWeeklyLimitUsd) so a heavy
+// week does not lock the rest of the month. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
 // a loop); the coach chat is not in it, its messages get their own allowance.
 // 0 in either turns AI off for everyone. The owner has the same limits as any
@@ -16,7 +17,8 @@
 import { L } from './lang.js';
 import { limitToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
-import { aiLimitShare } from "./ai-limit-share.js";
+import { aiLimitShare, aiPlan } from "./ai-limit-share.js";
+import { mondayOfDate } from "./dashboard-shared.js";
 import { addAiSpend } from "./ai-total.js";
 import { ownerUnlimited } from "./staging.js";
 import { packMessagesLeft } from "./coach-packs.js";
@@ -57,12 +59,29 @@ export function aiDailyLimitUsd(env, share = 1) {
   return limit != null && limit >= 0 ? limit * share : null;
 }
 
+// The monthly brake by plan (aiPlan, ai-limit-share.js): AI_MONTHLY_LIMIT_USD
+// every account that bought Pro, whatever the plan (Petr 2026-11-16: the same
+// for all who pay; the morning report weighs spending against what Pro brings
+// in), AI_UNPAID_LIMIT_USD
+// an account that has not bought Pro, the free week as one period (1.25).
+// Unset, the unpaid one is the monthly one times share.
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
-export function aiMonthlyLimitUsd(env, share = 1) {
+export function aiMonthlyLimitUsd(env, share = 1, plan = null) {
   if (ownerUnlimited(env)) return null;
-  const limit = n(env.AI_MONTHLY_LIMIT_USD), base = (limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD) * share;
+  const limit = n(env.AI_MONTHLY_LIMIT_USD), full = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  const own = plan === "unpaid" ? n(env.AI_UNPAID_LIMIT_USD) : null;
+  const base = own != null && own >= 0 ? Math.min(own, full) : full * share;
   // The App Review demo account gets a small fixed budget (app-review.js).
   return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;
+}
+
+// A paid plan's week (Monday to Sunday, the account's days) may use
+// AI_WEEK_SHARE of its month: a little over a quarter, so an uneven month
+// fits, while one heavy week waits until Monday, not the 1st. The free week
+// and the other unpaid accounts have no weekly part (their brake is small).
+export const AI_WEEK_SHARE = 0.3;
+export function aiWeeklyLimitUsd(monthLimit, plan) {
+  return monthLimit != null && plan === "paid" ? Math.round(monthLimit * AI_WEEK_SHARE * 1e5) / 1e5 : null;
 }
 
 const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0);
@@ -111,36 +130,50 @@ export async function aiSpentUtcDay(env, day, { exceptId = 0 } = {}) {
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
-export async function aiSpentThisMonth(env, { exceptId = 0 } = {}) {
+// since: an earlier first day (the free week that began last month, aiPlan).
+export async function aiSpentThisMonth(env, { exceptId = 0, since = null } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const month = (await limitToday(env)).slice(0, 7);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, month + "-01", month + "-31", Number(exceptId) || 0).first();
+  const month = (await limitToday(env)).slice(0, 7), from = since && since < month + "-01" ? since : month + "-01";
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, from, month + "-31", Number(exceptId) || 0).first();
+  return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
+}
+
+// Everything the account's AI cost since Monday (its own days), the coach chat
+// included; since: a later first day (the plan's newest paid record, aiPlan).
+export async function aiSpentThisWeek(env, { exceptId = 0, since = null } = {}) {
+  if (!tracked(env)) return 0;
+  await ensureAiUsage(env.DB);
+  const today = await limitToday(env), monday = mondayOfDate(today), from = since && since > monday ? since : monday;
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, from, today, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
 export async function aiAllowance(env) {
-  const [spentUsd, monthSpentUsd, share] = await Promise.all([aiSpentToday(env), aiSpentThisMonth(env), aiLimitShare(env)]);
-  return { spentUsd, limitUsd: aiDailyLimitUsd(env, share), monthSpentUsd, monthLimitUsd: aiMonthlyLimitUsd(env, share) };
+  const [share, plan] = await Promise.all([aiLimitShare(env), aiPlan(env)]);
+  const [spentUsd, monthSpentUsd] = await Promise.all([aiSpentToday(env), aiSpentThisMonth(env, { since: plan.since })]);
+  return { spentUsd, limitUsd: aiDailyLimitUsd(env, share), monthSpentUsd, monthLimitUsd: aiMonthlyLimitUsd(env, share, plan.plan) };
 }
 
-// Throws before a model call once this month's or today's spending reached its
-// limit; the daily one does not stop the coach chat. exceptId: the asking
+// Throws before a model call once this month's, this week's or today's
+// spending reached its limit; the daily one does not stop the coach chat. exceptId: the asking
 // call's own slot, whose reservation does not count against itself.
 export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = {}) {
   if (!tracked(env)) return;
-  const share = await aiLimitShare(env);
-  const monthLimit = aiMonthlyLimitUsd(env, share), dayLimit = feature === COACH_CHAT_FEATURE || feature === COACH_CHECK_FEATURE ? null : aiDailyLimitUsd(env, share);
+  const [share, plan] = await Promise.all([aiLimitShare(env), aiPlan(env)]);
+  const monthLimit = aiMonthlyLimitUsd(env, share, plan.plan), weekLimit = aiWeeklyLimitUsd(monthLimit, plan.plan), dayLimit = feature === COACH_CHAT_FEATURE || feature === COACH_CHECK_FEATURE ? null : aiDailyLimitUsd(env, share);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
-  const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
-  if (monthLimit != null && monthSpent >= monthLimit && monthSpent >= monthLimit + await packRaise(env)) throw limitError(await monthLimitMessage(env));
+  const [monthSpent, weekSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId, since: plan.since }).catch(failed), weekLimit == null ? 0 : aiSpentThisWeek(env, { exceptId, since: plan.paidSince }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
+  const raise = (monthLimit != null && monthSpent >= monthLimit) || (weekLimit != null && weekSpent >= weekLimit) ? await packRaise(env) : 0;
+  if (monthLimit != null && monthSpent >= monthLimit + raise) throw limitError(await monthLimitMessage(env));
+  if (weekLimit != null && weekSpent >= weekLimit + raise) throw limitError(L("Tento týden toho bylo s AI hodně. Kouč a AI funkce budou zase k dispozici v pondělí.", "That's a lot of AI for this week. The coach and AI features are back on Monday."));
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra.", "That's a lot of AI for today. You can carry on tomorrow."));
 }
 
-// Bought coach messages (coach-packs.js) never stop at the monthly cap: it
+// Bought coach messages (coach-packs.js) never stop at the monthly or weekly cap: each
 // rises by PACK_NET_USD_PER_MESSAGE for every bought message still left and
 // every one used this month (coach_messages kind 'pack'), so it does not
 // shrink as they are used. 0.05 USD keeps a margin under what the 100 pack

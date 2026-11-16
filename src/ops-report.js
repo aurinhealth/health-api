@@ -165,10 +165,11 @@ const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 // weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ email, cost, limit }] }
 // (accountStats). Every morning: the numbers, what to watch and a proposal
 // for each, so a limit is raised before people hit it. limits: the Worker
-// settings ({ monthly, unpaidShare, totalAlert, totalLimit }).
+// settings ({ monthly, unpaid, unpaidShare, totalAlert, totalLimit }).
 export function accountsReport(stats, limits = {}) {
   if (!stats) return null;
   const { monthly = null, unpaidShare = 1, totalAlert = null, totalLimit = null } = limits;
+  const unpaid = limits.unpaid ?? (monthly == null ? null : monthly * unpaidShare);
   const paid = stats.paidMonthly + stats.paidYearly;
   const revenue = stats.paidMonthly * NET_USD_PER_MONTH.monthly + stats.paidYearly * NET_USD_PER_MONTH.yearly;
   const projected = stats.monthDay > 0 ? stats.monthUsd / stats.monthDay * stats.monthDays : 0;
@@ -178,7 +179,7 @@ export function accountsReport(stats, limits = {}) {
 - Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), pilot a dárky ${stats.gift || 0}, ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
 - AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}${stats.groups?.length ? `\n- AI včera podle skupin: ${stats.groups.map(g => `${GROUP_NAMES[g.grp] || g.grp} ${usd(Number(g.cost_usd) || 0)}${g.brake_usd != null ? ` z ${usd(Number(g.brake_usd))}` : ""}`).join(", ")}` : ""}
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
-- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
+- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${usd(monthly)}, bez placení ${usd(unpaid)}` : ""}`];
   const proposals = [];
   for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
   if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
@@ -221,12 +222,13 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     if (!ids.has(Number(row.user_id))) continue;
     if (Number(row.week) > 0) { stats.aiUsersWeek++; stats.weekUsd += Number(row.week); }
   }
-  const full = aiMonthlyLimitUsd(env), share = unpaidLimitShare(env);
+  const full = aiMonthlyLimitUsd(env);
   for (const row of monthRows) {
     if (!ids.has(Number(row.user_id))) continue;
     const counted = Number(row.counted) || 0;
     stats.monthUsd += Number(row.cost) || 0;
-    const limit = full == null ? null : whole.has(Number(row.user_id)) ? full : full * share;
+    // Only paying accounts: an unpaid one at its small brake is the brake working.
+    const limit = full == null || !whole.has(Number(row.user_id)) ? null : full;
     if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit });
   }
   return stats;
@@ -296,7 +298,7 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month, calls }) => aiSummary(used, month, aiMonthlyLimitUsd(env), calls)).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
-  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaidShare: unpaidLimitShare(env), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
+  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaid: aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid"), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
     .catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
   const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts);
   const to = String(env.OWNER_EMAIL || "").trim();
