@@ -373,7 +373,7 @@ struct GymBuilderView: View {
                 MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 96)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: data.headline).font(Typo.sentence(21)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     if let most = data.tired.first {
                         // Under "ready", the tired muscle reads as tired: "Ještě unavené: hýždě, odpočaté za 2 dny".
                         Text(verbatim: L10n.f("Ještě unavené: %@, odpočaté %@", L10n.tr(most.label).lowercased(with: Fmt.locale), most.readyText(today: data.date)))

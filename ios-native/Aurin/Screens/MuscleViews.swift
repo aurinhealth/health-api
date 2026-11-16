@@ -198,7 +198,7 @@ struct MusclesWidget: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: data.headline).font(Typo.sentence(20)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     Text(verbatim: data.headlineNote).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
                 }
                 VStack(alignment: .leading, spacing: 7) {
@@ -218,7 +218,7 @@ struct MusclesWidget: View {
                 MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 110)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: data.headline).font(Typo.sentence(21)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(data.tired.prefix(2)) { TiredLine(muscle: $0, today: data.date) }
                     }

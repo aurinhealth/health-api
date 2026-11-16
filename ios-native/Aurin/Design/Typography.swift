@@ -15,9 +15,10 @@ enum Typo {
         .custom("InstrumentSerif-Regular", size: size, relativeTo: .largeTitle)
     }
 
-    /// A heading or a big title, 22 pt and up.
-    static func heading(_ size: CGFloat, relativeTo style: Font.TextStyle = .title3) -> Font {
-        .custom("InstrumentSerif-Regular", size: size, relativeTo: style)
+    /// A heading or a big title, 22 pt and up, growing like the text style
+    /// nearest to its size unless one is given.
+    static func heading(_ size: CGFloat, relativeTo style: Font.TextStyle? = nil) -> Font {
+        .custom("InstrumentSerif-Regular", size: size, relativeTo: style ?? Font.TextStyle.nearest(size))
     }
 
     /// The coach's words on a card (Today, Training, Food, Health): serif.

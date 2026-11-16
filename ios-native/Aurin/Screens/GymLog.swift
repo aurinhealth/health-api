@@ -287,7 +287,7 @@ struct KcalCheckCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Kalorie k ověření", systemImage: "exclamationmark.triangle")
                 .font(Typo.bodyStrong).foregroundStyle(Palette.amber)
-            Text(sentence).font(Typo.sentence(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(sentence).font(Typo.coach(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             if let reason, !reason.isEmpty {
                 Text(reason).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }

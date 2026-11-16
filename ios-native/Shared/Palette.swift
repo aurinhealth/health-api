@@ -19,11 +19,11 @@ enum Palette {
     /// Secondary text. At least 4.5:1 (WCAG AA for small text) on every
     /// surface in both modes, the section tints at the top of a screen
     /// included (PaletteTests). Text in it is never smaller than 11 pt.
-    static let muted = Color(light: 0x69665F, dark: 0xA3A8A5)
+    static let muted = Color(light: 0x5F5B54, dark: 0xA3A8A5)
     /// Tertiary text: units, chart axes, hints. Also at least 4.5:1 on every
     /// surface and tint in both modes (redesign D-TMAVY-3; 4.2:1 on the dark
     /// Today tint before), never smaller than 11 pt.
-    static let faint = Color(light: 0x6A665F, dark: 0x939A97)
+    static let faint = Color(light: 0x66625B, dark: 0x939A97)
     static let hairline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
     static let track = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
 

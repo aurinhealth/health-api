@@ -347,7 +347,7 @@ struct SharedWorkoutView: View {
                         SaveWorkoutButton(template: share.template).padding(.top, 10)
                     }
                 } else if let error {
-                    Text(error).font(Typo.heading(22, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 40)
+                    Text(error).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).padding(.top, 40)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
                 }

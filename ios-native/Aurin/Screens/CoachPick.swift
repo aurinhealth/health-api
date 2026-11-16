@@ -396,7 +396,7 @@ struct CoachPickCard: View {
         PickDetails(option: best)
         if let heat = best.heat { HeatLine(text: heat) }
         if let reason = best.reason {
-            Text(verbatim: reason).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: reason).font(Typo.coach(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
         }
         if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         HStack(spacing: 10) {

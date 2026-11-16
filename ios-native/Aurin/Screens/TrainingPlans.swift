@@ -1029,7 +1029,7 @@ struct PlanProposalCard: View {
                     Text(proposal.text).font(.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     if let chart = proposal.chart { PlanHRVChart(chart: chart) }
                 } else {
-                    Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(proposal.text).font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 if proposal.options.count > 1 {
                     VStack(spacing: 0) {

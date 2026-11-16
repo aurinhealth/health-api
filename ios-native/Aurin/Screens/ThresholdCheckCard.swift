@@ -163,7 +163,7 @@ struct ThresholdCheckCard: View {
         let chosen = day[o.sport] ?? o.recommended
         VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(o.sport) + ", " + metricName(o.metric), color: Palette.amberBar)
-            Text(headline(o)).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(headline(o)).font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             Text(L10n.f("Ověř to testem: %@ (%@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
                 .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             ScrollView(.horizontal) {
@@ -218,7 +218,7 @@ struct ThresholdCheckCard: View {
         VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(p.sport) + ", " + L10n.tr("Test"), color: Palette.amberBar)
             Text(L10n.f("%@, %@", p.name ?? L10n.tr("Test"), Fmt.dayHeading(p.testDate)))
-                .font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                .font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             SecondaryButton(title: "Zrušit test") {
                 Task { await act(["action": .string("cancel"), "sport": .string(p.sport)], estimate: nil) }
             }
@@ -233,7 +233,7 @@ struct ThresholdCheckCard: View {
             VStack(alignment: .leading, spacing: 12) {
                 WidgetHeader(title: sportTitle(r.sport) + ", " + L10n.tr("Výsledek testu"), color: Palette.green)
                 ForEach(lines, id: \.self) { line in
-                    Text(line).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(line).font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 Text(sentTo(r, connected: connected))
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -295,7 +295,7 @@ struct ThresholdCheckCard: View {
     private func manual(_ m: ThresholdCheck.Manual) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(m.sport) + ", " + L10n.tr("Výsledek testu"), color: Palette.amberBar)
-            Text(L10n.f("Jak dopadl test %@?", Fmt.dayHeading(m.testDate))).font(Typo.sentence(20)).foregroundStyle(Palette.ink)
+            Text(L10n.f("Jak dopadl test %@?", Fmt.dayHeading(m.testDate))).font(Typo.coach(20)).foregroundStyle(Palette.ink)
             ForEach(fields(m.testId), id: \.key) { (field: Field) in
                 TextField(L10n.tr(field.label), text: Binding(get: { typed[m.sport + field.key] ?? "" }, set: { typed[m.sport + field.key] = $0 }))
                     .keyboardType(field.time ? .numbersAndPunctuation : .decimalPad)

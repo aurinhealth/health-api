@@ -19,7 +19,7 @@ struct CoachCheckInCard: View {
         VStack(alignment: .leading, spacing: 12) {
             if let advice = things.advice {
                 if let headline = advice.headline {
-                    Text(headline).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(headline).font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 if advice.kind == "easier_day", let message = advice.message {
                     Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
@@ -144,7 +144,7 @@ struct WeekRevisionCard: View {
                         .foregroundStyle(changes.isEmpty || applied ? Palette.green : Palette.amber)
                     Text("Revize po tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
                 }
-                Text(summary).font(Typo.sentence(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Text(summary).font(Typo.coach(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 ForEach(changes) { change in row(change, applied: applied) }
                 if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
