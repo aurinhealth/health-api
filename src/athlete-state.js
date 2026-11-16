@@ -71,7 +71,7 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     const before = state.memoryMeta[patch.edit.from];
     delete state.memoryMeta[patch.edit.from];
     state.memories = [...new Set(state.memories.map(x => x === patch.edit.from ? to : x))];
-    state.memoryMeta[to] = { ...memoryMeta(to, date), group: validGroup(patch.edit.group) || groupOf(patch.edit.from, before), ...(patch.edit.by === 'coach' ? { changed: 'updated', changedAt: date } : {}) };
+    state.memoryMeta[to] = { ...memoryMeta(to, date), group: validGroup(patch.edit.group) || groupOf(patch.edit.from, before), ...(patch.edit.by === 'coach' ? { changed: 'updated', changedAt: date } : {}), ...(before?.pausedSports?.length ? { pausedSports: before.pausedSports } : {}) };
   }
   // Only the group of a memory changes (the edit sheet's Goals, Training, Health, Life).
   if (patch.regroup?.text != null && state.memories.includes(patch.regroup.text) && validGroup(patch.regroup.group)) state.memoryMeta[patch.regroup.text] = { ...(state.memoryMeta[patch.regroup.text] || memoryMeta(patch.regroup.text, date)), group: patch.regroup.group };

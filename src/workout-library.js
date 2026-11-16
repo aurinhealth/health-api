@@ -591,7 +591,7 @@ export async function hasFeedback(db, workoutId, date) {
 // app read the same event): the step text with each step's kind, one line
 // about this session on top and carbs per hour. It has no time of day (midnight,
 // as the gym's) unless one is given: the athlete sets one in the app if they want.
-export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null } = {}) {
+export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null, experience = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
   const rendered = renderForEnvironment(workout, environment);
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
@@ -603,7 +603,7 @@ export function buildIntervalsEvent(workout, date, environment = "indoor", { thr
   // The athlete's own workout and the AI's workout for the day keep their own
   // words; a library workout's generic text stays in the app.
   const own = /^(own|ai)-/.test(String(workout.id || "")) && workout.description ? String(workout.description).trim() + "\n" : "";
-  const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport);
+  const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport, experience);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime || "")) ? startTime : "00:00";
   return {
     external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: workout.name,
@@ -623,7 +623,9 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // proposals. Availability limits belong to generation, never to this write.
   await ensureTrainingTables(db);
   await ensureLocalWorkouts(db);
-  let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime });
+  // The carbs of the calendar event follow the athlete's level, as the app's card does.
+  const experience = await capabilitiesWithLevel(db, sportOf(workout.sport) === "run" ? "run" : sportOf(workout.sport) === "swim" ? "swim" : "ride").then(c => c.level, () => null);
+  let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime, experience });
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) {
     // A race leg saved before the race mark existed gets it now (the watch's race card).
@@ -640,7 +642,7 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   }
   // Watts in the description only for a new event.
   const thresholds = await athleteThresholds(env).catch(() => null);
-  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
+  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime, experience });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).

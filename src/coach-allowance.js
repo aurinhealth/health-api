@@ -82,10 +82,11 @@ export async function coachAllowance(env, today) {
 }
 
 // This week's messages of one conversation: how many, what kind it started as,
-// how many extra ones it had and when the last one was.
+// how many extra ones it had and when the last one was. Free replies (a chip,
+// a bare yes) are left out: they neither use the conversation's follow-ups nor keep it running.
 async function chatState(env, chatId, today) {
   if (!(Number(chatId) > 0)) return null;
-  const rows = (await env.DB.prepare('SELECT kind, created_at FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ? ORDER BY id')
+  const rows = (await env.DB.prepare("SELECT kind, created_at FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ? AND kind NOT IN ('confirm', 'chip') ORDER BY id")
     .bind(env.USER_ID, mondayOfDate(today), Number(chatId)).all()).results || [];
   if (!rows.length) return null;
   return { count: rows.length, workout: rows[0].kind === 'workout', extras: rows.filter(r => r.kind === 'extra').length, last: sqlTime(rows.at(-1).created_at) };

@@ -45,3 +45,10 @@ export async function takeChipAnswer(db, chatId, reply, message) {
     return Boolean(row?.id);
   } catch (error) { if (/no such table/i.test(String(error?.message || error))) return false; throw error; }
 }
+
+// The answer back when the reply was not taken (no messages left, the answer failed).
+export async function giveChipBack(db, chatId, reply) {
+  const messageId = Number(reply?.messageId);
+  if (!(Number(chatId) > 0) || !(messageId > 0)) return;
+  await db.prepare("UPDATE coach_questions SET answered_at = NULL WHERE user_id = ? AND chat_id = ? AND message_id = ?").bind(db.userId, Number(chatId), messageId).run();
+}

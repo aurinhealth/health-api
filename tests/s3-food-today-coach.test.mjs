@@ -9,9 +9,10 @@ import { carbsPerHour, fuelPlan } from "../src/workout-explanation.js";
 import { weeklyGoalKg, heavyTrainingCap } from "../src/energy-profile.js";
 import { HYDRATION_FACTORS, hydrationMl } from "../src/fluids.js";
 import { proBannerState, closeProBanner, ensureProBanner } from "../src/pro-banner.js";
-import { freeRepliesOf, claimFreeReply, nearAt } from "../src/coach-allowance.js";
+import { freeRepliesOf, claimFreeReply, claimCoachMessage, nearAt } from "../src/coach-allowance.js";
 import { confirmableToday, confirmationOnly } from "../src/coach-chat-confirm.js";
-import { saveCoachQuestion, takeChipAnswer, questionChips } from "../src/coach-questions.js";
+import { saveCoachQuestion, takeChipAnswer, questionChips, giveChipBack } from "../src/coach-questions.js";
+import { rankOptions } from "../src/coach-pick.js";
 import { appendChatTurnIds } from "../src/assistant-chats.js";
 import { planAroundCard } from "../src/coach-actions.js";
 import { updateAthleteState, getAthleteState, pausedSports } from "../src/athlete-state.js";
@@ -104,10 +105,13 @@ test("the Pro banner: back in 7 days, after 3 closes once in 30, never with Pro"
   assert.equal(proBannerState({ purchased: true, now }).offer, "get");
 });
 
-test("closing the banner counts each close", async () => {
+test("closing the banner counts one close a day", async () => {
   const db = scopedDb(createD1(), 1);
   await closeProBanner(db); await closeProBanner(db);
   await ensureProBanner(db);
+  assert.equal((await db.prepare("SELECT closes FROM pro_banner WHERE user_id = 1").first()).closes, 1, "a double tap is one close");
+  await db.prepare("UPDATE pro_banner SET closed_at = datetime('now', '-8 days') WHERE user_id = 1").run();
+  await closeProBanner(db);
   assert.equal((await db.prepare("SELECT closes FROM pro_banner WHERE user_id = 1").first()).closes, 2);
 });
 
@@ -162,4 +166,32 @@ test("pain in one spot asks to plan around it; injured stays manual", async () =
   assert.deepEqual(pausedSports({ ...state, memoryOff: true }), []);
   await updateAthleteState(db, { forget: knee }, { date: "2026-11-16" });
   assert.deepEqual(pausedSports(await getAthleteState(db, { date: "2026-11-16" })), [], "the pause ends with the memory");
+});
+
+test("review fixes: a failed read keeps today's target, a chip comes back, an edit keeps the pause, free replies leave the chat alone", async () => {
+  const db = scopedDb(createD1(), 1);
+  await saveNutritionDay(db, nutritionDayOf({ date: "2026-11-16", kcal: 1000, target: 2500, meals: [{ entries: [1] }] }), "2026-11-16");
+  await saveNutritionDay(db, nutritionDayOf({ date: "2026-11-16", kcal: 1200, target: null, meals: [{ entries: [1] }] }), "2026-11-16");
+  const row = await db.prepare("SELECT kcal, target_kcal FROM nutrition_days WHERE user_id = 1 AND date = '2026-11-16'").first();
+  assert.deepEqual([row.kcal, row.target_kcal], [1200, 2500]);
+
+  const turn = await appendChatTurnIds(db, null, "Ahoj", "Jak ses měl?");
+  await saveCoachQuestion(db, { chatId: turn.chatId, messageId: turn.messageId, chips: ["All good", "Rest"] });
+  const reply = { messageId: turn.messageId, chip: "Rest" };
+  assert.equal(await takeChipAnswer(db, turn.chatId, reply, "Rest"), true);
+  await giveChipBack(db, turn.chatId, reply);
+  assert.equal(await takeChipAnswer(db, turn.chatId, reply, "Rest"), true);
+
+  const knee = "Bolí mě levé koleno";
+  await updateAthleteState(db, { memory: knee }, { date: "2026-11-16" });
+  await updateAthleteState(db, { planAround: { memory: knee, sports: ["run"] } }, { date: "2026-11-16" });
+  await updateAthleteState(db, { edit: { from: knee, to: "Bolí mě levé koleno do schodů" } }, { date: "2026-11-16" });
+  assert.deepEqual(pausedSports(await getAthleteState(db, { date: "2026-11-16" })), ["run"]);
+  assert.deepEqual(rankOptions({ ride: null, run: null, paused: ["run", "gym"] }).options.map(o => o.kind).filter(k => ["run", "gym"].includes(k)), []);
+
+  const env = { DB: createD1(), USER_ID: 7, COACH_WEEKLY_MESSAGES: "30" };
+  await claimFreeReply(env, 5, "confirm", { today: "2026-11-16" });
+  await claimCoachMessage(env, 5, { today: "2026-11-16" });
+  const kinds = env.DB.sqlite.prepare("SELECT kind, counted FROM coach_messages WHERE user_id = 7 ORDER BY id").all().map(r => r.kind + ":" + r.counted);
+  assert.deepEqual(kinds, ["confirm:0", "message:1"], "the first counted message is the chat's first");
 });

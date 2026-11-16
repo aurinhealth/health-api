@@ -50,7 +50,8 @@ export async function proBanner(env, status, now = Date.now()) {
   return proBannerState({ paywall, pro, purchased, closes: row?.closes, closedAt: row?.closed_at, now });
 }
 
+// A double tap, a retry or a second device the same day is one close.
 export async function closeProBanner(db) {
   await ensureProBanner(db);
-  await db.prepare("INSERT INTO pro_banner (user_id, closes, closed_at) VALUES (?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET closes = closes + 1, closed_at = CURRENT_TIMESTAMP").bind(db.userId).run();
+  await db.prepare("INSERT INTO pro_banner (user_id, closes, closed_at) VALUES (?, 1, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET closes = closes + 1, closed_at = CURRENT_TIMESTAMP WHERE pro_banner.closed_at IS NULL OR pro_banner.closed_at < datetime('now', '-1 day')").bind(db.userId).run();
 }

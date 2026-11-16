@@ -6,7 +6,7 @@ import { trainingSetup } from './onboarding.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
 import { claimCoachMessage, claimFreeReply, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
-import { takeChipAnswer } from './coach-questions.js';
+import { takeChipAnswer, giveChipBack } from './coach-questions.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
@@ -1341,7 +1341,7 @@ async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null){
   const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
   // Tonight's bedtime as Today shows it, for the late card (only from 17:00 to 4:00: hour).
   const bedtime=hour!=null?(()=>{try{return buildToday({date,hour,daily:inputs.daily,health:inputs.health,fitness:inputs.fitness,sleep:{sessions:inputs.health?.sleep||[]},profile:eff,checkin:inputs.checkin}).tonight?.bedtime||null;}catch{return null;}})():null;
-  const day=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna});
+  const day=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna,paused:pausedSports(athlete)});
   return {day,planned,less,chosen:state.chosen,gym,forecast:place.forecast??null,bedtime,today:recent.today,done:recent.done,...(degraded?{degraded:true}:{})};
 }
 // A short fingerprint of a text for a cache key (FNV-1a).
@@ -2460,7 +2460,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const freeKind=chip?'chip':drafts.length&&confirmationOnly(message)?'confirm':null;
     let claim;
     try{claim=freeKind?await claimFreeReply(env,body.chatId,freeKind):await claimCoachMessage(env,body.chatId);}
-    catch(error){if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
+    catch(error){if(chip&&error.coachAllowance)await giveChipBack(env.DB,body.chatId,body.reply).catch(()=>null);if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
     // What the coach knows beyond this chat's last 60 messages (coach-notes.js):
     // the older part of a long chat, the notes of the last days, the end of
     // another chat today and what no longer holds. Nothing of it with memory off.
@@ -2651,7 +2651,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The app learns the chat first: when the connection drops, the answer
       // the server finishes is loaded from it instead of asked (and counted) again.
       if(onChat){const opened=await openChatForAnswer(env.DB,body.chatId,saved,{ghost}).catch(error=>{console.error('Chat not opened',error.message);return null;});if(opened){answerChat=opened.id;if(opened.created)newChat=opened.id;onChat(opened.id);}}
-      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));
+      return answerMessage(show,onProgress,onStep).catch(async error=>{if(newChat)await dropEmptyChat(env.DB,newChat).catch(e=>console.error('Empty chat not dropped',e.message));if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));if(!shown&&chip)await giveChipBack(env.DB,body.chatId,body.reply).catch(()=>null);if(sportChanges&&!shown)await saveSportChoice(env.DB,env.USER_ID,noSport,true).then(()=>bumpCacheVersion(env.DB)).catch(e=>console.error('Sport choice not undone',e.message));
         // Changes a yes in the text already made stay made: the chat says so instead of an error.
         if(madeInChat.some(c=>c.done)){console.error('Coach answer failed after chat confirmation',error.message);const text=madeInChatText();const ids=await remember(text);return {status:'ok',answer:text,...ids,actions:[],confirmedInChat:madeInChat.filter(c=>c.done&&c.action).map(c=>({...c.action,draftId:c.draftId}))};}
         throw error;});
@@ -2723,6 +2723,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await ensureCoachInboxTable(env.DB);
       const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=? ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%',chat.messages[0]?.createdAt||'9999').all().catch(()=>({results:[]}))).results||[];
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
+      // "Plan around your knee?" is a card of the redesign app (API level 3) only.
+      if(!(Number(appApiLevel(request))>=3))chat.actions=chat.actions.filter(a=>a.type!=='plan_around');
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
@@ -2770,7 +2772,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // A proposed end date applies only while it is still in the future.
         if(a.type==='status'){result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});await syncedPlans(env).catch(()=>null);}
         // The sports the athlete kept on its chips rest while the pain is remembered.
-        else if(a.type==='plan_around'){const chosen=Array.isArray(body.sports)?body.sports.filter(x=>(a.sports||[]).includes(x)):a.sports||[];result=await updateAthleteState(env.DB,{planAround:{memory:a.memory,sports:chosen}});draft.action={...a,sports:chosen};}
+        else if(a.type==='plan_around'){const chosen=Array.isArray(body.sports)?body.sports.filter(x=>(a.sports||[]).includes(x)):a.sports||[];result=await updateAthleteState(env.DB,{planAround:{memory:a.memory,sports:chosen}});draft.action={...a,sports:chosen};await syncedPlans(env).catch(()=>null);await bumpCacheVersion(env.DB);}
         else if(['gym_swap','gym_add','gym_remove'].includes(a.type)){
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
           assertTrainingAllowed(await getAthleteState(env.DB));

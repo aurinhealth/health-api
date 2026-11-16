@@ -43,7 +43,8 @@ export function nutritionDayOfToday(date, n) {
   return nutritionDayOf({ date, kcal: n.kcal, target: n.target, macros: { protein: n.protein, carbs: n.carbs, fat: n.fat }, meals: [{ entries: num(n.kcal) > 0 ? [1] : [] }] });
 }
 
-// One upsert. Eaten always follows; the targets only while the day is today.
+// One upsert. Eaten always follows; the targets only while the day is today,
+// and a missing target (a failed read) keeps the one stored.
 // Unchanged values write nothing.
 export async function saveNutritionDay(db, row, today) {
   if (!db || !row || !DAY.test(row.date) || !DAY.test(String(today || ""))) return;
@@ -53,15 +54,15 @@ export async function saveNutritionDay(db, row, today) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id, date) DO UPDATE SET
       kcal = excluded.kcal, protein_g = excluded.protein_g, carbs_g = excluded.carbs_g, fat_g = excluded.fat_g, logged = excluded.logged,
-      target_kcal = CASE WHEN ${open} = 1 THEN excluded.target_kcal ELSE nutrition_days.target_kcal END,
-      target_protein_g = CASE WHEN ${open} = 1 THEN excluded.target_protein_g ELSE nutrition_days.target_protein_g END,
-      target_carbs_g = CASE WHEN ${open} = 1 THEN excluded.target_carbs_g ELSE nutrition_days.target_carbs_g END,
-      target_fat_g = CASE WHEN ${open} = 1 THEN excluded.target_fat_g ELSE nutrition_days.target_fat_g END,
+      target_kcal = CASE WHEN ${open} = 1 THEN COALESCE(excluded.target_kcal, nutrition_days.target_kcal) ELSE nutrition_days.target_kcal END,
+      target_protein_g = CASE WHEN ${open} = 1 THEN COALESCE(excluded.target_protein_g, nutrition_days.target_protein_g) ELSE nutrition_days.target_protein_g END,
+      target_carbs_g = CASE WHEN ${open} = 1 THEN COALESCE(excluded.target_carbs_g, nutrition_days.target_carbs_g) ELSE nutrition_days.target_carbs_g END,
+      target_fat_g = CASE WHEN ${open} = 1 THEN COALESCE(excluded.target_fat_g, nutrition_days.target_fat_g) ELSE nutrition_days.target_fat_g END,
       updated_at = CURRENT_TIMESTAMP
     WHERE nutrition_days.kcal IS NOT excluded.kcal OR nutrition_days.protein_g IS NOT excluded.protein_g OR nutrition_days.carbs_g IS NOT excluded.carbs_g
       OR nutrition_days.fat_g IS NOT excluded.fat_g OR nutrition_days.logged IS NOT excluded.logged
-      OR (${open} = 1 AND (nutrition_days.target_kcal IS NOT excluded.target_kcal OR nutrition_days.target_protein_g IS NOT excluded.target_protein_g
-        OR nutrition_days.target_carbs_g IS NOT excluded.target_carbs_g OR nutrition_days.target_fat_g IS NOT excluded.target_fat_g))`)
+      OR (${open} = 1 AND (COALESCE(excluded.target_kcal, nutrition_days.target_kcal) IS NOT nutrition_days.target_kcal OR COALESCE(excluded.target_protein_g, nutrition_days.target_protein_g) IS NOT nutrition_days.target_protein_g
+        OR COALESCE(excluded.target_carbs_g, nutrition_days.target_carbs_g) IS NOT nutrition_days.target_carbs_g OR COALESCE(excluded.target_fat_g, nutrition_days.target_fat_g) IS NOT nutrition_days.target_fat_g))`)
     .bind(db.userId, row.date, row.kcal, row.protein, row.carbs, row.fat, ...(open ? [row.target, row.proteinTarget, row.carbsTarget, row.fatTarget] : [null, null, null, null]), row.logged ? 1 : 0).run();
 }
 
