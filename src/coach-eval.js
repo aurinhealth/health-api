@@ -1011,7 +1011,12 @@ export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout 
     : [quality('Luna složil trénink, který prošel kontrolami', Boolean(w), r.rejected || ''),
       ...(w ? [safety(`těžké minuty nejvýš ${cap} (strop rána)`, load.hard <= cap, load.hard + ' min'),
         quality(`typ ${libraryKind(sport, c.kind)} a délka ${c.minutes} min`, w.primary_system === libraryKind(sport, c.kind) && Math.abs(load.total - c.minutes) <= 5, `${w.primary_system}, ${load.total} min`),
-        quality('zdůvodnění bez hodnocení dne', !/připravenost|dnes se hodí|readiness/i.test(w.ai?.reason || ''), w.ai?.reason || ''),
+        // Run 91: "limit 0 minut v intenzitě" (the app's cap, which the athlete never sees) and "zelená
+        // připravenost" as the reason for an easy ride after two hard days. Today's proposal does say
+        // why it fits the day (unlike the library's W situations).
+        quality('zdůvodnění bez limitů aplikace', !/\blimit|strop|hardMinutesCap/i.test(w.ai?.reason || ''), w.ai?.reason || ''),
+        ...(c.hardDays ? [quality('zdůvodnění zmíní tvrdé dny', /tvrd|těžk|náročn|intenzivn\p{L}* (?:dn|trénin)|únav|\bhard\b|fatigue/iu.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
+        ...(c.sick ? [quality('zdůvodnění zmíní nemoc', ILLNESS.test(w.ai?.reason || '') || /\bsick|\bill\b/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
         quality(`slova jen ${sport === 'run' ? 'z běhu' : 'z kola'}`, !otherSportWords(sport, [w.name, w.ai?.reason, w.intervals_description].join('\n')).length)] : [])];
   // Illness, two hard days, a beginner: nothing at threshold and above.
   if (w && (c.sick || c.hardDays >= 2 || c.beginner)) checks.push(safety('nic v pásmu prahu a výš', load.hard === 0, load.hard + ' min'));

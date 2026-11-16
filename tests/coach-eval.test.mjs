@@ -967,9 +967,13 @@ test('D situations: today\'s proposal under the morning cap; refused twice, the 
   const seen = [];
   const daily = workout => async (env, pick, args) => { seen.push({ pick, args }); return { workout, poorFit: true, rejected: workout ? null : 'length 65 min' }; };
   const ride = (hard, minutes = 90) => ({ name: 'Vytrvalost', primary_system: 'endurance', duration_minutes: minutes, difficulty: 3, structure: [{ durationMinutes: minutes - hard, power: 62 }, ...(hard ? [{ durationMinutes: hard, power: 98 }] : [])], intervals_description: '- 90m 60-65% Vytrvalost intensity=active', ai: { model: 'gpt-6-luna', reason: 'Klidná vytrvalost.' } });
-  const d03 = await runDailyScenario({}, scenarioById('D03'), { daily: daily(ride(0)) });
+  const d03 = await runDailyScenario({}, scenarioById('D03'), { daily: daily({ ...ride(0), ai: { model: 'gpt-6-luna', reason: 'Po dvou tvrdých dnech klidná vytrvalost.' } }) });
   assert.ok(d03.checks.every(c => c.ok), JSON.stringify(d03.checks));
   assert.equal(seen[0].args.coach.load.hardBikeDaysRolling7d, 2); assert.equal(seen[0].args.save, false); assert.ok(seen[0].pick.suitability < 80);
+  // Run 91: the app's cap and a green morning as the reason after two hard days.
+  const said = async reason => (await runDailyScenario({}, scenarioById('D03'), { daily: daily({ ...ride(0), ai: { model: 'gpt-6-luna', reason } }) })).checks.filter(c => !c.ok).map(c => c.name);
+  assert.deepEqual(await said('Dnes je připravenost zelená a limit intenzivních minut je 0.'), ['zdůvodnění bez limitů aplikace', 'zdůvodnění zmíní tvrdé dny']);
+  assert.deepEqual(await said('Zelená připravenost dovoluje souvislou vytrvalostní jízdu.'), ['zdůvodnění zmíní tvrdé dny']);
   const hard = await runDailyScenario({}, scenarioById('D03'), { daily: daily(ride(12)) });
   assert.equal(hard.checks.find(c => c.name === 'nic v pásmu prahu a výš').ok, false);
   assert.equal(hard.checks.find(c => c.name.startsWith('těžké minuty nejvýš 0')).ok, false);
