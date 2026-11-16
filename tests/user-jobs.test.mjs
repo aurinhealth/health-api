@@ -56,6 +56,8 @@ test("Aurin's own VO2max runs once a day for every consenting user, whatever the
   assert.ok(dueUserJobs("* * * * *", at(4, 47)).includes("fitness-estimate"));
   assert.ok(!dueUserJobs("* * * * *", at(4, 45)).includes("fitness-estimate"));
   assert.ok(!dueUserJobs("* * * * *", at(5, 47)).includes("fitness-estimate"));
+  // Again in the afternoon, for the data that synced after the morning run.
+  assert.ok(dueUserJobs("* * * * *", at(16, 47)).includes("fitness-estimate"));
   const db = database(1);
   // 2: Apple Health only, no phone; 3: consent withdrawn; 4: blocked.
   for (const [id, consent, disabled] of [[2, true, 0], [3, false, 0], [4, true, 1]]) {

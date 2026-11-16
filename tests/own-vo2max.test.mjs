@@ -70,19 +70,31 @@ test("the resting layer: HUNT with BMI, Uth without height or weight", () => {
   assert.equal(restingEstimate({ ...base, restHr: null }), null);
 });
 
-test("fitness age from the HUNT 3 norms", () => {
+test("fitness age from the HUNT 3 norms, a choice", () => {
   // The line through the HUNT 3 means: men 44.63 at 50, 0.371 a year (Loe 2013, table 2).
-  assert.equal(fitnessAge(44.63, "male"), 50);
-  assert.equal(fitnessAge(48.34, "male"), 40);
-  assert.equal(fitnessAge(35.87, "female"), 50);
-  assert.equal(fitnessAge(70, "male"), 20);
-  assert.equal(fitnessAge(10, "female"), 90);
+  assert.equal(fitnessAge(44.63, "male", "hunt"), 50);
+  assert.equal(fitnessAge(48.34, "male", "hunt"), 40);
+  assert.equal(fitnessAge(35.87, "female", "hunt"), 50);
+  assert.equal(fitnessAge(70, "male", "hunt"), 20);
+  assert.equal(fitnessAge(10, "female", "hunt"), 90);
   // Older means lower, smoothly: 1 ml/kg/min is about 2.7 years for a man.
-  near(fitnessAge(46.8, "male") - fitnessAge(47.8, "male"), 2.7, 0.1);
+  near(fitnessAge(46.8, "male", "hunt") - fitnessAge(47.8, "male", "hunt"), 2.7, 0.1);
   // Unknown sex: the mean of both.
-  near(fitnessAge(44, null), (fitnessAge(44, "male") + fitnessAge(44, "female")) / 2, 0.1);
-  assert.equal(normVo2(50, "male"), 44.6);
-  assert.equal(normVo2(25, "female"), 43.3);
+  near(fitnessAge(44, null, "hunt"), (fitnessAge(44, "male", "hunt") + fitnessAge(44, "female", "hunt")) / 2, 0.1);
+  assert.equal(normVo2(50, "male", "hunt"), 44.6);
+  assert.equal(normVo2(25, "female", "hunt"), 43.3);
+});
+
+test("fitness age from the FRIEND medians by default (Kaminsky 2015)", () => {
+  // The line through the FRIEND medians: men 35.57 at 50, 0.474 a year; near each group's median at its middle.
+  assert.equal(fitnessAge(35.57, "male"), 50);
+  assert.equal(fitnessAge(26.03, "female"), 50);
+  near(normVo2(35, "male"), 42.4, 0.8);
+  near(normVo2(65, "male"), 28.2, 0.8);
+  near(normVo2(45, "female"), 26.7, 1.3);
+  // The same VO2max is a younger fitness age than with HUNT.
+  assert.ok(fitnessAge(45, "male") < fitnessAge(45, "male", "hunt"));
+  assert.equal(fitnessAge(45, "male", "unknown"), fitnessAge(45, "male"));
 });
 
 test("composite age: study-based years, capped, needs VO2max and two of sleep, gym and waist", () => {
@@ -211,4 +223,18 @@ test("the daily job stores one row a day and is exported and deleted with the ac
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM fitness_estimates").get().n, 2);
   assert.match(FITNESS_ESTIMATES_TABLE, /PRIMARY KEY \(user_id, date\)/);
   assert.equal(await latestFitnessEstimate(db, 8), null);
+  // "Data from": the services of the workouts and the resting heart rate, most used first.
+  assert.deepEqual(stored.details.sources, ["apple-health", "intervals"]);
+  // Data that arrives after the morning run: a refresh works the day out again
+  // from the row before it and replaces it (it used to stay as first written).
+  const next = shift(day, 1), kept = second.estimate.vo2max;
+  insert.run(7, "intervals", "activity", ride(next, 260, 134).start_time, null, null, null, ride(next, 260, 134).payload_json);
+  assert.equal((await withTimeZone("Europe/Prague", () => updateFitnessEstimate(env, { date: next }))).status, "done");
+  const again = await withTimeZone("Europe/Prague", () => updateFitnessEstimate(env, { date: next, refresh: true }));
+  assert.equal(again.status, "updated");
+  assert.equal(again.estimate.details.workouts.ride.count, 7);
+  assert.ok(Math.abs(again.estimate.vo2max - first.estimate.vo2max) <= 1 / 7 + 0.05, "still limited from the day before, not from the replaced row");
+  assert.equal((await latestFitnessEstimate(db, 7)).vo2max, again.estimate.vo2max);
+  assert.ok(kept != null);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM fitness_estimates").get().n, 2);
 });

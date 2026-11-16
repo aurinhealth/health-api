@@ -193,16 +193,27 @@ export function rideFactor(estimates, previous = null) {
 // at 50 and 0.371 less a year, women 35.87 and 0.298. A line, not the table's steps:
 // between 35 and 45 the men's means differ by 2 ml/kg/min only, so a table
 // would move the age by 5 years for 1 ml/kg/min.
-const NORMS = { male: { at50: 44.63, perYear: 0.3709 }, female: { at50: 35.87, perYear: 0.2977 } };
-const normOf = (sex, age) => NORMS[sex].at50 - NORMS[sex].perYear * (age - 50);
+// FRIEND registry (Kaminsky et al. 2015, Mayo Clin Proc 90:1515, measured
+// treadmill VO2max, 50th percentile by age group 20–29 … 70–79; men 48.0, 42.4,
+// 37.8, 32.6, 28.2, 24.4, women 37.6, 30.2, 26.7, 23.4, 20.0, 18.3), the same
+// kind of line: men 35.57 at 50 and 0.474 less a year, women 26.03 and 0.373.
+// FRIEND is the default (Petr 2026-11-16: kinder to users, US lab tests are
+// lower than the fit Norwegian sample); HUNT stays a choice (profile fitnessNorm).
+export const FITNESS_NORMS = ["friend", "hunt"];
+const NORMS = {
+  hunt: { male: { at50: 44.63, perYear: 0.3709 }, female: { at50: 35.87, perYear: 0.2977 } },
+  friend: { male: { at50: 35.57, perYear: 0.4737 }, female: { at50: 26.03, perYear: 0.3726 } }
+};
+const normSet = norm => NORMS[norm] || NORMS.friend;
+const normOf = (sex, age, norm) => normSet(norm)[sex].at50 - normSet(norm)[sex].perYear * (age - 50);
 // Fitness age (NTNU's idea): the age whose average VO2max equals this one, kept to 20–90.
-export function fitnessAge(vo2, sex) {
+export function fitnessAge(vo2, sex, norm = "friend") {
   if (!(vo2 > 0)) return null;
-  const solve = s => 50 + (NORMS[s].at50 - vo2) / NORMS[s].perYear;
+  const solve = s => 50 + (normSet(norm)[s].at50 - vo2) / normSet(norm)[s].perYear;
   const age = sex === "male" || sex === "female" ? solve(sex) : (solve("male") + solve("female")) / 2;
   return round1(clamp(age, 20, 90));
 }
-export const normVo2 = (age, sex) => round1(sex === "male" || sex === "female" ? normOf(sex, age) : (normOf("male", age) + normOf("female", age)) / 2);
+export const normVo2 = (age, sex, norm = "friend") => round1(sex === "male" || sex === "female" ? normOf(sex, age, norm) : (normOf("male", age, norm) + normOf("female", age, norm)) / 2);
 
 // Composite age ("Aurin age"): the real age plus years for fitness and the
 // habits behind it, each from a published dose-response (docs/methodology.md
@@ -237,10 +248,10 @@ export function compositeAge(input) {
   const gains = Object.entries(targets).filter(([, t]) => t).map(([k, t]) => [k, round1(result.value - (compositeYears({ ...input, ...t })?.value ?? result.value))]).filter(([, g]) => g >= 0.3).sort((a, b) => b[1] - a[1]);
   return { ...result, gains: Object.fromEntries(gains) };
 }
-function compositeYears({ age, sex, vo2max, sleepHours, sleepSpreadMin, activityMinutes, gymPerWeek, steps, restHr, waist }) {
+function compositeYears({ age, sex, vo2max, sleepHours, sleepSpreadMin, activityMinutes, gymPerWeek, steps, restHr, waist, norm }) {
   if (!(age > 0) || !(vo2max > 0)) return null;
   const parts = {};
-  parts.vo2max = clamp(toYears(0.87) * (vo2max - normVo2(age, sex)) / 3.5, -4, 4);
+  parts.vo2max = clamp(toYears(0.87) * (vo2max - normVo2(age, sex, norm)) / 3.5, -4, 4);
   if (restHr != null) parts.restingHeartRate = clamp(toYears(1.09) * (restHr - (sex === "female" ? 63 : 60)) / 10, -1, 1);
   if (activityMinutes != null) parts.activity = Math.max(-1.5, activityMinutes <= 150 ? toYears(0.69) * activityMinutes / 150 : toYears(0.69) + (toYears(0.61) - toYears(0.69)) * Math.min(1, (activityMinutes - 150) / 300));
   if (steps != null) parts.steps = Math.max(-1.5, toYears(0.47) * clamp((steps - 4000) / ((age >= 60 ? 7000 : 9000) - 4000), 0, 1));
@@ -335,9 +346,14 @@ export function estimateDay(inputs) {
   const anchored = gap && gap <= 28 && n(prev.vo2max) && (prev.model == null || prev.model === MODEL_VERSION) && (prev.confidence == null || rank(prev.confidence) >= rank(confidence));
   const limit = anchored ? WEEKLY_CHANGE * gap / 7 : null;
   const value = limit == null ? raw : clamp(raw, prev.vo2max - limit, prev.vo2max + limit);
-  const fit = fitnessAge(value, sex);
   const habitsActivity = activityHabits(recent, athlete), sleep = sleepHabits(inputs.sleep);
-  const composite = compositeAge({ age, sex, vo2max: value, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, waist: n(inputs.waist) });
+  // Both norms every day (the user can switch, health-estimates.js picks one); the columns keep FRIEND, the default.
+  const agesFor = norm => {
+    const c = compositeAge({ age, sex, vo2max: value, sleepHours: sleep.hours, sleepSpreadMin: sleep.spreadMin, activityMinutes: habitsActivity.minutes, gymPerWeek: habitsActivity.gymPerWeek, steps: n(inputs.steps), restHr, waist: n(inputs.waist), norm });
+    return { fitnessAge: fitnessAge(value, sex, norm), compositeAge: c?.value ?? null, parts: c?.parts ?? null, gains: c?.gains ?? null };
+  };
+  const ages = Object.fromEntries(FITNESS_NORMS.map(k => [k, agesFor(k)]));
+  const fit = ages.friend.fitnessAge, composite = ages.friend.compositeAge == null ? null : { value: ages.friend.compositeAge, parts: ages.friend.parts, gains: ages.friend.gains };
   return {
     date, vo2max: round1(value), confidence, fitnessAge: fit, compositeAge: composite?.value ?? null, rideFactor: factor.value,
     details: {
@@ -345,7 +361,8 @@ export function estimateDay(inputs) {
       resting: resting ? { ...resting, weight: REST_WEIGHT, activityIndex: pa } : null,
       workouts: Object.fromEntries(Object.entries(bySport).map(([k, b]) => [k, { count: b.count, weight: round2(b.weight), mean: round1(b.sum / b.weight), median: round1(median(b.values)) }])),
       rideFactorLearned: factor.learned,
-      composite: composite ? { parts: composite.parts, gains: composite.gains, sleep, activity: habitsActivity } : null
+      composite: composite ? { parts: composite.parts, gains: composite.gains, sleep, activity: habitsActivity } : null,
+      ages
     }
   };
 }
