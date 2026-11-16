@@ -18,7 +18,7 @@ enum Palette {
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)
     /// Secondary text. At least 4.5:1 (WCAG AA for small text) on every
     /// surface in both modes, the section tints at the top of a screen
-    /// included (PaletteTests). Text in it is never smaller than 11 pt.
+    /// included (DesignTokenTests). Text in it is never smaller than 11 pt.
     static let muted = Color(light: 0x5F5B54, dark: 0xA3A8A5)
     /// Tertiary text: units, chart axes, hints. Also at least 4.5:1 on every
     /// surface and tint in both modes (redesign D-TMAVY-3; 4.2:1 on the dark
@@ -142,6 +142,7 @@ enum Palette {
             }
         }
     }
+}
 
 extension Color {
     init(light: UInt32, dark: UInt32, alpha: Double = 1) {
