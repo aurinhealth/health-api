@@ -11,7 +11,7 @@
 //   the main night of the day (primaryNights);
 // - the sleep need from the profile's age and sleep goal, the strain of the
 //   day before and the sleep history (sleepNeedFor);
-// - the morning check-in on top (applyCheckin);
+// - Sick from the Journal on top (applyCheckin); the morning answer never;
 // - with cycle tracking on (profile.cycle, dashboard-shared.js), the phase of
 //   each day, so the luteal rise is the athlete's normal (cycle-model.js).
 // Pure: the callers load the inputs.
@@ -71,7 +71,7 @@ export function strainOn(rows, date) {
 // Readiness for `date`. `rows` are merged wellness rows when the caller has
 // them already, otherwise `google` (Google/Apple days) and `intervals`
 // (Intervals.icu wellness) are merged here. `profile` gives the age and the
-// sleep goal, `checkin` the morning answer (only for the day it was given).
+// sleep goal, `checkin` Sick from the Journal (only "sick" acts, recovery-model.js applyCheckin).
 // Returns the readiness after the check-in (score, zone, components, flags,
 // missing, provisional, checkin) with the body's own number (`body`), the
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.

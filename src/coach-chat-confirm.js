@@ -33,15 +33,25 @@ export function chatConfirmation(message) {
 // The changes a yes in the text may make: today's training plan only. A rest,
 // a status, a plan or a change of a done activity still needs the tap.
 export const CHAT_CONFIRMABLE = new Set(['gym_swap', 'gym_add', 'gym_remove', 'workout', 'move', 'week_sport']);
+// And only a change of today (AI-4, 2026-11-16): a card for another day, a
+// move to or from another day and the week plan need the tap, since a typed
+// yes may have meant only part of the answer.
+export const confirmableToday = (action, today) => Boolean(action && CHAT_CONFIRMABLE.has(action.type) && action.type !== 'week_sport'
+  && action.date === today && (action.type !== 'move' || !action.eventSnapshot?.date || action.eventSnapshot.date === today));
 
-// The open cards under the chat's last answer, made since `since` (today), oldest first.
-export async function openDraftsOfLastAnswer(db, chatId, since) {
+// Only a confirmation, without a request beside it ("…a přidej tam biceps"):
+// such a message does not count as a coach message (coach-allowance.js).
+export const confirmationOnly = message => Boolean(chatConfirmation(message)) && !/[\s,]+(?:a|and)\s+(?:prid|add)/u.test(plain(message));
+
+// The open cards under the chat's last answer, made since `since` (today),
+// oldest first; with `today`, only the changes of today (confirmableToday).
+export async function openDraftsOfLastAnswer(db, chatId, since, today = null) {
   if (!Number.isInteger(Number(chatId)) || !Number(chatId)) return [];
   const last = await db.prepare("SELECT id FROM assistant_messages WHERE user_id=? AND chat_id=? AND role='assistant' ORDER BY id DESC LIMIT 1").bind(db.userId, Number(chatId)).first();
   if (!last) return [];
   await ensureCoachInboxTable(db);
   const rows = (await db.prepare("SELECT id,draft_json FROM coach_inbox WHERE user_id=? AND status='draft' AND created_at>=? AND draft_json LIKE ? ORDER BY id").bind(db.userId, since, '%"chatId":' + Number(chatId) + ',"messageId":' + last.id + '%').all()).results || [];
-  return rows.map(r => { try { const d = JSON.parse(r.draft_json); return d.kind === 'coach_action' && d.chatId === Number(chatId) && d.messageId === last.id && !d.ghost && CHAT_CONFIRMABLE.has(d.action?.type) ? { draftId: r.id, action: d.action } : null; } catch { return null; } }).filter(Boolean);
+  return rows.map(r => { try { const d = JSON.parse(r.draft_json); return d.kind === 'coach_action' && d.chatId === Number(chatId) && d.messageId === last.id && !d.ghost && CHAT_CONFIRMABLE.has(d.action?.type) && (!today || confirmableToday(d.action, today)) ? { draftId: r.id, action: d.action } : null; } catch { return null; } }).filter(Boolean);
 }
 
 // Does the coach's last answer end its text with a question ("Mám ti dát i lehké vyjetí?")?

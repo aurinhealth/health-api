@@ -4,7 +4,7 @@ import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
 import { cycleShared } from "./cycle-model.js";
 import { withFocus, racePhase } from "./athlete-focus.js";
-import { brokenStations } from "./athlete-state.js";
+import { brokenStations, pausedSports } from "./athlete-state.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS, requestedMuscles } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
 import { strengthCoverage } from './strength-balance.js';
@@ -266,7 +266,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null,feeling=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -294,6 +294,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),...(gymFirst?{gymDay:true}:{}),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
+    // Sports resting for a pain ("Plan around your knee?", athlete-state.js): no sessions of them.
+    ...(pausedSports(athleteState).length?{pausedSports:pausedSports(athleteState)}:{}),
     statusUntil:athleteState?.statusUntil||null,
     rhythm:preferences.weeklyActivities == null ? null : {weeklyActivities:preferences.weeklyActivities},
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),
@@ -304,7 +306,10 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     // Deník: the habits that go with the athlete's next-morning readiness and
     // yesterday's answers (routes-journal.js journalForCoach).
     ...(journal?{journal}:{}),
-    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date})},
+    // The morning answer (morning-checkin.js feelingOf): how the athlete says
+    // they feel today, for this day only. Subjective, never the readiness and
+    // never an illness (AI-6, T-HAB-1).
+    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date}),...(['fresh','normal','tired'].includes(feeling)?{feeling}:{})},
     week:days,
     // Kontrola týdne (week-check.js): the athlete's state against the load
     // ahead and the changes the app proposes, when there are any.
