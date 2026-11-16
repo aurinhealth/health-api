@@ -5,8 +5,8 @@
 // Only the test server answers, and only the "Coach evaluation" workflow
 // (coach-eval.yml) may call it: its GitHub token has an audience of its own.
 import { askCoach, callOpenAI, coachContext, assistantTask, coachInstructionsFor, safetyNote, lightModel, complexModel } from './coach-assistant.js';
-import { composeWorkout } from './ai-workout-compose.js';
-import { workoutLoadCheck } from './ai-workout-pick.js';
+import { composeWorkout, dailyOwnWorkout, libraryKind } from './ai-workout-compose.js';
+import { workoutLoadCheck, hardCapFor } from './ai-workout-pick.js';
 import { usageCost } from './ai-usage.js';
 import { validateCoachActions, hardDayConflict, eventSport, coachPlanTemplates, actionInstructions, actionsNote } from './coach-actions.js';
 import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
@@ -710,6 +710,15 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'W01', title: 'Knihovna: kolo VO2max 45 min těžké', compose: { sport: 'ride', kind: 'vo2max', minutes: 45, minDifficulty: 6.5, maxDifficulty: 10, zone: 'green', score: 78 } },
   { id: 'W02', title: 'Knihovna: běh tempo 40 min střední', compose: { sport: 'run', kind: 'tempo', minutes: 40, minDifficulty: 4, maxDifficulty: 6.5, zone: 'green', score: 72 } },
   { id: 'W03', title: 'Knihovna: kolo vytrvalost 2 h, horší den', compose: { sport: 'ride', kind: 'endurance', minutes: 120, minDifficulty: null, maxDifficulty: null, zone: 'yellow', score: 58 } },
+  // Návrh kouče (today's proposal, dailyOwnWorkout): the library's ranked pick
+  // fits the day poorly, Luna writes the coach's type and length under the
+  // morning's hard-minute cap; refused twice, the ranked pick stays (D05,
+  // the library thread's critic 2026-11-16: no library workout by length alone).
+  { id: 'D01', title: 'Návrh kouče: kolo tempo 60 min, žluté ráno', daily: { sport: 'ride', kind: 'tempo', minutes: 60, zone: 'yellow', score: 61 } },
+  { id: 'D02', title: 'Návrh kouče: běh po nemoci, jen regenerace', daily: { sport: 'run', kind: 'recovery', minutes: 30, zone: 'red', score: 38, sick: true } },
+  { id: 'D03', title: 'Návrh kouče: kolo po dvou tvrdých dnech', daily: { sport: 'ride', kind: 'endurance', minutes: 90, zone: 'green', score: 74, hardDays: 2 } },
+  { id: 'D04', title: 'Návrh kouče: začínající běžec 30 min', daily: { sport: 'run', kind: 'endurance', minutes: 30, zone: 'green', score: 70, beginner: true } },
+  { id: 'D05', title: 'Návrh kouče: dvakrát zamítnutý návrh nechá výběr z knihovny', daily: { sport: 'ride', kind: 'tempo', minutes: 45, zone: 'yellow', score: 64, refused: true } },
   // The answer checker (coach-checker.js) on fixed answers with a planted fault
   // (experiment 2026-11-11: the regex checks found 1 of 12): it must name the
   // fault's category, and say nothing on the clean answers (K09, K10, K11;
@@ -919,7 +928,7 @@ export function cardKind(athlete, action, library = []) {
   return coach.recommendation?.session?.kind || null;
 }
 
-const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost' };
+const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost', recovery: 'regenerace' };
 
 // Two "intensity=interval" steps in a row in the workout's text (a repeat's steps come round again).
 export function effortsBackToBackText(description) {
@@ -981,6 +990,36 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
     message: `Knihovna, ${c.sport === 'run' ? 'běh' : 'kolo'}, ${COMPOSE_KINDS[c.kind] || c.kind}, ${c.minutes} min${band}, připravenost ${c.score} (${c.zone})`,
     model: runs.map(r => r.workout?.ai?.model || r.model).join(', '), ms: Date.now() - started,
     answer: runs.map(describe).join('\n\n'), proposed: [], kept: [], checks, passed: true };
+}
+
+// A D situation: today's proposal as the app makes it (dailyOwnWorkout), nothing kept.
+// `refused`: a model whose drafts run 20 min too long, so both tries fail (the fallback branch).
+export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout } = {}) {
+  const c = scenario.daily, started = Date.now(), model = lightModel(env);
+  const coach = { readiness: { status: c.zone, score: c.score }, recommendation: { session: { kind: c.kind, durationMinutes: c.minutes } }, ...(c.hardDays ? { load: { hardBikeDaysRolling7d: c.hardDays } } : {}) };
+  const today = { score: c.score, zone: c.zone, ...(c.sick ? { feeling: 'sick' } : {}) };
+  const focus = c.beginner ? { sport: 'running', sportLabel: L('běh', 'running'), goal: L('Začínám běhat, chci uběhnout 5 km.', 'I am new to running and want to run 5 km.') } : null;
+  // The ranked library pick of the coach's type, under COMPOSE_BELOW.
+  const pick = { id: 'library-pick', primary_system: c.kind, suitability: 60, duration_minutes: c.minutes };
+  const tooLong = async () => ({ text: JSON.stringify({ name: 'Tempo', reason: L('Tempo ve třech blocích.', 'Tempo in three blocks.'), blocks: [{ repeats: 1, steps: [{ label: 'warm-up', seconds: 900, low: 55, high: 65 }] }, { repeats: 3, steps: [{ label: 'tempo', seconds: 900, low: 80, high: 85 }, { label: 'easy', seconds: 300, low: 50, high: 55 }] }] }), model: 'refused-stub' });
+  const r = await daily(env, pick, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today, focus, model, save: false, log: false, ...(c.refused ? { ask: tooLong } : {}) }).catch(error => ({ workout: null, rejected: 'error: ' + error.message }));
+  const w = r.workout, sport = c.sport === 'run' ? 'run' : 'ride', cap = hardCapFor(coach, today);
+  const load = w ? workoutLoadCheck(w, sport) : null;
+  const checks = c.refused
+    ? [quality('dvakrát zamítnutý návrh: žádný trénink od AI ani z knihovny podle délky', w === null && Boolean(r.rejected), r.rejected || ''),
+      quality('zůstane výběr z knihovny pro aiWorkoutPick (poorFit platí)', r.poorFit === true)]
+    : [quality('Luna složil trénink, který prošel kontrolami', Boolean(w), r.rejected || ''),
+      ...(w ? [safety(`těžké minuty nejvýš ${cap} (strop rána)`, load.hard <= cap, load.hard + ' min'),
+        quality(`typ ${libraryKind(sport, c.kind)} a délka ${c.minutes} min`, w.primary_system === libraryKind(sport, c.kind) && Math.abs(load.total - c.minutes) <= 5, `${w.primary_system}, ${load.total} min`),
+        quality('zdůvodnění bez hodnocení dne', !/připravenost|dnes se hodí|readiness/i.test(w.ai?.reason || ''), w.ai?.reason || ''),
+        quality(`slova jen ${sport === 'run' ? 'z běhu' : 'z kola'}`, !otherSportWords(sport, [w.name, w.ai?.reason, w.intervals_description].join('\n')).length)] : [])];
+  // Illness, two hard days, a beginner: nothing at threshold and above.
+  if (w && (c.sick || c.hardDays >= 2 || c.beginner)) checks.push(safety('nic v pásmu prahu a výš', load.hard === 0, load.hard + ' min'));
+  const describe = !w ? (r.rejected ? `Nesložil nic, co by prošlo kontrolami: ${r.rejected}. Zůstává výběr z knihovny.` : 'Nesložil nic. Zůstává výběr z knihovny.')
+    : [`**${w.name}**, ${w.duration_minutes} min, těžké ${load.hard} min, obtížnost ${w.difficulty}`, w.ai?.reason || '', '```', String(w.intervals_description || '').trim(), '```'].filter(Boolean).join('\n');
+  return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'compose',
+    message: `Návrh kouče, ${sport === 'run' ? 'běh' : 'kolo'}, ${COMPOSE_KINDS[c.kind] || c.kind}, ${c.minutes} min, připravenost ${c.score} (${c.zone})`,
+    model: w?.ai?.model || (c.refused ? 'refused-stub' : model), ms: Date.now() - started, answer: describe, proposed: [], kept: [], checks, passed: true };
 }
 
 // S68: an easy spin or session offered for tonight, not ruled out, not for tomorrow.
@@ -1048,6 +1087,7 @@ export async function runCheckerScenario(env, scenario, { check = checkCoachAnsw
 // One situation through the real coach. `ask` is askCoach (tests pass their own).
 export async function runScenario(env, scenario, { ask = askCoach, check = checkCoachAnswer, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW } = {}) {
   if (scenario.compose) return runComposeScenario(env, scenario);
+  if (scenario.daily) return runDailyScenario(env, scenario);
   if (scenario.screen) return runScreenScenario(env, scenario, { date });
   if (scenario.planted) return runCheckerScenario(env, scenario, { check, date, now });
   // A situation on its own day (the personas) and at its own hour (S68).

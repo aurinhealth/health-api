@@ -146,7 +146,7 @@ test("the AI after the answer fits Cloudflare's time, and a try without its work
   // The generator's AI calls end within the budget, with a short wait for a slot.
   assert.match(src, /slotWaitMs:Math\.min\(5000,/);
   assert.match(src, /aiWorkoutPick\(env,generated,\{[^}]*\.\.\.\(ask\?\{ask\}:\{\}\)\}\)/);
-  assert.match(src, /composeWorkout\(env,\{sport:genSport[^}]*\.\.\.\(ask\?\{ask\}:\{\}\)\}\)/);
+  assert.match(src, /dailyOwnWorkout\(env,generated\.workout,\{sport:genSport[^}]*\.\.\.\(ask\?\{ask\}:\{\}\)\}\)/);
 });
 
 test("a choice without a workout goes into the day's plan, and a changed mind takes it out", async () => {
