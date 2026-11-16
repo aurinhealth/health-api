@@ -3783,7 +3783,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // passes the load rules like a chat card asked for again; red and illness
       // still hold (Petr 2026-10-27: "chci intervaly" gave the same ride).
       const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true||body.insisted===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
-      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,...await capabilitiesWithLevel(env.DB,genSport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport:genSport};
+      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,...await capabilitiesWithLevel(env.DB,genSport).then(c=>({capabilities:c.capabilities,experience:c.level,runBase:c.runBase})),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
       if(askedFocus&&!['recovery','endurance','long_endurance'].includes(askedFocus)&&coach.readiness?.status==='red')coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(planFocus||weekRole?.focus)});
@@ -3819,8 +3819,13 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
         const ask=until?(e,o)=>{const left=until-Date.now();return left<2000?Promise.reject(new Error('AI time for this answer is spent')):callOpenAI(e,{...o,slotWaitMs:Math.min(5000,Math.round(left/3)),timeoutMs:Math.min(o.timeoutMs||left,left)});}:null;
         const before=generated.workout?.id,today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await readinessCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null,ratings:await recentWorkoutRatings(env.DB,{sport:genSport,since:shiftDate(date,-42)})};
         // Nothing in the library fits the day well: the AI writes its own (ai-workout-compose.js).
-        const own=(await dailyOwnWorkout(env,generated.workout,{sport:genSport,kind:coachKind,minutes:sessionMinutes||generated.durationMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})})).workout;
-        generated=own?{...generated,workout:renderForEnvironment(own,environment),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})});
+        // background (the library's proposal, option A): the coach writes after
+        // the answer, the library's pick shows with aiPending until the app asks again.
+        // The key holds the brief and the morning (a check-in or a sync that changes the zone asks anew).
+        const ownMinutes=sessionMinutes||generated.durationMinutes;
+        const bg=body.background===true&&ctx?.waitUntil?{key:composeKey({date,sport:genSport,environment,kind:coachKind,minutes:ownMinutes})+'|'+(coach.readiness?.status||'')+'|'+(today.feeling||''),defer:p=>ctx.waitUntil(p)}:{};
+        const daily=await dailyOwnWorkout(env,generated.workout,{sport:genSport,kind:coachKind,minutes:ownMinutes,coach,today,focus:coachInputs.focus,experience:coachInputs.experience,runBase:coachInputs.runBase,thresholds,...bg,...(ask?{ask}:{})}),own=daily.workout;
+        generated=own?{...generated,workout:renderForEnvironment(own,environment),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:daily.pending?{...generated,aiPending:true}:daily.tried?generated:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})});
         if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
       }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;
