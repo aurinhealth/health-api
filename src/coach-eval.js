@@ -719,6 +719,10 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'D03', title: 'Návrh kouče: kolo po dvou tvrdých dnech', daily: { sport: 'ride', kind: 'endurance', minutes: 90, zone: 'green', score: 74, hardDays: 2 } },
   { id: 'D04', title: 'Návrh kouče: začínající běžec 30 min', daily: { sport: 'run', kind: 'endurance', minutes: 30, zone: 'green', score: 70, beginner: true } },
   { id: 'D05', title: 'Návrh kouče: dvakrát zamítnutý návrh nechá výběr z knihovny', daily: { sport: 'ride', kind: 'tempo', minutes: 45, zone: 'yellow', score: 64, refused: true } },
+  // Step 2 (COACH_FIRST, on the test server): the library fits well and the coach still writes first,
+  // to the engine's target difficulty ± 0.75.
+  { id: 'D06', title: 'Kouč píše první: kolo sweet spot 75 min', daily: { sport: 'ride', kind: 'sweet_spot', minutes: 75, zone: 'green', score: 78, first: true, target: 5, experience: 'intermediate' } },
+  { id: 'D07', title: 'Kouč píše první: běh tempo 45 min, zkušený', daily: { sport: 'run', kind: 'tempo', minutes: 45, zone: 'green', score: 76, first: true, target: 5.5, experience: 'experienced' } },
   // The answer checker (coach-checker.js) on fixed answers with a planted fault
   // (experiment 2026-11-11: the regex checks found 1 of 12): it must name the
   // fault's category, and say nothing on the clean answers (K09, K10, K11;
@@ -928,7 +932,7 @@ export function cardKind(athlete, action, library = []) {
   return coach.recommendation?.session?.kind || null;
 }
 
-const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost', recovery: 'regenerace' };
+const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost', recovery: 'regenerace', sweet_spot: 'sweet spot' };
 
 // Two "intensity=interval" steps in a row in the workout's text (a repeat's steps come round again).
 export function effortsBackToBackText(description) {
@@ -1000,9 +1004,11 @@ export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout 
   const today = { score: c.score, zone: c.zone, ...(c.sick ? { feeling: 'sick' } : {}) };
   const focus = c.beginner ? { sport: 'running', sportLabel: L('běh', 'running'), goal: L('Začínám běhat, chci uběhnout 5 km.', 'I am new to running and want to run 5 km.') } : null;
   // The ranked library pick of the coach's type, under COMPOSE_BELOW.
-  const pick = { id: 'library-pick', primary_system: c.kind, suitability: 60, duration_minutes: c.minutes };
+  const pick = { id: 'library-pick', primary_system: libraryKind(c.sport, c.kind), suitability: c.first ? 95 : 60, duration_minutes: c.minutes };
+  if (c.target) coach.recommendation.progression = { targetDifficulty: c.target };
+  const first = c.first ? { env: { ...env, COACH_FIRST: 'true' }, experience: c.experience, thresholds: c.sport === 'run' ? { runThresholdPace: '4:40' } : { ftp: 260 } } : null;
   const tooLong = async () => ({ text: JSON.stringify({ name: 'Tempo', reason: L('Tempo ve třech blocích.', 'Tempo in three blocks.'), blocks: [{ repeats: 1, steps: [{ label: 'warm-up', seconds: 900, low: 55, high: 65 }] }, { repeats: 3, steps: [{ label: 'tempo', seconds: 900, low: 80, high: 85 }, { label: 'easy', seconds: 300, low: 50, high: 55 }] }] }), model: 'refused-stub' });
-  const r = await daily(env, pick, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today, focus, model, save: false, log: false, ...(c.refused ? { ask: tooLong } : {}) }).catch(error => ({ workout: null, rejected: 'error: ' + error.message }));
+  const r = await daily(first?.env || env, pick, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today, focus, model, save: false, log: false, ...(first ? { experience: first.experience, thresholds: first.thresholds } : {}), ...(c.refused ? { ask: tooLong } : {}) }).catch(error => ({ workout: null, rejected: 'error: ' + error.message }));
   const w = r.workout, sport = c.sport === 'run' ? 'run' : 'ride', cap = hardCapFor(coach, today);
   const load = w ? workoutLoadCheck(w, sport) : null;
   const checks = c.refused
@@ -1018,6 +1024,11 @@ export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout 
         ...(c.hardDays ? [quality('zdůvodnění zmíní tvrdé dny', /tvrd|těžk|náročn|intenzivn\p{L}* (?:dn|trénin)|únav|\bhard\b|fatigue/iu.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
         ...(c.sick ? [quality('zdůvodnění zmíní nemoc', ILLNESS.test(w.ai?.reason || '') || /\bsick|\bill\b/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
         quality(`slova jen ${sport === 'run' ? 'z běhu' : 'z kola'}`, !otherSportWords(sport, [w.name, w.ai?.reason, w.intervals_description].join('\n')).length)] : [])];
+  if (c.first) {
+    checks.push(quality('kouč psal první, i když knihovna sedí', r.coachFirst === true, r.held || ''));
+    const lo = Math.round((c.target - 0.75) * 10) / 10, hi = Math.round((c.target + 0.75) * 10) / 10;
+    if (w) checks.push(quality(`obtížnost v pásmu ${lo}–${hi}`, Number(w.difficulty) >= lo && Number(w.difficulty) <= hi, String(w.difficulty)));
+  }
   // Illness, two hard days, a beginner: nothing at threshold and above.
   if (w && (c.sick || c.hardDays >= 2 || c.beginner)) checks.push(safety('nic v pásmu prahu a výš', load.hard === 0, load.hard + ' min'));
   const describe = !w ? (r.rejected ? `Nesložil nic, co by prošlo kontrolami: ${r.rejected}. Zůstává výběr z knihovny.` : 'Nesložil nic. Zůstává výběr z knihovny.')

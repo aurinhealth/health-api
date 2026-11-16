@@ -3819,7 +3819,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
         const ask=until?(e,o)=>{const left=until-Date.now();return left<2000?Promise.reject(new Error('AI time for this answer is spent')):callOpenAI(e,{...o,slotWaitMs:Math.min(5000,Math.round(left/3)),timeoutMs:Math.min(o.timeoutMs||left,left)});}:null;
         const before=generated.workout?.id,today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await readinessCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null,ratings:await recentWorkoutRatings(env.DB,{sport:genSport,since:shiftDate(date,-42)})};
         // Nothing in the library fits the day well: the AI writes its own (ai-workout-compose.js).
-        const own=(await dailyOwnWorkout(env,generated.workout,{sport:genSport,kind:coachKind,minutes:sessionMinutes||generated.durationMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})})).workout;
+        const own=(await dailyOwnWorkout(env,generated.workout,{sport:genSport,kind:coachKind,minutes:sessionMinutes||generated.durationMinutes,coach,today,focus:coachInputs.focus,experience:coachInputs.experience,thresholds,...(ask?{ask}:{})})).workout;
         generated=own?{...generated,workout:renderForEnvironment(own,environment),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})});
         if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
       }

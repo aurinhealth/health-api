@@ -106,7 +106,7 @@ const SCHEMA = { type: "json_schema", name: "own_workout", strict: true, schema:
 // `diagnose`: instead of null, return { rejected } naming the check the AI's
 // workout failed (the coach evaluation). With a band, a workout whose only
 // fault is a difficulty outside it is asked for once more with that number.
-export async function composeWorkout(env, { sport = "ride", kind, minutes, coach = {}, today = {}, focus = null, asked = null, model = null, save = true, ask = callOpenAI, diagnose = false, fallback = libraryFallback } = {}) {
+export async function composeWorkout(env, { sport = "ride", kind, minutes, coach = {}, today = {}, focus = null, asked = null, daily = null, model = null, save = true, ask = callOpenAI, diagnose = false, fallback = libraryFallback } = {}) {
   sport = sport === "run" ? "run" : "ride";
   const type = libraryKind(sport, kind), length = Math.round(Number(minutes) || 0);
   if (!env.OPENAI_API_KEY || (save && !env.DB?.userId) || !(length >= 20)) return null;
@@ -117,7 +117,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase();
   // The athlete's own choice is the brief: the morning only adds a warning.
   const cap = asked ? Math.max(HARD_CAP.green, Math.round(length / 2)) : hardCapFor(coach, today), warning = asked ? composeWarning(type, zone) : null;
-  const band = asked && (asked.minDifficulty != null || asked.maxDifficulty != null) ? [Number(asked.minDifficulty ?? 1), Number(asked.maxDifficulty ?? 10)] : null;
+  const band = asked && (asked.minDifficulty != null || asked.maxDifficulty != null) ? [Number(asked.minDifficulty ?? 1), Number(asked.maxDifficulty ?? 10)] : daily?.band || null;
   if (save && asked?.key) {
     await ensureAiWorkouts(env.DB);
     const kept = await composedFor(env.DB, asked.key);
@@ -126,6 +126,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   const facts = {
     sport, language: L("cs", "en"), type, minutes: length, hardMinutesCap: cap,
     ...(asked ? { chosenByAthlete: true } : {}), ...(band ? { difficulty: { min: band[0], max: band[1], scale: "1–10" } } : {}),
+    ...(daily?.experience ? { athleteLevel: daily.experience } : {}),
     readiness: { score: today.score ?? coach.readiness?.score ?? null, zone, feeling: today.feeling || null },
     sleep: today.sleep || null,
     form: { tsb: coach.readiness?.tsb ?? null, hardDaysLast7: coach.load?.hardBikeDaysRolling7d ?? null },
@@ -134,7 +135,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   try {
     const input = L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts);
     const compose = async extra => {
-      const r = await ask(env, { feature: "workout-compose", instructions: withFocus(instructions(sport, { asked: Boolean(asked) }), focus) + extra, input, format: SCHEMA, maxOutputTokens: 2500, model: model || lightModel(env) });
+      const r = await ask(env, { feature: "workout-compose", instructions: withFocus(instructions(sport, { asked: Boolean(asked), band: Boolean(band) }), focus) + extra, input, format: SCHEMA, maxOutputTokens: 2500, model: model || lightModel(env) });
       const data = JSON.parse(r.text);
       // A draft the editor's own rules refuse (a step under 30 % FTP, run 44
       // and 45, W01) is a failed check like the others: the second try and
@@ -187,6 +188,28 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   }
 }
 
+// Step 2 of the coach roadmap (Petr 2026-11-16, thread "Nechat kouče psát
+// tréninky na míru"): with COACH_FIRST the AI writes today's ride or run
+// first, the library stays the backstop. Only where the cycling and running
+// coaches let it (/mnt/project-files/kouc-pise-prvni/): easy, tempo and sweet
+// spot days for everyone with a threshold; harder types only for an
+// experienced athlete on a green morning. A beginner or one returning after a
+// break, a sick check-in, the plan's day, a ride over 120 min or a run over
+// 90 min stay with the library.
+export const coachFirstOn = env => env?.COACH_FIRST === "true";
+const COACH_FIRST_EASY = ["endurance", "long_endurance", "tempo", "sweet_spot", "recovery"];
+export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = {}, experience = null, thresholds = {} } = {}) {
+  const run = sport === "run", c = coach.constraints || {}, zone = String(coach.readiness?.status || today.zone || "green").toLowerCase();
+  if (c.plannedToday) return "planned";
+  if (c.novice) return "novice";
+  if (c.returning) return "returning";
+  if (today.feeling === "sick") return "sick";
+  if (run ? !thresholds.runThresholdPace : !Number(thresholds.ftp)) return "no threshold";
+  if (Number(minutes) > (run ? 90 : 120)) return "long";
+  if (!COACH_FIRST_EASY.includes(kind) && (experience !== "experienced" || zone !== "green")) return "hard type";
+  return null;
+}
+
 // Today's proposal (Návrh kouče): the AI's own workout when the library's
 // ranked pick fits the day poorly (poorFit). With no library fallback: a
 // draft refused twice leaves `workout` null, so the ranked pick stays and
@@ -194,16 +217,21 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
 // workout picked by its length alone. One log line per proposal counts how
 // often poorFit fires and compose is refused: sport, type and the refused
 // checks only, no health data.
-export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, ...opts } = {}) {
+// With COACH_FIRST (coachFirst lets it) the AI writes first whatever the fit,
+// to the coach engine's target difficulty ± 0.75 (our calibration).
+export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, ...opts } = {}) {
   const poor = poorFit(pick, { sport, kind });
-  const r = poor ? await composeWorkout(env, { sport, kind, ...opts, diagnose: true, fallback: null }) : null;
+  const held = coachFirstOn(env) ? coachFirst({ sport, kind, minutes: opts.minutes, coach: opts.coach, today: opts.today, experience, thresholds }) : "off";
+  const first = held === null, target = Number(opts.coach?.recommendation?.progression?.targetDifficulty);
+  const band = first && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
+  const r = poor || first ? await composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience } } : {}), diagnose: true, fallback: null }) : null;
   const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
   // Only the names of the refused checks ("hard", "length"): their numbers
   // (the hard-minute cap) would tell the morning's readiness, and an error's
   // text may quote the model.
   const error = Boolean(rejected?.startsWith("error:")), checks = rejected && !error ? [...new Set(rejected.split(", ").map(f => f.split(" ")[0]))].join(",") : null;
-  if (log) console.log(JSON.stringify({ daily_compose: !poor ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(checks ? { rejected: checks } : {}) }));
-  return { workout, poorFit: poor, rejected };
+  if (log) console.log(JSON.stringify({ daily_compose: !poor && !first ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(held !== "off" ? { coach_first: held || "yes" } : {}), ...(checks ? { rejected: checks } : {}) }));
+  return { workout, poorFit: poor, coachFirst: first, held: held === "off" ? null : held, rejected };
 }
 
 // The AI's workout keeps to the brief: the length within 5 minutes, the type,
