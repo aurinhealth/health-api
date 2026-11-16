@@ -179,6 +179,8 @@ export function loadView(series, historyDays) {
   });
   const level = points.at(-1).level;
   return {
+    // learning: under MIN_HISTORY_DAYS of history; quiet: history enough but no load in the last 28 days; ready: a level.
+    state: level ? "ready" : historyDays < MIN_HISTORY_DAYS ? "learning" : "quiet",
     level,
     label: loadLevelLabel(level),
     text: level ? LOAD_TEXTS[level] : null,
@@ -199,8 +201,12 @@ export function loadBalance(rows, date) {
 // gymSessions of strength_sets rows, {date, minutes, rpe, volume}), each
 // day's session RPE load (strengthLoad), so cardio and endurance never count.
 // Null without a gym session in the window: a swimmer gets an empty dial, not 0.
-export function muscleLoad(sessions, date, loadOf) {
+// `since`: the first gym day on record, when it is older than the sets read,
+// so a lifter back from a break is not "learning" again.
+export function muscleLoad(sessions, date, loadOf, since = null) {
   const rows = (Array.isArray(sessions) ? sessions : []).map(s => ({ id: s.date, load: loadOf(s) })).filter(r => r.load > 0);
   if (!rows.length) return null;
-  return loadBalance(rows, date);
+  const { series, historyDays } = dailyLoadSeries(rows, date);
+  const first = isDate(since) && since <= date ? daysBetween(since, date) + 1 : 0;
+  return loadView(series, Math.max(historyDays, first));
 }

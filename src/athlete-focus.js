@@ -107,11 +107,15 @@ export function goalTypeOf(p = {}) {
 // A profile being saved over `saved`: away from Lose weight to Race or Get
 // fitter, a losing calorie goal the athlete did not change becomes maintain
 // (no hidden deficit; the default since PR #1118 is maintain too).
-export function withGoalType(next = {}, saved = {}) {
-  const before = goalTypeOf(saved || {}), words = String(next.sportGoal || "").trim().toLowerCase();
-  // An older app changes only the words: a new choice there wins over the key it sent back.
-  const oldApp = GOAL_TEXTS[words] && words !== String(saved?.sportGoal || "").trim().toLowerCase();
-  const type = oldApp ? GOAL_TEXTS[words] : goalTypeOf(next);
+export function withGoalType(next = {}, saved = {}, sent = next.goalType) {
+  const norm = v => String(v || "").trim().toLowerCase();
+  const words = norm(next.sportGoal), changed = words !== norm(saved?.sportGoal), before = goalTypeOf(saved || {});
+  // An older app picks a goal by writing its words; a newer one sends the key
+  // (`sent`, the request's own goalType). An older app never sends the key
+  // (normalizeProfile keeps only known fields), so unchanged words keep the saved one.
+  const type = GOAL_TEXTS[words] && changed ? GOAL_TEXTS[words]
+    : GOAL_TYPES.includes(sent) ? sent
+      : !changed ? goalTypeOf(saved || {}) : goalTypeOf(next);
   const out = { ...next };
   if (type) out.goalType = type; else delete out.goalType;
   // The choice kept as words too, so older apps and the coach read the same goal.

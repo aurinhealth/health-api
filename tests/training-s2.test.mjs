@@ -154,6 +154,9 @@ test("goalType reads the old Czech goal words and leaving Lose weight resets the
   const old = withGoalType({ ...saved, sportGoal: "zlepšit kondici" }, saved);
   assert.equal(old.goalType, "fitness");
   assert.equal(old.goal, "maintain");
+  // An older build saving anything else sends no key: the saved one stays.
+  const own = { goalType: "race", sportGoal: "Sub 3 marathon", goal: "maintain" };
+  assert.equal(withGoalType(normalizeFocus({ sportGoal: "Sub 3 marathon" }), own, undefined).goalType, "race");
   // Own words stay as they are.
   assert.equal(withGoalType({ goalType: "race", sportGoal: "Prague half under 1:45", goal: "maintain" }, {}).sportGoal, "Prague half under 1:45");
 });
@@ -208,4 +211,31 @@ test("a swapped-in exercise's weight is only suggested and a main lift gets one 
   assert.equal(lift.warmupSet.reps, 5);
   assert.ok(lift.warmupSet.kg < lift.kg);
   assert.ok(alternatives.filter(a => !a.warmup).every(a => a.warmupSet == null));
+});
+
+test("the plan's done days seek the workout index by date", () => {
+  const source = readFileSync(new URL("../src/plan-context.js", import.meta.url), "utf8");
+  const sql = source.match(/export async function planSportDates[\s\S]*?prepare\("([^"]+)"\)/)[1];
+  const db = new DatabaseSync(":memory:");
+  db.exec(readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8"));
+  const plan = db.prepare("EXPLAIN QUERY PLAN " + sql).all(1, "2026-10-01", "2026-11-17").map(r => r.detail).join(" | ");
+  assert.match(plan, /idx_health_datapoints_user_1 \(user_id=\? AND source_family=\? AND data_type=\? AND start_time>\? AND start_time<\?\)/, plan);
+});
+
+test("the first gym day is one seek on the date index, and a lifter back from a break is not learning", () => {
+  const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const sql = source.match(/SELECT workout_date AS d FROM strength_sets WHERE user_id=\? AND completed=1 ORDER BY workout_date LIMIT 1/)[0];
+  const db = new DatabaseSync(":memory:");
+  db.exec(readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8"));
+  const plan = db.prepare("EXPLAIN QUERY PLAN " + sql).all(1).map(r => r.detail).join(" | ");
+  assert.match(plan, /idx_strength_sets_user_date \(user_id=\?\)/, plan);
+  assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+  const back = [];
+  for (let i = 0; i < 10; i += 2) back.push(...squats(shift(date, -i)));
+  assert.equal(muscleLoad(gymSessions(back), date, strengthLoad).state, "learning");
+  const returning = muscleLoad(gymSessions(back), date, strengthLoad, "2026-03-01");
+  assert.equal(returning.state, "ready");
+  assert.equal(returning.level, "wellAbove");
+  // History but nothing in the last 28 days: quiet, not learning.
+  assert.equal(loadBalance([{ id: shift(date, -35), load: 50 }], date).state, "quiet");
 });

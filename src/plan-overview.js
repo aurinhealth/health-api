@@ -28,7 +28,8 @@ export function planOverview(plan, { today, doneDates = [], days = [] } = {}) {
       monday,
       phase,
       phaseLabel: spec.gym ? spec.gym.name : phaseLabel(phase, template.sport),
-      keys: summary.weeks[i]?.keys || [],
+      // The key sessions of the week as it runs (a recovery week pulled sooner takes its own; a lighter week has none).
+      keys: spec.light ? [] : summary.weeks[pw?.index ?? i]?.keys || [],
       status,
       // Share of the planned sessions done, for a finished week only.
       ...(status === "done" && completion[i + 1] != null ? { completion: completion[i + 1] } : {}),

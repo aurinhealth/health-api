@@ -227,7 +227,7 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null }) {
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -399,7 +399,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // null without any load; Muscle load only from the gym's work sets
     // (`gymSets`), absent for an older caller that does not read them.
     loadBalance: loadBalance(intervals, date),
-    ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad) } : {}),
+    ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad, gymSince) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,

@@ -1980,9 +1980,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
   if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){let profile=normalizeProfile(await request.json().catch(()=>({})));
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const sent=await request.json().catch(()=>({}));let profile=normalizeProfile(sent);
     // The main goal as a key (athlete-focus.js withGoalType): leaving Lose weight resets an unchanged losing calorie goal to maintain.
-    profile=withGoalType(profile,await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first().then(r=>r?JSON.parse(r.profile_json):{}).catch(()=>({})));
+    profile=withGoalType(profile,await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first().then(r=>r?JSON.parse(r.profile_json):{}).catch(()=>({})),sent?.goalType);
     // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
     if(profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length){const pro=await subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>null);if(pro===false)profile=withoutProDiet(profile);else if(pro===null){const saved=await dashboardProfile(env).catch(()=>null);if(saved)profile={...profile,dietStyle:profile.dietStyle==='custom'&&saved.dietStyle!=='custom'?'balanced':profile.dietStyle,proteinPerKg:saved.proteinPerKg??null,nutrientTargets:saved.nutrientTargets||{}};}}if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
     // What "auto" resolves to with the saved goal and race (Settings shows it next to "automaticky").
@@ -3161,7 +3161,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [days,gym,health,fitness,insights,coaches,profiles,plans,gymSets]=await Promise.all([
+      const [days,gym,health,fitness,insights,coaches,profiles,plans,gymSets,gymSince]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
         trainingGymPlans(env,start,end,{summary:true}).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
@@ -3170,12 +3170,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null})),
         syncedPlans(env,date).catch(()=>({})),
         // Muscle load (workload-ratio.js): the gym's work sets of the last 42 days, one read on idx_strength_sets_user_date.
-        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null)
+        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null),
+        // The first gym day on record (one index seek), so a lifter back from a break is not learning again.
+        env.DB.prepare("SELECT workout_date AS d FROM strength_sets WHERE user_id=? AND completed=1 ORDER BY workout_date LIMIT 1").bind(env.USER_ID).first().then(r=>r?.d?String(r.d).slice(0,10):null).catch(()=>null)
       ]);
       // Without a main race in the profile, the race of the running plan is the one Training counts down to.
       const planTemplate=plans.active&&getTemplate(plans.active.templateId),planRace=planTemplate?.race&&plans.active.raceDate>=date?{name:planTemplate.name,date:plans.active.raceDate}:null;
       // The saved profile says whether the athlete has set a focus yet ("Nastav si zaměření a cíle").
-      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace,gymSets}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace,gymSets,gymSince}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
