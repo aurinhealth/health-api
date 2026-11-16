@@ -63,7 +63,7 @@ through, so a workflow edited on a branch gets none of them:
 | --- | --- | --- | --- |
 | `production` | `CLOUDFLARE_API_TOKEN` | `deploy-worker.yml` deploy with target production (also from Vydat), `food-micros.yml` | the owner approves; main only |
 | `staging` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (the test account's) | `deploy-worker.yml` deploy to the test server (every push to main) | main only |
-| `backup` | `CLOUDFLARE_API_TOKEN` | `db-backup.yml` (Sunday nights) | main only, no approval: the night run would wait for it while holding `production-deploy` and block every deploy |
+| `backup` | `CLOUDFLARE_API_TOKEN` | `db-backup.yml` (Saturday nights) | main only, no approval: the night run would wait for it while holding `production-deploy` and block every deploy |
 | `testflight` | `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | `ios-testflight.yml` on main and by hand, Vydat's pick and release | main only |
 | `testflight-pr` | the same four | `ios-testflight.yml` on a pull request that changes it | the owner approves; any branch |
 
