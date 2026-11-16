@@ -1160,11 +1160,17 @@ enum C {
     static let stale = Color(red: 0x6E / 255, green: 0x74 / 255, blue: 0x71 / 255)
     /// Strain under its target before the evening: fine for now.
     static let neutral = Color(red: 0xD9 / 255, green: 0xD6 / 255, blue: 0xD0 / 255)
-    static let green = Color(red: 0x8F / 255, green: 0xE6 / 255, blue: 0xC4 / 255)
-    static let amber = Color(red: 0xF2 / 255, green: 0xB4 / 255, blue: 0x6B / 255)
+    /// The state colours (Palette.Status, Shared/StatusHex.swift), dark.
+    static let green = status(StatusHex.good.dark)
+    static let amber = status(StatusHex.warn.dark)
     static let indigo = Color(red: 0xA5 / 255, green: 0xA1 / 255, blue: 0xFF / 255)
     static let pink = Color(red: 0xF5 / 255, green: 0x9B / 255, blue: 0xB0 / 255)
-    static let red = Color(red: 1, green: 0x6B / 255, blue: 0x5B / 255)
+    static let red = status(StatusHex.bad.dark)
+
+    private static func status(_ hex: UInt32) -> Color {
+        let c = StatusHex.rgb(hex)
+        return Color(red: c.red, green: c.green, blue: c.blue)
+    }
     static let carbs = Color(red: 1, green: 0xC2 / 255, blue: 0x74 / 255)
     static let protein = Color(red: 0x83 / 255, green: 0xC7 / 255, blue: 1)
     static let fat = Color(red: 0xB3 / 255, green: 0xA1 / 255, blue: 1)

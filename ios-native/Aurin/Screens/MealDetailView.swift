@@ -157,7 +157,7 @@ struct MealDetailContent: View {
                 }
             }
 
-            Text(meal.label).font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 28)
+            Text(meal.label).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 28)
             HStack(alignment: .lastTextBaseline, spacing: 10) {
                 Text(Fmt.int(meal.kcal ?? 0)).font(Typo.number(76)).foregroundStyle(Palette.ink)
                 if let goal { Text(L10n.f("z %@ kcal", Fmt.int(goal.kcal))).font(Typo.small).foregroundStyle(Palette.muted) }

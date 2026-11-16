@@ -44,7 +44,7 @@ struct StepsDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Pohyb").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            Text("Pohyb").font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             Picker("Období", selection: $period) {
                 ForEach(Period.allCases) { r in Text(LocalizedStringKey(r.title)).tag(r) }
             }

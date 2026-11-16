@@ -916,8 +916,8 @@ struct MaxHeartSuggestion: View {
 struct HeartZoneStrip: View {
     let zones: [TrainingProfileResponse.HRZone]
 
-    static let colors: [Color] = [Palette.faint, Palette.blue, Palette.green, Palette.amberBar, Palette.rust, Palette.indigo, Palette.indigo]
-    static func color(_ index: Int) -> Color { colors[min(index, colors.count - 1)] }
+    /// The one zone palette (Palette.Zone).
+    static func color(_ index: Int) -> Color { Palette.Zone.color(index) }
 
     /// Each zone's width in beats; an open end gets a tenth of the whole span.
     private var widths: [Double] {

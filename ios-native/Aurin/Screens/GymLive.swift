@@ -39,7 +39,7 @@ struct LiveGymView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScreenBackground(glow: Palette.Glow.training)
+            ScreenBackground(glow: Palette.Glow.gym)
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             if let day {
                 if summary {
@@ -126,7 +126,7 @@ struct LiveGymView: View {
 
             if list.isEmpty {
                 VStack(spacing: 18) {
-                    Text("Zatím žádný cvik").font(Typo.sentence(22)).foregroundStyle(Palette.secondary)
+                    Text("Zatím žádný cvik").font(Typo.heading(22)).foregroundStyle(Palette.secondary)
                     PrimaryButton(title: L10n.tr("Přidat cvik"), systemImage: "plus") { picking = true }
                 }
                 .frame(maxWidth: .infinity)
@@ -288,7 +288,7 @@ struct LiveGymView: View {
         let title = day.planName ?? (done.isEmpty ? L10n.tr("Silový trénink") : GymCoach.title(done.map(\.name), catalog: catalog, known: muscles))
         return VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: "Posilovna dokončena").padding(.top, 24)
-            Text(title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
+            Text(title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
             HStack(alignment: .top, spacing: 8) {
                 GymStat(label: "Čas", value: time.value, unit: time.unit)
                 GymStat(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit)

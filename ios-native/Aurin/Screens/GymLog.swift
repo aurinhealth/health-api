@@ -32,7 +32,7 @@ struct GymDoneDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
+            Text(title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
             // Who recorded it, and after a merge whose heart rate and calories count.
             if let line = SourceLine.gym(session) { line.padding(.top, 10) }
             stats.padding(.top, 18)
@@ -287,7 +287,7 @@ struct KcalCheckCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Kalorie k ověření", systemImage: "exclamationmark.triangle")
                 .font(Typo.bodyStrong).foregroundStyle(Palette.amber)
-            Text(sentence).font(Typo.sentence(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(sentence).font(Typo.coach(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             if let reason, !reason.isEmpty {
                 Text(reason).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -500,7 +500,7 @@ struct GymCoachLine: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "sparkles").scaledFont(13).foregroundStyle(Palette.amber)
-            Text(text).font(Typo.sentence(16)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(text).font(Typo.coach(17)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -608,7 +608,7 @@ struct GymExerciseSearch: View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 if let eyebrow { SectionLabel(text: eyebrow) }
-                Text(L10n.tr(title)).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(L10n.tr(title)).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

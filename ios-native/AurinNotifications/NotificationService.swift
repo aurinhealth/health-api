@@ -38,15 +38,12 @@ final class NotificationService: UNNotificationServiceExtension {
 /// The ring as a PNG in the extension's temporary folder (iOS moves the
 /// attachment into its own store).
 enum ReadinessRing {
-    /// The zone colours of the dark palette (Shared/Palette.swift green, amber, red):
+    /// The state colours of the dark palette (Shared/StatusHex.swift, Palette.Status):
     /// the ring sits on a dark tile in light and dark mode alike.
     static func color(_ zone: String?) -> UIColor {
-        switch zone {
-        case "green": return UIColor(red: 0x8F / 255, green: 0xE6 / 255, blue: 0xC4 / 255, alpha: 1)
-        case "yellow": return UIColor(red: 0xF2 / 255, green: 0xB4 / 255, blue: 0x6B / 255, alpha: 1)
-        case "red": return UIColor(red: 0xFF / 255, green: 0x6B / 255, blue: 0x5B / 255, alpha: 1)
-        default: return UIColor(white: 0.85, alpha: 1)
-        }
+        guard let hex = StatusHex.zone(zone)?.dark else { return UIColor(white: 0.85, alpha: 1) }
+        let c = StatusHex.rgb(hex)
+        return UIColor(red: c.red, green: c.green, blue: c.blue, alpha: 1)
     }
 
     static func image(score: Int, zone: String?) -> UIImage {

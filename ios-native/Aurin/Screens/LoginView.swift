@@ -82,7 +82,7 @@ struct LoginView: View {
             Spacer(minLength: 0)
             WelcomeLock(shut: page == Self.signIn)
             Text("Tvoje data pracují jen pro tebe.")
-                .font(Typo.sentence(32, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .font(Typo.heading(32, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 8)
@@ -228,7 +228,7 @@ struct PasskeyOfferSheet: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: "faceid").scaledFont(40, weight: .light).foregroundStyle(Palette.green)
-                Text("Příště přes Face ID").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Příště přes Face ID").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 Spacer()
@@ -281,7 +281,7 @@ struct EmailLoginSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                Text(sent ? "Zadej kód z e-mailu" : "Přihlášení e-mailem").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(sent ? "Zadej kód z e-mailu" : "Přihlášení e-mailem").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 if sent {
                     Text(L10n.f("Poslali jsme ho na %@. Platí 10 minut.", email)).font(Typo.small).foregroundStyle(Palette.muted)
                     TextField("123456", text: $code)

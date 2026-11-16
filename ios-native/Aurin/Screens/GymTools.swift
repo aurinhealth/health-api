@@ -284,7 +284,7 @@ struct GymBuilderView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
                 Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
-                    .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 if let proposal { result(proposal) } else if let template { templateForm(template) }
@@ -373,7 +373,7 @@ struct GymBuilderView: View {
                 MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 96)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: data.headline).font(Typo.sentence(21)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     if let most = data.tired.first {
                         // Under "ready", the tired muscle reads as tired: "Ještě unavené: hýždě, odpočaté za 2 dny".
                         Text(verbatim: L10n.f("Ještě unavené: %@, odpočaté %@", L10n.tr(most.label).lowercased(with: Fmt.locale), most.readyText(today: data.date)))
@@ -961,7 +961,7 @@ struct EquipmentView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Vybavení posilovny").padding(.top, 24)
-                Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Kde cvičíš?").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 VStack(spacing: 10) {
                     ForEach(sorted) { place in placeRow(place) }

@@ -343,11 +343,11 @@ struct CoachView: View {
     private var dayWelcome: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let s = home?.morningSummary, let headline = s.headline {
-                Text(headline).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(headline).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 if let text = s.text { Text(text).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true) }
                 if let rec = s.recommendation { Text(rec).font(Typo.sentenceItalic(18)).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true) }
             } else {
-                Text("Na co se chceš zeptat?").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Na co se chceš zeptat?").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
             }
             if let priorities = home?.priorities, !priorities.isEmpty {
                 SectionLabel(text: "Dnes je důležité").padding(.top, 6)
@@ -1148,7 +1148,7 @@ struct ActionCard: View {
                         } label: {
                             VStack(spacing: 1) {
                                 Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.caption.weight(.medium))
-                                Text(verbatim: Fmt.dayMonth(day.date)).scaledFont(10.5, cap: .denseCap).foregroundStyle(day.fits ? Palette.muted : Palette.ink.opacity(0.25))
+                                Text(verbatim: Fmt.dayMonth(day.date)).scaledFont(11, cap: .denseCap).foregroundStyle(day.fits ? Palette.muted : Palette.ink.opacity(0.25))
                             }
                             .foregroundStyle(day.fits ? Palette.ink : Palette.ink.opacity(0.3))
                             .frame(width: 52, height: 44)
@@ -1193,7 +1193,7 @@ struct PlanProposalBlock: View {
         let card = action.trainingPlan
         VStack(alignment: .leading, spacing: 8) {
             Label(L10n.tr("Tréninkový plán"), systemImage: "calendar").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-            Text(verbatim: action.planName ?? "").font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: action.planName ?? "").font(Typo.heading(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             if let weeks = card?.weeks, !weeks.isEmpty {
                 PlanWeeksChart(bars: weeks.map { PlanWeeksChart.Bar(week: $0.week, phase: $0.race == true ? "race" : $0.phase, value: Double(max($0.minutes, 1)), minutes: $0.minutes, done: nil) }, compact: true)
             }
@@ -1274,7 +1274,7 @@ struct WorkoutPreviewBlock: View {
             Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
-                Text(verbatim: workout.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: workout.name).font(Typo.heading(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 if let blocks = workout.steps, !WorkoutProfile.segments(blocks).isEmpty {
                     WorkoutProfile(blocks: blocks, sport: action.sport ?? "ride", compact: true)
                 }
@@ -1284,7 +1284,7 @@ struct WorkoutPreviewBlock: View {
                 }
             } else if let plan = preview.plan {
                 let exercises = GymProposal(draftId: nil, planName: plan.planName ?? "", rationale: nil, rows: plan.rows, muscles: [:]).exercises
-                Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 VStack(spacing: 0) {
                     ForEach(Array(exercises.prefix(5).enumerated()), id: \.offset) { _, e in
                         HStack {

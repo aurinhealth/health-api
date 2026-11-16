@@ -199,7 +199,7 @@ struct GymSessionView: View {
                     }
                 }
             } else if let day, !day.exercises.isEmpty {
-                Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
+                Text(day.planName ?? "Silový trénink").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
                 let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
                 let before = parts.before(day).reduce(0) { $0 + parts.minutes($1, day: day) }
@@ -251,7 +251,7 @@ struct GymSessionView: View {
                 ShareWorkoutButton(template: kept, date: date, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
-                    .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
+                    .font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
                 Picker("Délka", selection: $minutes) {
                     ForEach([30, 45, 60, 75, 90], id: \.self) { Text("\($0) min").tag($0) }
                 }
@@ -573,7 +573,7 @@ struct TechniqueSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(exercise).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(exercise).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }
@@ -871,7 +871,7 @@ struct AlternativesSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(text: "Nahradit cvik")
                 Text(verbatim: ExerciseCatalog.shownName(exercise))
-                    .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle {
                     Text(verbatim: subtitle).font(Typo.body).foregroundStyle(Palette.muted)

@@ -258,7 +258,7 @@ struct PaywallView: View {
     private var freeWeek: some View {
         VStack(spacing: 0) {
             topBar(back: !notNow)
-            Text("Tvůj týden zdarma").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+            Text("Tvůj týden zdarma").font(Typo.heading(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
                 .multilineTextAlignment(.center)
             Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
                 .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
@@ -903,7 +903,7 @@ struct OfferCard: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? .clear : Night.line))
             .overlay(alignment: .topLeading) {
                 if offer.trial {
-                    Text("7 DNÍ ZDARMA").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                    Text("7 DNÍ ZDARMA").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Night.mint, in: Capsule())
                         .offset(x: 10, y: -9)
@@ -954,7 +954,7 @@ struct AllProPlans: View {
                     .accessibilityLabel(L10n.tr("Zavřít"))
                 }
                 .padding(.top, 16)
-                Text("Všechny tarify").font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+                Text("Všechny tarify").font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
                     .multilineTextAlignment(.center)
                 includedList.padding(.top, 18)
                 HStack(alignment: .top, spacing: 10) {
@@ -1098,7 +1098,7 @@ struct PlanCard: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Night.line))
             .overlay(alignment: .topLeading) {
                 if let save = offer.save {
-                    Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                    Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
                         .lineLimit(1).fixedSize()
                         .padding(.horizontal, 9).padding(.vertical, 3)
                         .background(Night.mint, in: Capsule())
@@ -1128,7 +1128,7 @@ struct WeekCalendar: View {
                 ForEach(days.indices, id: \.self) { i in
                     VStack(spacing: 6) {
                         Text(verbatim: i == 0 ? L10n.tr("DNES") : days[i].formatted(.dateTime.weekday(.abbreviated).locale(L10n.locale)).uppercased())
-                            .scaledFont(10, weight: .semibold, cap: .denseCap)
+                            .scaledFont(11, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(i == 0 ? Night.mint : Night.faint)
                         ZStack {
                             Circle().fill(i == 0 ? Night.mint : Night.card)

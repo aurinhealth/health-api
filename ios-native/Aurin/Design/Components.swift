@@ -65,7 +65,7 @@ struct WidgetHeader: View {
 struct HealthKitTag: View {
     var body: some View {
         Text("HK")
-            .scaledFont(9, weight: .bold)
+            .scaledFont(11, weight: .bold)
             .tracking(0.7)
             .foregroundStyle(Color(light: 0xC2410C, dark: 0xF6A06B))
             .padding(.horizontal, 5)

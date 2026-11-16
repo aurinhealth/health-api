@@ -54,7 +54,7 @@ struct PlanPreviewContent: View {
 
     var body: some View {
             VStack(alignment: .leading, spacing: 0) {
-                Text(template.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 18)
+                Text(template.name).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 18)
                 Text(template.goal).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).padding(.top, 4)
                 Card {
                     PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: template.weeks, preview: preview))
@@ -682,7 +682,7 @@ struct ActivePlanContent: View {
                      : active.started ? L10n.f("Týden %@ z %@", String(active.week), String(active.weeksCount)) + ", " + phase
                      : L10n.f("Začíná %@", Fmt.dayMonth(active.firstDay ?? active.startDate)))
             .padding(.top, 24)
-        Text(active.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+        Text(active.name).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
         if let proposal = active.proposal { PlanProposalCard(proposal: proposal, changed: reload).padding(.top, 16) }
         Card {
             PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, preview: preview, active: active), current: active.started ? active.week : 0)
@@ -889,7 +889,7 @@ struct ActivePlanContent: View {
         if !legs.isEmpty {
             Card {
                 WidgetHeader(title: L10n.tr("Závod"), color: Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
-                Text(verbatim: active.template.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text(verbatim: active.template.name).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 HStack(alignment: .top, spacing: 20) {
                     ForEach(legs.indices, id: \.self) { i in leg(legs[i].distance, legs[i].minutes) }
                     Spacer(minLength: 0)
@@ -910,7 +910,7 @@ struct ActivePlanContent: View {
         if let low = race.low, let high = race.high, let minutes = race.minutes {
             Card {
                 WidgetHeader(title: L10n.tr("Závod"), color: Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
-                Text(verbatim: active.template.name + " " + raceDistance(race.km)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text(verbatim: active.template.name + " " + raceDistance(race.km)).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: "\(low)–\(high) W").font(Typo.number(24)).foregroundStyle(Palette.ink)
@@ -1157,7 +1157,7 @@ struct PlanWeekContent: View {
     var body: some View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { ", " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
-                Text(week.phaseLabel).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(week.phaseLabel).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     HStack(spacing: 26) {
                         stat(String(detail.sessions.count), L10n.plural("tréninků", detail.sessions.count))
@@ -1527,7 +1527,7 @@ struct PlanResultContent: View {
     var body: some View {
                 VStack(alignment: .leading, spacing: 0) {
                     SectionLabel(text: result.name + ", " + Fmt.dayMonth(result.startDate) + "–" + Fmt.dayMonth(result.endDate)).padding(.top, 24)
-                    Text("Plán splněn").font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                    Text("Plán splněn").font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                     if let start = result.ftpStart, let end = result.ftpEnd {
                         Card {
                             VStack(spacing: 4) {

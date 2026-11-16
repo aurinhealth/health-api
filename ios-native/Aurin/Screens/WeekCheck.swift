@@ -123,7 +123,7 @@ struct WeekCheckContent: View {
                 Text("Kontrola týdne").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
             }
             if let summary = applied ? (appliedText ?? check.summary) : check.summary {
-                Text(summary).font(Typo.sentence(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                Text(summary).font(Typo.coach(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             }
             if !applied, let chips = check.chips, !chips.isEmpty {
                 FlowChips(chips: chips)

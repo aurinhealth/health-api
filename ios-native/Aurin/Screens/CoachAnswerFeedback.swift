@@ -97,7 +97,7 @@ struct AnswerFeedbackSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Co v odpovědi nesedělo?").font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text("Co v odpovědi nesedělo?").font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
             Text("Uloží se jen důvod, ne text chatu.").font(Typo.small).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4).padding(.bottom, 12)

@@ -4223,3 +4223,10 @@
 /* Add food: the month's free AI photos without Pro (src/food-photo-trial.js) */
 "Fotky jídla zdarma tento měsíc: zbývá %1$lld z %2$lld" = "Free photo logs this month: %1$lld of %2$lld left";
 "Fotky jídla zdarma na tento měsíc jsou využité. Aurin Pro zapíše jídlo z fotky, slovy nebo z webu." = "This month's free photo logs are used up. Aurin Pro logs meals by photo, in words or from the web.";
+
+/* Redesign glossary (one word for one thing, every screen): "Čas" = "Time" for a
+   workout's length and "Navrhnout trénink" = "Suggest a workout" are above. */
+"Auto" = "Auto";
+"Jiná možnost" = "Another option";
+"Tri" = "Tri";
+"Upravit cviky" = "Edit exercises";

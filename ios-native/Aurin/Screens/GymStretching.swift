@@ -280,11 +280,11 @@ struct StretchTimerView: View {
             if finished {
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").scaledFont(64).foregroundStyle(Palette.green)
-                Text(kind.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(kind.doneTitle).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Hotovo")) { if let onClose { onClose() } else { dismiss() } }
             } else if let hold {
-                Text(verbatim: hold.item.name).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: hold.item.name).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                 Text(verbatim: subtitle(hold)).font(.subheadline).foregroundStyle(Palette.muted)
                 if !hold.item.photoURLs.isEmpty { ExercisePhotos(urls: hold.item.photoURLs, labeled: false) }
@@ -726,7 +726,7 @@ struct GymGoalSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(L10n.tr("Cíl")).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(L10n.tr("Cíl")).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                 }

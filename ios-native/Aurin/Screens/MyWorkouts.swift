@@ -35,7 +35,7 @@ struct MyWorkoutsView: View {
         DetailScreen(glow: Palette.Glow.training, title: friends ? "Od přátel" : "Moje tréninky") {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(friends ? "Od přátel" : "Moje tréninky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text(friends ? "Od přátel" : "Moje tréninky").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Spacer()
                     if !friends {
                         Menu {
@@ -335,7 +335,7 @@ struct SharedWorkoutView: View {
                 if let share {
                     Text(share.own ? L10n.tr("Tvůj sdílený trénink") : share.fromName.map { L10n.f("%@ ti posílá trénink", $0) } ?? L10n.tr("Trénink od přítele"))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 24)
-                    Text(share.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
+                    Text(share.name).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
                     Text(([L10n.tr(LibrarySport.find(share.sport)?.label ?? "Posilovna")] + [share.template.summary]).joined(separator: ", "))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 4)
                     if share.template.isEndurance {
@@ -347,7 +347,7 @@ struct SharedWorkoutView: View {
                         SaveWorkoutButton(template: share.template).padding(.top, 10)
                     }
                 } else if let error {
-                    Text(error).font(Typo.sentence(22, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 40)
+                    Text(error).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).padding(.top, 40)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
                 }

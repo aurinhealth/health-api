@@ -92,7 +92,7 @@ struct ProPage: View {
     /// locked, ticked once the account has it (Pro, or everything during the pilot).
     private var contents: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: state.unlocked ? "Aurin Pro" : "Aurin Free").font(Typo.sentence(28)).foregroundStyle(Night.ink)
+            Text(verbatim: state.unlocked ? "Aurin Pro" : "Aurin Free").font(Typo.heading(28)).foregroundStyle(Night.ink)
             Text(verbatim: cardLine).font(.subheadline).foregroundStyle(Night.muted).padding(.top, 2).padding(.bottom, 10)
             ForEach(ProContents.free, id: \.self) { row($0, sub: false) }
             Text(verbatim: L10n.tr(state.unlocked ? "TAKÉ V CENĚ" : "S AURIN PRO"))
@@ -180,7 +180,7 @@ struct FreeWeekProgress: View {
                 ForEach(days.indices, id: \.self) { i in
                     VStack(spacing: 6) {
                         Text(verbatim: i == today ? L10n.tr("DNES") : days[i].formatted(.dateTime.weekday(.abbreviated).locale(L10n.locale)).uppercased())
-                            .scaledFont(10, weight: .semibold, cap: .denseCap)
+                            .scaledFont(11, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(i == today ? Night.mint : i == 4 ? Night.amber : Night.faint)
                         ZStack {
                             Circle().fill(i == today ? Night.mint : Night.card)
@@ -232,7 +232,7 @@ struct PaymentDots: View {
         let first = calendar.date(byAdding: .month, value: -total, to: payments.ends) ?? payments.ends
         let last = calendar.date(byAdding: .month, value: -1, to: payments.ends) ?? payments.ends
         VStack(alignment: .leading, spacing: 14) {
-            Text(verbatim: L10n.f("Platba %lld z %lld", number, total)).font(Typo.sentence(24)).foregroundStyle(Night.ink)
+            Text(verbatim: L10n.f("Platba %lld z %lld", number, total)).font(Typo.heading(24)).foregroundStyle(Night.ink)
             HStack(spacing: 0) {
                 ForEach(1...total, id: \.self) { i in
                     if i > 1 {
@@ -291,7 +291,7 @@ struct ExtraMessagesCard: View {
                 (Text(verbatim: "\(extra) ").font(Typo.number(36)).foregroundColor(Night.ink)
                  + Text("zbývá, nepropadnou").font(.subheadline).foregroundColor(Night.muted))
             } else {
-                Text("Zatím žádné").font(Typo.sentence(28)).foregroundStyle(Night.ink)
+                Text("Zatím žádné").font(Typo.heading(28)).foregroundStyle(Night.ink)
             }
             Text("Použijí se, až dojdou zprávy na tento týden.").font(.footnote).foregroundStyle(Night.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -330,7 +330,7 @@ struct CoachPacksPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Další zprávy koučovi").font(Typo.sentence(30)).foregroundStyle(Night.ink)
+                Text("Další zprávy koučovi").font(Typo.heading(30)).foregroundStyle(Night.ink)
                 Text(verbatim: L10n.f("Máš %lld navíc. Nepropadnou.", left)).font(.subheadline).foregroundStyle(Night.muted)
                     .padding(.bottom, 6)
                 ForEach(ProStore.packIDs, id: \.self) { id in pack(id) }
@@ -397,7 +397,7 @@ struct CoachPacksPage: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? .clear : Night.line))
             .overlay(alignment: .topLeading) {
                 if best {
-                    Text("NEJVÝHODNĚJŠÍ").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                    Text("NEJVÝHODNĚJŠÍ").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Night.mint, in: Capsule())
                         .offset(x: 10, y: -9)

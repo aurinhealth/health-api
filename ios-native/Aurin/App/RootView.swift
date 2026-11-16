@@ -474,7 +474,7 @@ struct UpdateRequiredView: View {
             Image(systemName: "arrow.down.app")
                 .scaledFont(44, weight: .light)
                 .foregroundStyle(Palette.ink)
-            Text(L10n.tr("Je potřeba nová verze")).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(L10n.tr("Je potřeba nová verze")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru."))
                 .font(.subheadline)
                 .foregroundStyle(Palette.muted)
@@ -674,10 +674,15 @@ struct TabBar: View {
                     .frame(height: 22)
                 Text(L10n.tr(label))
                     .scaledFont(10, weight: open ? .semibold : .regular)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(1).minimumScaleFactor(0.9)
             }
             .foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Long press shows the tab large, as the system tab bar does.
+            .accessibilityShowsLargeContentViewer {
+                Image(systemName: Self.symbol(value))
+                Text(L10n.tr(label))
+            }
             .background {
                 if open { Capsule().fill(Palette.ink.opacity(0.12)).padding(6) }
             }

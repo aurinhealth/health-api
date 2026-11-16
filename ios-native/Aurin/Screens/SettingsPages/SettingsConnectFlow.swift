@@ -215,7 +215,7 @@ struct ServiceConnectSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     pair().padding(.top, 8).padding(.bottom, 20)
                     Text(L10n.f("Propojit %@ s Aurinem", service.name))
-                        .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                         .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.bottom, 22)
                     row("arrow.down", L10n.tr("Aurin čte"), service.reads, first: true)
                     row("arrow.up", L10n.tr("Aurin zapisuje"), service.writes)
@@ -283,7 +283,7 @@ struct ServiceConnectSheet: View {
             Spacer()
             pair(connected: true)
             Text(L10n.f("%@ je propojený", service.name))
-                .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center).padding(.top, 22)
             Text("Data se začínají stahovat. Můžeš zatím pokračovat.")
                 .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center).padding(.top, 8)

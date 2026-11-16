@@ -572,7 +572,7 @@ struct NextSession: View {
             HStack(spacing: 12) {
                 PlanStateIcon(symbol: SportIcon.symbol(session.sport ?? "other"), state: .upcoming, size: 40)
                 Text(session.title)
-                    .font(Typo.sentence(24, relativeTo: .title2))
+                    .font(Typo.heading(24, relativeTo: .title2))
                     .foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -686,7 +686,7 @@ struct EventCard: View {
             }
             HStack(alignment: .lastTextBaseline) {
                 Text(event.name ?? "Hlavní závod")
-                    .font(Typo.sentence(26, relativeTo: .title2))
+                    .font(Typo.heading(26, relativeTo: .title2))
                     .foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 12)
@@ -956,7 +956,7 @@ struct ZonesWidget: View {
                 WidgetHeader(title: "Aktivní minuty", color: Palette.rust)
                 VStack(alignment: .leading, spacing: 4) {
                     NumberText(value: Fmt.int(week.counted), unit: L10n.f("z %@", "150 min"))
-                    Text(ZoneStyle.status(week)).font(Typo.caption).foregroundStyle(ZoneStyle.statusColor(week)).lineLimit(1)
+                    Text(week.status).font(Typo.caption).foregroundStyle(week.statusColor).lineLimit(1)
                 }
                 ProgressLine(fraction: week.counted / TrainingSnapshot.ZoneWeek.whoTarget, color: Palette.rust)
             } else if let weeks = zones.weeks, let week = weeks.last {
@@ -964,7 +964,7 @@ struct ZonesWidget: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         NumberText(value: Fmt.int(week.counted), unit: L10n.f("z %@", "150 min"))
-                        Text(ZoneStyle.status(week)).font(Typo.caption).foregroundStyle(ZoneStyle.statusColor(week))
+                        Text(week.status).font(Typo.caption).foregroundStyle(week.statusColor)
                     }
                     .frame(width: 120, alignment: .leading)
                     ZoneWeekBars(weeks: weeks, height: 52)
@@ -983,27 +983,26 @@ struct ZonesWidget: View {
     }
 
     private var parts: [(String, Double, Color)] {
-        [("Lehká", zones.light, ZoneStyle.light), ("Střední", zones.moderate, ZoneStyle.moderate),
-         ("Intenzivní", zones.vigorous, ZoneStyle.vigorous), ("Maximální", zones.peak, ZoneStyle.peak)]
+        [("Lehká", zones.light, TrainingSnapshot.ZoneWeek.lightColor), ("Střední", zones.moderate, TrainingSnapshot.ZoneWeek.moderateColor),
+         ("Intenzivní", zones.vigorous, TrainingSnapshot.ZoneWeek.vigorousColor), ("Maximální", zones.peak, TrainingSnapshot.ZoneWeek.peakColor)]
     }
 }
 
-/// The colours of the heart-rate zones and the week's state against WHO.
-enum ZoneStyle {
-    static let light = Palette.sand
-    static let moderate = Palette.amberBar.opacity(0.55)
-    static let vigorous = Palette.amberBar
-    static let peak = Palette.rust
+/// The WHO intensity bands in the one zone palette (Palette.Zone): light Z1,
+/// moderate Z2, vigorous Z4, peak Z5; and the week's state against WHO.
+extension TrainingSnapshot.ZoneWeek {
+    static let lightColor = Palette.Zone.color(0)
+    static let moderateColor = Palette.Zone.color(1)
+    static let vigorousColor = Palette.Zone.color(3)
+    static let peakColor = Palette.Zone.color(4)
 
     /// "splněno" or "chybí 45 min".
-    static func status(_ week: TrainingSnapshot.ZoneWeek) -> String {
-        let left = TrainingSnapshot.ZoneWeek.whoTarget - week.counted
+    var status: String {
+        let left = Self.whoTarget - counted
         return left <= 0 ? L10n.tr("doporučení splněno") : L10n.f("chybí %@ min", Fmt.int(left))
     }
 
-    static func statusColor(_ week: TrainingSnapshot.ZoneWeek) -> Color {
-        week.counted >= TrainingSnapshot.ZoneWeek.whoTarget ? Palette.green : Palette.amber
-    }
+    var statusColor: Color { counted >= Self.whoTarget ? Palette.Status.good : Palette.Status.warn }
 }
 
 /// The weeks' active minutes as stacked bars: moderate, then vigorous and peak
@@ -1062,9 +1061,9 @@ struct ZoneWeekBars: View {
             RoundedRectangle(cornerRadius: 2.5).fill(Palette.track).frame(height: 2.5).frame(maxWidth: .infinity)
         } else {
             VStack(spacing: 0) {
-                Rectangle().fill(ZoneStyle.peak).frame(height: h * scaled(2 * week.peak, 0, top))
-                Rectangle().fill(ZoneStyle.vigorous).frame(height: h * scaled(2 * week.vigorous, 0, top))
-                Rectangle().fill(ZoneStyle.moderate).frame(height: h * scaled(week.moderate, 0, top))
+                Rectangle().fill(TrainingSnapshot.ZoneWeek.peakColor).frame(height: h * scaled(2 * week.peak, 0, top))
+                Rectangle().fill(TrainingSnapshot.ZoneWeek.vigorousColor).frame(height: h * scaled(2 * week.vigorous, 0, top))
+                Rectangle().fill(TrainingSnapshot.ZoneWeek.moderateColor).frame(height: h * scaled(week.moderate, 0, top))
             }
             .clipShape(RoundedRectangle(cornerRadius: 2.5))
             .frame(maxWidth: .infinity)
@@ -1083,9 +1082,9 @@ struct ZoneLegend: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            item("Střední", week.moderate, ZoneStyle.moderate)
-            item("Intenzivní", week.vigorous, ZoneStyle.vigorous)
-            item("Maximální", week.peak, ZoneStyle.peak)
+            item("Střední", week.moderate, TrainingSnapshot.ZoneWeek.moderateColor)
+            item("Intenzivní", week.vigorous, TrainingSnapshot.ZoneWeek.vigorousColor)
+            item("Maximální", week.peak, TrainingSnapshot.ZoneWeek.peakColor)
         }
     }
 

@@ -230,7 +230,7 @@ struct SourcePrioritySheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text(part.title).font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(part.title).font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }

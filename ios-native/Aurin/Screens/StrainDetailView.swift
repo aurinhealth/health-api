@@ -76,7 +76,7 @@ struct StrainDetailContent: View {
             SectionLabel(text: isToday ? L10n.tr("Trénink dnes") : L10n.f("Trénink %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
                 .padding(.top, 24)
             Text(verbatim: L10n.tr("Námaha"))
-                .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
+                .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
             dial
             if let target = today.strain.target {
                 SectionLabel(text: isToday ? "Dnešní cíl" : "Cíl dne").padding(.top, 30)

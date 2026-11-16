@@ -15,7 +15,7 @@ struct SuggestFeatureView: View {
         SettingsPage(title: "Navrhnout funkci", trail: false) {
             if sent {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Díky, návrh odešel.").font(Typo.sentence(24)).foregroundStyle(Palette.ink)
+                    Text("Díky, návrh odešel.").font(Typo.heading(24)).foregroundStyle(Palette.ink)
                     PrimaryButton(title: "Hotovo", systemImage: "checkmark") { dismiss() }
                 }
                 .padding(.top, 8)

@@ -41,7 +41,7 @@ struct RecipeEditorView: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 18) {
                 BackSlot { dismiss() }
-                Text("Nový recept").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Nový recept").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 SettingsGroup {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
                     SettingsDivider()

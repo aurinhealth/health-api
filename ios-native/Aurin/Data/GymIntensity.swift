@@ -77,7 +77,7 @@ struct IntensitySheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.bottom, 6)
+                Text(title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.bottom, 6)
                 ForEach(GymIntensity.letters, id: \.self) { letter in
                     Button {
                         onPick(letter)

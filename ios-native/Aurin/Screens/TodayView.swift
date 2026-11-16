@@ -493,7 +493,7 @@ struct TabHeader<Extra: View>: View {
 
     @ViewBuilder private var title: some View {
         let text = Text(verbatim: Fmt.monthTitle(date))
-            .font(Typo.sentence(30, relativeTo: .title))
+            .font(Typo.heading(30, relativeTo: .title))
             .foregroundStyle(Palette.ink)
             .lineLimit(1).minimumScaleFactor(0.7)
         let withChevron = HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -725,7 +725,7 @@ struct ReadinessHero: View {
                 // What to do today (src/day-verdict.js), only for today.
                 if let verdict = ReadinessText.verdict(readiness.verdict) {
                     Text(verdict)
-                        .font(Typo.sentence(26, relativeTo: .title2))
+                        .font(Typo.heading(26, relativeTo: .title2))
                         .foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("today.verdict")
                 }
@@ -744,14 +744,14 @@ struct ReadinessHero: View {
             } else if readiness.flags?.contains("no_night") == true && (!isToday || Calendar.current.component(.hour, from: Date()) >= 12) {
                 // Today from noon on: the night is not coming any more.
                 Text("Bez zaznamenané noci")
-                    .font(Typo.sentence(34, relativeTo: .largeTitle))
+                    .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
                 Text("Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
-                    .font(Typo.sentence(34, relativeTo: .largeTitle))
+                    .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
                 Text(nightMissing && isToday
@@ -775,7 +775,7 @@ struct ReadinessHero: View {
 /// Readiness without a watch or ring (audit 14.2), on Today, the Health card
 /// and the readiness detail: no number is coming, and the advice still works.
 struct NoWearableText: View {
-    var title: Font = Typo.sentence(34, relativeTo: .largeTitle)
+    var title: Font = Typo.heading(34, relativeTo: .largeTitle)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -797,7 +797,7 @@ struct NoWearableText: View {
 struct ReadinessLearning: View {
     let days: Int
     let date: String
-    var title: Font = Typo.sentence(34, relativeTo: .largeTitle)
+    var title: Font = Typo.heading(34, relativeTo: .largeTitle)
 
     private var shown: Int { min(14, max(1, days)) }
 

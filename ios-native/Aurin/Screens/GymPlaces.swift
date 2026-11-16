@@ -75,7 +75,7 @@ struct GymPlaceView: View {
                 menu
             }
             .padding(.top, 24)
-            Text("Co tam je").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
+            Text("Co tam je").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
 
             searchField.padding(.top, 16)
             ScrollViewReader { proxy in
@@ -363,7 +363,7 @@ struct StationSheet: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: sectionLabel).padding(.top, 28)
                 HStack(alignment: .center) {
-                    Text(station.label).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text(station.label).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Button {

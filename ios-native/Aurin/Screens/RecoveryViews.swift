@@ -229,7 +229,7 @@ struct RecoveryRoutineView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Regenerace dnes").padding(.top, 24)
                 Text(verbatim: item.routine?.title ?? item.title)
-                    .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
@@ -321,7 +321,7 @@ struct RecoveryRoutineView: View {
                     Text(half ? "Druhá strana" : "První strana").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
                 }
             }
-            Text(verbatim: exercise.name).font(Typo.sentence(24)).foregroundStyle(Palette.ink)
+            Text(verbatim: exercise.name).font(Typo.heading(24)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if let cue = exercise.cue {
                 Text(verbatim: cue).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -509,7 +509,7 @@ struct RecoveryTimeView: View {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else {
                 // Never "hard training now": today's readiness decides.
-                Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+                Text("Regenerace").font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
                 Text("Není se z čeho zotavovat. Co se dnes hodí, rozhodne dnešní připravenost.")
                     .font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 8)
                     .fixedSize(horizontal: false, vertical: true)
@@ -527,12 +527,12 @@ struct RecoveryTimeContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            Text("Regenerace").font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             // Half a day at most, labelled as an estimate (Today audit 15).
             if let ready = time.ready {
                 let when = RecoveryTime.part(ready, today: today, now: now)
                 Text(verbatim: when.prefix(1).uppercased(with: L10n.locale) + when.dropFirst())
-                    .font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 4)
+                    .font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 4)
             }
             if RecoveryTime.waitsForGreener(zone) {
                 Text("tvrdý trénink až po zelenějším ránu (odhad)").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)

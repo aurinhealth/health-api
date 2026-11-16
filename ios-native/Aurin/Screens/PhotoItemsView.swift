@@ -50,7 +50,7 @@ struct PhotoItemsView: View {
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Z fotky").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted).textCase(.uppercase)
-                        Text(verbatim: L10n.plural("%lld položek na fotce", items.count)).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.plural("%lld položek na fotce", items.count)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     }
                 }
                 VStack(spacing: 0) {

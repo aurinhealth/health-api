@@ -100,7 +100,7 @@ struct CoachTextCard: View {
                 if folded {
                     Button { withAnimation(.snappy) { folded = false } } label: {
                         sentence
-                            .font(Typo.sentence(17))
+                            .font(Typo.coach(17))
                             .foregroundStyle(Palette.ink)
                             .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,7 +109,7 @@ struct CoachTextCard: View {
                     .buttonStyle(.plain)
                 } else {
                     sentence
-                        .font(Typo.sentence(21))
+                        .font(Typo.coach(21))
                         .foregroundStyle(Palette.ink)
                         .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)

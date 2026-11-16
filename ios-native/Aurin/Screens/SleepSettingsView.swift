@@ -341,7 +341,7 @@ struct SleepSettingsCard: View {
                 Text(L10n.f("spánek %@", SleepPlanner.short(tonight.sleep ?? tonight.need)))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             } else {
-                Text("Nastav si budík").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text("Nastav si budík").font(Typo.heading(22)).foregroundStyle(Palette.ink)
             }
         }
         .accessibilityElement(children: .combine)

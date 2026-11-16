@@ -12,7 +12,9 @@ enum DemoData {
         "sex": .string("male"), "age": .number(38), "height": .number(182), "hrmax": .number(188), "rhr": .number(48),
         "activity": .string("light"), "sportHours": .string("auto"), "goal": .string("lose_0.25"), "targetWeight": .number(80),
         "mainSport": .string("running"), "sportGoal": .string(local("Půlmaraton pod 1:40")), "eventName": .string(local("Pražský půlmaraton")),
-        "eventDate": .string("2026-11-01"), "weeklyHours": .number(7)
+        "eventDate": .string("2026-11-01"), "weeklyHours": .number(7),
+        // The one demo person on every sample screen (redesign glossary).
+        "displayName": .string("Alex Novak")
     ] }
 
     static var connections: [ConnectionsResponse.Provider] { [

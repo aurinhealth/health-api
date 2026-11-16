@@ -60,7 +60,7 @@ struct GymSidesView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Levá a pravá strana") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Historie posilovny").padding(.top, 24)
-                Text("Levá a pravá strana").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Levá a pravá strana").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 Card {
                     VStack(alignment: .leading, spacing: 16) {
                         ForEach(items) { item in row(item) }
@@ -109,7 +109,7 @@ struct CoachNote: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: "sparkles").font(.footnote).foregroundStyle(Palette.amber)
-            Text(verbatim: text).font(Typo.sentence(16)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: text).font(Typo.coach(17)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

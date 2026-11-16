@@ -441,7 +441,7 @@ struct TrainingModeView: View {
         let last = history.last(exercise.name, before: date)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                Text(exercise.name).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 if live.running { PartClock(live: live, key: exercise.name) }
@@ -1282,7 +1282,7 @@ struct TrainingModeView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(spacing: 8) {
                 SectionLabel(text: "Trénink dokončen")
-                Text(title(day)).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                Text(title(day)).font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
@@ -1637,9 +1637,9 @@ struct TrainingModeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Spacer()
             if day?.cancelled == true {
-                Text("Dnešní posilovna je zrušená.").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Dnešní posilovna je zrušená.").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             } else {
-                Text("Prázdný trénink").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Prázdný trénink").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 PrimaryButton(title: L10n.tr("Přidat cvik"), systemImage: "plus") { picking = true }
             }
             NavigationLink(value: AppRoute.gymBuilder) {

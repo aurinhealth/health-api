@@ -64,7 +64,7 @@ struct AddFoodSheet: View {
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Co přidáme?").font(Typo.sentence(31, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        Text("Co přidáme?").font(Typo.heading(31, relativeTo: .title)).foregroundStyle(Palette.ink)
                         Spacer()
                         Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                     }
@@ -638,7 +638,7 @@ struct FoodAmountView: View {
             VStack(alignment: .leading, spacing: 16) {
                 BackSlot { dismiss() }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(current.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(current.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     if product.isEstimate { AIEstimateTag() }
                     HStack(spacing: 8) {
                         if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
@@ -893,7 +893,7 @@ struct ManualFoodView: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 20) {
                 BackSlot { dismiss() }
-                Text("Zadat ručně").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Zadat ručně").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 SettingsGroup(title: "Jedna porce", footer: L10n.tr("Co necháš prázdné, počítá se jako 0 g.")) {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
                     SettingsDivider()
@@ -1023,7 +1023,7 @@ struct FoodReportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Co nesedí?").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 8)
+            Text("Co nesedí?").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 8)
             SettingsGroup {
                 ForEach(Array(Self.reasons.filter { $0.code != "other_product" || product.barcode != nil }.enumerated()), id: \.element.code) { index, item in
                     if index > 0 { SettingsDivider() }

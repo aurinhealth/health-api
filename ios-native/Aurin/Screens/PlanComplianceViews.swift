@@ -137,7 +137,7 @@ struct PlanComplianceSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: title).padding(.top, 8)
-                Text("Splnění plánu").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
+                Text("Splnění plánu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
                 HStack(spacing: 16) {
                     ComplianceRing(percent: compliance.percent, size: 88)
                     VStack(alignment: .leading, spacing: 4) {

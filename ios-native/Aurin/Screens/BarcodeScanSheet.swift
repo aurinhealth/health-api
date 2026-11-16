@@ -367,7 +367,7 @@ struct BarcodeScanSheet: View {
                             }
                             .buttonStyle(.plain)
                         }
-                        Text(product.name).font(Typo.sentence(27, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                        Text(product.name).font(Typo.heading(27, relativeTo: .title2)).foregroundStyle(Palette.ink)
                         Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     NutritionCells(product: product, amount: amount)
@@ -409,7 +409,7 @@ struct BarcodeScanSheet: View {
                     .disabled(saving || amount <= 0 || product.calories_100g == nil) }
                 }
             case .notFound:
-                Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text("Kód \(code ?? "") neznám.").font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 // The label first: its values are exact and saved with the
                 // code for everyone; AI only estimates.
                 Button { labelOpen = true } label: {

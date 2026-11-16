@@ -52,7 +52,7 @@ struct InsightsView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Rekordy a zaměření") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Osobní rekordy").padding(.top, 24)
-                Text("Rekordy a zaměření").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Rekordy a zaměření").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else if let insights {

@@ -358,7 +358,7 @@ struct ActivityDetailView: View {
                     }
                 }
                 .padding(.top, 24)
-                Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(detail?.activity.name ?? session.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 8) }
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
@@ -887,7 +887,7 @@ struct PlannedWorkoutView: View {
                     if session.status != "done" { CoachPill(subject: .planned(session)) }
                 }
                 .padding(.top, 24)
-                Text(session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(session.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.minutes { meta("Délka", Fmt.duration(m)) }
                     if let t = session.tss { meta("Zátěž", Fmt.int(t) + " TSS") }
@@ -1299,7 +1299,7 @@ struct FeedbackSheet: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Jak to šlo?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Jak to šlo?").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text(session.title).font(Typo.small).foregroundStyle(Palette.muted)
                 if loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
@@ -1313,7 +1313,7 @@ struct FeedbackSheet: View {
                         }
                     }
                     VStack(spacing: 4) {
-                        Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar).disabled(saved)
+                        Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.ink).disabled(saved)
                         HStack {
                             Text(verbatim: L10n.isEnglish ? "Easy" : "Lehké")
                             Spacer()
@@ -1631,7 +1631,7 @@ struct ManualWorkoutSheet: View {
             // No watch on: how hard it felt stands in for the heart rate.
             SettingsGroup(title: "Náročnost") {
                 HStack {
-                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar)
+                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.ink)
                     Text("\(Int(rpe))").font(Typo.number(22)).frame(width: 30)
                 }
                 .padding(.horizontal, 16).frame(minHeight: 50)
@@ -1721,7 +1721,7 @@ struct PowerTermsSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Co znamenají zkratky")
-                    .font(Typo.sentence(28, relativeTo: .title))
+                    .font(Typo.heading(28, relativeTo: .title))
                     .foregroundStyle(Palette.ink)
                     .padding(.bottom, 12)
                 ForEach(Array(Self.terms.enumerated()), id: \.offset) { index, term in

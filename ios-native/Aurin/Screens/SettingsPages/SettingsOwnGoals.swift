@@ -67,7 +67,7 @@ private struct SheetHeader: View {
 
     var body: some View {
         HStack {
-            Text(L10n.tr(title)).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text(L10n.tr(title)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             Spacer()
             ChromeButton(systemImage: "xmark", label: "Zavřít", action: close)
         }

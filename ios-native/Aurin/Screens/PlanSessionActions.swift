@@ -151,7 +151,7 @@ struct PlanColorsLegend: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Co znamenají barvy")
-                    .font(Typo.sentence(28, relativeTo: .title))
+                    .font(Typo.heading(28, relativeTo: .title))
                     .foregroundStyle(Palette.ink)
                     .padding(.bottom, 12)
                 ForEach(Array(PlanState.allCases.enumerated()), id: \.offset) { index, state in
@@ -371,7 +371,7 @@ struct MovePlannedSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Přesunout trénink").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text("Přesunout trénink").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1).padding(.top, 2)
             HStack(spacing: 6) {
                 ForEach(days, id: \.self) { d in

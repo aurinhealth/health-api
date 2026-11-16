@@ -501,7 +501,7 @@ struct NutrientTargetSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(L10n.f("Cíl: %@", detail.name)).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(L10n.f("Cíl: %@", detail.name)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                 }

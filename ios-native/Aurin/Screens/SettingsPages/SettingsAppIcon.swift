@@ -242,7 +242,7 @@ struct AppIconSettingsView: View {
                     }
                     .overlay(alignment: .topTrailing) {
                         if icon.rule == .pro {
-                            Text(verbatim: "PRO").scaledFont(9.5, weight: .bold).foregroundStyle(Color(red: 0.1, green: 0.07, blue: 0.03))
+                            Text(verbatim: "PRO").scaledFont(11, weight: .bold).foregroundStyle(Color(red: 0.1, green: 0.07, blue: 0.03))
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(AurinMark.amber, in: Capsule())
                                 .offset(x: 6, y: -7)
@@ -256,7 +256,7 @@ struct AppIconSettingsView: View {
                         Image(systemName: "lock.fill").scaledFont(8)
                         Text(verbatim: AppIconUnlock.lockNote(icon)).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .scaledFont(10).foregroundStyle(Palette.muted)
+                    .scaledFont(11).foregroundStyle(Palette.muted)
                 }
             }
             .frame(maxWidth: .infinity)
