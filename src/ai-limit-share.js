@@ -43,8 +43,14 @@ export function groupOfSubscription(row, now = Date.now()) {
   return [OFFER_CODE, PROMOTIONAL].includes(Number(row.offer_type)) ? "gift" : "paid";
 }
 
-async function subscriptionRow(env) {
-  const read = () => env.DB.prepare("SELECT plan, valid_until, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
+// Once per request (the group and the plan both read it).
+const rowOnce = new WeakMap();
+function subscriptionRow(env) {
+  if (!rowOnce.has(env)) rowOnce.set(env, readSubscriptionRow(env));
+  return rowOnce.get(env);
+}
+async function readSubscriptionRow(env) {
+  const read = () => env.DB.prepare("SELECT plan, valid_until, store_signed_at, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
   try { return await read(); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
     await ensureStoreColumns(env.DB);
@@ -83,6 +89,31 @@ export function aiGroup(env) {
 
 // Whether the account pays (or has Pro as a gift): the whole limits.
 export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(await purchaseGroup(env));
+
+// The plan the account's monthly AI brake follows (aiMonthlyLimitUsd,
+// ai-usage.js), from its subscription now: "paid" (Pro bought, any plan or
+// an offer code, or a call of no account: every paying user the same brake,
+// Petr 2026-11-16) or "unpaid" (no Pro bought: the free week, TestFlight, no
+// purchase, only bought coach messages). The free week (Apple's
+// introductory offer) counts as a period of its own: since is the day it began
+// (valid_until less FREE_WEEK_DAYS), so a week across two months does not get
+// two months' brakes. paidSince: the day of the newest paid record, so the
+// spending of a free week that just turned paid does not take the new plan's
+// week. Once per request; a failed read counts as "unpaid" (fail closed: one
+// request may be refused).
+export const FREE_WEEK_DAYS = 7;
+const planOnce = new WeakMap();
+export function aiPlan(env) {
+  if (noAccount(env)) return Promise.resolve({ plan: "paid" });
+  if (!planOnce.has(env)) planOnce.set(env, subscriptionRow(env).then(row => {
+    const group = groupOfSubscription(row);
+    const paidSince = Number(row?.store_signed_at) > 0 ? new Date(Number(row.store_signed_at)).toISOString().slice(0, 10) : null;
+    if (group === "paid" || group === "gift") return { plan: "paid", paidSince };
+    if (group === "trial" && Number(row.offer_type) === 1) return { plan: "unpaid", since: new Date(Date.parse(row.valid_until) - FREE_WEEK_DAYS * 864e5).toISOString().slice(0, 10) };
+    return { plan: "unpaid" };
+  }).catch(error => { console.error("AI plan not read", error?.message || error); return { plan: "unpaid" }; }));
+  return planOnce.get(env);
+}
 
 // The share of the limits this account gets (1 or AI_UNPAID_LIMIT_SHARE), once per request.
 export async function aiLimitShare(env) {
