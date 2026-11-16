@@ -16,7 +16,7 @@ import { activityKindOf } from './activity-match.js';
 import { isHardSession } from './session-intensity.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage, DEFAULT_MODEL } from './ai-usage.js';
-import { AI_FEATURES, COACH_CHAT_FEATURE, isFoodFeature } from './ai-features.js';
+import { AI_FEATURES, COACH_CHAT_FEATURE, COACH_CHECK_FEATURE, isFoodFeature } from './ai-features.js';
 import { trendFacts } from './trend-facts.js';
 import { localDateTime, halfDay } from './user-time.js';
 import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
@@ -488,7 +488,9 @@ const claudePart=part=>{
 export const claudeMessages=input=>input.filter(m=>m.role!=='developer').map(m=>({role:m.role==='assistant'?'assistant':'user',content:(Array.isArray(m.content)?m.content:[m.content]).map(claudePart)}));
 const developerNotes=input=>input.filter(m=>m.role==='developer').map(m=>Array.isArray(m.content)?m.content.map(p=>p.text||'').join(''):String(m.content||'')).filter(Boolean);
 async function claudeResponse(env,{fullInstructions,input,maxOutputTokens,format,model,reasoningEffort,feature,timeoutMs,slotId,hold}){
-  if(!env.COACH_EVAL||!env.ANTHROPIC_API_KEY)throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
+  // The app reaches Claude only for the live answer check (coach-checker.js claudeCheckOn).
+  if(!(env.COACH_EVAL||(feature===COACH_CHECK_FEATURE&&env.COACH_CHECK_CLAUDE==='true'))||!env.ANTHROPIC_API_KEY)throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
+  if(typeof input==='string')input=[{role:'user',content:input}];
   // No refusal fallback: the comparison must measure the model it names. A busy
   // Claude is asked again twice, like OpenAI (fetchOpenAI).
   const signal=AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),notes=developerNotes(input);

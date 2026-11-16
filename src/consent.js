@@ -1,5 +1,5 @@
 // Consents under GDPR: health data (Art. 9) needs the user's explicit consent,
-// and it covers sending data to OpenAI for the AI features (stored as a second
+// and it covers sending data to the AI providers for the AI features (stored as a second
 // kind, 'ai', given together with it). Each is stored with the version of the text the user agreed to and when
 // (user_consents, migration 0013), so the consent can be shown later. A new
 // version of the health text asks everyone again.
@@ -22,7 +22,12 @@ export const CONSENT_VERSION = '2026-11-06';
 // A new AI version does not ask again: only the health version does. Its page
 // sends the AI box as ticked, so an AI consent to an older text ends there
 // unless it is ticked again.
-export const AI_CONSENT_VERSION = '2026-11-10';
+// 2026-11-14: names Anthropic (USA) next to OpenAI, for the coach's answer check
+// on Claude Haiku (coach-checker.js, Petr 2026-11-14). An app sends it as aiVersion
+// when it shows that text; an older app's consent stays at '2026-11-10', and
+// only a consent at '2026-11-14' or later lets data go to Anthropic (aiAnthropic).
+export const AI_CONSENT_VERSION = '2026-11-14';
+export const AI_CONSENT_OPENAI_ONLY = '2026-11-10';
 export const CONSENT_KINDS = ['health', 'ai'];
 
 async function consentRows(db, userId) {
@@ -55,11 +60,12 @@ export async function consentStatus(env) {
     // screen instead of asking as for a new account.
     paused: !health && rows.some(r => r.kind === 'health' && r.withdrawn_at),
     needed: env.USER_IS_OWNER !== true && health?.version !== CONSENT_VERSION,
-    aiAllowed: Boolean(ai) || (env.USER_IS_OWNER === true && !aiWithdrawn)
+    aiAllowed: Boolean(ai) || (env.USER_IS_OWNER === true && !aiWithdrawn),
+    aiAnthropic: (ai?.version || '') >= AI_CONSENT_VERSION || (env.USER_IS_OWNER === true && !aiWithdrawn)
   };
 }
 
-// {health:true} and/or {ai:true|false}. Health consent can only be given here;
+// {health:true} and/or {ai:true|false}, with aiVersion: the AI text the app showed. Health consent can only be given here;
 // it is taken back by pausing health data (health-pause.js) or deleting the account.
 export async function saveConsent(env, input = {}) {
   const userId = env.USER_ID ?? env.DB?.userId;
@@ -68,12 +74,12 @@ export async function saveConsent(env, input = {}) {
   if (input.ai !== undefined && typeof input.ai !== 'boolean') throw new Error(L('Neplatná volba souhlasu s AI.', 'Invalid AI consent choice.'));
   if (input.health === undefined && input.ai === undefined) throw new Error(L('Chybí volba souhlasu.', 'No consent choice given.'));
   if (input.ai !== undefined && !input.health && !(await consentStatus(env)).health) throw new Error(L('Nejdřív je potřeba souhlas se zpracováním údajů o zdraví.', 'Consent to process health data comes first.'));
-  const now = new Date().toISOString();
-  const grant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, kind === 'ai' ? AI_CONSENT_VERSION : CONSENT_VERSION, now);
+  const now = new Date().toISOString(), aiVersion = input.aiVersion === AI_CONSENT_VERSION ? AI_CONSENT_VERSION : AI_CONSENT_OPENAI_ONLY;
+  const grant = kind => env.DB.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, NULL) ON CONFLICT(user_id, kind) DO UPDATE SET version = excluded.version, granted_at = excluded.granted_at, withdrawn_at = NULL').bind(userId, kind, kind === 'ai' ? aiVersion : CONSENT_VERSION, now);
   const statements = [];
   if (input.health === true) statements.push(grant('health'));
   if (input.ai === true) statements.push(grant('ai'));
-  if (input.ai === false) statements.push(env.DB.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, 'ai', ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at").bind(userId, AI_CONSENT_VERSION, now, now));
+  if (input.ai === false) statements.push(env.DB.prepare("INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, 'ai', ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at").bind(userId, aiVersion, now, now));
   await env.DB.batch(statements);
   return { status: 'ok', consent: await consentStatus(env) };
 }

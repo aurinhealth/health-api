@@ -29,7 +29,7 @@ struct SetupFlowView: View {
     @State private var consentFirst = false
     @State private var consentOnly = false
     @State private var agree = false
-    // Sending what an AI feature needs to OpenAI: its own choice, never ticked
+    // Sending what an AI feature needs to OpenAI and Anthropic: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
     /// iOS has not asked about notifications yet: the page about them comes last.
@@ -191,7 +191,7 @@ struct SetupFlowView: View {
 
     // What the health consent covers (CONSENT_VERSION in src/consent.js). The AI
     // has its own card below (AI_CONSENT_VERSION), so the optional consent names
-    // OpenAI right at its box (release 1.0.1 point 1, App Review 5.1.2(i)).
+    // OpenAI and Anthropic right at its box (release 1.0.1 point 1, App Review 5.1.2(i)).
     private static let consentPoints: [(String, String)] = [
         ("Co", "Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku."),
         ("Odkud", "Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám."),
@@ -219,10 +219,10 @@ struct SetupFlowView: View {
                     Text("(nepovinné)").foregroundStyle(Palette.muted)
                 }
                 .font(Typo.bodyStrong)
-                Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
+                Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnostem OpenAI a Anthropic (USA). Ani jedna je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            checkbox("Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)",
+            checkbox("Posílat data, která AI funkce potřebují, společnostem OpenAI a Anthropic (USA)",
                      note: "Jde to kdykoli vypnout v Nastavení.",
                      isOn: $agreeAI)
         }

@@ -285,7 +285,7 @@ struct PaywallView: View {
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
-            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
+            Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnostem OpenAI a Anthropic v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
                 .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -274,7 +274,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func setAI(_ allowed: Bool) async throws {
-        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
+        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed), "aiVersion": .string(Self.aiConsentVersion)])
     }
 
     /// All the account's data as an NDJSON file in the temporary folder, to
@@ -322,7 +322,7 @@ final class APIClient: @unchecked Sendable {
 
     /// Turns on the AI features (the user's consent, as in the web settings).
     func allowAI() async throws {
-        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(true)])
+        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(true), "aiVersion": .string(Self.aiConsentVersion)])
     }
 
     // MARK: - Workouts

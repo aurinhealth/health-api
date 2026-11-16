@@ -59,3 +59,37 @@ test('the check is part of the chat: the daily AI limit leaves it out like the c
   // A photo message is not checked (the checker does not see the photo).
   assert.match(entry, /checking=coachCheckOn\(env\)&&!image/);
 });
+
+test('the live check runs on Claude Haiku only with the flag, the key and the AI consent naming Anthropic (Petr 2026-11-14)', async () => {
+  const { claudeCheckOn } = await import('../src/coach-checker.js');
+  const on = { COACH_CHECK_CLAUDE: 'true', ANTHROPIC_API_KEY: 'k' };
+  assert.equal(claudeCheckOn(on, { aiAnthropic: true }), true);
+  assert.equal(claudeCheckOn(on, { aiAnthropic: false }), false, 'an older AI consent keeps the light model');
+  assert.equal(claudeCheckOn(on, null), false);
+  assert.equal(claudeCheckOn({ ANTHROPIC_API_KEY: 'k' }, { aiAnthropic: true }), false, 'production without the flag');
+  assert.equal(claudeCheckOn({ COACH_CHECK_CLAUDE: 'true' }, { aiAnthropic: true }), false, 'no key');
+  // The model reaches the checker with the app's call (limits and usage), not the eval's direct one.
+  const c = checker([]);
+  await checkedCoachAnswer({}, first, { context: {}, message: 'm', rewrite: () => assert.fail('no rewrite'), check: c.check, model: 'claude-haiku-5-5' });
+  const { callOpenAI } = await import('../src/coach-assistant.js');
+  assert.equal(c.calls[0].options.model, 'claude-haiku-5-5');assert.equal(c.calls[0].options.ask, callOpenAI);
+  const d = checker([]);
+  await checkedCoachAnswer({}, first, { context: {}, message: 'm', rewrite: () => assert.fail('no rewrite'), check: d.check });
+  assert.equal(d.calls[0].options.model, undefined);
+});
+
+test('the app reaches Claude only for the answer check where COACH_CHECK_CLAUDE is on', async () => {
+  const { callOpenAI } = await import('../src/coach-assistant.js');
+  const original = globalThis.fetch, calls = [];
+  globalThis.fetch = async (url, options) => { const body = JSON.parse(options.body); calls.push({ url, body }); return Response.json({ model: body.model, stop_reason: 'end_turn', content: [{ type: 'text', text: '{"flags":[]}' }], usage: { input_tokens: 1000, output_tokens: 100 } }); };
+  try {
+    const env = { OPENAI_API_KEY: 'test', ANTHROPIC_API_KEY: 'k', COACH_CHECK_CLAUDE: 'true' };
+    const r = await callOpenAI(env, { feature: 'coach-check', instructions: 'i', input: 'text', model: 'claude-haiku-5-5', maxOutputTokens: 100 });
+    assert.equal(calls[0].url, 'https://api.anthropic.com/v1/messages');
+    assert.deepEqual(calls[0].body.messages, [{ role: 'user', content: [{ type: 'text', text: 'text' }] }]);
+    assert.equal(r.text, '{"flags":[]}');
+    await assert.rejects(callOpenAI(env, { feature: 'coach-chat', instructions: 'i', input: 'text', model: 'claude-haiku-5-5', maxOutputTokens: 100 }));
+    await assert.rejects(callOpenAI({ ...env, COACH_CHECK_CLAUDE: undefined }, { feature: 'coach-check', instructions: 'i', input: 'text', model: 'claude-haiku-5-5', maxOutputTokens: 100 }));
+    assert.equal(calls.length, 1);
+  } finally { globalThis.fetch = original; }
+});

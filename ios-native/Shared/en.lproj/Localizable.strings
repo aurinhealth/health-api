@@ -45,7 +45,7 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer and remember your chats, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
+"Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnostem OpenAI a Anthropic v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer and remember your chats, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI and Anthropic in the USA. You can turn this off anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
 "Aktivní" = "Active";
@@ -747,7 +747,7 @@
 "Tréninky týdne" = "This week's workouts";
 "Tuky" = "Fat";
 "Tvoje data o zdraví" = "Your health data";
-"Tvůj účet Intervals.icu, když ho připojíš. OpenAI, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě." = "Your Intervals.icu account, if you connect it. OpenAI, if you use AI features, and only the data needed for an answer. We don't share it with anyone else, sell it, or use it for ads.";
+"Tvůj účet Intervals.icu, když ho připojíš. OpenAI a Anthropic, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě." = "Your Intervals.icu account, if you connect it. OpenAI and Anthropic, if you use AI features, and only the data needed for an answer. We don't share it with anyone else, sell it, or use it for ads.";
 "Typ" = "Type";
 "Týden" = "Week";
 "Tělesný tuk" = "Body fat";
@@ -2785,7 +2785,7 @@
 "Starší záznamy" = "Older entries";
 "Které položky" = "Which items";
 "Nálada, Úzkost, Konopí, CBD a všechno v Lécích. Sex kouč neuvidí nikdy." = "Mood, Anxiety, Cannabis, CBD and everything under Medication. The coach never sees Sex.";
-"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI, USA). Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning it on you explicitly agree that it is shared with the AI coach (OpenAI, USA). You can turn it off any time and the coach stops getting it.";
+"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI a Anthropic, USA). Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning it on you explicitly agree that it is shared with the AI coach (OpenAI and Anthropic, USA). You can turn it off any time and the coach stops getting it.";
 "Pokračovat v tréninku" = "Resume workout";
 "Přejít na cvik" = "Go to this exercise";
 "Tep se měří" = "Heart rate measured";
@@ -3002,7 +3002,7 @@
 "Lehčí trénink" = "Easier session";
 "Upraveno i v kalendáři." = "Changed in the calendar too.";
 "Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";
-"Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)" = "Send the data AI features need to OpenAI (USA)";
+"Posílat data, která AI funkce potřebují, společnostem OpenAI a Anthropic (USA)" = "Send the data AI features need to OpenAI and Anthropic (USA)";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";
 "Zadat kód" = "Enter code";
@@ -3396,7 +3396,7 @@
 "Zaškrtni první políčko, ať můžeš pokračovat." = "Tick the first box to continue.";
 "Později" = "Later";
 "Tvůj AI kouč" = "Your AI coach";
-"Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí." = "The coach, its daily summary on Today, Training and Food, its memory after a chat day, food recognition from a photo and workout and week reviews send the data they need, incl. health data and photos you send, to OpenAI (USA). OpenAI does not use it to train its models. Cycle and sensitive journal items only after you turn them on.";
+"Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnostem OpenAI a Anthropic (USA). Ani jedna je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí." = "The coach, its daily summary on Today, Training and Food, its memory after a chat day, food recognition from a photo and workout and week reviews send the data they need, incl. health data and photos you send, to OpenAI and Anthropic (USA). Neither uses it to train its models. Cycle and sensitive journal items only after you turn them on.";
 "Jde to kdykoli vypnout v Nastavení." = "You can turn it off any time in Settings.";
 "Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón." = "Aurin needs your age, height and weight to work out calories, strain and recovery. Sex changes how calories and heart rate zones are worked out.";
 "Zadej výšku mezi %@ a %@." = "Enter a height between %@ and %@.";
@@ -3488,7 +3488,7 @@
 "Nikdy je neprodáme" = "Never sold";
 "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš." = "No ads, no data brokers. Shared only with services you connect.";
 "AI jen s tvým souhlasem" = "AI only with your yes";
-"Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí." = "The coach and food photos send only what the question needs. OpenAI doesn’t train on it.";
+"Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI ani Anthropic se na nich neučí." = "The coach and food photos send only what the question needs. Neither OpenAI nor Anthropic trains on it.";
 "Stáhneš je, nebo smažeš" = "Yours to take or delete";
 "Všechno si stáhneš nebo smažeš účet se všemi daty, přímo tady." = "Download everything or delete your account with all its data, right here.";
 "Čte a zapisuje" = "Read and write";
@@ -3827,7 +3827,7 @@
 "Povolit AI a začít týden zdarma" = "Allow AI and start free week";
 "Aurin Pro potřebuje AI" = "Aurin Pro needs AI";
 "Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data." = "Your free week has started. AI could not be turned on; turn it on in Settings → Privacy & data.";
-"Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data." = "The coach, food from a photo and ratings send the data they need, including health data and photos you send, to OpenAI in the USA, also daily for the coach's summary and at night for its memory. Turn it off anytime in Settings → Privacy & data.";
+"Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnostem OpenAI a Anthropic v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data." = "The coach, food from a photo and ratings send the data they need, including health data and photos you send, to OpenAI and Anthropic in the USA, also daily for the coach's summary and at night for its memory. Turn it off anytime in Settings → Privacy & data.";
 "VYZKOUŠEJ 7 DNÍ ZDARMA" = "TRY 7 DAYS FREE";
 "12MĚSÍČNÍ TARIF, VYZKOUŠEJ 7 DNÍ ZDARMA" = "12-MONTH PLAN, TRY 7 DAYS FREE";
 "V PRO JE" = "INCLUDED IN PRO";

@@ -221,7 +221,7 @@ struct ServiceConnectSheet: View {
                     row("arrow.up", L10n.tr("Aurin zapisuje"), service.writes)
                     if service.google {
                         row("target", L10n.tr("K čemu"), L10n.tr("Jen pro funkce aplikace: přehled dne, regenerace, kalorický cíl, plán tréninků a osobní asistent."))
-                        row("person.2", L10n.tr("Kdo data dostane"), L10n.tr("Tvůj účet Intervals.icu, když ho připojíš. OpenAI, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě."))
+                        row("person.2", L10n.tr("Kdo data dostane"), L10n.tr("Tvůj účet Intervals.icu, když ho připojíš. OpenAI a Anthropic, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě."))
                     }
                     row("xmark", L10n.tr("Odpojit"), service.google
                         ? L10n.tr("Kdykoli v Nastavení → Zdroje dat, v Soukromí smažeš účet i se všemi daty.")

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { consentStatus, saveConsent, CONSENT_VERSION, AI_CONSENT_VERSION } from "../src/consent.js";
+import { consentStatus, saveConsent, CONSENT_VERSION, AI_CONSENT_VERSION, AI_CONSENT_OPENAI_ONLY } from "../src/consent.js";
 import { assertAIAccess, subscriptionStatus } from "../src/subscription.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -47,7 +47,22 @@ test("a new health text asked again: AI holds only when its box is ticked again"
   assert.equal((await saveConsent(env, { health: true, ai: false })).consent.aiAllowed, false);
   const { consent } = await saveConsent(env, { health: true, ai: true });
   assert.equal(consent.aiAllowed, true);
-  assert.equal(consent.ai.version, AI_CONSENT_VERSION);
+  assert.equal(consent.ai.version, AI_CONSENT_OPENAI_ONLY);
+});
+
+test("Anthropic only with the AI text that names it (Petr 2026-11-14): an older app's consent stays OpenAI only", async () => {
+  const { env } = setup();
+  await saveConsent(env, { health: true, ai: true, aiVersion: "2026-11-01" });
+  let c = await consentStatus(env);
+  assert.equal(c.ai.version, AI_CONSENT_OPENAI_ONLY);
+  assert.equal(c.aiAnthropic, false);
+  c = (await saveConsent(env, { ai: true, aiVersion: AI_CONSENT_VERSION })).consent;
+  assert.equal(c.ai.version, AI_CONSENT_VERSION);
+  assert.equal(c.aiAnthropic, true);
+  c = (await saveConsent(env, { ai: false })).consent;
+  assert.equal(c.aiAllowed, false);
+  assert.equal(c.aiAnthropic, false);
+  assert.equal((await consentStatus(setup({ owner: true }).env)).aiAnthropic, true);
 });
 
 test("health consent cannot be refused here, and AI needs it first", async () => {
@@ -114,9 +129,8 @@ test("the consent gate fails closed: any env with a database needs consent, whet
 });
 
 test("an AI consent stores the AI text's own version; it does not ask for health again", async () => {
-  const { AI_CONSENT_VERSION } = await import("../src/consent.js");
   const { env } = setup();
-  await saveConsent(env, { health: true, ai: true });
+  await saveConsent(env, { health: true, ai: true, aiVersion: AI_CONSENT_VERSION });
   const c = await consentStatus(env);
   assert.equal(c.ai.version, AI_CONSENT_VERSION);
   assert.equal(c.health.version, CONSENT_VERSION);
