@@ -19,7 +19,7 @@ async function withOpenAI(fn) {
   globalThis.fetch = async () => { calls++; return Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage: { input_tokens: 100000, output_tokens: 50000 } }); };
   try { await fn(() => calls); } finally { globalThis.fetch = realFetch; }
 }
-const LIMITS = { AI_MONTHLY_LIMIT_USD: "5", AI_YEARLY_LIMIT_USD: "3", AI_UNPAID_LIMIT_USD: "1.25", AI_UNPAID_LIMIT_SHARE: "0.5", AI_DAILY_LIMIT_USD: "100" };
+const LIMITS = { AI_MONTHLY_LIMIT_USD: "5", AI_UNPAID_LIMIT_USD: "1.25", AI_UNPAID_LIMIT_SHARE: "0.5", AI_DAILY_LIMIT_USD: "100" };
 const future = (days = 30) => new Date(Date.now() + days * 864e5).toISOString();
 // 7: monthly Pro; 8: yearly Pro; 9: the free week; 10: no purchase; 11: a yearly offer code;
 // 12: a monthly offer code (the pilot's discount); 13: a free offer code (not the free week).
@@ -41,27 +41,27 @@ const spend = (db, id, day, usd) => db.sqlite.prepare("INSERT INTO ai_usage (use
 test("the monthly brake follows the plan and stays under what it nets", async () => {
   const db = await accounts();
   const plans = await Promise.all([7, 8, 9, 10, 11, 12, 13].map(id => aiPlan(envFor(db, id))));
-  assert.deepEqual(plans.map(p => p.plan), ["monthly", "yearly", "unpaid", "unpaid", "yearly", "yearly", "unpaid"]);
+  assert.deepEqual(plans.map(p => p.plan), ["paid", "paid", "unpaid", "unpaid", "paid", "paid", "unpaid"]);
   assert.ok(plans[2].since && !plans[6].since, "only the free week is a period of its own");
   const limits = await Promise.all([7, 8, 9, 10, 11, 12, 13].map(id => aiAllowance(envFor(db, id)).then(a => a.monthLimitUsd)));
-  assert.deepEqual(limits, [5, 3, 1.25, 1.25, 3, 3, 1.25], "an offer code nets no more than the yearly plan");
+  assert.deepEqual(limits, [5, 5, 1.25, 1.25, 5, 5, 1.25], "every plan of Pro, an offer code too, has the same brake");
   // A Sandbox purchase (TestFlight) is not Pro bought; the live owner has the same brakes.
   db.sqlite.prepare("UPDATE subscriptions SET store_environment = 'Sandbox' WHERE user_id = 7").run();
   assert.equal((await aiAllowance(envFor(db, 7))).monthLimitUsd, 1.25);
-  assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true }))).monthLimitUsd, 3);
+  assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true }))).monthLimitUsd, 5);
   assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true, ENVIRONMENT: "staging" }))).monthLimitUsd, null);
   // Unset, every plan has the monthly brake (times the unpaid share), as before.
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5" }, 0.5, "unpaid"), 2.5);
-  assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5" }, 1, "yearly"), 5);
-  // A plan's own brake never goes above the monthly one, and the App Review account keeps its small one.
-  assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "2", AI_YEARLY_LIMIT_USD: "3" }, 1, "yearly"), 2);
+  // The unpaid brake never goes above the paid one.
+  assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "1", AI_UNPAID_LIMIT_USD: "1.25" }, 1, "unpaid"), 1);
   // Only paid plans have a week, 30 % of their month.
-  assert.deepEqual([aiWeeklyLimitUsd(5, "monthly"), aiWeeklyLimitUsd(3, "yearly"), aiWeeklyLimitUsd(1.25, "unpaid"), aiWeeklyLimitUsd(null, "yearly")], [1.5, 0.9, null, null]);
+  assert.deepEqual([aiWeeklyLimitUsd(5, "paid"), aiWeeklyLimitUsd(1.25, "unpaid"), aiWeeklyLimitUsd(null, "paid")], [1.5, null, null]);
   // What a plan nets a month in Czechia after 21 % VAT and Apple's 15 % at 22.10 Kč a dollar (ČNB 13 Nov 2026):
-  // 199 Kč monthly 6.33, 1 490 Kč yearly 3.95, 149 Kč × 12 with the commitment 4.74 USD
-  // (the code's 5.9 and 3.7 are the lowest across countries, 27 % VAT in Hungary).
+  // 199 Kč monthly 6.33, 1 490 Kč yearly 3.95, 149 Kč × 12 with the commitment 4.74 USD. The
+  // yearly plans net less than the brake on purpose: only the heaviest users reach it, and the
+  // morning report weighs spending against what Pro brings in (Petr 2026-11-16).
   const net = czk => czk / 1.21 * 0.85 / 22.1;
-  assert.ok(5 < net(199) && 3 < net(1490 / 12) && 3 < net(149));
+  assert.ok(5 < net(199) && 5 > net(149) && 1.25 < net(1490 / 12));
 });
 
 test("an account without Pro stops at its small brake", async () => {
@@ -121,14 +121,16 @@ test("a paid week may use 30 % of its month; past it AI waits until Monday", asy
     spend(db, 8, shiftDate(monday, -1), 0.85);
     spend(db, 8, monday, 0.5);
     await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
-    // 0.5 + 0.7 = 1.2 is past the yearly plan's 0.9 a week.
+    // 0.5 + 0.7 + 0.7 = 1.9 is past 1.5 a week.
+    spend(db, 8, monday, 0.7);
     await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true && /v pondělí/.test(error.message) && !/\$|USD|\d/.test(error.message));
     assert.equal(calls(), 1);
-    // The monthly Pro has 1.5 a week.
+    // The monthly Pro has the same 1.5 a week.
     const monthly = envFor(db, 7);
     await ensureAiUsage(monthly.DB);
-    spend(db, 7, monday, 0.5);
+    spend(db, 7, monday, 1.2);
     await callOpenAI(monthly, { feature: "assistant", instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(monthly, { feature: "assistant", instructions: "x", input: "y" }), /v pondělí/);
     assert.equal(calls(), 2);
     // Bought messages raise the week too: a 100 pack is 5 USD more room.
     await savePackTransaction(env, { productId: "b.coach.messages100", bundleId: "b", transactionId: "t1", environment: "Production", purchaseDate: Date.now() });
@@ -139,7 +141,7 @@ test("a paid week may use 30 % of its month; past it AI waits until Monday", asy
 
 test("the live server and the test server set the brakes by plan", () => {
   const text = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-  for (const [key, value] of [["AI_MONTHLY_LIMIT_USD", "5"], ["AI_YEARLY_LIMIT_USD", "3"], ["AI_UNPAID_LIMIT_USD", "1.25"]]) {
+  for (const [key, value] of [["AI_MONTHLY_LIMIT_USD", "5"], ["AI_UNPAID_LIMIT_USD", "1.25"]]) {
     assert.equal(text.match(new RegExp(`"${key}": "([^"]+)"`, "g")).length, 2, key);
     assert.ok(text.match(new RegExp(`"${key}": "([^"]+)"`, "g")).every(line => line.endsWith(`"${value}"`)), key);
   }

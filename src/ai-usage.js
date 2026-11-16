@@ -2,7 +2,7 @@
 // Every model call goes through callOpenAI (coach-assistant.js), which holds
 // a slot with the call's most possible cost while it runs, checks the limit
 // and records the real cost after. The monthly limit is the
-// user's AI budget, set by plan so no account costs more than it brings in
+// user's AI budget, one for every account that bought Pro and a small one for the rest
 // (aiMonthlyLimitUsd), with a weekly part of it (aiWeeklyLimitUsd) so a heavy
 // week does not lock the rest of the month. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
@@ -59,19 +59,17 @@ export function aiDailyLimitUsd(env, share = 1) {
   return limit != null && limit >= 0 ? limit * share : null;
 }
 
-// The monthly brake by plan (aiPlan, ai-limit-share.js), under what the plan
-// nets after VAT and Apple's 15 % (Petr 2026-11-16: never pay for a user):
-// AI_MONTHLY_LIMIT_USD the monthly Pro (5 of about 5.9 USD), AI_YEARLY_LIMIT_USD
-// the yearly product (3 of about 3.7, paid at once; the yearly paid monthly with
-// the 12-month commitment nets about 4.7 and gets the same, as an offer code),
-// AI_UNPAID_LIMIT_USD
+// The monthly brake by plan (aiPlan, ai-limit-share.js): AI_MONTHLY_LIMIT_USD
+// every account that bought Pro, whatever the plan (Petr 2026-11-16: the same
+// for all who pay; the morning report weighs spending against what Pro brings
+// in), AI_UNPAID_LIMIT_USD
 // an account that has not bought Pro, the free week as one period (1.25).
-// Unset, a plan gets the monthly one (times share).
+// Unset, the unpaid one is the monthly one times share.
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
 export function aiMonthlyLimitUsd(env, share = 1, plan = null) {
   if (ownerUnlimited(env)) return null;
   const limit = n(env.AI_MONTHLY_LIMIT_USD), full = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
-  const own = plan === "yearly" ? n(env.AI_YEARLY_LIMIT_USD) : plan === "unpaid" ? n(env.AI_UNPAID_LIMIT_USD) : null;
+  const own = plan === "unpaid" ? n(env.AI_UNPAID_LIMIT_USD) : null;
   const base = own != null && own >= 0 ? Math.min(own, full) : full * share;
   // The App Review demo account gets a small fixed budget (app-review.js).
   return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;
@@ -83,7 +81,7 @@ export function aiMonthlyLimitUsd(env, share = 1, plan = null) {
 // and the other unpaid accounts have no weekly part (their brake is small).
 export const AI_WEEK_SHARE = 0.3;
 export function aiWeeklyLimitUsd(monthLimit, plan) {
-  return monthLimit != null && (plan === "monthly" || plan === "yearly") ? Math.round(monthLimit * AI_WEEK_SHARE * 1e5) / 1e5 : null;
+  return monthLimit != null && plan === "paid" ? Math.round(monthLimit * AI_WEEK_SHARE * 1e5) / 1e5 : null;
 }
 
 const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0);

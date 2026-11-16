@@ -101,12 +101,10 @@
     // The account the deploy smoke test acts as: its own, empty and disabled, never the
     // owner's (src/tenancy.js smokeUser; security audit 2026-11, SEC-010). Nobody receives mail there.
     "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
-    // Brake on an account's AI spending per month by plan, under what the plan nets
-    // after VAT and Apple (src/ai-usage.js aiMonthlyLimitUsd): monthly Pro, the yearly
-    // product (paid at once or with the 12-month commitment), no Pro bought (the free
-    // week counts as one period). A paid week may use 30 % of its month.
+    // Brake on an account's AI spending per month (src/ai-usage.js aiMonthlyLimitUsd):
+    // the same for every plan of Pro (Petr 2026-11-16), and one for an account that has
+    // not bought Pro (the free week counts as one period). A paid week may use 30 % of its month.
     "AI_MONTHLY_LIMIT_USD": "5",
-    "AI_YEARLY_LIMIT_USD": "3",
     "AI_UNPAID_LIMIT_USD": "1.25",
     // Half of the other AI limits (the daily guard, the coach's week) until
     // the account pays for Pro: the pilot, TestFlight and the free week (src/ai-limit-share.js).
@@ -211,7 +209,6 @@
         "OPEN_SIGNUP": "true",
         "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
         "AI_MONTHLY_LIMIT_USD": "5",
-        "AI_YEARLY_LIMIT_USD": "3",
         "AI_UNPAID_LIMIT_USD": "1.25",
         "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",

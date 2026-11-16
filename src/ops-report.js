@@ -165,11 +165,11 @@ const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 // weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ email, cost, limit }] }
 // (accountStats). Every morning: the numbers, what to watch and a proposal
 // for each, so a limit is raised before people hit it. limits: the Worker
-// settings ({ monthly, yearly, unpaid, unpaidShare, totalAlert, totalLimit }).
+// settings ({ monthly, unpaid, unpaidShare, totalAlert, totalLimit }).
 export function accountsReport(stats, limits = {}) {
   if (!stats) return null;
   const { monthly = null, unpaidShare = 1, totalAlert = null, totalLimit = null } = limits;
-  const yearly = limits.yearly ?? monthly, unpaid = limits.unpaid ?? (monthly == null ? null : monthly * unpaidShare);
+  const unpaid = limits.unpaid ?? (monthly == null ? null : monthly * unpaidShare);
   const paid = stats.paidMonthly + stats.paidYearly;
   const revenue = stats.paidMonthly * NET_USD_PER_MONTH.monthly + stats.paidYearly * NET_USD_PER_MONTH.yearly;
   const projected = stats.monthDay > 0 ? stats.monthUsd / stats.monthDay * stats.monthDays : 0;
@@ -179,11 +179,10 @@ export function accountsReport(stats, limits = {}) {
 - Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), pilot a dárky ${stats.gift || 0}, ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
 - AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}${stats.groups?.length ? `\n- AI včera podle skupin: ${stats.groups.map(g => `${GROUP_NAMES[g.grp] || g.grp} ${usd(Number(g.cost_usd) || 0)}${g.brake_usd != null ? ` z ${usd(Number(g.brake_usd))}` : ""}`).join(", ")}` : ""}
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
-- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${yearly !== monthly ? `měsíčně ${usd(monthly)}, ročně ${usd(yearly)}` : usd(monthly)}, bez placení ${usd(unpaid)}` : ""}`];
+- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${usd(monthly)}, bez placení ${usd(unpaid)}` : ""}`];
   const proposals = [];
-  // The brakes sit just under what each plan nets, so the lever is a cheaper coach, not a higher brake.
-  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). ${row.key || "AI_MONTHLY_LIMIT_USD"} je těsně pod čistým příjmem tarifu, nezvedej ho; jestli je to běžné používání, zlevni zprávu kouče (kratší vstup), jinak ho brzda zastaví.`);
-  if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Stropy zvednout nejde (jsou pod čistým příjmem tarifu): zlevni zprávu kouče, nebo sniž COACH_WEEKLY_MESSAGES.`);
+  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
+  if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
   if (paid > 0 && projected > revenue) proposals.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících). Sniž COACH_WEEKLY_MESSAGES z 30 na 25, nebo strop na účet.`);
   if (totalLimit != null && stats.totalYesterdayUsd >= totalLimit * 0.7) proposals.push(`Včera padlo ${pct(stats.totalYesterdayUsd, totalLimit)} % denní brzdy pro všechny. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na ${usd(Math.ceil(totalLimit * 1.5))}${totalAlert != null ? ` a AI_TOTAL_DAILY_ALERT_USD na ${usd(Math.ceil(totalAlert * 1.5))}` : ""}.`);
   for (const g of stats.groups || []) if (g.brake_usd != null && Number(g.cost_usd) >= Number(g.brake_usd) * 0.7) proposals.push(`Skupina „${GROUP_NAMES[g.grp] || g.grp}“ včera vyčerpala ${pct(Number(g.cost_usd), Number(g.brake_usd))} % své denní pojistky. Jestli jde o běžné používání, zvedni její hodnotu v AI_GROUP_BRAKES; jestli ne (hromadné účty, chyba), nech ji, pojistka ji zastaví.`);
@@ -207,7 +206,7 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   const groups = await aiSpendByGroup(db, date).catch(() => []);
   const stats = { groups, totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, gift: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
   // whole: the accounts with a paying account's limits (paid, and gifts and offer codes, which bring in nothing).
-  const whole = new Set(), yearly = new Set();
+  const whole = new Set();
   for (const sub of subs) {
     if (!ids.has(Number(sub.user_id))) continue;
     const group = groupOfSubscription(sub, now);
@@ -215,7 +214,6 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     else if (group === "trial") stats.trial++;
     else if (group === "gift") { stats.gift++; whole.add(Number(sub.user_id)); }
     else if (group === "paid") { whole.add(Number(sub.user_id)); if (String(sub.product_id || "").endsWith(".yearly")) stats.paidYearly++; else stats.paidMonthly++; }
-    if ((group === "gift" || group === "paid") && String(sub.product_id || "").endsWith(".yearly")) yearly.add(Number(sub.user_id));
   }
   const spend = (await db.prepare("SELECT user_id, SUM(cost_usd) AS week FROM ai_usage WHERE day >= ? AND day <= ? AND model NOT IN ('pending', 'carried-over') GROUP BY user_id").bind(weekFrom, date).all()).results || [];
   // counted: what the account's limit sees (with what a deleted account of the same person carried over).
@@ -224,14 +222,14 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     if (!ids.has(Number(row.user_id))) continue;
     if (Number(row.week) > 0) { stats.aiUsersWeek++; stats.weekUsd += Number(row.week); }
   }
-  const full = aiMonthlyLimitUsd(env), year = aiMonthlyLimitUsd(env, 1, "yearly"), unpaid = aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid");
+  const full = aiMonthlyLimitUsd(env);
   for (const row of monthRows) {
     if (!ids.has(Number(row.user_id))) continue;
     const counted = Number(row.counted) || 0;
     stats.monthUsd += Number(row.cost) || 0;
     // Only paying accounts: an unpaid one at its small brake is the brake working.
-    const id = Number(row.user_id), limit = full == null || !whole.has(id) ? null : yearly.has(id) ? year : full;
-    if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit, key: yearly.has(id) ? "AI_YEARLY_LIMIT_USD" : "AI_MONTHLY_LIMIT_USD" });
+    const limit = full == null || !whole.has(Number(row.user_id)) ? null : full;
+    if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit });
   }
   return stats;
 }
@@ -300,7 +298,7 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month, calls }) => aiSummary(used, month, aiMonthlyLimitUsd(env), calls)).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
-  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), yearly: aiMonthlyLimitUsd(env, 1, "yearly"), unpaid: aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid"), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
+  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaid: aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid"), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
     .catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
   const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts);
   const to = String(env.OWNER_EMAIL || "").trim();

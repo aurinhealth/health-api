@@ -50,7 +50,7 @@ function subscriptionRow(env) {
   return rowOnce.get(env);
 }
 async function readSubscriptionRow(env) {
-  const read = () => env.DB.prepare("SELECT plan, valid_until, product_id, store_signed_at, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
+  const read = () => env.DB.prepare("SELECT plan, valid_until, store_signed_at, store_environment, free_trial, offer_type, testflight FROM subscriptions WHERE user_id = ?").bind(env.USER_ID).first();
   try { return await read(); } catch (error) {
     if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
     await ensureStoreColumns(env.DB);
@@ -91,13 +91,10 @@ export function aiGroup(env) {
 export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(await purchaseGroup(env));
 
 // The plan the account's monthly AI brake follows (aiMonthlyLimitUsd,
-// ai-usage.js), from its subscription now: "yearly" (Pro on the yearly
-// product, paid at once or monthly with the 12-month commitment: the server
-// cannot tell the two apart), "monthly" (Pro on the monthly product, or a call
-// of no account) or "unpaid" (no Pro bought: the free week, TestFlight, no
-// purchase, only bought coach messages). Pro through an offer code or a
-// promotional offer ("gift": the pilot's discount nets about what the yearly
-// plan does) has the yearly one whatever the product. The free week (Apple's
+// ai-usage.js), from its subscription now: "paid" (Pro bought, any plan or
+// an offer code, or a call of no account: every paying user the same brake,
+// Petr 2026-11-16) or "unpaid" (no Pro bought: the free week, TestFlight, no
+// purchase, only bought coach messages). The free week (Apple's
 // introductory offer) counts as a period of its own: since is the day it began
 // (valid_until less FREE_WEEK_DAYS), so a week across two months does not get
 // two months' brakes. paidSince: the day of the newest paid record, so the
@@ -107,12 +104,11 @@ export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(a
 export const FREE_WEEK_DAYS = 7;
 const planOnce = new WeakMap();
 export function aiPlan(env) {
-  if (noAccount(env)) return Promise.resolve({ plan: "monthly" });
+  if (noAccount(env)) return Promise.resolve({ plan: "paid" });
   if (!planOnce.has(env)) planOnce.set(env, subscriptionRow(env).then(row => {
     const group = groupOfSubscription(row);
     const paidSince = Number(row?.store_signed_at) > 0 ? new Date(Number(row.store_signed_at)).toISOString().slice(0, 10) : null;
-    if (group === "gift") return { plan: "yearly", paidSince };
-    if (group === "paid") return { plan: String(row.product_id || "").endsWith(".yearly") ? "yearly" : "monthly", paidSince };
+    if (group === "paid" || group === "gift") return { plan: "paid", paidSince };
     if (group === "trial" && Number(row.offer_type) === 1) return { plan: "unpaid", since: new Date(Date.parse(row.valid_until) - FREE_WEEK_DAYS * 864e5).toISOString().slice(0, 10) };
     return { plan: "unpaid" };
   }).catch(error => { console.error("AI plan not read", error?.message || error); return { plan: "unpaid" }; }));
