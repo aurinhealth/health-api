@@ -148,7 +148,7 @@ import { handleEmailLogin, reviewCode } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
-import { needsAIAccess } from "./ai-routes.js";
+import { needsAIAccess, aiRouteFeature } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
@@ -618,7 +618,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // No consent to health data yet: no health data comes in (health-pause.js consentRefusal).
     if (signedIn && user.healthConsent === false && !user.healthPaused && !user.isOwner) { const refused = consentRefusal(request.method, url.pathname); if (refused) return refused; }
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
-      try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
+      try{await assertAIAccess(env,aiRouteFeature(url.pathname));}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
 
 

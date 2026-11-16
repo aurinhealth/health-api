@@ -38,6 +38,8 @@ struct AddFoodSheet: View {
     @State private var path: [FoodRoute] = []
     @State private var scanning = false
     @State private var photoMode: String?
+    /// The month's free AI photos without Pro; nil with Pro and in the pilot.
+    @State private var photoTrial: SubscriptionStatus.PhotoTrial?
     /// Choosing a food for a meal photo's list (PhotoItemsView "Přidat
     /// položku"): only the search and the lists; the food comes back here.
     var pick: ((FoodProduct, Double) -> Void)? = nil
@@ -95,6 +97,13 @@ struct AddFoodSheet: View {
                         tile("Ručně", "pencil") { path.append(.manual) }
                     }
                     .padding(.top, 16) }
+                    // Without Pro: how many of the month's free photos are left
+                    // (src/food-photo-trial.js); once none, a photo opens the Pro offer.
+                    if query.isEmpty, pick == nil, let photoTrial {
+                        Text(photoTrial.left > 0 ? L10n.f("Fotky jídla zdarma tento měsíc: zbývá %1$lld z %2$lld", photoTrial.left, photoTrial.limit)
+                                                 : L10n.tr("Fotky jídla zdarma na tento měsíc jsou využité. Aurin Pro zapíše jídlo z fotky, slovy nebo z webu."))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 10)
+                    }
                     if readingPhoto {
                         CoachThinking(text: L10n.tr("AI čte fotku…")).padding(.top, 12)
                     } else if lookingUp {
@@ -188,6 +197,11 @@ struct AddFoodSheet: View {
         .presentationBackground(Palette.background)
         .task(id: query) { await search() }
         .task { await loadRecent() }
+        // Again after each photo read, so the count follows.
+        .task(id: readingPhoto) {
+            guard !readingPhoto, !model.demo else { return }
+            photoTrial = (try? await model.api.subscription())?.photoTrial
+        }
         .onAppear(perform: begin)
         .onChange(of: model.pendingFoods.first { $0.id == current }?.state) { _, state in
             guard let state, state != .looking, let item = model.pendingFoods.first(where: { $0.id == current }) else { return }

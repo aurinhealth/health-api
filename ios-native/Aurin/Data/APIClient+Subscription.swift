@@ -27,6 +27,15 @@ struct SubscriptionStatus: Decodable, Equatable {
     var appAccountToken: String? = nil
     /// Aurin Pro as the App Store last told the server; nil when never bought.
     var purchase: Purchase? = nil
+    /// The month's free AI photos of food without Pro (src/food-photo-trial.js);
+    /// nil with Pro, in the pilot and from an older server.
+    var photoTrial: PhotoTrial? = nil
+
+    struct PhotoTrial: Decodable, Equatable {
+        let limit: Int
+        let used: Int
+        let left: Int
+    }
 
     struct Purchase: Decodable, Equatable {
         let active: Bool
@@ -47,6 +56,8 @@ struct SubscriptionStatus: Decodable, Equatable {
     var pilot: Bool { mode != "paid" }
     var packsBuyable: Bool { (packsOnSale ?? checkoutAvailable) == true }
     var hasAI: Bool { plan == "ai" }
+    /// AI may read a photo of food: Pro (or the pilot), or a free photo left this month.
+    var photoAI: Bool { aiAccess == true || (aiConsent == true && (photoTrial?.left ?? 0) > 0) }
     /// Aurin Pro bought (or its free week); in the pilot everyone has AI without it.
     var purchased: Bool { purchase?.active == true || (!pilot && hasAI) }
 

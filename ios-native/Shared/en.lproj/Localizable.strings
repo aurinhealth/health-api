@@ -3911,7 +3911,7 @@
 /* Settings → Aurin Pro: what Aurin has for free and what Pro adds; the offer's coach and plan */
 "Připravenost, spánek a zátěž" = "Readiness, sleep and strain";
 "Sledování cyklu" = "Cycle tracking";
-"Zápis jídla, čárový kód a etiketa" = "Food log, barcode and label";
+"Zápis jídla, čárový kód a 5 fotek jídla s AI měsíčně" = "Log meals by hand or barcode, and try 5 photo logs free each month";
 "Zápis posilovny a technika cviků" = "Gym log and exercise technique";
 "Úvodní plán pro každý sport" = "A starter plan for every sport";
 "Aurin Intelligence" = "Aurin Intelligence";
@@ -4219,3 +4219,7 @@
 "Aurin zapíše do Apple Health na tomhle iPhonu, co mu posílá Google Health z tvých hodinek." = "Aurin will write to Apple Health on this iPhone what Google Health sends it from your watch.";
 "Jen typy, které zaškrtneš: spánek, tep, klidový tep, okysličení krve, dechovou frekvenci a kroky." = "Only the types you tick: sleep, heart rate, resting heart rate, blood oxygen, respiratory rate and steps.";
 "Vypnout to můžeš kdykoli a zápis tím skončí. Co už v Apple Health je, tam zůstane i po smazání účtu a mohou to číst aplikace, kterým čtení Apple Health povolíš." = "You can turn it off at any time, and writing stops. What is already in Apple Health stays there, also after you delete your account, and apps you allow to read Apple Health can read it.";
+
+/* Add food: the month's free AI photos without Pro (src/food-photo-trial.js) */
+"Fotky jídla zdarma tento měsíc: zbývá %1$lld z %2$lld" = "Free photo logs this month: %1$lld of %2$lld left";
+"Fotky jídla zdarma na tento měsíc jsou využité. Aurin Pro zapíše jídlo z fotky, slovy nebo z webu." = "This month's free photo logs are used up. Aurin Pro logs meals by photo, in words or from the web.";

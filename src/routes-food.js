@@ -18,6 +18,8 @@ import { recordOpsEvent } from "./ops-report.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
 import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
+import { plansUnlocked } from "./subscription.js";
+import { countFoodPhoto } from "./food-photo-trial.js";
 import { localToday } from "./user-time.js";
 import { dashboardProfile } from "./dashboard-shared.js";
 import { waterGoal, loadBuild } from "./water-goal.js";
@@ -126,7 +128,9 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       if(body.mode==='barcode'){const b=await readBarcodeWithAI(env,{image:body.image});return Response.json(b.barcode?{status:'ok',barcode:b.barcode}:{status:'unreadable',message:L('Číslo pod čárovým kódem se nepodařilo přečíst. Vyfoť kód zblízka, nebo číslo opiš.', 'The number under the barcode couldn\'t be read. Take a close-up photo of the code or type the number.')},{headers:{'Cache-Control':'no-store'}});}
       const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
       if(!r.result)return Response.json({status:'unreadable',message:L('Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.', 'I couldn\'t read the values in the photo. Take a close, straight photo of the table or enter the values by hand.')},{headers:{'Cache-Control':'no-store'}});
-      return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
+      // Without Pro the photo is one of the month's free ones (food-photo-trial.js).
+      const photoTrial=await plansUnlocked(env)?null:await countFoodPhoto(env);
+      return Response.json({status:'ok',...r.result,model:r.model,...(photoTrial?{photoTrial}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.limit?error.message:L('Čtení fotky přes AI selhalo: ', 'Reading the photo with AI failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):/JPG|PNG/.test(error.message)?400:502});}
   }
   // Drinks of a day with the day's target (body weight and training).

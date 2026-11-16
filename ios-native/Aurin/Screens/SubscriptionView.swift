@@ -59,7 +59,8 @@ enum ProContents {
         "Připravenost, spánek a zátěž",
         "Sledování cyklu",
         "Kalorický cíl a makra",
-        "Zápis jídla, čárový kód a etiketa",
+        // Exactly what Free gets (App Review 3.1.2): FOOD_PHOTO_TRIAL in src/food-photo-trial.js.
+        "Zápis jídla, čárový kód a 5 fotek jídla s AI měsíčně",
         "Zápis posilovny a technika cviků",
         "Úvodní plán pro každý sport"
     ]

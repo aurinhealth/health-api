@@ -2,7 +2,8 @@ import { L } from './lang.js';
 import { consentStatus } from './consent.js';
 import { storeConfigured, proActive, subscriptionRow } from './app-store.js';
 import { FREE_PLANS } from './training-plans.js';
-import { isFreeFeature } from './ai-features.js';
+import { isFreeFeature, isTrialFeature } from './ai-features.js';
+import { foodPhotoTrial, foodPhotoTrialLimit } from './food-photo-trial.js';
 // Aurin Pro can be bought in the app (app-store.js); AI still needs it only once
 // AI_PAYWALL_ENABLED is on. Until then (the pilot) everyone has AI.
 // AI_PAYWALL_ENABLED (Worker var): 'true' turns the paid split on for everyone;
@@ -68,10 +69,16 @@ export async function assertPlanAccess(env,template){
   if(FREE_PLANS.has(template.id)||await plansUnlocked(env))return;
   const error=new Error(L('Tento plán je součástí Aurin Pro.', 'This plan is part of Aurin Pro.'));error.status=402;throw error;
 }
-// A free feature (ai-features.js) needs only the consent, not Pro.
+// A free feature (ai-features.js) needs only the consent, not Pro; a trial one
+// (a photo of food) the consent and a free photo left this month.
 export async function assertAIAccess(env,feature=null){
   const status=await subscriptionStatus(env);
   if(status.aiAccess||(status.aiConsent&&isFreeFeature(feature)))return;
+  if(status.aiConsent&&isTrialFeature(feature)){
+    if((await foodPhotoTrial(env))?.left>0)return;
+    const limit=foodPhotoTrialLimit(env);
+    const error=new Error(L(`Fotky jídla zdarma na tento měsíc jsou využité (${limit}). Aurin Pro zapíše jídlo z fotky, slovy nebo z webu.`, `You've used this month's ${limit} free photo logs. Aurin Pro logs meals by photo, in words or from the web.`));error.status=402;error.ai=true;error.limit=true;throw error;
+  }
   if(!status.aiConsent){const error=new Error(L('AI funkce potřebují tvůj souhlas. Zapneš je v Nastavení → Soukromí a data.', 'AI features need your consent. Turn them on in Settings → Privacy & data.'));error.status=403;error.ai=true;error.consent=true;throw error;}
   const error=new Error(L('Tato AI funkce je součástí Aurin Pro. Najdeš ho v Nastavení → Aurin Pro.', 'This AI feature is part of Aurin Pro. See Settings → Aurin Pro.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }
