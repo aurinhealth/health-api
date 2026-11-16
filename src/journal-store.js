@@ -10,7 +10,7 @@
 // drinks (Pití), the food diary and the activities; the athlete's own answer
 // wins over them.
 import { CATALOG, DEFAULT_PINNED, MOOD_LABEL_MASK, catalogItem, normalizeCustomItem } from "./journal-catalog.js";
-import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
+import { COFFEE, drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime, localToday } from "./user-time.js";
@@ -261,7 +261,7 @@ export async function autoDays(db, from, to) {
     if (alcohol) { const a = at(date, "alcohol"); a.amount = (a.amount || 0) + alcoholDrinks(kind, ml, name); a.time = later(a.time, time); return; }
     (days[date] ||= {}).__water = (days[date].__water || 0) + Math.max(0, water);
     if (/energ|red bull|monster|\bburn\b|rockstar/i.test(String(name || ""))) set(date, "energy_drink", true);
-    if (kind === "coffee" || (kind === "food" && /espresso|ristretto|lungo|káv|kav|coffee|latte|cappucc|kafe|americano|flat white/i.test(String(name || "")))) {
+    if (kind === "coffee" || (kind === "food" && COFFEE.test(String(name || "")))) {
       const c = at(date, "coffee_cups"); c.amount = (c.amount || 0) + 1; c.time = later(c.time, time);
     }
     const mg = caffeineMg(kind, ml, name);

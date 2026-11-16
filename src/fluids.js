@@ -123,7 +123,7 @@ const ALCOHOL = /(pivo|piva|beer|ležák|lezak|radler|víno|vína|vino|wine|pros
 // (Coca-Cola 0,5 l from a barcode): a gram of a drink is about a millilitre.
 const DRINK = /(\bcola\b|coca|kola\b|kofola|pepsi|fanta|sprite|mirinda|7up|schweppes|tonic|limonád|limonad|lemonade|soda\b|džus|dzus|juice|šťáva|stava|nektar|nektár|smoothie|ice ?tea|ledový čaj|ledovy caj|čaj\b|caj\b|\btea\b|káva\b|kava\b|kafe|coffee|latte|cappuccino|espresso|americano|minerálk|mineralk|mattoni|magnesia|\bvoda\b|water|mléko|mleko|\bmilk\b|kefír|kefir|ayran|energ\w* drink|energetick|red ?bull|monster|semtex|big shock|isoton|ionto|powerade|gatorade|kombucha|\bnápoj|\bnapoj|\bdrink|protein ?shake|\bshake\b|pivo|beer|víno|vino|wine|radler)/i;
 const NOT_DRINK = /(dort|koláč|kolac|zmrzl|čokolád|cokolad|sušenk|susenk|tyčink|tycink|pečiv|peciv|bonbon|muffin|cake|cookie|pudink|puding|jogurt|sýr|syr|chips|gumov|želé|zele|prášek|prasek|powder)/i;
-const COFFEE = /espresso|ristretto|lungo|káv|kav|kafe|coffee|latte|cappucc|americano|flat white/i;
+export const COFFEE = /espresso|ristretto|lungo|káv|kav|kafe|coffee|latte|cappucc|americano|flat white/i;
 const servingMl = text => {
   const m = /(\d+(?:[.,]\d+)?)\s*(ml|cl|dl|l)\b/i.exec(String(text || ""));
   if (!m) return null;
