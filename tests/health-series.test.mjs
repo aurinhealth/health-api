@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { buildHealthSeries, bandState, latestState, loadDays, SERIES_METRICS } from "../src/health-series.js";
 import { seriesRows } from "../src/health-series-store.js";
-import { friendBands, vo2maxView, aurinAgeView, estimateSeries, profileAge } from "../src/health-estimates.js";
+import { friendBands, vo2maxView, aurinAgeView, estimateSeries, profileAge, withNorm, fitnessNormOf } from "../src/health-estimates.js";
+import { normalizeProfile } from "../src/energy-profile.js";
+import { estimateDay } from "../src/own-vo2max.js";
 import { buildHealth, sleepNeedParts } from "../src/app-health.js";
 import { recoveryReadiness, sleepNeedFor } from "../src/recovery-model.js";
 import { withTimeZone } from "../src/user-time.js";
@@ -161,4 +163,32 @@ test("/app/api/health sends a state per metric and the need's lines, nothing new
   assert.equal(h.readiness.low, undefined);
   assert.equal(h.readiness.high, undefined);
   assert.ok(Object.keys(SERIES_METRICS).every(k => !["readiness", "form", "fitness", "fatigue"].includes(k)));
+});
+
+test("Aurin age in the user's norm: FRIEND by default, HUNT when chosen; older rows hold HUNT only", () => {
+  assert.equal(fitnessNormOf({}), "friend");
+  assert.equal(fitnessNormOf({ fitnessNorm: "hunt" }), "hunt");
+  assert.equal(normalizeProfile({ fitnessNorm: "hunt" }).fitnessNorm, "hunt");
+  assert.equal(normalizeProfile({ fitnessNorm: "cooper" }).fitnessNorm, "");
+  const ages = { friend: { fitnessAge: 25, compositeAge: 31, parts: { vo2max: -3 }, gains: {} }, hunt: { fitnessAge: 38, compositeAge: 35, parts: { vo2max: -0.5 }, gains: { sleep: 0.4 } } };
+  const stored = [{ date: day(-1), vo2max: 48, fitnessAge: 40, compositeAge: 36, details: { composite: { parts: {}, gains: {} } } }, { date: DATE, vo2max: 48.1, fitnessAge: 25, compositeAge: 31, details: { ages, composite: { parts: { vo2max: -3 }, gains: {} } } }];
+  const friend = aurinAgeView({ rows: withNorm(stored, "friend"), age: 35 });
+  assert.equal(friend.value, 31);
+  assert.equal(friend.norm, "friend");
+  assert.deepEqual(friend.series.map(p => p.date), [DATE], "the older HUNT-only row has no FRIEND age");
+  const hunt = aurinAgeView({ rows: withNorm(stored, "hunt"), age: 35, norm: "hunt" });
+  assert.equal(hunt.value, 35);
+  assert.equal(hunt.fitnessAge, 38);
+  assert.deepEqual(hunt.gains, { sleep: 0.4 });
+  assert.deepEqual(hunt.series.map(p => p.value), [36, 35]);
+  // VO2max is the same in both.
+  assert.equal(vo2maxView({ rows: withNorm(stored, "friend") }).value, vo2maxView({ rows: withNorm(stored, "hunt") }).value);
+});
+
+test("the daily estimate stores both norms, FRIEND in the columns", () => {
+  const sessions = Array.from({ length: 6 }, (_, i) => ({ date: day(-i * 5), kind: "ride", minutes: 60, avgHr: 150, avgPower: 150 }));
+  const e = estimateDay({ date: DATE, age: 35, sex: "male", height: 180, weight: 80, restHrs: Array(20).fill(50), profileMaxHr: 190, sessions, sleep: Array.from({ length: 14 }, (_, i) => ({ date: day(-i), durationMin: 450, startTime: day(-i - 1) + "T21:30:00Z", endTime: day(-i) + "T05:00:00Z" })) });
+  assert.equal(e.fitnessAge, e.details.ages.friend.fitnessAge);
+  assert.equal(e.compositeAge, e.details.ages.friend.compositeAge);
+  assert.ok(e.details.ages.friend.fitnessAge < e.details.ages.hunt.fitnessAge);
 });

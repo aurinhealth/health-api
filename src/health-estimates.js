@@ -82,7 +82,21 @@ export function vo2maxView({ rows = [], age = null, sex = null }) {
   };
 }
 
-export function aurinAgeView({ rows = [], age = null }) {
+// The user's norm for fitness age and Aurin age: FRIEND unless they chose HUNT.
+export const fitnessNormOf = profile => (profile?.fitnessNorm === "hunt" ? "hunt" : "friend");
+
+// The rows with fitness age and Aurin age in the user's norm. A row stores both
+// (details.ages, from 2026-11-16); an older row only HUNT's in its columns, so
+// for FRIEND it has no age (its VO2max stays).
+export function withNorm(rows, norm) {
+  return rows.map(r => {
+    const a = r.details?.ages?.[norm];
+    if (a) return { ...r, fitnessAge: a.fitnessAge, compositeAge: a.compositeAge, details: { ...r.details, composite: a.compositeAge == null ? null : { ...(r.details.composite || {}), parts: a.parts, gains: a.gains } } };
+    return r.details?.ages || norm === "hunt" ? r : { ...r, fitnessAge: null, compositeAge: null };
+  });
+}
+
+export function aurinAgeView({ rows = [], age = null, norm = "friend" }) {
   const list = rows.filter(r => num(r.compositeAge) != null);
   const last = list.at(-1);
   if (!last) return null;
@@ -90,6 +104,8 @@ export function aurinAgeView({ rows = [], age = null }) {
   return {
     value: round1(num(last.compositeAge)),
     age: num(age),
+    // "friend" (the default) or "hunt": the norm the ages compare VO2max with.
+    norm,
     date: last.date,
     fitnessAge: round1(num(last.fitnessAge)),
     // Years each factor adds (+) or takes off (−), and what each habit could take off.

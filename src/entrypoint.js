@@ -37,7 +37,7 @@ import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildHealthSeries,SERIES_METRICS,SERIES_RANGES} from './health-series.js';
 import {seriesRows} from './health-series-store.js';
-import {vo2maxView,aurinAgeView,estimateSeries,profileAge} from './health-estimates.js';
+import {vo2maxView,aurinAgeView,estimateSeries,profileAge,withNorm,fitnessNormOf} from './health-estimates.js';
 import {buildDays,DAYS_MAX} from './app-days.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
@@ -3098,7 +3098,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle});
       // Only Aurin's estimate, never the watch's (T-SCI-1); null until the daily job has a row.
       body.vo2max=vo2maxView({rows:estimates,age:profileAge(profile,date),sex:profile?.sex});
-      body.aurinAge=aurinAgeView({rows:estimates,age:profileAge(profile,date)});
+      body.aurinAge=aurinAgeView({rows:withNorm(estimates,fitnessNormOf(profile)),age:profileAge(profile,date),norm:fitnessNormOf(profile)});
       keepUsualWake(env,ctx,date,profile,body.sleep?.tonight);
       return Response.json(body,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
@@ -3114,8 +3114,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!SERIES_RANGES[range]||!(SERIES_METRICS[metric]||metric==='vo2max'||metric==='aurinAge'))return Response.json({message:'Unknown metric or range'},{status:400});
       const result=await cached(env,ctx,'health-series:'+metric+':'+range+':'+date,async()=>{
         if(metric==='vo2max'||metric==='aurinAge'){
-          const [rows,profile]=await Promise.all([fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-Math.max(SERIES_RANGES[range],97)-1)),dashboardProfile(env).catch(()=>null)]);
-          const view=metric==='vo2max'?vo2maxView({rows,age:profileAge(profile,date),sex:profile?.sex}):aurinAgeView({rows,age:profileAge(profile,date)});
+          const [stored,profile]=await Promise.all([fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-Math.max(SERIES_RANGES[range],97)-1)),dashboardProfile(env).catch(()=>null)]);
+          const norm=fitnessNormOf(profile),rows=withNorm(stored,norm);
+          const view=metric==='vo2max'?vo2maxView({rows,age:profileAge(profile,date),sex:profile?.sex}):aurinAgeView({rows,age:profileAge(profile,date),norm});
           const {series,...rest}=view||{};
           return {status:'ok',metric,range,...(view?rest:{}),date,...(view?{estimateDate:view.date}:{}),weekly:SERIES_RANGES[range]>=91,points:estimateSeries({rows,key:metric==='vo2max'?'vo2max':'compositeAge',days:SERIES_RANGES[range],date})};
         }
@@ -3136,7 +3137,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const date=localToday();
       const [rows,profile]=await Promise.all([fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-365)),dashboardProfile(env).catch(()=>null)]);
-      return Response.json({status:'ok',aurinAge:aurinAgeView({rows,age:profileAge(profile,date)})},{headers:{'Cache-Control':'no-store'}});
+      const norm=fitnessNormOf(profile);
+      return Response.json({status:'ok',aurinAge:aurinAgeView({rows:withNorm(rows,norm),age:profileAge(profile,date),norm})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
