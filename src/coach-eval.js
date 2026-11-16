@@ -1014,9 +1014,9 @@ export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout 
         // Run 91: "limit 0 minut v intenzitě" (the app's cap, which the athlete never sees) and "zelená
         // připravenost" as the reason for an easy ride after two hard days. Today's proposal does say
         // why it fits the day (unlike the library's W situations).
-        quality('zdůvodnění bez limitů aplikace', !/limit|strop|hardMinutesCap/i.test(w.ai?.reason || ''), w.ai?.reason || ''),
-        ...(c.hardDays ? [quality('zdůvodnění zmíní tvrdé dny', /tvrd|náročn|únav|hard|fatigue/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
-        ...(c.sick ? [quality('zdůvodnění zmíní nemoc', /nemoc|nachlaz|sick|ill(?:ness)?\b/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
+        quality('zdůvodnění bez limitů aplikace', !/\blimit|strop|hardMinutesCap/i.test(w.ai?.reason || ''), w.ai?.reason || ''),
+        ...(c.hardDays ? [quality('zdůvodnění zmíní tvrdé dny', /tvrd|těžk|náročn|intenzivn|únav|\bhard\b|fatigue/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
+        ...(c.sick ? [quality('zdůvodnění zmíní nemoc', (ILLNESS.test(w.ai?.reason || '') || /\bsick|\bill\b/i).test(w.ai?.reason || ''), w.ai?.reason || '')] : []),
         quality(`slova jen ${sport === 'run' ? 'z běhu' : 'z kola'}`, !otherSportWords(sport, [w.name, w.ai?.reason, w.intervals_description].join('\n')).length)] : [])];
   // Illness, two hard days, a beginner: nothing at threshold and above.
   if (w && (c.sick || c.hardDays >= 2 || c.beginner)) checks.push(safety('nic v pásmu prahu a výš', load.hard === 0, load.hard + ' min'));
