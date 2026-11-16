@@ -211,4 +211,18 @@ test("the daily job stores one row a day and is exported and deleted with the ac
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM fitness_estimates").get().n, 2);
   assert.match(FITNESS_ESTIMATES_TABLE, /PRIMARY KEY \(user_id, date\)/);
   assert.equal(await latestFitnessEstimate(db, 8), null);
+  // "Data from": the services of the workouts and the resting heart rate, most used first.
+  assert.deepEqual(stored.details.sources, ["apple-health", "intervals"]);
+  // Data that arrives after the morning run: a refresh works the day out again
+  // from the row before it and replaces it (it used to stay as first written).
+  const next = shift(day, 1), kept = second.estimate.vo2max;
+  insert.run(7, "intervals", "activity", ride(next, 260, 134).start_time, null, null, null, ride(next, 260, 134).payload_json);
+  assert.equal((await withTimeZone("Europe/Prague", () => updateFitnessEstimate(env, { date: next }))).status, "done");
+  const again = await withTimeZone("Europe/Prague", () => updateFitnessEstimate(env, { date: next, refresh: true }));
+  assert.equal(again.status, "updated");
+  assert.equal(again.estimate.details.workouts.ride.count, 7);
+  assert.ok(Math.abs(again.estimate.vo2max - first.estimate.vo2max) <= 1 / 7 + 0.05, "still limited from the day before, not from the replaced row");
+  assert.equal((await latestFitnessEstimate(db, 7)).vo2max, again.estimate.vo2max);
+  assert.ok(kept != null);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM fitness_estimates").get().n, 2);
 });
