@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { saveConsent } from "../src/consent.js";
 import { assertAIAccess } from "../src/subscription.js";
-import { foodPhotoTrial, countFoodPhoto } from "../src/food-photo-trial.js";
+import { foodPhotoTrial, claimFoodPhoto, returnFoodPhoto } from "../src/food-photo-trial.js";
 import { aiRouteFeature } from "../src/ai-routes.js";
 import { KEPT_TABLES } from "../src/health-pause.js";
 
@@ -22,11 +22,15 @@ test("without Pro, AI reads 5 photos of food a month; words and the web stay Pro
   await assert.rejects(assertAIAccess(env, "food-photo"), e => e.status === 403 && e.consent === true, "the AI consent comes first");
   await saveConsent(env, { ai: true });
   assert.deepEqual(await foodPhotoTrial(env), { limit: 5, used: 0, left: 5 });
-  for (let i = 0; i < 5; i++) { await assertAIAccess(env, "food-photo"); await assertAIAccess(env, "barcode"); await countFoodPhoto(env); }
+  // A photo AI could not read gives its photo back.
+  assert.equal(await claimFoodPhoto(env), true);
+  await returnFoodPhoto(env);
+  assert.equal((await foodPhotoTrial(env)).used, 0);
+  for (let i = 0; i < 5; i++) { const request = { ...env }; await assertAIAccess(request, "food-photo"); assert.equal(await claimFoodPhoto(request), true); await assertAIAccess(request, "food-photo"); }
   assert.deepEqual(await foodPhotoTrial(env), { limit: 5, used: 5, left: 0 });
+  assert.equal(await claimFoodPhoto({ ...env }), false, "photos sent at once cannot go over");
   await assert.rejects(assertAIAccess(env, "food-photo"), e => e.status === 402 && /free photo logs|Fotky jídla zdarma/.test(e.message));
-  await assert.rejects(assertAIAccess(env, "barcode"), e => e.status === 402, "the barcode photo goes with them");
-  for (const feature of ["food-lookup", "food-sentence", "assistant", null]) await assert.rejects(assertAIAccess(env, feature), e => e.status === 402, String(feature));
+  for (const feature of ["barcode", "food-lookup", "food-sentence", "assistant", null]) await assert.rejects(assertAIAccess(env, feature), e => e.status === 402, String(feature));
 });
 
 test("the number is a Worker setting and 0 turns the free photos off", async () => {
@@ -42,5 +46,6 @@ test("the gate names the photo route, the table goes and stays with the account"
   assert.ok(PERSONAL_TABLES.food_photo_trial);
   assert.ok(KEPT_TABLES.has("food_photo_trial"), "pausing health data does not start the photos over");
   const routes = readFileSync(new URL("../src/routes-food.js", import.meta.url), "utf8");
-  assert.match(routes, /const photoTrial=await plansUnlocked\(env\)\?null:await countFoodPhoto\(env\);/, "only a read photo counts, and only without Pro");
+  assert.match(routes, /if\(!await plansUnlocked\(env\)&&\(body\.mode==='front'\|\|body\.mode==='barcode'\|\|!await claimFoodPhoto\(env\)\)\)return Response\.json\(\{status:'subscription_required'/, "without Pro: a photo is taken first, the package front and barcode need Pro");
+  assert.match(routes, /if\(!r\.result\)\{await returnFoodPhoto\(env\);/, "an unread photo is given back");
 });

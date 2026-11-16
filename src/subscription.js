@@ -3,7 +3,7 @@ import { consentStatus } from './consent.js';
 import { storeConfigured, proActive, subscriptionRow } from './app-store.js';
 import { FREE_PLANS } from './training-plans.js';
 import { isFreeFeature, isTrialFeature } from './ai-features.js';
-import { foodPhotoTrial, foodPhotoTrialLimit } from './food-photo-trial.js';
+import { foodPhotoTrial, foodPhotoTrialLimit, holdsFoodPhoto } from './food-photo-trial.js';
 // Aurin Pro can be bought in the app (app-store.js); AI still needs it only once
 // AI_PAYWALL_ENABLED is on. Until then (the pilot) everyone has AI.
 // AI_PAYWALL_ENABLED (Worker var): 'true' turns the paid split on for everyone;
@@ -75,7 +75,7 @@ export async function assertAIAccess(env,feature=null){
   const status=await subscriptionStatus(env);
   if(status.aiAccess||(status.aiConsent&&isFreeFeature(feature)))return;
   if(status.aiConsent&&isTrialFeature(feature)){
-    if((await foodPhotoTrial(env))?.left>0)return;
+    if(holdsFoodPhoto(env)||(await foodPhotoTrial(env))?.left>0)return;
     const limit=foodPhotoTrialLimit(env);
     const error=new Error(L(`Fotky jídla zdarma na tento měsíc jsou využité (${limit}). Aurin Pro zapíše jídlo z fotky, slovy nebo z webu.`, `You've used this month's ${limit} free photo logs. Aurin Pro logs meals by photo, in words or from the web.`));error.status=402;error.ai=true;error.limit=true;throw error;
   }

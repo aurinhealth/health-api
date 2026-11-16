@@ -28,7 +28,7 @@ export const AI_FEATURES = {
   "food-photo": { name: "jídlo z fotky", food: true, trial: true },
   "food-lookup": { name: "dohledání potraviny", food: true },
   "food-sentence": { name: "jídlo větou", food: true },
-  barcode: { name: "čárový kód", food: true, trial: true }
+  barcode: { name: "čárový kód", food: true }
 };
 export const isFoodFeature = feature => AI_FEATURES[feature]?.food === true;
 export const isTrialFeature = feature => AI_FEATURES[feature]?.trial === true;
