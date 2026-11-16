@@ -220,6 +220,9 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
       targetWeightKg: num(nutrition.targetWeightKg), deficitKcal: num(breakdown.weightLossDeficit)
     },
     sentence: sentence({ eaten: eaten.kcal || 0, target, bonus, left, next: meals.find(m => m.suggestion) }),
+    // From 10 h of sport a week a losing goal goes at most 0.5 % a week
+    // (energy-profile.js heavyTrainingCap); the coach card says why (T-NUT-2).
+    heavyTraining: breakdown.heavyTraining ? L("Hodně trénuješ a to potřebuje energii. Tvůj cíl jí nechává dost na regeneraci.", "Heavy training needs fuel. Your target keeps energy for recovery.") : null,
     macros: {
       // On keto and lower carb the carbs are a limit, on keto net carbs (diet.js).
       carbs: { eaten: eaten.carbs, target: num(macros.carbs_g), ...(macros.carbs_max ? { limit: true } : {}), ...(macros.net_carbs ? { net: true } : {}) },

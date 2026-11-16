@@ -144,7 +144,9 @@ export const PERSONAL_TABLES = {
   // Aurin's own VO2max and ages, one row a day (own-vo2max-store.js).
   fitness_estimates: { pk: ["user_id", "date"] },
   // One row a week of training per sport (training-history.js trainingWeeks).
-  training_weeks: { pk: ["user_id", "week"] }
+  training_weeks: { pk: ["user_id", "week"] },
+  // Eaten and the frozen targets of each day (nutrition-days.js).
+  nutrition_days: { pk: ["user_id", "date"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

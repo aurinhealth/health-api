@@ -266,7 +266,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null,feeling=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -304,7 +304,10 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     // Deník: the habits that go with the athlete's next-morning readiness and
     // yesterday's answers (routes-journal.js journalForCoach).
     ...(journal?{journal}:{}),
-    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date})},
+    // The morning answer (morning-checkin.js feelingOf): how the athlete says
+    // they feel today, for this day only. Subjective, never the readiness and
+    // never an illness (AI-6, T-HAB-1).
+    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date}),...(['fresh','normal','tired'].includes(feeling)?{feeling}:{})},
     week:days,
     // Kontrola týdne (week-check.js): the athlete's state against the load
     // ahead and the changes the app proposes, when there are any.
