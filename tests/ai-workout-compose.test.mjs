@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { composeWorkout, dailyOwnWorkout, poorFit, COMPOSE_BELOW, fewMatches, composeKey, composeWarning, composeFits } from "../src/ai-workout-compose.js";
+import { composeWorkout, dailyOwnWorkout, coachFirst, poorFit, COMPOSE_BELOW, fewMatches, composeKey, composeWarning, composeFits } from "../src/ai-workout-compose.js";
 import { getWorkout } from "../src/workout-library.js";
 
 const owner = () => ({ DB: scopedDb(createD1(), 1), USER_ID: 1, USER_IS_OWNER: true, OPENAI_API_KEY: "test" });
@@ -198,4 +198,110 @@ test("today's proposal: a draft refused twice keeps the ranked pick, with one lo
   assert.equal(lines[4].rejected, undefined, "no error text");
   assert.equal(lines[5].rejected, "hard", "the check's name, not its cap");
   for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|(?<!vo)\d|readiness|score|sleep|spent/);
+});
+
+// Step 2 (COACH_FIRST): the AI writes first only where the coaches let it.
+test("coach first: easy and tempo days for everyone with a threshold, harder only for the experienced on a green morning", () => {
+  const green = { readiness: { status: "green" }, constraints: {} }, ftp = { ftp: 250 }, pace = { runThresholdPace: "4:30" };
+  assert.equal(coachFirst({ sport: "ride", kind: "sweet_spot", minutes: 75, coach: green, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 120, coach: green, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 150, coach: green, thresholds: ftp }), "long");
+  assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: green, thresholds: ftp }), "hard type");
+  assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: green, thresholds: ftp, experience: "experienced" }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "openers", minutes: 45, coach: green, thresholds: ftp, experience: "experienced" }), "race");
+  assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: { ...green, readiness: { status: "yellow" } }, thresholds: ftp, experience: "experienced" }), "hard type");
+  assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: green, thresholds: {} }), "no threshold");
+  const base = { longestRun30: 70, runs8w: 20, weeksWith2Runs: 6, longestBreak28: 4, last7Minutes: 150 };
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace, runBase: base }), null);
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace }), "run base", "no history read");
+  for (const thin of [{ weeksWith2Runs: 2 }, { longestBreak28: 14 }, { runs8w: 11 }, { last7Minutes: 59 }])
+    assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace, runBase: { ...base, ...thin } }), "run base", JSON.stringify(thin));
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 80, coach: green, thresholds: pace, runBase: base }), "long", "over 1.1× the longest run of 30 days (77 min)");
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 75, coach: green, thresholds: pace, runBase: base }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: { ...green, constraints: { lastHardDays: 1 } }, thresholds: ftp }), "hard yesterday");
+  assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 60, coach: { ...green, constraints: { lastHardDays: 1 } }, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: { ...green, constraints: { lastHardDays: 2 } }, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 100, coach: green, thresholds: pace, runBase: { ...base, longestRun30: 120 } }), "long");
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: { ...green, constraints: { novice: true } }, thresholds: pace }), "novice");
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: { ...green, constraints: { returning: true } }, thresholds: pace }), "returning");
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, today: { feeling: "sick" }, thresholds: pace }), "sick");
+  assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 60, coach: { ...green, constraints: { plannedToday: { name: "x" } } }, thresholds: ftp }), "planned");
+});
+
+test("coach first: off without the flag; on, a good library fit is still written by the AI, to the target difficulty ± 0.75", async () => {
+  const env = owner(), good = { primary_system: "tempo", suitability: 95 }, seen = [];
+  const coach = { readiness: { status: "green" }, constraints: {}, recommendation: { progression: { targetDifficulty: 4 } } };
+  const ask = async (e, args) => { seen.push(JSON.parse(args.input.replace(/^[^{]*/, ""))); return answer(tempo45)(); };
+  const log = console.log; console.log = () => {};
+  try {
+    assert.equal((await dailyOwnWorkout(env, good, { ...day, coach, ask, thresholds: { ftp: 250 } })).workout, null, "without COACH_FIRST the good fit stays");
+    assert.equal(seen.length, 0);
+    const on = { ...env, COACH_FIRST: "true" };
+    const r = await dailyOwnWorkout(on, good, { ...day, coach, ask, thresholds: { ftp: 250 }, experience: "regular" });
+    assert.equal(r.coachFirst, true);
+    assert.deepEqual(seen[0].difficulty, { min: 3.3, max: 4.8, scale: "1–10" });
+    assert.equal(seen[0].athleteLevel, "regular");
+    const held = await dailyOwnWorkout(on, good, { ...day, coach: { ...coach, constraints: { novice: true } }, ask, thresholds: { ftp: 250 } });
+    assert.equal(held.workout, null); assert.equal(held.held, "novice"); assert.equal(seen.length, seen.length);
+  } finally { console.log = log; }
+});
+
+test("coach first: no band on endurance days, where the difficulty follows the minutes; the log says only held or yes", async () => {
+  const seen = [], logs = [], orig = console.log;
+  const env = { ...owner(), COACH_FIRST: "true" };
+  const ask = async (e, args) => { seen.push(JSON.parse(args.input.replace(/^[^{]*/, ""))); return null; };
+  const coach = { readiness: { status: "green" }, constraints: {}, recommendation: { progression: { targetDifficulty: 4.45 } } };
+  console.log = l => logs.push(l);
+  try {
+    await dailyOwnWorkout(env, { suitability: 95, primary_system: "endurance", duration_minutes: 60 }, { sport: "ride", kind: "endurance", minutes: 60, coach, today: {}, ask, thresholds: { ftp: 250 }, experience: "experienced" });
+    await dailyOwnWorkout(env, { suitability: 95, primary_system: "endurance", duration_minutes: 60 }, { sport: "ride", kind: "endurance", minutes: 60, coach, today: { feeling: "sick" }, ask, thresholds: { ftp: 250 } });
+  } finally { console.log = orig; }
+  assert.ok(seen.length >= 1 && seen.every(f => !f.difficulty), JSON.stringify(seen[0]));
+  assert.ok(logs.every(l => !/sick|novice|returning/.test(l)), logs.join("\n"));
+  assert.match(logs.at(-1), /"coach_first":"held"/);
+});
+
+test("checks: most of the work in the type's zone; long VO2max efforts need recoveries of at least half their length", async () => {
+  const { workInZone, shortRecoveries, composeFaults } = await import("../src/ai-workout-compose.js");
+  const sst = [{ durationMinutes: 10, power: 60 }, { repeats: 3, steps: [{ durationMinutes: 12, power: 91 }, { durationMinutes: 4, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(sst, "ride", "sweet_spot"), 1);
+  const tooHigh = [{ durationMinutes: 10, power: 60 }, { repeats: 3, steps: [{ durationMinutes: 12, power: 98 }, { durationMinutes: 4, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(tooHigh, "ride", "sweet_spot"), 0, "threshold, not sweet spot");
+  assert.equal(workInZone(sst, "ride", "endurance"), null);
+  const vo2 = rec => [{ durationMinutes: 15, power: 60 }, { repeats: 4, steps: [{ durationMinutes: 4, power: 112 }, { durationMinutes: rec, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(shortRecoveries(vo2(3), "ride"), false, "Helgerud 4×4 with 3 min");
+  assert.equal(shortRecoveries(vo2(1.5), "ride"), true);
+  const short = [{ durationMinutes: 15, power: 60 }, { repeats: 10, steps: [{ durationMinutes: 0.67, power: 120 }, { durationMinutes: 0.33, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(shortRecoveries(short, "ride"), false, "40/20 is exempt");
+  const thirty = [{ durationMinutes: 12, power: 60 }, { durationMinutes: 3, power: 100 }, { durationMinutes: 3, power: 55 }, { repeats: 10, steps: [{ durationMinutes: 0.5, power: 120 }, { durationMinutes: 0.5, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(thirty, "ride", "vo2max"), null, "30/30 after an opener: only short efforts in the zone, not checked");
+  assert.deepEqual(composeFaults({ structure: vo2(1.5), sport: "ride", type: "vo2max", length: 47, cap: 45 }), ["recoveries under half the effort"]);
+});
+
+test("coach first in the background (the library's proposal): pending at once, the workout on the next ask; a failed try leaves the library", async () => {
+  const env = { ...owner(), COACH_FIRST: "true" }, good = { primary_system: "tempo", suitability: 95 }, deferred = [];
+  const coach = { readiness: { status: "green" }, constraints: {}, recommendation: { progression: { targetDifficulty: 4 } } };
+  let calls = 0;
+  const ask = async () => { calls++; return answer(tempo45)(); };
+  const args = { ...day, coach, ask, thresholds: { ftp: 250 }, key: "k1", defer: p => deferred.push(p) };
+  const log = console.log; console.log = () => {};
+  try {
+    const first = await dailyOwnWorkout(env, good, args);
+    assert.equal(first.pending, true); assert.equal(first.workout, null); assert.equal(deferred.length, 1);
+    assert.equal((await dailyOwnWorkout(env, good, args)).pending, true, "still writing: no second try");
+    await Promise.all(deferred);
+    assert.equal(calls, 1);
+    const done = await dailyOwnWorkout(env, good, args);
+    assert.ok(done.workout?.id?.startsWith("ai-")); assert.equal(done.pending, undefined); assert.equal(calls, 1, "read, not written again");
+    const bad = { ...args, key: "k2", ask: async () => { calls++; return { text: "{}" }; } };
+    assert.equal((await dailyOwnWorkout(env, good, bad)).pending, true);
+    await Promise.all(deferred);
+    const failed = await dailyOwnWorkout(env, good, bad);
+    assert.equal(failed.workout, null); assert.equal(failed.pending, undefined, "the library's pick stays"); assert.equal(failed.tried, true, "no AI pick after it");
+    assert.equal(deferred.length, 2);
+    const both = await Promise.all([dailyOwnWorkout(env, good, { ...args, key: "k3" }), dailyOwnWorkout(env, good, { ...args, key: "k3" })]);
+    assert.ok(both.every(r => r.pending)); assert.equal(deferred.length, 3, "two asks at once: one compose");
+    await Promise.all(deferred);
+    assert.equal((await dailyOwnWorkout({ ...env, OPENAI_API_KEY: "" }, good, { ...args, key: "k4" })).pending, undefined, "no AI: no pending card");
+  } finally { console.log = log; }
 });

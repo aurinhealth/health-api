@@ -201,7 +201,14 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Texty:** „Aurin age, estimate from your fitness and habits“. Nikdy „biological age“ (neměříme krev ani DNA), nikdy riziko, úmrtnost, nemoc ani délka života, ani na webu a v textech kouče.
 - **Limity:** jde o souvislosti z kohort, ne o příčiny ani osobní předpověď. Sčítání vlivů z různých studií předpokládá nezávislost, shluk kondice to řeší jen zčásti. Hodinky měří jinak než studie. Půlení a stropy jsou naše volba. Výpočet není ověřený proti výsledkům.
 
-### 2.12 Obvyklé pásmo a stav v grafech Zdraví, porovnání VO2max
+### 2.12 Vlastní trénink kouče (kolo a běh)
+
+- **Výpočet** (`coachFirst`, `composeFaults` v `src/ai-workout-compose.js`): kouč (AI) sestaví dnešní trénink místo výběru z knihovny jen u vytrvalosti, tempa a sweet spotu, u tvrdších typů jen zkušenému sportovci v zelené. Návrh odmítne a nechá knihovnu, když: jde o plánovaný den, začátečníka, návrat po pauze, nemoc z check-inu, chybí FTP nebo prahové tempo, jízda je delší než 120 min, běh delší než 90 min nebo delší než 1,1× nejdelší běh za 30 dní, tvrdý typ přijde den po tvrdém tréninku kteréhokoli sportu, nebo běžci chybí základ (méně než 3 týdny po sobě se 2+ běhy, pauza 14+ dní za posledních 28, méně než 12 běhů za 8 týdnů, méně než 60 min za posledních 7 dní). Hotový návrh musí mít aspoň 60 % minut nad lehkým tempem v zóně svého typu (sweet spot 88–94 % FTP) a po každém úseku VO2max nebo anaerobním od 2 min pauzu aspoň poloviční délky. Obtížnost je cílová obtížnost enginu ±0,75.
+- **Zdroj:** délka běhu: Frandsen JSB et al. Br J Sports Med 2025;59:1203, doi:10.1136/bjsports-2024-109380 (riziko zranění rostlo u běhu delšího než 1,1× nejdelší za 30 dní; týdenní +10 % souvislost neukázal). Zóny: Allen a Coggan (viz Zóny a FTP). Intervaly VO2max: Buchheit M, Laursen PB. Sports Med 2013;43:313–338; Helgerud J et al. 2007 (4×4 min s 3 min pauzou).
+- **Limity:** 60 % v zóně, poloviční pauza u VO2max, ±0,75 obtížnosti a pravidla běžeckého základu jsou naše kalibrace. 60 % a poloviční pauzu splní celá knihovna kromě jednoho MTB tréninku; 70 % a pauza 1:1 by odmítly i over-undery, Helgerudovo 4×4 a běžecké 5×3 min se 2 min klusu. Dva tvrdé dny po sobě hlídá praxe hard/easy, ne studie.
+- **Co tvrdit:** trénink sestavený koučem podle pravidel trenérů, s kontrolou délky běhu podle studie. Nikdy „vědecky podložené“.
+
+### 2.13 Obvyklé pásmo a stav v grafech Zdraví, porovnání VO2max
 
 - **Pásmo u každého bodu** (`src/health-series.js`, `GET /app/api/health/series`): průměr ± 1 SD ze 60 dní před bodem (`personalBaseline`, aspoň 14 dní), u HRV a klidového tepu přesně to pásmo, se kterým počítá index regenerace (`recoveryReadiness`, 2.1). Dech má spodní hranici SD 0,3 jako příznak zvýšeného dechu. Nad 90 dní týdenní průměry.
 - **Stav** podle vzdálenosti od průměru v SD, stejně jako skóre regenerace (1 SD na horší straně = 60, 2 SD = 40) a příznaky dechu a teploty (2 SD): do 1 SD „within“, do 2 SD „slightly“, dál „far“. Žádný nový práh. Texty jen „above/below your usual range“, nikdy nemoc.

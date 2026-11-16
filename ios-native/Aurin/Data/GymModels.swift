@@ -345,6 +345,8 @@ struct GeneratedWorkout: Decodable {
     let variantCount: Int?
     /// The asked kind the coach still eased, and why (POST /app/api/workouts/generate).
     var eased: Eased? = nil
+    /// The coach still writes its own workout (background: true); ask again for it.
+    var aiPending: Bool? = nil
 
     struct Eased: Decodable {
         let kind: String
