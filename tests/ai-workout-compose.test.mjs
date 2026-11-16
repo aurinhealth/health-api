@@ -273,5 +273,7 @@ test("checks: most of the work in the type's zone; long VO2max efforts need reco
   assert.equal(shortRecoveries(vo2(1.5), "ride"), true);
   const short = [{ durationMinutes: 15, power: 60 }, { repeats: 10, steps: [{ durationMinutes: 0.67, power: 120 }, { durationMinutes: 0.33, power: 50 }] }, { durationMinutes: 10, power: 50 }];
   assert.equal(shortRecoveries(short, "ride"), false, "40/20 is exempt");
-  assert.deepEqual(composeFaults({ structure: vo2(1.5), sport: "ride", type: "vo2max", length: 47, cap: 45 }), ["recoveries shorter than efforts"]);
+  const thirty = [{ durationMinutes: 12, power: 60 }, { durationMinutes: 3, power: 100 }, { durationMinutes: 3, power: 55 }, { repeats: 10, steps: [{ durationMinutes: 0.5, power: 120 }, { durationMinutes: 0.5, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(thirty, "ride", "vo2max"), null, "30/30 after an opener: only short efforts in the zone, not checked");
+  assert.deepEqual(composeFaults({ structure: vo2(1.5), sport: "ride", type: "vo2max", length: 47, cap: 45 }), ["recoveries under half the effort"]);
 });

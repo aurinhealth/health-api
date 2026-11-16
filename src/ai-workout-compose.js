@@ -289,7 +289,7 @@ export function composeFaults({ structure, sport = "ride", type, length, cap, ba
   if (effortsBackToBack(structure, sport)) faults.push("efforts back to back");
   const work = workInZone(structure, sport, type);
   if (work != null && work < 0.6) faults.push(`zone ${Math.round(work * 100)} %`);
-  if (["vo2max", "anaerobic"].includes(type) && shortRecoveries(structure, sport)) faults.push("recoveries shorter than efforts");
+  if (["vo2max", "anaerobic"].includes(type) && shortRecoveries(structure, sport)) faults.push("recoveries under half the effort");
   const warm = HARD_TYPES.includes(type) ? warmupMinutes(structure, sport) : null;
   if (warm != null && warm < MIN_WARMUP) faults.push(`warm-up ${Math.round(warm)} min`);
   return faults;
@@ -301,14 +301,16 @@ export function composeFaults({ structure, sport = "ride", type, length, cap, ba
 // passes it, 70 % would refuse 30 over-unders and the like (docs/methodology.md).
 export function workInZone(structure = [], sport = "ride", type) {
   if (["endurance", "recovery"].includes(type)) return null;
-  const zones = zonesFor(sport); let all = 0, own = 0;
+  const zones = zonesFor(sport); let all = 0, own = 0, long = false, short = false;
   for (const s of flattenSteps(structure)) {
     if (s.rest) continue;
     const z = zoneOf(Number(s.power) || 50, zones), m = Number(s.durationMinutes) || 0;
-    if (["recovery", "endurance"].includes(z) || m < 1) continue;
-    all += m; if (z === type) own += m;
+    if (["recovery", "endurance"].includes(z)) continue;
+    if (m < 1) { if (z === type) short = true; continue; }
+    all += m; if (z === type) { own += m; long = true; }
   }
-  return all > 0 ? own / all : null;
+  // Only efforts under 1 min in the type's zone (30/30, sprints): not checked.
+  return all > 0 && (long || !short) ? own / all : null;
 }
 // VO2max and anaerobic efforts of 2 min and more each followed by a recovery
 // of at least half their length: any shorter one. Our calibration: 1:1 would
