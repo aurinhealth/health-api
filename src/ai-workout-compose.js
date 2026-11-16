@@ -165,7 +165,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
       const second = strict(again);
       if (second.length < first.length || (second.length === first.length && !again.faults.length && faults.length)) ({ r, template, structure, reason, faults } = again), first = second;
       if (first.length) {
-        const library = await fallback(env, { sport, type, length, cap, band });
+        const library = fallback ? await fallback(env, { sport, type, length, cap, band }) : null;
         if (library) return { ...library, ai: { reason: library.ai.reason, fallback: true, composed: false, model: r.model || model || lightModel(env), usage: r.usage || null, tried: first.join(", "), ...(warning ? { warning } : {}) } };
       }
     }
@@ -185,6 +185,21 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     if (!error?.ai) console.error("Workout compose AI failed", error?.message || error);
     return diagnose ? { rejected: "error: " + String(error?.message || error).slice(0, 120) } : null;
   }
+}
+
+// Today's proposal (Návrh kouče): the AI's own workout when the library's
+// ranked pick fits the day poorly (poorFit). With no library fallback: a
+// draft refused twice leaves `workout` null, so the ranked pick stays and
+// aiWorkoutPick chooses among the safe candidates, instead of a library
+// workout picked by its length alone. One log line per proposal counts how
+// often poorFit fires and compose is refused: sport, type and the refused
+// checks only, no health data.
+export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, ...opts } = {}) {
+  const poor = poorFit(pick, { sport, kind });
+  const r = poor ? await composeWorkout(env, { sport, kind, ...opts, diagnose: true, fallback: null }) : null;
+  const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
+  if (log) console.log(JSON.stringify({ daily_compose: !poor ? "library" : workout ? "composed" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(rejected ? { rejected: rejected.slice(0, 120) } : {}) }));
+  return { workout, poorFit: poor, rejected };
 }
 
 // The AI's workout keeps to the brief: the length within 5 minutes, the type,

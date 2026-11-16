@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { composeWorkout, poorFit, COMPOSE_BELOW, fewMatches, composeKey, composeWarning, composeFits } from "../src/ai-workout-compose.js";
+import { composeWorkout, dailyOwnWorkout, poorFit, COMPOSE_BELOW, fewMatches, composeKey, composeWarning, composeFits } from "../src/ai-workout-compose.js";
 import { getWorkout } from "../src/workout-library.js";
 
 const owner = () => ({ DB: scopedDb(createD1(), 1), USER_ID: 1, USER_IS_OWNER: true, OPENAI_API_KEY: "test" });
@@ -159,4 +159,36 @@ test("a draft the editor refuses (a step under 30 %) is asked for once more and 
   assert.equal(await composeWorkout(env, { ...day, ask: answer(zero), fallback: none }), null);
   const banded = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: 4.5, maxDifficulty: 10 }, ask: answer(zero) });
   assert.ok(banded?.ai?.fallback && !/difficulty/.test(banded.ai.tried), "no difficulty for a refused draft");
+});
+
+// The library thread's critic, 2026-11-16: on today's proposal a draft refused
+// twice gave the library workout nearest in length, which replaced the ranked
+// pick and skipped aiWorkoutPick. Now the ranked pick stays.
+test("today's proposal: a draft refused twice keeps the ranked pick, with one log line and no health data", async () => {
+  const env = owner(), logs = [], log = console.log;
+  console.log = line => logs.push(line);
+  const longer = [block(600, 55, 65), { repeats: 4, steps: [{ label: "tempo", seconds: 600, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(300, 50, 55)];
+  const poor = { primary_system: "tempo", suitability: COMPOSE_BELOW - 10 }, good = { primary_system: "tempo", suitability: 95 };
+  let fallbacks = 0, asks = 0;
+  const ask = async () => { asks++; return answer(longer)(); };
+  try {
+    const refused = await dailyOwnWorkout(env, poor, { ...day, ask, fallback: async () => { fallbacks++; return { id: "lib" }; } });
+    assert.equal(refused.workout, null, "nothing from the library: the caller keeps its ranked pick");
+    assert.equal(refused.poorFit, true);
+    assert.match(refused.rejected, /^length \d+ min$/);
+    assert.equal(asks, 2, "asked twice");
+    assert.equal(fallbacks, 0, "the library fallback is never asked");
+    const composed = await dailyOwnWorkout(env, poor, { ...day, ask: answer(tempo45) });
+    assert.ok(composed.workout?.ai?.composed && !composed.workout.ai.fallback);
+    asks = 0;
+    const kept = await dailyOwnWorkout(env, good, { ...day, ask });
+    assert.equal(kept.workout, null); assert.equal(kept.poorFit, false); assert.equal(asks, 0, "a good fit asks nothing");
+    const skipped = await dailyOwnWorkout({ ...env, OPENAI_API_KEY: "" }, poor, { ...day, ask });
+    assert.equal(skipped.workout, null);
+  } finally { console.log = log; }
+  const lines = logs.map(l => JSON.parse(l)).filter(l => l.daily_compose);
+  assert.deepEqual(lines.map(l => l.daily_compose), ["rejected", "composed", "library", "skipped"]);
+  assert.deepEqual(Object.keys(lines[0]).sort(), ["daily_compose", "rejected", "sport", "type"]);
+  assert.match(lines[0].rejected, /^length \d+ min$/);
+  for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|64|readiness|score|sleep/);
 });
