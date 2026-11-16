@@ -198,7 +198,11 @@ export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = t
   const poor = poorFit(pick, { sport, kind });
   const r = poor ? await composeWorkout(env, { sport, kind, ...opts, diagnose: true, fallback: null }) : null;
   const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
-  if (log) console.log(JSON.stringify({ daily_compose: !poor ? "library" : workout ? "composed" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(rejected ? { rejected: rejected.slice(0, 120) } : {}) }));
+  // Only the names of the refused checks ("hard", "length"): their numbers
+  // (the hard-minute cap) would tell the morning's readiness, and an error's
+  // text may quote the model.
+  const error = Boolean(rejected?.startsWith("error:")), checks = rejected && !error ? [...new Set(rejected.split(", ").map(f => f.split(" ")[0]))].join(",") : null;
+  if (log) console.log(JSON.stringify({ daily_compose: !poor ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(checks ? { rejected: checks } : {}) }));
   return { workout, poorFit: poor, rejected };
 }
 

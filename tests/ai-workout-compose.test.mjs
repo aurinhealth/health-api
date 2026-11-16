@@ -185,10 +185,17 @@ test("today's proposal: a draft refused twice keeps the ranked pick, with one lo
     assert.equal(kept.workout, null); assert.equal(kept.poorFit, false); assert.equal(asks, 0, "a good fit asks nothing");
     const skipped = await dailyOwnWorkout({ ...env, OPENAI_API_KEY: "" }, poor, { ...day, ask });
     assert.equal(skipped.workout, null);
+    const failed = await dailyOwnWorkout(env, poor, { ...day, ask: async () => { throw new Error("AI time for this answer is spent"); } });
+    assert.equal(failed.workout, null);
+    // 24 min of VO2max over the yellow morning's 20, twice: the cap (20) would tell the readiness.
+    const hard = [block(600, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
+    await dailyOwnWorkout(env, { primary_system: "vo2max", suitability: 50 }, { ...day, kind: "vo2", ask: answer(hard) });
   } finally { console.log = log; }
   const lines = logs.map(l => JSON.parse(l)).filter(l => l.daily_compose);
-  assert.deepEqual(lines.map(l => l.daily_compose), ["rejected", "composed", "library", "skipped"]);
+  assert.deepEqual(lines.map(l => l.daily_compose), ["rejected", "composed", "library", "skipped", "error", "rejected"]);
   assert.deepEqual(Object.keys(lines[0]).sort(), ["daily_compose", "rejected", "sport", "type"]);
-  assert.match(lines[0].rejected, /^length \d+ min$/);
-  for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|64|readiness|score|sleep/);
+  assert.equal(lines[0].rejected, "length");
+  assert.equal(lines[4].rejected, undefined, "no error text");
+  assert.equal(lines[5].rejected, "hard", "the check's name, not its cap");
+  for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|\d|readiness|score|sleep|spent/);
 });
