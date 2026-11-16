@@ -429,7 +429,7 @@ struct SavedEnduranceSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(workout.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(workout.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }

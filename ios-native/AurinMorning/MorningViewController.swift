@@ -73,14 +73,11 @@ struct Morning {
 struct MorningView: View {
     let morning: Morning
 
-    /// The zone colours of the dark palette (Shared/Palette.swift).
+    /// The state colours of the dark palette (Shared/StatusHex.swift, Palette.Status).
     private var zoneColor: Color {
-        switch morning.zone {
-        case "green": return Color(red: 0x8F / 255, green: 0xE6 / 255, blue: 0xC4 / 255)
-        case "yellow": return Color(red: 0xF2 / 255, green: 0xB4 / 255, blue: 0x6B / 255)
-        case "red": return Color(red: 0xFF / 255, green: 0x6B / 255, blue: 0x5B / 255)
-        default: return Color(white: 0.85)
-        }
+        guard let hex = StatusHex.zone(morning.zone)?.dark else { return Color(white: 0.85) }
+        let c = StatusHex.rgb(hex)
+        return Color(red: c.red, green: c.green, blue: c.blue)
     }
 
     var body: some View {

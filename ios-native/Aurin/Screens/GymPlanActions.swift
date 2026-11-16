@@ -47,7 +47,7 @@ struct GymPlanActionsSheet: View {
         NavigationStack {
             SettingsPage(title: "Změnit trénink") {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title ?? L10n.tr("Posilovna")).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(title ?? L10n.tr("Posilovna")).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Text(Fmt.capitalized(Fmt.relativeDay(date, today: AppModel.localDate(Date())))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 if cancelled {

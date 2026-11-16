@@ -122,7 +122,7 @@ struct CoachStepSheet: View {
                     Spacer()
                     ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                 }
-                Text(verbatim: step.title).font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(verbatim: step.title).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 if let text = step.text {
                     Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }

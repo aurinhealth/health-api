@@ -415,7 +415,7 @@ struct DrinkSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }

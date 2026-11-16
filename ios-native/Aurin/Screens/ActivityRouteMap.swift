@@ -26,7 +26,8 @@ struct ActivityRouteMap: View {
         let coordinate: CLLocationCoordinate2D
     }
 
-    static let zoneColors: [Color] = [Palette.faint, Palette.blue, Palette.green, Palette.amberBar, Palette.rust]
+    /// Z1 to Z5 of the one zone palette (Palette.Zone).
+    static let zoneColors: [Color] = Array(Palette.Zone.all.prefix(5))
     private static let scale: [Color] = [Palette.blue, Palette.green, Palette.gold, Palette.amberBar, Palette.rust]
 
     private var points: [Point] {

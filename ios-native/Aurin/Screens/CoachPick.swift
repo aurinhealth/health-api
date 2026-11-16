@@ -387,7 +387,7 @@ struct CoachPickCard: View {
             PickIcon(option: best)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(verbatim: best.title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(verbatim: best.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     if best.workout?.ai != nil { AIMark() }
                 }
                 if let subtitle = best.subtitle { Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted) }

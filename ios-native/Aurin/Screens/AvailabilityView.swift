@@ -121,7 +121,7 @@ struct AvailabilityView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Kdy mám čas") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Tréninkový týden").padding(.top, 24)
-                Text("Kdy mám čas").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Kdy mám čas").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if loading && prefs == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)

@@ -1,10 +1,13 @@
 import SwiftUI
 import UIKit
 
-// Three typefaces, each with one job:
-// - SF Pro (the system font) for all UI text, so Dynamic Type works;
-// - Instrument Serif only for numbers;
-// - Newsreader for sentences and text headings.
+// One type scale with two typefaces (Petr 2026-11-16, redesign Z1):
+// - SF Pro (the system font) for all UI text and the coach chat, on the
+//   system text styles, so Dynamic Type works;
+// - Instrument Serif (OFL, Resources/Fonts/OFL-InstrumentSerif.txt) for
+//   headings, the big numbers and the coach cards, its italic for the coach's
+//   green key sentence.
+// Nothing is set below 11 pt.
 enum Typo {
     /// Grows with the text size like a large title: the same at the default
     /// size, and the screens cap it (DynamicTypeSize.screenCap).
@@ -12,12 +15,26 @@ enum Typo {
         .custom("InstrumentSerif-Regular", size: size, relativeTo: .largeTitle)
     }
 
-    static func sentence(_ size: CGFloat = 20, relativeTo style: Font.TextStyle = .title3) -> Font {
-        .custom("Newsreader-Regular", size: size, relativeTo: style)
+    /// A heading or a big title, 22 pt and up.
+    static func heading(_ size: CGFloat, relativeTo style: Font.TextStyle = .title3) -> Font {
+        .custom("InstrumentSerif-Regular", size: size, relativeTo: style)
     }
 
+    /// The coach's words on a card (Today, Training, Food, Health): serif.
+    static func coach(_ size: CGFloat = 20, relativeTo style: Font.TextStyle = .title3) -> Font {
+        .custom("InstrumentSerif-Regular", size: size, relativeTo: style)
+    }
+
+    /// The coach's key sentence, green italic on a coach card.
     static func sentenceItalic(_ size: CGFloat = 20, relativeTo style: Font.TextStyle = .title3) -> Font {
-        .custom("Newsreader-Italic", size: size, relativeTo: style)
+        .custom("InstrumentSerif-Italic", size: size, relativeTo: style)
+    }
+
+    /// A sentence of UI text (an explanation, an empty state, a message):
+    /// SF Pro on the system text style nearest to `size` (body for 17 to 19,
+    /// title 3 for 20 and 21), so it follows Dynamic Type like any UI text.
+    static func sentence(_ size: CGFloat = 17, relativeTo style: Font.TextStyle? = nil) -> Font {
+        .system(style ?? Font.TextStyle.nearest(size))
     }
 
     static let body = Font.subheadline

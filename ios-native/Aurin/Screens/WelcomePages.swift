@@ -77,7 +77,7 @@ struct WelcomePageView: View {
             } else {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(LocalizedStringKey(page.title))
-                        .font(Typo.sentence(42, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                        .font(Typo.heading(42, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                         .accessibilityAddTraits(.isHeader)
                     Text(LocalizedStringKey(page.text))
                         .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
@@ -188,7 +188,7 @@ private struct WelcomeOpening: View {
             Spacer(minLength: 0)
             (Text("Kouč, který zná ")
              + Text("tvůj spánek.").font(Typo.sentenceItalic(44, relativeTo: .largeTitle)).foregroundColor(Palette.green))
-                .font(Typo.sentence(44, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .font(Typo.heading(44, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .rises(play, delay: 0.35)
@@ -330,7 +330,7 @@ private struct WelcomeTraining: View {
                     ForEach(Array(plates.enumerated()), id: \.offset) { i, plate in
                         let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
                         Text(verbatim: GymCoach.shown(plate))
-                            .scaledFont(10, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
+                            .scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                             .lineLimit(1).minimumScaleFactor(0.6)
                             .frame(width: PlateLoaderSheet.width(plate) * 0.7, height: PlateLoaderSheet.height(plate) * 0.42)
                             .background(shape.fill(PlateLoaderSheet.fill(plate)))
@@ -430,7 +430,7 @@ private struct WelcomeCoach: View {
             let shown = String(part.prefix(max(0, left)))
             left -= part.count
             let piece = Text(verbatim: shown)
-            out = out + (i == 1 ? piece.font(Typo.sentenceItalic(18)).foregroundColor(Palette.green) : piece.font(Typo.sentence(18)).foregroundColor(Palette.ink))
+            out = out + (i == 1 ? piece.font(Typo.sentenceItalic(18)).foregroundColor(Palette.green) : piece.font(Typo.coach(18)).foregroundColor(Palette.ink))
         }
         return out
     }

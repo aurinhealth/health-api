@@ -245,7 +245,7 @@ struct MusclesWidget: View {
                 MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 132)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: data.headline).font(Typo.sentence(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     if let last = data.lastGymText {
                         Text(verbatim: last).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 4)
                     }
@@ -282,7 +282,7 @@ struct MusclesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Kapitálky and the serif title, as the other details (Petr, 2026-10-24).
                 SectionLabel(text: "Svaly po tréninku").padding(.top, 24)
-                Text(verbatim: MuscleFatigue.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
+                Text(verbatim: MuscleFatigue.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
                 Picker("Pohled", selection: $tab) {
                     Text("Odpočinek").tag(0)
                     Text("Tento týden").tag(1)
@@ -610,7 +610,7 @@ struct MuscleDetailView: View {
                 .accessibilityHidden(true)
                 .padding(.top, 20)
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let muscle {
                     Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
@@ -626,7 +626,7 @@ struct MuscleDetailView: View {
         HStack(spacing: 14) {
             MuscleFigurePair(colors: [id: muscle?.figureColor ?? Palette.green], selected: id, spacing: 2).frame(height: 104)
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let muscle {
                     Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
@@ -646,7 +646,7 @@ struct MuscleDetailView: View {
                 let percent = Int((change * 100).rounded())
                 let weeks = max(1, MuscleFatigue.days(from: s.points[0].week, to: s.points[s.points.count - 1].week) / 7)
                 Text(verbatim: L10n.plural("%@ %% za %lld týdnů", (percent > 0 ? "+" : "") + String(percent), weeks))
-                    .font(Typo.sentence(22)).foregroundStyle(percent > 0 ? Palette.green : percent < 0 ? Palette.amber : Palette.ink)
+                    .font(Typo.heading(22)).foregroundStyle(percent > 0 ? Palette.green : percent < 0 ? Palette.amber : Palette.ink)
                 Text(verbatim: L10n.f("Odhad maxima: %@, z tvých sérií.", L10n.tr(s.exercise))).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Chart(s.points) { p in
@@ -671,7 +671,7 @@ struct MuscleDetailView: View {
                 }
                 .frame(height: 130)
             } else if let s = d.strength, let p = s.points.last {
-                Text(verbatim: Units.weightText(p.kg, digits: 0)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text(verbatim: Units.weightText(p.kg, digits: 0)).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 Text(verbatim: L10n.f("Odhad maxima: %@. Trend uvidíš po dalším týdnu.", L10n.tr(s.exercise))).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
@@ -695,7 +695,7 @@ struct MuscleDetailView: View {
             Card {
                 Text("Jak často").font(Typo.caption).foregroundStyle(Palette.muted)
                 Text(verbatim: L10n.f("Průměrně %@× týdně", Fmt.decimal(c.perWeek, digits: 1)))
-                    .font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 Text(verbatim: note(c)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 VStack(spacing: 6) {
                     HStack(spacing: 6) {

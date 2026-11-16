@@ -248,7 +248,7 @@ struct DayReviewView: View {
                 .padding(.top, 12)
         }
         if let headline = review.headline {
-            Text(headline).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            Text(headline).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
         }
         if let reasons = review.reasons, !reasons.isEmpty {
             SectionLabel(text: "Proč").padding(.top, 22)

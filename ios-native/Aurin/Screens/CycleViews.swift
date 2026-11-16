@@ -447,7 +447,7 @@ struct CycleLogSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(verbatim: Fmt.capitalized(Fmt.dayHeading(date).lowercased(with: Fmt.locale)))
-                    .font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 if pill != nil {
                     SettingsToggle(title: "Prášek vzat", isOn: $pillTaken)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -543,7 +543,7 @@ struct CycleCalendarView: View {
                 Button { shift(-1) } label: { Image(systemName: "chevron.left").font(.body.weight(.semibold)) }
                     .accessibilityLabel("Předchozí měsíc")
                 Spacer()
-                Text(verbatim: monthTitle).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: monthTitle).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button { shift(1) } label: { Image(systemName: "chevron.right").font(.body.weight(.semibold)) }
                     .disabled(month >= String(today.prefix(7)))
@@ -934,7 +934,7 @@ struct DateChoiceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.tr(title)).font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(L10n.tr(title)).font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
             DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
@@ -969,7 +969,7 @@ struct LengthChoiceSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Délka cyklu").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text("Délka cyklu").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
             Picker("", selection: $length) {
                 ForEach(21...40, id: \.self) { n in
                     Text(verbatim: L10n.plural("%lld dní", n)).tag(n)

@@ -54,7 +54,7 @@ struct SleepDetailContent: View {
                 }
                 .padding(.top, 12)
             } else {
-                Text("Dnešní noc ještě není nahraná.").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
+                Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
             }
 
             if let night = sleep.night {
@@ -583,7 +583,7 @@ struct WeightDetailContent: View {
                     .padding(.top, 8)
                 }
             } else {
-                Text("Zatím žádné vážení.").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 24)
+                Text("Zatím žádné vážení.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 24)
             }
             Button(action: add) {
                 Label("Zapsat váhu", systemImage: "plus")
@@ -613,7 +613,7 @@ struct WeightEntrySheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Zapsat váhu").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text("Zapsat váhu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             HStack(alignment: .firstTextBaseline) {
                 TextField(placeholder, text: $text).keyboardType(.decimalPad).font(Typo.number(56)).focused($focused)
                 Text(Units.weightUnit).font(Typo.body).foregroundStyle(Palette.faint)

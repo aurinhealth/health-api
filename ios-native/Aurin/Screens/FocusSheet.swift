@@ -74,7 +74,7 @@ struct FocusSheet: View {
         NavigationStack {
             PageScroll {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Zaměření").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text("Zaměření").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     SectionLabel(text: "Sporty").padding(.top, 4)
                     SportsPicker(choice: $sports).disabled(loading || saving)
                     if sports.swims { SwimLevelGroup(swims100: $swims100) }

@@ -178,7 +178,7 @@ private struct SetupPageTitle: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(title).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text(subtitle).font(Typo.small).foregroundStyle(Palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)

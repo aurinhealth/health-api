@@ -18,7 +18,7 @@ struct HealthPauseSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Pozastavit zdravotní data").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Pozastavit zdravotní data").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Aurin přestane tvoje zdravotní data používat a smaže, co z nich uchovává.")
                     .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -167,7 +167,7 @@ struct HealthPausedView: View {
                     .cardSurface(cornerRadius: 24)
                     .accessibilityHidden(true)
                 Text("Zdravotní data jsou pozastavená")
-                    .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                     .padding(.top, 22)
                 Text("Aurin tvoje zdravotní data nečte ani neuchovává. Zapnout je můžeš kdykoli.")

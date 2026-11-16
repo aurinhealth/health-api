@@ -94,7 +94,7 @@ struct BrickSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 Text(verbatim: first.title + " + " + second.title)
-                    .font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: [Fmt.capitalized(Fmt.weekdayName(first.date)), total > 0 ? Fmt.duration(total) : nil].compactMap { $0 }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 2)

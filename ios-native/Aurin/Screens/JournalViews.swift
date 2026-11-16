@@ -254,7 +254,7 @@ struct JournalMorningSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Včera").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Včera").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .padding(.top, 24)
                 JournalDayEditor(date: date, inSheet: true)
                 PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
@@ -284,7 +284,7 @@ struct JournalView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.health, title: "Deník") {
             HStack(alignment: .center, spacing: 8) {
-                Text("Deník").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Deník").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 Menu {
                     Button { tracking = true } label: { Label("Co sledovat", systemImage: "checklist") }

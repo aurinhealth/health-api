@@ -26,7 +26,7 @@ struct ConsentSheet<Content: View>: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(title).font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text(lead)
                     .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -328,7 +328,7 @@ struct GoogleWriteSheet: View {
                 IntegrationIcon(id: "google", size: 52)
             }
             .padding(.top, 8)
-            Text("Posílat do Google Health").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text("Posílat do Google Health").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
             Text(verbatim: L10n.f("Google se na své stránce zeptá, jestli může Aurin do Google Health zapisovat %@.", SyncSendGroup.scopeList(missing)))
                 .font(Typo.body).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -483,7 +483,7 @@ struct ForwardConsentSheet: View {
             }
             .padding(.top, 8)
             Text(verbatim: L10n.f("Posílat tréninky z %@ do %@?", SyncForwardGroup.name(source), target))
-                .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .font(Typo.heading(24, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text(verbatim: L10n.tr(what))
                 .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
@@ -534,7 +534,7 @@ struct OthersConsentSheet: View {
             }
             .padding(.top, 8)
             Text("Posílat data z dalších aplikací do Apple Health?")
-                .font(Typo.sentence(24, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .font(Typo.heading(24, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             // Exactly what goes (the privacy policy says the same).
             Text("Aurin zapíše do Apple Health na tomhle iPhonu, co mu posílá Google Health z tvých hodinek.")
@@ -733,7 +733,7 @@ struct SyncStatusSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Odeslání").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Odeslání").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }

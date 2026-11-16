@@ -59,12 +59,12 @@ struct CardioLengthSlider: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(.body).foregroundStyle(Palette.ink)
                 Spacer()
-                Text(verbatim: GymCardio.length(minutes)).font(Typo.sentence(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                Text(verbatim: GymCardio.length(minutes)).font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
                     .monospacedDigit()
             }
             Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0.rounded()) }), in: 0...60, step: 1,
                    onEditingChanged: { editing in if !editing { onCommit(minutes) } })
-            .tint(Palette.amber)
+            .tint(Palette.ink)
             .accessibilityLabel(Text(title))
             .accessibilityValue(Text(verbatim: GymCardio.length(minutes)))
             HStack {
@@ -120,7 +120,7 @@ struct CardioTimeSheet: View {
                 .padding(.horizontal, 16).frame(minHeight: 52)
                 .cardSurface(cornerRadius: 22)
                 Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0.rounded()) }), in: 1...60, step: 1)
-                    .tint(Palette.amber)
+                    .tint(Palette.ink)
                     .accessibilityHidden(true)
                 Spacer()
             }
@@ -191,13 +191,13 @@ struct CardioTimerView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: L10n.tr("Kardio") + ", " + L10n.tr(isStart ? "Začátek" : "Konec"))
                     .font(.caption.weight(.semibold)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.amber)
-                Text(verbatim: item.name).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: item.name).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
             }
             if let stopped {
                 Spacer()
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").scaledFont(64).foregroundStyle(Palette.green)
-                    Text(GymRoutineKind.cardio.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text(GymRoutineKind.cardio.doneTitle).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Text(verbatim: item.name + ", " + stopped.summary).font(.subheadline).foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity)
@@ -229,7 +229,7 @@ struct CardioTimerView: View {
                 }
             } else {
                 Spacer()
-                Text(verbatim: GymCardio.length(minutes)).font(Typo.sentence(54, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                Text(verbatim: GymCardio.length(minutes)).font(Typo.heading(54, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .monospacedDigit()
                     .frame(maxWidth: .infinity)
                 CardioTimeChips(favourites: favourites, minutes: $minutes)

@@ -526,7 +526,7 @@ struct WidgetSectionPage: View {
                         .scaledFont(22, weight: .semibold)
                         .foregroundStyle(section.color)
                     Text(section.title)
-                        .font(Typo.sentence(30, relativeTo: .title))
+                        .font(Typo.heading(30, relativeTo: .title))
                         .foregroundStyle(Palette.ink)
                 }
                 .accessibilityElement(children: .combine)

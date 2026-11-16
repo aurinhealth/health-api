@@ -85,28 +85,31 @@ struct ShareOptions: Codable, Equatable {
 
 // MARK: - Colours
 
-/// The image's own colours (Shared/Palette.swift, dark and light), fixed
-/// because the picture is drawn once for whoever sees it.
+/// The image's own colours: the app's tokens (Shared/Palette.swift) fixed to
+/// dark or light, because the picture is drawn once for whoever sees it.
 struct ShareTheme {
     let dark: Bool
     let clear: Bool
 
-    private func pick(_ light: UInt32, _ dark: UInt32) -> Color { Color(hex: self.dark ? dark : light) }
+    private func pick(_ color: Color) -> Color { color.resolved(dark: dark) }
 
-    var ink: Color { pick(0x1B1A17, 0xECEAE6) }
-    var secondary: Color { pick(0x3B3832, 0xD9D6D0) }
-    var muted: Color { pick(0x6D6A63, 0x9AA39F) }
-    var green: Color { pick(0x1F6B52, 0x8FE6C4) }
-    var amber: Color { pick(0xA35A12, 0xF2B46B) }
-    var indigo: Color { pick(0x4F46C8, 0xA5A1FF) }
-    var rust: Color { pick(0xB4532F, 0xF0907A) }
-    var blue: Color { pick(0x1D6FA3, 0x7CC3F0) }
-    var protein: Color { pick(0x2F7FD8, 0x83C7FF) }
-    var carbs: Color { pick(0xD98A06, 0xFFC274) }
-    var fat: Color { pick(0x7C5CE0, 0xB3A1FF) }
-    var zoneGrey: Color { pick(0xB9B4AA, 0x5D6662) }
+    var ink: Color { pick(Palette.ink) }
+    var secondary: Color { pick(Palette.secondary) }
+    var muted: Color { pick(Palette.muted) }
+    /// The state colours (Palette.Status).
+    var green: Color { pick(Palette.Status.good) }
+    var amber: Color { pick(Palette.Status.warn) }
+    var red: Color { pick(Palette.Status.bad) }
+    var indigo: Color { pick(Palette.indigo) }
+    var rust: Color { pick(Palette.rust) }
+    var blue: Color { pick(Palette.blue) }
+    var protein: Color { pick(Palette.protein) }
+    var carbs: Color { pick(Palette.carbs) }
+    var fat: Color { pick(Palette.fat) }
+    /// Zone `index` from 0 (Z1), in the one zone palette (Palette.Zone).
+    func zone(_ index: Int) -> Color { pick(Palette.Zone.color(index)) }
     /// The inside of a ring dot: the card behind it, or nothing on a photo.
-    var hole: Color { clear ? .clear : pick(0xFBFAF7, 0x0B0C0D) }
+    var hole: Color { clear ? .clear : pick(dark ? Palette.background : Palette.card) }
     /// Tracks, hairlines and chips.
     func line(_ opacity: Double) -> Color { ink.opacity(opacity) }
 
@@ -117,13 +120,14 @@ struct ShareTheme {
         if clear {
             Color.clear
         } else {
-            let base = pick(0xF3EFE8, 0x0B0C0D)
+            let base = pick(Palette.background)
+            // The section tints of the app (Palette.Glow): Training, Today, Health, Food.
             let tint: Color = {
                 switch glow {
-                case .warm: return pick(0xF3E1C6, 0x2C2416)
-                case .green: return pick(0xD6EADF, 0x17342C)
-                case .indigo: return pick(0xE0E2F4, 0x24254A)
-                case .rust: return pick(0xF2DCCB, 0x3A2119)
+                case .warm: return pick(Palette.Glow.training)
+                case .green: return pick(Palette.Glow.today)
+                case .indigo: return pick(Palette.Glow.health)
+                case .rust: return pick(Palette.Glow.food)
                 }
             }()
             RadialGradient(colors: [tint, base], center: glow == .rust ? .bottom : .top, startRadius: 0, endRadius: width * 0.85)

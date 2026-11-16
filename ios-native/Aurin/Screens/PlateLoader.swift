@@ -339,7 +339,7 @@ struct PlateLoaderSheet: View {
                 .overlay { Circle().stroke(Self.line(look), lineWidth: 1.5) }
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
-                        Text(verbatim: "×\(count)").scaledFont(10.5, weight: .semibold).foregroundStyle(Palette.onButton)
+                        Text(verbatim: "×\(count)").scaledFont(11, weight: .semibold).foregroundStyle(Palette.onButton)
                             .padding(.horizontal, 4).frame(minWidth: 19, minHeight: 19)
                             .background { Capsule().fill(Palette.button) }
                             .offset(x: 6, y: -6)

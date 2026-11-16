@@ -59,7 +59,7 @@ struct StepUpSheet: View {
                 .scaledFont(22).foregroundStyle(Palette.ink)
                 .frame(width: 56, height: 56).background(Palette.card, in: Circle())
                 .accessibilityHidden(true)
-            Text(L10n.tr(codeSent ? "Zadej kód" : "Potvrď, že jsi to ty")).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(L10n.tr(codeSent ? "Zadej kód" : "Potvrď, že jsi to ty")).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
             Text(verbatim: codeSent ? L10n.f("Poslali jsme ho na %@. Platí 10 minut.", request.info.email ?? "") : request.reason)
                 .font(Typo.body).foregroundStyle(Palette.muted).multilineTextAlignment(.center)

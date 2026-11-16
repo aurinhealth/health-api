@@ -497,7 +497,7 @@ struct SetupFlowView: View {
     }
 
     private func title(_ text: String) -> some View {
-        Text(text).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+        Text(text).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Flow
@@ -834,7 +834,7 @@ struct SetupFlowView: View {
     @ViewBuilder
     private var notificationsPage: some View {
         Text("Ozveme se, když na tom záleží")
-            .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+            .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 24)
         // Without a watch or ring the morning readiness never comes (audit 14.6): the coach and bedtime lead.

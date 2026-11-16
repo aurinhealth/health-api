@@ -570,7 +570,7 @@ struct TrainingPlanCard: View {
         Card {
             WidgetHeader(title: L10n.tr("Tréninkový plán"), color: Palette.amberBar)
             HStack {
-                Text("Vybrat plán").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text("Vybrat plán").font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 Spacer()
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
@@ -581,7 +581,7 @@ struct TrainingPlanCard: View {
         Card {
             WidgetHeader(title: L10n.tr("Plán splněn"), color: Palette.green)
             HStack {
-                Text(result.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Text(result.name).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 Spacer()
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
@@ -642,7 +642,7 @@ struct TrainingPlanTile: View {
         } else {
             DetailScreen(glow: Palette.Glow.training, title: L10n.tr("Tréninkový plán")) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Tréninkový plán").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text("Tréninkový plán").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                         .padding(.top, 24).padding(.bottom, 16)
                     TrainingPlanCard()
                 }
@@ -701,7 +701,7 @@ struct ActivePlanSummary: View {
         Card {
             WidgetHeader(title: L10n.tr("Plán"), color: Palette.amberBar,
                          trailing: active.paused == true ? L10n.tr("pozastaveno") : active.started ? L10n.f("týden %@/%@", String(active.week), String(active.weeksCount)) : L10n.f("od %@", Fmt.dayMonth(active.firstDay ?? active.startDate)))
-            Text(active.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text(active.name).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, active: active), current: active.started ? active.week : 0, compact: true)
             if active.started, let week = active.template.weeks.first(where: { $0.week == active.week }) {
                 Text(([active.returning == true ? L10n.tr("návrat") : week.phaseLabel] + week.keys.prefix(active.returning == true ? 1 : week.keys.count)).joined(separator: ", "))
@@ -783,8 +783,8 @@ struct TrainingPlansSheet: View {
 
     /// Ride, run, swim, multisport (triathlon, duathlon, aquabike, aquathlon), gym: the sport order everywhere in the app.
     static let sports: [(id: String, symbol: String, color: Color)] = [
-        ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("swim", "figure.pool.swim", Palette.blue),
-        ("triathlon", "figure.open.water.swim", Palette.green), ("gym", "dumbbell.fill", Palette.indigo)
+        ("ride", "bicycle", Palette.Sport.ride), ("run", "figure.run", Palette.Sport.run), ("swim", "figure.pool.swim", Palette.Sport.swim),
+        ("triathlon", "figure.open.water.swim", Palette.Sport.other), ("gym", "dumbbell.fill", Palette.Sport.gym)
     ]
 
     private func sportTile(_ item: (id: String, symbol: String, color: Color)) -> some View {
@@ -852,7 +852,7 @@ struct PlanDetailView: View {
     var body: some View {
         SettingsPage(title: template.name) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(template.goal).font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(template.goal).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Text(template.description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack(alignment: .top, spacing: 28) {
@@ -1025,7 +1025,7 @@ struct PlanProposalCard: View {
                 WidgetHeader(title: proposal.title, color: proposal.type == "harder" ? Palette.blue : Palette.amberBar)
                 if let headline = proposal.headline {
                     // A change the plan made already (approved mockup 1-trend-misto-jednoho-rana, 3 Nov 2026).
-                    Text(headline).font(Typo.sentence(24)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(headline).font(Typo.heading(24)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                     Text(proposal.text).font(.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     if let chart = proposal.chart { PlanHRVChart(chart: chart) }
                 } else {
@@ -1227,7 +1227,7 @@ struct PlanSessionView: View {
         DetailScreen(glow: Palette.Glow.training, title: session.workout?.name ?? session.label) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: Fmt.capitalized(Fmt.weekdayShort(session.date)) + " " + Fmt.dayMonth(session.date)).padding(.top, 24)
-                Text(session.workout?.name ?? session.label ?? "").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(session.workout?.name ?? session.label ?? "").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.workout?.duration_minutes ?? session.minutes { meta("Délka", Fmt.duration(Int(m))) }
                     if let t = session.workout?.target_load { meta("Zátěž", Fmt.int(t) + " TSS") }
@@ -1306,7 +1306,7 @@ struct PlanBadge: View {
 
     var body: some View {
         Text(verbatim: L10n.tr(pro ? "PRO" : "ZDARMA"))
-            .scaledFont(10.5, weight: .bold, cap: .denseCap).tracking(0.6)
+            .scaledFont(11, weight: .bold, cap: .denseCap).tracking(0.6)
             .foregroundStyle(pro ? Night.lilac : Palette.green)
             .padding(.horizontal, 7).padding(.vertical, 3)
             .background((pro ? Night.lilac : Palette.green).opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))

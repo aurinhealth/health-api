@@ -38,7 +38,7 @@ struct JournalMoodSheet: View {
             VStack(alignment: .leading, spacing: 18) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: L10n.isEnglish ? "How do you feel?" : "Jak se cítíš?")
-                        .font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Text(verbatim: Fmt.capitalized(JournalStyle.weekday(date))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 VStack(spacing: 10) {

@@ -139,11 +139,11 @@ struct ReadinessCard: View {
                 }
                 PartsRow(parts: readiness.parts)
             } else if let days = readiness.learningDays {
-                ReadinessLearning(days: days, date: date, title: Typo.sentence(30, relativeTo: .title))
+                ReadinessLearning(days: days, date: date, title: Typo.heading(30, relativeTo: .title))
             } else if model.noWearable {
-                NoWearableText(title: Typo.sentence(30, relativeTo: .title))
+                NoWearableText(title: Typo.heading(30, relativeTo: .title))
             } else {
-                Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Zatím bez čísla").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
@@ -317,11 +317,11 @@ struct ReadinessDetailContent: View {
                 .padding(.top, 12)
             } else if let days = r.learningDays {
                 // Without a number, why (audit 14.4): the same as the Health card.
-                ReadinessLearning(days: days, date: health.date, title: Typo.sentence(30, relativeTo: .title))
+                ReadinessLearning(days: days, date: health.date, title: Typo.heading(30, relativeTo: .title))
             } else if noWearable {
-                NoWearableText(title: Typo.sentence(30, relativeTo: .title))
+                NoWearableText(title: Typo.heading(30, relativeTo: .title))
             } else {
-                Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
+                Text("Zatím bez čísla").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }

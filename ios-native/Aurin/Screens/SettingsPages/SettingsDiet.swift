@@ -199,7 +199,7 @@ private struct DietSheetHead: View {
 
     var body: some View {
         HStack {
-            Text(L10n.tr(title)).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text(L10n.tr(title)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             Spacer()
             ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
         }
@@ -396,7 +396,7 @@ private struct DietProteinSlider: View {
             if let kg {
                 Text(L10n.f("%@ g denně", Fmt.int(kg * value))).font(.subheadline).foregroundStyle(Palette.muted)
             }
-            Slider(value: $value, in: 1.2...3.0, step: 0.1).tint(Palette.protein)
+            Slider(value: $value, in: 1.2...3.0, step: 0.1).tint(Palette.ink)
                 .padding(.horizontal, 18).padding(.top, 8)
             HStack {
                 Text(verbatim: Fmt.decimal(1.2, digits: 1))

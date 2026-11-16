@@ -302,7 +302,7 @@ struct MetricChart<Chart: View>: View {
 
 private struct MetricEmpty: View {
     var body: some View {
-        Text("Zatím žádné měření.").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 24)
+        Text("Zatím žádné měření.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 24)
     }
 }
 

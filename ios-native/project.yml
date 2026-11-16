@@ -149,8 +149,6 @@ targets:
         UIAppFonts:
           - InstrumentSerif-Regular.ttf
           - InstrumentSerif-Italic.ttf
-          - Newsreader-Regular.ttf
-          - Newsreader-Italic.ttf
   # Home-screen and lock-screen widgets (WidgetKit), embedded in the app.
   AurinWidgets:
     type: app-extension
@@ -189,6 +187,7 @@ targets:
     platform: iOS
     sources:
       - path: AurinNotifications
+      - path: Shared/StatusHex.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
     settings:
@@ -214,6 +213,7 @@ targets:
     sources:
       - path: AurinMorning
       - path: Shared/NotificationText.swift
+      - path: Shared/StatusHex.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
     settings:
@@ -246,6 +246,7 @@ targets:
     sources:
       - path: AurinWatch
       - path: WatchShared
+      - path: Shared/StatusHex.swift
       # The watch app's privacy manifest: UserDefaults, and the gym, heart rate
       # and coach messages it sends to the server.
       - path: Privacy/Watch/PrivacyInfo.xcprivacy
@@ -316,6 +317,7 @@ targets:
       - path: AurinWatchWidgets
       - path: WatchShared/WatchSnapshot.swift
       - path: WatchShared/WatchPlan.swift
+      - path: Shared/StatusHex.swift
     entitlements:
       path: AurinWatchWidgets/AurinWatchWidgets.entitlements
       properties:

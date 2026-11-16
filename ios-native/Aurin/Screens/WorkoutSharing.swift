@@ -181,11 +181,10 @@ struct SharePreviewCard: View {
         }
     }
 
+    /// The power zone's colour in the one zone palette (Palette.Zone).
     private func zoneColor(_ percent: Double) -> Color {
-        let colors: [UInt32] = dark ? [0x5C6662, 0x7CC3F0, 0x8FE6C4, 0xF0B36E, 0xF0907A, 0xA5A1FF]
-                                    : [0xB9B4AA, 0x1D6FA3, 0x1F6B52, 0xA35A12, 0xB4532F, 0x4F46C8]
         let index = percent < 56 ? 0 : percent < 76 ? 1 : percent < 91 ? 2 : percent < 106 ? 3 : percent < 121 ? 4 : 5
-        return Color(hex: colors[index])
+        return Palette.Zone.color(index).resolved(dark: dark)
     }
 }
 

@@ -101,7 +101,7 @@ struct TargetPartsSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text(L10n.tr(isToday ? "Dnešní cíl" : "Cíl dne")).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(L10n.tr(isToday ? "Dnešní cíl" : "Cíl dne")).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .padding(.bottom, 6)
 
                 section("Základ")

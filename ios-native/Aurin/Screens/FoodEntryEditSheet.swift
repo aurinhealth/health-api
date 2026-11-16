@@ -94,7 +94,7 @@ struct FoodEntryEditSheet: View {
         NavigationStack {
             SettingsPage(title: "Upravit jídlo") {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(entry.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(entry.name).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     if let app = entry.app { AppTag(name: app) }
                 }

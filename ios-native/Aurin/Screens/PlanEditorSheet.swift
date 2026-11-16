@@ -229,7 +229,7 @@ struct PlanEditorSheet: View {
             Image(systemName: "checkmark").scaledFont(12, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                 .frame(width: 28, height: 28).background(Palette.green, in: Circle())
         } else if offset == current || exercise.doneCount > 0 {
-            Text("\(exercise.doneCount)/\(exercise.workCount)").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.amber)
+            Text("\(exercise.doneCount)/\(exercise.workCount)").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.amber)
                 .frame(width: 28, height: 28).overlay { Circle().stroke(Palette.amber, lineWidth: 2) }
         } else {
             Circle().stroke(Palette.hairline, lineWidth: 1.5).frame(width: 28, height: 28)

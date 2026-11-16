@@ -10,11 +10,8 @@ private func sportLabel(_ sport: String) -> String {
     ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení", "brick": "Brick"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
 }
 
-/// The sport's colour, as on the sport tiles in Tréninkové plány (TrainingPlansSheet.sports).
-private func sportColor(_ sport: String) -> Color {
-    let id = sport == "strength" ? "gym" : sport == "tri" ? "triathlon" : sport
-    return TrainingPlansSheet.sports.first { $0.id == id }?.color ?? Palette.amber
-}
+/// The sport's colour (Palette.Sport).
+private func sportColor(_ sport: String) -> Color { Palette.Sport.color(sport) }
 
 private func sportSymbol(_ sport: String) -> String {
     ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility", "brick": "link"][sport] ?? "figure.mixed.cardio"
@@ -178,7 +175,7 @@ struct WeekPlanView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Plán týdne") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Tréninkový týden").padding(.top, 24)
-                Text("Plán týdne").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Plán týdne").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 Picker("Týden", selection: $weekStart) {
                     Text("Tento týden").tag(thisWeek)
@@ -1114,7 +1111,7 @@ struct WeekSessionDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: Fmt.dayHeading(session.date) + ", " + sportLabel(session.sport))
-                    Text(session.title).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text(session.title).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 24)

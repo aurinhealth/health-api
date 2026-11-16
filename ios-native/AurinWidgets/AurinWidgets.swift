@@ -71,9 +71,9 @@ enum W {
 
     static func zoneColor(_ zone: String?) -> Color {
         switch zone {
-        case "green": return green
-        case "yellow": return amber
-        case "red": return rust
+        case "green": return Palette.Status.good
+        case "yellow": return Palette.Status.warn
+        case "red": return Palette.Status.bad
         default: return muted
         }
     }

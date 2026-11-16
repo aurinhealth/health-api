@@ -20,7 +20,7 @@ struct TrainingLibraryView: View {
         DetailScreen(glow: Palette.Glow.training, title: sport?.label ?? "Knihovna tréninků") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Knihovna tréninků").padding(.top, 24)
-                Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(sport?.label ?? "Knihovna tréninků").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if let sport {
                     if sport.id == "gym" { GymLibrarySection() } else if sport.id == "tri" { BrickLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
@@ -89,12 +89,12 @@ struct LibrarySport: Identifiable {
     let color: Color
 
     static let all = [
-        LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.amberBar),
-        LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.rust),
-        LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.blue),
+        LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.Sport.ride),
+        LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.Sport.run),
+        LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.Sport.swim),
         // Bricks, two sports one right after the other (BrickLibrarySection).
-        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.green),
-        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.indigo)
+        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other),
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym)
     ]
     /// The sports of one workout (Moje tréninky → +): not the bricks.
     static var single: [LibrarySport] { all.filter { $0.id != "tri" } }
@@ -287,7 +287,7 @@ struct LibraryBrickSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(verbatim: brick.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(verbatim: brick.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
@@ -620,7 +620,7 @@ struct WorkoutLibrarySection: View {
                 dragging = editing
                 if !editing { minutes = Int(slider) }
             })
-            .tint(Palette.amberBar)
+            .tint(Palette.ink)
             Menu {
                 ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
                     Button("± \(t) min") { tolerance.wrappedValue = t }
@@ -748,7 +748,7 @@ struct LibraryWorkoutSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(workout.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(workout.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
@@ -878,7 +878,7 @@ struct ExerciseLibraryView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Cviky") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Knihovna cviků").padding(.top, 24)
-                Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Cviky").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 ExerciseCatalog(muscle: muscle)
             }
         }
@@ -1078,7 +1078,7 @@ struct ExerciseSheet: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
-                Text(exercise.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(exercise.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted)
                 BodyMap(load: exercise.muscles ?? [:], height: 280, legend: true)

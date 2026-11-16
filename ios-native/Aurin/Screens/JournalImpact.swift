@@ -12,7 +12,7 @@ struct JournalImpactView: View {
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.today, title: "Co na tebe působí") {
-            Text("Co na tebe působí").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text("Co na tebe působí").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .padding(.top, 8)
             Picker(L10n.tr("Ukazatel"), selection: $metric) {
                 ForEach(JournalText.metrics, id: \.key) { m in Text(L10n.tr(m.title)).tag(m.key) }
@@ -186,7 +186,7 @@ struct JournalItemView: View {
             if let detail {
                 HStack(spacing: 12) {
                     JournalIcon(symbol: detail.icon, color: tone(detail), size: 44)
-                    Text(verbatim: detail.name).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text(verbatim: detail.name).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 }
                 .padding(.top, 8)
                 nextMorning(detail).padding(.top, 18)

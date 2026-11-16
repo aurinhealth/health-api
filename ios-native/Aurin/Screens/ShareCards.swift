@@ -795,7 +795,7 @@ struct ShareActivityCard: View {
         let u = s.u
         let sub = [workout.value("Vzdálenost").map { $0.value + " " + $0.unit }, workout.value("Čas").map { $0.value + " h" }]
             .compactMap { $0 }.joined(separator: ", ")
-        let zoneColors = [s.t.zoneGrey, s.t.blue, s.t.green, s.t.amber, s.t.rust, s.t.indigo]
+        let zoneColors = Palette.Zone.all.indices.map(s.t.zone)
         let list = Array(stats.prefix(3))
         return ZStack(alignment: .topLeading) {
             s.brand(ShareText.date(dateText))

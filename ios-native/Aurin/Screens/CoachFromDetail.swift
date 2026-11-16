@@ -61,14 +61,7 @@ struct CoachSubject: Equatable {
         }
     }
 
-    private static func color(_ sport: String) -> Color {
-        switch sport {
-        case "ride": return Palette.amber
-        case "run": return Palette.rust
-        case "strength": return Palette.indigo
-        default: return Palette.green
-        }
-    }
+    private static func color(_ sport: String) -> Color { Palette.Sport.color(sport) }
 
     private static func line(_ parts: [String?]) -> String {
         parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")

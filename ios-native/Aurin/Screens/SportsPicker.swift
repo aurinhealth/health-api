@@ -74,10 +74,8 @@ struct SportsChoice: Equatable {
     static func symbol(_ kind: String) -> String {
         ["ride": "bicycle", "run": "figure.run", "swim": "figure.pool.swim", "strength": "dumbbell.fill"][kind] ?? "figure.mixed.cardio"
     }
-    /// The sport colours of the plans and the week (TrainingPlansSheet.sports).
-    static func color(_ kind: String) -> Color {
-        ["ride": Palette.amberBar, "run": Palette.rust, "swim": Palette.blue, "strength": Palette.indigo][kind] ?? Palette.green
-    }
+    /// The sport colours (Palette.Sport).
+    static func color(_ kind: String) -> Color { Palette.Sport.color(kind) }
 }
 
 /// "Which sports do you do?": one row per sport with its icon, a tick and a

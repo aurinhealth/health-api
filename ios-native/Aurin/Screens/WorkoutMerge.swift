@@ -84,7 +84,7 @@ struct MergeWorkoutsSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Sloučit tréninky").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text("Sloučit tréninky").font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Text(verbatim: proposal.note).font(Typo.small).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
                 SectionLabel(text: "Čas").padding(.top, 20)

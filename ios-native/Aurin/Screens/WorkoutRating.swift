@@ -55,7 +55,7 @@ struct GymRatingSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Jak se ti trénink líbil?").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text("Jak se ti trénink líbil?").font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Přeskočit") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }

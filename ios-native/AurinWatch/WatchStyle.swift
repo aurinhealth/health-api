@@ -13,11 +13,12 @@ enum W {
     static let disc = Color(hex: 0x121314)
     static let tile = Color.white.opacity(0.07)
 
-    static let green = Color(hex: 0x8FE6C4)
-    static let amber = Color(hex: 0xF2B46B)
+    /// The state colours (Palette.Status, Shared/StatusHex.swift), dark.
+    static let green = Color(hex: StatusHex.good.dark)
+    static let amber = Color(hex: StatusHex.warn.dark)
     static let indigo = Color(hex: 0xA5A1FF)
     static let pink = Color(hex: 0xF59BB0)
-    static let red = Color(hex: 0xFF6B5B)
+    static let red = Color(hex: StatusHex.bad.dark)
     /// Palette.rust (dark): a carbs limit passed.
     static let rust = Color(hex: 0xF0907A)
     /// The iPhone's dark macro and water colours (Shared/Palette.swift).

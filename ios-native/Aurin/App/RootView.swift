@@ -474,7 +474,7 @@ struct UpdateRequiredView: View {
             Image(systemName: "arrow.down.app")
                 .scaledFont(44, weight: .light)
                 .foregroundStyle(Palette.ink)
-            Text(L10n.tr("Je potřeba nová verze")).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(L10n.tr("Je potřeba nová verze")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru."))
                 .font(.subheadline)
                 .foregroundStyle(Palette.muted)

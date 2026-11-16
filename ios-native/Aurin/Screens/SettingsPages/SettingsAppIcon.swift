@@ -256,7 +256,7 @@ struct AppIconSettingsView: View {
                         Image(systemName: "lock.fill").scaledFont(8)
                         Text(verbatim: AppIconUnlock.lockNote(icon)).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .scaledFont(10).foregroundStyle(Palette.muted)
+                    .scaledFont(11).foregroundStyle(Palette.muted)
                 }
             }
             .frame(maxWidth: .infinity)

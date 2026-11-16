@@ -284,7 +284,7 @@ struct GymBuilderView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
                 Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
-                    .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
                 if let proposal { result(proposal) } else if let template { templateForm(template) }
@@ -961,7 +961,7 @@ struct EquipmentView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Vybavení posilovny").padding(.top, 24)
-                Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Kde cvičíš?").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 VStack(spacing: 10) {
                     ForEach(sorted) { place in placeRow(place) }

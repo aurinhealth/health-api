@@ -32,7 +32,7 @@ struct ZonesDetailContent: View {
                     Text(verbatim: Fmt.int(week.counted)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text(verbatim: L10n.f("z %@", "150 min")).font(Typo.small).foregroundStyle(Palette.muted)
                 }
-                Pill(text: ZoneStyle.status(week), foreground: ZoneStyle.statusColor(week),
+                Pill(text: week.status, foreground: week.statusColor,
                      background: week.counted >= TrainingSnapshot.ZoneWeek.whoTarget ? Palette.greenSoft : Palette.amberSoft)
 
                 Card {
@@ -47,18 +47,18 @@ struct ZonesDetailContent: View {
             } else {
                 Card {
                     WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + ", " + Fmt.hoursMinutesLong(zones.minutes))
-                    ZoneBar(parts: [("Lehká", zones.light, ZoneStyle.light), ("Střední", zones.moderate, ZoneStyle.moderate),
-                                    ("Intenzivní", zones.vigorous, ZoneStyle.vigorous), ("Maximální", zones.peak, ZoneStyle.peak)])
+                    ZoneBar(parts: [("Lehká", zones.light, TrainingSnapshot.ZoneWeek.lightColor), ("Střední", zones.moderate, TrainingSnapshot.ZoneWeek.moderateColor),
+                                    ("Intenzivní", zones.vigorous, TrainingSnapshot.ZoneWeek.vigorousColor), ("Maximální", zones.peak, TrainingSnapshot.ZoneWeek.peakColor)])
                 }
                 .padding(.top, 14)
             }
 
             SectionLabel(text: "Co znamenají zóny").padding(.top, 30)
             VStack(alignment: .leading, spacing: 12) {
-                zoneRow(ZoneStyle.light, "Lehká", "pod 40 %")
-                zoneRow(ZoneStyle.moderate, "Střední", "40–59 %")
-                zoneRow(ZoneStyle.vigorous, "Intenzivní", "60–84 %")
-                zoneRow(ZoneStyle.peak, "Maximální", "85 % a víc")
+                zoneRow(TrainingSnapshot.ZoneWeek.lightColor, "Lehká", "pod 40 %")
+                zoneRow(TrainingSnapshot.ZoneWeek.moderateColor, "Střední", "40–59 %")
+                zoneRow(TrainingSnapshot.ZoneWeek.vigorousColor, "Intenzivní", "60–84 %")
+                zoneRow(TrainingSnapshot.ZoneWeek.peakColor, "Maximální", "85 % a víc")
             }
             .padding(.top, 12)
             Text("Minuta v intenzivní nebo maximální zóně se počítá dvakrát, jak to doporučuje WHO.")
@@ -110,7 +110,7 @@ struct ZoneWeekTable: View {
                     cell(week.vigorous)
                     cell(week.peak)
                     Text(verbatim: Fmt.int(week.counted))
-                        .font(Typo.number(18)).foregroundStyle(ZoneStyle.statusColor(week))
+                        .font(Typo.number(18)).foregroundStyle(week.statusColor)
                         .frame(width: 44, alignment: .trailing)
                 }
                 .padding(.vertical, 10)

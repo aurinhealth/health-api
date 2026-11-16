@@ -256,16 +256,8 @@ struct SportStyle {
         }
     }
 
-    static func color(_ sport: String) -> Color {
-        switch sport {
-        case "ride": return Palette.amberBar
-        case "run": return Palette.rust
-        case "strength": return Palette.indigo
-        case "swim": return Palette.blue
-        case "walk": return Palette.green
-        default: return Palette.brown
-        }
-    }
+    /// The sport colour (Palette.Sport): who it is, never how it went.
+    static func color(_ sport: String) -> Color { Palette.Sport.color(sport) }
 
     static func name(_ sport: String) -> String {
         switch sport {
@@ -347,7 +339,7 @@ struct MonthGrid: View {
                 }
             }
             .frame(width: 26, height: 26)
-            Text(Self.value(day, mode)).scaledFont(10, weight: .semibold, cap: .denseCap).monospacedDigit()
+            Text(Self.value(day, mode)).scaledFont(11, weight: .semibold, cap: .denseCap).monospacedDigit()
                 .foregroundStyle(mode == .compliance ? style.percent.map(ComplianceScale.color) ?? Palette.faint : (day?.count ?? 0) > 0 ? Palette.ink : Palette.faint)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -529,7 +521,7 @@ struct CalendarActivityRow: View {
                         Text(Fmt.int(kcal)).font(Typo.number(17))
                     }
                     .foregroundStyle(check ? Palette.amber : Palette.ink)
-                    Text("kcal").scaledFont(10, cap: .denseCap).foregroundStyle(Palette.faint)
+                    Text("kcal").scaledFont(11, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
                 .accessibilityLabel(check ? L10n.f("%@ kcal, k ověření", Fmt.int(kcal)) : Fmt.int(kcal) + " kcal")
             }
@@ -578,7 +570,7 @@ struct WatchActivityDetail: View {
                             .frame(width: 48, height: 48)
                             .background(SportStyle.color(activity.sport), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: activity.title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                            Text(verbatim: activity.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                             Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
                         }
                     }
