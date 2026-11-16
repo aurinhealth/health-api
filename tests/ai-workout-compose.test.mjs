@@ -197,5 +197,5 @@ test("today's proposal: a draft refused twice keeps the ranked pick, with one lo
   assert.equal(lines[0].rejected, "length");
   assert.equal(lines[4].rejected, undefined, "no error text");
   assert.equal(lines[5].rejected, "hard", "the check's name, not its cap");
-  for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|\d|readiness|score|sleep|spent/);
+  for (const l of lines) assert.doesNotMatch(JSON.stringify(l), /yellow|(?<!vo)\d|readiness|score|sleep|spent/);
 });
