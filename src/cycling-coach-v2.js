@@ -1,4 +1,5 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
+import { returnDay, FIRST_DAY_MINUTES, EASY_DAY_MINUTES } from "./illness-return.js";
 import { trainingStatus } from './training-status.js';
 import { intensityClass, isHardSession, isHardKind } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
@@ -600,14 +601,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // easy and shorter, the first one only recovery, whatever was planned; after
   // more than 7 days ill, the whole first week (audit wave 2, 9.3: an
   // estimate after Elliott 2020, a graded return).
-  const sinceIll=!policy.paused&&athleteState?.recoveredAt?diffDays(targetDate,athleteState.recoveredAt):null;
-  const illDays=athleteState?.recoveredAt&&athleteState?.sickFrom?diffDays(athleteState.recoveredAt,athleteState.sickFrom):null;
-  const easyDays=illDays!=null&&illDays>7?7:3;
-  if(sinceIll!=null&&sinceIll>=0&&sinceIll<easyDays&&!["race","openers"].includes(kind)){
+  // The rule lives in illness-return.js, shared with the app's card.
+  const sinceIll=!policy.paused?returnDay(athleteState,targetDate):null;
+  if(sinceIll!=null&&!["race","openers"].includes(kind)){
     const easy=sinceIll===0?"recovery":"endurance";
     if(kind!=="recovery"&&kind!==easy)kind=easy;
     returning=true;
-    capAt(sinceIll===0?(short?30:45):(short?40:75),L("návrat po nemoci","back after being ill"));
+    capAt((sinceIll===0?FIRST_DAY_MINUTES:EASY_DAY_MINUTES)[short?1:0],L("návrat po nemoci","back after being ill"));
     adaptations.push(sinceIll===0?L("první den po nemoci: jen lehce a krátce","first day after being ill: just short and easy"):L("návrat po nemoci: "+(sinceIll===1?"druhý":sinceIll===2?"třetí":(sinceIll+1)+".")+" den bez intenzity","back after being ill: day "+(sinceIll+1)+" without intensity"));
     adaptations.push(L("když se potíže během tréninku vrátí, přestaň a odpočívej","if the symptoms come back during the session, stop and rest"));
   }

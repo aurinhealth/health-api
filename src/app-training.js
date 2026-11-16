@@ -5,12 +5,12 @@
 // Pure: GET /app/api/training loads the inputs.
 import { groupOfType, typeName, mark } from "./activity-type.js";
 import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
-import { sessionLoad, strengthLoad } from "./training-load.js";
+import { sessionLoad, strengthLoad, gymSessions } from "./training-load.js";
 import { athleteFocus, racePhase, DEFAULT_PHASES } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
 import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
-import { workloadMetrics } from "./workload-ratio.js";
+import { workloadMetrics, loadBalance, muscleLoad } from "./workload-ratio.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -227,7 +227,7 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null }) {
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -395,6 +395,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // The last 7 days against the usual 28, in words only (Today audit D4).
     acwr: workload.historyDays > 0 && workload.acwr.level ? { level: workload.acwr.level } : null,
     monotony: workload.historyDays > 0 ? workload.monotony : null,
+    // Training → Load (redesign): two dials in words against the usual band,
+    // null without any load; Muscle load only from the gym's work sets
+    // (`gymSets`), absent for an older caller that does not read them.
+    loadBalance: loadBalance(intervals, date),
+    ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,

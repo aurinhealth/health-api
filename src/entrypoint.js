@@ -40,7 +40,7 @@ import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile,effectiveProfile} from './energy-profile.js';
 import {withoutProDiet} from './diet.js';
-import {athleteFocus,mainKindsOf,SPORT_KINDS,normalizeFocus} from './athlete-focus.js';
+import {athleteFocus,mainKindsOf,SPORT_KINDS,normalizeFocus,withGoalType} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
 import { loadProfiles, refreshSuggestions, pinUsualWake, loadEffectiveProfile } from './profile-suggestions.js';
@@ -55,6 +55,9 @@ import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, 
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
 import { workloadMetrics } from "./workload-ratio.js";
+import { planOverview } from "./plan-overview.js";
+import { MANUAL_SPORTS, manualWorkoutType } from "./activity-type.js";
+import { illnessReturn } from "./illness-return.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities, fillWellness } from "./coach-reflection.js";
 import { addLoads } from "./training-load.js";
 import { savePersonalFood } from './personal-foods.js';
@@ -1491,7 +1494,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       // The memory screen: the lasting memories with their groups, what no longer
       // holds (Past), the notes of the last days (Recent chats) and "Use memory".
-      const memoryScreen=async state=>({memories:memoryList(state),pastMemories:pastMemoryList(state),recentChats:await recentNotes(env.DB,{days:coachNoteDays(env)}).catch(()=>[]),memoryOff:Boolean(state.memoryOff)});
+      const memoryScreen=async state=>({memories:memoryList(state),pastMemories:pastMemoryList(state),recentChats:await recentNotes(env.DB,{days:coachNoteDays(env)}).catch(()=>[]),memoryOff:Boolean(state.memoryOff),
+        // Back from Sick: the "Easing back in" card, its length set here (illness-return.js), no speed choice.
+        illnessReturn:illnessReturn(state,localToday())});
       if(request.method==='GET'){const state=await getAthleteState(env.DB);return Response.json({status:'ok',state,...await memoryScreen(state)},{headers:{'Cache-Control':'no-store'}});}
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -1935,10 +1940,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{
       const body=await request.json(),minutes=Number(body.minutes),name=String(body.name||'').trim().slice(0,180),date=String(body.date||''),completed=body.completed===true;
-      if(!validTrainingDay(date)||!name||!Number.isFinite(minutes)||minutes<=0||minutes>1440||!['ride','run','gym'].includes(body.sport))throw new Error(L('Vyplň název, datum, sport a délku.', 'Fill in the name, date, sport and duration.'));
+      if(!validTrainingDay(date)||!name||!Number.isFinite(minutes)||minutes<=0||minutes>1440||!MANUAL_SPORTS.includes(body.sport))throw new Error(L('Vyplň název, datum, sport a délku.', 'Fill in the name, date, sport and duration.'));
       if(completed&&date>localToday()||!completed&&date<localToday())throw new Error(L('Zkontroluj datum a zda je trénink dokončený.', 'Check the date and whether the workout is completed.'));
       if(!completed)assertTrainingAllowed(await getAthleteState(env.DB));
-      const type=body.sport==='gym'?'WeightTraining':body.sport==='run'?'Run':'Ride';
+      // Plus → Log workout: ride, run, swim, gym and More (an Intervals.icu type
+      // from GET /app/api/activity/types), which also sets how Apple Health and
+      // Google Health get it (manualWorkoutType).
+      const type=manualWorkoutType(body.sport,body.type);
       const requestId=/^[A-Za-z0-9_-]{10,80}$/.test(String(body.requestId||''))?String(body.requestId):crypto.randomUUID();
       // Done with a start time (Zapsat trénink): the heart rate of that window,
       // from the phone (Apple Health) or the Google Health samples kept here.
@@ -1955,11 +1963,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let pairedWith=null;
       if(completed&&body.pairWith&&body.start&&body.end){const watch=await watchWorkoutIn(env.DB,env.USER_ID,{start:body.start,end:body.end}).catch(()=>null);pairedWith=watch&&watch.source+':'+watch.id===String(body.pairWith)?String(body.pairWith):null;if(!pairedWith)throw new Error(L('Záznam z hodinek se nenašel.', 'The watch\'s record wasn\'t found.'));}
       const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes,avgHr:heart?.avgHr,maxHr:heart?.maxHr,kcal:heart?.kcal,pairedWith});
-      if(!completed)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:await syncLocalWorkout(env,saved.id)});
-      if(pairedWith)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},pairedWith,sends:[]});
+      if(!completed)return Response.json({status:'ok',eventId:'planned:'+saved.id,type,sync:await syncLocalWorkout(env,saved.id)});
+      if(pairedWith)return Response.json({status:'ok',eventId:'planned:'+saved.id,type,sync:{status:'not_exported'},pairedWith,sends:[]});
       // Done: to every destination the user sends activities to (Synchronizace).
-      const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,name,date,minutes,notes:body.notes,rpe:body.rpe,start:body.start},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
-      return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},activityKey:sent.key,sends:sent.sends});
+      const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,type,name,date,minutes,notes:body.notes,rpe:body.rpe,start:body.start},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
+      return Response.json({status:'ok',eventId:'planned:'+saved.id,type,sync:{status:'not_exported'},activityKey:sent.key,sends:sent.sends});
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
   {const r=await handleSyncApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
@@ -1973,6 +1981,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
   if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){let profile=normalizeProfile(await request.json().catch(()=>({})));
+    // The main goal as a key (athlete-focus.js withGoalType): leaving Lose weight resets an unchanged losing calorie goal to maintain.
+    profile=withGoalType(profile,await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first().then(r=>r?JSON.parse(r.profile_json):{}).catch(()=>({})));
     // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
     if(profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length){const pro=await subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>null);if(pro===false)profile=withoutProDiet(profile);else if(pro===null){const saved=await dashboardProfile(env).catch(()=>null);if(saved)profile={...profile,dietStyle:profile.dietStyle==='custom'&&saved.dietStyle!=='custom'?'balanced':profile.dietStyle,proteinPerKg:saved.proteinPerKg??null,nutrientTargets:saved.nutrientTargets||{}};}}if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
     // What "auto" resolves to with the saved goal and race (Settings shows it next to "automaticky").
@@ -2331,6 +2341,23 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   // One week of the active ride or run plan: its sessions with their steps,
   // which are done and which can still be changed (GET ?week=N).
+  // Training → plan overview (plan-overview.js): the plan week by week, done
+  // and coming, for the overview and phase screens. Lighter than /app/api/plans:
+  // the plan, the week plan and one read of the done days per plan.
+  if(url.pathname==='/app/api/plans/overview'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const today=localToday(),[{active,gym},prefs]=await Promise.all([syncedPlans(env,today),getWeekPlan(env.DB).catch(()=>({}))]);
+      const [doneActive,doneGym]=await Promise.all([
+        active&&today>=active.startDate?planSportDates(env,active,active.startDate,shiftDate(today,1)).catch(()=>[]):[],
+        gym&&today>=gym.startDate?env.DB.prepare("SELECT DISTINCT substr(workout_date,1,10) AS d FROM strength_sets WHERE user_id=? AND completed=1 AND workout_date>=? AND workout_date<?").bind(env.USER_ID,gym.startDate,shiftDate(today,1)).all().then(r=>(r.results||[]).map(x=>x.d)).catch(()=>[]):[]
+      ]);
+      return Response.json({status:'ok',
+        active:active?planOverview(active,{today,doneDates:doneActive,days:sportDays(prefs.days,active)}):null,
+        activeGym:gym?planOverview(gym,{today,doneDates:doneGym,days:sportDays(prefs.days,'gym')}):null
+      },{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
   if(url.pathname==='/app/api/plans/week'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
@@ -3134,19 +3161,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [days,gym,health,fitness,insights,coaches,profiles,plans]=await Promise.all([
+      const [days,gym,health,fitness,insights,coaches,profiles,plans,gymSets]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
         trainingGymPlans(env,start,end,{summary:true}).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
         loadFitnessInsights(env.DB,date).catch(()=>({})),
         api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null})),
-        syncedPlans(env,date).catch(()=>({}))
+        syncedPlans(env,date).catch(()=>({})),
+        // Muscle load (workload-ratio.js): the gym's work sets of the last 42 days, one read on idx_strength_sets_user_date.
+        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null)
       ]);
       // Without a main race in the profile, the race of the running plan is the one Training counts down to.
       const planTemplate=plans.active&&getTemplate(plans.active.templateId),planRace=planTemplate?.race&&plans.active.raceDate>=date?{name:planTemplate.name,date:plans.active.raceDate}:null;
       // The saved profile says whether the athlete has set a focus yet ("Nastav si zaměření a cíle").
-      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace,gymSets}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

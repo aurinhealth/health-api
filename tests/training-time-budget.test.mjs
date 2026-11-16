@@ -23,6 +23,7 @@ import { athleteSteps, athleteMinutes } from '../src/workout-explanation.js';
 import { fewMatches } from '../src/ai-workout-compose.js';
 import { systemOf } from '../src/training-plans.js';
 import { isHardKind } from '../src/session-intensity.js';
+import { MANUAL_SPORTS, manualWorkoutType } from '../src/activity-type.js';
 
 const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
@@ -44,7 +45,7 @@ async function api(minutes) {
     Request, Response, URL, console, crypto, lang: () => 'cs', L: cs => cs, internalHeaders,
     getWeekPlan, availabilityOn, trainingBudget, parseTimeWindow, roleFor, targetFor,
     validTrainingDay: validDay, mondayOfDate: weekStartOf, localToday: () => today,
-    getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,
+    getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes, MANUAL_SPORTS, manualWorkoutType,
     buildCyclingCoachV2, FOCUS_OF, kindOfSystem, isHardKind, generateWorkout, getCapabilities, capabilitiesWithLevel, getWorkout, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan, plannedSessionFromRows, weeklyGymDays,
     readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
