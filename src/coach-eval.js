@@ -1006,9 +1006,9 @@ export async function runDailyScenario(env, scenario, { daily = dailyOwnWorkout 
   // The ranked library pick of the coach's type, under COMPOSE_BELOW.
   const pick = { id: 'library-pick', primary_system: libraryKind(c.sport, c.kind), suitability: c.first ? 95 : 60, duration_minutes: c.minutes };
   if (c.target) coach.recommendation.progression = { targetDifficulty: c.target };
-  const first = c.first ? { env: { ...env, COACH_FIRST: 'true' }, experience: c.experience, thresholds: c.sport === 'run' ? { runThresholdPace: '4:40' } : { ftp: 260 } } : null;
+  const first = c.first ? { env: { ...env, COACH_FIRST: 'true' }, experience: c.experience, thresholds: c.sport === 'run' ? { runThresholdPace: '4:40' } : { ftp: 260 }, runBase: { longestRun30: 75, runs8w: 24, weeksWith2Runs: 8, longestBreak28: 3, last7Minutes: 160 } } : null;
   const tooLong = async () => ({ text: JSON.stringify({ name: 'Tempo', reason: L('Tempo ve třech blocích.', 'Tempo in three blocks.'), blocks: [{ repeats: 1, steps: [{ label: 'warm-up', seconds: 900, low: 55, high: 65 }] }, { repeats: 3, steps: [{ label: 'tempo', seconds: 900, low: 80, high: 85 }, { label: 'easy', seconds: 300, low: 50, high: 55 }] }] }), model: 'refused-stub' });
-  const r = await daily(first?.env || env, pick, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today, focus, model, save: false, log: false, ...(first ? { experience: first.experience, thresholds: first.thresholds } : {}), ...(c.refused ? { ask: tooLong } : {}) }).catch(error => ({ workout: null, rejected: 'error: ' + error.message }));
+  const r = await daily(first?.env || env, pick, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today, focus, model, save: false, log: false, ...(first ? { experience: first.experience, thresholds: first.thresholds, runBase: first.runBase } : {}), ...(c.refused ? { ask: tooLong } : {}) }).catch(error => ({ workout: null, rejected: 'error: ' + error.message }));
   const w = r.workout, sport = c.sport === 'run' ? 'run' : 'ride', cap = hardCapFor(coach, today);
   const load = w ? workoutLoadCheck(w, sport) : null;
   const checks = c.refused

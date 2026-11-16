@@ -28,6 +28,7 @@ export const epley1rm=(kg,reps)=>Number(kg)>0&&Number(reps)>=1&&Number(reps)<=12
 const SPORT_KINDS=['ride','run','swim','strength'],GYM_DAY_MIN=60;
 // Date helpers here, not from dashboard-shared.js (which imports this module through profile-suggestions.js).
 const shiftDate=(date,days)=>new Date(Date.parse(String(date).slice(0,10)+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
+const diffIso=(a,b)=>Math.round((Date.parse(b+'T12:00:00Z')-Date.parse(a+'T12:00:00Z'))/86400000);
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 // One row a week (Monday): minutes and sessions per sport, running km, the
 // latest FTP and threshold pace and the best estimated 1RM of the main lifts.
@@ -195,7 +196,16 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const sports=yearFromWeeks(weeks,mondayOfDate(daysBack(364)));
   // The pool of the last pool swim (25 or 50 m, 25 yd): the default until one is chosen by hand.
   const poolLength=[...activities].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??[...weeks].reverse().find(w=>w.pool>0)?.pool??null;
-  return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sportExperienceOwn,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  // The running base for the coach's own run (ai-workout-compose.js coachFirst):
+  // the longest run of the last 30 days (Frandsen 2025: a run over 1.1× it raised
+  // the injury risk), runs in 8 weeks, weeks in a row with 2+ runs, the longest
+  // break in the last 28 days and the last 7 days' minutes. Counts only, no health data.
+  const runs=training.filter(a=>a.kind==='run'),runDays=[...new Set(runs.map(a=>a.date))].sort();
+  const weekRuns=w=>runs.filter(a=>mondayOfDate(a.date)===w).length;
+  let streak=0;for(let w=mondayOfDate(daysBack(7));weekRuns(w)>=2;w=shiftDate(w,-7))streak++;
+  const inBreak=[daysBack(28),...runDays.filter(d=>d>=daysBack(28)),end];
+  const runBase={longestRun30:Math.round(Math.max(0,...runs.filter(a=>a.date>=daysBack(30)).map(a=>Number(a.minutes)||0))),runs8w:runs.filter(a=>a.date>=daysBack(56)).length,weeksWith2Runs:streak,longestBreak28:Math.max(0,...inBreak.slice(1).map((d,i)=>diffIso(inBreak[i],d))),last7Minutes:Math.round(runs.filter(a=>a.date>daysBack(7)).reduce((s,a)=>s+(Number(a.minutes)||0),0))};
+  return {mainSport,supportSports:support,regularSports,experience,runBase,sportExperience:sportExperienceLevels,sportExperienceOwn,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 // The levels chosen by hand in Profile → Experience, 'auto' where none.
 // The single "experience" of older versions is the gym's.

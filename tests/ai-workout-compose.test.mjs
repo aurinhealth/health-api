@@ -211,8 +211,17 @@ test("coach first: easy and tempo days for everyone with a threshold, harder onl
   assert.equal(coachFirst({ sport: "ride", kind: "openers", minutes: 45, coach: green, thresholds: ftp, experience: "experienced" }), "race");
   assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: { ...green, readiness: { status: "yellow" } }, thresholds: ftp, experience: "experienced" }), "hard type");
   assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: green, thresholds: {} }), "no threshold");
-  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace }), null);
-  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 100, coach: green, thresholds: pace }), "long");
+  const base = { longestRun30: 70, runs8w: 20, weeksWith2Runs: 6, longestBreak28: 4, last7Minutes: 150 };
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace, runBase: base }), null);
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace }), "run base", "no history read");
+  for (const thin of [{ weeksWith2Runs: 2 }, { longestBreak28: 14 }, { runs8w: 11 }, { last7Minutes: 59 }])
+    assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace, runBase: { ...base, ...thin } }), "run base", JSON.stringify(thin));
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 80, coach: green, thresholds: pace, runBase: base }), "long", "over 1.1× the longest run of 30 days (77 min)");
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 75, coach: green, thresholds: pace, runBase: base }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: { ...green, constraints: { lastHardDays: 1 } }, thresholds: ftp }), "hard yesterday");
+  assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 60, coach: { ...green, constraints: { lastHardDays: 1 } }, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: { ...green, constraints: { lastHardDays: 2 } }, thresholds: ftp }), null);
+  assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 100, coach: green, thresholds: pace, runBase: { ...base, longestRun30: 120 } }), "long");
   assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: { ...green, constraints: { novice: true } }, thresholds: pace }), "novice");
   assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: { ...green, constraints: { returning: true } }, thresholds: pace }), "returning");
   assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, today: { feeling: "sick" }, thresholds: pace }), "sick");
@@ -250,4 +259,19 @@ test("coach first: no band on endurance days, where the difficulty follows the m
   assert.ok(seen.length >= 1 && seen.every(f => !f.difficulty), JSON.stringify(seen[0]));
   assert.ok(logs.every(l => !/sick|novice|returning/.test(l)), logs.join("\n"));
   assert.match(logs.at(-1), /"coach_first":"held"/);
+});
+
+test("checks: most of the work in the type's zone; long VO2max efforts need recoveries of at least half their length", async () => {
+  const { workInZone, shortRecoveries, composeFaults } = await import("../src/ai-workout-compose.js");
+  const sst = [{ durationMinutes: 10, power: 60 }, { repeats: 3, steps: [{ durationMinutes: 12, power: 91 }, { durationMinutes: 4, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(sst, "ride", "sweet_spot"), 1);
+  const tooHigh = [{ durationMinutes: 10, power: 60 }, { repeats: 3, steps: [{ durationMinutes: 12, power: 98 }, { durationMinutes: 4, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(workInZone(tooHigh, "ride", "sweet_spot"), 0, "threshold, not sweet spot");
+  assert.equal(workInZone(sst, "ride", "endurance"), null);
+  const vo2 = rec => [{ durationMinutes: 15, power: 60 }, { repeats: 4, steps: [{ durationMinutes: 4, power: 112 }, { durationMinutes: rec, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(shortRecoveries(vo2(3), "ride"), false, "Helgerud 4×4 with 3 min");
+  assert.equal(shortRecoveries(vo2(1.5), "ride"), true);
+  const short = [{ durationMinutes: 15, power: 60 }, { repeats: 10, steps: [{ durationMinutes: 0.67, power: 120 }, { durationMinutes: 0.33, power: 50 }] }, { durationMinutes: 10, power: 50 }];
+  assert.equal(shortRecoveries(short, "ride"), false, "40/20 is exempt");
+  assert.deepEqual(composeFaults({ structure: vo2(1.5), sport: "ride", type: "vo2max", length: 47, cap: 45 }), ["recoveries shorter than efforts"]);
 });

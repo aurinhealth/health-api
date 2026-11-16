@@ -75,3 +75,14 @@ test('the starter week follows the main sport, not the gym level',()=>{
   assert.equal(starterPlan(h,{strength:'beginner',ride:'experienced'}).weeklyMinutes,240);
   assert.equal(starterPlan({...h,experience:'regular'},{ride:'auto'}).weeklyMinutes,150,'Auto: the last 12 weeks');
 });
+test('the running base for the coach\'s own run: longest run of 30 days, runs in 8 weeks, weeks in a row with 2+ runs, breaks',async()=>{
+ const {raw,a}=db();
+ for(let d=1;d<=35;d+=2)activity(raw,{days:d,type:'Run',minutes:d===9?70:40});
+ activity(raw,{days:40,type:'Run',minutes:120});
+ const b=(await trainingHistory(a,1,{now:NOW})).runBase;
+ assert.equal(b.longestRun30,70,'the 120 min run is older than 30 days');
+ assert.equal(b.runs8w,19);
+ assert.ok(b.weeksWith2Runs>=3,JSON.stringify(b));
+ assert.ok(b.longestBreak28<=2,JSON.stringify(b));
+ assert.equal(b.last7Minutes,40*3);
+});

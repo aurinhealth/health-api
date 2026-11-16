@@ -16,7 +16,7 @@ import { L } from "./lang.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
-import { zonesFor, buildWorkout, difficultyFromStructure, stepIntensities } from "./workout-model.js";
+import { zonesFor, zoneOf, flattenSteps, buildWorkout, difficultyFromStructure, stepIntensities } from "./workout-model.js";
 import { cleanEnduranceTemplate, enduranceStructure, enduranceSystem } from "./endurance-templates.js";
 import { workoutLoadCheck, hardCapFor, HARD_CAP } from "./ai-workout-pick.js";
 import { isHardKind } from "./session-intensity.js";
@@ -195,10 +195,19 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
 // spot days for everyone with a threshold; harder types only for an
 // experienced athlete on a green morning. A beginner or one returning after a
 // break, a sick check-in, the plan's day, a ride over 120 min or a run over
-// 90 min stay with the library.
+// 90 min stay with the library. So do: a hard type the day after a hard
+// session of either sport (hard/easy practice), a run longer than 1.1× the
+// longest run of the last 30 days (Frandsen 2025) and a runner without a
+// base: under 3 weeks in a row with 2+ runs, a break of 14+ days in the last
+// 28, under 12 runs in 8 weeks or under 60 min in the last 7 days (our
+// calibration, docs/methodology.md).
 export const coachFirstOn = env => env?.COACH_FIRST === "true";
 const COACH_FIRST_EASY = ["endurance", "long_endurance", "tempo", "sweet_spot", "recovery"];
-export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = {}, experience = null, thresholds = {} } = {}) {
+const EASY_KINDS = ["endurance", "long_endurance", "recovery"];
+export function runWithoutBase(b) {
+  return !b || b.weeksWith2Runs < 3 || b.longestBreak28 >= 14 || b.runs8w < 12 || b.last7Minutes < 60;
+}
+export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = {}, experience = null, thresholds = {}, runBase = null } = {}) {
   const run = sport === "run", c = coach.constraints || {}, zone = String(coach.readiness?.status || today.zone || "green").toLowerCase();
   if (c.plannedToday) return "planned";
   if (c.novice) return "novice";
@@ -206,6 +215,9 @@ export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = 
   if (today.feeling === "sick") return "sick";
   if (run ? !thresholds.runThresholdPace : !Number(thresholds.ftp)) return "no threshold";
   if (Number(minutes) > (run ? 90 : 120)) return "long";
+  if (run && runWithoutBase(runBase)) return "run base";
+  if (run && Number(minutes) > 1.1 * runBase.longestRun30) return "long";
+  if (!EASY_KINDS.includes(kind) && c.lastHardDays != null && c.lastHardDays <= 1) return "hard yesterday";
   if (["race", "openers"].includes(kind)) return "race";
   if (!COACH_FIRST_EASY.includes(kind) && (experience !== "experienced" || zone !== "green")) return "hard type";
   return null;
@@ -222,11 +234,11 @@ export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = 
 // to the coach engine's target difficulty ± 0.75 (our calibration). No band on
 // endurance and recovery days, where the difficulty follows the minutes alone,
 // nor on a run sweet spot day, scored on the threshold scale.
-export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, ...opts } = {}) {
+export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, runBase = null, ...opts } = {}) {
   const poor = poorFit(pick, { sport, kind });
-  const held = coachFirstOn(env) ? coachFirst({ sport, kind, minutes: opts.minutes, coach: opts.coach, today: opts.today, experience, thresholds }) : "off";
+  const held = coachFirstOn(env) ? coachFirst({ sport, kind, minutes: opts.minutes, coach: opts.coach, today: opts.today, experience, thresholds, runBase }) : "off";
   const first = held === null, target = Number(opts.coach?.recommendation?.progression?.targetDifficulty);
-  const banded = !["endurance", "long_endurance", "recovery"].includes(kind) && !(sport === "run" && kind === "sweet_spot");
+  const banded = !EASY_KINDS.includes(kind) && !(sport === "run" && kind === "sweet_spot");
   const band = first && banded && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
   const r = poor || first ? await composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience } } : {}), diagnose: true, fallback: null }) : null;
   const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
@@ -275,9 +287,40 @@ export function composeFaults({ structure, sport = "ride", type, length, cap, ba
     if (!(d >= band[0] - 1 && d <= band[1] + 1)) faults.push(`difficulty ${d}`);
   }
   if (effortsBackToBack(structure, sport)) faults.push("efforts back to back");
+  const work = workInZone(structure, sport, type);
+  if (work != null && work < 0.6) faults.push(`zone ${Math.round(work * 100)} %`);
+  if (["vo2max", "anaerobic"].includes(type) && shortRecoveries(structure, sport)) faults.push("recoveries shorter than efforts");
   const warm = HARD_TYPES.includes(type) ? warmupMinutes(structure, sport) : null;
   if (warm != null && warm < MIN_WARMUP) faults.push(`warm-up ${Math.round(warm)} min`);
   return faults;
+}
+
+// Of the minutes above easy riding or running (steps of 1 min and more), the
+// share in the type's own zone (sweet spot 88–94 % FTP); null for an easy
+// workout. At least 60 % is our calibration: every library ride and run but one
+// passes it, 70 % would refuse 30 over-unders and the like (docs/methodology.md).
+export function workInZone(structure = [], sport = "ride", type) {
+  if (["endurance", "recovery"].includes(type)) return null;
+  const zones = zonesFor(sport); let all = 0, own = 0;
+  for (const s of flattenSteps(structure)) {
+    if (s.rest) continue;
+    const z = zoneOf(Number(s.power) || 50, zones), m = Number(s.durationMinutes) || 0;
+    if (["recovery", "endurance"].includes(z) || m < 1) continue;
+    all += m; if (z === type) own += m;
+  }
+  return all > 0 ? own / all : null;
+}
+// VO2max and anaerobic efforts of 2 min and more each followed by a recovery
+// of at least half their length: any shorter one. Our calibration: 1:1 would
+// refuse Helgerud's 4×4 min with 3 min and the library's 5×3 min runs with
+// 2 min jogs (docs/methodology.md); 30/30 and 40/20 are short and exempt.
+export function shortRecoveries(structure = [], sport = "ride") {
+  const kinds = stepIntensities(structure, sport), flat = [];
+  structure.forEach((block, i) => {
+    const steps = Array.isArray(block.steps) ? block.steps : [block], list = Array.isArray(kinds[i]) ? kinds[i] : [kinds[i]];
+    for (let k = 0; k < (Array.isArray(block.steps) ? Math.max(1, Number(block.repeats) || 1) : 1); k++) steps.forEach((st, j) => flat.push([list[j], Number(st.durationMinutes) || 0]));
+  });
+  return flat.some(([kind, m], i) => kind === "interval" && m >= 2 && flat[i + 1] && flat[i + 1][0] === "recovery" && flat[i + 1][1] < 0.5 * m - 0.01);
 }
 
 // A hard session starts after at least 10 easy minutes (the library's own
