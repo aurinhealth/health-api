@@ -176,6 +176,10 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
       zone: zones && !s.free ? zoneForPercent(zones, (low + high) / 2)?.name || null : null
     };
     if (run) Object.assign(out, { paceSlow: s.free ? null : formatPace(pace(low)), paceFast: s.free ? null : formatPace(pace(high)) });
+    // A run without the athlete's threshold pace gets no invented paces
+    // (T-BEH-1): the step's effort in words from the run zones instead, as the
+    // app's RPE and zone words; the length stays as planned.
+    if (run && !thresholdPace && !s.free) out.effort = runEffort((low + high) / 2);
     const hr = !s.free && !(run ? thresholdPace : ftp) ? heartRateFor((low + high) / 2, ranges, hrZones) : null;
     if (hr) Object.assign(out, hr);
     return out;
@@ -183,6 +187,13 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
   // What each step is for, as in the Intervals.icu text (warmup, interval, recovery, active, cooldown).
   const kinds = stepIntensities(structure, sport);
   return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => ({ ...row(s), intensity: kinds[i][j] })) } : { repeats: 1, steps: [{ ...row(block), intensity: kinds[i] }] });
+}
+
+// The run zones above in words: Z1–Z2 easy, Z3 steady, Z4 threshold, Z5–Z6
+// intervals, Z7 repetition (Daniels' names, running coach BEH-6).
+export function runEffort(percent) {
+  const z = RUN_ZONE_RANGE;
+  return percent <= z.Z2[1] ? "easy" : percent <= z.Z3[1] ? "steady" : percent <= z.Z4[1] ? "threshold" : percent <= z.Z6[1] ? "intervals" : "repetition";
 }
 
 // Swim steps: metres (or minutes in open water), pace per 100 m from the
