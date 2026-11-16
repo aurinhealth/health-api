@@ -5,7 +5,8 @@ import { batchingD1 } from "./d1-batch.js";
 import { trainingSetup } from './onboarding.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
-import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
+import { claimCoachMessage, claimFreeReply, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
+import { takeChipAnswer } from './coach-questions.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
@@ -53,7 +54,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary, planAroundCard } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -89,7 +90,7 @@ import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-
 import { HISTORY_DAYS, nutritionDayOf, nutritionDayOfToday, saveNutritionDay, loadFoodHistory, buildFoodHistory } from './nutrition-days.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
-import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck, heartSince } from './athlete-state.js';
+import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck, heartSince, pausedSports } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
@@ -172,7 +173,7 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 import { readDaysTogether } from "./day-reads.js";
 import { shiftDate, googleHealthFor, weekHealthDate, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
-import { chatUndo, lastUndoInChat, chatConfirmation, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
+import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
@@ -2443,12 +2444,23 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,...await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
       catch(error){console.error('Food sentence failed',error.message);}
     }
-    // A message to the coach counts against the week's allowance (coach-allowance.js).
-    let claim;
-    try{claim=await claimCoachMessage(env,body.chatId);}
-    catch(error){if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
     // The chat so far decides the depth too: a follow-up keeps the topic's context.
     const date=localToday(),appContext=assistantAppContext(body.appContext,date),chat=await chatContext(env.DB,body.chatId,{withIds:true}).catch(()=>({turns:[],firstId:null,more:false})),conversation=chat.turns;
+    // "Potvrzuju": the open cards under the last answer go through as if
+    // tapped (in answerMessage), before the data is read, so the answer sees
+    // the changed plan. Only today's changes (confirmableToday): a card for
+    // another day, a move across days or the week plan needs the tap. Not
+    // from a push reply (the cards are not on the lock screen), and a bare
+    // "Jo" after a question in the answer answers the question, not the cards.
+    const yes=ghost||body.pushReply?false:chatConfirmation(message);
+    const drafts=yes&&!(yes==='weak'&&answerAsks(conversation))?await openDraftsOfLastAnswer(env.DB,body.chatId,dayStartSql(date),date).catch(()=>[]):[];
+    // A message to the coach counts against the week's allowance (coach-allowance.js);
+    // a tap on the coach's chip or a bare confirmation of today's cards is a free reply.
+    const chip=!ghost&&body.reply?await takeChipAnswer(env.DB,body.chatId,body.reply,message).catch(()=>false):false;
+    const freeKind=chip?'chip':drafts.length&&confirmationOnly(message)?'confirm':null;
+    let claim;
+    try{claim=freeKind?await claimFreeReply(env,body.chatId,freeKind):await claimCoachMessage(env,body.chatId);}
+    catch(error){if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
     // What the coach knows beyond this chat's last 60 messages (coach-notes.js):
     // the older part of a long chat, the notes of the last days, the end of
     // another chat today and what no longer holds. Nothing of it with memory off.
@@ -2472,18 +2484,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const goal=null,preferences={};
     // A push reply carries the app's API level it was sent from (coach-push-reply.js).
     const oldAppCards=(level=>level!==null&&level!==undefined&&!(Number(level)>=2))(appApiLevel(request)??body.appApi);
+    // The redesign's cards ("Plan around your knee?") only for an app that draws them (API level 3).
+    const redesignCards=Number(appApiLevel(request)??body.appApi)>=3;
     let madeInChat=[];
     const madeInChatText=()=>L('Hotovo: ','Done: ')+madeInChat.filter(c=>c.done).map(c=>c.proposal).join('; ')+L('. Na zbytek zprávy teď neumím odpovědět, zkus to prosím znovu.','. I couldn\'t answer the rest of your message now, please try again.');
     const answerMessage=async (onAnswer,onProgress=()=>{},onStep=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       // The thinking steps with the athlete's numbers (coach-steps.js); the app shows them as they come.
       const steps=stepList(),step=s=>{if(steps.add(s))onStep(s);};
-      // "Potvrzuju": the open cards under the last answer go through as if
-      // tapped, before the data is read, so the answer sees the changed plan.
-      // Not from a push reply (the cards are not on the lock screen), and a bare
-      // "Jo" after a question in the answer answers the question, not the cards.
-      const yes=ghost||body.pushReply?false:chatConfirmation(message);
-      const drafts=yes&&!(yes==='weak'&&answerAsks(conversation))?await openDraftsOfLastAnswer(env.DB,body.chatId,dayStartSql(date)).catch(()=>[]):[];
+      // The confirmed cards (yes and drafts above).
       if(drafts.length)onProgress(L('Provádím potvrzené změny…', 'Making the confirmed changes…'));
       const confirmedInChat=await confirmInChat(drafts,async draftId=>{
         const actionUrl=new URL('https://internal/app/api/assistant/action');
@@ -2594,6 +2603,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Saved before the previews, so a pain or a broken machine told now shapes them.
       const saves=keeps&&!noSport?memorySaves(answer.memory,athleteState.memories):[];
       if(saves.length)await updateAthleteState(env.DB,{saves}).catch(error=>{console.error('Coach memory save failed',error.message);saves.length=0;});
+      // One pain told now: the card "Plan around your knee?" with the sports to rest (coach-actions.js planAroundCard).
+      const around=saves.length&&!ghost&&redesignCards?planAroundCard(saves,{paused:pausedSports(athleteState),date}):null;
+      if(around)actions.push(around);
       // A proposed workout is prepared right away, so the chat shows it (profile,
       // exercises) and confirming plans exactly this one.
       // Several gym days in one answer are built as a block: each sees the others.
@@ -2757,6 +2769,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
         if(a.type==='status'){result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});await syncedPlans(env).catch(()=>null);}
+        // The sports the athlete kept on its chips rest while the pain is remembered.
+        else if(a.type==='plan_around'){const chosen=Array.isArray(body.sports)?body.sports.filter(x=>(a.sports||[]).includes(x)):a.sports||[];result=await updateAthleteState(env.DB,{planAround:{memory:a.memory,sports:chosen}});draft.action={...a,sports:chosen};}
         else if(['gym_swap','gym_add','gym_remove'].includes(a.type)){
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
           assertTrainingAllowed(await getAthleteState(env.DB));

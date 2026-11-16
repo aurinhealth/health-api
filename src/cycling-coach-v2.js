@@ -18,6 +18,7 @@ import { racePhase } from "./athlete-focus.js";
 import { sessionLoad } from "./training-load.js";
 import { MAX_MINUTES } from "./workout-model.js";
 import { sorePartsFor } from "./pain-words.js";
+import { pausedSports } from "./athlete-state.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -665,7 +666,11 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // Nemoc ticked in Deník today, or yesterday (morning-checkin.js readinessCheckin):
   // rest today like the status Nemoc, without setting it (audit wave 2, 9.1).
   const sickDay=!policy.paused&&journalSick&&daysAhead===0;
-  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
+  // A sport the athlete rests for a pain ("Plan around your knee?",
+  // athlete-state.js pausedSports): no session of it; the other sports go on.
+  const painPause=!policy.paused&&!sickDay&&pausedSports(athleteState).includes(sport);
+  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}
+    :painPause?{headline:L("Plánuju s ohledem na bolest","Planning around the pain"),guidance:[L("Tenhle sport teď kvůli bolesti vynecháváš, ostatní sporty jdou dál.","You're resting this sport for the pain; your other sports go on."),L("Až bolest odezní, odeber ji z paměti kouče a sport se vrátí.","Once the pain is gone, remove it from the coach's memory and the sport comes back.")]}:null;
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
   if(tsb==null)missing.push("current CTL/ATL/TSB");
@@ -687,7 +692,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:pause?pause.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,returning,lastHardDays:[lastHard,lastOtherHard].filter(d=>d!=null).sort((a,b)=>a-b)[0]??null,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
-    recommendation:pause?{session:{kind:'rest',name:pause.headline,durationMinutes:0,steps:[],cadence:null},adaptations:pause.guidance,decisionRule:sickDay?'journal_sick':'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":awaitingNight?"await_night":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
+    recommendation:pause?{session:{kind:'rest',name:pause.headline,durationMinutes:0,steps:[],cadence:null},adaptations:pause.guidance,decisionRule:sickDay?'journal_sick':painPause?'pain_pause':'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":awaitingNight?"await_night":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives:pause?[]:alternatives,
     missingData:missing,
     confidence:missing.length>=4?"low":missing.length>=2?"medium":"high"

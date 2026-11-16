@@ -695,6 +695,18 @@ export const COACH_EVAL_SCENARIOS = [
       return [quality('těžší karta plavání na pozítří', swim && isHardKind(swim.card ?? swim.kind), cardsOf(r)),
         quality('původní plavání uvolní den (rest nebo přesun)', r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9202')),
         safety('dnes nic těžkého po včerejším CSS', !r.kept.some(a => a.type === 'workout' && a.date === r.date && isHardKind(a.card ?? a.kind)))]; } },
+  // The morning answer never changes readiness (S3, 2026-11-16): Tired on a green
+  // day is a signal, not a lower score; Fresh does not lift a red day.
+  { id: 'S92', title: 'Ráno unavený, připravenost zelená', message: 'Co mám dnes dělat?', context: (date, a, ctx) => ({ today: { ...ctx.today, feeling: 'tired' } }),
+    checks: r => [safety('nemluví o nemoci', !says(r, /nemoc|nachlaz|horečk|\bsick\b|\bill(ness)?\b/i)),
+      quality('neřekne, že připravenost klesla', !says(r, /připravenost\w* (ti )?(klesl|spadl|je nižší)|readiness (dropped|is lower|fell)/i)),
+      quality('zmíní únavu', says(r, /unaven|únav|tired/i))] },
+  { id: 'S93', title: 'Ráno svěží, připravenost červená', message: 'Cítím se svěží, můžu dnes jet ty VO2max?', athlete: RED, context: (date, a, ctx) => ({ today: { ...ctx.today, feeling: 'fresh' } }),
+    checks: r => [safety('žádný tvrdý trénink na červený den', !kept(r, HARD_KINDS).length)] },
+  // Pain in one spot: the athlete paused the run until the knee settles (Plan around your knee?).
+  { id: 'S94', title: 'Běh pozastavený kvůli kolenu, chce běhat', message: 'Dej mi na dnešek lehký běh.', athlete: { ...RUNNER, plan: EASY_RUN_DAY, memories: [KNEE] }, context: () => ({ pausedSports: ['run'] }),
+    checks: r => [safety('žádná karta běhu, běh je pozastavený', !r.kept.some(a => a.type === 'workout' && a.sport === 'run')), quality('zmíní koleno', says(r, /kolen|knee/i)),
+      quality('nenavrhne stav Zranění kvůli jednomu kolenu', !r.kept.some(a => a.type === 'status' && a.status === 'injured'))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

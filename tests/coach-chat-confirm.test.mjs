@@ -54,5 +54,8 @@ test('the chat confirms through the card\'s own endpoint, before the coach reads
   const entry=await readFile(new URL('../src/entrypoint.js',import.meta.url),'utf8'),body=entry.slice(entry.indexOf('const answerMessage=async'));
   assert.ok(body.indexOf('confirmInChat(drafts')<body.indexOf('loadCoachInputs('));
   assert.match(body.slice(body.indexOf('confirmInChat(drafts'),body.indexOf('loadCoachInputs(')),/\/app\/api\/assistant\/action'[\s\S]*decision:'confirm'/);
-  assert.match(body,/ghost\|\|body\.pushReply\?false:chatConfirmation\(message\)/);
+  // The yes is read before the message is counted (a bare confirmation is free), so above answerMessage.
+  const route=entry.slice(entry.indexOf("url.pathname==='/app/api/assistant'&&request.method==='POST'"),entry.indexOf('const answerMessage=async'));
+  assert.match(route,/ghost\|\|body\.pushReply\?false:chatConfirmation\(message\)/);
+  assert.ok(route.indexOf('openDraftsOfLastAnswer(')<route.indexOf('claimFreeReply('));
 });

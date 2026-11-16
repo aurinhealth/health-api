@@ -4,7 +4,7 @@ import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
 import { cycleShared } from "./cycle-model.js";
 import { withFocus, racePhase } from "./athlete-focus.js";
-import { brokenStations } from "./athlete-state.js";
+import { brokenStations, pausedSports } from "./athlete-state.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS, requestedMuscles } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
 import { strengthCoverage } from './strength-balance.js';
@@ -294,6 +294,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),...(gymFirst?{gymDay:true}:{}),
     athleteState:cyclingCoachV2.athleteState.status,statusNote:cyclingCoachV2.athleteState.note,
+    // Sports resting for a pain ("Plan around your knee?", athlete-state.js): no sessions of them.
+    ...(pausedSports(athleteState).length?{pausedSports:pausedSports(athleteState)}:{}),
     statusUntil:athleteState?.statusUntil||null,
     rhythm:preferences.weeklyActivities == null ? null : {weeklyActivities:preferences.weeklyActivities},
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),

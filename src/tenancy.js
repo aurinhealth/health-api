@@ -146,7 +146,11 @@ export const PERSONAL_TABLES = {
   // One row a week of training per sport (training-history.js trainingWeeks).
   training_weeks: { pk: ["user_id", "week"] },
   // Eaten and the frozen targets of each day (nutrition-days.js).
-  nutrition_days: { pk: ["user_id", "date"] }
+  nutrition_days: { pk: ["user_id", "date"] },
+  // When the Pro banner was closed and how often (pro-banner.js).
+  pro_banner: {},
+  // The chips under a coach question the server asked (coach-questions.js).
+  coach_questions: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

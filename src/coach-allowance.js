@@ -30,6 +30,13 @@ export const coachWorkoutChatMessages = env => n(env.COACH_WORKOUT_CHAT_MESSAGES
 const WORKOUT_CHAT_HOURS = 3;
 // A conversation counts as still going on while its last message is this recent.
 const RUNNING_MINUTES = 30;
+// Free replies (AI-4, 2026-11-16): a typed confirmation of a card
+// (coach-chat-confirm.js confirmationOnly) and a tap on a chip the server put
+// under a coach question (coach-questions.js) do not count as messages. They
+// still go through the account's USD brake (ai-usage.js), and at most half
+// the week's messages are free (15 of 30, 7 of 15), so a script of yeses
+// cannot replace the limit (monetization review 2026-11-16); past that they count.
+export const freeRepliesOf = limit => Math.floor(limit / 2);
 // The app says how many are left from 75 % on: 7 of 30, 4 of 15.
 export const nearAt = limit => Math.floor(limit / 4 + 0.25);
 
@@ -38,7 +45,8 @@ const sqlTime = text => Date.parse(String(text || '').replace(' ', 'T') + 'Z');
 
 // kind: 'message' (counts), 'workout' (a conversation after a workout: its
 // first message counts, the next ones up to the cap do not), 'extra' or 'pack'
-// (a bought message, taken from coach_pack_balance).
+// (a bought message, taken from coach_pack_balance), 'confirm' or 'chip' (a
+// free reply, freeRepliesOf).
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS coach_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, week TEXT NOT NULL, chat_id INTEGER, kind TEXT NOT NULL, counted INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
   await db.prepare('CREATE INDEX IF NOT EXISTS coach_messages_user_week ON coach_messages(user_id, week)').run();
@@ -118,6 +126,22 @@ export async function checkCoachMessage(env, chatId, { today, now = Date.now() }
   const error = new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.'));
   Object.assign(error, { limit: true, status: 429, coachAllowance: { ...allowance, exhausted: true } });
   throw error;
+}
+
+// A free reply ('confirm' or 'chip'), taken in one statement whose condition
+// is the week's free cap; past the cap, or without a row, it is a message as
+// any other (claimCoachMessage). A free reply goes even when the week's
+// messages are used up: it only says yes to the coach's own card or question.
+export async function claimFreeReply(env, chatId, kind, { today, now = Date.now() } = {}) {
+  if (!['confirm', 'chip'].includes(kind)) return claimCoachMessage(env, chatId, { today, now });
+  today ??= await limitToday(env);
+  const before = await coachAllowance(env, today);
+  if (!before) return null;
+  const week = mondayOfDate(today), chat = Number(chatId) > 0 ? Number(chatId) : null;
+  const row = await env.DB.prepare("INSERT INTO coach_messages (user_id, week, chat_id, kind, counted) SELECT ?, ?, ?, ?, 0 WHERE (SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND kind IN ('confirm','chip')) < ? RETURNING id")
+    .bind(env.USER_ID, week, chat, kind, env.USER_ID, week, freeRepliesOf(before.limit)).first();
+  if (row?.id) return { kind, id: row.id, before, free: true };
+  return claimCoachMessage(env, chatId, { today, now });
 }
 
 const storedKind = kind => kind === 'workout-free' ? 'workout' : kind;

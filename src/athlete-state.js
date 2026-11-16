@@ -56,6 +56,13 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     if (patch.toPast && state.memories.includes(patch.forget) && groupOf(patch.forget, meta) === 'health') state.pastMemories = [...state.pastMemories.filter(p => p.text !== patch.forget), { text: patch.forget, group: 'health', at: meta?.at || null, endedAt: date }].slice(-PAST_KEEP);
     state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));
   }
+  // "Plan around your knee?" (T-KOUC-1, 2026-11-16): the sports the athlete
+  // chose rest while the pain is in the memory; the other sports go on.
+  // Injured stays a status the athlete sets by hand.
+  if (patch.planAround?.memory && state.memories.includes(patch.planAround.memory)) {
+    const sports = [...new Set((patch.planAround.sports || []).filter(s => PAUSABLE_SPORTS.includes(s)))];
+    state.memoryMeta[patch.planAround.memory] = { ...(state.memoryMeta[patch.planAround.memory] || {}), pausedSports: sports };
+  }
   if (patch.forgetPast != null) state.pastMemories = state.pastMemories.filter(p => p.text !== patch.forgetPast);
   // An edited memory keeps its place in the list and counts as new.
   if (patch.edit?.from != null && state.memories.includes(patch.edit.from)) {
@@ -131,7 +138,7 @@ function remember(state, text, date, { group = null, by = null, station = null, 
 export const memoryList = (state, date = localToday()) => (state.memories || []).map(text => {
   const meta = state.memoryMeta?.[text] || {};
   const badge = meta.changed && meta.changedAt && meta.changedAt > shiftDate(date, -BADGE_DAYS) ? meta.changed : null;
-  return { text, since: meta.at || null, check: meta.check || null, group: groupOf(text, meta), badge };
+  return { text, since: meta.at || null, check: meta.check || null, group: groupOf(text, meta), badge, ...(meta.pausedSports?.length ? { pausedSports: meta.pausedSports } : {}) };
 });
 // What no longer holds: a past pain or illness, newest first.
 export const pastMemoryList = state => [...(state.pastMemories || [])].reverse().map(p => ({ text: p.text, group: p.group || 'health', since: p.at || null, ended: p.endedAt || null }));
@@ -166,6 +173,11 @@ export function statusCheck(state, date = localToday()) {
 // The stations that do not work now: the gym plan, swaps and the coach leave them out.
 export const brokenStations = (state, date = localToday()) => state?.memoryOff ? [] : [...new Set((state?.memories || [])
   .map(text => state.memoryMeta?.[text]).filter(m => m?.station && m.check > date).map(m => m.station))];
+// The sports a remembered pain pauses ("Plan around your knee?"): only while
+// the memory is kept, and nothing with the memory off.
+export const PAUSABLE_SPORTS = ['ride', 'run', 'swim', 'gym'];
+export const pausedSports = state => state?.memoryOff ? [] : [...new Set((state?.memories || [])
+  .flatMap(text => state.memoryMeta?.[text]?.pausedSports || []).filter(s => PAUSABLE_SPORTS.includes(s)))];
 // The muscle groups the athlete wants trained more for a while.
 export const focusGroups = (state, date = localToday()) => state?.memoryOff ? [] : [...new Set((state?.memories || [])
   .map(text => state.memoryMeta?.[text]).filter(m => m?.muscles?.length && m.check > date).flatMap(m => m.muscles))];
