@@ -721,7 +721,7 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'D05', title: 'Návrh kouče: dvakrát zamítnutý návrh nechá výběr z knihovny', daily: { sport: 'ride', kind: 'tempo', minutes: 45, zone: 'yellow', score: 64, refused: true } },
   // Step 2 (COACH_FIRST, on the test server): the library fits well and the coach still writes first,
   // to the engine's target difficulty ± 0.75.
-  { id: 'D06', title: 'Kouč píše první: kolo sweet spot 75 min', daily: { sport: 'ride', kind: 'sweet_spot', minutes: 75, zone: 'green', score: 78, first: true, target: 5, experience: 'intermediate' } },
+  { id: 'D06', title: 'Kouč píše první: kolo sweet spot 75 min', daily: { sport: 'ride', kind: 'sweet_spot', minutes: 75, zone: 'green', score: 78, first: true, target: 5, experience: 'regular' } },
   { id: 'D07', title: 'Kouč píše první: běh tempo 45 min, zkušený', daily: { sport: 'run', kind: 'tempo', minutes: 45, zone: 'green', score: 76, first: true, target: 5.5, experience: 'experienced' } },
   // The answer checker (coach-checker.js) on fixed answers with a planted fault
   // (experiment 2026-11-11: the regex checks found 1 of 12): it must name the

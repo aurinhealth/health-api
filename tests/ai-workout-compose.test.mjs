@@ -208,6 +208,7 @@ test("coach first: easy and tempo days for everyone with a threshold, harder onl
   assert.equal(coachFirst({ sport: "ride", kind: "endurance", minutes: 150, coach: green, thresholds: ftp }), "long");
   assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: green, thresholds: ftp }), "hard type");
   assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: green, thresholds: ftp, experience: "experienced" }), null);
+  assert.equal(coachFirst({ sport: "ride", kind: "openers", minutes: 45, coach: green, thresholds: ftp, experience: "experienced" }), "race");
   assert.equal(coachFirst({ sport: "ride", kind: "vo2", minutes: 60, coach: { ...green, readiness: { status: "yellow" } }, thresholds: ftp, experience: "experienced" }), "hard type");
   assert.equal(coachFirst({ sport: "ride", kind: "tempo", minutes: 60, coach: green, thresholds: {} }), "no threshold");
   assert.equal(coachFirst({ sport: "run", kind: "endurance", minutes: 45, coach: green, thresholds: pace }), null);
@@ -227,11 +228,26 @@ test("coach first: off without the flag; on, a good library fit is still written
     assert.equal((await dailyOwnWorkout(env, good, { ...day, coach, ask, thresholds: { ftp: 250 } })).workout, null, "without COACH_FIRST the good fit stays");
     assert.equal(seen.length, 0);
     const on = { ...env, COACH_FIRST: "true" };
-    const r = await dailyOwnWorkout(on, good, { ...day, coach, ask, thresholds: { ftp: 250 }, experience: "intermediate" });
+    const r = await dailyOwnWorkout(on, good, { ...day, coach, ask, thresholds: { ftp: 250 }, experience: "regular" });
     assert.equal(r.coachFirst, true);
     assert.deepEqual(seen[0].difficulty, { min: 3.3, max: 4.8, scale: "1–10" });
-    assert.equal(seen[0].athleteLevel, "intermediate");
+    assert.equal(seen[0].athleteLevel, "regular");
     const held = await dailyOwnWorkout(on, good, { ...day, coach: { ...coach, constraints: { novice: true } }, ask, thresholds: { ftp: 250 } });
     assert.equal(held.workout, null); assert.equal(held.held, "novice"); assert.equal(seen.length, seen.length);
   } finally { console.log = log; }
+});
+
+test("coach first: no band on endurance days, where the difficulty follows the minutes; the log says only held or yes", async () => {
+  const seen = [], logs = [], orig = console.log;
+  const env = { ...owner(), COACH_FIRST: "true" };
+  const ask = async (e, args) => { seen.push(JSON.parse(args.input.replace(/^[^{]*/, ""))); return null; };
+  const coach = { readiness: { status: "green" }, constraints: {}, recommendation: { progression: { targetDifficulty: 4.45 } } };
+  console.log = l => logs.push(l);
+  try {
+    await dailyOwnWorkout(env, { suitability: 95, primary_system: "endurance", duration_minutes: 60 }, { sport: "ride", kind: "endurance", minutes: 60, coach, today: {}, ask, thresholds: { ftp: 250 }, experience: "experienced" });
+    await dailyOwnWorkout(env, { suitability: 95, primary_system: "endurance", duration_minutes: 60 }, { sport: "ride", kind: "endurance", minutes: 60, coach, today: { feeling: "sick" }, ask, thresholds: { ftp: 250 } });
+  } finally { console.log = orig; }
+  assert.ok(seen.length >= 1 && seen.every(f => !f.difficulty), JSON.stringify(seen[0]));
+  assert.ok(logs.every(l => !/sick|novice|returning/.test(l)), logs.join("\n"));
+  assert.match(logs.at(-1), /"coach_first":"held"/);
 });

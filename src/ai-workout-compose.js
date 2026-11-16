@@ -206,6 +206,7 @@ export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = 
   if (today.feeling === "sick") return "sick";
   if (run ? !thresholds.runThresholdPace : !Number(thresholds.ftp)) return "no threshold";
   if (Number(minutes) > (run ? 90 : 120)) return "long";
+  if (["race", "openers"].includes(kind)) return "race";
   if (!COACH_FIRST_EASY.includes(kind) && (experience !== "experienced" || zone !== "green")) return "hard type";
   return null;
 }
@@ -218,19 +219,22 @@ export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = 
 // often poorFit fires and compose is refused: sport, type and the refused
 // checks only, no health data.
 // With COACH_FIRST (coachFirst lets it) the AI writes first whatever the fit,
-// to the coach engine's target difficulty ± 0.75 (our calibration).
+// to the coach engine's target difficulty ± 0.75 (our calibration). No band on
+// endurance and recovery days, where the difficulty follows the minutes alone,
+// nor on a run sweet spot day, scored on the threshold scale.
 export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, ...opts } = {}) {
   const poor = poorFit(pick, { sport, kind });
   const held = coachFirstOn(env) ? coachFirst({ sport, kind, minutes: opts.minutes, coach: opts.coach, today: opts.today, experience, thresholds }) : "off";
   const first = held === null, target = Number(opts.coach?.recommendation?.progression?.targetDifficulty);
-  const band = first && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
+  const banded = !["endurance", "long_endurance", "recovery"].includes(kind) && !(sport === "run" && kind === "sweet_spot");
+  const band = first && banded && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
   const r = poor || first ? await composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience } } : {}), diagnose: true, fallback: null }) : null;
   const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
   // Only the names of the refused checks ("hard", "length"): their numbers
   // (the hard-minute cap) would tell the morning's readiness, and an error's
   // text may quote the model.
   const error = Boolean(rejected?.startsWith("error:")), checks = rejected && !error ? [...new Set(rejected.split(", ").map(f => f.split(" ")[0]))].join(",") : null;
-  if (log) console.log(JSON.stringify({ daily_compose: !poor && !first ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(held !== "off" ? { coach_first: held || "yes" } : {}), ...(checks ? { rejected: checks } : {}) }));
+  if (log) console.log(JSON.stringify({ daily_compose: !poor && !first ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(held !== "off" ? { coach_first: held ? "held" : "yes" } : {}), ...(checks ? { rejected: checks } : {}) }));
   return { workout, poorFit: poor, coachFirst: first, held: held === "off" ? null : held, rejected };
 }
 
