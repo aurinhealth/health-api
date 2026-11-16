@@ -21,15 +21,18 @@ async function withOpenAI(fn) {
 }
 const LIMITS = { AI_MONTHLY_LIMIT_USD: "5", AI_YEARLY_LIMIT_USD: "3", AI_UNPAID_LIMIT_USD: "1.25", AI_UNPAID_LIMIT_SHARE: "0.5", AI_DAILY_LIMIT_USD: "100" };
 const future = (days = 30) => new Date(Date.now() + days * 864e5).toISOString();
-// 7: monthly Pro; 8: yearly Pro; 9: the free week; 10: no purchase; 11: a yearly offer code.
+// 7: monthly Pro; 8: yearly Pro; 9: the free week; 10: no purchase; 11: a yearly offer code;
+// 12: a monthly offer code (the pilot's discount); 13: a free offer code (not the free week).
 async function accounts() {
-  const db = grantAiConsent(createD1(), 7, 8, 9, 10, 11);
+  const db = grantAiConsent(createD1(), 7, 8, 9, 10, 11, 12, 13);
   await ensureStoreColumns(db);
   const sub = db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, product_id, store_environment, free_trial, offer_type) VALUES (?, 'ai', ?, ?, 'Production', ?, ?)");
   sub.run(7, future(), "b.pro.monthly", 0, null);
   sub.run(8, future(365), "b.pro.yearly", 0, null);
   sub.run(9, future(3), "b.pro.yearly", 1, 1);
   sub.run(11, future(365), "b.pro.yearly", 0, 3);
+  sub.run(12, future(), "b.pro.monthly", 0, 3);
+  sub.run(13, future(60), "b.pro.monthly", 1, 3);
   return db;
 }
 const envFor = (db, id, extra = {}) => ({ DB: scopedDb(db, id), USER_ID: id, OPENAI_API_KEY: "k", ...LIMITS, ...extra });
@@ -37,10 +40,16 @@ const spend = (db, id, day, usd) => db.sqlite.prepare("INSERT INTO ai_usage (use
 
 test("the monthly brake follows the plan and stays under what it nets", async () => {
   const db = await accounts();
-  const plans = await Promise.all([7, 8, 9, 10, 11].map(id => aiPlan(envFor(db, id))));
-  assert.deepEqual(plans.map(p => p.plan), ["monthly", "yearly", "unpaid", "unpaid", "yearly"]);
-  const limits = await Promise.all([7, 8, 9, 10, 11].map(id => aiAllowance(envFor(db, id)).then(a => a.monthLimitUsd)));
-  assert.deepEqual(limits, [5, 3, 1.25, 1.25, 3]);
+  const plans = await Promise.all([7, 8, 9, 10, 11, 12, 13].map(id => aiPlan(envFor(db, id))));
+  assert.deepEqual(plans.map(p => p.plan), ["monthly", "yearly", "unpaid", "unpaid", "yearly", "yearly", "unpaid"]);
+  assert.ok(plans[2].since && !plans[6].since, "only the free week is a period of its own");
+  const limits = await Promise.all([7, 8, 9, 10, 11, 12, 13].map(id => aiAllowance(envFor(db, id)).then(a => a.monthLimitUsd)));
+  assert.deepEqual(limits, [5, 3, 1.25, 1.25, 3, 3, 1.25], "an offer code nets no more than the yearly plan");
+  // A Sandbox purchase (TestFlight) is not Pro bought; the live owner has the same brakes.
+  db.sqlite.prepare("UPDATE subscriptions SET store_environment = 'Sandbox' WHERE user_id = 7").run();
+  assert.equal((await aiAllowance(envFor(db, 7))).monthLimitUsd, 1.25);
+  assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true }))).monthLimitUsd, 3);
+  assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true, ENVIRONMENT: "staging" }))).monthLimitUsd, null);
   // Unset, every plan has the monthly brake (times the unpaid share), as before.
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5" }, 0.5, "unpaid"), 2.5);
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5" }, 1, "yearly"), 5);
@@ -48,8 +57,9 @@ test("the monthly brake follows the plan and stays under what it nets", async ()
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "2", AI_YEARLY_LIMIT_USD: "3" }, 1, "yearly"), 2);
   // Only paid plans have a week, 30 % of their month.
   assert.deepEqual([aiWeeklyLimitUsd(5, "monthly"), aiWeeklyLimitUsd(3, "yearly"), aiWeeklyLimitUsd(1.25, "unpaid"), aiWeeklyLimitUsd(null, "yearly")], [1.5, 0.9, null, null]);
-  // What a plan nets a month after 21 % VAT and Apple's 15 % at 22.10 Kč a dollar (ČNB 13 Nov 2026):
-  // 199 Kč monthly 6.33, 1 490 Kč yearly 3.95, 149 Kč × 12 with the commitment 4.74 USD.
+  // What a plan nets a month in Czechia after 21 % VAT and Apple's 15 % at 22.10 Kč a dollar (ČNB 13 Nov 2026):
+  // 199 Kč monthly 6.33, 1 490 Kč yearly 3.95, 149 Kč × 12 with the commitment 4.74 USD
+  // (the code's 5.9 and 3.7 are the lowest across countries, 27 % VAT in Hungary).
   const net = czk => czk / 1.21 * 0.85 / 22.1;
   assert.ok(5 < net(199) && 3 < net(1490 / 12) && 3 < net(149));
 });
@@ -78,6 +88,27 @@ test("the free week is a period of its own: a week across two months gets one br
   assert.equal(await aiSpentThisMonth(env, { since: "2000-01-01" }), 1);
   // A day before the week began in the same month counts too (the month starts earlier).
   assert.equal(await aiSpentThisMonth(env, { since: localToday() }), 0);
+  // The brake itself counts from the week's first day.
+  await withOpenAI(async calls => {
+    spend(db, 9, plan.since, 1);
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
+    assert.equal(calls(), 1);
+  });
+});
+
+test("a free week that just turned paid does not take the new plan's week", async () => {
+  const db = await accounts();
+  await withOpenAI(async calls => {
+    const today = localToday(), monday = mondayOfDate(today);
+    // Bought today after 1.00 USD in the free week, on Monday or later.
+    db.sqlite.prepare("UPDATE subscriptions SET store_signed_at = ? WHERE user_id = 8").run(Date.parse(today + "T12:00:00Z"));
+    const env = envFor(db, 8);
+    await ensureAiUsage(env.DB);
+    spend(db, 8, monday, today === monday ? 0 : 1);
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 1);
+  });
 });
 
 test("a paid week may use 30 % of its month; past it AI waits until Monday", async () => {

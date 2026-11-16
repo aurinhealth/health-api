@@ -181,8 +181,9 @@ export function accountsReport(stats, limits = {}) {
 - AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
 - Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? `, strop na účet ${yearly !== monthly ? `měsíčně ${usd(monthly)}, ročně ${usd(yearly)}` : usd(monthly)}, bez placení ${usd(unpaid)}` : ""}`];
   const proposals = [];
-  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
-  if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
+  // The brakes sit just under what each plan nets, so the lever is a cheaper coach, not a higher brake.
+  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). ${row.key || "AI_MONTHLY_LIMIT_USD"} je těsně pod čistým příjmem tarifu, nezvedej ho; jestli je to běžné používání, zlevni zprávu kouče (kratší vstup), jinak ho brzda zastaví.`);
+  if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Stropy zvednout nejde (jsou pod čistým příjmem tarifu): zlevni zprávu kouče, nebo sniž COACH_WEEKLY_MESSAGES.`);
   if (paid > 0 && projected > revenue) proposals.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících). Sniž COACH_WEEKLY_MESSAGES z 30 na 25, nebo strop na účet.`);
   if (totalLimit != null && stats.totalYesterdayUsd >= totalLimit * 0.7) proposals.push(`Včera padlo ${pct(stats.totalYesterdayUsd, totalLimit)} % denní brzdy pro všechny. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na ${usd(Math.ceil(totalLimit * 1.5))}${totalAlert != null ? ` a AI_TOTAL_DAILY_ALERT_USD na ${usd(Math.ceil(totalAlert * 1.5))}` : ""}.`);
   for (const g of stats.groups || []) if (g.brake_usd != null && Number(g.cost_usd) >= Number(g.brake_usd) * 0.7) proposals.push(`Skupina „${GROUP_NAMES[g.grp] || g.grp}“ včera vyčerpala ${pct(Number(g.cost_usd), Number(g.brake_usd))} % své denní pojistky. Jestli jde o běžné používání, zvedni její hodnotu v AI_GROUP_BRAKES; jestli ne (hromadné účty, chyba), nech ji, pojistka ji zastaví.`);
@@ -228,8 +229,9 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
     if (!ids.has(Number(row.user_id))) continue;
     const counted = Number(row.counted) || 0;
     stats.monthUsd += Number(row.cost) || 0;
-    const id = Number(row.user_id), limit = full == null ? null : yearly.has(id) ? year : whole.has(id) ? full : unpaid;
-    if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit });
+    // Only paying accounts: an unpaid one at its small brake is the brake working.
+    const id = Number(row.user_id), limit = full == null || !whole.has(id) ? null : yearly.has(id) ? year : full;
+    if (limit && counted >= limit * 0.8) stats.nearCap.push({ email: row.email, cost: counted, limit, key: yearly.has(id) ? "AI_YEARLY_LIMIT_USD" : "AI_MONTHLY_LIMIT_USD" });
   }
   return stats;
 }

@@ -63,7 +63,8 @@ export function aiDailyLimitUsd(env, share = 1) {
 // nets after VAT and Apple's 15 % (Petr 2026-11-16: never pay for a user):
 // AI_MONTHLY_LIMIT_USD the monthly Pro (5 of about 5.9 USD), AI_YEARLY_LIMIT_USD
 // the yearly product (3 of about 3.7, paid at once; the yearly paid monthly with
-// the 12-month commitment nets about 4.7 and gets the same), AI_UNPAID_LIMIT_USD
+// the 12-month commitment nets about 4.7 and gets the same, as an offer code),
+// AI_UNPAID_LIMIT_USD
 // an account that has not bought Pro, the free week as one period (1.25).
 // Unset, a plan gets the monthly one (times share).
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
@@ -140,12 +141,13 @@ export async function aiSpentThisMonth(env, { exceptId = 0, since = null } = {})
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
-// Everything the account's AI cost since Monday (its own days), the coach chat included.
-export async function aiSpentThisWeek(env, { exceptId = 0 } = {}) {
+// Everything the account's AI cost since Monday (its own days), the coach chat
+// included; since: a later first day (the plan's newest paid record, aiPlan).
+export async function aiSpentThisWeek(env, { exceptId = 0, since = null } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const today = await limitToday(env);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, mondayOfDate(today), today, Number(exceptId) || 0).first();
+  const today = await limitToday(env), monday = mondayOfDate(today), from = since && since > monday ? since : monday;
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, from, today, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
@@ -166,7 +168,7 @@ export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = 
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
-  const [monthSpent, weekSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId, since: plan.since }).catch(failed), weekLimit == null ? 0 : aiSpentThisWeek(env, { exceptId }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
+  const [monthSpent, weekSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId, since: plan.since }).catch(failed), weekLimit == null ? 0 : aiSpentThisWeek(env, { exceptId, since: plan.paidSince }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
   const raise = (monthLimit != null && monthSpent >= monthLimit) || (weekLimit != null && weekSpent >= weekLimit) ? await packRaise(env) : 0;
   if (monthLimit != null && monthSpent >= monthLimit + raise) throw limitError(await monthLimitMessage(env));
   if (weekLimit != null && weekSpent >= weekLimit + raise) throw limitError(L("Tento týden toho bylo s AI hodně. Kouč a AI funkce budou zase k dispozici v pondělí.", "That's a lot of AI for this week. The coach and AI features are back on Monday."));
