@@ -1,13 +1,16 @@
 name: Database backup
 
-# Every Sunday at night: the central database and every user data database
+# Every Saturday night: the central database and every user data database
 # go to the R2 bucket aurin-db-backups (EU), kept 28 days, encrypted with age
 # on the runner before upload (scripts/backup-recipients.txt). A D1 export makes
-# the database wait for a moment, so it runs when nobody trains.
+# the database wait for a moment, so it runs when nobody trains. GitHub starts
+# this schedule 6 to 7 hours late (01:30 ran at 07:51-08:19 UTC in November
+# 2026, and the 15 Nov export made five background jobs fail once), so it is
+# set for Saturday 21:30 UTC: on time or late, it runs at night in Europe.
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 1 * * 0"
+    - cron: "30 21 * * 6"
 
 permissions:
   contents: read
