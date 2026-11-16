@@ -89,6 +89,19 @@ test("the loader reads one daily metric from the day index and steps from the ho
   assert.equal(s.points.length, 15);
 });
 
+test("today's steps are a running total: shown without a state, the latest state and change from yesterday", () => {
+  const morning = rows.map(r => (r.id === DATE ? { ...r, steps: 600 } : r));
+  const s = buildHealthSeries({ metric: "steps", range: "30d", date: DATE, rows: morning });
+  const today = s.points.at(-1);
+  assert.equal(today.date, DATE);
+  assert.equal(today.value, 600);
+  assert.equal(today.state, null);
+  assert.equal(today.low, null);
+  assert.equal(s.latest.date, day(-1));
+  assert.equal(s.latest.state, "within");
+  assert.ok(Math.abs(s.change90) < 1000, String(s.change90));
+});
+
 test("FRIEND 2015 bands by sex and age group, none outside 20 to 79 or without a sex", () => {
   assert.deepEqual(friendBands(35, "male"), { registry: "FRIEND", year: 2015, test: "treadmill", sex: "male", ageFrom: 30, ageTo: 39, p10: 30.2, p25: 35.9, p50: 42.4, p75: 49.2, p90: 56.5 });
   assert.equal(friendBands(29, "female").p50, 37.6);

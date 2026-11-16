@@ -85,9 +85,9 @@ export function dataSources(activityRows, restRows) {
 
 // The stored rows from `from` on, oldest first (VO2max and Aurin age charts;
 // one row a day, at most the days asked for, by the primary key).
+// A database the daily job has not reached yet has no table: no rows (no CREATE on every read).
 export async function fitnessEstimatesSince(db, userId, from) {
-  await db.prepare(FITNESS_ESTIMATES_TABLE).run();
-  const rows = (await db.prepare("SELECT date, vo2max, fitness_age, composite_age, details_json FROM fitness_estimates WHERE user_id = ? AND date >= ? ORDER BY date").bind(userId, from).all()).results || [];
+  const rows = await db.prepare("SELECT date, vo2max, fitness_age, composite_age, details_json FROM fitness_estimates WHERE user_id = ? AND date >= ? ORDER BY date").bind(userId, from).all().then(r => r.results || [], error => { if (/no such table/i.test(String(error?.message))) return []; throw error; });
   return rows.map(r => { let details = null; try { details = JSON.parse(r.details_json); } catch { details = null; } return { date: r.date, vo2max: r.vo2max, fitnessAge: r.fitness_age, compositeAge: r.composite_age, details }; });
 }
 

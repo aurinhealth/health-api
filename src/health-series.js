@@ -107,7 +107,10 @@ export function buildHealthSeries({ metric, range, date, rows = [] }) {
     }
   }
   const dates = Array.from({ length: days }, (_, i) => shift(date, i - days + 1));
-  const daily = dates.map(d => pointOn(list, d, metric)).filter(Boolean);
+  // Steps of today are a running total: today's point is shown, but without a
+  // band or state, and the latest state and the change come from finished days.
+  const partial = m.steps ? date : null;
+  const daily = dates.map(d => pointOn(list, d, metric)).filter(Boolean).map(p => (p.date === partial ? { ...p, low: null, high: null, z: null } : p));
   let points;
   if (days < WEEKLY_FROM_DAYS) points = daily.map(p => shape(p, m.digits));
   else {
@@ -122,8 +125,9 @@ export function buildHealthSeries({ metric, range, date, rows = [] }) {
   // The change over 90 days: the last 7 days' average against the 7 days 90 days before (as weight's 30-day change).
   const valueOf = d => { const v = num(list.find(r => r.id === d)?.[m.key]); return v != null && (metric === "steps" ? v >= 0 : v > 0) ? v : null; };
   const week = to => mean(Array.from({ length: 7 }, (_, i) => valueOf(shift(to, -i))).filter(v => v != null));
-  const now = week(date), before = week(shift(date, -CHANGE_DAYS));
-  const latest = daily.at(-1);
+  const last = partial ? shift(date, -1) : date;
+  const now = week(last), before = week(shift(last, -CHANGE_DAYS));
+  const latest = daily.filter(p => p.date !== partial).at(-1);
   return {
     status: "ok", metric, range, date,
     weekly: days >= WEEKLY_FROM_DAYS,
