@@ -204,4 +204,13 @@ final class GymAdjustmentTests: XCTestCase {
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "T")
         XCTAssertEqual(GymSessionMath.carried(next, in: exercise([done, next]))?.kg, "50")
     }
+
+    func testModerateAtTheTopBeforeTheLastHardSetStays() {
+        // Petr 2026-11-16: preacher curl 100 × 12 of 8–12 at M, set 2 planned H.
+        // F chosen for set 2 after doing it rates set 2: TrainingModeView keeps
+        // the plan's H for its weight, so set 1 is not "easy" and 100 stays.
+        let done = set(1, "1", kg: "100", reps: "12", done: true, letter: "M", planned: "8–12")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "H", planned: "8–12")
+        XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+    }
 }

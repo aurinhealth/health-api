@@ -24,6 +24,9 @@ struct TrainingModeView: View {
     @State private var intensityFor: SetRef?
     /// Sets whose letter was chosen here: shown solid, not as the plan's.
     @State private var picked: Set<Int> = []
+    /// The plan's letter of a set still to do whose letter was chosen here
+    /// ("" for none): that set's own weight and ✦ line keep following it.
+    @State private var planLetters: [Int: String] = [:]
     /// Done sets whose change to the next weight was declined ("Nechat").
     @State private var kept: Set<Int> = []
     /// Sets to come whose weight or reps were typed in ahead: they keep them.
@@ -2303,6 +2306,7 @@ struct TrainingModeView: View {
         guard var next = day else { return }
         let gone = next.deleteSet(row: set.row)
         picked = Set(picked.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
+        planLetters = Self.moved(planLetters) { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         kept = Set(kept.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
         typed.move { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         if !next.exercises.isEmpty {
@@ -2319,13 +2323,17 @@ struct TrainingModeView: View {
         guard var next = day else { return }
         if letter == "D" {
             next.addDrop(after: row)
-        } else if next.exercises.flatMap(\.sets).first(where: { $0.row == row })?.drop != true {
+        } else if let set = next.exercises.flatMap(\.sets).first(where: { $0.row == row }), !set.drop {
+            // The letter of a set still to do rates it; the weight it was
+            // given keeps following the plan's letter.
+            if !set.done, planLetters[row] == nil { planLetters[row] = GymIntensity.letter(set.intensity) ?? "" }
             next.setIntensity(row: row, letter)
         }
         // Rows after an added drop set move one down.
         picked = Set(picked.map { $0 > row && letter == "D" ? $0 + 1 : $0 }).union([row])
         if letter == "D" {
             kept = Set(kept.map { $0 > row ? $0 + 1 : $0 })
+            planLetters = Self.moved(planLetters) { $0 > row ? $0 + 1 : $0 }
             typed.move { $0 > row ? $0 + 1 : $0 }
         }
         let old = day
@@ -2337,6 +2345,7 @@ struct TrainingModeView: View {
         guard var next = day else { return }
         next.removeDrop(row: row)
         picked = Set(picked.compactMap { $0 == row ? nil : $0 > row ? $0 - 1 : $0 })
+        planLetters = Self.moved(planLetters) { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         kept = Set(kept.compactMap { $0 == row ? nil : $0 > row ? $0 - 1 : $0 })
         typed.move { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         await saveDay(next)
@@ -2372,7 +2381,21 @@ struct TrainingModeView: View {
     /// GymSessionMath.carried with this workout's kept and typed sets; a
     /// first try of the exercise also follows its warm-up.
     private func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
-        GymSessionMath.carried(set, in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
+        GymSessionMath.carried(asPlanned(set), in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
+    }
+
+    /// A set still to do with the plan's letter back in place of one chosen
+    /// for it here (Petr 2026-11-16: F chosen for set 2 made set 1 "easy").
+    private func asPlanned(_ set: GymSet) -> GymSet {
+        guard !set.done, let letter = planLetters[set.row] else { return set }
+        var planned = set
+        planned.intensity = letter.isEmpty ? nil : letter
+        return planned
+    }
+
+    /// Rows moved by a set added or taken out (nil: the row is gone).
+    private static func moved(_ letters: [Int: String], _ to: (Int) -> Int?) -> [Int: String] {
+        Dictionary(letters.compactMap { row, letter in to(row).map { ($0, letter) } }, uniquingKeysWith: { a, _ in a })
     }
 
     /// The letter chosen for the set before (not the plan's): the sets to come
@@ -2387,8 +2410,8 @@ struct TrainingModeView: View {
     /// How the set before moved this one's weight: the ✦ line and its
     /// "Nechat 12,5" (GymSessionMath.adjustment).
     private func adjusted(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String, from: Int)? {
-        guard !set.done, let before = GymSessionMath.previous(set, in: exercise), !kept.contains(before.row),
-              let change = GymSessionMath.adjustment(set, after: before),
+        guard !set.done, let before = GymSessionMath.previous(asPlanned(set), in: exercise), !kept.contains(before.row),
+              let change = GymSessionMath.adjustment(asPlanned(set), after: before),
               // Not when the set has its own weight (typed in ahead, the plan's own).
               carried(set, in: exercise)?.kg == change.kg,
               let kg = before.kg, let done = before.reps else { return nil }
