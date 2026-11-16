@@ -177,7 +177,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
       return workout ? { ...workout, ai: { reason, composed: true, model: r.model || model || lightModel(env), usage: r.usage || null, ...(warning ? { warning } : {}) } } : null;
     }
     await ensureAiWorkouts(env.DB);
-    await env.DB.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) VALUES (?,?,?,?,?,?,?)").bind(env.DB.userId, id, sport, template.name, JSON.stringify(structure), reason, asked?.key || null).run();
+    await env.DB.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) VALUES (?,?,?,?,?,?,?)").bind(env.DB.userId, id, sport, template.name, JSON.stringify(structure), reason, asked?.key || daily?.key || null).run();
     // Old ones never planned go after a month; a planned one stays for its calendar day.
     await env.DB.prepare("DELETE FROM ai_workouts WHERE user_id=? AND created_at<datetime('now','-30 days') AND 'ai-'||id NOT IN (SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND workout_id LIKE 'ai-%')").bind(env.DB.userId, env.DB.userId).run().catch(() => {});
     const workout = aiWorkout({ id, sport, name: template.name, structure_json: JSON.stringify(structure), reason });
@@ -234,20 +234,58 @@ export function coachFirst({ sport = "ride", kind, minutes, coach = {}, today = 
 // to the coach engine's target difficulty ± 0.75 (our calibration). No band on
 // endurance and recovery days, where the difficulty follows the minutes alone,
 // nor on a run sweet spot day, scored on the threshold scale.
-export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, runBase = null, ...opts } = {}) {
+// `key` and `defer` (the library's proposal, option A, Petr 2026-11-16): the
+// coach's workout is written after the answer (defer = ctx.waitUntil) and kept
+// under the key; the answer says pending and the library's pick shows until
+// the app asks again. A failed or stale try leaves the library's pick.
+export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = true, experience = null, thresholds = {}, runBase = null, key = null, defer = null, ...opts } = {}) {
   const poor = poorFit(pick, { sport, kind });
   const held = coachFirstOn(env) ? coachFirst({ sport, kind, minutes: opts.minutes, coach: opts.coach, today: opts.today, experience, thresholds, runBase }) : "off";
   const first = held === null, target = Number(opts.coach?.recommendation?.progression?.targetDifficulty);
   const banded = !EASY_KINDS.includes(kind) && !(sport === "run" && kind === "sweet_spot");
   const band = first && banded && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
-  const r = poor || first ? await composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience } } : {}), diagnose: true, fallback: null }) : null;
+  const compose = () => composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience, ...(key && defer ? { key } : {}) } } : {}), diagnose: true, fallback: null });
+  if (first && key && defer && env.DB?.userId) {
+    const state = await composeState(env.DB, key);
+    if (state.workout) return { workout: state.workout, poorFit: poor, coachFirst: true, held: null, rejected: null };
+    if (state.since && Date.now() - state.since < PENDING_MS) return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, pending: true };
+    if (!state.since && !state.failed) {
+      await markCompose(env.DB, key, sport, "pending");
+      defer(compose().then(r => r && !r.rejected ? r : markCompose(env.DB, key, sport, "failed").then(() => r)).then(r => logDaily(log, { poor, first, held, sport, kind, r }))
+        .catch(error => console.error("Coach first compose", error?.message || error)));
+      return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, pending: true };
+    }
+    // Failed or stale: the library's pick, without another AI call.
+    return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, tried: true };
+  }
+  const r = poor || first ? await compose() : null;
+  const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
+  logDaily(log, { poor, first, held, sport, kind, r });
+  return { workout, poorFit: poor, coachFirst: first, held: held === "off" ? null : held, rejected };
+}
+
+function logDaily(log, { poor, first, held, sport, kind, r }) {
   const rejected = r?.rejected || null, workout = r && !rejected ? r : null;
   // Only the names of the refused checks ("hard", "length"): their numbers
   // (the hard-minute cap) would tell the morning's readiness, and an error's
   // text may quote the model.
   const error = Boolean(rejected?.startsWith("error:")), checks = rejected && !error ? [...new Set(rejected.split(", ").map(f => f.split(" ")[0]))].join(",") : null;
   if (log) console.log(JSON.stringify({ daily_compose: !poor && !first ? "library" : workout ? "composed" : error ? "error" : rejected ? "rejected" : "skipped", sport: sport === "run" ? "run" : "ride", type: libraryKind(sport, kind), ...(held !== "off" ? { coach_first: held ? "held" : "yes" } : {}), ...(checks ? { rejected: checks } : {}) }));
-  return { workout, poorFit: poor, coachFirst: first, held: held === "off" ? null : held, rejected };
+}
+
+// The proposal's own workout under its key: the workout, a try still running
+// (since, a row without steps named "pending") or a failed one.
+export const PENDING_MS = 60000;
+async function composeState(db, key) {
+  await ensureAiWorkouts(db);
+  const row = await db.prepare("SELECT id,sport,name,structure_json,reason,created_at FROM ai_workouts WHERE user_id=? AND request_key=? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(db.userId, key).first().catch(() => null);
+  if (!row) return {};
+  const workout = aiWorkout(row);
+  if (workout) return { workout: { ...workout, ai: { reason: row.reason, composed: true } } };
+  return row.name === "failed" ? { failed: true } : { since: Date.parse(String(row.created_at).replace(" ", "T") + "Z") || Date.now() };
+}
+async function markCompose(db, key, sport, name) {
+  await db.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) VALUES (?,?,?,?,?,?,?)").bind(db.userId, newId(), sport, name, "[]", null, key).run().catch(() => {});
 }
 
 // The AI's workout keeps to the brief: the length within 5 minutes, the type,

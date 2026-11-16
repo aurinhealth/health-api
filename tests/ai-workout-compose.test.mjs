@@ -277,3 +277,27 @@ test("checks: most of the work in the type's zone; long VO2max efforts need reco
   assert.equal(workInZone(thirty, "ride", "vo2max"), null, "30/30 after an opener: only short efforts in the zone, not checked");
   assert.deepEqual(composeFaults({ structure: vo2(1.5), sport: "ride", type: "vo2max", length: 47, cap: 45 }), ["recoveries under half the effort"]);
 });
+
+test("coach first in the background (the library's proposal): pending at once, the workout on the next ask; a failed try leaves the library", async () => {
+  const env = { ...owner(), COACH_FIRST: "true" }, good = { primary_system: "tempo", suitability: 95 }, deferred = [];
+  const coach = { readiness: { status: "green" }, constraints: {}, recommendation: { progression: { targetDifficulty: 4 } } };
+  let calls = 0;
+  const ask = async () => { calls++; return answer(tempo45)(); };
+  const args = { ...day, coach, ask, thresholds: { ftp: 250 }, key: "k1", defer: p => deferred.push(p) };
+  const log = console.log; console.log = () => {};
+  try {
+    const first = await dailyOwnWorkout(env, good, args);
+    assert.equal(first.pending, true); assert.equal(first.workout, null); assert.equal(deferred.length, 1);
+    assert.equal((await dailyOwnWorkout(env, good, args)).pending, true, "still writing: no second try");
+    await Promise.all(deferred);
+    assert.equal(calls, 1);
+    const done = await dailyOwnWorkout(env, good, args);
+    assert.ok(done.workout?.id?.startsWith("ai-")); assert.equal(done.pending, undefined); assert.equal(calls, 1, "read, not written again");
+    const bad = { ...args, key: "k2", ask: async () => { calls++; return { text: "{}" }; } };
+    assert.equal((await dailyOwnWorkout(env, good, bad)).pending, true);
+    await Promise.all(deferred);
+    const failed = await dailyOwnWorkout(env, good, bad);
+    assert.equal(failed.workout, null); assert.equal(failed.pending, undefined, "the library's pick stays"); assert.equal(failed.tried, true, "no AI pick after it");
+    assert.equal(deferred.length, 2);
+  } finally { console.log = log; }
+});

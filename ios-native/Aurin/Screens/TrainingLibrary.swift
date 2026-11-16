@@ -389,6 +389,9 @@ struct WorkoutLibrarySection: View {
     @State private var variant = 0
     @State private var proposing = false
     @State private var proposalError: String?
+    /// The athlete opened the proposal, asked for another or changed the length:
+    /// the coach's own workout no longer replaces it.
+    @State private var touched = false
     /// Few workouts of the chosen type: the AI's own for these filters (Na míru od AI).
     @State private var composeWanted = false
     @State private var composed: LibraryWorkout?
@@ -475,14 +478,21 @@ struct WorkoutLibrarySection: View {
         VStack(alignment: .leading, spacing: 10) {
             if let workout = proposal?.workout {
                 SectionLabel(text: "Návrh kouče")
-                Button { open = workout } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                Button { open = workout; touched = true } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                if proposal?.aiPending == true {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Kouč píše…").font(Typo.small).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
                 if (proposal?.variantCount ?? 0) > 1 {
-                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { variant += 1; await propose() } }
+                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { touched = true; variant += 1; await propose() } }
                         .disabled(proposing)
                 }
             } else {
                 PrimaryButton(title: proposing ? "Hledám…" : "Navrhnout trénink na dnes", systemImage: "sparkles", busy: proposing) {
-                    Task { variant = 0; await propose() }
+                    Task { variant = 0; touched = false; await propose() }
                 }
                 .disabled(model.demo)
             }
@@ -491,7 +501,7 @@ struct WorkoutLibrarySection: View {
             }
         }
         .padding(.top, 20)
-        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil }
+        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil; touched = true }
     }
 
     /// Shown while the AI writes and once it has; a failure or an empty answer hides it.
@@ -542,13 +552,24 @@ struct WorkoutLibrarySection: View {
 
     private func propose() async {
         proposing = true
-        defer { proposing = false }
         do {
-            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant)
+            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant, background: variant == 0)
             proposalError = nil
         } catch {
             proposalError = error.localizedDescription
         }
+        proposing = false
+        // The coach writes its own workout after the answer (within ~25 s):
+        // asked again at most four times, and it takes the card's place only
+        // while the card is untouched (not opened, no other suggestion, same length).
+        for _ in 0..<4 where variant == 0 && proposal?.aiPending == true && !touched {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled, !touched else { return }
+            guard let fresh = try? await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: 0, background: true),
+                  !touched else { continue }
+            withAnimation(.snappy) { proposal = fresh }
+        }
+        if proposal?.aiPending == true { proposal?.aiPending = nil }
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far
