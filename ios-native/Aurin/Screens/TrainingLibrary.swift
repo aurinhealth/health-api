@@ -392,6 +392,8 @@ struct WorkoutLibrarySection: View {
     /// The athlete opened the proposal, asked for another or changed the length:
     /// the coach's own workout no longer replaces it.
     @State private var touched = false
+    /// Each proposal's own wait for the coach: an older one stops when a new one starts.
+    @State private var proposeRun = 0
     /// Few workouts of the chosen type: the AI's own for these filters (Na míru od AI).
     @State private var composeWanted = false
     @State private var composed: LibraryWorkout?
@@ -479,7 +481,7 @@ struct WorkoutLibrarySection: View {
             if let workout = proposal?.workout {
                 SectionLabel(text: "Návrh kouče")
                 Button { open = workout; touched = true } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
-                if proposal?.aiPending == true {
+                if proposal?.aiPending == true && !touched {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Kouč píše…").font(Typo.small).foregroundStyle(Palette.muted)
@@ -551,6 +553,8 @@ struct WorkoutLibrarySection: View {
     }
 
     private func propose() async {
+        proposeRun += 1
+        let run = proposeRun
         proposing = true
         do {
             proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant, background: variant == 0)
@@ -562,14 +566,14 @@ struct WorkoutLibrarySection: View {
         // The coach writes its own workout after the answer (within ~25 s):
         // asked again at most four times, and it takes the card's place only
         // while the card is untouched (not opened, no other suggestion, same length).
-        for _ in 0..<4 where variant == 0 && proposal?.aiPending == true && !touched {
+        for _ in 0..<4 where variant == 0 && proposal?.aiPending == true && !touched && run == proposeRun {
             try? await Task.sleep(for: .seconds(6))
-            guard !Task.isCancelled, !touched else { return }
+            guard !Task.isCancelled, !touched, run == proposeRun else { break }
             guard let fresh = try? await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: 0, background: true),
-                  !touched else { continue }
+                  !touched, run == proposeRun else { continue }
             withAnimation(.snappy) { proposal = fresh }
         }
-        if proposal?.aiPending == true { proposal?.aiPending = nil }
+        if run == proposeRun, proposal?.aiPending == true { proposal?.aiPending = nil }
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far

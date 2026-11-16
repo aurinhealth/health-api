@@ -299,5 +299,9 @@ test("coach first in the background (the library's proposal): pending at once, t
     const failed = await dailyOwnWorkout(env, good, bad);
     assert.equal(failed.workout, null); assert.equal(failed.pending, undefined, "the library's pick stays"); assert.equal(failed.tried, true, "no AI pick after it");
     assert.equal(deferred.length, 2);
+    const both = await Promise.all([dailyOwnWorkout(env, good, { ...args, key: "k3" }), dailyOwnWorkout(env, good, { ...args, key: "k3" })]);
+    assert.ok(both.every(r => r.pending)); assert.equal(deferred.length, 3, "two asks at once: one compose");
+    await Promise.all(deferred);
+    assert.equal((await dailyOwnWorkout({ ...env, OPENAI_API_KEY: "" }, good, { ...args, key: "k4" })).pending, undefined, "no AI: no pending card");
   } finally { console.log = log; }
 });

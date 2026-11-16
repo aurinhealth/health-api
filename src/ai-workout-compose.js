@@ -245,12 +245,13 @@ export async function dailyOwnWorkout(env, pick, { sport = "ride", kind, log = t
   const banded = !EASY_KINDS.includes(kind) && !(sport === "run" && kind === "sweet_spot");
   const band = first && banded && target > 0 ? [Math.max(1, Math.round((target - 0.75) * 10) / 10), Math.min(10, Math.round((target + 0.75) * 10) / 10)] : null;
   const compose = () => composeWorkout(env, { sport, kind, ...opts, ...(first ? { daily: { band, experience, ...(key && defer ? { key } : {}) } } : {}), diagnose: true, fallback: null });
-  if (first && key && defer && env.DB?.userId) {
+  if (first && key && defer && env.DB?.userId && env.OPENAI_API_KEY && (await consentStatus(env).catch(() => ({}))).aiAllowed) {
     const state = await composeState(env.DB, key);
     if (state.workout) return { workout: state.workout, poorFit: poor, coachFirst: true, held: null, rejected: null };
     if (state.since && Date.now() - state.since < PENDING_MS) return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, pending: true };
+    // Only the request that claims the key writes (two at once: one compose).
     if (!state.since && !state.failed) {
-      await markCompose(env.DB, key, sport, "pending");
+      if (!await markCompose(env.DB, key, sport, "pending")) return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, pending: true };
       defer(compose().then(r => r && !r.rejected ? r : markCompose(env.DB, key, sport, "failed").then(() => r)).then(r => logDaily(log, { poor, first, held, sport, kind, r }))
         .catch(error => console.error("Coach first compose", error?.message || error)));
       return { workout: null, poorFit: poor, coachFirst: true, held: null, rejected: null, pending: true };
@@ -278,14 +279,17 @@ function logDaily(log, { poor, first, held, sport, kind, r }) {
 export const PENDING_MS = 60000;
 async function composeState(db, key) {
   await ensureAiWorkouts(db);
-  const row = await db.prepare("SELECT id,sport,name,structure_json,reason,created_at FROM ai_workouts WHERE user_id=? AND request_key=? ORDER BY created_at DESC, rowid DESC LIMIT 1").bind(db.userId, key).first().catch(() => null);
+  const row = await db.prepare("SELECT id,sport,name,structure_json,reason,created_at FROM ai_workouts WHERE user_id=? AND request_key=? ORDER BY structure_json<>'[]' DESC, created_at DESC, rowid DESC LIMIT 1").bind(db.userId, key).first().catch(() => null);
   if (!row) return {};
   const workout = aiWorkout(row);
   if (workout) return { workout: { ...workout, ai: { reason: row.reason, composed: true } } };
   return row.name === "failed" ? { failed: true } : { since: Date.parse(String(row.created_at).replace(" ", "T") + "Z") || Date.now() };
 }
+// "pending" only while the key has no row yet: true when this request claimed it.
 async function markCompose(db, key, sport, name) {
-  await db.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) VALUES (?,?,?,?,?,?,?)").bind(db.userId, newId(), sport, name, "[]", null, key).run().catch(() => {});
+  const only = name === "pending" ? " WHERE NOT EXISTS (SELECT 1 FROM ai_workouts WHERE user_id=? AND request_key=?)" : "";
+  const r = await db.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) SELECT ?,?,?,?,?,?,?" + only).bind(db.userId, newId(), sport, name, "[]", null, key, ...(only ? [db.userId, key] : [])).run().catch(() => null);
+  return Boolean(r?.meta?.changes ?? r?.changes);
 }
 
 // The AI's workout keeps to the brief: the length within 5 minutes, the type,
