@@ -179,21 +179,53 @@ export function ownerEmail(env) {
 // coach card and Today, each of which also emptied the request's read memo).
 const IDEMPOTENT_SCHEMA = /^\s*(CREATE\s+(UNIQUE\s+)?(TABLE|INDEX)\s+IF\s+NOT\s+EXISTS|ALTER\s+TABLE\s+[a-z_][a-z_0-9]*\s+ADD\s+(COLUMN\s+)?[a-z_])/i;
 const schemaDoneByDb = new WeakMap();
+// A new copy of the server still sent them all on its first request: with few
+// users most requests start a new copy, and on 2026-11-17 such a first workout
+// pick made ~100 trips to the account's database, most of them these (some
+// sent twice, by two handlers at once). The statements done are therefore also
+// kept in the data center's cache, per release and database, and a new copy
+// starts from that list. It is read by each request that needs it until one
+// has it (never one request's promise awaited by another: api-cache.js endedRequestError).
+const SCHEMA_TTL_SECONDS = 86400;
+const schemaLoaded = new WeakSet();
+const schemaStore = () => globalThis.caches?.default || null;
+function schemaKeeper(db, schemaDone, key) {
+  const store = key ? schemaStore() : null;
+  if (!store) return { known: () => null, keep() {} };
+  let reading = null, saving = false;
+  return {
+    known: () => schemaLoaded.has(db) ? null : reading ||= store.match(key)
+      .then(hit => hit ? hit.json() : [])
+      .then(list => { for (const sql of Array.isArray(list) ? list : []) schemaDone.add(sql); schemaLoaded.add(db); })
+      .catch(() => {}),
+    // One write for the statements one request adds in a moment.
+    keep() {
+      if (saving) return;
+      saving = true;
+      setTimeout(() => {
+        saving = false;
+        store.put(key, new Response(JSON.stringify([...schemaDone]), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + SCHEMA_TTL_SECONDS } })).catch(() => {});
+      }, 0);
+    }
+  };
+}
 const REAL = Symbol("statement");
-function schemaStatement(statement, sql, schemaDone) {
+function schemaStatement(statement, sql, schemaDone, keeper, running) {
   return {
     [REAL]: statement,
-    bind: (...values) => schemaStatement(statement.bind(...values), sql, schemaDone),
+    bind: (...values) => schemaStatement(statement.bind(...values), sql, schemaDone, keeper, running),
     async run() {
+      const known = keeper.known();
+      if (known) await known;
       if (schemaDone.has(sql)) return { success: true, results: [], meta: { changes: 0 } };
-      let result;
-      try { result = await statement.run(); }
-      catch (error) {
-        if (/duplicate column/i.test(String(error?.message || error))) schemaDone.add(sql);
-        throw error;
+      // Two handlers of this request asking for the same table at once: one statement.
+      if (!running.has(sql)) {
+        const result = Promise.resolve().then(() => statement.run());
+        running.set(sql, result);
+        result.then(() => true, error => /duplicate column/i.test(String(error?.message || error)))
+          .then(done => { if (done) { schemaDone.add(sql); keeper.keep(); } running.delete(sql); });
       }
-      schemaDone.add(sql);
-      return result;
+      return running.get(sql);
     },
     first: (...args) => statement.first(...args),
     all: (...args) => statement.all(...args),
@@ -328,12 +360,12 @@ function idGuardStatement(statement, sql, id, values = []) {
 
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
-export function scopedDb(db, userId, { memo = false } = {}) {
+export function scopedDb(db, userId, { memo = false, schemaKey = null } = {}) {
   if (!db) return db;
   const id = Number(userId);
   if (!Number.isInteger(id) || id <= 0) throw new Error("A user id is required for database access");
   if (!schemaDoneByDb.has(db)) schemaDoneByDb.set(db, new Set());
-  const schemaDone = schemaDoneByDb.get(db);
+  const schemaDone = schemaDoneByDb.get(db), keeper = schemaKeeper(db, schemaDone, schemaKey), running = new Map();
   const check = query => {
     const sql = String(query);
     if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql)) return;
@@ -347,7 +379,7 @@ export function scopedDb(db, userId, { memo = false } = {}) {
     prepare(query) {
       check(query);
       const statement = db.prepare(query);
-      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query, statement?.[TARGET_KIND] || null);
+      const retried = retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone, keeper, running) : statement, query, statement?.[TARGET_KIND] || null);
       return idGuardStatement(reads ? memoStatement(retried, String(query), reads) : retried, String(query), id);
     },
     async batch(statements) {
@@ -361,6 +393,13 @@ export function scopedDb(db, userId, { memo = false } = {}) {
   };
 }
 
+// The cache key of the tables done on env's databases in this release (scopedDb).
+function schemaKey(env) {
+  const release = env.CF_VERSION_METADATA?.id;
+  if (!release) return null;
+  return "https://cache.internal/schema/" + encodeURIComponent(env.ENVIRONMENT || "production") + "/" + encodeURIComponent(release) + "/" + encodeURIComponent(env.USER_DATA_SHARD || "legacy");
+}
+
 // The env every handler sees for one user: scoped DB, identity, and no access
 // to the owner's legacy global credentials unless this is the owner.
 export function userEnv(env, user, { memo = false } = {}) {
@@ -368,7 +407,7 @@ export function userEnv(env, user, { memo = false } = {}) {
   // Reads started side by side go to each database in one trip (d1-batch.js).
   const core = batchingD1(env.DB);
   const data = env.USER_DATA_DB || env.FOOD_CATALOG_DB ? routedUserDb(core, batchingD1(env.USER_DATA_DB || env.DB), PERSONAL_TABLES, batchingD1(env.FOOD_CATALOG_DB || env.DB)) : core;
-  const scoped = { ...env, DB: scopedDb(data, user.id, { memo }), RAW_DB: retryingDb(core), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
+  const scoped = { ...env, DB: scopedDb(data, user.id, { memo, schemaKey: schemaKey(env) }), RAW_DB: retryingDb(core), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;

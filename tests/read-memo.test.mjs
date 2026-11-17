@@ -114,3 +114,25 @@ test("only reads of the listed tables are kept", () => {
   assert.equal(memoizableSql("SELECT * FROM users WHERE id=?"), false);
   assert.equal(memoizableSql("SELECT * FROM training_plans WHERE user_id=? AND status='active'"), true);
 });
+
+// 2026-11-17: a new copy of the server sent ~65 of them on its first workout
+// pick, one after another, before reading anything.
+test("tables done by one copy of the server are not checked again by a new copy in the same release", async () => {
+  const kept = new Map(), saved = globalThis.caches;
+  globalThis.caches = { default: { match: async k => kept.has(k) ? new Response(kept.get(k)) : undefined, put: async (k, r) => { kept.set(k, await r.text()); } } };
+  try {
+    const { db, asked } = counted();
+    const CREATE = "CREATE TABLE IF NOT EXISTS coach_picks(user_id INTEGER, date TEXT)";
+    const first = scopedDb(db, 3, { schemaKey: "https://cache.internal/schema/test/r1/data-001" });
+    // Two handlers of one request at once: one statement.
+    await Promise.all([first.prepare(CREATE).run(), first.prepare(CREATE).run()]);
+    assert.equal(asked.filter(s => s === CREATE).length, 1);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    // Another copy (its own database object): the kept list, no statement.
+    await scopedDb(Object.create(db), 3, { schemaKey: "https://cache.internal/schema/test/r1/data-001" }).prepare(CREATE).run();
+    assert.equal(asked.filter(s => s === CREATE).length, 1);
+    // Another release or database: checked again.
+    await scopedDb(Object.create(db), 3, { schemaKey: "https://cache.internal/schema/test/r2/data-001" }).prepare(CREATE).run();
+    assert.equal(asked.filter(s => s === CREATE).length, 2);
+  } finally { globalThis.caches = saved; }
+});
