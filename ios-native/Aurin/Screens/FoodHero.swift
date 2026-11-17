@@ -13,7 +13,6 @@ struct FoodHero: View {
     var setTarget: () -> Void = {}
 
     private var eaten: Double { food.kcal ?? 0 }
-    private var isToday: Bool { food.date == AppModel.localDate(Date()) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -106,6 +105,8 @@ struct FoodTargetBar: View {
                 }
                 Capsule().fill(Palette.ink).frame(width: max(min(eaten, target) * scale - (over ? 3 : 0), 0))
             }
+            .frame(width: geo.size.width, alignment: .leading)
+            .clipShape(Capsule())
         }
         .frame(height: 8)
         .accessibilityHidden(true)

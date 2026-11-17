@@ -223,7 +223,7 @@ struct FoodContent: View {
             .sheet(item: $adding) { item in AddFoodSheet(meal: item.meal, pending: item) }
 
             // Also on a day gone by: it is added to the day shown (D-JIDLO-5).
-            Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : "dinner") } label: {
+            Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : (food.mealSlots?.last ?? "dinner")) } label: {
                 Label("Přidat jídlo", systemImage: "plus")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 50)
@@ -700,6 +700,7 @@ struct MealRow: View {
             HStack(alignment: .center, spacing: 12) {
                 NavigationLink { MealDetailView(type: meal.type) } label: { summary }
                     .buttonStyle(.plain)
+                    .accessibilityValue(showTargets ? macrosSpoken : "")
                 addButton
             }
             if showTargets {
@@ -712,7 +713,8 @@ struct MealRow: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
+                // One link per meal for VoiceOver: the macros are read with the summary.
+                .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 14)
@@ -755,6 +757,13 @@ struct MealRow: View {
                 .font(Typo.caption.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "Carbs 72 / 75 g, Protein 24 / 34 g, Fat 14 / 18 g".
+    private var macrosSpoken: String {
+        [("Sacharidy", sum(\.carbs), goal?.carbs), ("Bílkoviny", sum(\.protein), goal?.protein), ("Tuky", sum(\.fat), goal?.fat)]
+            .map { L10n.tr($0.0) + " " + FiberRow.text(eaten: $0.1, target: $0.2, limit: false) }
+            .joined(separator: ", ")
     }
 
     private func sum(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double {
