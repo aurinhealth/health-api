@@ -7,8 +7,8 @@ import SwiftUI
 /// kcal over and for every goal (Petr 2026-11-12 and 2026-11-16, decision 1).
 struct FoodHero: View {
     let food: FoodSnapshot
-    /// Opens where the target comes from (the Calories detail).
-    var openTarget: (() -> Void)? = nil
+    /// The bar and its parts open the Calories detail (not in a picture of the screen).
+    var linked = true
     /// No target yet: where the body details are set.
     var setTarget: () -> Void = {}
 
@@ -29,8 +29,8 @@ struct FoodHero: View {
             .accessibilityElement(children: .combine)
             if let target = food.target, target > 0 {
                 Group {
-                    if let openTarget {
-                        Button(action: openTarget) { parts(target) }
+                    if linked {
+                        NavigationLink { CaloriesDetailView(food: food) } label: { parts(target) }
                             .buttonStyle(.plain)
                             .accessibilityHint(L10n.tr("Otevře, z čeho se cíl skládá"))
                     } else {
@@ -74,7 +74,7 @@ struct FoodHero: View {
     private func parts(_ target: Double) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             FoodTargetBar(eaten: eaten, target: target, parts: food.targetParts)
-            TargetPartsRow(parts: food.targetParts, target: target, more: openTarget != nil)
+            TargetPartsRow(parts: food.targetParts, target: target, more: linked)
         }
         .contentShape(Rectangle())
     }

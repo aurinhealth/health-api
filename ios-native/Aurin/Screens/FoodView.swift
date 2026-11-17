@@ -106,7 +106,6 @@ struct FoodContent: View {
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
-    @State private var showingParts = false
     /// "Přidat" on a food that AI found after "Co přidáme?" closed.
     @State private var adding: PendingFood?
     @Environment(\.wideLayout) private var wide
@@ -150,16 +149,8 @@ struct FoodContent: View {
         let today = AppModel.localDate(Date())
         // A wide window: the day's numbers and the coach on the left, the meals and drinks on the right.
         WideColumns {
-            FoodHero(food: food,
-                     openTarget: food.targetParts != nil ? { showingParts = true } : nil,
-                     setTarget: actions.settings)
+            FoodHero(food: food, setTarget: actions.settings)
                 .padding(.top, 22)
-                .sheet(isPresented: $showingParts) {
-                    if let parts = food.targetParts {
-                        TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
-                                         isToday: food.date == today, past: food.date < today)
-                    }
-                }
             // The macros in one card with "All nutrients" (and the Pro nutrients pinned under them).
             if food.target != nil || (food.kcal ?? 0) > 0 {
                 VStack(alignment: .leading, spacing: 0) {
