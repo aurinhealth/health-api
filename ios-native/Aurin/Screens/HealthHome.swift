@@ -72,7 +72,7 @@ extension AurinAgeText {
             case "steps", "activity": what = "Pohyb přes den je tvoje největší šance."
             default: what = "Kondice je tvoje největší šance."
             }
-            return (L10n.tr(what), L10n.f("Mohl by ti vrátit asi %@ roku.", Fmt.decimal(best.value, digits: 1)))
+            return (L10n.tr(what), L10n.f("Mohl by ti ubrat asi %@ roku z Aurin age.", Fmt.decimal(best.value, digits: 1)))
         }
         if let top = groups(age.parts).min(by: { $0.years < $1.years }), top.years < -0.05 {
             return (L10n.f("Nejvíc pro tebe dělá %@.", L10n.isEnglish ? L10n.tr(groupTitle(top.key)) : L10n.tr(groupTitle(top.key)).lowercased(with: Fmt.locale)), L10n.tr("Drž to tak dál."))
@@ -368,22 +368,35 @@ struct EffectBar: View {
 /// The coach under Aurin age: a rule-based sentence (no AI) and Ask Coach.
 struct AurinAgeCoachCard: View {
     let age: HealthAurinAge
-    @State private var open = false
 
     var body: some View {
         let sentence = AurinAgeText.coachSentence(age)
+        CoachSentenceCard(lead: sentence.0, key: sentence.1)
+    }
+}
+
+/// A coach card without AI: Two lights with "Coach", the sentence in the
+/// coach's serif with the key sentence in green italic, and Ask Coach
+/// (consistency point 4; max 2 sentences).
+struct CoachSentenceCard: View {
+    let lead: String
+    var key: String? = nil
+    var view = "health"
+    @State private var open = false
+
+    var body: some View {
         Card {
             HStack(spacing: 8) {
                 TwoLights(size: 20)
                 Text("Kouč").font(.caption.weight(.medium)).tracking(1.2).foregroundStyle(Palette.muted)
             }
-            (Text(verbatim: sentence.0 + (sentence.1 == nil ? "" : " "))
-                + Text(verbatim: sentence.1 ?? "").italic().foregroundColor(Palette.Status.good))
+            (Text(verbatim: lead + (key == nil || lead.isEmpty ? "" : " "))
+                + Text(verbatim: key ?? "").italic().foregroundColor(Palette.Status.good))
                 .font(Typo.coach(21)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             CoachActionRow { open = true }
         }
-        .sheet(isPresented: $open) { CoachEntry.chat(subject: nil, view: "health", date: nil) }
+        .sheet(isPresented: $open) { CoachEntry.chat(subject: nil, view: view, date: nil) }
     }
 }
 
@@ -588,8 +601,8 @@ struct SleepNightCard: View {
     private var tonight: String {
         let t = sleep.tonight
         switch (t.bedtime, t.wake) {
-        case let (bed?, wake?): return L10n.f("v posteli do %@, budík %@", bed, wake)
-        case let (bed?, nil): return L10n.f("v posteli do %@", bed)
+        case let (bed?, wake?): return L10n.f("v posteli do %@, budík %@", ClockText.format(bed), ClockText.format(wake))
+        case let (bed?, nil): return L10n.f("v posteli do %@", ClockText.format(bed))
         default: return L10n.f("potřeba %@", Fmt.duration(t.need))
         }
     }
@@ -618,8 +631,8 @@ struct SleepNightCard: View {
                     if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
                 }
                 .position(x: c.x, y: c.y - r * 0.42)
-                Text(verbatim: "20:00").font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 2)
-                Text(verbatim: "10:00").font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 2)
+                Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 2)
+                Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 2)
             }
         }
         .accessibilityElement(children: .ignore)

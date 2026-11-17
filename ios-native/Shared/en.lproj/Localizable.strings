@@ -4384,7 +4384,7 @@
 "Posilovna je tvoje největší šance." = "Strength training is your biggest chance.";
 "Pohyb přes den je tvoje největší šance." = "Moving through the day is your biggest chance.";
 "Kondice je tvoje největší šance." = "Fitness is your biggest chance.";
-"Mohl by ti vrátit asi %@ roku." = "It could give you back about %@ years.";
+"Mohl by ti ubrat asi %@ roku z Aurin age." = "It could take about %@ years off your Aurin age.";
 "Nejvíc pro tebe dělá %@." = "%@ does the most for you.";
 "Drž to tak dál." = "Keep it up.";
 "posilovna každý týden" = "strength training every week";
@@ -4406,3 +4406,12 @@
 "Každý bod je odhad Aurinu z toho dne." = "Each point is Aurin's estimate that day.";
 "Jak snížit Aurin age?" = "How can I lower my Aurin age?";
 "Co mi nejvíc pomáhá?" = "What helps me most?";
+/* Redesign H3: readiness, sleep, cycle, journal */
+"Minulá noc proti tvému obvyklému" = "Last night vs your usual";
+"Index skládá délku, kvalitu a fáze noci do čísla ze 100." = "The index puts the night's length, quality and stages into one number out of 100.";
+"Obvykle %@ až %@." = "Usual %1$@ to %2$@.";
+"%@, v posteli do %@" = "%1$@, in bed by %2$@";
+"Spánkový dluh za posledních 7 nocí" = "Sleep debt over the last 7 nights";
+"Zapiš menstruaci, až začne." = "Log your period when it starts.";
+"Odhady se zpřesní po 3 zapsaných menstruacích." = "Estimates get better after 3 logged periods.";
+"Spojené neznamená způsobené." = "Linked doesn't mean caused.";

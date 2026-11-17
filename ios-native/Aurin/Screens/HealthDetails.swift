@@ -53,6 +53,12 @@ struct SleepDetailContent: View {
                     }
                 }
                 .padding(.top, 12)
+                // The index keeps its place with the usual range and one sentence (D-ZDRAVI-17).
+                if night.index != nil {
+                    Text(verbatim: Self.indexSentence(sleep.index))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                }
             } else {
                 Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
             }
@@ -134,33 +140,31 @@ struct SleepDetailContent: View {
             }
             .padding(.top, 14)
 
-            SectionLabel(text: "Potřeba a dluh").padding(.top, 32)
+            // Tonight as one row; why the need is what it is lives in the
+            // planner only (D-ZDRAVI-17), the debt over the last 7 nights.
             Card {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Potřeba na dnešní noc (odhad)").font(.body)
-                    Spacer()
-                    Text(Fmt.hoursMinutes(Double(sleep.tonight.need))).font(Typo.number(28))
-                        .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep.tonight.need)))
-                }
-                VStack(spacing: 6) {
-                    NeedRow(title: "Základ podle věku", minutes: sleep.tonight.base, signed: false)
-                    if sleep.tonight.strain > 0 { NeedRow(title: "Dnešní námaha", minutes: sleep.tonight.strain) }
-                    if sleep.tonight.hrv > 0 { NeedRow(title: "Nízké HRV", minutes: sleep.tonight.hrv) }
-                    if sleep.tonight.debt > 0 { NeedRow(title: "Doplnění dluhu", minutes: sleep.tonight.debt) }
-                    if sleep.tonight.naps > 0 { NeedRow(title: "Zdřímnutí", minutes: -sleep.tonight.naps) }
+                RouteLink(route: .sleepSettings) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Dnes v noci").font(.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Text(verbatim: Self.tonightLine(sleep.tonight)).font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.trailing)
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 if let debt = sleep.debt {
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Spánkový dluh za 7 dní").font(.body)
+                        Text("Spánkový dluh za posledních 7 nocí").font(.body)
                         Spacer()
-                        Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.amber)
+                        Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.ink)
                             .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     }
                     DebtStrip(minutes: debt.minutes)
                 }
             }
-            .padding(.top, 14)
+            .padding(.top, 32)
 
             if let reg = sleep.regularity, !reg.nights.isEmpty {
                 let usual = RegularityChart.usual(reg.nights)
@@ -181,6 +185,20 @@ struct SleepDetailContent: View {
     }
 
     static let partsAnchor = "sleep.indexParts"
+
+    /// "Usual 75 to 83. The index is the night's length, quality and stages, out of 100."
+    static func indexSentence(_ index: HealthSnapshot.IndexNights?) -> String {
+        let what = L10n.tr("Index skládá délku, kvalitu a fáze noci do čísla ze 100.")
+        guard let low = index?.low, let high = index?.high else { return what }
+        return L10n.f("Obvykle %@ až %@.", Fmt.int(low), Fmt.int(high)) + " " + what
+    }
+
+    /// "8 h 30 min, in bed by 22:10".
+    static func tonightLine(_ t: HealthSnapshot.Tonight) -> String {
+        let need = Fmt.hoursMinutes(Double(t.sleep ?? t.need))
+        guard let bed = t.bedtime else { return need }
+        return L10n.f("%@, v posteli do %@", need, ClockText.format(optional: bed) ?? bed)
+    }
 
     private func weekday(_ iso: String) -> String {
         if L10n.isEnglish {
@@ -232,22 +250,6 @@ struct StatRow: View {
         .padding(.vertical, 13)
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         .accessibilityElement(children: .combine)
-    }
-}
-
-struct NeedRow: View {
-    let title: String
-    let minutes: Int
-    var signed = true
-
-    var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Text((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
-                .accessibilityLabel((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutesSpoken(Double(abs(minutes))))
-        }
-        .font(Typo.small).foregroundStyle(Palette.muted)
     }
 }
 

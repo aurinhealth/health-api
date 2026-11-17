@@ -252,7 +252,7 @@ struct HealthRoute: View {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
-                    ReadinessDetailContent(health: health, noWearable: model.noWearable)
+                    ReadinessDetailContent(health: health, summary: model.today?.summary, noWearable: model.noWearable)
                 }
             // The new detail template (redesign H): the value, its siblings, chart and trend.
             case .metric(let metric): HealthValuePage(value: HealthValue(metric: metric) ?? .restingHR)

@@ -157,7 +157,7 @@ final class SnapshotTests: XCTestCase {
     func testHealthScreens() throws {
         let health = DemoData.health
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
-        try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
+        try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health, summary: DemoData.today.summary).padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30) }
         // The night's timeline didn't load: "Zkusit znovu" in the stages card.
         try render("health-sleep-failed", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }

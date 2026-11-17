@@ -95,6 +95,12 @@ struct HealthContent: View {
                 VStack(alignment: .leading, spacing: 0) {
                     TabHeader(date: model.headerDay(health.date), coach: actions.coach, settings: actions.settings)
                     WeekStrip(date: model.headerDay(health.date)).padding(.top, 14)
+                    // Stale or broken sources, as on Today (DATA-4: freshness and
+                    // connection states stay).
+                    if model.selectedDate == nil && !model.demo {
+                        DataAgePill()
+                        ConnectionProblemCard()
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -165,26 +171,6 @@ enum ReadinessText {
         }
     }
 
-    static func unit(_ key: String) -> String {
-        switch key {
-        case "hrv": return "ms"
-        case "restingHR": return "bpm"
-        case "sleep": return "h"
-        default: return ""
-        }
-    }
-
-    static func value(_ part: HealthSnapshot.Part) -> String {
-        part.key == "sleep" ? Fmt.hoursMinutes(part.value) : Fmt.int(part.value)
-    }
-
-    /// "58–70 ms", "7:10–8:00 h".
-    static func range(_ part: HealthSnapshot.Part) -> String {
-        let show = { (x: Double?) in part.key == "sleep" ? Fmt.hoursMinutes(x) : Fmt.int(x) }
-        // "7:20–8:10" needs no "h"; heart rate in bpm as everywhere else.
-        return show(part.low) + "–" + show(part.high) + (part.key == "sleep" ? "" : " " + unit(part.key))
-    }
-
     /// -1 under the usual range, 1 above it, 0 within.
     static func side(_ part: HealthSnapshot.Part) -> Int {
         guard let value = part.value, let low = part.low, let high = part.high else { return 0 }
@@ -192,14 +178,6 @@ enum ReadinessText {
     }
 
     /// "↑ vyšší", "↓ kratší", "obvyklé" on the card.
-    static func word(_ part: HealthSnapshot.Part) -> String {
-        switch side(part) {
-        case 1: return "↑ " + L10n.tr(part.key == "sleep" ? "delší" : "vyšší")
-        case -1: return "↓ " + L10n.tr(part.key == "sleep" ? "kratší" : "nižší")
-        default: return L10n.tr("obvyklé")
-        }
-    }
-
     /// "lepší než obvykle" in the readiness detail: what the value means, in the
     /// colour of its points, since a lower resting heart rate helps and a shorter
     /// night costs (the bar above already shows the direction).
@@ -249,6 +227,8 @@ enum ReadinessText {
 
 struct ReadinessDetailContent: View {
     let health: HealthSnapshot
+    /// Today's rule-based sentence and advice (TodaySnapshot.summary) for the coach card.
+    var summary: TodaySnapshot.Summary? = nil
     /// No watch or ring (AppModel.noWearable): why no number is coming.
     var noWearable = false
     /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
@@ -275,12 +255,19 @@ struct ReadinessDetailContent: View {
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
 
+            // The coach card stays (redesign H); Ask Coach is its last row,
+            // the coach itself is top right.
+            if let summary, let lead = summary.headline ?? summary.text {
+                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
+            }
+
             if let checkin {
                 MorningCheckinCard(feeling: checkin, keepAnswered: true, top: 24)
             }
 
             if !r.parts.isEmpty {
-                SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
+                // Not "What shapes it": that is Aurin age's (D-ZDRAVI-22).
+                SectionLabel(text: "Minulá noc proti tvému obvyklému").padding(.top, 32)
                 VStack(spacing: 0) {
                     ForEach(r.parts) { part in
                         if let route = Self.route(part.key) {
@@ -343,8 +330,8 @@ struct ReadinessDetailContent: View {
                 Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
             }
             if part.low != nil, part.high != nil, part.value != nil {
+                // The word and the bar, no range numbers on readiness (SCI-4).
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("obvyklé rozmezí %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Spacer()
                     Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
                 }

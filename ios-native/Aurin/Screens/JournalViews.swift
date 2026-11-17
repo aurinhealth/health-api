@@ -126,12 +126,13 @@ struct JournalStateMark: View {
 struct JournalHealthCard: View {
     @Environment(AppModel.self) private var model
     @State private var data: JournalToday?
-    @State private var page = 0
+
+    /// One finding, the strongest, and no carousel (D-ZDRAVI-20).
+    private var strongest: JournalEffect? { data?.top.max { abs($0.effect) < abs($1.effect) } }
 
     var body: some View {
         Card {
-            let top = data?.top ?? []
-            WidgetHeader(title: L10n.tr("Deník"), color: Palette.indigo, trailing: top.count > 1 ? "\(page + 1) / \(top.count)" : nil)
+            WidgetHeader(title: L10n.tr("Deník"), color: Palette.indigo)
             if let card = data?.card {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -146,19 +147,21 @@ struct JournalHealthCard: View {
                     }
                     .buttonStyle(.plain)
                 }
-                if !top.isEmpty { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                if strongest != nil { Rectangle().fill(Palette.hairline).frame(height: 1) }
             }
-            if !top.isEmpty {
-                TabView(selection: $page) {
-                    ForEach(Array(top.enumerated()), id: \.element.id) { index, effect in
-                        Button { model.push(.journalImpact) } label: { effectView(effect) }
-                            .buttonStyle(.plain)
-                            .tag(index)
+            if let effect = strongest {
+                Button { model.push(.journalImpact) } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        effectView(effect)
+                        HStack {
+                            Text("Co na tebe působí").font(Typo.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                        }
+                        .frame(minHeight: 44)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 92)
-                if top.count > 1 { dots(top.count) }
+                .buttonStyle(.plain)
             } else if data?.card == nil, data != nil {
                 Button { model.push(.journal(AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))) } label: {
                     Text("Co na tebe působí, ukážu po pár dnech.").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
@@ -186,17 +189,6 @@ struct JournalHealthCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-    }
-
-    private func dots(_ count: Int) -> some View {
-        HStack(spacing: 5) {
-            ForEach(0..<count, id: \.self) { i in
-                Capsule().fill(i == page ? Palette.secondary : Palette.ink.opacity(0.22))
-                    .frame(width: i == page ? 14 : 6, height: 6)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityHidden(true)
     }
 
     private func load() async {
