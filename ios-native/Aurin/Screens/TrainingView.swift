@@ -200,7 +200,7 @@ struct TrainingContent: View {
                              plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
             .padding(.top, 18)
 
-        TrainingPlanCard(training: training)
+        PlanSummaryCard(training: training)
             .padding(.top, 14)
     }
 

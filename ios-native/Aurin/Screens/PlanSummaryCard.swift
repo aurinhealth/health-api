@@ -5,7 +5,7 @@ import SwiftUI
 /// bars (done pale, the current one full, the rest grey). Without a plan one
 /// row, "No training plan" with "Choose a plan". It replaces the race card and
 /// the plan tile of the old tools row.
-struct TrainingPlanCard: View {
+struct PlanSummaryCard: View {
     @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
     @State private var plans: TrainingPlans?
