@@ -99,6 +99,18 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
   assert.ok(rows(raw).every(r => r.updated_at === "2000-01-01"), "unchanged records are not written again");
   assert.equal(before.length, 4);
   assert.ok(rows(raw).every(r => r.record_role === "primary"));
+  // Only what changed is written: the same records again send no upsert, one new step count sends one.
+  let upserts = 0;
+  const prepare = raw.prepare;
+  raw.prepare = sql => { if (/^\s*INSERT INTO health_datapoints/.test(sql)) upserts++; return prepare(sql); };
+  await saveAppleHealth(db, 1, body);
+  assert.equal(upserts, 0, "nothing new: no upsert");
+  const more = { ...body, records: body.records.map(r => r.type === "steps" ? { ...r, value: 3100 } : r) };
+  assert.equal((await saveAppleHealth(db, 1, more)).changed, 1);
+  raw.prepare = prepare;
+  assert.equal(upserts, 1, "one changed row: one upsert");
+  assert.equal(rows(raw, "data_type='steps'")[0].value_numeric, 3100);
+  await saveAppleHealth(db, 1, body);
 
   const summary = await googleDashboard(db, "2026-10-10");
   assert.equal(summary.today.restingHR, 51);
