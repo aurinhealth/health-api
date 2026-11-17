@@ -218,8 +218,11 @@ struct TrainingContent: View {
                 .buttonStyle(.plain)
             }
             .padding(.top, top - 12)
+            // The coach above the workout card (concept a-hlavni/000, D-TRENINK-3).
+            CoachTextCard(screen: "training").padding(.top, 6)
             if !upcoming.isEmpty {
                 TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                    .padding(.top, 14)
             }
         } else {
             // D-TRENINK-8: the load and the overview are today's, never shown under another day.
@@ -239,8 +242,9 @@ struct TrainingContent: View {
 
     /// The coach's card and, today, the two Load dials.
     @ViewBuilder private var coachAndLoad: some View {
-        CoachTextCard(screen: "training").padding(.top, 18)
-        if shownDay == training.date {
+        if shownDay != training.date {
+            CoachTextCard(screen: "training").padding(.top, 18)
+        } else {
             LoadSection(training: training).padding(.top, 28)
         }
     }
@@ -463,10 +467,19 @@ struct TodaySessions: View {
                         Circle()
                             .fill(index == (current ?? 0) ? Palette.ink : Palette.faint.opacity(0.35))
                             .frame(width: 7, height: 7)
-                            .onTapGesture { withAnimation { current = index } }
                     }
                 }
-                .accessibilityHidden(true)
+                // Only a marker for sight; VoiceOver swipes up or down through the workouts.
+                .accessibilityElement()
+                .accessibilityLabel(L10n.f("Trénink %@ z %@", String((current ?? 0) + 1), String(sessions.count)))
+                .accessibilityAdjustableAction { direction in
+                    let now = current ?? 0
+                    switch direction {
+                    case .increment: withAnimation { current = min(sessions.count - 1, now + 1) }
+                    case .decrement: withAnimation { current = max(0, now - 1) }
+                    @unknown default: break
+                    }
+                }
             }
         }
     }
@@ -594,7 +607,7 @@ struct NextSession: View {
                     in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
-        .task(id: session.eventId ?? session.date) { await loadParts() }
+        .task(id: [session.eventId ?? "", session.date, session.title]) { await loadParts() }
     }
 
     private var info: some View {
@@ -632,7 +645,9 @@ struct NextSession: View {
             cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + Self.left($1) })))
         } else if sport == "swim", let blocks, let m = WorkoutCardParts.meters(blocks) {
             cells.append(.init(label: L10n.tr("Vzdálenost"), value: Fmt.int(m), unit: "m"))
-        } else if let blocks {
+        } else if let blocks, (session.minutes ?? 0) < 45 {
+            // Carbs per hour stands here from 45 min once the server has it (Carbs B);
+            // a short workout shows its work minutes.
             let work = WorkoutCardParts.workMinutes(blocks, sport: sport)
             if work > 0 { cells.append(.init(label: L10n.tr("Práce"), value: String(work), unit: "min")) }
         }
@@ -674,11 +689,14 @@ struct NextSession: View {
 
     /// The gym day or the planned steps, once; never in the sample day.
     private func loadParts() async {
+        // Another workout in this place (the first one done): never its parts.
+        blocks = nil
+        gymDay = nil
         guard let model, !model.demo else { return }
         if isGym {
-            guard session.date >= today, gymDay == nil else { return }
+            guard session.date >= today else { return }
             gymDay = try? await model.gymDay(date: session.date)
-        } else if let id = session.eventId, blocks == nil {
+        } else if let id = session.eventId {
             blocks = (try? await model.api.plannedWorkout(eventId: id))?.workout.steps
         }
     }

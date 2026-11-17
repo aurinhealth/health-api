@@ -2016,8 +2016,9 @@ struct TrainingModeView: View {
         day = next
         GymSwaps.record(date, from: name, to: alt.name)
         swaps = GymSwaps.list(date)
-        lastSwap = SwapUndo(from: name, to: alt.name, day: before, swaps: swapsBefore, index: indexBefore,
-                            renamed: !next.exercises.contains(where: { $0.name == name }))
+        // The timer goes back only when it moved and the new exercise had no time of its own before.
+        lastSwap = SwapUndo(from: name, to: alt.name, day: before, after: next, swaps: swapsBefore, index: indexBefore,
+                            renamed: !next.exercises.contains(where: { $0.name == name }) && !before.exercises.contains(where: { $0.name == alt.name }))
         // The exercise on screen stays on screen, now as the alternative.
         if onScreen, let at = next.exercises.firstIndex(where: { $0.sets.contains { rows.contains($0.row) } }) {
             index = at
@@ -2056,12 +2057,9 @@ struct TrainingModeView: View {
         await loadMuscles(undo.day)
     }
 
-    /// The swap can go back while the new exercise has no set done since.
-    static func canUndo(_ undo: SwapUndo, in day: GymDay?) -> Bool {
-        let doneBefore = undo.day.exercises.filter { $0.name == undo.to }.reduce(0) { $0 + $1.doneCount }
-        let doneNow = (day?.exercises ?? []).filter { $0.name == undo.to }.reduce(0) { $0 + $1.doneCount }
-        return doneNow == doneBefore
-    }
+    /// The swap can go back while nothing in the day changed since: a set
+    /// done or an exercise added anywhere would be lost with the old day.
+    static func canUndo(_ undo: SwapUndo, in day: GymDay?) -> Bool { day == undo.after }
 
     /// An exercise added on the way (or the first one of an empty workout),
     /// with the coach's weights and reps from the history.
@@ -2643,6 +2641,8 @@ struct SwapUndo: Equatable {
     let to: String
     /// The day, the swaps and the place before the swap.
     let day: GymDay
+    /// The day right after it: undo only while it is still this.
+    let after: GymDay
     let swaps: [GymSwap]
     let index: Int
     /// The old exercise left the day, so the watch's time went with it.

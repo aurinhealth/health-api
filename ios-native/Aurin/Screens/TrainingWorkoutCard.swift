@@ -101,6 +101,8 @@ enum WorkoutCardParts {
 /// minutes centred under each; a work part's target in text size above it.
 struct WorkoutPartsRow: View {
     let parts: [WorkoutCardPart]
+    /// Four caption lines: grows with the text size.
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 74
 
     var body: some View {
         let total = max(1, parts.reduce(0) { $0 + $1.minutes })
@@ -126,7 +128,7 @@ struct WorkoutPartsRow: View {
                 }
             }
         }
-        .frame(height: 74)
+        .frame(height: height)
     }
 
     private func color(_ part: WorkoutCardPart) -> Color {

@@ -410,7 +410,8 @@ struct GymBuilderView: View {
                 DatePicker("Den", selection: $day, in: earliest..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
                 // The one length control of every sport, without the tolerance (Petr decision 6).
-                LengthControl(minutes: pickedLength, recommended: GymLength.usual ?? 60, range: 20...120, step: 5,
+                // Until a length is picked, "Recommended" shows the length the form sends.
+                LengthControl(minutes: pickedLength, recommended: lengthPicked ? (GymLength.usual ?? 60) : minutes, range: 20...120, step: 5,
                               presets: $gymPresets, fallback: 60)
             }
             .padding(.top, 10)
