@@ -120,14 +120,12 @@ struct LoadTile: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Text(verbatim: kind.title.uppercased(with: Fmt.locale))
-                    .font(.caption2.weight(.medium)).tracking(1.4)
-                    .foregroundStyle(Palette.muted)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
-            }
+            // The title names the tile, centred, whole (never "Load balan…").
+            Text(verbatim: kind.title)
+                .font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
             RangeDial(value: view?.plot, scale: LoadWords.scale, band: view.map(LoadWords.band), size: 112, lineWidth: 9, spoken: spoken) {
                 Text(verbatim: centre).font(Typo.heading(19)).foregroundStyle(view?.plot == nil ? Palette.muted : Palette.ink)
             }
@@ -146,6 +144,7 @@ struct LoadTile: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(kind.title)
         .accessibilityValue(spoken)
+        .accessibilityAddTraits(.isButton)
     }
 
     private var state: MetricState? { LoadWords.state(view?.level) }
