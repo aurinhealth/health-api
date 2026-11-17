@@ -108,30 +108,34 @@ private struct CoachEntryHint: ViewModifier {
     }
 }
 
-/// The AI consent from the coach's entry while AI is off: the same text as the
-/// chat's consent card (CoachView). Zapnout turns it on and opens the chat.
+/// The AI consent from the coach's entry while AI is off: the one consent
+/// card (AIConsentCard, redesign Z2) in a sheet. Povolit AI turns it on,
+/// closes the sheet and opens the chat.
 struct AIConsentAsk: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     var accepted: () -> Void
 
     var body: some View {
-        ConsentSheet(title: "Kouč používá AI",
-                     lead: "Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data.",
-                     legal: "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.",
-                     accept: allow) {
-            EmptyView()
+        ScrollView {
+            VStack(spacing: 10) {
+                AIConsentCard(allow: { try await model.api.allowAI() }) {
+                    model.setAIOff(false)
+                    dismiss()
+                    // The consent sheet closes first, then the chat opens.
+                    try? await Task.sleep(for: .milliseconds(450))
+                    accepted()
+                }
+                Button { dismiss() } label: {
+                    Text("Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
         }
-    }
-
-    private func allow() {
-        let model = model
-        let accepted = accepted
-        Task {
-            guard (try? await model.api.allowAI()) != nil else { return }
-            model.setAIOff(false)
-            // The consent sheet closes first, then the chat opens.
-            try? await Task.sleep(for: .milliseconds(450))
-            accepted()
-        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Palette.background)
     }
 }

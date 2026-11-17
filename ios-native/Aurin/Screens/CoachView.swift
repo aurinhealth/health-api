@@ -376,31 +376,20 @@ struct CoachView: View {
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    /// The AI consent with the onboarding's full text (AIConsentCard); the
+    /// question that ran into it goes out once it is given.
     private var consentCard: some View {
-        Card {
-            Text("Kouč používá AI").font(.headline)
-            Text("Aby mohl odpovídat a pamatovat si vaše rozhovory, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data.")
-                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            Button {
-                Task {
-                    do {
-                        try await model.api.allowAI()
-                        model.setAIOff(false)
-                        needsConsent = false
-                        error = nil
-                        // The question that ran into the consent goes out now, no need to type it again.
-                        if let question = unsent {
-                            unsent = nil
-                            messages.removeAll { $0.id == question.bubble }
-                            input = question.text
-                            photo = question.photo
-                            await send()
-                        }
-                    } catch { self.error = error.localizedDescription }
-                }
-            } label: {
-                Text("Povolit AI").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
+        AIConsentCard(allow: { try await model.api.allowAI() }) {
+            model.setAIOff(false)
+            needsConsent = false
+            error = nil
+            // The question that ran into the consent goes out now, no need to type it again.
+            if let question = unsent {
+                unsent = nil
+                messages.removeAll { $0.id == question.bubble }
+                input = question.text
+                photo = question.photo
+                await send()
             }
         }
     }

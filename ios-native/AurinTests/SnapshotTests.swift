@@ -500,6 +500,20 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(t.thisWeek.planned, 0)
     }
 
+    /// The shared parts of the new design (redesign Z2) in light, dark and
+    /// large text, in Czech and English.
+    func testRedesignComponents() throws {
+        try render("z2-components", glow: Palette.Glow.health, window: true) { ComponentGallery() }
+        try render("z2-components-large-1", glow: Palette.Glow.health, typeSize: .accessibility1, window: true) { ComponentGallery(part: .charts) }
+        try render("z2-components-large-2", glow: Palette.Glow.health, typeSize: .accessibility1, window: true) { ComponentGallery(part: .rest) }
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        try render("z2-components-en", glow: Palette.Glow.health, window: true) { ComponentGallery().environment(\.locale, L10n.locale) }
+    }
+
     func testNewScreens() throws {
         try render("add-sheet", height: 1000) { AddSheet().environment(AppModel(demo: true)) }
         try render("body-map", height: 320) {

@@ -214,15 +214,15 @@ struct SetupFlowView: View {
         Card {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
-                    Text("Tvůj AI kouč").foregroundStyle(Palette.ink)
+                    Text(AIConsentText.title).foregroundStyle(Palette.ink)
                     Text("(nepovinné)").foregroundStyle(Palette.muted)
                 }
                 .font(Typo.bodyStrong)
-                Text("Kouč, jeho denní shrnutí na Dnes, Tréninku a Jídle, jeho paměť po dni s chatem, rozpoznání jídla z fotky a hodnocení tréninku a týdne posílají potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI (USA). Ta je nepoužívá k trénování svých modelů. Cyklus a citlivé položky deníku jen po jejich zapnutí.")
+                Text(AIConsentText.body)
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             checkbox("Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)",
-                     note: "Jde to kdykoli vypnout v Nastavení.",
+                     note: LocalizedStringKey(AIConsentText.note),
                      isOn: $agreeAI)
         }
         Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
