@@ -418,11 +418,11 @@ struct DeviationBars: View {
     }
 }
 
-/// "warmer ↑ · cooler ↓" and "band ±0.5 °C of your usual" under a temperature tile's bars.
+/// "warmer ↑, cooler ↓" and "band ±0.5 °C of your usual" under a temperature tile's bars.
 struct DeviationLegend: View {
     var body: some View {
         HStack {
-            Text("teplejší ↑ · chladnější ↓")
+            Text("teplejší ↑, chladnější ↓")
             Spacer(minLength: 6)
             Text(verbatim: L10n.f("pás ±%@ od tvého obvyklého", Fmt.decimal(Units.temperatureChange(0.5)) + " " + Units.temperatureUnit))
         }

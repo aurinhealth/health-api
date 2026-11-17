@@ -92,7 +92,7 @@ test("the strength plan tests on its first session and goes light on the others"
   assert.equal(first.test, true);
   assert.equal(first.sets, 1);
   assert.equal(first.reps, "3–5");
-  assert.match(first.name, /^Síla · Test síly · týden 1\/12$/);
+  assert.match(first.name, /^Síla, Test síly, týden 1\/12$/);
   const second = gymPhaseFor(plan, shift(monday, 2), gymDays);
   assert.ok(!second.test);
   assert.equal(second.rpe, "6–7");

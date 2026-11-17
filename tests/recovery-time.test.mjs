@@ -6,7 +6,7 @@ import { halfDay } from "../src/user-time.js";
 import { buildToday } from "../src/app-today.js";
 
 const now = Date.parse("2026-10-15T08:00:00Z"), ago = h => now - h * 3600000;
-const ride = (endHoursAgo, tss, intensity = 70, extra = {}) => ({ kind: "ride", type: "Ride", source: "intervals", name: "Kolo · tempo", tss, icu_intensity: intensity, minutes: 75, end: ago(endHoursAgo), ...extra });
+const ride = (endHoursAgo, tss, intensity = 70, extra = {}) => ({ kind: "ride", type: "Ride", source: "intervals", name: "Kolo, tempo", tss, icu_intensity: intensity, minutes: 75, end: ago(endHoursAgo), ...extra });
 
 test("training load sets the hours on the TrainingPeaks guide", () => {
   assert.equal(sessionRecoveryHours({ kind: "ride", tss: 150 }).hours, 24);
@@ -31,7 +31,7 @@ test("a watch workout without TSS is estimated from its minutes", () => {
 test("Regenerace waits for the last session and adds the morning's signs", () => {
   const plain = recoveryTime({ activities: [ride(14, 84, 88)], now });
   assert.equal(plain.hours, 36 - 14);
-  assert.equal(plain.causes[0].title, "Kolo · tempo");
+  assert.equal(plain.causes[0].title, "Kolo, tempo");
   assert.equal(plain.causes[0].hours, 36);
   // When that session alone is done, without the morning's signs.
   assert.equal(plain.causes[0].readyAt, plain.readyAt);
@@ -64,7 +64,7 @@ test("the activity detail and the coach read the same model", () => {
   assert.match(c.hardFrom, /^2026-10-1[67] (morning|afternoon|evening)$/);
   assert.equal(c.hoursLeft, undefined);
   assert.doesNotMatch(c.causes.join(" "), /\d+ h\b/);
-  assert.match(c.causes[0], /Kolo · tempo/);
+  assert.match(c.causes[0], /Kolo, tempo/);
 });
 
 test("the coach gets half a day, after 22:00 the next morning (Prague time)", () => {

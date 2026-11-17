@@ -220,11 +220,11 @@ struct RideDetail: View {
         }
     }
 
-    /// "ZÍTRA · 60 MIN".
+    /// "ZÍTRA, 60 MIN".
     private var when: String {
         let day = W.relativeDay(session.date)
         let minutes = session.minutes ?? plan?.minutes
-        return day + (session.time.map { " · " + W.clockText($0) } ?? "") + (minutes.map { " · \($0) min" } ?? "")
+        return day + (session.time.map { ", " + W.clockText($0) } ?? "") + (minutes.map { ", \($0) min" } ?? "")
     }
 
     private func axis(_ plan: WatchPlan) -> some View {

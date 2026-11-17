@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
-import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
+import { scopedDb, mayCreateAccount, createAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS, SITE_ACCOUNT_LIMITS, ensureTenancy, _resetTenancyForTest } from "../src/tenancy.js";
 import { handleEmailLogin } from "../src/email-login.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { groupBrakeUsd, aiSpendingReport } from "../src/ai-total.js";
@@ -125,14 +125,15 @@ test("the brake is counted once when the group's day starts", async () => {
   });
 });
 
-test("the owner is held live like any account of the same purchase, on the test server only by the day's brake", async () => {
+test("the owner is held live by a group of its own, apart from the testers, on the test server only by the day's brake", async () => {
   const db = await accounts();
   await withOpenAI(async calls => {
-    const limits = { AI_GROUP_BRAKES: { testflight: { usd: 0.5 } } };
+    const limits = { AI_GROUP_BRAKES: { testflight: { usd: 0.5 }, owner: { usd: 0.5 } } };
     await ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true }));
-    await assert.rejects(ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true })), error => error.status === 429, "live: the owner with a TestFlight purchase is in the testers' group");
+    await assert.rejects(ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true })), error => error.status === 429, "live: the owner's own brake");
+    await ask(envFor(db, 10, limits));
     await ask(envFor(db, 10, { ...limits, USER_IS_OWNER: true, ENVIRONMENT: "staging" }));
-    assert.equal(calls(), 2);
+    assert.equal(calls(), 3, "the testers' group is not touched by the owner's spending");
   });
 });
 
@@ -161,7 +162,8 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   const report = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
   assert.equal(report.today, 1.4);
   const counted = async owner => Object.fromEntries((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES, OWNER_EMAIL: owner })).groups.map(g => [g.group, g.accounts]));
-  assert.deepEqual([(await counted(" U7@example.com ")).gift, (await counted(" U7@example.com ")).free], [1, 1], "the owner counts like any account");
+  assert.deepEqual([(await counted("")).gift, (await counted("")).free], [1, 1]);
+  assert.deepEqual([(await counted(" U11@example.com ")).gift, (await counted(" U7@example.com ")).free], [0, 0], "the owner is a group of its own, not counted in the others");
   db.sqlite.prepare("UPDATE subscriptions SET testflight = 0").run();
   db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, testflight) VALUES (7, 'free', 1)").run();
   assert.deepEqual([(await counted("")).testflight, (await counted("")).free], [2, 0], "a TestFlight build without a purchase counts in testflight, not free");
@@ -174,6 +176,17 @@ test("the owner sees today's spending by group against its brake, yesterday and 
   assert.deepEqual(by.free, { group: "free", spent: 0.7, brake: 1, accounts: 1 }, "accounts without a purchase older than a week");
   assert.deepEqual(by.new, { group: "new", spent: 0, brake: 1, accounts: null }, "a fixed brake has no accounts");
   assert.deepEqual(by.testflight, { group: "testflight", spent: 0, brake: 0.5, accounts: 1 }, "a group with no spending yet shows the brake it would get");
+
+  // The month: each group's days added up, and the days it reached its brake; last month's days don't count.
+  const sameMonth = yesterday.slice(0, 7) === today.slice(0, 7);
+  db.sqlite.prepare("INSERT INTO ai_spend_groups (day, grp, cost_usd, brake_usd) VALUES (?, 'free', 1.2, 1), ('2000-01-31', 'free', 9, 1), ('2000-01-31', 'paid', 9, 1)").run(yesterday);
+  const month = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
+  assert.equal(month.monthDays, Number(today.slice(8)));
+  assert.deepEqual(month.monthGroups.map(g => g.group), ["paid", "gift", "trial", "testflight", "free", "new", "system"]);
+  const monthBy = Object.fromEntries(month.monthGroups.map(g => [g.group, g]));
+  assert.deepEqual(monthBy.paid, { group: "paid", spent: 0.7, braked: 0 });
+  assert.deepEqual(monthBy.free, sameMonth ? { group: "free", spent: 1.9, braked: 1 } : { group: "free", spent: 0.7, braked: 0 });
+  assert.deepEqual(monthBy.new, { group: "new", spent: 0, braked: 0 }, "a group with no spending this month");
 
   const user = { isAdmin: true, isOwner: false }, url = new URL("https://aurin.health/app/api/admin/ai-spending");
   const get = who => handleAdminApi(new Request(url), { RAW_DB: db, AI_GROUP_BRAKES: BRAKES }, url, { signedIn: true, user: who });
@@ -254,9 +267,14 @@ test("one network opens a few new accounts a day; invited addresses, the owner a
   assert.equal(await mayCreateAccount(db, open, "invited@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "owner@example.com", { request: from("203.0.113.5") }), true);
   assert.equal(await mayCreateAccount(db, open, "other@example.com", { request: from("198.51.100.7") }), true);
-  // Every address of one IPv6 /64 is the same network.
+  // Every address of one IPv6 /64 is the same caller.
   for (let i = 1; i <= NEW_ACCOUNT_LIMITS.hour; i++) await mayCreateAccount(db, open, `v${i}@example.com`, { request: from(`2001:db8:1:2::${i}`) });
   await assert.rejects(mayCreateAccount(db, open, "v9@example.com", { request: from("2001:db8:1:2::99") }), SignupLimited);
+  // The /64s of one /48 share the site's looser cap, so stepping through them stops there.
+  let made = 0;
+  for (let i = 0; i < SITE_ACCOUNT_LIMITS.hour + 5; i++) made += await mayCreateAccount(db, open, `s${i}@example.com`, { request: from(`2001:db8:1:${(i + 10).toString(16)}::1`) }).then(() => 1, error => { assert.ok(error instanceof SignupLimited); return 0; });
+  assert.equal(made, SITE_ACCOUNT_LIMITS.hour - NEW_ACCOUNT_LIMITS.hour, "the /48's hour, the first /64's three included");
+  assert.equal(await mayCreateAccount(db, open, "w@example.com", { request: from("2001:db8:2:1::1") }), true, "another /48");
 });
 
 test("signing in to an existing account is never held by the new-account limit", async () => {

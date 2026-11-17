@@ -171,10 +171,10 @@ struct TodayWeatherChip: View {
         .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
     }
 
-    /// "Prague · 14° / 6° · rain", or "Přidat počasí" without a place.
+    /// "Prague, 14° / 6°, rain", or "Přidat počasí" without a place.
     private var text: String {
         guard let weather else { return L10n.tr("Přidat počasí") }
-        return [weather.place ?? L10n.tr("Počasí"), WeatherText.range(weather), WeatherText.description(weather.code)].compactMap { $0 }.joined(separator: " · ")
+        return [weather.place ?? L10n.tr("Počasí"), WeatherText.range(weather), WeatherText.description(weather.code)].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -675,7 +675,7 @@ struct WeatherPlaceView: View {
                             .frame(width: 32, height: 32).background(Palette.blue, in: Circle())
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Aktuální poloha").font(.body.weight(.semibold)).foregroundStyle(Palette.blue)
-                            Text(verbatim: following ? (current.map { $0 + " · " } ?? "") + L10n.tr("aktualizuje se samo") : L10n.tr("poloha iPhonu, aktualizuje se sama"))
+                            Text(verbatim: following ? (current.map { $0 + ", " } ?? "") + L10n.tr("aktualizuje se samo") : L10n.tr("poloha iPhonu, aktualizuje se sama"))
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer()

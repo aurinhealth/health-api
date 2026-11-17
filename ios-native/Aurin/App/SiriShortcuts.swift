@@ -200,7 +200,7 @@ struct AskCoachIntent: AppIntent {
                 case .done(let result):
                     if let text = result.answer { answer = text }
                     proposal = !(result.actions ?? []).isEmpty || result.kind == "food_draft"
-                case .progress, .chat: break
+                case .progress, .chat, .step: break
                 }
             }
         } catch APIError.aiConsentRequired {

@@ -137,11 +137,11 @@ struct WatchRoot: View {
                 Group {
                     if let s = store.snapshot {
                         switch page {
-                        case .why: WhyDetail(s: s).hiddenInAlwaysOn()
-                        case .sleep: SleepDetail(s: s).hiddenInAlwaysOn()
-                        case .restingHR: MetricDetail(s: s, metric: .restingHR).hiddenInAlwaysOn()
-                        case .hrv: MetricDetail(s: s, metric: .hrv).hiddenInAlwaysOn()
-                        case .strain: StrainDetail(s: s).hiddenInAlwaysOn()
+                        case .why: WhyDetail(s: s)
+                        case .sleep: SleepDetail(s: s)
+                        case .restingHR: MetricDetail(s: s, metric: .restingHR)
+                        case .hrv: MetricDetail(s: s, metric: .hrv)
+                        case .strain: StrainDetail(s: s)
                         case .alarm: AlarmView()
                         case .coach: CoachView()
                         }

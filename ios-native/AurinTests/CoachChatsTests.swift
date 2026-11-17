@@ -50,6 +50,18 @@ import SwiftUI
         XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date, limit: 8).count, CoachSuggestions.fallback.count)
     }
 
+    /// The questions under an answer follow the language the athlete writes in, whatever the app's.
+    func testSuggestionsFollowTheWrittenLanguage() {
+        XCTAssertEqual(L10n.written("Můžu dnes dát intervaly?"), "cs")
+        XCTAssertEqual(L10n.written("muzu dnes jet intervaly"), "cs")
+        XCTAssertEqual(L10n.written("Can I do the intervals today?"), "en")
+        XCTAssertNil(L10n.written("FTP 250"))
+        let date = AppModel.localDate(Date())
+        XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date, language: "cs").first, "Jak mám dnes trénovat?")
+        XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date, language: "en").first, L10n.tr("Jak mám dnes trénovat?", in: "en"))
+        XCTAssertNotEqual(L10n.tr("Jak mám dnes trénovat?", in: "en"), "Jak mám dnes trénovat?")
+    }
+
     /// "Report this answer…" fills the description within the server's 4000 characters.
     func testReportedAnswerFitsTheReport() {
         let start = CoachAnswerReport.startText(String(repeating: "Dlouhá odpověď. ", count: 400))

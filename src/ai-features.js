@@ -4,10 +4,15 @@
 // it runs without Aurin Pro once the paywall is on (subscription.js). The coach
 // chat is the one feature the daily guard leaves out (ai-usage.js).
 // Settings → Aurin Pro in the app lists technique as free (Petr, 7 Nov 2026).
+// trial: runs without Pro while the month's free photos last (food-photo-trial.js).
 export const COACH_CHAT_FEATURE = "assistant";
+// The check of a coach answer before the athlete sees it (coach-checker.js):
+// part of the chat, so the daily guard leaves it out too.
+export const COACH_CHECK_FEATURE = "coach-check";
 export const AI_FEATURES = {
   [COACH_CHAT_FEATURE]: { name: "chat s koučem" },
   "screen-text": { name: "věty kouče na obrazovkách" },
+  [COACH_CHECK_FEATURE]: { name: "kontrola odpovědi kouče" },
   reflection: { name: "poznámka po tréninku" },
   "coach-notes": { name: "poznámky kouče" },
   "week-revision": { name: "revize týdne" },
@@ -20,11 +25,12 @@ export const AI_FEATURES = {
   "gym-adjust": { name: "úprava posilovny slovy" },
   "gym-equipment": { name: "vybavení posilovny" },
   technique: { name: "technika cviku", free: true },
-  "food-photo": { name: "jídlo z fotky", food: true },
+  "food-photo": { name: "jídlo z fotky", food: true, trial: true },
   "food-lookup": { name: "dohledání potraviny", food: true },
   "food-sentence": { name: "jídlo větou", food: true },
   barcode: { name: "čárový kód", food: true }
 };
 export const isFoodFeature = feature => AI_FEATURES[feature]?.food === true;
+export const isTrialFeature = feature => AI_FEATURES[feature]?.trial === true;
 export const isFreeFeature = feature => AI_FEATURES[feature]?.free === true;
 export const featureName = feature => AI_FEATURES[feature]?.name || feature;

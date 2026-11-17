@@ -147,7 +147,7 @@ struct MealDetailContent: View {
             HStack {
                 BackSlot(action: back)
                 Spacer()
-                SectionLabel(text: L10n.f("Jídlo · %@", ClockText.format(meal.time)))
+                SectionLabel(text: L10n.f("Jídlo v %@", ClockText.format(meal.time)))
                 Spacer()
                 // The pinned bar carries the "+" when the page has one.
                 if floating {
@@ -178,7 +178,7 @@ struct MealDetailContent: View {
             }
             .padding(.top, 22)
 
-            SectionLabel(text: meal.entries.isEmpty ? "Zatím nic" : L10n.f("Potraviny · %@", String(meal.entries.count))).padding(.top, 28)
+            SectionLabel(text: meal.entries.isEmpty ? "Zatím nic" : L10n.f("Potraviny (%@)", String(meal.entries.count))).padding(.top, 28)
             if meal.entries.isEmpty {
                 Text("V tomto jídle zatím nic není. Přidej první potravinu.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
                 PrimaryButton(title: MealSlot.addText(meal.type), systemImage: "plus", action: add).padding(.top, 16)
@@ -296,13 +296,13 @@ struct FoodEntryCard: View {
         .background(color.opacity(0.12), in: Capsule())
     }
 
-    /// "150 g · Madeta".
+    /// "150 g, Madeta".
     static func detail(_ e: FoodSnapshot.Entry) -> String? {
         let parts = [e.amount, e.brand, ClockText.format(optional: e.time)].compactMap { $0?.nilIfBlank }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
-    /// "vláknina 3 g · cukry 12 g · sůl 0,4 g".
+    /// "vláknina 3 g, cukry 12 g, sůl 0,4 g".
     static func extras(_ e: FoodSnapshot.Entry) -> String {
         let fiberGrams: String = e.fiber.map { Fmt.decimal($0) + " g" } ?? "–"
         let sugarGrams: String = e.sugar.map { Fmt.decimal($0) + " g" } ?? "–"
@@ -310,7 +310,7 @@ struct FoodEntryCard: View {
         let fiber = L10n.f("vláknina %@", fiberGrams)
         let sugar = L10n.f("cukry %@", sugarGrams)
         let salt = L10n.f("sůl %@", saltGrams)
-        return [fiber, sugar, salt].joined(separator: " · ")
+        return [fiber, sugar, salt].joined(separator: ", ")
     }
 }
 

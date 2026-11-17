@@ -14,13 +14,13 @@ struct SourceLine: View {
             HStack(spacing: 3) {
                 ForEach(sources, id: \.name) { IntegrationIcon(id: $0.logo ?? "", size: size) }
             }
-            Text(verbatim: ([(names ?? sources.map(\.name)).joined(separator: ", ")] + [detail].compactMap { $0 }).joined(separator: " · "))
+            Text(verbatim: ([(names ?? sources.map(\.name)).joined(separator: ", ")] + [detail].compactMap { $0 }).joined(separator: ", "))
                 .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
     }
 
-    /// The gym detail's line: "Aurin · tep a kalorie z Apple Watch" after a
+    /// The gym detail's line: "Aurin, tep a kalorie z Apple Watch" after a
     /// merge, else who recorded it.
     static func gym(_ session: WeekSession?) -> SourceLine? {
         guard let sources = session?.sources, !sources.isEmpty else { return nil }
@@ -93,7 +93,7 @@ struct MergeWorkoutsSheet: View {
                 }
                 SectionLabel(text: "Kalorie a tep").padding(.top, 20)
                 ForEach(proposal.energy) { e in
-                    choice(title: e.kcal.map { e.name + " · " + Fmt.int($0) + " kcal" } ?? e.name, detail: e.text, logo: e.logo ?? "", on: energy == e.key) { energy = e.key }
+                    choice(title: e.kcal.map { e.name + ", " + Fmt.int($0) + " kcal" } ?? e.name, detail: e.text, logo: e.logo ?? "", on: energy == e.key) { energy = e.key }
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
                 PrimaryButton(title: L10n.tr("Sloučit"), busy: saving) { Task { await save() } }
@@ -110,10 +110,10 @@ struct MergeWorkoutsSheet: View {
         .onAppear { if energy.isEmpty { energy = proposal.energy.first?.key ?? "" } }
     }
 
-    /// "20:02 – 21:23 · 1 h 21 min".
+    /// "20:02 – 21:23, 1 h 21 min".
     private func spanTitle(_ s: MergeProposal.Span) -> String {
         let clock = [s.start, s.end].compactMap { $0 }.map { ClockText.format($0) }.joined(separator: " – ")
-        return [clock.isEmpty ? nil : clock, s.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+        return [clock.isEmpty ? nil : clock, s.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: ", ")
     }
 
     private func choice(title: String, detail: String, logo: String?, on: Bool, pick: @escaping () -> Void) -> some View {

@@ -10,8 +10,9 @@ const KINDS = ["water", "coffee", "tea", "juice", "milk", "sport", "soda", "beer
 // How much of a drink counts towards hydration, against water (the Beverage
 // Hydration Index, Maughan 2016: milk and oral-rehydration drinks keep more
 // water in the body, coffee and tea about as much as water). Coffee is counted
-// at 0.9 to stay on the safe side; beer at half; wine and spirits not at all.
-export const HYDRATION_FACTORS = { water: 1, tea: 1, coffee: 0.9, juice: 1, milk: 1.1, sport: 1.1, soda: 0.9, beer: 0.5, wine: 0, other: 1, food: 1 };
+// at 0.9 to stay on the safe side; beer, wine and spirits not at all (NUT-2,
+// 2026-11-16: beer as wine and as alcohol logged in food, fluids.js ALCOHOL).
+export const HYDRATION_FACTORS = { water: 1, tea: 1, coffee: 0.9, juice: 1, milk: 1.1, sport: 1.1, soda: 0.9, beer: 0, wine: 0, other: 1, food: 1 };
 export const hydrationMl = (ml, kind) => Math.round((Number(ml) || 0) * (HYDRATION_FACTORS[kind] ?? 1));
 const round100 = ml => Math.round(ml / 100) * 100;
 
@@ -123,6 +124,7 @@ const ALCOHOL = /(pivo|piva|beer|ležák|lezak|radler|víno|vína|vino|wine|pros
 // (Coca-Cola 0,5 l from a barcode): a gram of a drink is about a millilitre.
 const DRINK = /(\bcola\b|coca|kola\b|kofola|pepsi|fanta|sprite|mirinda|7up|schweppes|tonic|limonád|limonad|lemonade|soda\b|džus|dzus|juice|šťáva|stava|nektar|nektár|smoothie|ice ?tea|ledový čaj|ledovy caj|čaj\b|caj\b|\btea\b|káva\b|kava\b|kafe|coffee|latte|cappuccino|espresso|americano|minerálk|mineralk|mattoni|magnesia|\bvoda\b|water|mléko|mleko|\bmilk\b|kefír|kefir|ayran|energ\w* drink|energetick|red ?bull|monster|semtex|big shock|isoton|ionto|powerade|gatorade|kombucha|\bnápoj|\bnapoj|\bdrink|protein ?shake|\bshake\b|pivo|beer|víno|vino|wine|radler)/i;
 const NOT_DRINK = /(dort|koláč|kolac|zmrzl|čokolád|cokolad|sušenk|susenk|tyčink|tycink|pečiv|peciv|bonbon|muffin|cake|cookie|pudink|puding|jogurt|sýr|syr|chips|gumov|želé|zele|prášek|prasek|powder)/i;
+export const COFFEE = /espresso|ristretto|lungo|káv|kav|kafe|coffee|latte|cappucc|americano|flat white/i;
 const servingMl = text => {
   const m = /(\d+(?:[.,]\d+)?)\s*(ml|cl|dl|l)\b/i.exec(String(text || ""));
   if (!m) return null;
@@ -144,8 +146,10 @@ export function drinkFromFoodEntry(row) {
     : (Array.isArray(note.ingredients) ? note.ingredients : []).filter(i => i?.unit === "ml").map(i => ({ name: String(i.name || name), ml: Number(i.amount) }));
   const valid = parts.filter(p => p.ml > 0 && p.ml <= 5000);
   if (!valid.length) return null;
-  const counted = valid.filter(p => !ALCOHOL.test(p.name)).reduce((s, p) => s + p.ml, 0);
-  return { id: "food:" + row.id, foodId: row.id, consumedAt: String(row.consumed_at || "").slice(0, 16), ml: Math.round(counted), name, kind: "food", alcohol: counted === 0, totalMl: Math.round(valid.reduce((s, p) => s + p.ml, 0)) };
+  const drinks = valid.filter(p => !ALCOHOL.test(p.name)), counted = drinks.reduce((s, p) => s + p.ml, 0);
+  // A coffee in the diary counts as a logged coffee does (HYDRATION_FACTORS).
+  const hydration = drinks.reduce((s, p) => s + p.ml * (COFFEE.test(p.name) ? HYDRATION_FACTORS.coffee : 1), 0);
+  return { id: "food:" + row.id, foodId: row.id, consumedAt: String(row.consumed_at || "").slice(0, 16), ml: Math.round(counted), hydrationMl: Math.round(hydration), name, kind: "food", alcohol: counted === 0, totalMl: Math.round(valid.reduce((s, p) => s + p.ml, 0)) };
 }
 
 export async function foodDrinks(db, userId, date) {

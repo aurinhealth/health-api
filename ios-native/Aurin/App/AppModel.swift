@@ -44,6 +44,8 @@ final class AppModel {
     }
     /// The training calendar's days by date (Training → the strip and month).
     var calendar: [String: CalendarDay] = [:]
+    /// Readiness, sleep, strain and HRV by date (Today → the month calendar).
+    var dayValues: [String: DayValues] = [:]
     /// The strain of past days before this week, by date, as Today shows it for
     /// that day (Training → the day chosen in the calendar).
     var pastStrain: [String: Double] = [:]
@@ -128,6 +130,11 @@ final class AppModel {
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     var shownDay: String { selectedDate ?? Self.localDate(Date()) }
+    /// The day in a tab's month, week and day bar: the one picked, not the one
+    /// whose data is still on screen while it loads (DaySwipe shows that one
+    /// as saved or as empty cards), so the week and the numbers never show two
+    /// days. The demo shows its sample day.
+    func headerDay(_ drawn: String) -> String { demo ? drawn : shownDay }
     /// The "+" sheet is open: what it adds goes to today, whatever day the
     /// screens show (weight always did).
     var writesToday = false
@@ -179,7 +186,7 @@ final class AppModel {
     /// closes; each waits under its meal in Jídlo (AppModel+PendingFood.swift).
     var pendingFoods: [PendingFood] = PendingFood.saved()
     @ObservationIgnored var pendingPhotos: [UUID: UIImage] = [:]
-    /// "„Rohlík“ dohledáno · čeká v Jídle" for a few seconds, the sheet closed (RootView).
+    /// "„Rohlík“ dohledáno, čeká v Jídle" for a few seconds, the sheet closed (RootView).
     var foodReady: FoodReady?
 
     /// "Navrhnout pro všechny": the food stays the user's own; the owner gets it
@@ -271,6 +278,10 @@ final class AppModel {
         }
         api.onHealthPaused = { [weak self] in
             Task { @MainActor in if let self, !self.demo, self.phase == .signedIn { self.notePaused(true) } }
+        }
+        // The server took no health data (no consent yet): checkSetup asks for it.
+        api.onHealthConsentRequired = { [weak self] in
+            Task { @MainActor in if let self, !self.demo, self.phase == .signedIn, !self.needsSetup { await self.checkSetup() } }
         }
         if !demo {
             connectWrites()

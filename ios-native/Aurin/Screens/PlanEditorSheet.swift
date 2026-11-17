@@ -92,9 +92,11 @@ struct PlanEditorSheet: View {
             }
             .sheet(item: Binding(get: { swapping.map { Named(name: $0) } }, set: { swapping = $0?.name })) { item in
                 if let date {
-                    AlternativesSheet(date: date, exercise: item.name, inPlan: day.exercises.map(\.name)) { name in
-                        day.replace(exercise: item.name, with: name)
-                    }
+                    // With the alternative's load (own history, else the catalogue's start), not empty.
+                    AlternativesSheet(date: date, exercise: item.name, inPlan: day.exercises.map(\.name), choose: { _ in },
+                                      chooseAlternative: { alt in
+                                          day.replace(exercise: item.name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
+                                      })
                 }
             }
             .sheet(item: $cardioEditing) { part in
@@ -240,17 +242,17 @@ struct PlanEditorSheet: View {
         let warmups = exercise.sets.filter { $0.warmup && !$0.done }.count
         var line = Text(Self.summary(sets: work, reps: reps, done: exercise.doneCount)).foregroundStyle(Palette.muted)
         if warmups > 0 {
-            line = line + Text(verbatim: " · ").foregroundStyle(Palette.muted)
+            line = line + Text(verbatim: ", ").foregroundStyle(Palette.muted)
                 + Text(L10n.plural("%lld rozcvičovacích sérií", warmups)).foregroundStyle(Palette.amber)
         }
         return line.font(Typo.caption)
     }
 
-    /// "3 série × 8-12 · hotovo 1".
+    /// "3 série × 8-12, hotovo 1".
     static func summary(sets: Int, reps: String?, done: Int) -> String {
         var text = L10n.plural("%lld sérií", sets)
         if let reps { text += " × " + reps }
-        if done > 0 { text += " · " + L10n.f("hotovo %@", String(done)) }
+        if done > 0 { text += ", " + L10n.f("hotovo %@", String(done)) }
         return text
     }
 
@@ -358,7 +360,7 @@ struct ExercisePicker: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                                    Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
+                                    Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
                                         .font(Typo.caption).foregroundStyle(Palette.muted)
                                 }
                                 Spacer()

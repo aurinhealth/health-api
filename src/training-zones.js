@@ -227,7 +227,7 @@ function parseTime(value) {
   return parts.reduce((sum, x) => sum * 60 + x, 0) || null;
 }
 
-// Riegel (T2 = T1 · (D2/D1)^1.06): the distance runnable in 60 min is the
+// Riegel (T2 = T1, (D2/D1)^1.06): the distance runnable in 60 min is the
 // usual definition of threshold pace.
 function thresholdFromRace(meters, seconds) {
   if (!positive(meters) || !positive(seconds)) return null;

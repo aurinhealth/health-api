@@ -65,6 +65,13 @@ test('offline workout scheduling, moving and environment edits persist; completi
  await completeLocalWorkout(a,scheduled.eventId,{minutes:83,rpe:6,notes:'Hotovo'});assert.equal((await getScheduledWorkouts(a))[0].status,'completed');
  const row=await a.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='activity'").bind(1).first();assert.equal(JSON.parse(row.payload_json).moving_time,83*60);
 });
+test('a library pool swim stays in the pool when moved and goes to open water only when picked',async()=>{
+ const {a,env}=setup();
+ const scheduled=await scheduleWorkoutInIntervals(env,a,{workoutId:'swim-endurance-3x300',date:'2026-10-10',confirm:true});
+ await movePlannedEvent(env,{eventId:scheduled.eventId,date:'2026-10-11'});assert.equal((await getScheduledWorkouts(a))[0].environment,'indoor');
+ const changed=await setPlannedEnvironment(env,{eventId:scheduled.eventId,environment:'outdoor'});assert.equal(changed.type,'OpenWaterSwim');assert.equal((await getScheduledWorkouts(a))[0].environment,'outdoor');
+ await movePlannedEvent(env,{eventId:scheduled.eventId,date:'2026-10-12'});assert.equal((await getScheduledWorkouts(a))[0].environment,'outdoor');
+});
 test('an export outage preserves the app plan; retry is idempotent, import does not duplicate it, and deletion survives offline',async()=>{
  const {a,env}=setup(),original=globalThis.fetch;let calls=0;
  try{
@@ -88,4 +95,13 @@ test('two initial providers start independently and status stays running while G
  await startDashboardSync(a,ctx,async()=>[{source:'google',status:'queued'}],'initial_google');await startDashboardSync(a,ctx,async()=>[{source:'intervals',status:'done'}],'initial_intervals');await Promise.all(pending);
  await a.prepare("INSERT INTO sync_status(user_id,sync_name,status) VALUES(1,'google','running')").run();assert.equal((await dashboardSyncStatus(a)).status,'running');
  await a.prepare("UPDATE sync_status SET status='completed' WHERE user_id=1 AND sync_name='google'").run();assert.equal((await dashboardSyncStatus(a)).status,'done');
+});
+test('a logged food keeps the amount logged last, in its own unit, also after an edit',async()=>{
+ const {a}=setup();await savePersonalFood(a,food,{used:true,last:150});assert.equal((await listPersonalFoods(a))[0].last_amount,150);
+ const bar={...food,name:'Test tyčinka',nutrition_basis:'portion',serving_size:'40 g',calories_100g:200};await savePersonalFood(a,bar,{used:true,last:2});
+ const saved=(await listPersonalFoods(a)).find(f=>f.name==='Test tyčinka');assert.equal(saved.nutrition_basis,'g');assert.equal(saved.last_amount,80);
+ await savePersonalFood(a,{...saved,name:'Tyčinka'});assert.equal((await listPersonalFoods(a)).find(f=>f.id===saved.id).last_amount,80);
+ await savePersonalFood(a,{...food,calories_100g:61});assert.equal((await listPersonalFoods(a)).find(f=>f.name===food.name).last_amount,150,'saved again without its id (the scanner) keeps it');
+ await savePersonalFood(a,food,{used:true,last:-5});assert.equal((await listPersonalFoods(a)).find(f=>f.name===food.name).last_amount,150,'an invalid amount is ignored');
+ await savePersonalFood(a,{...food,name:'Jiná'},{used:true,last:-5});assert.equal((await listPersonalFoods(a)).find(f=>f.name==='Jiná').last_amount,undefined);
 });

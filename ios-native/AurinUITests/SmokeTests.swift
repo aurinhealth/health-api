@@ -41,7 +41,6 @@ final class SmokeTests: XCTestCase {
         skip.tap()
         XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not appear")
         pause(1)
-        // Its label also holds the "G" drawn as text.
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Pokračovat přes Google")).firstMatch.exists)
         shot("prihlaseni")
         email.tap()
@@ -238,10 +237,11 @@ final class SmokeTests: XCTestCase {
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "How should I train today")).firstMatch) {
                 pause(8)
                 shot("kouc-odpoved")
-                // A second question, so the conversation fills the screen.
-                if ask("What should I eat after training?", send: "Send") {
+                // A follow-up conversation the sample day answers from its own numbers,
+                // so the chat fills the screen.
+                for (i, question) in ["Why 78 after only 7 hours of sleep?", "How do I catch up tonight?", "What should I have for dinner?"].enumerated() where ask(question, send: "Send") {
                     pause(8)
-                    shot("kouc-odpoved-2")
+                    shot("kouc-odpoved-\(i + 2)")
                 }
             }
         }
@@ -299,8 +299,11 @@ final class SmokeTests: XCTestCase {
             pause(3)
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Jak mám dnes trénovat")).firstMatch) {
                 pause(8)
-                if ask("Co sníst po tréninku?", send: "Odeslat") { pause(8) }
                 shot("kouc-odpoved")
+                for (i, question) in ["Proč mám 78 po pouhých 7 hodinách spánku?", "Jak to dnes v noci dohnat?", "A co si dát k večeři?"].enumerated() where ask(question, send: "Odeslat") {
+                    pause(8)
+                    shot("kouc-odpoved-\(i + 2)")
+                }
             }
         }
     }

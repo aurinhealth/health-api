@@ -7,7 +7,7 @@
 // request waited in the queue and never ran: after a lost connection or a
 // reset a write may already have happened, and running it twice could add a
 // row twice.
-import { beginWait, noteD1 } from "./request-timing.js";
+import { beginWait, noteD1, viaBatcher } from "./request-timing.js";
 
 const TRANSIENT = /D1 DB is overloaded|Requests queued for too long|exceeded its CPU time limit and was reset|Network connection lost|storage caused object to be reset|transient issue|Cannot resolve D1 DB|internal error; reference/i;
 const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long/i;
@@ -27,13 +27,19 @@ export function readOnlySql(sql) {
   return /^\s*(SELECT|WITH)\b/i.test(code) && !/\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|DROP|ALTER)\b/i.test(code);
 }
 
-export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_MS, sleep = wait } = {}) {
+// target: which database ("user", "core", "foods"), for the slow report's split.
+export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_MS, sleep = wait, target = null } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
-      const started = Date.now(), end = beginWait("d1");
-      let result;
-      try { result = await run(); } finally { end(); }
-      noteD1(result, Date.now() - started);
+      const started = Date.now(), end = beginWait("d1"), endTarget = target ? beginWait("d1" + target) : () => {};
+      let result, counted = false;
+      try {
+        viaBatcher.seen = false;
+        const pending = run();
+        counted = viaBatcher.seen;
+        result = await pending;
+      } finally { end(); endTarget(); }
+      noteD1(result, Date.now() - started, { counted });
       return result;
     }
     catch (error) {

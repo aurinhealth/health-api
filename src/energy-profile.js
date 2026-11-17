@@ -2,7 +2,7 @@
 // weight (Mifflin-St Jeor) times everyday activity, the weekly goal, and a
 // sport estimate for users whose training is not tracked by a connected source.
 import { bilingual } from "./lang.js";
-import { normalizeFocus, sportFromText, mainKindsOf } from "./athlete-focus.js";
+import { normalizeFocus, sportFromText, mainKindsOf, mainSportOfKinds } from "./athlete-focus.js";
 import { localToday } from "./user-time.js";
 import { normalizeDiet } from "./diet.js";
 
@@ -34,9 +34,25 @@ export const GOALS = {
 // 1–1.4 % (Garthe 2011), 0.5–1 % is advised to keep muscle (Helms 2014).
 // 1 kg a week would be 1.8 % for a 55 kg runner. Settings offers no faster pace.
 export const MAX_LOSS_SHARE = 0.01;
-export function weeklyGoalKg(goalKey, weightKg) {
-  const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek, kg = num(weightKg);
-  return goal < 0 && kg > 0 ? Math.max(goal, -kg * MAX_LOSS_SHARE) : goal;
+// Below BMI 18.5 (WHO's underweight line) a losing goal plans maintenance
+// instead: no deficit for someone already light (onboarding review point 11).
+export const MIN_LOSS_BMI = 18.5;
+// Heavy training (T-NUT-2, 2026-11-16): from 10 hours of sport a week (the
+// "10+" choice of SPORT_HOURS) losing goes at most 0.5 % a week, the low end
+// of Helms 2014, so a deficit on top of a big training load keeps energy for
+// recovery (low energy availability, Mountjoy 2018).
+export const HEAVY_TRAINING_HOURS = 10;
+export const HEAVY_MAX_LOSS_SHARE = 0.005;
+const lossShare = weeklyHours => num(weeklyHours) >= HEAVY_TRAINING_HOURS ? HEAVY_MAX_LOSS_SHARE : MAX_LOSS_SHARE;
+// No goal (or an unknown one) plans maintenance: no deficit nobody asked for.
+export function weeklyGoalKg(goalKey, weightKg, heightCm = null, weeklyHours = null) {
+  const goal = (GOALS[goalKey] || GOALS.maintain).kgPerWeek, kg = num(weightKg), m = num(heightCm) / 100;
+  if (goal < 0 && kg > 0 && m >= 1 && kg / (m * m) < MIN_LOSS_BMI) return 0;
+  return goal < 0 && kg > 0 ? Math.max(goal, -kg * lossShare(weeklyHours)) : goal;
+}
+// Whether heavy training slowed the chosen loss (the coach card says why).
+export function heavyTrainingCap(goalKey, weightKg, heightCm = null, weeklyHours = null) {
+  return num(weeklyHours) >= HEAVY_TRAINING_HOURS && weeklyGoalKg(goalKey, weightKg, heightCm, weeklyHours) > weeklyGoalKg(goalKey, weightKg, heightCm);
 }
 
 // The highest calorie target of a day, morning and evening alike: a sanity
@@ -65,6 +81,10 @@ export function ageFrom(birthDate, now = new Date()) {
 
 // Cleans a profile posted from the dashboard; unknown values become null.
 const clockText = v => { const m = String(v ?? "").trim().match(/^(\d{1,2}):(\d{2})$/); return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? m[1].padStart(2, "0") + ":" + m[2] : ""; };
+// The days an alarm rings, 0 = Sunday … 6 = Saturday (getUTCDay); without a
+// choice Monday to Friday for the work day alarm, Saturday and Sunday at the weekend.
+export const WORK_DAYS = [1, 2, 3, 4, 5], WEEKEND_DAYS = [0, 6];
+const weekdays = (v, fallback) => Array.isArray(v) ? [...new Set(v.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a, b) => a - b) : [...fallback];
 
 // One night's own choice from the Spánek screen: the evening's date, how long
 // to sleep (5–12 h in minutes, null = the whole need) and a wake time for
@@ -82,7 +102,8 @@ export function sleepSettings(profile = {}) {
   const goal = num(profile.sleepGoal), once = sleepTonight(profile.sleepTonight);
   return {
     goal: goal >= 360 && goal <= 600 ? goal : null,
-    wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) },
+    wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend),
+      workdayDays: weekdays(profile.wakeDays, WORK_DAYS), weekendDays: weekdays(profile.wakeDaysWeekend, WEEKEND_DAYS) },
     // The usual wake times kept once worked out (profile-suggestions.js pinUsualWake).
     usual: { workday: minutes(profile.wakeUsual?.workday), weekend: minutes(profile.wakeUsual?.weekend) },
     tonight: once ? { date: once.date, minutes: once.minutes, wake: minutes(once.wake) } : null
@@ -124,8 +145,14 @@ export function normalizeProfile(p = {}) {
     // Sleep: an own goal (6–10 h, in minutes) and the alarm on work days and
     // at the weekend ("HH:MM"); empty means the usual from recorded nights.
     sleepGoal: inRange(p.sleepGoal, 360, 600),
+    // The norm fitness age and Aurin age compare VO2max with: empty is FRIEND
+    // (the default), "hunt" the Norwegian HUNT 3 (own-vo2max.js).
+    fitnessNorm: p.fitnessNorm === "hunt" ? "hunt" : "",
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
+    // The days each alarm rings (Friday off: no work day alarm that morning).
+    wakeDays: weekdays(p.wakeDays, WORK_DAYS),
+    wakeDaysWeekend: weekdays(p.wakeDaysWeekend, WEEKEND_DAYS),
     sleepTonight: sleepTonight(p.sleepTonight),
     // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
     meals: mealSlots(p.meals),
@@ -154,7 +181,8 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
   for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
-  const deficitOf = key => Math.round(-weeklyGoalKg(key, weight) * 7700 / 7) || 0;
+  const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
+  const deficitOf = key => Math.round(-weeklyGoalKg(key, weight, p.height, sportHours) * 7700 / 7) || 0;
   if (missing.length) {
     // The owner keeps the calibrated baseline until the profile is complete;
     // weight stays required for everyone.
@@ -162,7 +190,6 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     return { ready: false, source: null, missing, weightKg: weight > 0 ? weight : null };
   }
   const bmr = restingMetabolicRate(p, weight);
-  const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
   const sportDaily = activityTracked ? 0 : sportHours * weight * SPORT_KCAL_PER_KG_HOUR / 7;
   return {
     ready: true,
@@ -174,6 +201,9 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     sportDaily: Math.round(sportDaily),
     // Calories below expenditure per day; 0 when maintaining.
     deficit: deficitOf(p.goal),
+    // Sport hours a week the deficit was planned with, and whether they slowed the loss.
+    weeklyHours: num(sportHours) || 0,
+    heavyTraining: heavyTrainingCap(p.goal, weight, p.height, sportHours),
     // Never plan below resting metabolism, nor below common safe minimums.
     // On a training day the training comes on top (index.js energyForDate).
     floor: Math.round(Math.max(bmr, p.sex === "male" ? 1500 : 1200)),
@@ -200,11 +230,12 @@ export function proteinReferenceKg(weightKg, heightCm) {
 // weeks. No change while the rate is within the goal's range: losing between
 // half and 1.5× the goal, maintaining within ±0.25 kg a week.
 // The loop also corrects a systematic error of the wearable's energy figures.
-// With the weight, losing is measured against the pace capped at 1 % a week.
-export function trendAdjustment(goalKey, trend, weightKg = null) {
+// With the weight, losing is measured against the pace capped at 1 % a week;
+// with the height too, below BMI 18.5 against maintaining.
+export function trendAdjustment(goalKey, trend, weightKg = null, heightCm = null, weeklyHours = null) {
   const rate = Number(trend?.weeklyRateKg), samples = Number(trend?.samples || 0), span = trend?.spanDays;
   if (trend?.weeklyRateKg == null || !Number.isFinite(rate) || samples < 4 || (span != null && Number(span) < 21)) return { adjustment: 0, reason: "insufficient_weight_history" };
-  const goal = weeklyGoalKg(goalKey, weightKg);
+  const goal = weeklyGoalKg(goalKey, weightKg, heightCm, weeklyHours);
   const step = gap => { const kcal = Math.max(-250, Math.min(250, -gap * 7700 / 7 * 0.5)); return Math.round(kcal / 25) * 25 || 0; };
   if (goal < 0) {
     if (rate > goal / 2) return { adjustment: step(rate - goal), reason: "loss_below_target" };
@@ -216,7 +247,8 @@ export function trendAdjustment(goalKey, trend, weightKg = null) {
     if (rate > goal * 1.5) return { adjustment: step(rate - goal), reason: "gain_above_target" };
     return { adjustment: 0, reason: "within_target_range" };
   }
-  if (rate > 0.25) return { adjustment: step(rate), reason: "gaining_while_maintaining" };
+  // Below BMI 18.5 a losing goal plans maintenance: gaining is never cut back there.
+  if (rate > 0.25) return (GOALS[goalKey]?.kgPerWeek ?? 0) < 0 ? { adjustment: 0, reason: "within_target_range" } : { adjustment: step(rate), reason: "gaining_while_maintaining" };
   if (rate < -0.25) return { adjustment: step(rate), reason: "losing_while_maintaining" };
   return { adjustment: 0, reason: "within_target_range" };
 }
@@ -253,10 +285,17 @@ export function effectiveProfile(saved, suggested) {
   if (Array.isArray(history?.regularSports) && history.regularSports.length) profile.regularSports = history.regularSports.slice(0, 4);
   // A race that is over no longer decides (athleteFocus drops it too).
   const raceAhead = !profile.eventDate || profile.eventDate >= localToday();
-  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
+  const raceSport = { run: "running", ride: "cycling", swim: "swimming", tri: "triathlon" }[normalizeFocus(profile).eventSport];
+  if (profile.mainSport === "auto") profile.mainSport = (raceAhead ? raceSport ?? sportFromText(profile.eventName) : null) ?? sportFromText(profile.sportGoal)
     ?? (history?.recentCount || history?.yearCount ? suggested.mainSport ?? history.mainSport : "general");
   // "auto" never lands on a sport the athlete turned off (Sports to suggest).
   if (saved?.mainSport === "auto" && Array.isArray(profile.sports) && !mainKindsOf({ mainSport: profile.mainSport }).every(k => profile.sports.includes(k))) profile.mainSport = "general";
+  // Sports ticked but none of them main, and a race ahead: the race's sport
+  // (its distance, else its name) is the main one when the athlete ticked it.
+  if ((profile.eventName || profile.eventDate) && raceAhead && Array.isArray(profile.mainSports) && !profile.mainSports.length && Array.isArray(profile.sports)) {
+    const kinds = mainKindsOf({ mainSport: raceSport ?? sportFromText(profile.eventName) });
+    if (kinds.length && kinds.every(k => profile.sports.includes(k))) Object.assign(profile, { mainSports: kinds, mainSport: mainSportOfKinds(kinds) });
+  }
   const hours = Number(history?.weeklyHours);
   if ((profile.weeklyHours == null || profile.weeklyHours === "") && hours >= 1) profile.weeklyHours = Math.round(hours * 2) / 2;
   profile.mainSport = normalizeFocus(profile).mainSport;

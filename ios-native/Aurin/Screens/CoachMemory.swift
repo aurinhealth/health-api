@@ -251,7 +251,7 @@ struct CoachMemoryEditor: View {
     }
 }
 
-/// "Zapamatováno · Zpět" under an answer.
+/// "Zapamatováno, Zpět" under an answer.
 struct MemoryChipView: View {
     let chip: CoachMemoryChip
     var undo: () -> Void

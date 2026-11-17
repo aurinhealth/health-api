@@ -79,7 +79,7 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.deepEqual(t.plan.map(p => p.kind), ["workout", "bedtime"]);
   assert.equal(t.plan[0].time, null, "a planned session has no clock: it comes after the last record");
   assert.equal(t.plan[0].status, "planned");
-  assert.equal(t.plan[0].detail, "45 min · 45 TSS");
+  assert.equal(t.plan[0].detail, "45 min, 45 TSS");
   assert.equal(t.plan[0].done, false);
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:00", "the usual wake time (07:02) to 5 minutes");
@@ -120,7 +120,7 @@ test("Den: a done ride carries its distance, power and what it added to the stra
   const training = {
     planned: [],
     completed: [
-      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo · tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
+      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo, tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
       { id: "watch:1", family: "apple-health", start: DATE + "T07:00:00", durationHours: 0.5, name: "Běh", type: "Run", payload: { exercise: { metricsSummary: { distanceMillimeters: 5200000, averagePowerWatts: 0 } } } }
     ],
     matched: []
@@ -285,12 +285,12 @@ test("a day's Apple Health HRV wins over Google's copy of it", () => {
 
 test("the day's strain target follows readiness, the plan, sleep debt and the zone", async () => {
   const { strainTarget } = await import("../src/app-today.js");
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green" }), { low: 11.1, high: 14.1 });
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", debt: 30 }), { low: 10.6, high: 13.6 });
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", planned: 8.6 }), { low: 9.1, high: 12.1 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green" }), { low: 11.1, high: 14.1, mid: 12.6 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", debt: 30 }), { low: 10.6, high: 13.6, mid: 12.1 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", planned: 8.6 }), { low: 9.1, high: 12.1, mid: 10.6 });
   assert.ok(strainTarget({ readiness: 50, zone: "yellow", planned: 18 }).high <= 13.5);
   assert.ok(strainTarget({ readiness: 25, zone: "red" }).high <= 7.5);
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", rest: true }), { low: 5, high: 8 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", rest: true }), { low: 5, high: 8, mid: 6.5 });
   const t = buildToday(input);
   assert.ok(t.strain.target.low < t.strain.target.high);
   assert.equal(t.strain.target.readiness, t.readiness.score);
@@ -300,13 +300,13 @@ test("the day's strain target follows readiness, the plan, sleep debt and the zo
 test("without a plan the strain target follows readiness under the usual day, never a rest day (D3)", async () => {
   const { strainTarget, usualStrain } = await import("../src/app-today.js");
   // Without a plan and nothing today: no rest-day cap, the usual day caps the high end.
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 13 }), { low: 10, high: 13 });
-  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 16 }), { low: 11.1, high: 14.1 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 13 }), { low: 10, high: 13, mid: 11.5 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", noPlan: true, usual: 16 }), { low: 11.1, high: 14.1, mid: 12.6 });
   // A new athlete without 14 days: at most 12.
-  assert.deepEqual(strainTarget({ readiness: 90, zone: "green", noPlan: true }), { low: 9, high: 12 });
+  assert.deepEqual(strainTarget({ readiness: 90, zone: "green", noPlan: true }), { low: 9, high: 12, mid: 10.5 });
   assert.ok(strainTarget({ readiness: 25, zone: "red", noPlan: true, usual: 15 }).high <= 7.5);
   // A very quiet usual day never caps below a rest day, and the range never turns over.
-  assert.deepEqual(strainTarget({ readiness: 80, zone: "green", noPlan: true, usual: 1.8 }), { low: 5, high: 8 });
+  assert.deepEqual(strainTarget({ readiness: 80, zone: "green", noPlan: true, usual: 1.8 }), { low: 5, high: 8, mid: 6.5 });
   for (const debt of [60, 120, 600]) {
     const t = strainTarget({ readiness: 80, zone: "red", noPlan: true, usual: 1.8, debt });
     assert.ok(t.high >= t.low && t.low >= 1, JSON.stringify(t));
@@ -329,7 +329,7 @@ test("without a plan the strain target follows readiness under the usual day, ne
   const free = today({ recovery: { yesterday: {}, tomorrow: {}, gym: {} } });
   assert.equal(free.strain.target.rest, false);
   assert.match(free.strain.target.plan, /^bez plánu/);
-  assert.equal(withLang("en", () => today({ recovery: null })).strain.target.plan.replace(" · not above your usual volume", ""), "no plan");
+  assert.equal(withLang("en", () => today({ recovery: null })).strain.target.plan.replace(", not above your usual volume", ""), "no plan");
   // A plan around today: planned or done yesterday or tomorrow, a gym plan, a running Aurin plan.
   for (const recovery of [{ tomorrow: { planned: [{ name: "Intervaly" }] } }, { yesterday: { matched: [{ name: "Tempo" }] } }, { gym: { "2026-10-15": { exercises: ["Dřep"] } } }]) {
     const t = today({ recovery });

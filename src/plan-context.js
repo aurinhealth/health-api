@@ -75,9 +75,11 @@ export async function syncedPlans(env,today=localToday()){
   return {active,gym};
 }
 // Days with an activity of the plan's sports (`of`: a plan or a sport), from (inclusive) to (exclusive).
+// The families that store workouts named first, so the read seeks
+// idx_health_datapoints_user_1 by start_time instead of reading every workout ever.
 export async function planSportDates(env,of,from,to){
   const sports=planDoneSports(of);
-  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
   return [...new Set(rows.map(activityFromRow).filter(a=>a&&sports.includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
 // Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.
@@ -206,12 +208,12 @@ export function gymPlanSummary(rows){
 // where it is shown, not for the long reads (milestones) that only count days.
 export async function trainingGymPlans(env,from,to,{summary=false}={}){
   await ensureGymPlans(env.DB);
-  const [plans,cancelled,unpaired]=await Promise.all([
+  const [plans,cancelled,unpaired,types]=await Promise.all([
     env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
     env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
-    unpairedGymDays(env.DB,env.USER_ID,from,to)
+    unpairedGymDays(env.DB,env.USER_ID,from,to),gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}))
   ]);
-  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={},types=await gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}));
+  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={};
   for(const r of plans.results||[]){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}

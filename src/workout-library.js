@@ -100,7 +100,7 @@ export async function capabilitiesWithLevel(db, sport = "ride") {
   const own = chosen?.mode === 'manual' ? chosen.level : training.history?.sportExperienceOwn?.[kind] || chosen?.level || null;
   // `levels`: every sport's level as Profile shows it, for the coach's way of explaining.
   const levels = Object.fromEntries(['ride', 'run', 'swim', 'strength'].map(s => [s === 'strength' ? 'gym' : s, training.experienceBySport?.[s]?.level || null]).filter(([, l]) => l));
-  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own, levels };
+  return { capabilities: { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) }, level: own, levels, runBase: training.history?.runBase || null };
 }
 
 export function parseWorkoutSearchFilters(params) {
@@ -425,8 +425,8 @@ function moreWork(base, target, { library, fits, cap, maxDifficulty }) {
     if (!best || n(r.work_minutes, 0) > n(best.work_minutes, 0) || n(r.work_minutes, 0) === n(best.work_minutes, 0) && n(r.difficulty, 0) < n(best.difficulty, 0)) best = r;
   }
   if (!best) return null;
-  const name = String(best.name).replace(/ · \d+ min$/, "");
-  return { ...best, resized_from: base.id, resize_notes: [L("delší hlavní série v rámci dnešní obtížnosti: ", "a longer main set within today's difficulty: ") + name + L(" místo ", " instead of ") + String(base.name).replace(/ · \d+ min$/, "")] };
+  const name = String(best.name).replace(/(?: · |, )\d+ min$/, "");
+  return { ...best, resized_from: base.id, resize_notes: [L("delší hlavní série v rámci dnešní obtížnosti: ", "a longer main set within today's difficulty: ") + name + L(" místo ", " instead of ") + String(base.name).replace(/(?: · |, )\d+ min$/, "")] };
 }
 
 function resizeLength(base, target, { library, fits }) {
@@ -447,7 +447,7 @@ function resizeLength(base, target, { library, fits }) {
   }
   best ??= closest;
   if (best === resized) return resized;
-  const name = String(best.name).replace(/ · \d+ min$/, "");
+  const name = String(best.name).replace(/(?: · |, )\d+ min$/, "");
   return { ...best, resized_from: base.id, resize_notes: [...(best.resize_notes || []), L("kratší varianta z knihovny: ", "shorter variant from the library: ") + name] };
 }
 function resizeOwn(base, target) {
@@ -456,12 +456,12 @@ function resizeOwn(base, target) {
   try { structure = JSON.parse(base.structure_json || "[]"); } catch {}
   const resized = resizeStructure(structure, target, { sport, system: base.primary_system });
   // "VO₂ 40/20 3×12" with one set fewer is "2×12" (coach eval W01).
-  const r = resized.mainRepeats, name = String(base.name).replace(/ · \d+ min$/, "");
+  const r = resized.mainRepeats, name = String(base.name).replace(/(?: · |, )\d+ min$/, "");
   const counted = r ? name.replace(new RegExp("(^|[^\\d])" + r.from + "×"), "$1" + r.to + "×") : name;
   let tags = [];
   try { tags = JSON.parse(base.tags_json || "[]"); } catch {}
   const built = buildWorkout({
-    id: base.id + "~" + target, sport, name: counted + " · " + target + " min",
+    id: base.id + "~" + target, sport, name: counted + ", " + target + " min",
     system: base.primary_system, secondarySystem: base.secondary_system, structure: resized.structure, family: base.family, level: base.level,
     sourceName: base.source_name, sourceKind: base.source_kind, sourceUrl: base.source_url, licenseNote: base.license_note, attribution: base.attribution, citation: base.citation,
     description: base.description, tags: tags.filter(t => !/^\d+min$/.test(t)).concat(target + "min"), cadence: base.cadence, indoorOnly: Boolean(n(base.indoor_only, 0))
@@ -591,7 +591,7 @@ export async function hasFeedback(db, workoutId, date) {
 // app read the same event): the step text with each step's kind, one line
 // about this session on top and carbs per hour. It has no time of day (midnight,
 // as the gym's) unless one is given: the athlete sets one in the app if they want.
-export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null } = {}) {
+export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null, experience = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
   const rendered = renderForEnvironment(workout, environment);
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
@@ -603,7 +603,7 @@ export function buildIntervalsEvent(workout, date, environment = "indoor", { thr
   // The athlete's own workout and the AI's workout for the day keep their own
   // words; a library workout's generic text stays in the app.
   const own = /^(own|ai)-/.test(String(workout.id || "")) && workout.description ? String(workout.description).trim() + "\n" : "";
-  const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport);
+  const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport, experience);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime || "")) ? startTime : "00:00";
   return {
     external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: workout.name,
@@ -623,7 +623,9 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // proposals. Availability limits belong to generation, never to this write.
   await ensureTrainingTables(db);
   await ensureLocalWorkouts(db);
-  let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime });
+  // The carbs of the calendar event follow the athlete's level, as the app's card does.
+  const experience = await capabilitiesWithLevel(db, sportOf(workout.sport) === "run" ? "run" : sportOf(workout.sport) === "swim" ? "swim" : "ride").then(c => c.level, () => null);
+  let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime, experience });
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) {
     // A race leg saved before the race mark existed gets it now (the watch's race card).
@@ -640,7 +642,7 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   }
   // Watts in the description only for a new event.
   const thresholds = await athleteThresholds(env).catch(() => null);
-  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
+  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime, experience });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).

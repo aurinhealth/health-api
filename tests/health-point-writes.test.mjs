@@ -132,6 +132,16 @@ test('a changed row on a closed day makes the cached days outdated; today and ye
   assert.equal(bumps.length, 2);
 });
 
+test("a changed Google workout of today makes the cached day's activity outdated; the same workout again does not", async () => {
+  const { env, context, bumps } = setup();
+  context.readSyncPrefs = async () => ({ pullActivities: true });
+  const run = [{ name: 'run', info: { sample: null, start: localToday() + 'T06:00:00Z', end: localToday() + 'T07:00:00Z', value: null, unit: null } }];
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'exercise', run);
+  assert.equal(bumps.length, 1);
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'exercise', run);
+  assert.equal(bumps.length, 1);
+});
+
 test('Intervals weight import skips identical weights and retains corrections', async () => {
   const { raw, env } = setup();
   let weight = 80;

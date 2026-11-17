@@ -51,7 +51,7 @@ struct InsightsView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Rekordy a zaměření") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · rekordy").padding(.top, 24)
+                SectionLabel(text: "Osobní rekordy").padding(.top, 24)
                 Text("Rekordy a zaměření").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
@@ -162,7 +162,7 @@ struct InsightsView: View {
         } else {
             let top = pinned.compactMap { name in all.first { $0.exercise == name } }
             if !top.isEmpty {
-                SectionLabel(text: L10n.f("Připnuté · %@ z %@", String(top.count), String(Self.maxPinned))).padding(.top, 24)
+                SectionLabel(text: L10n.f("Připnuté (%@ z %@)", String(top.count), String(Self.maxPinned))).padding(.top, 24)
                 liftCard(top)
             }
             if let pinNote {
@@ -170,7 +170,7 @@ struct InsightsView: View {
             }
             let rest = all.filter { !pinned.contains($0.exercise) }
             if !rest.isEmpty {
-                SectionLabel(text: (top.isEmpty ? L10n.tr("Cviky") : L10n.tr("Všechny cviky")) + " · \(rest.count)").padding(.top, 24)
+                SectionLabel(text: (top.isEmpty ? L10n.tr("Cviky") : L10n.tr("Všechny cviky")) + " (\(rest.count))").padding(.top, 24)
                 liftCard(showAll ? rest : Array(rest.prefix(Self.shown)))
                 if rest.count > Self.shown && !showAll {
                     SecondaryButton(title: L10n.f("Zobrazit všechny (%@)", String(rest.count)), systemImage: "chevron.down") { showAll = true }
@@ -281,7 +281,7 @@ struct InsightsView: View {
                     legend("Anaerobní", p.anaerobic, Palette.rust)
                 }
                 if let minutes = focus.minutes, let count = focus.activities {
-                    Text(L10n.plural("%lld aktivit", count) + " · " + Fmt.duration(minutes))
+                    Text(L10n.plural("%lld aktivit", count) + ", " + Fmt.duration(minutes))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
@@ -351,7 +351,7 @@ struct InsightsView: View {
                 ForEach(Array(ride.efforts.enumerated()), id: \.offset) { index, effort in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     recordRow("\(effort.minutes) min", value: "\(effort.watts) W",
-                              detail: [effort.wkg.map { Fmt.decimal($0, digits: 1) + " W/kg" }, effort.minutes == 60 ? "FTP" : nil].compactMap { $0 }.joined(separator: " · "))
+                              detail: [effort.wkg.map { Fmt.decimal($0, digits: 1) + " W/kg" }, effort.minutes == 60 ? "FTP" : nil].compactMap { $0 }.joined(separator: ", "))
                 }
             }
             .padding(.top, 8)

@@ -164,7 +164,7 @@ private struct AlarmDay: View {
 
     private var title: String {
         let name = first ? W.tr("Zítra", "Tomorrow") : W.dayName(morning).capitalized(with: W.locale)
-        return name + (weekend ? W.tr(" · víkend", " · weekend") : "")
+        return name + (weekend ? W.tr(", víkend", ", weekend") : "")
     }
 
     private var bedMinutes: Int {
@@ -192,7 +192,7 @@ private struct AlarmDay: View {
         .buttonStyle(.plain)
     }
 
-    /// Saves on the iPhone (the alarm lives there): a tap and "Saved ·
+    /// Saves on the iPhone (the alarm lives there): a tap and "Saved:
     /// weekdays 6:45" for two seconds, or a failure tap and Try again.
     private func save(_ scope: String) {
         sending = true
@@ -209,7 +209,7 @@ private struct AlarmDay: View {
             }
             saved = wake
             WKInterfaceDevice.current().play(.success)
-            let text = W.tr("Uloženo · ", "Saved · ") + Self.scopeName(scope) + " " + W.clock(minutes: Double(wake))
+            let text = W.tr("Uloženo: ", "Saved: ") + Self.scopeName(scope) + " " + W.clock(minutes: Double(wake))
             result = .saved(text)
             AccessibilityNotification.Announcement(text).post()
             try? await Task.sleep(for: .seconds(2))
@@ -217,7 +217,7 @@ private struct AlarmDay: View {
         }
     }
 
-    /// "weekdays", "weekend" or "tomorrow" in "Saved · weekdays 6:45".
+    /// "weekdays", "weekend" or "tomorrow" in "Saved, weekdays 6:45".
     static func scopeName(_ scope: String) -> String {
         switch scope {
         case "once": W.tr("zítra", "tomorrow")

@@ -246,7 +246,7 @@ struct MissedPillCard: View {
                 Card {
                     WidgetHeader(title: "Cyklus", color: Palette.pink)
                     Text("Prášek ještě není zapsaný").font(Typo.sentence(20)).foregroundStyle(Palette.ink)
-                    Text(verbatim: L10n.f("%@. prášek z %@", String(number), String(pill.of)) + " · " + L10n.f("obvykle ho bereš kolem %@", ClockText.format(usual)))
+                    Text(verbatim: L10n.f("%@. prášek z %@", String(number), String(pill.of)) + ", " + L10n.f("obvykle ho bereš kolem %@", ClockText.format(usual)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     HStack(spacing: 10) {
                         Button { take() } label: {
@@ -406,14 +406,14 @@ struct CycleWidget: View {
             .lineLimit(2).fixedSize(horizontal: false, vertical: true)
     }
 
-    /// "1. den · křeče, únava", "Krvácení · křeče", or without bleeding "Návaly horka · noční pocení".
+    /// "1. den, křeče, únava", "Krvácení, křeče", or without bleeding "Návaly horka, noční pocení".
     private var summary: String {
         if cycle.flow == 0 {
-            return Fmt.capitalized(cycle.symptoms.map { CycleText.symptom($0) }.joined(separator: " · "))
+            return Fmt.capitalized(cycle.symptoms.map { CycleText.symptom($0) }.joined(separator: ", "))
         }
         let head = cycle.hormonal || cycle.cycleDay == nil ? L10n.tr("Krvácení") : L10n.f("%@. den", String(cycle.cycleDay ?? 1))
         let symptoms = cycle.symptoms.map { CycleText.symptom($0) }
-        return ([head] + (symptoms.isEmpty ? [] : [symptoms.joined(separator: ", ")])).joined(separator: " · ")
+        return ([head] + (symptoms.isEmpty ? [] : [symptoms.joined(separator: ", ")])).joined(separator: ", ")
     }
 }
 

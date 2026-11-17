@@ -48,7 +48,7 @@ final class MuscleTests: XCTestCase {
         XCTAssertLessThanOrEqual(focus.count, 5, "the server takes 1 to 5 muscles")
         XCTAssertEqual(Set(focus).count, focus.count)
         for id in focus {
-            // Rested, or rested later today as the rings count it (the sample's chest and back).
+            // Rested, or rested later today as the rings count it.
             XCTAssertTrue(sample.ready(body: id), id)
             XCTAssertTrue(BodyFigure.muscles.contains { $0.id == id }, id)
         }
@@ -72,6 +72,10 @@ final class MuscleTests: XCTestCase {
         XCTAssertEqual(Set(try fatigue(chest: "recovering", chestReady: "2026-11-09").restedFocus), ["chest", "forearms"])
         // Recovering until tomorrow does not.
         XCTAssertEqual(try fatigue(chest: "recovering", chestReady: "2026-11-10").restedFocus, [])
+        // No big muscle rested: the short session takes the smaller rested ones.
+        XCTAssertEqual(try fatigue(chest: "fatigued", chestReady: "2026-11-11").shortFocus, ["forearms"])
+        // With a big muscle rested there is no short session, Rested builds it.
+        XCTAssertEqual(try fatigue(chest: "recovering", chestReady: "2026-11-09").shortFocus, [])
     }
 
     func testFigurePathsStayInTheFigure() {

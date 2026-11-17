@@ -14,18 +14,21 @@ export async function connectionStatus(env) {
   const google = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
   const googleConnected = Boolean(google && env.GOOGLE_REFRESH_TOKEN);
   const intervalsButton = intervalsOAuthConfigured(env), intervalsConnected = Boolean(env.INTERVALS_API_KEY);
-  // A stored key the provider refused at the last sync (connection-health.js).
-  const health = await readConnectionHealth(env);
+  const own = env.DB && env.USER_ID != null;
+  // All four reads side by side: one database trip instead of four in a row.
+  // A stored key the provider refused at the last sync (connection-health.js);
+  // Apple Health is connected on the iPhone (HealthKit), the server only knows
+  // what the phone sent; where nights and days come from when several sources
+  // measure them (source-priority.js); the types switched off per service under
+  // Zdroje dat → Health data (source-reading.js).
+  const [health, apple, priority, readOff] = await Promise.all([readConnectionHealth(env),
+    own ? appleHealthStatus(env.DB, env.USER_ID).catch(() => ({ connected: false })) : { connected: false },
+    own ? readSourcePriority(env.DB, env.USER_ID) : { night: "auto", day: "auto" },
+    own ? readReadOff(env.DB, env.USER_ID) : { google: [], ultrahuman: [], whoop: [] }]);
   const state = (provider, connected) => connected ? health[provider] : { needsReconnect: false, lastError: null, lastErrorAt: null, lastSuccessAt: null };
-  // Apple Health is connected on the iPhone (HealthKit); the server only knows what the phone sent.
   const ultrahuman = ultrahumanConfigured(env), ultrahumanConnected = Boolean(env.ULTRAHUMAN_TOKEN);
   const whoop = whoopConfigured(env), whoopConnected = Boolean(env.WHOOP_TOKEN);
   const wahoo = wahooConfigured(env), wahooConnected = Boolean(env.WAHOO_TOKEN);
-  const apple = env.DB && env.USER_ID != null ? await appleHealthStatus(env.DB, env.USER_ID).catch(() => ({ connected: false })) : { connected: false };
-  // Where nights and days come from when several sources measure them (source-priority.js).
-  const priority = env.DB && env.USER_ID != null ? await readSourcePriority(env.DB, env.USER_ID) : { night: "auto", day: "auto" };
-  // The types switched off per service under Zdroje dat → Health data (source-reading.js).
-  const readOff = env.DB && env.USER_ID != null ? await readReadOff(env.DB, env.USER_ID) : { google: [], ultrahuman: [], whoop: [] };
   return {status:"ok",priority,readOff,readTypes:READ_TYPES,providers:[
     {id:"google",name:"Google Health",required:false,configured:google,connected:googleConnected,...state("google",googleConnected),connectUrl:google?"/oauth/google":null,extras:grantedExtras(env),extrasUrl:google?"/oauth/google?extra=1":null,
       // Permissions unticked on Google's consent screen: that data stays empty until they are granted.

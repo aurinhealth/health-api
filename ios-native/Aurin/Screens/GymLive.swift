@@ -121,7 +121,7 @@ struct LiveGymView: View {
                 }
                 .buttonStyle(.plain)
             }
-            SectionLabel(text: "Probíhá · posilovna").padding(.top, 18)
+            SectionLabel(text: "Právě v posilovně").padding(.top, 18)
             clock(day).padding(.top, 2)
 
             if list.isEmpty {
@@ -183,7 +183,7 @@ struct LiveGymView: View {
         }
     }
 
-    /// A finished exercise (or one waiting): "5 sérií · 2 180 kg".
+    /// A finished exercise (or one waiting): "5 sérií, 2 180 kg".
     private func collapsed(_ exercise: GymExercise) -> some View {
         let done = exercise.sets.allSatisfy { $0.done }
         let count = exercise.doneCount
@@ -191,7 +191,7 @@ struct LiveGymView: View {
             sum + (s.kg.flatMap(LiftWeight.number) ?? 0) * (s.reps.flatMap(LiftWeight.number) ?? 0)
         }
         let caption: String = count > 0
-            ? L10n.plural("%lld sérií · %@ %@", count, Fmt.int(LiftWeight.shownValue(volume)), Units.weightUnit)
+            ? L10n.plural("%lld sérií, %@ %@", count, Fmt.int(LiftWeight.shownValue(volume)), Units.weightUnit)
             : L10n.plural("%lld sérií v plánu", exercise.workCount)
         return HStack(spacing: 12) {
             Image(systemName: done ? "checkmark" : "circle.dashed")
@@ -287,7 +287,7 @@ struct LiveGymView: View {
         let time = GymCoach.clock(minutes)
         let title = day.planName ?? (done.isEmpty ? L10n.tr("Silový trénink") : GymCoach.title(done.map(\.name), catalog: catalog, known: muscles))
         return VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Posilovna · hotovo").padding(.top, 24)
+            SectionLabel(text: "Posilovna dokončena").padding(.top, 24)
             Text(title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
             HStack(alignment: .top, spacing: 8) {
                 GymStat(label: "Čas", value: time.value, unit: time.unit)

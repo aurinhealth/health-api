@@ -14,7 +14,7 @@ struct SettingsTitle: View {
     }
 }
 
-/// The photo, the name and "34 let · 182 cm · 81,4 kg" under it; opens Účet.
+/// The photo, the name and "34 let, 182 cm, 81,4 kg" under it; opens Účet.
 struct SettingsProfileCard: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -40,7 +40,7 @@ struct SettingsProfileCard: View {
         if let years, years > 0 { parts.append(L10n.f("%@ let", String(years))) }
         if let height = p["height"]?.number, height > 0 { parts.append(Units.lengthText(height)) }
         if let weight = model.today?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
     var body: some View {
@@ -385,8 +385,10 @@ struct GymSettingsView: View {
     }
 }
 
-/// Výživa: the meals of the day, the favourite drinks and the figure.
+/// Výživa: the meals of the day, the favourite drinks, the figure and the food region.
 struct FoodDrinkSettingsView: View {
+    @AppStorage(FoodRegion.key) private var foodRegion = FoodRegion.automatic
+
     var body: some View {
         SettingsPage(title: "Výživa") {
             SettingsGroup {
@@ -404,6 +406,14 @@ struct FoodDrinkSettingsView: View {
                 SettingsDivider()
                 NavigationLink { DrinkFigureSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "face.smiling", color: Palette.blue), title: "Postavička pití")
+                }
+                SettingsDivider()
+                NavigationLink {
+                    OptionListPage(title: "Region potravin", selection: $foodRegion, options: FoodRegion.options,
+                                   footer: "Potraviny z tohoto regionu se ve vyhledávání ukážou první. Automaticky se řídí regionem iPhonu.")
+                } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.green), title: "Region potravin",
+                                value: foodRegion == FoodRegion.automatic ? "Automaticky" : FoodRegion.title(foodRegion))
                 }
             }
             .buttonStyle(.plain)

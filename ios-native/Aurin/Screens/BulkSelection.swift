@@ -39,7 +39,7 @@ struct SelectableRow<Content: View>: View {
     }
 }
 
-/// Kopírovat · Přesunout · Smazat under the list while selecting.
+/// Kopírovat, Přesunout, Smazat under the list while selecting.
 struct BulkActionBar: View {
     let count: Int
     var copy: () -> Void

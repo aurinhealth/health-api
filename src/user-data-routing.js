@@ -24,6 +24,9 @@ const CENTRAL_TABLES = new Set([
   'auth_challenges', 'email_login_codes', 'review_code_failures', 'request_limits', 'd1_migrations'
 ]);
 const TARGET = Symbol('database target');
+// "user", "core" or "foods": which database a statement goes to, for the
+// slow report (d1-retry.js target).
+export const TARGET_KIND = Symbol('database kind');
 const STATEMENT = Symbol('database statement');
 const routers = new WeakMap();
 
@@ -52,9 +55,10 @@ export function routedUserDb(core, personal, personalTables, foods = core) {
     if (databases.size > 1) throw new Error('A query cannot join central and user databases or the food catalogue');
     return databases.values().next().value || core;
   }
+  const kindOf = database => database === personal && personal !== core ? 'user' : database === foods && foods !== core ? 'foods' : 'core';
   function wrap(statement, database) {
     return {
-      [TARGET]: database, [STATEMENT]: statement,
+      [TARGET]: database, [STATEMENT]: statement, [TARGET_KIND]: kindOf(database),
       bind: (...values) => wrap(statement.bind(...values), database),
       run: (...args) => statement.run(...args),
       first: (...args) => statement.first(...args),

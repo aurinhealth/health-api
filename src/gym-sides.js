@@ -9,15 +9,16 @@ const WORK = row => String(row?.[0] || 'WORK').toUpperCase() !== 'WARMUP';
 const pad = (row, n) => Array.from({ length: n }, (_, i) => row?.[i] == null ? '' : row[i]);
 
 // How each exercise was done last time: 'sides' or 'both'. The user's switch
-// in the app wins over the guess by name next time too.
+// in the app wins over the guess by name next time too: the last work set of
+// the last session decides (set 1 by sides, then back to both: 'both').
 export function lastSideChoice(sets) {
   const latest = new Map();
   for (const s of sets || []) {
-    if (!s.exercise) continue;
+    if (!s.exercise || !WORK([s.type])) continue;
     const date = String(s.workout_date || s.date || '');
+    const row = Number(s.plan_row) || 0;
     const prev = latest.get(s.exercise);
-    if (!prev || date > prev.date) latest.set(s.exercise, { date, sides: Boolean(s.side) });
-    else if (date === prev.date && s.side) prev.sides = true;
+    if (!prev || date > prev.date || (date === prev.date && row >= prev.row)) latest.set(s.exercise, { date, row, sides: Boolean(s.side) });
   }
   return Object.fromEntries([...latest].map(([name, v]) => [name, v.sides ? 'sides' : 'both']));
 }

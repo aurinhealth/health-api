@@ -112,7 +112,7 @@ test("the first gym session after Nemoc holds the weights with a set less, then 
   const base = { date, cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: session(day(-9)) }, recoveryWeek: { recovery: false, known: true } };
   const plan = extra => withLang("cs", () => generateStrengthPlan({ ...base, ...extra }, { durationMinutes: 60 }));
   const back = plan({ athleteState: { status: "active", recoveredAt: day(-2), memories: [] } });
-  assert.match(back.planName, / · po nemoci$/);
+  assert.match(back.planName, /, po nemoci$/);
   assert.match(back.rationale, /První trénink po nemoci: váhy se drží/);
   assert.ok(back.loadEstimates.every(x => x.sets <= 3));
   const bench = back.loadEstimates.find(x => x.exercise === "DB bench press");

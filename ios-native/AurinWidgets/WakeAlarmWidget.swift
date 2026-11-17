@@ -54,7 +54,7 @@ enum WakeAlarmMode {
     }
 }
 
-/// The alarm's title ("Alarm · weekday"), or "Snoozed" while it waits.
+/// The alarm's title ("Alarm, weekday"), or "Snoozed" while it waits.
 @available(iOS 26, *)
 struct WakeAlarmTitle: View {
     let attributes: AlarmAttributes<WakeAlarm>

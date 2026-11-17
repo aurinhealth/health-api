@@ -36,7 +36,7 @@ struct SleepDetailContent: View {
         let sleep = health.sleep
         ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.f("Spánek · noc na %@", weekday(health.date))).padding(.top, 24)
+            SectionLabel(text: L10n.f("Spánek v noci na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
@@ -67,7 +67,7 @@ struct SleepDetailContent: View {
                 // The window is the last 14 nights, however many of them were measured.
                 if let index = sleep.index, index.nights.count >= 2 {
                     HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(text: L10n.f("Index spánku · posledních %@ nocí", "14"))
+                        SectionLabel(text: L10n.f("Index spánku za posledních %@ nocí", "14"))
                         Spacer(minLength: 8)
                         Text(verbatim: L10n.f("průměr %@ / 100", String(index.average))).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
@@ -124,7 +124,7 @@ struct SleepDetailContent: View {
             }
             VStack(spacing: 0) {
                 if let stats = detail?.night?.stats, let hrv = stats.hrv {
-                    MetricRow(metric: .hrv, title: "HRV v noci", value: Fmt.int(hrv), unit: "ms" + (stats.hrvLow.map { " · " + Fmt.int($0) + "–" + Fmt.int(stats.hrvHigh) } ?? ""))
+                    MetricRow(metric: .hrv, title: "HRV v noci", value: Fmt.int(hrv), unit: "ms" + (stats.hrvLow.map { ", " + Fmt.int($0) + "–" + Fmt.int(stats.hrvHigh) } ?? ""))
                 }
                 if let r = health.respiration { MetricRow(metric: .respiration, title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
                 if let d = health.wristTemp?.deviation ?? health.skinTemp?.deviation {
@@ -137,7 +137,7 @@ struct SleepDetailContent: View {
             SectionLabel(text: "Potřeba a dluh").padding(.top, 32)
             Card {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Potřeba na dnešní noc · odhad").font(.body)
+                    Text("Potřeba na dnešní noc (odhad)").font(.body)
                     Spacer()
                     Text(Fmt.hoursMinutes(Double(sleep.tonight.need))).font(Typo.number(28))
                         .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep.tonight.need)))
@@ -164,7 +164,7 @@ struct SleepDetailContent: View {
 
             if let reg = sleep.regularity, !reg.nights.isEmpty {
                 let usual = RegularityChart.usual(reg.nights)
-                SectionLabel(text: L10n.f("Pravidelnost · %@ nocí", String(reg.nights.count))).padding(.top, 32)
+                SectionLabel(text: L10n.f("Pravidelnost za %@ nocí", String(reg.nights.count))).padding(.top, 32)
                 Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
                     .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 10)
                 Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
@@ -384,13 +384,13 @@ struct SleepIndexParts: View {
         }
     }
 
-    /// "usnutí za 9 min · probuzení 3× · 22 min vzhůru", whatever the night has.
+    /// "usnutí za 9 min, probuzení 3×, 22 min vzhůru", whatever the night has.
     private func qualityNote(_ q: HealthSnapshot.IndexParts.Quality) -> String {
         var bits: [String] = []
         if let latency = q.latency ?? night.latencyMinutes { bits.append(L10n.f("usnutí za %@ min", Fmt.int(latency))) }
         if let wakeups { bits.append(L10n.f("probuzení %@×", String(wakeups))) }
         if let awake = q.waso ?? night.stages?.awake { bits.append(L10n.f("%@ min vzhůru", Fmt.int(awake))) }
-        return bits.isEmpty ? L10n.tr("čas v posteli, kdy spíš") : bits.joined(separator: " · ")
+        return bits.isEmpty ? L10n.tr("čas v posteli, kdy spíš") : bits.joined(separator: ", ")
     }
 
     private func part(_ title: String, value: String, note: String, fill: Double, first: Bool = false, spoken: String? = nil) -> some View {
@@ -546,7 +546,7 @@ struct WeightDetailContent: View {
             SectionLabel(text: "Váha a složení těla").padding(.top, 24)
             if let w = health.weight {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
+                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text(Units.weightUnit).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 24)
@@ -574,7 +574,7 @@ struct WeightDetailContent: View {
                     SectionLabel(text: "Složení těla").padding(.top, 32)
                     VStack(spacing: 0) {
                         if let fat = w.bodyFat {
-                            MetricRow(metric: .bodyFat, title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { " · " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
+                            MetricRow(metric: .bodyFat, title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { ", " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
                         }
                         if let muscle = w.muscle {
                             MetricRow(metric: .muscle, title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)

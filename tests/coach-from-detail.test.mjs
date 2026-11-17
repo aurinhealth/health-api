@@ -10,8 +10,8 @@ import { scopedDb } from '../src/tenancy.js';
 const today = '2026-10-24';
 
 test('a detail screen names what the athlete asks about, never its numbers', () => {
-  const c = assistantAppContext({ view: 'training', date: today, sport: 'ride', subject: { kind: 'activity', id: 'i123456', title: 'Kolo · tempo', tss: 999 } }, today);
-  assert.deepEqual(c.subject, { kind: 'activity', id: 'i123456', title: 'Kolo · tempo', metric: null });
+  const c = assistantAppContext({ view: 'training', date: today, sport: 'ride', subject: { kind: 'activity', id: 'i123456', title: 'Kolo, tempo', tss: 999 } }, today);
+  assert.deepEqual(c.subject, { kind: 'activity', id: 'i123456', title: 'Kolo, tempo', metric: null });
   const m = assistantAppContext({ view: 'health', subject: { kind: 'metric', metric: 'hrv', title: 'HRV' } }, today);
   assert.deepEqual(m.subject, { kind: 'metric', id: null, title: 'HRV', metric: 'hrv' });
   // Unknown kinds, odd ids and control characters are left out.
@@ -24,11 +24,11 @@ test('a detail screen names what the athlete asks about, never its numbers', () 
 
 test('the open activity and the open planned session come from the stored day', () => {
   const day = {
-    completed: [{ id: 'i1', name: 'Walk', type: 'Walk', durationHours: 0.8 }, { id: 'i2', name: 'Kolo · tempo', type: 'Ride', durationHours: 1.2, tss: 74, payload: { icu_average_watts: 198 } }],
+    completed: [{ id: 'i1', name: 'Walk', type: 'Walk', durationHours: 0.8 }, { id: 'i2', name: 'Kolo, tempo', type: 'Ride', durationHours: 1.2, tss: 74, payload: { icu_average_watts: 198 } }],
     planned: [{ id: 'planned:55', name: 'VO2max 5×4', type: 'Ride', durationHours: 1.25 }]
   };
   const a = selectedSubject({ kind: 'activity', id: 'i2' }, day);
-  assert.equal(a.selectedActivity.name, 'Kolo · tempo');assert.equal(a.selectedActivity.averagePower, 198);
+  assert.equal(a.selectedActivity.name, 'Kolo, tempo');assert.equal(a.selectedActivity.averagePower, 198);
   assert.equal(selectedSubject({ kind: 'planned', id: 'planned:55' }, day).selectedSession.name, 'VO2max 5×4');
   assert.equal(selectedSubject({ kind: 'planned', id: '55' }, day).selectedSession.name, 'VO2max 5×4');
   assert.deepEqual(selectedSubject({ kind: 'activity', id: 'nope' }, day), {});
@@ -54,7 +54,7 @@ test('the coach answers a notification with a notification', () => {
   assert.equal(replyPush({ answer: 'Jen text.', actions: [] }, 7).category, COACH_REPLY_CATEGORY);
   assert.equal(failedReplyPush(null, 7).category, null);
   assert.ok(shortBody('slovo '.repeat(300)).length <= 600);
-  assert.equal(plainText('# Nadpis\n- jedna\n- dvě'), 'Nadpis\n· jedna\n· dvě');
+  assert.equal(plainText('# Nadpis\n- jedna\n- dvě'), 'Nadpis\n• jedna\n• dvě');
   assert.equal(pushOpening('Tři krátké noci za sebou', 'Zítřejší práh vyměním?'), '**Tři krátké noci za sebou**\n\nZítřejší práh vyměním?');
 });
 

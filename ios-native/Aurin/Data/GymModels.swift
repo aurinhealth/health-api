@@ -125,7 +125,7 @@ struct GymProposal: Codable, Equatable {
     /// The length the server settled on, when it chose it (autoLength).
     var minutes: Int? = nil
 
-    /// The exercises in order with their work sets, "3 × 8–10 · 40 kg".
+    /// The exercises in order with their work sets, "3 × 8–10, 40 kg".
     var exercises: [(name: String, sets: Int, reps: String, kg: String)] {
         var out: [(name: String, sets: Int, reps: String, kg: String)] = []
         for row in rows {
@@ -345,6 +345,8 @@ struct GeneratedWorkout: Decodable {
     let variantCount: Int?
     /// The asked kind the coach still eased, and why (POST /app/api/workouts/generate).
     var eased: Eased? = nil
+    /// The coach still writes its own workout (background: true); ask again for it.
+    var aiPending: Bool? = nil
 
     struct Eased: Decodable {
         let kind: String

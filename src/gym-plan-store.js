@@ -23,10 +23,11 @@ export function emptyPlanValues(date) {
 
 export async function readGymPlan(db, date, { includeCancelled = false } = {}) {
   await ensureGymPlans(db);
-  const row = await db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
+  // Both in one database trip.
+  const [row, cancellation] = await Promise.all([db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).first(),
+    db.prepare("SELECT event_json FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).first()]);
   let values = null;
   try { values = row?.values_json ? JSON.parse(row.values_json) : null; } catch { values = null; }
-  const cancellation = await db.prepare("SELECT event_json FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
   const visible = !cancellation || includeCancelled;
   return { date, values: visible && Array.isArray(values) && values.length ? values : emptyPlanValues(date), stored: visible && Boolean(values), cancelled: Boolean(cancellation), recoverable: Boolean(cancellation && values), cancelledEvent: includeCancelled && cancellation?.event_json ? JSON.parse(cancellation.event_json) : null };
 }
@@ -120,12 +121,25 @@ export function planValues(body = {}) {
   return [...header, ...sets];
 }
 
-export async function writeStrengthPlanToDb(db, body) {
+async function storedPlanValues(db, body) {
   // One-sided exercises go L and P, the lagging side one set more (gym-sides.js).
   const history = await getStrengthHistory(db, 500).catch(() => []);
   const weaker = Object.fromEntries(sideBalance(history).filter(b => b.weaker).map(b => [b.exercise, b.weaker]));
   const rows = Array.isArray(body.rows) ? splitSides(body.rows, { columns: GYM_PLAN_COLUMNS.length, weaker, choice: lastSideChoice(history) }).slice(0, MAX_ROWS) : body.rows;
-  const values = planValues({ ...body, rows });
+  return planValues({ ...body, rows });
+}
+
+// A new plan in place of the day's stored one (Chat v1, another focus): only
+// while the stored plan is still exactly `source`, in one conditional write, so
+// a set logged meanwhile is never overwritten. False when it changed.
+export async function replaceStrengthPlanInDb(db, body, source) {
+  const values = await storedPlanValues(db, body);
+  const saved = await db.prepare("UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?").bind(JSON.stringify(values), db.userId, body.date, JSON.stringify(source)).run();
+  return saved.meta?.changes === 1;
+}
+
+export async function writeStrengthPlanToDb(db, body) {
+  const values = await storedPlanValues(db, body);
   await saveGymPlan(db, body.date, values);
   await restoreGymPlan(db, body.date);
   return { status: "ok", storage: "d1", workoutDate: body.date, rowsWritten: values.length - 7, previousWorkoutSynced: false };

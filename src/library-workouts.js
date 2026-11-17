@@ -51,7 +51,7 @@ export async function writeIntervalsRpe(env,activityId,rpe){
 // The athlete's recent RPE and notes on library workouts, newest first.
 export async function recentWorkoutFeedback(db,since,limit=10){
   const rows=(await db.prepare("SELECT scheduled_date,workout_id,sport,rpe,notes,completed_percent FROM workout_feedback WHERE user_id=? AND survey<>'auto_completed' AND scheduled_date>=? ORDER BY scheduled_date DESC,id DESC LIMIT ?").bind(db.userId,since,limit).all().catch(()=>({results:[]}))).results||[];
-  const out=[];
-  for(const r of rows){const w=await getWorkout(db,r.workout_id).catch(()=>null);out.push({date:r.scheduled_date,workoutId:r.workout_id,name:w?.name||r.workout_id,system:w?.primary_system||null,sport:r.sport,rpe:r.rpe,notes:r.notes||null,completedPercent:r.completed_percent});}
-  return out;
+  // The workouts side by side: a generated one is a database read, one trip for all of them.
+  const workouts=await Promise.all(rows.map(r=>getWorkout(db,r.workout_id).catch(()=>null)));
+  return rows.map((r,i)=>{const w=workouts[i];return {date:r.scheduled_date,workoutId:r.workout_id,name:w?.name||r.workout_id,system:w?.primary_system||null,sport:r.sport,rpe:r.rpe,notes:r.notes||null,completedPercent:r.completed_percent};});
 }

@@ -24,8 +24,8 @@ final class GymLiveActivityTests: XCTestCase {
         XCTAssertEqual(state.exercise, "Barbell bench press")
         XCTAssertEqual(state.setLabel, "série 1 ze 2")
         XCTAssertEqual(state.load, "85 kg × 6")
-        XCTAssertEqual(state.then, "Squat · 100 kg × 5")
-        XCTAssertEqual(state.header, "Posilovna · 1 ze 2 cviků")
+        XCTAssertEqual(state.then, "Squat, 100 kg × 5")
+        XCTAssertEqual(state.header, "Posilovna, 1 ze 2 cviků")
         XCTAssertEqual(state.segments.count, 2)
         XCTAssertEqual(state.segments[0], 1.0 / 3, accuracy: 0.001)
         XCTAssertEqual(state.row, sheet.exercises[0].sets[1].row)
@@ -56,7 +56,7 @@ final class GymLiveActivityTests: XCTestCase {
         var sheet = day()
         let focused = try XCTUnwrap(GymLiveActivity.state(sheet, focus: 1, restStart: nil, restEnd: nil))
         XCTAssertEqual(focused.exercise, "Squat")
-        XCTAssertEqual(focused.then, "Barbell bench press · 40 kg × 10")
+        XCTAssertEqual(focused.then, "Barbell bench press, 40 kg × 10")
         for set in sheet.exercises.flatMap(\.sets) { sheet.complete(row: set.row, kg: "1", reps: "1", rpe: "") }
         XCTAssertNil(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil))
     }

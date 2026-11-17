@@ -77,7 +77,7 @@ struct PhotoItemsView: View {
                         Text(Fmt.int(total(\.calories_100g))).font(Typo.number(28)).foregroundStyle(Palette.ink)
                         Text("kcal").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
-                    Text(verbatim: L10n.f("%@ g bílkovin · %@ g sacharidů · %@ g tuků", Fmt.int(total(\.protein_100g)), Fmt.int(total(\.carbs_100g)), Fmt.int(total(\.fat_100g))))
+                    Text(verbatim: L10n.f("%@ g bílkovin, %@ g sacharidů, %@ g tuků", Fmt.int(total(\.protein_100g)), Fmt.int(total(\.carbs_100g)), Fmt.int(total(\.fat_100g))))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 DayLeftLine(day: model.writeDay, kcal: total(\.calories_100g), protein: total(\.protein_100g), carbs: total(\.carbs_100g))

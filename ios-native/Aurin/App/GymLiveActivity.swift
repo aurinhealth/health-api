@@ -66,11 +66,11 @@ enum GymLiveActivity {
         let exercise = list[index]
         guard let set = exercise.sets.first(where: { !$0.done }) else { return nil }
         let following = open.first { $0 > index } ?? open.first { $0 != index }
-        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + " · " + load($0, in: list[i]) } }
+        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + ", " + load($0, in: list[i]) } }
         let resting = restEnd.map { $0 > now } ?? false
         let live = LiveWorkout.shared
         return .init(
-            header: L10n.tr("Posilovna") + " · " + exercisesLine(index + 1, of: list.count),
+            header: L10n.tr("Posilovna") + ", " + exercisesLine(index + 1, of: list.count),
             exercise: exercise.name,
             setLabel: set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : setLine(set, of: exercise.workCount),
             load: load(set, in: exercise),
@@ -107,9 +107,9 @@ enum GymLiveActivity {
         return "\(n) \(preposition(total)) \(total) " + (total == 1 ? "cviku" : "cviků")
     }
 
-    /// "série 3 ze 4" (by sides "série 2 ze 4 · L"), "set 3 of 4".
+    /// "série 3 ze 4" (by sides "série 2 ze 4, L"), "set 3 of 4".
     static func setLine(_ set: GymSet, of total: Int) -> String {
-        let side = set.side.map { " · " + $0 } ?? ""
+        let side = set.side.map { ", " + $0 } ?? ""
         if L10n.isEnglish { return "set \(set.number) of \(total)" + side }
         return "série \(set.number) \(preposition(total)) \(total)" + side
     }

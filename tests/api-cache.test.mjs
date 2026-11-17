@@ -193,3 +193,52 @@ test("forgetCached drops one entry under the current version and keeps the rest"
   assert.deepEqual(await cached(env, null, "google-dashboard:2026-11-05", day, { store }), { steps: 2 });
   assert.deepEqual(await cached(env, null, "coach-inputs", async () => ({ heavy: false }), { store }), { heavy: true });
 });
+
+// Today's coach cards run in different copies of the server (isolates), where
+// the copy's own `computing` does not reach; a second module instance is one.
+test("another copy of the server waits for the coach's inputs a first copy is computing, and computes them itself after its failure", async () => {
+  const other = await import("../src/api-cache.js?copy=2");
+  const { env } = setup();
+  const map = new Map();
+  const store = { match: async key => (map.has(key) ? new Response(map.get(key)) : undefined), put: async (key, response) => { map.set(key, await response.text()); }, delete: async key => map.delete(key) };
+  let calls = 0, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const first = cached(env, null, "coach-inputs:2026-11-10", async () => { calls++; await gate; return { status: "ok", n: 1 }; }, { store });
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const second = other.cached(env, null, "coach-inputs:2026-11-10", async () => { calls++; return { status: "ok", n: 2 }; }, { store });
+  setTimeout(release, 300);
+  assert.deepEqual(await first, { status: "ok", n: 1 });
+  assert.deepEqual(await second, { status: "ok", n: 1 });
+  assert.equal(calls, 1);
+  assert.equal([...map.keys()].some(k => k.endsWith("?computing")), false, "no mark is left behind");
+  // A failure takes its mark away: the waiting copy computes the entry itself.
+  calls = 0;
+  const failing = cached(env, null, "coach-inputs:2026-11-11", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 300)); throw new Error("D1 overloaded"); }, { store });
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const waiting = other.cached(env, null, "coach-inputs:2026-11-11", async () => { calls++; return { status: "ok", n: 3 }; }, { store });
+  await assert.rejects(failing, /D1 overloaded/);
+  assert.deepEqual(await waiting, { status: "ok", n: 3 });
+  assert.equal(calls, 2);
+  // Entries other than the coach's inputs never wait for another copy.
+  calls = 0;
+  await Promise.all([cached(env, null, "fitness:90", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 50)); return { status: "ok" }; }, { store }), other.cached(env, null, "fitness:90", async () => { calls++; return { status: "ok" }; }, { store })]);
+  assert.equal(calls, 2);
+});
+
+// 2026-11-16: 9 workout picks answered HTTP 500 ("This promise was created by a
+// request that has since ended"): the request computing the entry was given up by
+// the app, and Cloudflare fails the requests waiting for it with this error.
+test("a request waiting for one that has since ended computes the entry itself", async () => {
+  const { env, store } = setup();
+  let calls = 0, end;
+  const never = new Promise((resolve, reject) => { end = reject; });
+  const first = cached(env, null, "pick-base:2026-11-16", () => { calls++; return never; }, { store });
+  first.catch(() => {});
+  await new Promise(resolve => setTimeout(resolve, 5));
+  // Three waiting requests: the first of them computes it, the others wait for that one.
+  const waiting = [1, 2, 3].map(() => cached(env, null, "pick-base:2026-11-16", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 5)); return { status: "ok", day: [] }; }, { store }));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  end(new Error("This promise was created by a request that has since ended, so it can never settle."));
+  for (const answer of await Promise.all(waiting)) assert.deepEqual(answer, { status: "ok", day: [] });
+  assert.equal(calls, 2);
+});

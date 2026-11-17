@@ -241,6 +241,30 @@ export async function getStrengthHistory(db, limit = 100, { drops = false } = {}
   return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
 }
 
+// The recent window (getStrengthHistory, 500 sets: about two months) plus the
+// last sets of the named exercises however old: a swap to an exercise done
+// months ago still starts from its own weight (Petr 2026-11-12, floor press
+// to bench press). Read through the (user_id, exercise, workout_date) index,
+// only when the window was full and only the days before it.
+export async function withHistoryOf(db, history, names, limit = 200) {
+  const list = [...new Set((names || []).filter(Boolean).map(String))].slice(0, 80);
+  if (!list.length || history.length < 500) return history;
+  const oldest = history.reduce((a, r) => String(r.workout_date) < a ? String(r.workout_date) : a, String(history[0].workout_date));
+  const result = await db.prepare(`
+    SELECT workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
+           actual_kg, actual_reps, rpe, completed, note, replacement, execution,
+           source, updated_at
+    FROM strength_sets
+    WHERE user_id = ? AND completed = 1 AND type = 'WORK' AND exercise IN (${list.map(() => "?").join(",")}) AND workout_date <= ?
+    ORDER BY workout_date DESC, plan_row ASC
+    LIMIT ?
+  `).bind(db.userId, ...list, oldest, limit).all().catch(() => ({ results: [] }));
+  const key = r => [r.workout_date, r.plan_row, normalizeExerciseName(r.exercise), r.set_no].join("|");
+  const seen = new Set(history.map(key));
+  const older = (result.results || []).filter(r => !seen.has(key(r)))
+    .map(row => ({ ...row, ...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
+  return older.length ? [...history, ...older] : history;
+}
 
 // The work sets of the last `days` days grouped by exercise and day, newest
 // day first (GET /app/api/gym/history): what the app shows as "minule 82,5 kg

@@ -57,7 +57,7 @@ struct IntegrationCard: View {
                 if let problem = provider.problemText {
                     Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
                 } else if let dataAt {
-                    Text(verbatim: DataAgePill.age(last: dataAt, now: now) + (lastNight ? " · " + L10n.tr("poslední noc dorazila") : ""))
+                    Text(verbatim: DataAgePill.age(last: dataAt, now: now) + (lastNight ? ", " + L10n.tr("poslední noc dorazila") : ""))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -230,13 +230,13 @@ struct IntegrationDetailView: View {
         }
     }
 
-    /// "propojeno · před 2 min", or what is wrong. After "Synchronizovat znovu"
+    /// "propojeno, před 2 min", or what is wrong. After "Synchronizovat znovu"
     /// that went fine, its time (the server notes a success at most every 10 min).
     private var state: String {
         guard current.connected == true else { return L10n.tr("nepřipojeno") }
         if let problem = current.problemText { return problem }
-        if let line = syncLine, !line.problem { return L10n.tr("propojeno") + " · " + SourceActions.when(line.at) }
-        if let at = current.lastSuccessAt.flatMap(SourceActions.when) { return L10n.tr("propojeno") + " · " + at }
+        if let line = syncLine, !line.problem { return L10n.tr("propojeno") + ", " + SourceActions.when(line.at) }
+        if let at = current.lastSuccessAt.flatMap(SourceActions.when) { return L10n.tr("propojeno") + ", " + at }
         return L10n.tr("propojeno")
     }
 

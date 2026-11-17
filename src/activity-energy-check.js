@@ -27,7 +27,7 @@ export function walkingEnergyCheck(activity,weightKg){
   const estimated=Math.round((met-1)*weight*hours),low=Math.round(estimated*.6),high=Math.round(estimated*1.6),reported=Number(activity.calories);
   const review=reported>0&&(reported>high||reported<low)&&energyGap(reported,estimated);
   return {status:review?'review':'consistent',reported:reported>0?reported:null,estimated,low,high,
-    source:L('Google Health · souhrn chůze', 'Google Health · walking summary'),basis:'active',steps:Number(metrics.steps)||null,distanceKm:km||null,
+    source:L('Souhrn chůze z Google Health', 'Google Health walking summary'),basis:'active',steps:Number(metrics.steps)||null,distanceKm:km||null,
     reason:review?L('Údaj zařízení se liší od orientačního odhadu běžné chůze. Zkontroluj délku, kopce, zátěž a tep.', 'The device value differs from a rough estimate for normal walking. Check the duration, hills, load and heart rate.'):L('Orientační kontrola podle hmotnosti, délky a dostupné vzdálenosti. Nejde o měření.', 'A rough check based on weight, duration and the available distance. It isn\'t a measurement.')};
 }
 export function activityTelemetryEnergy(activity,rows){
@@ -56,6 +56,6 @@ export function strengthEnergyCheck(activity,weightKg){
   const estimated=Math.round(2.5*weight*hours),low=Math.round(1.5*weight*hours),high=Math.round(5*weight*hours),reported=Number(activity.calories);
   const review=reported>0&&(reported>high||reported<low)&&energyGap(reported,estimated);
   return {status:review?'review':'consistent',reported:reported>0?reported:null,estimated,low,high,basis:'active',
-    source:activity.source==='google-health'?L('Google Health · souhrn tréninku', 'Google Health · workout summary'):null,
+    source:activity.source==='google-health'?L('Souhrn tréninku z Google Health', 'Google Health workout summary'):null,
     reason:review?L('Hodinky počítají posilovnu podle tepu jako vytrvalostní trénink, včetně pauz mezi sériemi. Skutečný výdej bývá nižší.', 'Watches count lifting from heart rate like endurance training, rests between sets included. The real burn is usually lower.'):L('Orientační kontrola podle hmotnosti a délky tréninku. Nejde o měření.', 'A rough check based on weight and workout duration. It isn\'t a measurement.')};
 }

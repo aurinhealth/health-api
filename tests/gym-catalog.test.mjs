@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {gymExerciseCatalog,findGymExercises} from '../src/gym-catalog.js';
+import {gymExerciseCatalog,findGymExercises,gymAlternatives,catalogueStartLoad} from '../src/gym-catalog.js';
 import {EXERCISES} from '../src/strength-generator.js';
 import {EXERCISE_INTELLIGENCE} from '../src/strength-intelligence.js';
 import { serverSource } from "./helpers/server-source.mjs";
@@ -18,4 +18,22 @@ test('every picker exercise has a fatigue for ordering an added exercise in the 
   assert.ok(gymExerciseCatalog().every(item=>Number.isFinite(EXERCISE_INTELLIGENCE[item.name]?.fatigue)));
   const src=serverSource();
   assert.match(src,/fatigue:EXERCISE_INTELLIGENCE\[e\.name\]\?\.fatigue\?\?null/);
+});
+
+test('a swapped-in exercise never done before still gets a weight (Petr 2026-11-12)',()=>{
+  // No history: the generator's catalogue start, never an empty kg.
+  const alts=gymAlternatives('Barbell bench press',[],[],{},()=>true,{sex:'male',experience:'regular'});
+  assert.ok(alts.length>0);
+  assert.ok(alts.filter(a=>EXERCISES[a.name].baseKg>0).every(a=>a.kg>0&&a.source==='catalogue-default'));
+  // Lighter for a woman and below the experienced level, as the generator.
+  const some=[{workout_date:'2026-11-01',exercise:'Leg press',actual_kg:100,actual_reps:10,set_type:'WORK',completed:1}];
+  const male=catalogueStartLoad('Lat pulldown',{sex:'male',experience:'experienced'},some).kg;
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'female',experience:'experienced'},some).kg<male);
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'male',experience:'beginner'},some).kg<male);
+  // No strength history at all: the first session's light start, as the generator.
+  assert.ok(catalogueStartLoad('Lat pulldown',{sex:'male',experience:'experienced'},[]).kg<male);
+  // Own history still wins.
+  const history=[{workout_date:'2026-11-01',exercise:'Barbell Floor Press',actual_kg:70,actual_reps:8,rpe:8,set_type:'WORK',completed:1}];
+  const own=gymAlternatives('Barbell bench press',history).find(a=>a.name==='Barbell Floor Press');
+  assert.equal(own.kg,70);assert.equal(own.source,'own-history');
 });

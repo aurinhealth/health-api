@@ -9,16 +9,28 @@ struct LabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// The title and the line under the window: the nutrition table, or the
     /// front of the package for the name and the brand.
-    var title = "ETIKETA"
-    var hint = "Vyfoť tabulku výživových údajů"
+    let title: String
+    let hint: String
+    /// The front is a step after the label: it can be skipped.
+    let front: Bool
     let onImage: (UIImage) -> Void
     /// nil until the camera permission is known.
     @State private var cameraAllowed: Bool?
     @State private var torch = false
     @State private var photo: PhotosPickerItem?
-    @State private var camera = PhotoCamera(closeUp: true)
+    @State private var camera: PhotoCamera
     @State private var taking = false
     @State private var error: String?
+
+    /// The nutrition table up close; `front`: the front of the package for
+    /// its name and brand, the whole package at 1x.
+    init(front: Bool = false, onImage: @escaping (UIImage) -> Void) {
+        self.front = front
+        title = front ? "PŘEDNÍ STRANA" : "ETIKETA"
+        hint = front ? "Vyfoť přední stranu s názvem" : "Vyfoť tabulku výživových údajů"
+        self.onImage = onImage
+        _camera = State(initialValue: PhotoCamera(closeUp: !front))
+    }
 
     private var cameraReady: Bool { cameraAllowed == true && BarcodeScanner.device != nil }
 
@@ -80,11 +92,22 @@ struct LabelCameraSheet: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!cameraReady || taking)
-                .accessibilityLabel(L10n.tr("Vyfotit etiketu"))
+                .accessibilityLabel(L10n.tr(front ? "Vyfotit přední stranu" : "Vyfotit etiketu"))
                 Spacer()
                 Color.clear.frame(width: 52, height: 52)
             }
             .padding(.horizontal, 48).padding(.top, 30)
+
+            if front {
+                Button { dismiss() } label: {
+                    Text("Přeskočit").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 22).frame(height: 44)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 22)
+            }
 
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 14) }
             Spacer(minLength: 0)
@@ -127,7 +150,7 @@ struct LabelCameraSheet: View {
     }
 
     private func load(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+        guard let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) else {
             error = L10n.tr("Obrázek se nepodařilo načíst.")
             return
         }
@@ -230,7 +253,7 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        let image = photo.fileDataRepresentation().flatMap(UIImage.init(data:))
+        let image = photo.fileDataRepresentation().flatMap { UIImage.downsampled($0) }
         queue.async { [self] in
             pending?.resume(returning: image)
             pending = nil

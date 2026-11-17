@@ -163,7 +163,7 @@ struct SleepDetail: View {
             if diff >= 0 { parts.append(W.tr("o \(amount) nad potřebou", "\(amount) over your need")) }
             else { parts.append(W.tr("o \(amount) pod potřebou", "\(amount) under your need")) }
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     private var tiles: [Tiles.Item] {

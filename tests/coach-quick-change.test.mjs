@@ -1,4 +1,4 @@
-// Kratší · Delší · Lehčí · Těžší · Jiný den under the coach's workout card
+// Kratší, Delší, Lehčí, Těžší, Jiný den under the coach's workout card
 // (src/coach-quick-change.js): rules only, no AI, no message counted.
 import test from "node:test";
 import assert from "node:assert/strict";

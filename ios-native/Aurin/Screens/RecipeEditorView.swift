@@ -34,7 +34,7 @@ struct RecipeEditorView: View {
         let protein: Double = total { p, q in p.grams(p.protein_100g, for: q) } / servings
         let carbs: Double = total { p, q in p.grams(p.carbs_100g, for: q) } / servings
         let fat: Double = total { p, q in p.grams(p.fat_100g, for: q) } / servings
-        return L10n.f("bílkoviny %@ g · sacharidy %@ g · tuky %@ g", Fmt.int(protein), Fmt.int(carbs), Fmt.int(fat))
+        return L10n.f("bílkoviny %@ g, sacharidy %@ g, tuky %@ g", Fmt.int(protein), Fmt.int(carbs), Fmt.int(fat))
     }
 
     var body: some View {
@@ -95,9 +95,12 @@ struct RecipeEditorView: View {
         .floatingBack { dismiss() }
         .navBarVisibility(.hidden)
         .sheet(isPresented: $picking) {
-            IngredientPicker { product in
-                items.append(Item(product: product, amount: product.perPortion ? "1" : FoodAmountView.text(product.defaultAmount)))
-            }
+            // The same search as logging a meal: own foods first, then the catalog and AI.
+            AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), pick: { product, amount in
+                // No thousands separator: Item.value reads "1500", not "1,500" or "1 500".
+                items.append(Item(product: product, amount: amount.formatted(.number.grouping(.never).precision(.fractionLength(0...1)).locale(L10n.locale))))
+                picking = false
+            })
         }
     }
 
@@ -123,45 +126,6 @@ struct RecipeEditorView: View {
             saved()
         } catch {
             self.error = error.localizedDescription
-        }
-    }
-}
-
-/// Finds an ingredient: the own foods first, then the catalog search.
-struct IngredientPicker: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    let pick: (FoodProduct) -> Void
-    @State private var query = ""
-    @State private var own: [FoodProduct] = []
-    @State private var results: [FoodProduct] = []
-    @State private var searching = false
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if searching { ProgressView().frame(maxWidth: .infinity) }
-                ForEach(query.trimmingCharacters(in: .whitespaces).count >= 2 ? results : own) { product in
-                    Button { pick(product); dismiss() } label: { ProductRow(product: product) }
-                        .buttonStyle(.plain)
-                        .listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.plain)
-            .searchable(text: $query, prompt: "Hledat surovinu")
-            .navigationTitle("Surovina")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
-        }
-        .task { own = (try? await model.api.personalFoods(frequent: true, limit: 500)) ?? [] }
-        .task(id: query) {
-            let q = query.trimmingCharacters(in: .whitespaces)
-            guard q.count >= 2 else { results = []; return }
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled else { return }
-            searching = true
-            defer { searching = false }
-            results = (try? await model.api.searchFood(name: q)) ?? []
         }
     }
 }

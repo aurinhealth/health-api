@@ -105,24 +105,24 @@ function buildFamilyWorkouts() {
         const structure = session(core, total, f);
         if (!structure) continue;
         out.push(run({
-          id: `${f.key}-${level.join("x")}-${total}`, name: `${f.label(level)} · ${total} min`, system: f.system, secondarySystem: f.secondary || null,
+          id: `${f.key}-${level.join("x")}-${total}`, name: `${f.label(level)}, ${total} min`, system: f.system, secondarySystem: f.secondary || null,
           structure, family: f.key, level: index + 1, tags: ["pfd-original", f.key, `${total}min`, ...(f.tags || [])], description: f.desc
         }));
       }
     });
   }
   for (const e of ENDURANCE) for (const total of e.totals) {
-    out.push(run({ id: `${e.key}-${total}`, name: `${e.label} · ${total} min`, system: "endurance", secondarySystem: e.secondary || null, structure: e.build(total), family: e.key, tags: ["pfd-original", e.key, `${total}min`], description: e.desc }));
+    out.push(run({ id: `${e.key}-${total}`, name: `${e.label}, ${total} min`, system: "endurance", secondarySystem: e.secondary || null, structure: e.build(total), family: e.key, tags: ["pfd-original", e.key, `${total}min`], description: e.desc }));
   }
   RUN_WALK.levels.forEach((level, index) => {
     for (const total of RUN_WALK.totals) {
       const structure = runWalk(level, total);
       if (!structure) continue;
-      out.push(run({ id: `${RUN_WALK.key}-${level.join("-")}-${total}`, name: `Běh s chůzí ${level[0]}/${level[1]} min · ${total} min`, system: "endurance", structure, family: RUN_WALK.key, level: index + 1, tags: ["pfd-original", RUN_WALK.key, "beginner", `${total}min`], description: RUN_WALK.desc }));
+      out.push(run({ id: `${RUN_WALK.key}-${level.join("-")}-${total}`, name: `Běh s chůzí ${level[0]}/${level[1]} min, ${total} min`, system: "endurance", structure, family: RUN_WALK.key, level: index + 1, tags: ["pfd-original", RUN_WALK.key, "beginner", `${total}min`], description: RUN_WALK.desc }));
     }
   });
   for (const total of [20, 25, 30, 40, 45]) {
-    out.push(run({ id: `run-recovery-${total}`, name: `Regenerační běh · ${total} min`, system: "recovery", structure: [step(total, 72, null, "velmi lehce, klidně s chůzí")], family: "run-recovery", tags: ["pfd-original", "recovery"], description: "Velmi lehký klus po těžkém dni – prokrvení bez další zátěže." }));
+    out.push(run({ id: `run-recovery-${total}`, name: `Regenerační běh, ${total} min`, system: "recovery", structure: [step(total, 72, null, "velmi lehce, klidně s chůzí")], family: "run-recovery", tags: ["pfd-original", "recovery"], description: "Velmi lehký klus po těžkém dni – prokrvení bez další zátěže." }));
   }
   return out;
 }
@@ -157,15 +157,15 @@ function buildResearchWorkouts() {
 }
 
 const PUBLIC_REFERENCES = [
-  ...[6, 8, 10].map(r => run({ id: `run-public-yasso-${r}x800`, name: `Yasso 800s · ${r}×800 m`, sourceName: "Bart Yasso · Runner's World", sourceKind: "public_reference",
+  ...[6, 8, 10].map(r => run({ id: `run-public-yasso-${r}x800`, name: `Yasso 800s, ${r}×800 m`, sourceName: "Bart Yasso, Runner's World", sourceKind: "public_reference",
     licenseNote: "Veřejně popsaný tréninkový princip; časy úseků převedené na % prahového tempa.", attribution: "Yasso 800s: 800 m úseky v čase (min:s) odpovídajícím cílovému času maratonu (h:min), klus stejně dlouhý.",
     system: "vo2max", secondarySystem: "threshold", structure: [...WU_STRIDES, blocks(r, 3.5, 107, 3.5, 68), ...CD], family: "run-public-yasso",
     tags: ["public-reference", "yasso", "marathon"], description: "Klasická maratonská příprava: úseky ~800 m (≈ 3,5 min) s klusem stejně dlouhým." })),
-  run({ id: "run-public-norwegian-double-am", name: "Norský double threshold · dopolední 5×6 min", sourceName: "Veřejně popsaná norská metoda", sourceKind: "public_reference",
+  run({ id: "run-public-norwegian-double-am", name: "Norský double threshold, dopolední 5×6 min", sourceName: "Veřejně popsaná norská metoda", sourceKind: "public_reference",
     licenseNote: "Veřejně popsaný princip (kontrola laktátu 2–3 mmol/l); nejde o interní plán sportovce.", attribution: "Norská metoda popsaná v rozhovorech a článcích (např. Marius Bakken): dvě prahové jednotky v jednom dni s nízkým laktátem.",
     system: "threshold", secondarySystem: "tempo", structure: [...WU, blocks(5, 6, 96, 1), ...CD], family: "run-public-norwegian",
     tags: ["public-reference", "norwegian", "double-threshold"], description: "Dopolední část norského double threshold dne – úseky těsně pod prahem, laktát drží nízko." }),
-  run({ id: "run-public-norwegian-double-pm", name: "Norský double threshold · odpolední 10×1000 m", sourceName: "Veřejně popsaná norská metoda", sourceKind: "public_reference",
+  run({ id: "run-public-norwegian-double-pm", name: "Norský double threshold, odpolední 10×1000 m", sourceName: "Veřejně popsaná norská metoda", sourceKind: "public_reference",
     licenseNote: "Veřejně popsaný princip; úseky převedené na čas a % prahového tempa.", attribution: "Norská metoda popsaná v rozhovorech a článcích (např. Marius Bakken).",
     system: "threshold", structure: [...WU, blocks(10, 3.5, 98, 1), ...CD], family: "run-public-norwegian",
     tags: ["public-reference", "norwegian", "double-threshold"], description: "Odpolední část – kratší úseky (~1000 m) v prahovém tempu s minutovou pauzou." })

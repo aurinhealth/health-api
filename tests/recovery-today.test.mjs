@@ -20,7 +20,7 @@ test("after a gym day: why and one tip, the stretch for the upper body; no bedti
   assert.deepEqual(r.items.map(i => i.kind), ["stretch"]);
   const stretch = r.items[0];
   assert.equal(stretch.title, "Protažení po posilovně");
-  assert.match(stretch.detail, /^\d+ min · hrudník, záda, ramena$/);
+  assert.match(stretch.detail, /^\d+ min, hrudník, záda, ramena$/);
   assert.equal(stretch.routine.items[0].name, "Hrudník ve dveřích");
   assert.equal(stretch.routine.items[0].dose, "40 s na stranu");
   assert.equal(stretch.routine.items[0].seconds, 80);
@@ -88,7 +88,7 @@ test("sauna and a finished routine are saved as done and join Today's plan", asy
   const rows = today.plan.filter(i => i.kind === "recovery");
   assert.deepEqual(rows.map(i => i.title), ["Protažení po posilovně", "Sauna"]);
   assert.ok(rows.every(i => i.done && /hotovo$/.test(i.detail)));
-  assert.match(rows[0].detail, /^\d+ min · 6 cviků · hotovo$/);
+  assert.match(rows[0].detail, /^\d+ min, 6 cviků, hotovo$/);
   // With stretching "less", the sauna is the tip; alcohol or a Sick status takes it off.
   const base = { date: DATE, hour: 20, daily: { training: { planned: [], matched: [], completed: [] } }, gym: { name: "Horní tělo A", exercises: ["Bench press"], logged: 4 } };
   assert.equal(buildToday({ ...base, recovery: { less: ["stretch"] } }).recovery.items[0].kind, "sauna");

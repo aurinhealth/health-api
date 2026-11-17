@@ -4,7 +4,7 @@ import { L } from './lang.js';
 
 export const ATHLETE_STATUSES = { active: 'Active', sick: 'Sick', injured: 'Injured', on_break: 'Rest' };
 const label = status => ({ active: L('Aktivní', 'Active'), sick: L('Nemoc', 'Sick'), injured: L('Zranění', 'Injured'), on_break: L('Pauza', 'Rest') })[status];
-const headline = status => ({ sick: L('Nemoc · odpočinek během nemoci', 'Sick · rest while you are ill'), injured: L('Zranění · respektuj omezení', 'Injured · respect your limitations'), on_break: L('Pauza · tréninková přestávka', 'Rest · a break from training') })[status] || null;
+const headline = status => ({ sick: L('Nemoc, odpočívej', 'Ill, take a rest'), injured: L('Zranění, respektuj omezení', 'Injured, respect your limitations'), on_break: L('Tréninková pauza', 'A break from training') })[status] || null;
 // Nemoc set more than 7 days ago: the guidance adds a doctor (audit wave 2,
 // 9.5, after Elliott 2020), without naming any illness.
 const longIll = raw => raw.status === 'sick' && Date.now() - Date.parse(raw.changedAt || '') > 7 * 864e5;

@@ -18,8 +18,8 @@ test("a run pace in the reader's units", () => {
 
 test("the run lines of Aktivita dne", () => {
   const steps = [{ repeats: 1, steps: [{ durationSeconds: 600, paceFast: "5:30" }] }, { repeats: 4, steps: [{ durationSeconds: 300, paceFast: "4:30", percentHigh: 100, note: "effort" }, { durationSeconds: 120, paceFast: "6:00" }] }];
-  assert.deepEqual(workoutLines(steps, "run"), [["Rozklus", "10 min · 5:30 /km"], ["4 × effort", "5 min · 4:30 /km"]]);
-  assert.deepEqual(imperial(() => workoutLines(steps, "run")), [["Warm-up", "10 min · 8:51 /mi"], ["4 × effort", "5 min · 7:15 /mi"]]);
+  assert.deepEqual(workoutLines(steps, "run"), [["Rozklus", "10 min, 5:30 /km"], ["4 × effort", "5 min, 4:30 /km"]]);
+  assert.deepEqual(imperial(() => workoutLines(steps, "run")), [["Warm-up", "10 min, 8:51 /mi"], ["4 × effort", "5 min, 7:15 /mi"]]);
 });
 
 test("the stored lines are made again for an imperial user, a metric user's stay", () => {

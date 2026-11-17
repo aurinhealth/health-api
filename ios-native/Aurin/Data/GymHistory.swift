@@ -155,12 +155,11 @@ extension AppModel {
 enum DemoGymHistory {
     static let history = GymHistory(exercises: [
         GymHistory.Exercise(name: "Barbell bench press", sessions: [
-            GymHistory.Session(date: "2026-10-05", sets: [lift(80, 8, 6), lift(80, 8, 6), lift(82.5, 6, 6), lift(82.5, 6, 6)]),
-            GymHistory.Session(date: "2026-10-01", sets: [lift(80, 8, 8), lift(80, 8, 8), lift(80, 7, 8), lift(80, 6, 8)]),
-            GymHistory.Session(date: "2026-09-28", sets: [lift(77.5, 8, 8), lift(77.5, 8, 8), lift(80, 6, 8)])
+            GymHistory.Session(date: "2026-09-24", sets: [lift(60, 6, 6), lift(60, 6, 6), lift(60, 6, 6), lift(60, 5, 6)]),
+            GymHistory.Session(date: "2026-09-17", sets: [lift(57.5, 6, 6), lift(57.5, 6, 6), lift(57.5, 6, 6)])
         ]),
         GymHistory.Exercise(name: "One-arm DB row", sessions: [
-            GymHistory.Session(date: "2026-10-05", sets: [lift(30, 10, 10), lift(30, 10, 10), lift(32.5, 8, 10)])
+            GymHistory.Session(date: "2026-09-24", sets: [lift(24, 10, 10), lift(24, 10, 10), lift(24, 9, 10)])
         ])
     ] + lastWeek)
 
@@ -169,11 +168,11 @@ enum DemoGymHistory {
     /// and in English (the English sample day translates the sheet).
     private static let lastWeek: [GymHistory.Exercise] = {
         let rows: [([String], [GymHistory.Lift])] = [
-            (["Dřep", "Squat"], [lift(77.5, 8, 6), lift(77.5, 8, 6), lift(77.5, 7, 6), lift(77.5, 6, 6)]),
-            (["Tlak na lavici", "Bench press"], [lift(60, 8, 8), lift(60, 8, 8), lift(60, 7, 8)]),
-            (["Přítahy", "Rows"], [lift(47.5, 10, 10), lift(47.5, 10, 10), lift(47.5, 9, 10)]),
-            (["Rumunský mrtvý tah", "Romanian deadlift"], [lift(67.5, 8, 8), lift(67.5, 8, 8), lift(67.5, 8, 8)]),
-            (["Výpady", "Lunges"], [lift(14, 10, 10), lift(14, 10, 10), lift(14, 10, 10)])
+            (["Dřep", "Squat"], [lift(77.5, 3, 3), lift(77.5, 3, 3), lift(77.5, 3, 3), lift(77.5, 3, 3)]),
+            (["Tlak na lavici", "Bench press"], [lift(60, 6, 6), lift(60, 6, 6), lift(60, 6, 6), lift(60, 6, 6)]),
+            (["Přítahy", "Rows"], [lift(47.5, 8, 8), lift(47.5, 8, 8), lift(47.5, 8, 8), lift(47.5, 8, 8)]),
+            (["Tlaky s jednoručkami nad hlavu", "DB shoulder press"], [lift(15, 10, 10), lift(15, 10, 10), lift(15, 10, 10)]),
+            (["Pallof press"], [lift(10, 10, 10), lift(10, 10, 10), lift(10, 10, 10)])
         ]
         return rows.flatMap { row -> [GymHistory.Exercise] in
             row.0.map { GymHistory.Exercise(name: $0, sessions: [GymHistory.Session(date: "2026-10-01", sets: row.1)]) }
@@ -272,13 +271,13 @@ enum GymCoach {
         return L10n.f("minule %@ opakování", repsList(session))
     }
 
-    /// "80×8 · 80×8 · 82,5×6".
+    /// "80×8, 80×8, 82,5×6".
     static func setsLine(_ lifts: [GymHistory.Lift]) -> String {
         lifts.map { (lift: GymHistory.Lift) -> String in
             let reps = String(Int(lift.reps ?? 0))
             if let kg = lift.kg, kg > 0 { return shown(kg) + "×" + reps }
             return reps
-        }.joined(separator: " · ")
+        }.joined(separator: ", ")
     }
 
     /// The done work sets of an exercise as one line.

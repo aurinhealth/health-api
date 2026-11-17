@@ -189,7 +189,7 @@ export function buildRideReview({ activity = {}, detail = null, plan = null, wel
       for (let r = 1; r <= reps[0].of; r++) {
         const rep = reps.filter(s => s.rep === r), mainStep = rep.find(s => s.role === 'work') || rep[0];
         if (!rep.some(s => s.actual)) continue;
-        rows.push([String(r), ...roles.map(role => { const s = rep.find(x => x.role === role); const a = s?.actual; if (!a) return '—'; return role === 'sprint' ? U.v(a.watts) + (n(a.maxWatts) ? ' (' + round(a.maxWatts) + ')' : '') : round(a.watts) + ' W · ' + L.clock(a.seconds); }), mainStep.actual?.hr ? mainStep.actual.hr + ' / ' + (mainStep.actual.maxHr ?? '—') : '—']);
+        rows.push([String(r), ...roles.map(role => { const s = rep.find(x => x.role === role); const a = s?.actual; if (!a) return '—'; return role === 'sprint' ? U.v(a.watts) + (n(a.maxWatts) ? ' (' + round(a.maxWatts) + ')' : '') : round(a.watts) + ' W, ' + L.clock(a.seconds); }), mainStep.actual?.hr ? mainStep.actual.hr + ' / ' + (mainStep.actual.maxHr ?? '—') : '—']);
       }
       if (rows.length) table = { columns: cols, rows };
     }
@@ -251,8 +251,8 @@ export function buildRideReview({ activity = {}, detail = null, plan = null, wel
   // Plan vs reality per step, for the chart.
   const kindLabel = lo => ({ vo2: 'VO₂max', threshold: t('Práh', 'Threshold'), sweetspot: 'Sweet spot', tempo: 'Tempo' })[workKind(lo)];
   const label = s => ({ warmup: t('Rozjetí', 'Warm-up'), sprint: 'Sprint', work: kindLabel(s.lo || 0), rest: t('Pauza', 'Recovery'), cooldown: t('Vyjetí', 'Cool-down'), free: t('Volně', 'Free ride') })[s.role] || (s.note && (!L.en || !/[ěščřžýáíéůúňťď]/i.test(s.note)) ? s.note : t('Aerobní část', 'Aerobic part'));
-  const tip = s => label(s) + ' · ' + (s.actual ? L.clock(s.actual.seconds) + ' · ' + U.v(s.actual.watts) + (s.actual.hr ? ' · ' + t('tep ', 'HR ') + s.actual.hr : '') : t('chybí', 'missing')) + (s.lo != null && s.role !== 'sprint' ? ' · ' + t('cíl ', 'target ') + U.band(s.lo, s.hi) : '');
-  const chart = S.length && ftp ? { ftp, steps: S.map(s => ({ role: s.role, label: label(s), tip: tip(s), start: n(s.actual?.start), seconds: s.actual ? s.actual.seconds : s.minutes * 60, planned: s.minutes * 60, lo: s.lo != null ? W(s.lo) : null, hi: s.hi != null ? W(s.hi) : null, watts: s.actual ? round(s.actual.watts) : null, text: s.actual ? L.clock(s.actual.seconds) + ' · ' + U.v(s.actual.watts) : null, hr: s.actual?.hr ?? null, status: s.status, missing: !s.actual })) } : null;
+  const tip = s => label(s) + ', ' + (s.actual ? L.clock(s.actual.seconds) + ', ' + U.v(s.actual.watts) + (s.actual.hr ? ', ' + t('tep ', 'HR ') + s.actual.hr : '') : t('chybí', 'missing')) + (s.lo != null && s.role !== 'sprint' ? ', ' + t('cíl ', 'target ') + U.band(s.lo, s.hi) : '');
+  const chart = S.length && ftp ? { ftp, steps: S.map(s => ({ role: s.role, label: label(s), tip: tip(s), start: n(s.actual?.start), seconds: s.actual ? s.actual.seconds : s.minutes * 60, planned: s.minutes * 60, lo: s.lo != null ? W(s.lo) : null, hi: s.hi != null ? W(s.hi) : null, watts: s.actual ? round(s.actual.watts) : null, text: s.actual ? L.clock(s.actual.seconds) + ', ' + U.v(s.actual.watts) : null, hr: s.actual?.hr ?? null, status: s.status, missing: !s.actual })) } : null;
 
   const sections = [
     wins.length ? { kind: 'good', label: t('Co se povedlo', 'What went well'), items: wins } : null,
@@ -260,7 +260,7 @@ export function buildRideReview({ activity = {}, detail = null, plan = null, wel
     load.length ? { kind: 'load', label: t('Zátěž a regenerace', 'Load and recovery'), items: load } : null
   ].filter(Boolean);
   const actions = [];
-  if (facts.length) actions.push(t('Dokončeno: ', 'Completed: ') + facts.join(' · ') + '.');
+  if (facts.length) actions.push(t('Dokončeno: ', 'Completed: ') + facts.join(', ') + '.');
   if (!plan) actions.push(t('Bez spárovaného plánu hodnotím jen průběh jízdy.', 'No matched plan, so only the ride itself is reviewed.'));
   else if (steps.length && !usable) actions.push(t('Intervaly v záznamu se nepodařilo spárovat s plánem, hodnotím celek.', 'The recorded intervals could not be matched to the plan, so the ride is reviewed as a whole.'));
   return { verdict, target, table, chart, sections, actions, sport: sportOf(activity) };

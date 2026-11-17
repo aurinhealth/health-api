@@ -22,6 +22,13 @@ test('the step table keeps the planned range in watts',()=>{
   assert.deepEqual([row.steps[0].percentLow,row.steps[0].percentHigh,row.steps[0].wattsLow,row.steps[0].wattsHigh],[88,93,220,233]);
 });
 
+test('a repeat block whose text only repeats "3x" has no note; cadence stays on its steps',()=>{
+  const doc={steps:[{reps:3,text:'3x',steps:[{duration:300,power:{value:88,units:'%ftp'},cadence:{value:60}},{duration:300,power:{value:88,units:'%ftp'},cadence:{value:90}}]},{reps:2,text:'Low cadence',steps:[{duration:60,power:{value:80,units:'%ftp'}}]}]};
+  const s=structureFromWorkoutDoc(doc);
+  assert.equal(s[0].note,null);assert.equal(s[1].note,'Low cadence');
+  assert.deepEqual(s[0].steps.map(x=>x.cadence),['60','90']);
+});
+
 test('a structured workout_doc wins over the text and an event becomes a workout',()=>{
   const doc={steps:[{duration:600,power:{start:50,end:70,units:'%ftp'},ramp:true},{reps:4,steps:[{duration:240,power:{value:110,units:'%ftp'},cadence:{value:95}},{duration:120,power:{value:3,units:'power_zone'}}]}]};
   const s=structureFromWorkoutDoc(doc);

@@ -46,6 +46,8 @@ async function lastSettings(env, store) {
 export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { store = globalThis.caches?.default } = {}) {
   // Where each threshold came from, for Nastavení → Zóny (thresholdNotes).
   const sources = {};
+  // The athlete's own values, read while Intervals.icu answers (a database trip less in a row).
+  const ownValues = env.DB ? getTrainingProfile(env.DB).catch(error => { console.error("Training profile unavailable", error.message); return {}; }) : Promise.resolve({});
   const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, swimCss: null, swimCssSource: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {
     let settings = null, problem = null, thrown = false;
@@ -94,8 +96,7 @@ export async function athleteThresholds(env, fetchImpl = intervalsReads(env), { 
   // The thresholds before the athlete's own values (preview.*): Nastavení →
   // Zóny works the zones out again while a value is typed or cleared.
   const preview = { ftp: out.ftp, lthr: out.lthr, maxHr: out.maxHr, runMaxHr: out.runMaxHr, restHr: null, runThresholdPace: out.runThresholdPace, runLthr: out.runLthr, swimCss: out.swimCss };
-  let profile = {};
-  if (env.DB) { try { profile = await getTrainingProfile(env.DB); } catch (error) { console.error("Training profile unavailable", error.message); } }
+  const profile = await ownValues;
   // A manual FTP replaces the Intervals values, including its indoor FTP.
   if (profile.ftp) { out.ftp = profile.ftp; out.indoorFtp = null; out.source = "manual"; }
   for (const key of ["lthr", "maxHr"]) if (profile[key]) { out[key] = profile[key]; sources[key] = "manual"; }

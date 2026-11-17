@@ -101,10 +101,12 @@
     // The account the deploy smoke test acts as: its own, empty and disabled, never the
     // owner's (src/tenancy.js smokeUser; security audit 2026-11, SEC-010). Nobody receives mail there.
     "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
-    // Emergency brake on an account's AI spending per month (src/ai-usage.js);
-    // audit/aurin-pro-ai-limity-plan-2026-10-18.md.
+    // Brake on an account's AI spending per month (src/ai-usage.js aiMonthlyLimitUsd):
+    // the same for every plan of Pro (Petr 2026-11-16), and one for an account that has
+    // not bought Pro (the free week counts as one period). A paid week may use 30 % of its month.
     "AI_MONTHLY_LIMIT_USD": "5",
-    // Half of every AI limit (the brake, the daily guard, the coach's week) until
+    "AI_UNPAID_LIMIT_USD": "1.25",
+    // Half of the other AI limits (the daily guard, the coach's week) until
     // the account pays for Pro: the pilot, TestFlight and the free week (src/ai-limit-share.js).
     "AI_UNPAID_LIMIT_SHARE": "0.5",
     // A daily guard against abuse on the AI around the coach (food, plans, reviews); the coach chat is not in it.
@@ -118,6 +120,7 @@
     // up to 15) or fixed where accounts cost nothing to make (new accounts, the server).
     // A full group stops only its accounts past perAccount today; the rest go on up to
     // twice the brake. A fixed brake stops the whole group.
+    // The owner's own account is a group of its own, apart from the testers.
     // The owner hears once a day when a group passes half of its brake.
     "AI_GROUP_BRAKES": {
       "paid": { "perAccount": 0.5, "min": 10 },
@@ -125,6 +128,7 @@
       "trial": { "perAccount": 0.25, "min": 5 },
       "testflight": { "perAccount": 0.375, "min": 5, "max": 20 },
       "free": { "perAccount": 0.25, "min": 5, "max": 15 },
+      "owner": { "usd": 5 },
       "new": { "usd": 5 },
       "system": { "usd": 5 }
     },
@@ -196,6 +200,10 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.aurin.health",
+        // Chat v1 (src/coach-actions.js chatV1On): on here, off on the live server until it ships.
+        "CHAT_V1": "true",
+        // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn): here only until the evals pass.
+        "COACH_FIRST": "true",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",
@@ -203,16 +211,20 @@
         "OPEN_SIGNUP": "true",
         "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
         "AI_MONTHLY_LIMIT_USD": "5",
+        "AI_UNPAID_LIMIT_USD": "1.25",
         "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",
-        // Testing costs at most 5 USD of AI a day, the owner included (src/ai-total.js):
-        // room for a few full coach evaluations (about 0.65 USD each) and app testing.
-        "AI_TOTAL_DAILY_ALERT_USD": "3",
-        "AI_TOTAL_DAILY_LIMIT_USD": "5",
-        "AI_GROUP_BRAKES": { "paid": { "usd": 0.5 }, "gift": { "usd": 1 }, "trial": { "usd": 0.5 }, "testflight": { "usd": 0.5 }, "free": { "usd": 0.5 }, "new": { "usd": 0.5 }, "system": { "usd": 0.5 } },
+        // Testing costs at most 10 USD of AI a day, the owner included (src/ai-total.js):
+        // room for full coach evaluations in 3 rounds with the answer checker (about 3 USD each) and app testing.
+        "AI_TOTAL_DAILY_ALERT_USD": "6",
+        "AI_TOTAL_DAILY_LIMIT_USD": "10",
+        // The coach evaluation counts as a job of the server, so "system" has the room of the day.
+        "AI_GROUP_BRAKES": { "paid": { "usd": 0.5 }, "gift": { "usd": 1 }, "trial": { "usd": 0.5 }, "testflight": { "usd": 0.5 }, "free": { "usd": 0.5 }, "owner": { "usd": 1 }, "new": { "usd": 0.5 }, "system": { "usd": 10 } },
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",
+        // The live answer check with the thinking steps (coach-checker.js): staging only until the release.
+        "COACH_CHECK": "true",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
         "WAHOO_CLIENT_ID": "W-nkdGNWUzPdr3a1rN2Z5Wvm7IOXPv_bjdGGmfbToFs",

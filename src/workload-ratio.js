@@ -21,7 +21,7 @@
 // audit D4, 2026-11-05): no ratio number, no bands, no "sweet spot" and no
 // "risk", since the ratio predicts no injuries (Impellizzeri 2021,
 // docs/methodology.md):
-//   < 0.7 well below · 0.7–0.9 below · 0.9–1.15 usual · 1.15–1.5 above · > 1.5 well above
+//   < 0.7 well below, 0.7–0.9 below, 0.9–1.15 usual, 1.15–1.5 above, > 1.5 well above
 //
 // Monotony (Foster 1998) is the mean daily load of the last 7 days over its
 // standard deviation (population SD of the 7 days); null with fewer than 7
@@ -143,4 +143,70 @@ export function workloadCaution(metrics) {
     "Monotónnost tréninku je " + dec(mono, 2) + ": dny jsou si zátěží příliš podobné. Střídej těžší a lehčí dny a zařaď den volna.",
     "Training monotony is " + dec(mono, 2) + ": your days carry too similar a load. Alternate hard and easy days and add a rest day."));
   return parts.length ? parts.join(" ") : null;
+}
+
+// ---- Training → Load: Load balance and Muscle load (redesign S2, 2026-11-16) ----
+// Both are the last 7 days against the usual 28 above, shown only as words
+// and as the dial's and the chart's place against the usual band: no ratio
+// number as text anywhere (Today audit D4; Petr's decision B, 2026-11-16).
+// `plot` in a series is the ratio for drawing the dial needle and the chart
+// line against `band`; the app never prints it.
+export const USUAL_BAND = Object.freeze({ low: 0.9, high: 1.15 });
+export const LOAD_SERIES_DAYS = 14;
+const LOAD_TEXTS = bilingual({
+  wellBelow: "Posledních 7 dní bylo mnohem lehčích než tvé obvyklé 4 týdny.",
+  below: "Posledních 7 dní bylo lehčích než tvé obvyklé 4 týdny.",
+  usual: "Posledních 7 dní bylo zhruba jako tvé obvyklé 4 týdny.",
+  above: "Posledních 7 dní bylo těžších než tvé obvyklé 4 týdny.",
+  wellAbove: "Posledních 7 dní bylo mnohem těžších než tvé obvyklé 4 týdny. Střídej těžší a lehčí dny."
+}, {
+  wellBelow: "The last 7 days were much easier than your usual 4 weeks.",
+  below: "The last 7 days were easier than your usual 4 weeks.",
+  usual: "The last 7 days were about as hard as your usual 4 weeks.",
+  above: "The last 7 days were harder than your usual 4 weeks.",
+  wellAbove: "The last 7 days were much harder than your usual 4 weeks. Alternate harder and easier days."
+});
+
+// The card and the detail from daily loads (oldest first, `days` at least
+// SERIES_DAYS long, the last one today): null without any load on record;
+// level null while fewer than MIN_HISTORY_DAYS days of history (learning).
+export function loadView(series, historyDays) {
+  if (!(historyDays > 0) || !Array.isArray(series) || series.length < CHRONIC_DAYS + LOAD_SERIES_DAYS - 1) return null;
+  const loads = series.map(d => d.load);
+  const points = Array.from({ length: LOAD_SERIES_DAYS }, (_, i) => {
+    const end = loads.length - LOAD_SERIES_DAYS + i + 1, r = acwr(loads.slice(0, end), historyDays - (LOAD_SERIES_DAYS - 1 - i));
+    return { date: series[end - 1].date, level: r.level, plot: r.value };
+  });
+  const level = points.at(-1).level;
+  return {
+    // learning: under MIN_HISTORY_DAYS of history; quiet: history enough but no load in the last 28 days; ready: a level.
+    state: level ? "ready" : historyDays < MIN_HISTORY_DAYS ? "learning" : "quiet",
+    level,
+    label: loadLevelLabel(level),
+    text: level ? LOAD_TEXTS[level] : null,
+    band: USUAL_BAND,
+    historyDays,
+    needsDays: MIN_HISTORY_DAYS,
+    series: points
+  };
+}
+
+// Load balance: every workout's load (the rows of GET /app/api/fitness).
+export function loadBalance(rows, date) {
+  const { series, historyDays } = dailyLoadSeries(rows, date);
+  return loadView(series, historyDays);
+}
+
+// Muscle load: only the gym's work sets (`sessions`: training-load.js
+// gymSessions of strength_sets rows, {date, minutes, rpe, volume}), each
+// day's session RPE load (strengthLoad), so cardio and endurance never count.
+// Null without a gym session in the window: a swimmer gets an empty dial, not 0.
+// `since`: the first gym day on record, when it is older than the sets read,
+// so a lifter back from a break is not "learning" again.
+export function muscleLoad(sessions, date, loadOf, since = null) {
+  const rows = (Array.isArray(sessions) ? sessions : []).map(s => ({ id: s.date, load: loadOf(s) })).filter(r => r.load > 0);
+  if (!rows.length) return null;
+  const { series, historyDays } = dailyLoadSeries(rows, date);
+  const first = isDate(since) && since <= date ? daysBetween(since, date) + 1 : 0;
+  return loadView(series, Math.max(historyDays, first));
 }

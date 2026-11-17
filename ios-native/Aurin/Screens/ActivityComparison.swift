@@ -140,9 +140,9 @@ struct ActivityComparisonSection: View {
         return "\(s / 60):" + String(format: "%02d", s % 60)
     }
 
-    /// "262 W · 158" or "4:26 · 171".
+    /// "262 W, 158" or "4:26, 171".
     private func cell(_ p: ActivityComparison.Pair, _ c: ActivityComparison) -> String {
-        [p.value.map { value($0, c) + (c.pace ? "" : " W") }, p.hr.map { Fmt.int($0) }].compactMap { $0 }.joined(separator: " · ")
+        [p.value.map { value($0, c) + (c.pace ? "" : " W") }, p.hr.map { Fmt.int($0) }].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// "+7 W" or "o 6 s rychleji"; better is more watts or a faster pace.

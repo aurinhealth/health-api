@@ -63,7 +63,7 @@ struct SharePhotoFlow: View {
             guard let item else { return }
             self.item = nil
             Task {
-                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else {
+                guard let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) else {
                     error = L10n.tr("Obrázek se nepodařilo načíst.")
                     return
                 }

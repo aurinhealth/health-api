@@ -2,7 +2,7 @@ import { L, bilingual } from './lang.js';
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import {trainingHistory,starterPlan,experienceChoices} from './training-history.js';
-import { weekWithCalendar } from './calendar-free.js';
+import { weekFree, withCalendarFree, ensureCalendarFree } from './calendar-free.js';
 import { MAX_MINUTES } from './workout-model.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -25,15 +25,15 @@ export const ROLE_LABELS = bilingual({
   quality: "Kvalita (intervaly)",
   endurance: "Vytrvalost",
   recovery: "Lehce / regenerace",
-  gym_upper: "Posilovna · s rezervou",
-  gym_full: "Posilovna · celé tělo"
+  gym_upper: "Posilovna s rezervou",
+  gym_full: "Posilovna na celé tělo"
 }, {
   long: "Long workout",
   quality: "Quality (intervals)",
   endurance: "Endurance",
   recovery: "Easy / recovery",
-  gym_upper: "Gym · with reserve",
-  gym_full: "Gym · full body"
+  gym_upper: "Gym, with reserve",
+  gym_full: "Full-body gym"
 });
 // What the coach should do with the role (the coach keeps its readiness guardrails).
 export const ROLE_FOCUS = { long: "long_endurance", endurance: "endurance", recovery: "recovery", quality: null };
@@ -105,12 +105,19 @@ export function sanitizeSessions(raw, days) {
 // calendar's free time (calendar-free.js) unless `calendar` is false.
 export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
   await ensure(db);
-  const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
+  // The calendar's table exists only once the iPhone sent one: a read of a missing
+  // table would fail the whole trip (d1-batch.js asks each read alone then).
+  if (date) { await ensureWeekOverrides(db); if (calendar) await ensureCalendarFree(db); }
+  // Every read side by side: one database trip instead of four in a row (the
+  // setup row counts only for automatic availability, which most have).
+  const [row, setup, override, free] = await Promise.all([db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first(),
+    db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null),
+    date ? db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first() : null,
+    date && calendar ? weekFree(db, date) : null]);
   let defaults; try { defaults = sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { defaults = sanitizeWeekPlan({}); }
   // Onboarding does not collect availability. Until the athlete saves a time
   // budget in Plan, use current history or the documented starting template.
   if(defaults.availabilityMode==='auto'||defaults.availability.every(day=>day.minutes==null)){
-    const setup=await db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null);
     if(setup?.completed_at){
       let training={};try{training=JSON.parse(setup.training_json||'{}');}catch{}
       const automatic=starterPlan(await trainingHistory(db),experienceChoices(training));
@@ -119,10 +126,8 @@ export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
   }
   if (!date) return defaults;
   defaults = usualFor(defaults, date);
-  await ensureWeekOverrides(db);
-  const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
   const prefs = override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week', ...(defaults.weekB ? { weekB: true } : {}) } : { ...defaults, source: 'default' };
-  return calendar ? weekWithCalendar(db, prefs, date) : prefs;
+  return calendar ? withCalendarFree(prefs, weekStartOf(date), free) : prefs;
 }
 
 export async function saveWeekPlan(db, input, date = null) {
@@ -406,7 +411,7 @@ export function raceDayRole(x, date, eventDate) {
   const role = left === 1 ? "recovery" : x.sport === "gym" ? "gym_upper" : x.role === "long" ? "endurance" : x.role;
   return role === x.role ? x : { ...x, role, label: ROLE_LABELS[role], share: x.share != null && SHARE[x.role] ? x.share * SHARE[role] / SHARE[x.role] : SHARE[role], ...(x.sport === "gym" ? {} : { focus: ROLE_FOCUS[role] }) };
 }
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null, strained = false } = {}) {
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null, taperDays = 7, strained = false } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
@@ -416,8 +421,13 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   // so does a strained athlete (week-check.js strainOf).
   const hold = Number(rampRate) > 8 || Boolean(strained);
   const planned = Number(plan?.load) > 0 ? Number(plan.load) : null;
-  const target = Math.round(base * (rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
+  // The taper before the main race (its days by the distance, racePhase): the
+  // volume goes down by about 45 % (Bosquet 2007: 41–60 %), for the share of
+  // this week's days that fall in it; the intensity stays (ROLE_RANGE).
+  const taperFrom = eventDate ? new Date(Date.parse(eventDate + "T12:00:00Z") - taperDays * 86400000).toISOString().slice(0, 10) : null;
+  const taper = taperFrom ? 1 - .45 * [0, 1, 2, 3, 4, 5, 6].filter(i => dateOf(i) >= taperFrom && dateOf(i) < eventDate).length / 7 : 1;
+  const target = Math.round(base * Math.min(taper < 1 ? taper : Infinity, rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
   let committed = 0;
   for (let i = 0; i < 7; i++) { const d = info(dateOf(i)); committed += Number(d.done) || 0; if (dateOf(i) >= today) committed += Number(d.planned) || 0; }

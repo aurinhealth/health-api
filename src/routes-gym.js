@@ -1,7 +1,7 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts, painfulExercises } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
@@ -9,24 +9,27 @@ import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings, exerciseLiked } from "./exercise-feedback.js";
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
-import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
-import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
+import { gymExerciseCatalog, gymAlternatives, gymLoadEstimate, catalogueStartLoad } from "./gym-catalog.js";
+import { EXERCISE_STATIONS, stationSections, stationExercises } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
-import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
-import { assertTrainingAllowed, getAthleteState, usedMemories } from "./athlete-state.js";
+import { getStrengthHistory, withHistoryOf, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
+import { assertTrainingAllowed, getAthleteState, usedMemories, brokenStations } from "./athlete-state.js";
 import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
-import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
+import { EXERCISE_INTELLIGENCE, historyFamily } from "./strength-intelligence.js";
+import { normalizeExerciseName } from "./strength-normalization.js";
 import { cleanGymRows, catalogNames, adjustGymPlan } from "./gym-adjust.js";
-import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan } from "./gym-plan-store.js";
+import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan, replaceStrengthPlanInDb } from "./gym-plan-store.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { saveOwnExerciseVideo, techniqueFor, ownExerciseVideo, storedTechnique, exerciseInUse, generateTechnique } from "./exercise-technique.js";
 import { L } from "./lang.js";
+import { effortScale } from "./gym-intensity.js";
 import { sideBalance, lastSideChoice } from "./gym-sides.js";
 import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
 import { syncGymActivity, removeGymActivity } from "./gym-session-activity.js";
+import { planStarted } from "./coach-gym-adjustment.js";
 import { matchActivities } from "./index.js";
 
 // The main sport: the profile's, else the one the training history shows.
@@ -34,6 +37,12 @@ async function mainSportOf(env,training){
   const { loadEffectiveProfile }=await import('./profile-suggestions.js');
   const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);
   return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training?.history?.mainSport||'';
+}
+// "female", "male" or "" from the profile, for the catalogue's starting loads.
+async function athleteSexOf(env){
+  const { loadEffectiveProfile }=await import('./profile-suggestions.js');
+  const sex=(await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null))?.sex;
+  return sex==='female'||sex==='male'?sex:'';
 }
 // The minutes an own routine takes, for the length picker's "+N min".
 const ownMinutes=(training,kind)=>training[kind+'Routine']&&training[kind+'Routine']!=='auto'?myRoutinesView(training)[kind].find(r=>r.id===training[kind+'Routine'])?.minutes||null:null;
@@ -122,23 +131,45 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history,setup,taste]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
+    const [plan,recent,setup,taste,sex,state]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),athleteSexOf(env),getAthleteState(env.DB).catch(()=>({}))]);
+    // An alternative never done before starts at the generator's catalogue load.
+    const start={sex,experience:setup?.experience||''};
     // The plan being built is sent along (not saved yet); else the saved day's.
     let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
-    // Only what the athlete's gym has (the active place's stations).
-    const fits=n=>fitsEquipment(n,setup);
+    // Only what the athlete's gym has (the active place's stations), and, as in
+    // the coach chat (todayGymContext), nothing loading a part the coach
+    // remembers as painful or a station the athlete said is broken.
+    const avoid=new Set([...painfulExercises(usedMemories(state)).avoid,...stationExercises(brokenStations(state,date))]);
+    const fits=n=>fitsEquipment(n,setup)&&!avoid.has(n);
+    // The candidates' own sets older than the recent window too (withHistoryOf).
+    let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
+    const asked=(Array.isArray(many)?many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)).slice(0,20):[exercise]);
+    const candidates=asked.flatMap(name=>gymAlternatives(name,recent,inPlan,taste,fits).slice(0,Array.isArray(many)?3:8).map(a=>a.name));
+    const history=await withHistoryOf(env.DB,recent,[...new Set(candidates)].flatMap(historyFamily));
     // ?exercises=[...] (the Apple Watch, when the day's plan comes): three
     // for each exercise of the plan in one request, kept on the watch so a
     // swap works without the iPhone and offline. The same reads as one swap.
-    let many=null;try{many=JSON.parse(url.searchParams.get('exercises')||'null');}catch{/* none */}
     if(Array.isArray(many)){
       const names=[...new Set(many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)))].slice(0,20);
-      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits).slice(0,3)
+      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits,start).slice(0,3)
         .map(a=>({name:a.name,sets:a.sets??null,reps:a.reps??null,kg:a.kg??null}))]));
       return Response.json({status:'ok',byExercise},{headers:{'Cache-Control':'no-store'}});
     }
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits)},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits,start)},{headers:{'Cache-Control':'no-store'}});
+  }
+  // The load of one exercise picked from the whole catalog in place of another
+  // ("Vybrat jiný cvik"): as an alternative's, from the history or the catalogue.
+  if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
+    const exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
+    const [recent,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
+    const history=await withHistoryOf(env.DB,recent,historyFamily(normalizeExerciseName(exercise)));
+    const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
+    return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
+  }
+  // The live mode's effort sheet: each letter with its reps left (gym-intensity.js effortScale).
+  if(url.pathname==='/app/api/gym/effort-scale'&&request.method==='GET'){
+    return Response.json({status:'ok',letters:effortScale()},{headers:{'Cache-Control':'no-store'}});
   }
   // The work sets of the last months by exercise and day (the app's exercise
   // history, "minule 82,5 kg × 6" and the suggested load of the next sets).
@@ -345,10 +376,22 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         if(plan.spare)plan.spare={warmup:plan.spare.warmup?all.warmup:null,stretching:plan.spare.stretching?all.stretching:null};
         if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
-      if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
-      const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
-      if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
-      const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime:draft.startTime||'00:00'}).catch(error=>({status:'error',message:error.message}));
+      // A plan of another focus from the coach (Chat v1) replaces the day's plan:
+      // only the very plan the card was made against, not cancelled, none of it
+      // done, in one conditional write; its calendar event keeps its time.
+      let startTime=draft.startTime||'00:00';
+      if(body.replaceSource){
+        const current=await readGymPlan(env.DB,plan.date,{includeCancelled:true}),changed=L('Plán se mezitím změnil nebo už začal. Požádej o nový návrh.', 'The plan has changed or already started. Ask for a new proposal.');
+        if(!current.stored||current.cancelled||JSON.stringify(current.values)!==JSON.stringify(body.replaceSource)||planStarted(current.values))throw new Error(changed);
+        const event=await env.DB.prepare('SELECT event_json FROM local_workouts WHERE user_id=? AND event_key=?').bind(env.USER_ID,'health-strength-'+plan.date).first().catch(()=>null);
+        startTime=/T(\d{2}:\d{2})/.exec(JSON.parse(event?.event_json||'{}').start_date_local||'')?.[1]||startTime;
+        if(!await replaceStrengthPlanInDb(env.DB,plan,body.replaceSource))throw new Error(changed);
+      }else{
+        if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
+        const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
+        if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
+      }
+      const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime}).catch(error=>({status:'error',message:error.message}));
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();
       return Response.json({status:'ok',intervals,eventId:intervals?.eventId!=null?'planned:'+intervals.eventId:null,message:L('Gym plán je uložený.', 'The gym plan is saved.')},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}

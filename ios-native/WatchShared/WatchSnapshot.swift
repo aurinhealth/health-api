@@ -75,6 +75,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         /// "07:00" on work days and at the weekend; nil without an alarm.
         var work: String?
         var weekend: String?
+        /// The days each rings (AlarmDays bits); nil = Monday to Friday and the weekend.
+        var workDays: Int?
+        var weekendDays: Int?
         /// Tonight: its evening, the wake time for the next morning (maybe
         /// set for that morning only), the bedtime and the minutes in bed.
         var evening: String?
@@ -129,10 +132,10 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var race: Bool? = nil
 
         /// The title without the length the server's plan already ends it with
-        /// ("Endurance with cadence drills · 60 min"), which the screens show apart.
+        /// ("Endurance with cadence drills, 60 min"), which the screens show apart.
         var name: String {
             guard let minutes else { return title }
-            for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where title.hasSuffix(suffix) {
+            for suffix in [" · \(minutes) min", ", \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where title.hasSuffix(suffix) {
                 return String(title.dropLast(suffix.count))
             }
             return title

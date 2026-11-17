@@ -49,7 +49,7 @@ export function buildRunReview({ activity = {}, detail = null, plan = null, well
       : fade >= 8 ? t('Úseky splněné, ale tempo ke konci klesalo.', 'Reps done, but the pace dropped towards the end.')
       : t('Povedený trénink, úseky v plánovaném tempu.', 'A good session: reps at the planned pace.');
     const reps = S.filter(s => s.block === work[0].block && s.role === 'work');
-    if (reps.length > 1) table = { columns: [t('Úsek', 'Rep'), t('Tempo · čas', 'Pace · time'), t('Tep prům. / max', 'HR avg / max')], rows: reps.filter(s => s.actual).map((s, i) => [String(i + 1), v(s.actual.watts) + ' · ' + L.clock(s.actual.seconds), s.actual.hr ? s.actual.hr + ' / ' + (s.actual.maxHr ?? '—') : '—']) };
+    if (reps.length > 1) table = { columns: [t('Úsek', 'Rep'), t('Tempo a čas', 'Pace and time'), t('Tep prům. / max', 'HR avg / max')], rows: reps.filter(s => s.actual).map((s, i) => [String(i + 1), v(s.actual.watts) + ', ' + L.clock(s.actual.seconds), s.actual.hr ? s.actual.hr + ' / ' + (s.actual.maxHr ?? '—') : '—']) };
   } else if (S.length) {
     const out = S.filter(s => s.actual && s.status === 'over' && s.role !== 'sprint');
     verdict = out.length ? t('Běh rychlejší, než měl být.', 'The run was faster than planned.') : t('Běh v plánovaném tempu.', 'Run at the planned pace.');
@@ -66,13 +66,13 @@ export function buildRunReview({ activity = {}, detail = null, plan = null, well
   load.push(...recoveryLines({ wellness, date: date || String(activity.start || '').slice(0, 10), fitness, hardDay: tss != null && tss >= 80 || work.length > 0, strong: work.length && work.every(s => s.status !== 'under'), sport: 'run' }));
 
   const label = s => ({ warmup: t('Rozklus', 'Warm-up'), sprint: t('Rovinka', 'Stride'), work: t('Úsek', 'Rep'), rest: t('Klus', 'Jog'), cooldown: t('Výklus', 'Cool-down') })[s.role] || t('Klidný běh', 'Easy running');
-  const chart = S.length ? { ftp: 100, unit: '%', refLabel: t('práh ', 'threshold ') + v(ref), steps: S.map(s => ({ role: s.role, label: label(s), tip: label(s) + ' · ' + (s.actual ? L.clock(s.actual.seconds) + ' · ' + v(s.actual.watts) + (s.actual.hr ? ' · ' + t('tep ', 'HR ') + s.actual.hr : '') : t('chybí', 'missing')) + (s.lo != null ? ' · ' + t('cíl ', 'target ') + band(s.lo, s.hi) : ''), start: n(s.actual?.start), seconds: s.actual ? s.actual.seconds : s.minutes * 60, lo: s.lo, hi: s.hi, watts: s.actual ? round(s.actual.watts / ref * 100) : null, text: s.actual ? L.clock(s.actual.seconds) + ' · ' + v(s.actual.watts) : null, status: s.role === 'sprint' ? null : s.status, missing: !s.actual })) } : null;
+  const chart = S.length ? { ftp: 100, unit: '%', refLabel: t('práh ', 'threshold ') + v(ref), steps: S.map(s => ({ role: s.role, label: label(s), tip: label(s) + ', ' + (s.actual ? L.clock(s.actual.seconds) + ', ' + v(s.actual.watts) + (s.actual.hr ? ', ' + t('tep ', 'HR ') + s.actual.hr : '') : t('chybí', 'missing')) + (s.lo != null ? ', ' + t('cíl ', 'target ') + band(s.lo, s.hi) : ''), start: n(s.actual?.start), seconds: s.actual ? s.actual.seconds : s.minutes * 60, lo: s.lo, hi: s.hi, watts: s.actual ? round(s.actual.watts / ref * 100) : null, text: s.actual ? L.clock(s.actual.seconds) + ', ' + v(s.actual.watts) : null, status: s.role === 'sprint' ? null : s.status, missing: !s.actual })) } : null;
   const sections = [
     wins.length ? { kind: 'good', label: t('Co se povedlo', 'What went well'), items: wins } : null,
     fixes.length ? { kind: 'fix', label: t('Co příště líp', 'Do better next time'), items: fixes } : null,
     load.length ? { kind: 'load', label: t('Zátěž a regenerace', 'Load and recovery'), items: load } : null
   ].filter(Boolean);
-  const actions = facts.length ? [t('Dokončeno: ', 'Completed: ') + facts.join(' · ') + '.'] : [];
+  const actions = facts.length ? [t('Dokončeno: ', 'Completed: ') + facts.join(', ') + '.'] : [];
   if (!plan) actions.push(t('Bez spárovaného plánu hodnotím jen průběh běhu.', 'No matched plan, so only the run itself is reviewed.'));
   else if (!ref) actions.push(t('Chybí prahové tempo v Intervals.icu, úseky proto neporovnávám s cílem.', 'No threshold pace in Intervals.icu, so the reps are not compared with their target.'));
   return { verdict, target, table, chart, sections, actions };

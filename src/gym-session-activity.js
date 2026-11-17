@@ -1,10 +1,10 @@
 // A gym session logged set by set in Aurin is a done activity of its own, with
 // its length and calories, even when the watch caught only a part of it.
 //
-// Fitbit and Pixel Watch detect lifting on their own and often stop after a
+// Fitbit and other Google Health watches detect lifting on their own and often stop after a
 // few minutes: a 75-minute session arrived from Google Health as one
 // "Strength training" of 14 minutes and 24 kcal. The gym plan itself carries
-// no length, so a day whose watch pieces were deleted read "0 min · 0 kcal".
+// no length, so a day whose watch pieces were deleted read "0 min, 0 kcal".
 //
 // While sets are being logged (each save of the day's gym), the day gets one
 // activity in Aurin (source 'local', external_id aurin-gym:<date>): from the

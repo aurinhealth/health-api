@@ -40,8 +40,8 @@ test('the card carries today\'s swap when one is offered', () => {
   const nudge = { ...easierSwap(hard), title: 'x', day: date, status: 'pending' };
   const state = { nudge };
   const card = withLang('en', () => easierDayCard({ date, readiness: off, state, offer: swapOffer(state, date) }));
-  assert.equal(card.from, 'VO2max 5×4 · 75 min');
-  assert.equal(card.to, 'Easy ride · 60 min');
+  assert.equal(card.from, 'VO2max 5×4, 75 min');
+  assert.equal(card.to, 'Easy ride, 60 min');
   assert.equal(card.date, date);
   // Swapped or kept: the card has done its job today.
   assert.equal(easierDayCard({ date, readiness: off, state: { nudge: { ...nudge, status: 'kept' } } }), null);
@@ -76,7 +76,7 @@ test('the coach push only offers to swap today\'s hard session, never to switch 
   const swim = [{ eventId: 'planned:9', date, sport: 'swim', kind: 'threshold', name: 'CSS 8×100', minutes: 50, environment: 'auto' }];
   const s = withLang('cs', () => coachNudge({ date, hour: 8, morning: true, easier, upcoming: swim }));
   assert.equal(s.body, 'Dnešní práh vyměním za lehké plavání 50 min?');
-  assert.equal(withLang('en', () => swapOffer({ nudge: { ...s.swap, title: s.title, day: date, status: 'pending' } }, date)).to, 'Easy swim · 50 min');
+  assert.equal(withLang('en', () => swapOffer({ nudge: { ...s.swap, title: s.title, day: date, status: 'pending' } }, date)).to, 'Easy swim, 50 min');
 });
 
 test('the resting heart rate alone: two nights above, or one with HRV under its range, against its own range', () => {

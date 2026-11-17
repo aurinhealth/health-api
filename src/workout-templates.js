@@ -32,9 +32,11 @@ import { describeInstructions } from './private/workout-templates.js';
 export const SPORTS = ["gym", ...ENDURANCE_SPORTS];
 const MAX_EXERCISES = 30;
 const MAX_SAVED = 300;
-const MAX_SHARES_PER_DAY = 100;
-// The preview image is a PNG drawn by the app (about 1200 × 630); base64.
+const MAX_SHARES_PER_DAY = 20;
+// The preview image is the PNG the app draws (1200 × 630), base64; any other
+// format or size is dropped (previewPng).
 const MAX_IMAGE_CHARS = 700_000;
+const PREVIEW_WIDTH = 1200, PREVIEW_HEIGHT = 630;
 const ID = /^[A-Za-z0-9]{10}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -293,7 +295,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     // A link to the workout; the app sends the preview image it drew.
     if (path === "/app/api/shares" && request.method === "POST") {
       const template = cleanTemplate(body);
-      const image = typeof body.image === "string" && body.image.length <= MAX_IMAGE_CHARS && /^[A-Za-z0-9+/=]+$/.test(body.image) ? body.image : null;
+      const image = previewPng(body.image) ? body.image : null;
       const db = env.RAW_DB || env.DB;
       await ensureShareTable(db);
       const today = (await db.prepare("SELECT COUNT(*) AS n FROM workout_shares WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(env.USER_ID).first())?.n || 0;
@@ -404,6 +406,20 @@ async function readShare(db, id) {
   return db.prepare("SELECT id,user_id,sport,name,from_name,plan_date,template_json FROM workout_shares WHERE id=?").bind(String(id)).first();
 }
 
+// A PNG of the preview size and nothing after its end: the signature, the
+// IHDR chunk with 1200 × 630, the IEND chunk last. Only the start and the end
+// are decoded, so the check costs no CPU. It checks the format, not the
+// picture: what a picture shows is left to the page's report link.
+export function previewPng(base64) {
+  if (typeof base64 !== "string" || base64.length < 60 || base64.length > MAX_IMAGE_CHARS || base64.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return false;
+  const decode = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  const head = decode(base64.slice(0, 32)), tail = decode(base64.slice(-24)).slice(-12);
+  const view = new DataView(head.buffer), ascii = (bytes, at) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => head[i] === b);
+  return signature && ascii(head, 12) === "IHDR" && view.getUint32(16) === PREVIEW_WIDTH && view.getUint32(20) === PREVIEW_HEIGHT
+    && new DataView(tail.buffer).getUint32(0) === 0 && ascii(tail, 4) === "IEND";
+}
+
 // Links are on aurin.health whichever host the app talks to, so they never change.
 export function shareUrl(env, id) { return new URL("/t/" + id, env?.APP_ORIGIN || SITE_ORIGIN).toString(); }
 
@@ -427,7 +443,8 @@ export async function publicSharePage(request, db, url, env = {}) {
   }
   if (m[2]) {
     const row = await db.prepare("SELECT image_png FROM workout_shares WHERE id=?").bind(m[1]).first();
-    if (!row?.image_png) return new Response("Not found", { status: 404 });
+    // Rows from before the check are served only when they pass it too.
+    if (!row?.image_png || !previewPng(row.image_png)) return new Response("Not found", { status: 404 });
     const bytes = Uint8Array.from(atob(row.image_png), c => c.charCodeAt(0));
     return new Response(bytes, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
   }
@@ -442,10 +459,10 @@ export async function publicSharePage(request, db, url, env = {}) {
   const from = share.from_name ? t(share.from_name + " ti posílá trénink", share.from_name + " sent you a workout") : t("Sdílený trénink", "Shared workout");
   const minutes = endurance ? Math.round(totalMinutes(enduranceStructure(template))) : template.minutes;
   const length = minutes ? (minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + (minutes % 60) + " min" : "") : minutes + " min") : null;
-  const meta = [sport, length, endurance ? null : exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(" · ");
+  const meta = [sport, length, endurance ? null : exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(", ");
   const muscles = endurance ? [] : mainMuscles(template, en);
   const list = endurance ? sectionList(template) : exercises.map(e => `<li><span>${escapeHtml(e.name)}</span><span class="sr">${escapeHtml(e.sets + " × " + e.reps)}</span></li>`).join("");
-  const description = from + " · " + meta;
+  const description = from + ", " + meta;
   const og = share.has_image ? new URL("/t/" + share.id + "/og.png", url.origin).toString() : null;
   // The App Store banner and the way there when the app is not installed;
   // APP_STORE_ID is the app's Apple ID in App Store Connect.
@@ -462,7 +479,8 @@ ${endurance ? intervalGraph(template) : ""}
 <p class="note">${endurance ? t(share.sport === "swim" ? "Tempo na 100 m ti aplikace přepočte podle tvého CSS." : share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "swim" ? "The app turns the paces per 100 m into yours from your CSS." : share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
 <a class="button" id="open" href="aurin://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
 <p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
-<a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
+<a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}
+<p class="note"><a href="mailto:support@aurin.health?subject=${encodeURIComponent("Report workout " + share.id)}">${t("Nahlásit nevhodný obsah", "Report inappropriate content")}</a></p>`;
   // Without the app the scheme does nothing: the page stays, so it shows the way to the app.
   const script = `<script>document.getElementById("open").addEventListener("click",function(){setTimeout(function(){if(!document.hidden){${store ? `location.href=${JSON.stringify(store)}` : `document.getElementById("noapp").hidden=false`}}},1500)})</script>`;
   return new Response(page({ en, title: share.name, description, head, body: body + script }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "Content-Security-Policy": scriptPolicy(script) } });
@@ -483,14 +501,14 @@ const zoneClass = p => p < 56 ? 1 : p < 76 ? 2 : p < 88 ? 3 : p < 106 ? 4 : 5;
 
 function sectionList(template) {
   return blockLines(template).map(b => {
-    const steps = b.steps.map(st => `${escapeHtml(st.length)} · ${escapeHtml(st.target)}`).join(" / ");
+    const steps = b.steps.map(st => `${escapeHtml(st.length)}, ${escapeHtml(st.target)}`).join(" / ");
     const title = (b.repeats > 1 ? b.repeats + "× " : "") + b.steps.map(st => st.label).join(" / ");
     return `<li class="sec"><i class="z${zoneClass(Math.max(...b.steps.map(st => st.percent)))}"></i><span><b>${escapeHtml(title)}</b><span class="sr">${steps}</span></span></li>`;
   }).join("");
 }
 
 function page({ en, title, description = "", head = "", body }) {
-  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Aurin</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
+  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
 :root{--bg:#F3EFE8;--card:#FBFAF7;--ink:#1B1A17;--muted:#6D6A63;--line:rgba(27,26,23,.09);--button:#15140F;--onbutton:#fff;--avatar:#1F6B52;--c0:#A35A12;--c1:#1F6B52;--c2:#4F46C8;--c3:#1D6FA3;--z1:#9C978D;--z2:#1D6FA3;--z3:#1F6B52;--z4:#C4782A;--z5:#B4532F}
 @media (prefers-color-scheme:dark){:root{--bg:#0A0B0C;--card:#1C1E1F;--ink:#ECEAE6;--muted:#9AA39F;--line:rgba(236,234,230,.08);--button:#F4F2EE;--onbutton:#0A0B0C;--avatar:#2E9E78;--c0:#F2B46B;--c1:#8FE6C4;--c2:#A5A1FF;--c3:#7CC3F0;--z1:#5C6266;--z2:#7CC3F0;--z3:#8FE6C4;--z4:#F0B36E;--z5:#F0907A}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}

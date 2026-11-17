@@ -41,6 +41,18 @@ test("a run goes onto the treadmill as VirtualRun; a bad place is refused", asyn
   assert.equal(calls.length, 1);
 });
 
+test("a planned swim stays a swim: open water and back to the pool", async () => {
+  const { raw, env, calls, fetchImpl } = await setup("Swim");
+  assert.equal((await setPlannedEnvironment(env, { eventId: "88", environment: "outdoor" }, fetchImpl)).type, "OpenWaterSwim");
+  let payload = JSON.parse(raw.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.equal(plannedEventWorkout(payload).sport, "swim");
+  assert.equal(plannedEventWorkout(payload).environment, "outdoor");
+  assert.equal((await setPlannedEnvironment(env, { eventId: "88", environment: "indoor" }, fetchImpl)).type, "Swim");
+  payload = JSON.parse(raw.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json);
+  assert.equal(plannedEventWorkout(payload).environment, "indoor");
+  assert.deepEqual(calls.map(c => JSON.parse(c.body).type), ["OpenWaterSwim", "Swim"]);
+});
+
 test("food for another day gets its meal's usual time, today keeps the time of logging", () => {
   assert.equal(mealConsumedAt("2099-01-01", "breakfast"), "2099-01-01T07:00:00");
   assert.equal(mealConsumedAt("2099-01-01", "snack_am"), "2099-01-01T10:00:00");
@@ -70,17 +82,17 @@ test("the endurance coach names the purpose, the steady watts, the cadence work 
   const text = coach.actions.join("\n");
   assert.match(text, /^Drž rovnoměrné vytrvalostní tempo/);
   assert.match(text, /Cíl: aerobní základ/);
-  assert.match(text, /30 min rovnoměrně · 65 % FTP \(169 W\)/);
+  assert.match(text, /30 min rovnoměrně, 65 % FTP \(169 W\)/);
   assert.match(text, /Kadence: 6× 1 min na 105–115 rpm/);
   assert.match(text, /Tep drž do ~153 bpm/);
-  assert.match(text, /Plán: 90 min · TSS 62 · IF 0,64 · FTP 260 W/);
+  assert.match(text, /Plán: 90 min, TSS 62, IF 0,64, FTP 260 W/);
   assert.doesNotMatch(text, /mezi úseky/);
 });
 
 test("intervals are a main set in watts of the indoor FTP; a day ahead has no morning summary", () => {
   const ride = { id: 2, name: "Threshold 4x8", type: "VirtualRide", durationHours: 1.33, tss: 95, description: "Rozjetí\n- 15m ramp 50-75%\nHlavní 4x\n- 8m 95-100%\n- 4m 55%\n- 10m 50%" };
   const council = buildCoachCouncil({ date: "2026-10-09", ahead: true, daily: { training: { planned: [ride], completed: [] } }, fitness: { tsb: 5 }, thresholds: { ftp: 260 } });
-  assert.match(council.coaches[0].actions.join("\n"), /4× 8 min · 95–100 % FTP \(235–247 W\), mezi úseky 4 min lehce/);
+  assert.match(council.coaches[0].actions.join("\n"), /4× 8 min, 95–100 % FTP \(235–247 W\), mezi úseky 4 min lehce/);
   assert.equal(council.morningSummary, null);
 });
 

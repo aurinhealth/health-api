@@ -41,8 +41,8 @@ final class GymDayPartsTests: XCTestCase {
     func testADayKeepsItsOwnWarmupAndShowsItsName() {
         let d = day(routines: #"{"warmup":{"minutes":7,"name":"Legs","items":[{"id":"own-1","name":"Rotoped","seconds":300,"sides":false}]},"stretching":"# + routine + #"}"#)
         var parts = GymDayParts.defaults(d)
-        XCTAssertEqual(parts.subtitle(.warmup, day: d), "Legs · 7 min")
-        XCTAssertEqual(parts.subtitle(.stretching, day: d), L10n.tr("Automaticky") + " · 5 min")
+        XCTAssertEqual(parts.subtitle(.warmup, day: d), "Legs, 7 min")
+        XCTAssertEqual(parts.subtitle(.stretching, day: d), L10n.tr("Automaticky") + ", 5 min")
         let ten = GymStretching(minutes: 10, items: [GymStretching.Item(id: "squat", name: "Dřep", seconds: 40, sides: false)])
         parts.routines = ["warmup": GymDayParts.Routine(routine: nil, length: 10, moves: ten)]
         XCTAssertEqual(parts.routine(.warmup, day: d), ten)
@@ -63,7 +63,7 @@ final class GymDayPartsTests: XCTestCase {
         let parts = GymDayParts.defaults(old)
         XCTAssertEqual(parts.choice(.cardioStart).minutes, 0)
         XCTAssertEqual(parts.routine(.cardioStart, day: old)?.items.first?.seconds, 0)
-        XCTAssertEqual(parts.subtitle(.cardioStart, day: old), GymCardio.name("treadmill") + " · " + L10n.tr("Bez limitu"))
+        XCTAssertEqual(parts.subtitle(.cardioStart, day: old), GymCardio.name("treadmill") + ", " + L10n.tr("Bez limitu"))
         XCTAssertEqual(parts.routine(.cardioStart, day: old)?.items.first?.duration, L10n.tr("Bez limitu"))
         let timed = day(routines: #"{"warmup":"# + routine + #","cardio":{"type":"treadmill","start":12,"end":12,"length":12}}"#)
         XCTAssertEqual(GymDayParts.defaults(timed).choice(.cardioEnd).minutes, 12)
@@ -80,7 +80,7 @@ final class GymDayPartsTests: XCTestCase {
         let stored = GymCardioLog.saving(entry, date: today, id: "cardio-start", into: "")
         XCTAssertEqual(GymCardioLog.entry(stored, date: today, id: "cardio-start"), entry)
         XCTAssertNil(GymCardioLog.entry(stored, date: today, id: "cardio-end"))
-        XCTAssertTrue(entry.summary.hasPrefix("7 min · "))
+        XCTAssertTrue(entry.summary.hasPrefix("7 min, "))
     }
 
     /// The day's parts travel in the plan (row 5, "day"), so the watch and the

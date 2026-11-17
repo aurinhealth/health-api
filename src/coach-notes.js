@@ -10,6 +10,7 @@ import { localToday, dayStartUtc } from './user-time.js';
 import { shiftDate } from './dashboard-shared.js';
 import { callOpenAI, lightModel } from './coach-assistant.js';
 import { consentStatus } from './consent.js';
+import { plansUnlocked } from './subscription.js';
 import { publicUser } from './tenancy.js';
 import { getAthleteState, updateAthleteState, MEMORY_GROUPS } from './athlete-state.js';
 import { dayNoteInstructions, chatSummaryInstructions } from './private/coach-notes.js';
@@ -163,10 +164,13 @@ export async function runCoachNotes(env, { now = Date.now(), ask = callOpenAI } 
   const due = (await db.prepare('SELECT day FROM coach_note_queue WHERE user_id=? AND due_at<=? ORDER BY day LIMIT 7').bind(db.userId, sqlTime(now)).all()).results || [];
   if (!due.length) return { days: 0 };
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
+  // The note is an AI feature of Aurin Pro: without Pro (paywall on) it is not
+  // asked for, so it is not logged as a failure every night (ops report 2026-11-11).
+  const pro = consent.aiAllowed && await plansUnlocked(env).catch(() => false);
   let written = 0;
   for (const { day } of due) {
-    // Without consent to AI or with AI unavailable the day is dropped, not retried every night.
-    if (consent.aiAllowed && env.OPENAI_API_KEY) {
+    // Without consent to AI, without Pro or with AI unavailable the day is dropped, not retried every night.
+    if (pro && env.OPENAI_API_KEY) {
       try { if ((await writeDayNote(env, day, { ask })).status === 'ok') written++; }
       catch (error) { if (error?.busy) return { days: written, busy: true }; console.error('Coach day note failed', error?.message || error); }
     }

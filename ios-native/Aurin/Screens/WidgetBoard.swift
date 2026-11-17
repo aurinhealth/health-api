@@ -23,6 +23,8 @@ struct WidgetBoard: View {
     @Environment(\.widgetEditingReport) private var report
     /// A wide window (iPhone Duo open): the rows in two columns, outside editing.
     @Environment(\.wideLayout) private var wide
+    /// Set on a day drawn beside during a swipe (DayPager): it loads nothing.
+    @Environment(\.dayPage) private var dayPage
 
     init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety") {
         self.panel = panel
@@ -196,6 +198,7 @@ struct WidgetBoard: View {
 
     /// The tabs whose data the widgets need and nobody has loaded yet.
     private func loadMissing(_ kinds: [WidgetKind]) async {
+        guard dayPage == nil else { return }
         var tabs: [AppTab] = []
         for kind in kinds {
             guard let tab = kind.source, !tabs.contains(tab), !data.has(tab) else { continue }

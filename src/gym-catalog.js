@@ -1,4 +1,4 @@
-import {EXERCISES} from './strength-generator.js';
+import {EXERCISES,CATALOGUE_SCALE,FIRST_SESSION_LOAD,startingLoadScale} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad,resolveLoad} from './strength-intelligence.js';
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
@@ -355,19 +355,35 @@ export function gymLoadEstimate(exercise,history=[]){
   const kg=estimate.source==='cross-exercise-estimate'&&def.baseKg>0?Math.min(estimate.kg,resolveLoad(name,def.baseKg*2)):estimate.kg;
   return {kg,source:estimate.source,reference:estimate.referenceExercise||null};
 }
+// An exercise with no own or similar history starts where the generator
+// starts it: the catalogue's load, lighter for a woman and below the
+// experienced level, first-session light without any strength history
+// (strength-generator.js workRows). start: {sex, experience}.
+export function catalogueStartLoad(exercise,{sex='',experience=''}={},history=[]){
+  const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!(def?.baseKg>0))return null;
+  const scale=history.length?CATALOGUE_SCALE[experience]??CATALOGUE_SCALE.regular:FIRST_SESSION_LOAD;
+  return {kg:resolveLoad(name,def.baseKg*startingLoadScale(def.muscle,sex)*scale),source:'catalogue-default',reference:null};
+}
 // Exercises the athlete gave a thumbs down (taste.disliked) are offered only
 // when nothing else fits; liked ones come first among equally similar ones.
 // fits: what the athlete's gym has, kept before the 8 are cut (a small home
 // gym still gets its 8 from further down, not what is left of the first 8).
-export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=>true){
+export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=>true,start={}){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
   const liked=new Set((taste.liked||[]).map(normalizeExerciseName));
   const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)&&fits(a.name));
   const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
   return ranked.slice(0,8).map(a=>{
-    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};
-    return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
+    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||catalogueStartLoad(a.name,start,history)||{kg:null,source:'no-reference'};
+    // The weight is only suggested, never carried over 1:1 from another
+    // exercise (strength coach S1, 2026-11-16): "suggested" with a reference in
+    // the history, "start-light" with only the catalogue's start load or none.
+    // A main lift swapped in gets one warm-up set first, at 65 % for 5 as the
+    // generator ramps a later main lift (strength-generator.js warmupRows).
+    const kg=estimate.kg??null,known=kg!=null&&!['catalogue-default','no-reference'].includes(estimate.source);
+    return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup),
+      weight:known?'suggested':'start-light',...(def.warmup&&kg>0?{warmupSet:{kg:resolveLoad(a.name,Math.max(2,kg*0.65)),reps:5}}:{})};
   });
 }
 

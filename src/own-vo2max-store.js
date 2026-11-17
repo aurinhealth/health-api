@@ -1,9 +1,10 @@
 // Aurin's own VO2max, fitness age and composite age (own-vo2max.js), worked
 // out once a day by the user job "fitness-estimate" (entrypoint.js) and kept
-// as one row per day in fitness_estimates. Nothing shows it yet: screens will
-// read the newest row only, never recompute it.
+// as one row per day in fitness_estimates, and once more in the afternoon so
+// data that synced after the morning run counts (refresh). Health and the
+// VO2max detail read the rows (health-estimates.js), never recompute them.
 //
-// Reads per user and day (D1 rows): the last stored row (1), activity and
+// Reads per user and run (D1 rows): the day's row and the last one before (2), activity and
 // exercise rows of 8 weeks by the (user, source, type, start) index (an
 // athlete training daily with a watch: about 130 kept of some 280 scanned), daily resting heart rate of 30 days
 // (≤ 60), the newest weight and body fat (≤ 6), sleep of 31 nights (≤ 80) and
@@ -34,18 +35,24 @@ export async function latestFitnessEstimate(db, userId) {
 }
 
 // The day's estimate, worked out and stored once: { status: "saved" | "done" | "no-data", estimate? }.
-export async function updateFitnessEstimate(env, { date = localToday() } = {}) {
+export async function updateFitnessEstimate(env, { date = localToday(), refresh = false } = {}) {
   const db = env.DB, user = env.USER_ID;
   await db.prepare(FITNESS_ESTIMATES_TABLE).run();
-  const last = await db.prepare("SELECT date, vo2max, confidence, ride_factor, model FROM fitness_estimates WHERE user_id = ? AND date <= ? ORDER BY date DESC LIMIT 1").bind(user, date).first();
-  if (last?.date === date) return { status: "done" };
+  // The day's own row is worked out again on a refresh (data that arrived
+  // after the morning run, a sync later in the day), from the row before it,
+  // so the weekly-change limit still counts from yesterday.
+  const [today, last] = await Promise.all([
+    db.prepare("SELECT date FROM fitness_estimates WHERE user_id = ? AND date = ?").bind(user, date).first(),
+    db.prepare("SELECT date, vo2max, confidence, ride_factor, model FROM fitness_estimates WHERE user_id = ? AND date < ? ORDER BY date DESC LIMIT 1").bind(user, date).first()
+  ]);
+  if (today && !refresh) return { status: "done" };
   const start = shift(date, -WINDOW_DAYS), end = shift(date, 1), utcEnd = dayStartUtc(end);
   // Intervals.icu keeps local times, the watch UTC: the end is the later of the two (own-fitness.js).
   const until = utcEnd > end ? utcEnd : end;
   const workouts = WORKOUT_PAIRS.map(([type, sources]) => rowsOf(db.prepare(`SELECT start_time, end_time, source_family, record_role, payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN (${sources.map(() => "?").join(",")}) AND data_type = ? AND start_time >= ? AND start_time < ? AND (record_role IS NULL OR record_role != 'duplicate')`).bind(user, ...sources, type, start, until).all()));
   const [rideRows, watchRows, restRows, weightRows, fatRows, sleepRows, profiles] = await Promise.all([
     ...workouts,
-    rowsOf(db.prepare("SELECT data_type, value_numeric, sample_time FROM health_datapoints WHERE user_id = ? AND data_type = 'daily-resting-heart-rate' AND sample_time >= ? AND sample_time < ? AND value_numeric > 0").bind(user, shift(date, -29), end).all()),
+    rowsOf(db.prepare("SELECT data_type, source_family, value_numeric, sample_time FROM health_datapoints WHERE user_id = ? AND data_type = 'daily-resting-heart-rate' AND sample_time >= ? AND sample_time < ? AND value_numeric > 0").bind(user, shift(date, -29), end).all()),
     rowsOf(db.prepare("SELECT data_type, value_numeric, sample_time FROM health_datapoints WHERE user_id = ? AND data_type = 'weight' AND sample_time >= ? AND sample_time < ? AND value_numeric BETWEEN 30 AND 300 ORDER BY sample_time DESC LIMIT 3").bind(user, shift(date, -365), until).all()),
     rowsOf(db.prepare("SELECT data_type, value_numeric, sample_time FROM health_datapoints WHERE user_id = ? AND data_type = 'body-fat' AND sample_time >= ? AND sample_time < ? AND value_numeric BETWEEN 3 AND 60 ORDER BY sample_time DESC LIMIT 3").bind(user, shift(date, -180), until).all()),
     // WHOOP keeps no sample_time on a night: by its start, on the index with the source.
@@ -60,9 +67,28 @@ export async function updateFitnessEstimate(env, { date = localToday() } = {}) {
   const previous = last ? { date: last.date, vo2max: last.vo2max, confidence: last.confidence, model: last.model, rideFactor: last.ride_factor } : null;
   const estimate = estimateDay(inputsFromRows({ date, profile, activityRows, dailyRows: [...restRows, ...newest(weightRows), ...newest(fatRows)], nights, previous }));
   if (!estimate) return { status: "no-data" };
-  await db.prepare("INSERT INTO fitness_estimates (user_id, date, vo2max, confidence, fitness_age, composite_age, ride_factor, model, details_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO NOTHING")
+  // The "Data from" row of the VO2max detail: the services the workouts and
+  // the resting heart rate came from.
+  estimate.details.sources = dataSources(activityRows, restRows);
+  await db.prepare("INSERT INTO fitness_estimates (user_id, date, vo2max, confidence, fitness_age, composite_age, ride_factor, model, details_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET vo2max = excluded.vo2max, confidence = excluded.confidence, fitness_age = excluded.fitness_age, composite_age = excluded.composite_age, ride_factor = excluded.ride_factor, model = excluded.model, details_json = excluded.details_json, created_at = CURRENT_TIMESTAMP")
     .bind(user, date, estimate.vo2max, estimate.confidence, estimate.fitnessAge, estimate.compositeAge, estimate.rideFactor, estimate.details.model, JSON.stringify(estimate.details)).run();
-  return { status: "saved", estimate };
+  return { status: today ? "updated" : "saved", estimate };
+}
+
+// Source families, as stored (the app names them), of the workouts of the
+// window and of the resting heart rate, most used first.
+export function dataSources(activityRows, restRows) {
+  const count = new Map();
+  for (const r of [...(activityRows || []).filter(r => r.record_role !== "duplicate"), ...(restRows || [])]) if (r?.source_family) count.set(r.source_family, (count.get(r.source_family) || 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s);
+}
+
+// The stored rows from `from` on, oldest first (VO2max and Aurin age charts;
+// one row a day, at most the days asked for, by the primary key).
+// A database the daily job has not reached yet has no table: no rows (no CREATE on every read).
+export async function fitnessEstimatesSince(db, userId, from) {
+  const rows = await db.prepare("SELECT date, vo2max, fitness_age, composite_age, details_json FROM fitness_estimates WHERE user_id = ? AND date >= ? ORDER BY date").bind(userId, from).all().then(r => r.results || [], error => { if (/no such table/i.test(String(error?.message))) return []; throw error; });
+  return rows.map(r => { let details = null; try { details = JSON.parse(r.details_json); } catch { details = null; } return { date: r.date, vo2max: r.vo2max, fitnessAge: r.fitness_age, compositeAge: r.composite_age, details }; });
 }
 
 // What the estimate takes from the profile: the effective one (the user's own

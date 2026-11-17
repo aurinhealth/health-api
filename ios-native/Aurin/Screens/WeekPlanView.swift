@@ -71,8 +71,8 @@ struct WeekSessionDraft: Identifiable, Equatable {
         return workout?.name ?? label ?? kindLabel(kind) ?? sportLabel(sport)
     }
 
-    /// "Vytrvalost · 2 h", as the row shows what the session was before a recalculation.
-    var line: String { title + " · " + Fmt.duration(minutes) }
+    /// "Vytrvalost, 2 h", as the row shows what the session was before a recalculation.
+    var line: String { title + ", " + Fmt.duration(minutes) }
 
     /// The lengths the detail offers (src/week-planner.js SESSION_MINUTES).
     static func lengths(_ sport: String, including current: Int) -> [Int] {
@@ -177,7 +177,7 @@ struct WeekPlanView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Plán týdne") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · týden").padding(.top, 24)
+                SectionLabel(text: "Tréninkový týden").padding(.top, 24)
                 Text("Plán týdne").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 Picker("Týden", selection: $weekStart) {
@@ -307,7 +307,7 @@ struct WeekPlanView: View {
         parts.append(WeekPlanPrefs.followsCalendar(prefs) ? L10n.tr("podle kalendáře")
                      : WeekPlanPrefs.source(prefs) == "week" ? L10n.tr("upraveno jen pro tento týden") : L10n.tr("podle tvého běžného týdne"))
         if let t = plan?.targets, t.recovery == true { parts.append(L10n.tr("odpočinkový týden")) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     private func dayMinutes(_ w: Int) -> Int {
@@ -508,7 +508,7 @@ struct WeekPlanView: View {
         .padding(.leading, 9).padding(.trailing, removable ? 5 : 9).frame(height: 28)
         .background(Palette.amberSoft, in: Capsule())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr("Brick · hned po kole"))
+        .accessibilityLabel(L10n.tr("Brick hned po kole"))
     }
 
     private func chip(_ sport: String, removable: Bool, remove: @escaping () -> Void) -> some View {
@@ -692,7 +692,7 @@ struct WeekPlanView: View {
             }
             ForEach(warnings, id: \.self) { w in
                 if let text = w.text {
-                    Text((w.date.map { Fmt.dayHeading($0) + " · " } ?? "") + text)
+                    Text((w.date.map { Fmt.dayHeading($0) + ", " } ?? "") + text)
                         .font(Typo.small).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
             }
@@ -757,10 +757,10 @@ struct WeekPlanView: View {
                     Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(s.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
                     Text([Fmt.duration(s.minutes), timeable(s) ? nil : slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
-                        .compactMap { $0 }.joined(separator: " · "))
+                        .compactMap { $0 }.joined(separator: ", "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if s.brick {
-                        Label(L10n.tr("Brick · hned po kole"), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                        Label(L10n.tr("Brick hned po kole"), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
                     }
                     if case .failed(let message) = s.status {
                         Text(message).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
@@ -825,7 +825,7 @@ struct WeekPlanView: View {
         return Group {
             if s.brick {
                 // Follows the ride; "Hned po sobě, nebo zvlášť" in Trénink changes it.
-                label.accessibilityLabel(L10n.tr("Brick · hned po kole"))
+                label.accessibilityLabel(L10n.tr("Brick hned po kole"))
             } else {
                 Menu {
                     ForEach(MovePlannedSheet.Slot.allCases) { slot in
@@ -838,7 +838,7 @@ struct WeekPlanView: View {
                             }
                         } label: {
                             let current = slot == .exact ? s.time != nil && !MovePlannedSheet.Slot.allCases.contains { $0.clock == s.time } : slot.clock == s.time
-                            if current { Label(L10n.tr(slot.label), systemImage: "checkmark") } else { Text(verbatim: L10n.tr(slot.label) + (slot.clock.map { " · " + ClockText.format($0) } ?? "")) }
+                            if current { Label(L10n.tr(slot.label), systemImage: "checkmark") } else { Text(verbatim: L10n.tr(slot.label) + (slot.clock.map { ", " + ClockText.format($0) } ?? "")) }
                         }
                     }
                 } label: { label }
@@ -1113,7 +1113,7 @@ struct WeekSessionDetailView: View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: Fmt.dayHeading(session.date) + " · " + sportLabel(session.sport))
+                    SectionLabel(text: Fmt.dayHeading(session.date) + ", " + sportLabel(session.sport))
                     Text(session.title).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1145,7 +1145,7 @@ struct WeekSessionDetailView: View {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(e.name).font(Typo.body).foregroundStyle(Palette.ink)
                                 Spacer(minLength: 8)
-                                Text(verbatim: [e.sets > 0 ? "\(e.sets) × \(e.reps)" : e.reps, e.kg].filter { !$0.isEmpty }.joined(separator: " · "))
+                                Text(verbatim: [e.sets > 0 ? "\(e.sets) × \(e.reps)" : e.reps, e.kg].filter { !$0.isEmpty }.joined(separator: ", "))
                                     .font(Typo.caption).foregroundStyle(Palette.muted)
                             }
                         }

@@ -126,7 +126,7 @@ private struct TurnView: View {
     }
 }
 
-/// What the coach is doing, as on the iPhone: the dots, the step and "· 4 s"
+/// What the coach is doing, as on the iPhone: the dots, the step and ", 4 s"
 /// from 3 s. VoiceOver reads the step only.
 private struct WaitRow: View {
     let text: String
@@ -149,7 +149,7 @@ private struct WaitRow: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let seconds = since.map { Int(context.date.timeIntervalSince($0)) } ?? 0
                 (Text(verbatim: text).foregroundColor(W.secondary)
-                    + Text(verbatim: seconds >= 3 ? " · \(seconds) s" : "").foregroundColor(W.muted))
+                    + Text(verbatim: seconds >= 3 ? ", \(seconds) s" : "").foregroundColor(W.muted))
                     .font(W.news(14))
                     .lineLimit(3)
             }

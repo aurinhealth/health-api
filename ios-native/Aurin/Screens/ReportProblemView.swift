@@ -148,7 +148,7 @@ struct ReportProblemView: View {
 
     private func load(_ item: PhotosPickerItem?) async {
         guard let item else { return }
-        guard let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw) else {
+        guard let raw = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(raw) else {
             error = L10n.tr("Obrázek se nepodařilo načíst.")
             return
         }
@@ -245,6 +245,14 @@ struct ReportProblemView: View {
                 if let signal = crash.signal { o["signal"] = .number(Double(signal)) }
                 if let reason = crash.reason { o["reason"] = .string(reason) }
                 return .object(o)
+            })
+        }
+        // The app's latest freezes, as iOS reported them (CrashReports).
+        let hangs = CrashReports.shared.hangs
+        if !hangs.isEmpty {
+            d["hangs"] = .array(hangs.map { hang -> JSONValue in
+                .object(["at": .string(stamp.string(from: hang.at)), "app": .string(hang.app), "ios": .string(hang.ios),
+                         "seconds": .number((hang.seconds * 10).rounded() / 10), "frames": .array(hang.frames.map { JSONValue.string($0) })])
             })
         }
         var errors: JSONObject = [:]

@@ -42,7 +42,7 @@ test('a new time zone 6 hours away comes first, in English too', () => withLang(
 
 test("the swap the push offered waits on Today until it is answered", () => {
   const nudge = { eventId: "e1", date: "2026-10-15", sport: "ride", minutes: 45, name: "VO2max 5×4", fromMinutes: 75, title: "Dvě krátké noci za sebou", day: "2026-10-15", status: "pending" };
-  assert.deepEqual(swapOffer({ nudge }, "2026-10-15"), { kind: "swap", id: "2026-10-15:swap", headline: "Dvě krátké noci za sebou", date: "2026-10-15", from: "VO2max 5×4 · 75 min", to: "Lehká jízda · 45 min" });
+  assert.deepEqual(swapOffer({ nudge }, "2026-10-15"), { kind: "swap", id: "2026-10-15:swap", headline: "Dvě krátké noci za sebou", date: "2026-10-15", from: "VO2max 5×4, 75 min", to: "Lehká jízda, 45 min" });
   assert.equal(swapOffer({ nudge: { ...nudge, status: "kept" } }, "2026-10-15"), null);
   assert.equal(swapOffer({ nudge }, "2026-10-16"), null);
 });

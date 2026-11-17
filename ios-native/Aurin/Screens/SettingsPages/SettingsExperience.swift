@@ -41,7 +41,7 @@ struct ExperienceGroup: View {
             Text(title).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
             Spacer(minLength: 8)
             Menu {
-                option(L10n.f("Auto · %@", Self.name(current.autoLevel)), selected: current.mode == "auto") { choose(sport, "auto") }
+                option(L10n.f("Auto (%@)", Self.name(current.autoLevel)), selected: current.mode == "auto") { choose(sport, "auto") }
                 ForEach(Self.names, id: \.0) { level in
                     option(L10n.tr(level.1), selected: current.mode == "manual" && current.level == level.0) { choose(sport, level.0) }
                 }
@@ -49,7 +49,7 @@ struct ExperienceGroup: View {
                 HStack(spacing: 4) {
                     Group {
                         if current.mode == "auto" {
-                            Text(verbatim: "Auto · ").foregroundColor(Palette.faint) + Text(verbatim: Self.name(current.autoLevel)).foregroundColor(Palette.muted)
+                            Text(verbatim: "Auto, ").foregroundColor(Palette.faint) + Text(verbatim: Self.name(current.autoLevel)).foregroundColor(Palette.muted)
                         } else {
                             Text(Self.name(current.level)).foregroundStyle(Palette.muted)
                         }

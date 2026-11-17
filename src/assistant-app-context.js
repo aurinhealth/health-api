@@ -1,13 +1,17 @@
 import { validDay, weekStartOf } from './training-availability.js';
 import { todayGymContext } from './coach-gym-adjustment.js';
 import { compactActivity } from './coach-assistant.js';
+import { mealOf, entryTime } from './app-food.js';
 
-const SUBJECT_KINDS=['activity','planned','exercise','metric','workout'];
+// meal: one meal of a day in Food (id = its slot, lunch…); plan: Training's
+// plan overview (id overview) or the phase of the preparation (id phase).
+const SUBJECT_KINDS=['activity','planned','exercise','metric','workout','meal','plan'];
+const MEAL_SLOTS=['breakfast','snack_am','lunch','snack_pm','dinner','snack_late'];
 const LIVE_PHASES=['set','rest','restBeforeExercise'];
 const text=(v,max)=>typeof v==='string'&&v.trim()?v.replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max):null;
 
 // What the athlete asks about from a detail screen ("Zeptat se kouče"): a done
-// activity, a planned session, a gym exercise or a health metric, by its id
+// activity, a planned session, a gym exercise, a metric, a meal or the plan, by its id
 // and the title the screen shows. Its numbers come from storage, never from here.
 function screenSubject(raw){
   if(!raw||typeof raw!=='object'||!SUBJECT_KINDS.includes(raw.kind))return null;
@@ -56,7 +60,24 @@ export function selectedSubject(subject,day){
   return {};
 }
 
-export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWeek,loadPrefs}) {
+// The meal a Food detail shows, from the day's stored food log by its slot.
+// Food names are what the athlete typed or a photo read: data for the coach,
+// never instructions (cut to 80 characters, no control characters).
+const round1=v=>Number.isFinite(Number(v))?Math.round(Number(v)*10)/10:null;
+export function selectedMeal(subject,nutrition){
+  if(subject?.kind!=='meal'||!MEAL_SLOTS.includes(subject.id))return {};
+  const entries=(Array.isArray(nutrition?.foodLog?.entries)?nutrition.foodLog.entries:[]).filter(e=>e&&!['planned','cancelled'].includes(e.status));
+  const parsed=entries.slice(0,60).map(e=>{let note={};try{note=JSON.parse(e.note||'{}')||{};}catch{}return {e,note,time:entryTime(e.consumed_at)};});
+  // Late snack is a slot only some athletes keep: asked from it, or with an entry logged to it, the late evening goes there as in Food.
+  const slots=subject.id==='snack_late'||parsed.some(x=>x.note?.mealType==='snack_late')?MEAL_SLOTS:undefined;
+  // At most 20 foods, so text the athlete typed stays a small part of the prompt.
+  const items=parsed.filter(x=>mealOf(x.note,x.time,slots)===subject.id).slice(0,20)
+    .map(({e,note,time})=>({name:text(String(e.recipe_title||note.product||''),80),time,kcal:Math.round(Number(e.kcal)||0),proteinG:round1(e.protein_g),carbsG:round1(e.carbs_g),fatG:round1(e.fat_g)}));
+  const sum=k=>round1(items.reduce((s,i)=>s+(i[k]||0),0));
+  return {selectedMeal:{meal:subject.id,items,totals:{kcal:Math.round(sum('kcal')),proteinG:sum('proteinG'),carbsG:sum('carbsG'),fatG:sum('fatG')}}};
+}
+
+export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWeek,loadPrefs,wanted=[]}) {
   const needsWeek=!(inputs.week?.days||[]).some(d=>d.date===appContext.weekStart);
   const [gym,extraWeek,prefs]=await Promise.all([
     appContext.sport==='gym'?(appContext.date===inputs.date?inputs.gym:loadGym(appContext.date)):null,
@@ -66,10 +87,11 @@ export async function selectedAssistantContext(appContext,inputs,{loadGym,loadWe
   const days=[...(inputs.week?.days||[])];
   for(const day of extraWeek?.days||[])if(!days.some(d=>d.date===day.date))days.push(day);
   days.sort((a,b)=>a.date.localeCompare(b.date));
-  const selectedGym=todayGymContext(gym,appContext.date);
+  const selectedGym=todayGymContext(gym,appContext.date,[],[],wanted);
   const exercise=selectedGym?.exercises.some(e=>e.name===appContext.exercise)?appContext.exercise:null;
   const selectedDay=days.find(d=>d.date===appContext.date)?.daily?.training||null;
-  return {appContext:{...appContext,exercise},selectedGym,gymPlan:gym,selectedDay,...selectedSubject(appContext.subject,selectedDay),
+  const nutrition=appContext.date===inputs.date?inputs.daily?.nutrition:days.find(d=>d.date===appContext.date)?.daily?.nutrition;
+  return {appContext:{...appContext,exercise},selectedGym,gymPlan:gym,selectedDay,...selectedSubject(appContext.subject,selectedDay),...selectedMeal(appContext.subject,nutrition),
     selectedWeek:{start:appContext.weekStart,days:prefs.days,availability:prefs.availability,weeklyActivities:prefs.weeklyActivities},
     week:{...inputs.week,days}};
 }

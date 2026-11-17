@@ -9,6 +9,7 @@ import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, MAX_CALORIE_TARGET, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { dayMacros, dietSummary } from "./diet.js";
+import { rideCarbsPerHour as rideCarbsPerHourFor } from "./nutrition-intelligence.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
@@ -214,7 +215,6 @@ const CONFIG = {
 
   // The rest-day baseline, weekly goal and target weight are personal: see
   // energyBaseline in energy-profile.js.
-  defaultRideCarbsPerHour: 90,
   preRideCarbsPerKg: 1.0,
   preRideWindowHours: 2,
   fluidMlPerHour: 700,
@@ -966,7 +966,8 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   // A changed row on a closed day (a late upload, the nightly look back): the
   // days kept in the cache (api-cache.js closedDay) are read again.
-  if(changed&&oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday()))await bumpCacheVersion(env.DB);
+  // A workout of any day too: the day's activity marks it done (entrypoint.js pickBase), as after an Apple Health one.
+  if(changed&&(['exercise','activity'].includes(type)||oldest&&closedDay(/T\d{2}$/.test(oldest)?localDate(oldest+':00:00Z'):oldest,localToday())))await bumpCacheVersion(env.DB);
   return points.length;
 }
 // Google heart rate arrives as a sample every few seconds (~36k a day). Written
@@ -2152,7 +2153,7 @@ async function energyForDate(env, date) {
   // Today and ahead, the weight trend corrects the estimate by energy balance
   // (up to ±250 kcal) when the weight moves clearly off the chosen goal
   // (trendAdjustment).
-  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date), weight?.value_numeric) : { adjustment: 0, reason: null };
+  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date), weight?.value_numeric, profile?.height, baseline.weeklyHours) : { adjustment: 0, reason: null };
   const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit + trend.adjustment : null;
   const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
   // Maintaining or gaining, training counts in full; losing, 70 % of it, a
@@ -2218,6 +2219,8 @@ async function energyForDate(env, date) {
       floorGapKcal,
       trendAdjustment: trend.adjustment,
       trendReason: trend.reason,
+      // From 10 h of sport a week losing goes at most 0.5 % a week (energy-profile.js).
+      heavyTraining: Boolean(baseline.heavyTraining),
       workouts: workoutCalories
     },
     proteinReferenceKg: proteinKg,
@@ -2285,7 +2288,7 @@ async function analysisDaily(
   if (actualRide) {
     fueling = calculateFueling(
       energy.currentWeight,
-      { durationHours: actualRide.durationHours || 0 }
+      actualRide
     );
     fueling.source = "actual";
   } else if (plannedRide) {
@@ -2440,8 +2443,13 @@ function calculateFueling(
     workout.durationHours ||
     0;
 
+  // The same g/h as the workout card (CARBS table via rideCarbsPerHour);
+  // hard = the 600 kcal/h rides of cyclingKcalPerHour.
   const rideCarbsPerHour =
-    CONFIG.defaultRideCarbsPerHour;
+    rideCarbsPerHourFor({
+      durationHours: duration,
+      intensity: workout.intensity ?? cyclingKcalPerHour(workout) > 500
+    });
 
   const rideCarbs =
     Math.round(
@@ -2480,8 +2488,9 @@ function calculateFueling(
 
     recommendation:
       (preRideCarbs != null ? `Before the ride: approximately ${preRideCarbs} g carbohydrate. ` : "") +
-      `During the ride: approximately ${rideCarbsPerHour} g carbohydrate/hour ` +
-      `(${rideCarbs} g total). ` +
+      (rideCarbsPerHour
+        ? `During the ride: approximately ${rideCarbsPerHour} g carbohydrate/hour (${rideCarbs} g total). `
+        : "During the ride: no carbohydrate needed, water is enough. ") +
       `Estimated fluid need: approximately ${fluid} ml.`
   };
 }

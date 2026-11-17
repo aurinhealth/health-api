@@ -1,11 +1,12 @@
 import Foundation
 import MetricKit
 
-/// The app's crashes as iOS reports them (MetricKit), kept on the phone so
-/// "Nahlásit problém" can send the latest ones with the diagnostics
-/// (ReportProblemView). iOS hands them over at most once a day, on a launch
-/// after the crash. Only the kind of crash, the app and iOS versions and the
-/// top frames of the crashed thread (binary and offset): no personal or health data.
+/// The app's crashes and freezes (hangs) as iOS reports them (MetricKit), kept
+/// on the phone so "Nahlásit problém" can send the latest ones with the
+/// diagnostics (ReportProblemView). iOS hands them over at most once a day, on
+/// a launch after the crash. Only the kind of crash or how long the app froze,
+/// the app and iOS versions and the top frames of the thread (binary and
+/// offset): no personal or health data.
 // Its stored list is read and written under lock.
 final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
     static let shared = CrashReports()
@@ -21,7 +22,18 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
         var frames: [String]
     }
 
+    /// The app stopped answering for a while (MXHangDiagnostic), and for how long.
+    struct Hang: Codable {
+        let at: Date
+        let app: String
+        let ios: String
+        let seconds: Double
+        var frames: [String]
+    }
+
     private static let key = "crashReports"
+    /// Freezes are kept apart, so the more frequent ones never push out a crash.
+    private static let hangKey = "hangReports"
     private static let limit = 3
     private static let keepFor: TimeInterval = 14 * 86400
     private let lock = NSLock()
@@ -40,22 +52,39 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
     var entries: [Crash] {
         lock.lock()
         defer { lock.unlock() }
-        return Array(fresh(load()).reversed())
+        let crashes: [Crash] = fresh(load(Self.key))
+        return crashes.reversed()
+    }
+
+    /// Newest first, from the last two weeks.
+    var hangs: [Hang] {
+        lock.lock()
+        defer { lock.unlock() }
+        let hangs: [Hang] = fresh(load(Self.hangKey))
+        return hangs.reversed()
     }
 
     private func keep(_ payloads: [MXDiagnosticPayload]) {
         let crashes = payloads.flatMap { payload in
             (payload.crashDiagnostics ?? []).map { Self.summary($0, at: payload.timeStampEnd) }
         }
-        guard !crashes.isEmpty else { return }
+        let hangs = payloads.flatMap { payload in
+            (payload.hangDiagnostics ?? []).map { Self.summary($0, at: payload.timeStampEnd) }
+        }
         lock.lock()
         defer { lock.unlock() }
-        var all = fresh(load())
-        for crash in crashes where !all.contains(where: { $0.at == crash.at && $0.frames == crash.frames }) {
-            all.append(crash)
+        if !crashes.isEmpty { add(crashes, key: Self.key, same: { $0.at == $1.at && $0.frames == $1.frames }) }
+        if !hangs.isEmpty { add(hangs, key: Self.hangKey, same: { $0.at == $1.at && $0.frames == $1.frames }) }
+    }
+
+    /// Called under the lock: the newest `limit` of the stored and the new ones.
+    private func add<T: Codable & Dated>(_ new: [T], key: String, same: (T, T) -> Bool) {
+        var all: [T] = fresh(load(key))
+        for item in new where !all.contains(where: { same($0, item) }) {
+            all.append(item)
         }
         all.sort { $0.at < $1.at }
-        save(Array(all.suffix(Self.limit)))
+        save(Array(all.suffix(Self.limit)), key: key)
     }
 
     private static func summary(_ diagnostic: MXCrashDiagnostic, at: Date) -> Crash {
@@ -69,7 +98,13 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
         return crash
     }
 
-    /// The top frames of the crashed thread, the crashing one first; each frame
+    private static func summary(_ diagnostic: MXHangDiagnostic, at: Date) -> Hang {
+        Hang(at: at, app: "\(diagnostic.applicationVersion) (\(diagnostic.metaData.applicationBuildVersion))",
+             ios: diagnostic.metaData.osVersion, seconds: diagnostic.hangDuration.converted(to: .seconds).value,
+             frames: frames(diagnostic.callStackTree))
+    }
+
+    /// The top frames of the crashed (or frozen) thread, the crashing one first; each frame
     /// nests the one that called it (MetricKit's call stack tree).
     private static func frames(_ tree: MXCallStackTree) -> [String] {
         guard let json = try? JSONSerialization.jsonObject(with: tree.jsonRepresentation()) as? [String: Any],
@@ -86,18 +121,22 @@ final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
         return out
     }
 
-    private func fresh(_ crashes: [Crash]) -> [Crash] {
+    private func fresh<T: Dated>(_ items: [T]) -> [T] {
         let since = Date().addingTimeInterval(-Self.keepFor)
-        return crashes.filter { $0.at > since }
+        return items.filter { $0.at > since }
     }
 
-    private func load() -> [Crash] {
-        guard let data = UserDefaults.standard.data(forKey: Self.key) else { return [] }
-        return (try? JSONDecoder().decode([Crash].self, from: data)) ?? []
+    private func load<T: Codable>(_ key: String) -> [T] {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([T].self, from: data)) ?? []
     }
 
-    private func save(_ crashes: [Crash]) {
-        guard let data = try? JSONEncoder().encode(crashes) else { return }
-        UserDefaults.standard.set(data, forKey: Self.key)
+    private func save<T: Codable>(_ items: [T], key: String) {
+        guard let data = try? JSONEncoder().encode(items) else { return }
+        UserDefaults.standard.set(data, forKey: key)
     }
 }
+
+protocol Dated { var at: Date { get } }
+extension CrashReports.Crash: Dated {}
+extension CrashReports.Hang: Dated {}

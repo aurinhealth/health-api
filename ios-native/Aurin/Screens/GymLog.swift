@@ -561,7 +561,7 @@ struct GymExerciseSearch: View {
         if !words.isEmpty || muscle != nil || rested || out.isEmpty {
             for entry in catalog where !seen.contains(entry.name) && entry.fits != false {
                 guard matches(entry.name) else { continue }
-                out.append(Item(name: entry.name, caption: [entry.muscle, entry.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")))
+                out.append(Item(name: entry.name, caption: [entry.muscle, entry.station].compactMap { $0?.nilIfBlank }.joined(separator: ", ")))
                 seen.insert(entry.name)
             }
         }
@@ -674,7 +674,7 @@ struct GymExerciseSearch: View {
                             .font(Typo.bodyStrong.weight(.semibold)).foregroundStyle(Palette.ink)
                             .multilineTextAlignment(.leading)
                         let caption = [item.caption.nilIfBlank, used.contains(item.name) ? L10n.tr("v tréninku") : nil]
-                            .compactMap { $0 }.joined(separator: " · ")
+                            .compactMap { $0 }.joined(separator: ", ")
                         if !caption.isEmpty {
                             Text(verbatim: caption).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                         }
@@ -771,9 +771,9 @@ struct ExerciseHistorySheet: View {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     if let kg = first.kg {
                         NumberText(value: GymCoach.shown(kg), unit: Units.weightUnit, size: 28)
-                        Text(verbatim: "× \(first.reps) · " + L10n.plural("%lld sérií", s.work.count))
+                        Text(verbatim: "× \(first.reps), " + L10n.plural("%lld sérií", s.work.count))
                     } else {
-                        Text(verbatim: L10n.plural("%lld opakování", first.reps) + " · " + L10n.plural("%lld sérií", s.work.count))
+                        Text(verbatim: L10n.plural("%lld opakování", first.reps) + ", " + L10n.plural("%lld sérií", s.work.count))
                     }
                 }
                 .font(.body).foregroundStyle(Palette.secondary)
@@ -809,15 +809,15 @@ struct ExerciseHistorySheet: View {
             if let heaviest = GymCoach.heaviestSet(exercise), let kg = heaviest.lift.kg {
                 record("Nejtěžší série", GymCoach.shown(kg), unit + " × " + Fmt.int(heaviest.lift.reps ?? 0), Fmt.dayMonthShort(heaviest.date))
                 if let max = GymCoach.oneRepMax(exercise) {
-                    record("Odhad 1RM", GymCoach.shown(max.kg), unit, L10n.tr("odhad") + " · " + Fmt.dayMonthShort(max.date))
+                    record("Odhad 1RM", GymCoach.shown(max.kg), unit, L10n.tr("odhad") + ", " + Fmt.dayMonthShort(max.date))
                 }
                 if let volume = GymCoach.bestVolume(exercise) {
-                    record("Nejvyšší objem", Fmt.int(LiftWeight.shownValue(volume.kg)), unit, L10n.tr("jeden trénink") + " · " + Fmt.dayMonthShort(volume.date))
+                    record("Nejvyšší objem", Fmt.int(LiftWeight.shownValue(volume.kg)), unit, L10n.tr("jeden trénink") + ", " + Fmt.dayMonthShort(volume.date))
                 }
             } else {
                 // Body weight: reps instead of kilos.
                 if let most = GymCoach.mostReps(exercise) {
-                    record("Nejvíc opakování", String(most.reps), nil, L10n.tr("jedna série") + " · " + Fmt.dayMonthShort(most.date))
+                    record("Nejvíc opakování", String(most.reps), nil, L10n.tr("jedna série") + ", " + Fmt.dayMonthShort(most.date))
                 }
                 if let most = GymCoach.mostSessionReps(exercise) {
                     record("Nejvíc za trénink", String(most.reps), nil, Fmt.dayMonthShort(most.date))
@@ -866,11 +866,11 @@ struct ExerciseHistorySheet: View {
         .padding(.top, 14)
     }
 
-    /// "3 série · 950 kg".
+    /// "3 série, 950 kg".
     private func meta(_ session: GymHistory.Session) -> String {
         let volume = GymCoach.volume(session)
         let sets = L10n.plural("%lld sérií", session.sets.count)
-        return volume > 0 ? sets + " · " + Fmt.int(LiftWeight.shownValue(volume)) + " " + Units.weightUnit : sets
+        return volume > 0 ? sets + ", " + Fmt.int(LiftWeight.shownValue(volume)) + " " + Units.weightUnit : sets
     }
 
     // MARK: Progress

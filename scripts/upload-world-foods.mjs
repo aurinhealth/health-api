@@ -28,6 +28,7 @@ export function plan(dir) {
   const files = [
     ...meta.files.map(f => [f, "application/octet-stream"]),
     ...readdirSync(join(dir, "names")).map(f => [`names/${f}`, "application/json"]),
+    ...readdirSync(join(dir, "vocab")).map(f => [`vocab/${f}`, "application/json"]),
     ["barcodes.idx.json", "application/json"],
     ["meta.json", "application/json"]
   ];

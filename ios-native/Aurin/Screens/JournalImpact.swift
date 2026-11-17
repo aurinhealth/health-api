@@ -279,7 +279,7 @@ struct JournalItemView: View {
         return Card {
             HStack(spacing: 7) {
                 Circle().fill(Palette.secondary).frame(width: 8, height: 8)
-                Text(verbatim: d.metricTitle + " · " + L10n.tr("30 rán")).font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                Text(verbatim: d.metricTitle + ", " + L10n.tr("30 rán")).font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
                 Spacer(minLength: 4)
                 Circle().fill(color).frame(width: 7, height: 7)
                 Text("dny s ✓").font(Typo.caption).foregroundStyle(Palette.muted)

@@ -68,6 +68,22 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(alarm.nextWake(after: now), WatchSnapshot.Alarm.at("08:30", on: morning))
     }
 
+    /// Own alarm days: a free Friday rings nothing, Friday moved to the
+    /// weekend alarm rings at its time (2026-11-06 is a Friday).
+    func testAlarmDays() throws {
+        let friday = try XCTUnwrap(WatchSnapshot.Alarm.day("2026-11-06"))
+        var alarm = WatchSnapshot.Alarm(work: "06:30", weekend: "08:30")
+        XCTAssertEqual(alarm.wake(on: friday), "06:30")
+        alarm.workDays = AlarmDays.work & ~(1 << 5)
+        XCTAssertNil(alarm.wake(on: friday))
+        XCTAssertFalse(alarm.weekendMorning(friday))
+        alarm.weekendDays = AlarmDays.weekend | (1 << 5)
+        XCTAssertEqual(alarm.wake(on: friday), "08:30")
+        XCTAssertTrue(alarm.weekendMorning(friday))
+        XCTAssertEqual(AlarmDays.mask(AlarmDays.json(alarm.weekendDays ?? 0), fallback: 0), AlarmDays.weekend | (1 << 5))
+        XCTAssertEqual(AlarmDays.mask(nil, fallback: AlarmDays.work), AlarmDays.work)
+    }
+
     /// Strain against the target, one rule for the watch app and its
     /// complications: under it is neutral until 18:00, then off.
     func testStrainStanding() throws {

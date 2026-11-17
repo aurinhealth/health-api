@@ -152,7 +152,7 @@ struct GymActivitySmall: View {
             }
             if resting, let start = s.restStart, let end = s.restEnd {
                 GymRestTimer(start: start, end: end, size: 26)
-                Text(labels.next + ": " + s.exercise + " · " + s.load)
+                Text(labels.next + ": " + s.exercise + ", " + s.load)
                     .font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
             } else {
                 Text(s.exercise).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
@@ -174,10 +174,10 @@ struct GymActivityCard: View {
         return !context.isStale && end > Date()
     }
 
-    /// "Další: Dřep · série 3 ze 4 · 80 kg × 8", without "Další" during the set.
+    /// "Další: Dřep, série 3 ze 4, 80 kg × 8", without "Další" during the set.
     static func islandLine(_ context: ActivityViewContext<GymActivityAttributes>, resting: Bool) -> String {
         let s = context.state
-        let line = s.exercise + " · " + s.setLabel + " · " + s.load
+        let line = s.exercise + ", " + s.setLabel + ", " + s.load
         return resting ? context.attributes.labels.next + ": " + line : line
     }
 
@@ -192,8 +192,8 @@ struct GymActivityCard: View {
                 AurinMark().frame(width: 14, height: 14)
                 GymActivityStats(context: context).layoutPriority(1)
                 Spacer(minLength: 4)
-                // "2 ze 5 cviků" of "Posilovna · 2 ze 5 cviků".
-                Text(s.header.components(separatedBy: " · ").last ?? s.header).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).lineLimit(1)
+                // "2 ze 5 cviků" of "Posilovna, 2 ze 5 cviků".
+                Text(s.header.replacingOccurrences(of: " · ", with: ", ").components(separatedBy: ", ").last ?? s.header).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).lineLimit(1)
             }
             HStack(alignment: .bottom, spacing: 10) {
                 if resting, let start = s.restStart, let end = s.restEnd {
@@ -203,7 +203,7 @@ struct GymActivityCard: View {
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(labels.next + " · " + s.setLabel).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+                        Text(labels.next + ", " + s.setLabel).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
                         Text(s.exercise).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
                         Text(s.load).font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.secondary)
                     }

@@ -39,6 +39,8 @@ test("the user databases' guards, a missing secret, a broken body and runtime er
     "Too many subrequests.",
     "Network connection lost.",
     "internal error; reference = 0123abcd",
+    "Cannot read properties of null (reading 'id')",
+    "Cannot read property 'token' of undefined",
   ]) {
     const response = await withPlainErrors(request("en"), Response.json({ message }, { status: 400 }));
     assert.equal((await response.json()).message, "Something went wrong. Try again in a moment.", message);

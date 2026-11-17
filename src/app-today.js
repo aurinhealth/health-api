@@ -11,7 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
-import { verdictText, signsAdvice } from "./day-verdict.js";
+import { verdictText, signsAdvice, numbersLine } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -95,8 +95,10 @@ export function strainTarget({ readiness = null, zone = null, planned = null, de
   // "rest", "no_intensity"): rest first (IOC 2022), whatever the plan says.
   if (recover) mid = Math.min(mid, 3);
   const r1 = v => Math.round(v * 10) / 10;
-  const low = r1(Math.max(1, mid - 1.5));
-  return { low, high: Math.max(low, r1(Math.min(20, mid + 1.5))) };
+  const low = r1(Math.max(1, mid - 1.5)), high = Math.max(low, r1(Math.min(20, mid + 1.5)));
+  // mid: the middle of the shown range, the one number the coach's sentence
+  // says ("strain to about 12.6"), so the AI never picks it (S3/S4).
+  return { low, high, mid: r1((low + high) / 2) };
 }
 
 // The usual day's strain: the 80th percentile of the last 28 days, each day
@@ -297,7 +299,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   // so a gym session or a watch workout outside the plan shows here too.
   // The watch's calories above the estimate the user chose to count (Plán dne → Kalorie k ověření).
   const watchExtra = deviceEnergyExtra(training.completed);
-  const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
+  const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(", ") || null;
 
   // Recovery (recovery-today.js): the suggestions after a training day, only
   // for today; the stretching and sauna saved for the day join the plan.
@@ -323,7 +325,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     recoveryId: r.id ?? null,
     time: r.done ? clockOf(r.doneAt) : null,
     title: r.kind === "stretch" && stretchName ? stretchName : r.title,
-    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
+    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : ", " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(", hotovo", ", done") : ""),
     done: r.done,
     status: r.done ? "done" : "planned"
   }));
@@ -415,7 +417,11 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
       learningDays: readiness.learningDays ?? null,
       // What to do today, a key of day-verdict.js VERDICT_KEYS (the app says it under the number); null on an earlier day.
+      // Kept for older builds and the morning push.
       verdict,
+      // The redesign's line under the number (AI-2): what the numbers say, a
+      // key of day-verdict.js NUMBERS_LINE_KEYS, never advice; null with the verdict.
+      numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest" }) : null,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
       pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length,
@@ -435,7 +441,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu · ne nad obvyklý objem", "no plan · not above your usual volume") : L("bez plánu", "no plan")) } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu, ne nad obvyklý objem", "no plan, not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }

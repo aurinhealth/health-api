@@ -25,6 +25,8 @@ struct AddFoodSheet: View {
     @State private var answers: [String: [FoodProduct]] = [:]
     @State private var tab = "foods"
     @AppStorage("foodListOrder") private var order = "recent"
+    /// A food just added with "+" in Poslední/Časté, with its "Vrátit".
+    @State private var added: PlanToast?
     @State private var searching = false
     /// The AI lookup or photo read this sheet waits for; it goes on in Jídlo
     /// when the sheet closes (AppModel+PendingFood.swift).
@@ -36,6 +38,8 @@ struct AddFoodSheet: View {
     @State private var path: [FoodRoute] = []
     @State private var scanning = false
     @State private var photoMode: String?
+    /// The month's free AI photos without Pro; nil with Pro and in the pilot.
+    @State private var photoTrial: SubscriptionStatus.PhotoTrial?
     /// Choosing a food for a meal photo's list (PhotoItemsView "Přidat
     /// položku"): only the search and the lists; the food comes back here.
     var pick: ((FoodProduct, Double) -> Void)? = nil
@@ -78,16 +82,28 @@ struct AddFoodSheet: View {
                     .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.25)).frame(height: 1) }
                     .padding(.top, 18)
 
-                    if pick == nil { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                    // Picking (a recipe's ingredient, a photo's item) has them too: the
+                    // food comes back through pick instead of being logged.
+                    // One row, so the foods start higher (Petr vs Yazio 2026-11-09); while
+                    // typing the results start right under the search. Dohledat AI is
+                    // the row under the results: without words it can't look anything up.
+                    if query.isEmpty { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
-                        tile("Vyfotit", "camera") { photoMode = "portion" }
-                        tile("Z galerie", "photo.on.rectangle") { galleryOpen = true }
+                        Menu {
+                            Button { photoMode = "portion" } label: { Label("Vyfotit", systemImage: "camera") }
+                            Button { galleryOpen = true } label: { Label("Z galerie", systemImage: "photo.on.rectangle") }
+                        } label: { tileFace("Vyfotit", "camera") }
                         tile("Etiketa", "doc.text.viewfinder") { photoMode = "label" }
                         tile("Ručně", "pencil") { path.append(.manual) }
-                        tile("Dohledat AI", "sparkles") { lookUp() }
-                            .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || lookingUp || model.demo)
                     }
-                    .padding(.top, 18) }
+                    .padding(.top, 16) }
+                    // Without Pro: how many of the month's free photos are left
+                    // (src/food-photo-trial.js); once none, a photo opens the Pro offer.
+                    if query.isEmpty, pick == nil, let photoTrial {
+                        Text(photoTrial.left > 0 ? L10n.f("Fotky jídla zdarma tento měsíc: zbývá %1$lld z %2$lld", photoTrial.left, photoTrial.limit)
+                                                 : L10n.tr("Fotky jídla zdarma na tento měsíc jsou využité. Aurin Pro zapíše jídlo z fotky, slovy nebo z webu."))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 10)
+                    }
                     if readingPhoto {
                         CoachThinking(text: L10n.tr("AI čte fotku…")).padding(.top, 12)
                     } else if lookingUp {
@@ -99,12 +115,12 @@ struct AddFoodSheet: View {
                     }
 
                     if query.isEmpty {
-                        Picker("Seznam", selection: $tab) {
-                            Text("Potraviny").tag("foods")
-                            Text("Recepty").tag("recipes")
+                        HStack(spacing: 8) {
+                            listChip("Poslední", "recent")
+                            listChip("Časté", "frequent")
+                            listChip("Recepty", "recipes")
                         }
-                        .pickerStyle(.segmented)
-                        .padding(.top, 22)
+                        .padding(.top, 16)
                         if tab == "foods" { foodList } else { recipeList }
                     } else {
                         VStack(spacing: 0) {
@@ -127,6 +143,16 @@ struct AddFoodSheet: View {
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(lookingUp || model.demo)
+                                Button { path.append(.manual) } label: {
+                                    HStack {
+                                        Text("Zadat ručně").font(Typo.sentence(15))
+                                        Spacer()
+                                        Image(systemName: "pencil").foregroundStyle(Palette.muted)
+                                    }
+                                    .padding(.vertical, 14)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.top, 14)
@@ -137,13 +163,32 @@ struct AddFoodSheet: View {
                 .padding(.bottom, 40)
             }
             .background { Palette.background.ignoresSafeArea() }
+            .overlay(alignment: .bottom) {
+                if let added {
+                    PlanToastView(toast: added) {
+                        self.added = nil
+                        if let undo = added.settle(undo: true) { Task { await undo() } }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy, value: added?.id)
+            // "Vrátit" stays a few seconds; the food is logged already.
+            .task(id: added?.id) {
+                guard let current = added else { return }
+                try? await Task.sleep(for: .seconds(5))
+                if added?.id == current.id { added = nil }
+                _ = current.settle(undo: false)
+            }
             .navBarVisibility(.hidden)
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
                 case .amount(let product): FoodAmountView(product: product, meal: meal, pick: pick, done: finish)
-                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, done: finish)
+                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, editing: true, pick: pick, done: finish)
                 case .items(let photoMeal): PhotoItemsView(meal: photoMeal, mealType: meal, done: finish)
-                case .manual: ManualFoodView(meal: meal, name: query, done: { dismiss() })
+                case .manual: ManualFoodView(meal: meal, name: query, pick: pick, done: { dismiss() })
                 case .recipe: RecipeEditorView(saved: { Task { await loadRecent() }; path.removeLast() })
                 }
             }
@@ -152,6 +197,11 @@ struct AddFoodSheet: View {
         .presentationBackground(Palette.background)
         .task(id: query) { await search() }
         .task { await loadRecent() }
+        // Again after each photo read, so the count follows.
+        .task(id: readingPhoto) {
+            guard !readingPhoto, !model.demo else { return }
+            photoTrial = (try? await model.api.subscription())?.photoTrial
+        }
         .onAppear(perform: begin)
         .onChange(of: model.pendingFoods.first { $0.id == current }?.state) { _, state in
             guard let state, state != .looking, let item = model.pendingFoods.first(where: { $0.id == current }) else { return }
@@ -173,13 +223,13 @@ struct AddFoodSheet: View {
         .onChange(of: galleryItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(data) {
                     read(image, mode: "portion")
                 }
                 galleryItem = nil
             }
         }
-        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }) }
+        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }, pick: pick) }
         .fullScreenCover(item: Binding(get: { photoMode.map { Named(name: $0) } }, set: { photoMode = $0?.name })) { mode in
             if mode.name == "label" {
                 LabelCameraSheet { image in
@@ -214,17 +264,20 @@ struct AddFoodSheet: View {
         }
     }
 
-    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: symbol).scaledFont(21)
-                Text(title).font(.footnote.weight(.medium))
-            }
-            .foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 72)
-            .cardSurface(cornerRadius: 18)
+    private func tile(_ title: LocalizedStringKey, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { tileFace(title, symbol) }
+            .buttonStyle(.plain)
+    }
+
+    private func tileFace(_ title: LocalizedStringKey, _ symbol: String) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: symbol).scaledFont(19)
+            Text(title).font(.caption.weight(.medium)).lineLimit(1).minimumScaleFactor(0.7)
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(Palette.ink)
+        .frame(maxWidth: .infinity).frame(minHeight: 58)
+        .padding(.horizontal, 4)
+        .cardSurface(cornerRadius: 16)
     }
 
     private func search() async {
@@ -249,49 +302,77 @@ struct AddFoodSheet: View {
         }
     }
 
-    /// "Poslední" or "Časté": the own foods by when or how often they were eaten.
+    /// "Poslední" or "Časté": the own foods by when or how often they were
+    /// eaten (up to 50, Petr 2026-11-09); "+" adds the amount logged last time.
     private var foodList: some View {
         let list = order == "frequent" ? frequent : recent
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                listChip("Poslední", "recent")
-                listChip("Časté", "frequent")
-            }
-            .padding(.top, 14)
+        return LazyVStack(alignment: .leading, spacing: 0) {
             if list.isEmpty {
                 Text("Zatím tu nic není. Potraviny, které přidáš, se tu objeví příště.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
             ForEach(list) { product in
-                Button { path.append(.amount(product)) } label: { ProductRow(product: product) }
-                    .buttonStyle(.plain)
+                HStack(spacing: 10) {
+                    Button { path.append(.amount(product)) } label: { ProductRow(product: product, hairline: false) }
+                        .buttonStyle(.plain)
+                    // Choosing for a meal photo's list: only the amount screen.
+                    if pick == nil {
+                        Button { quickAdd(product) } label: {
+                            Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                                .frame(width: 32, height: 32)
+                                .overlay { Circle().stroke(Palette.green, lineWidth: 1.5) }
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(verbatim: L10n.f("Přidat %@", product.name)))
+                    }
+                }
+                .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
             }
         }
     }
 
-    private func listChip(_ title: String, _ value: String) -> some View {
-        Button { order = value } label: {
+    /// "+": the food at the amount logged last time, at once, with "Vrátit";
+    /// a food without one yet (saved before that was kept) opens its amount.
+    private func quickAdd(_ product: FoodProduct) {
+        guard let amount = product.last_amount, !model.demo else { path.append(.amount(product)); return }
+        let id = model.loggedFood(product: product, amount: amount, meal: meal)
+        let kcal = product.kcal(for: amount).map { Fmt.int($0) + " kcal" }
+        added = PlanToast(title: L10n.f("Přidáno: %@", product.name), note: kcal, cancelled: false, symbol: "checkmark",
+                          undo: { await model.deleteFood(id: id) })
+    }
+
+    /// Poslední, Časté (the foods) or Recepty.
+    private func listChip(_ title: LocalizedStringKey, _ value: String) -> some View {
+        let on = value == "recipes" ? tab == "recipes" : tab == "foods" && order == value
+        return Button {
+            if value == "recipes" { tab = "recipes" } else { tab = "foods"; order = value }
+        } label: {
             Text(title).font(.footnote.weight(.medium))
-                .foregroundStyle(order == value ? Palette.onButton : Palette.ink)
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 32)
-                .background(order == value ? Palette.button : Palette.card, in: Capsule())
+                .background(on ? Palette.button : Palette.card, in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(order == value ? .isSelected : [])
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// The own recipes: one portion each, and "Nový recept".
     private var recipeList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button { path.append(.recipe) } label: {
-                Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+            // Choosing an ingredient or a photo's item: no new recipe from here.
+            if pick == nil {
+                Button { path.append(.recipe) } label: {
+                    Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .disabled(model.demo)
+                .padding(.top, 14)
             }
-            .buttonStyle(.plain)
-            .disabled(model.demo)
-            .padding(.top, 14)
-            if recipes.isEmpty {
+            if recipes.isEmpty && pick == nil {
                 Text("Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
             }
@@ -340,7 +421,7 @@ struct AddFoodSheet: View {
         }
         let count = r.ingredients?.count ?? 0
         if count > 0 { parts.append(L10n.plural("%lld surovin", count)) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 
     /// Every query word starts a word of the name (no diacritics, any case).
@@ -364,14 +445,14 @@ struct AddFoodSheet: View {
     private func loadRecent() async {
         guard !model.demo else { recent = DemoData.foods; frequent = DemoData.foods; return }
         let latestKey = "foods-recent", oftenKey = "foods-frequent"
-        if recent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: latestKey)?.value { recent = Array(kept.prefix(12)); saved = kept }
-        if frequent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: oftenKey)?.value { frequent = Array(kept.prefix(12)); saved += kept }
+        if recent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: latestKey)?.value { recent = kept; saved = kept }
+        if frequent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: oftenKey)?.value { frequent = kept; saved += kept }
         async let latest = model.api.personalFoods()
         async let often = model.api.personalFoods(frequent: true)
         async let own = model.api.recipes()
         let newest = try? await latest, most = try? await often
-        if let newest { recent = Array(newest.prefix(12)); Self.keep(newest, key: latestKey) }
-        if let most { frequent = Array(most.prefix(12)); Self.keep(most, key: oftenKey) }
+        if let newest { recent = newest; Self.keep(newest, key: latestKey) }
+        if let most { frequent = most; Self.keep(most, key: oftenKey) }
         if newest != nil || most != nil { saved = (newest ?? []) + (most ?? []) }
         recipes = (try? await own) ?? []
     }
@@ -431,7 +512,11 @@ struct AddFoodSheet: View {
     /// The food found (or the photo's list), to add.
     private func show(_ item: PendingFood) {
         shown = item.id
-        if item.items.count >= 2 {
+        if item.items.count >= 2, let pick {
+            // Picking: every food the photo shows comes back, with its amount.
+            item.items.forEach { pick($0.product, $0.amount) }
+            finish()
+        } else if item.items.count >= 2 {
             path.append(.items(model.pendingPhotoMeal(item)))
         } else if let product = item.product {
             path.append(item.query == nil ? .photo(product, item.note) : .amount(product))
@@ -459,11 +544,19 @@ extension FoodProduct: Hashable {
 
 struct ProductRow: View {
     let product: FoodProduct
+    /// false when the row's line goes under it together with a "+" beside it.
+    var hairline = true
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(product.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(product.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                    if product.isTableFood {
+                        Image(systemName: "checkmark.circle.fill").font(.subheadline).foregroundStyle(Palette.green)
+                            .accessibilityLabel(Text("z tabulky složení potravin"))
+                    }
+                }
                 Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -475,19 +568,25 @@ struct ProductRow: View {
             }
         }
         .padding(.vertical, 14)
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+        .overlay(alignment: .bottom) { if hairline { Rectangle().fill(Palette.hairline).frame(height: 1) } }
         .contentShape(Rectangle())
     }
 
     private var subtitle: String {
-        let amount = product.perPortion ? L10n.tr("1 porce") : Fmt.int(product.defaultAmount) + " " + product.unit
+        // A basic food: "1 šálek (237 ml), USDA".
+        if product.isTableFood, let size = product.usableServing {
+            return "1 " + product.servingName + " (" + Fmt.int(size) + " " + product.unit + "), " + (product.source_name ?? "USDA")
+        }
+        let amount = !product.perPortion ? Fmt.int(product.defaultAmount) + " " + product.unit
+            : product.defaultAmount == 1 ? L10n.tr("1 porce") : L10n.f("%@ porce", FoodAmountView.text(product.defaultAmount))
         let source: String? = switch product.source {
         case "personal", "manual": L10n.tr("moje potravina")
         case "recipe", "composed": L10n.tr("moje jídlo")
         case "ai", "ai_lookup": L10n.tr("dohledáno AI")
+        case "table": product.source_name ?? "USDA"
         default: product.source == nil ? nil : L10n.tr("katalog")
         }
-        return [product.brand, amount, source].compactMap { $0 }.joined(separator: " · ")
+        return [product.brand, amount, source].compactMap { $0 }.joined(separator: ", ")
     }
 }
 
@@ -557,7 +656,7 @@ struct FoodAmountView: View {
                     PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
                         .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))
                     if !current.perPortion, let size = current.usableServing {
-                        Text(L10n.f("1 %@ = %@ %@ · %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
+                        Text(L10n.f("1 %@ = %@ %@, %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
@@ -734,12 +833,12 @@ struct NutritionCells: View {
             .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
             let extra = extras
             if !extra.isEmpty {
-                Text(extra.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(extra.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
     }
 
-    /// "z toho cukry 5,6 g · vláknina 2 g · sůl 0,8 g", for what the food has.
+    /// "z toho cukry 5,6 g, vláknina 2 g, sůl 0,8 g", for what the food has.
     private var extras: [String] {
         var out: [String] = []
         if let g = product.grams(product.sugars_100g, for: amount) { out.append(L10n.f("z toho cukry %@", Self.grams(g))) }
@@ -778,10 +877,13 @@ struct ManualFoodView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var chosenMeal: String?
+    /// Picking an ingredient or a photo's item: the food comes back, nothing is logged.
+    var pick: ((FoodProduct, Double) -> Void)? = nil
 
-    init(meal: String, name: String = "", done: @escaping () -> Void = {}) {
+    init(meal: String, name: String = "", pick: ((FoodProduct, Double) -> Void)? = nil, done: @escaping () -> Void = {}) {
         self.meal = meal
         _name = State(initialValue: name)
+        self.pick = pick
         self.done = done
     }
 
@@ -804,9 +906,9 @@ struct ManualFoodView: View {
                     SettingsField(title: "Tuky", text: $fat, unit: "g")
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                 Button { Task { await save() } } label: {
-                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || number(kcal) == nil)
@@ -823,6 +925,7 @@ struct ManualFoodView: View {
     private func save() async {
         let product = FoodProduct(name: name.trimmingCharacters(in: .whitespaces), calories_100g: number(kcal), protein_100g: number(protein) ?? 0,
                                   carbs_100g: number(carbs) ?? 0, fat_100g: number(fat) ?? 0, nutrition_basis: "portion", source: "manual")
+        if let pick { pick(product, 1); return }
         saving = true
         defer { saving = false }
         if let message = await model.logFood(product: product, amount: 1, meal: target) { error = message } else { done() }

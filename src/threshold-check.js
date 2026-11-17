@@ -42,19 +42,19 @@ export function testWorkouts() {
   const spin = rep(3, [step(1, 100, "100-110", L("rychlá kadence", "fast cadence")), step(1, 55, "90")]);
   return [
     buildWorkout({
-      id: "test-ride-ftp20", name: L("Test FTP · 20 min", "FTP test · 20 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+      id: "test-ride-ftp20", name: L("Test FTP, 20 min", "FTP test, 20 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
       citation: "Allen H, Coggan A. Training and Racing with a Power Meter. 2nd ed. VeloPress; 2010.",
       structure: [step(10, 55, "90", L("rozjetí", "warm-up")), spin, step(5, 105, "95", L("svižně, ne naplno", "brisk, not all out")), step(10, 55, "90", L("lehce", "easy")), free(20, 100, "90-100", L("20 min co nejvyšší rovnoměrný výkon", "20 min at the highest even power you can hold")), step(10, 50, "85-95", L("vyjetí", "cool-down"))],
       description: L("Po rozjetí 20 minut naplno a rovnoměrně. FTP je 95 % průměrného výkonu z těch 20 minut.", "After the warm-up, 20 minutes all out and even. FTP is 95 % of the average power of those 20 minutes.")
     }),
     buildWorkout({
-      id: "test-ride-lthr30", name: L("Test prahového tepu · 30 min", "Threshold heart rate test · 30 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+      id: "test-ride-lthr30", name: L("Test prahového tepu, 30 min", "Threshold heart rate test, 30 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
       citation: "Friel J. The Cyclist's Training Bible. 5th ed. VeloPress; 2018.",
       structure: [step(15, 55, "90", L("rozjetí", "warm-up")), spin, free(30, 100, "90-100", L("30 min naplno jako časovka, rovnoměrně", "30 min all out like a time trial, evenly")), step(10, 50, "85-95", L("vyjetí", "cool-down"))],
       description: L("30 minut naplno jako časovka. Prahový tep je průměr posledních 20 minut.", "30 minutes all out like a time trial. The threshold heart rate is the average of the last 20 minutes.")
     }),
     buildWorkout({
-      id: "test-run-tt30", sport: "run", name: L("Běžecký test · 30 min", "Run test · 30 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+      id: "test-run-tt30", sport: "run", name: L("Běžecký test, 30 min", "Run test, 30 min"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
       citation: "Friel J. The Triathlete's Training Bible. 4th ed. VeloPress; 2016.",
       structure: [step(12, 78, null, L("rozklus", "warm-up jog")), rep(4, [step(sec(20), 115, null, L("rovinka – svižně, uvolněně", "stride – quick and relaxed")), step(sec(40), 65, null, L("volně / chůze", "easy / walk"))]), step(3, 72, null, L("klus", "jog")), step(30, 100, null, L("30 min naplno, rovnoměrně", "30 min all out, evenly")), step(10, 72, null, L("výklus", "cool-down jog"))],
       description: L("30 minut naplno a rovnoměrně, ideálně na rovině. Prahové tempo je průměr celých 30 minut, prahový tep průměr posledních 20 minut.", "30 minutes all out and evenly, ideally on the flat. Threshold pace is the average of the whole 30 minutes, the threshold heart rate the average of the last 20.")
@@ -66,7 +66,7 @@ export function testWorkouts() {
 function swimTest() {
   const swim = (meters, pace, note) => ({ durationMinutes: swimMinutes(meters, pace), power: pace, meters, note });
   return buildWorkout({
-    id: "test-swim-css", sport: "swim", name: L("Test CSS · 400 + 200 m", "CSS test · 400 + 200 m"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
+    id: "test-swim-css", sport: "swim", name: L("Test CSS, 400 + 200 m", "CSS test, 400 + 200 m"), system: "threshold", family: "test", tags: ["test"], sourceKind: "research", sourceName: L("Publikovaný protokol", "Published protocol"),
     citation: "Wakayoshi K et al. Determination and validity of critical velocity as an index of swimming performance. Int J Sports Med. 1992;13(5):367-371.",
     structure: [swim(300, 86, L("rozplavání, volně", "warm-up, easy")), rep(4, [swim(50, 95, L("postupně rychleji", "build up")), { durationMinutes: sec(20), power: 0, rest: true, note: null }]),
       swim(400, 104, L("400 m naplno, rovnoměrně, zapiš si čas", "400 m all out and even, note the time")), swim(200, 82, L("5 min volně", "5 min easy")),

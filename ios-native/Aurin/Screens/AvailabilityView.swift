@@ -120,7 +120,7 @@ struct AvailabilityView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kdy mám čas") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · týden").padding(.top, 24)
+                SectionLabel(text: "Tréninkový týden").padding(.top, 24)
                 Text("Kdy mám čas").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if loading && prefs == nil {

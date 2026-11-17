@@ -78,7 +78,7 @@ struct FoodDraftCard: View {
                 Button(L10n.tr(slot.label)) { meal = slot.id }
             }
         } label: {
-            Text(L10n.tr(MealSlot.labels[meal] ?? "Jídlo") + " · " + dayLabel)
+            Text(L10n.tr(MealSlot.labels[meal] ?? "Jídlo") + ", " + dayLabel)
                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.amber)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(Palette.amberSoft, in: Capsule())

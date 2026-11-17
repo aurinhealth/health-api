@@ -234,10 +234,10 @@ struct VO2maxMonths: View {
         }
     }
 
-    /// "47,8–48,6 · 21 dní".
+    /// "47,8–48,6, 21 dní".
     static func range(_ m: VO2maxContent.Month) -> String {
         let span = m.high - m.low < 0.05 ? Fmt.decimal(m.low) : Fmt.decimal(m.low) + "–" + Fmt.decimal(m.high)
-        return span + " · " + L10n.plural("%lld dní", m.days)
+        return span + ", " + L10n.plural("%lld dní", m.days)
     }
 
     static func change(_ value: Double?) -> String {

@@ -92,7 +92,7 @@ struct WatchSettingsView: View {
         } else if !state.installed {
             text = L10n.tr("Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu.")
         } else if let sent = WatchBridge.shared.lastSent {
-            text = L10n.f("Připojeno · data poslaná %@", sent.formatted(date: .omitted, time: .shortened))
+            text = L10n.f("Připojeno, data poslaná %@", sent.formatted(date: .omitted, time: .shortened))
         } else {
             text = L10n.tr("Připojeno")
         }

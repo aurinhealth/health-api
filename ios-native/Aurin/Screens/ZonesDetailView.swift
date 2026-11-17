@@ -26,7 +26,7 @@ struct ZonesDetailContent: View {
     var body: some View {
         let weeks = zones.weeks ?? []
         VStack(alignment: .leading, spacing: 0) {
-            Text("Aktivní minuty v zónách · tento týden").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
+            Text("Aktivní minuty v zónách tento týden").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
             if let week = weeks.last {
                 HStack(alignment: .lastTextBaseline, spacing: 10) {
                     Text(verbatim: Fmt.int(week.counted)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
@@ -46,7 +46,7 @@ struct ZonesDetailContent: View {
                 ZoneWeekTable(weeks: weeks).padding(.top, 10)
             } else {
                 Card {
-                    WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
+                    WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + ", " + Fmt.hoursMinutesLong(zones.minutes))
                     ZoneBar(parts: [("Lehká", zones.light, ZoneStyle.light), ("Střední", zones.moderate, ZoneStyle.moderate),
                                     ("Intenzivní", zones.vigorous, ZoneStyle.vigorous), ("Maximální", zones.peak, ZoneStyle.peak)])
                 }
@@ -102,7 +102,7 @@ struct ZoneWeekTable: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(verbatim: index == 0 ? L10n.tr("Tento týden") : L10n.f("Týden %@", ZoneWeekBars.label(week)))
                             .font(Typo.small).foregroundStyle(Palette.ink)
-                        Text(verbatim: L10n.f("od %@ · lehká %@", Fmt.dayMonth(week.start), Fmt.hoursMinutesLong(week.light)))
+                        Text(verbatim: L10n.f("od %@, lehká %@", Fmt.dayMonth(week.start), Fmt.hoursMinutesLong(week.light)))
                             .font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

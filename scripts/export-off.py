@@ -27,6 +27,7 @@ def main():
           list_filter(product_name, lambda x: x.lang IN ('main', 'cs', 'en') AND trim(coalesce(x."text", '')) <> '') AS names,
           brands, quantity, serving_size, product_quantity_unit AS unit,
           list_contains(countries_tags, 'en:czech-republic') AS cz,
+          list_contains(countries_tags, 'en:slovakia') AS sk,
           list_transform(list_filter(nutriments, lambda x: x.name IN ({wanted}) AND isfinite(x."100g")),
                          lambda x: struct_pack(k := x.name, v := x."100g")) AS n
         FROM read_parquet(?)

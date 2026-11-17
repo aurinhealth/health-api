@@ -70,7 +70,7 @@ struct GymPlaceView: View {
     private var page: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: place.name + " · " + EquipmentView.countLine(place))
+                SectionLabel(text: place.name + ", " + EquipmentView.countLine(place))
                 Spacer(minLength: 8)
                 menu
             }
@@ -240,8 +240,8 @@ struct GymPlaceView: View {
             guard !named.contains(st.id) else { return nil }
             let names = hits.filter { ($0.stations ?? []).contains(st.id) }.map(\.name)
             guard !names.isEmpty else { return nil }
-            let shown = names.prefix(2).joined(separator: " · ")
-            return (st, names.count > 2 ? shown + " · +\(names.count - 2)" : shown)
+            let shown = names.prefix(2).joined(separator: ", ")
+            return (st, names.count > 2 ? shown + ", +\(names.count - 2)" : shown)
         }
         return (byName, byExercise)
     }
@@ -315,7 +315,7 @@ struct GymPlaceView: View {
             return needs.contains(station.id) && needs.isSubset(of: after) && !needs.isSubset(of: before)
         }.count
         let text = opened > 0
-            ? L10n.plural("%@ · %lld nových cviků", station.label, opened)
+            ? L10n.plural("%@, %lld nových cviků", station.label, opened)
             : L10n.f("Přidáno: %@", station.label)
         toast = Toast(station: station, text: text)
     }
@@ -387,7 +387,7 @@ struct StationSheet: View {
                 }
 
                 if !exercises.isEmpty {
-                    SectionLabel(text: L10n.f("Cviky · %@", String(exercises.count))).padding(.top, 24)
+                    SectionLabel(text: L10n.f("Cviky (%@)", String(exercises.count))).padding(.top, 24)
                     VStack(spacing: 0) {
                         ForEach(Array(exercises.enumerated()), id: \.element.id) { index, ex in
                             if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -682,7 +682,7 @@ struct AddGymSheet: View {
         defer { busy = false }
         var jpegs: [Data] = []
         for item in photos {
-            if let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = await image.jpegForUpload(side: 1400) {
+            if let raw = try? await item.loadTransferable(type: Data.self), let image = await UIImage.photo(raw), let jpeg = await image.jpegForUpload(side: 1400) {
                 jpegs.append(jpeg)
             }
         }

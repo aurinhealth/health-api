@@ -18,7 +18,7 @@ import { CONSENT_VERSION } from './consent.js';
 export const KEPT_TABLES = new Set([
   'user_consents', 'user_identities', 'user_passkeys', 'user_language', 'user_time_zone',
   'connection_credentials', 'connection_accounts', 'subscriptions', 'store_originals', 'push_tokens', 'profile_photos',
-  'app_settings', 'user_setup', 'ai_usage', 'coach_messages', 'coach_carryover',
+  'app_settings', 'user_setup', 'ai_usage', 'coach_messages', 'coach_carryover', 'food_photo_trial',
   'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions', 'support_reports',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',
   'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods',
@@ -183,4 +183,17 @@ export function pausedRefusal(method, pathname) {
   if (OPEN_WHILE_PAUSED.some(open => open.test(pathname))) return null;
   if (pathname === '/app/api/connections' && method === 'DELETE') return null;
   return Response.json({ status: 'health_paused', message: L('Zdravotní data máš pozastavená. Zapni je v aplikaci.', 'Your health data is paused. Turn it back on in the app.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+}
+
+// An account that never gave the consent to health data (consent.js): the
+// server takes no health data from it (GDPR art. 9(2)(a)). Reading stays
+// open, so the setup can ask for the consent; writes and connecting a service
+// answer health_consent_required, which the app keeps for after the consent
+// (APIClient.swift) instead of dropping.
+export function consentRefusal(method, pathname) {
+  if (method === 'GET' || method === 'HEAD') { if (!CONNECTING.test(pathname)) return null; }
+  else if (!pathname.startsWith('/app/api/') && !CONNECTING.test(pathname)) return null;
+  if (OPEN_WHILE_PAUSED.some(open => open.test(pathname))) return null;
+  if (pathname === '/app/api/connections' && method === 'DELETE') return null;
+  return Response.json({ status: 'health_consent_required', message: L('Nejdřív potvrď souhlas se zpracováním údajů o zdraví.', 'First confirm your consent to processing health data.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
 }

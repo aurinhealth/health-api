@@ -24,7 +24,7 @@ Předpověď Apple Weather (WeatherKit, bez klíče Open-Meteo) se načítá i n
 
 ## Plán týdne a Doporučené tréninky
 
-Sporty se do dnů přetahují (nebo na mobilu ťuknutím vyberou a ťuknutím na den položí); jeden den může mít až čtyři tréninky, třeba kolo i gym nebo dvakrát kolo (druhý trénink stejného sportu je lehký a má vlastní cíl). Gym položený na den, kde byl dřív zrušený, se tam znovu počítá. Přesunutá kartička s sebou nebere návrh vytvořený pro původní den. Návrh dne (např. „2h 0m · ~98 TSS · IF 0,70 · Vytrvalost“) se u kartiček ukáže až po 5 s bez změny plánu, aby přesouvání nezahlcovalo kalendář.
+Sporty se do dnů přetahují (nebo na mobilu ťuknutím vyberou a ťuknutím na den položí); jeden den může mít až čtyři tréninky, třeba kolo i gym nebo dvakrát kolo (druhý trénink stejného sportu je lehký a má vlastní cíl). Gym položený na den, kde byl dřív zrušený, se tam znovu počítá. Přesunutá kartička s sebou nebere návrh vytvořený pro původní den. Návrh dne (např. „2h 0m, ~98 TSS, IF 0,70, Vytrvalost“) se u kartiček ukáže až po 5 s bez změny plánu, aby přesouvání nezahlcovalo kalendář.
 
 Běh roste pomalu: týdenní objem běhu (hotové, naplánované i navržené běhy) je nejvýš o 10 % nad větším z minulého týdne a průměru posledních 4 týdnů; 60 min týdně jde vždy. Návrhy běhu se podle toho zkrátí a záhlaví týdne to řekne.
 

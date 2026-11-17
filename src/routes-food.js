@@ -18,6 +18,8 @@ import { recordOpsEvent } from "./ops-report.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
 import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
+import { plansUnlocked } from "./subscription.js";
+import { claimFoodPhoto, returnFoodPhoto } from "./food-photo-trial.js";
 import { localToday } from "./user-time.js";
 import { dashboardProfile } from "./dashboard-shared.js";
 import { waterGoal, loadBuild } from "./water-goal.js";
@@ -61,12 +63,13 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     // Private saved foods first, then the common food-label catalogue, then
     // the read-only world catalogue in R2. A food users saved or corrected
-    // replaces the world record with the same barcode. A barcode none of them
+    // replaces the world record with the same barcode or catalogue key (a
+    // logged basic food is listed once). A barcode none of them
     // knows is asked of Open Food Facts live (open-food-facts.js), and where
     // each scan was found is counted for the morning report (ops-report.js).
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,catalogue]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),live=barcode&&!saved.length&&!catalogue.length?await lookupOpenFoodFacts(env,barcode):[],world=[...catalogue,...live],codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean));
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,catalogue]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode,market:body.market}).catch(error=>{console.error('world foods',error?.message);return [];})]),live=barcode&&!saved.length&&!catalogue.length?await lookupOpenFoodFacts(env,barcode):[],world=[...catalogue,...live],codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),keys=new Set(saved.map(p=>p.catalog_key).filter(Boolean));
       if(barcode){const counting=recordOpsEvent(env.RAW_DB||env.DB,'barcode',saved.length?'saved':catalogue.length?'world':live.length?'off-live':'missing');if(ctx?.waitUntil)ctx.waitUntil(counting);else await counting;}
-      const candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+      const candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode))&&!keys.has(p.catalog_key))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){console.error('Food search failed',error.message);return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.')},{status:500});}
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
@@ -106,7 +109,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zadej hodnoty ručně.', 'AI isn\'t available right now. Enter the values by hand.')},{status:503});
     try{
       const body=await request.json().catch(()=>({})),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24);
-      let r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
+      let r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE,market:body.market});
       // Not found on the web: with estimate=true and a name, typical values marked as an AI estimate.
       if(!r.product&&body.estimate===true&&name.trim().length>=2)r=await estimateFoodWithAI(env,{name,language:env.INTERFACE_LANGUAGE});
       if(!r.product)return Response.json({status:'not_found',message:L('AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).', 'The AI couldn\'t find the product with certainty. Enter the values from the label (or take a photo of it).')},{headers:{'Cache-Control':'no-store'}});
@@ -121,12 +124,15 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zadej hodnoty ručně.', 'AI isn\'t available right now. Enter the values by hand.')},{status:503});
     try{
       const body=await request.json().catch(()=>({}));
+      // Without Pro only a photo of food to log, one of the month's free ones
+      // (food-photo-trial.js), taken before AI reads it.
+      if(!await plansUnlocked(env)&&(body.mode==='front'||body.mode==='barcode'||!await claimFoodPhoto(env)))return Response.json({status:'subscription_required',message:L('Tato AI funkce je součástí Aurin Pro. Najdeš ho v Nastavení → Aurin Pro.', 'This AI feature is part of Aurin Pro. See Settings → Aurin Pro.')},{status:402});
       if(body.mode==='front'){const f=await readPackageFrontWithAI(env,{image:body.image});return Response.json(f.front?{status:'ok',...f.front}:{status:'unreadable',message:L('Název na obalu se nepodařilo přečíst. Doplň ho ručně.', 'The name on the package couldn\'t be read. Type it in.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.mode==='barcode'){const b=await readBarcodeWithAI(env,{image:body.image});return Response.json(b.barcode?{status:'ok',barcode:b.barcode}:{status:'unreadable',message:L('Číslo pod čárovým kódem se nepodařilo přečíst. Vyfoť kód zblízka, nebo číslo opiš.', 'The number under the barcode couldn\'t be read. Take a close-up photo of the code or type the number.')},{headers:{'Cache-Control':'no-store'}});}
       const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
-      if(!r.result)return Response.json({status:'unreadable',message:L('Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.', 'I couldn\'t read the values in the photo. Take a close, straight photo of the table or enter the values by hand.')},{headers:{'Cache-Control':'no-store'}});
+      if(!r.result){await returnFoodPhoto(env);return Response.json({status:'unreadable',message:L('Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.', 'I couldn\'t read the values in the photo. Take a close, straight photo of the table or enter the values by hand.')},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({status:'error',message:error.limit?error.message:L('Čtení fotky přes AI selhalo: ', 'Reading the photo with AI failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):/JPG|PNG/.test(error.message)?400:502});}
+    }catch(error){await returnFoodPhoto(env).catch(()=>{});return Response.json({status:'error',message:error.limit?error.message:L('Čtení fotky přes AI selhalo: ', 'Reading the photo with AI failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):/JPG|PNG/.test(error.message)?400:502});}
   }
   // Drinks of a day with the day's target (body weight and training).
   if(url.pathname==='/app/api/fluids'){
@@ -140,7 +146,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         const auto=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
         const target=waterGoal(auto,profile||{},await loadBuild(env.DB,profile,date,auto,localToday()).catch(error=>{console.error('Water build-up unavailable',error.message);return null;}));
         // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
-        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:hydrationMl(e.ml,e.kind)}));
+        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:e.hydrationMl??hydrationMl(e.ml,e.kind)}));
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -164,7 +170,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       const result=await saved.json();if(!saved.ok)throw new Error(L('Uložení selhalo.', 'Saving failed.'));
       let personal=null,warning=null;
       // The food for next time (and the shared catalogue) after the answer: the app waits only for the meal.
-      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
+      if(p.source!=='composed'){const saving=savePersonalFood(env.DB,p,{used:true,last:amount.amount}).catch(error=>{console.warn('personal food not saved',error?.message);return null;});
         if(ctx?.waitUntil)ctx.waitUntil(saving);else personal=await saving;}
       const google=await queueFoodGoogleSafely(env,ctx,result.id);
       warning ||= google.status==='error'?google.message:null;

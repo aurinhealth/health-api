@@ -47,7 +47,7 @@ test("the equipment catalog adds sections and a line, keeping id, group and labe
   const listed = catalog.filter(s => !HIDDEN.includes(s.id));
   assert.ok(listed.every(s => s.id && s.group && s.label && s.sections.length === 1 && s.description && s.uses && s.keywords));
   assert.deepEqual(catalog.find(s => s.id === "pec_deck").sections, ["upper_machines"]);
-  assert.equal(catalog.find(s => s.id === "pec_deck").uses, "Prsa · zadní ramena");
+  assert.equal(catalog.find(s => s.id === "pec_deck").uses, "Prsa, zadní ramena");
   assert.deepEqual(catalog.find(s => s.id === "pullup_bar").sections, ["benches"]);
   assert.deepEqual(catalog.find(s => s.id === "resistance_bands").sections, ["accessories"]);
   assert.deepEqual(catalog.find(s => s.id === "kettlebells").sections, ["free_weights"]);

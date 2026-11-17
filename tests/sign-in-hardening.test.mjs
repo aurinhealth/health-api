@@ -60,7 +60,8 @@ test("moving the account to another address keeps only the caller's notification
   const { env, sent } = await setup();
   const user = await member(env);
   addTokens(env, user.id, [PHONE, OLD_PHONE]);
-  const post = (path, body) => handleEmailChange(new Request(ORIGIN + path, { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, new URL(ORIGIN + path), { signedIn: true, user }, { waitUntil() {} });
+  const pending = [];
+  const post = async (path, body) => { const response = await handleEmailChange(new Request(ORIGIN + path, { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, new URL(ORIGIN + path), { signedIn: true, user }, { waitUntil: p => pending.push(p) }); await Promise.all(pending); return response; };
   await post("/app/api/account/email/start", { email: "new@example.com" });
   const code = sent.at(-1).text.match(/\b(\d{6})\b/)[1];
   assert.equal((await post("/app/api/account/email/verify", { email: "new@example.com", code, pushToken: PHONE })).status, 200);

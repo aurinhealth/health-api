@@ -65,7 +65,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
         let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
-        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly")
+        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle, svaly")
         // A yellow or red morning: hard training waits for a greener one.
         let time = DemoData.today.recoveryTime
         XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
@@ -90,11 +90,11 @@ final class SnapshotTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
         let plan = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: "Build", paused: nil, proposal: nil, sessionsLeft: 2)
-        XCTAssertEqual(TodayCoachAction.planLine(plan), "Half marathon · week 3/12 · Build · 2 sessions left")
+        XCTAssertEqual(TodayCoachAction.planLine(plan), "Half marathon, week 3/12, Build, 2 sessions left")
         let done = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: nil, paused: nil, proposal: nil, sessionsLeft: 0)
-        XCTAssertEqual(TodayCoachAction.planLine(done), "Half marathon · week 3/12")
+        XCTAssertEqual(TodayCoachAction.planLine(done), "Half marathon, week 3/12")
         let paused = TodaySnapshot.PlanLine(name: "Half marathon", week: 3, weeksCount: 12, phaseLabel: "Build", paused: true, proposal: nil, sessionsLeft: 2)
-        XCTAssertEqual(TodayCoachAction.planLine(paused), "Half marathon · paused")
+        XCTAssertEqual(TodayCoachAction.planLine(paused), "Half marathon, paused")
 
         let now = Date()
         let past = RecoveryTime(readyAt: ISO8601DateFormatter().string(from: now.addingTimeInterval(-3600)), from: "2026-10-07T17:00:00Z", lightAt: nil, hours: 0, progress: 1, causes: [])
@@ -205,6 +205,25 @@ final class SnapshotTests: XCTestCase {
         let product = try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"Rohlík","calories_100g":"287","protein_100g":9.2,"serving_size":"43 g","id":12,"confidence":"high"}"#.utf8))
         XCTAssertEqual(product.calories_100g, 287)
         XCTAssertEqual(product.defaultAmount, 43)
+        // Packages in kg, l, dl or cl are counted in grams or ml, not as 1 g.
+        func sized(_ quantity: String) throws -> FoodProduct {
+            try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"X","calories_100g":350,"quantity":"\#(quantity)"}"#.utf8))
+        }
+        XCTAssertEqual(try sized("1 kg").defaultAmount, 100, "a package over 500 starts at 100")
+        XCTAssertEqual(try sized("0,25 kg").defaultAmount, 250)
+        XCTAssertEqual(try sized("0,5 l").defaultAmount, 500)
+        XCTAssertEqual(try sized("33 cl").defaultAmount, 330)
+        XCTAssertEqual(try sized("2,5 dl").defaultAmount, 250)
+        XCTAssertEqual(try sized("2 x 125 g").defaultAmount, 100)
+        // Picking the package or a serving: less than one becomes one (not 0 ¼), more keeps the nearest fraction.
+        let package = PortionWheel.Unit(name: "balení", kind: .package, size: 400, most: 10)
+        XCTAssertEqual(PortionWheel.amount(1, switchedTo: package), 400)
+        XCTAssertEqual(PortionWheel.amount(100, switchedTo: package), 400)
+        XCTAssertEqual(PortionWheel.amount(600, switchedTo: package), 600)
+        let serving = PortionWheel.Unit(name: "porce", kind: .serving, size: 43, most: 46)
+        XCTAssertEqual(PortionWheel.amount(129, switchedTo: serving), 129)
+        let grams = PortionWheel.Unit(name: "g", size: 1, most: 2000)
+        XCTAssertEqual(PortionWheel.amount(399.6, switchedTo: grams), 400)
         // The empty shapes the server returns without data.
         let emptyHealth = """
         {"status":"ok","date":"2026-10-08","readiness":{"score":null,"zone":null,"missing":[],"flags":[],"parts":[],"hrv":null,"restingHR":null,"sleepMinutes":null,"strainYesterday":null,"history":[]},
@@ -223,7 +242,7 @@ final class SnapshotTests: XCTestCase {
         var day = DemoData.gym
         XCTAssertEqual(day.planName, "Celé tělo")
         let exercises = day.exercises
-        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(exercises[0].sets.count, 5)
         XCTAssertTrue(exercises[0].sets[0].warmup)
         XCTAssertEqual(exercises[0].doneCount, 1)
@@ -239,12 +258,12 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(day.exercises[0].doneCount, 1)
 
         day.replace(exercise: "Dřep", with: "Leg press")
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"], "done sets keep the old name")
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"], "done sets keep the old name")
 
         let body = day.saveBody
         guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
         XCTAssertEqual(full.count, rows.count + 7)
-        XCTAssertEqual(rows.count, 17)
+        XCTAssertEqual(rows.count, 19, "warm-up + 4 squat, 4 bench, 4 rows, 3 DB shoulder press, 3 Pallof")
     }
 
     func testTrainingSessionsDecode() {
@@ -259,7 +278,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(result.chatId, 12)
         XCTAssertEqual(result.actions?.count, 2)
         XCTAssertEqual(result.actions?[0].title, "Přesunout „Dlouhý běh“ na So 10. října")
-        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda · 1 h · Pá 9. října")
+        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1 h, Pá 9. října")
         try render("coach-action", height: 300) {
             VStack { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
         }
@@ -439,7 +458,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Fmt.dayHeading(today.date), "ČTVRTEK 8. ŘÍJNA")
         XCTAssertEqual(Fmt.dayTitle("2026-10-08", today: "2026-10-08"), "Dnes")
         XCTAssertEqual(Fmt.daySubtitle("2026-10-08", today: "2026-10-08"), "čtvrtek 8. října")
-        XCTAssertEqual(Fmt.dayShort("2026-10-08", today: "2026-10-08"), "Dnes · čt 8. 10.")
+        XCTAssertEqual(Fmt.dayShort("2026-10-08", today: "2026-10-08"), "Dnes, čt 8. 10.")
         XCTAssertEqual(Fmt.dayTitle("2026-10-07", today: "2026-10-08"), "Včera")
         XCTAssertEqual(Fmt.dayTitle("2026-10-05", today: "2026-10-08"), "Pondělí")
         XCTAssertEqual(Fmt.daySubtitle("2026-10-05", today: "2026-10-08"), "5. října")
@@ -631,9 +650,9 @@ final class SnapshotTests: XCTestCase {
     func testPlanEditing() {
         var day = DemoData.gym
         day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         day.moveExercise(from: 0, to: 3)
-        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Rumunský mrtvý tah", "Výpady"])
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 
         let sets = day.exercises[1].sets.count
@@ -680,15 +699,15 @@ final class SnapshotTests: XCTestCase {
         XCTAssertFalse(ExerciseCatalog.works(curl, "upper_back"))
         XCTAssertTrue(ExerciseCatalog.works(press, "quads"))
         XCTAssertFalse(ExerciseCatalog.works(press, "calves"))
-        XCTAssertEqual(EquipmentView.summary(home), "Domácí posilovna · 2 věci")
+        XCTAssertEqual(EquipmentView.summary(home), "Domácí posilovna, 2 věci")
         XCTAssertEqual(EquipmentView.kg(2.5), "2,5 kg")
         XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/vo2max")!), .vo2max)
         XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/library/run")!), .workoutLibrary("run"))
         // The equipment picker: every station once, by kind, with the muscles it is for.
         let stations = try JSONDecoder().decode([GymEquipment.Station].self, from: Data(#"""
         [{"id":"dumbbells","group":"Volné váhy","label":"Jednoručky","sections":["free_weights"],"uses":"Celé tělo","keywords":"cinky"},
-         {"id":"chest_press","group":"Prsa","label":"Tlaky na prsa (stroj)","sections":["upper_machines"],"uses":"Prsa · triceps"},
-         {"id":"pec_deck","group":"Záda a ramena","label":"Pec deck (rozpažování a zadní ramena)","sections":["upper_machines"],"uses":"Prsa · zadní ramena","keywords":"butterfly motýlek"},
+         {"id":"chest_press","group":"Prsa","label":"Tlaky na prsa (stroj)","sections":["upper_machines"],"uses":"Prsa, triceps"},
+         {"id":"pec_deck","group":"Záda a ramena","label":"Pec deck (rozpažování a zadní ramena)","sections":["upper_machines"],"uses":"Prsa, zadní ramena","keywords":"butterfly motýlek"},
          {"id":"cables","group":"Kladky","label":"Kladky (kabelový stroj)","sections":["cables"],"uses":"Celé tělo"},
          {"id":"sled","group":"Kardio","label":"Saně","sections":[]}]
         """#.utf8))
@@ -733,7 +752,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo · " + ClockText.format("07:00") + " · 1 h 30 min · 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .count), "2")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .kcal), Fmt.int(1250))
@@ -755,7 +774,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(off.session.plannedId, "planned:2")
         let missed = try XCTUnwrap(planDay.activities.last)
         XCTAssertEqual(PlanState(missed.session), .missed)
-        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno · 45 min")
+        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno, 45 min")
         // October 2026 starts on a Thursday: three empty cells first.
         let grid = ISODay.monthGrid("2026-10-15")
         XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])
@@ -778,8 +797,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(StageTotals.note(share: nil, wakeups: 3), "3×")
         let entry = FoodSnapshot.Entry(id: 1, name: "Jogurt", time: "08:00", meal: "breakfast", kcal: 133, protein: 14, carbs: 6, fat: 5,
                                        amount: "140 g", brand: "Madeta", fiber: nil, sugar: 6, salt: 0.15)
-        XCTAssertEqual(FoodEntryCard.detail(entry), "140 g · Madeta · " + ClockText.format("08:00"))
-        XCTAssertEqual(FoodEntryCard.extras(entry), "vláknina – · cukry 6,0 g · sůl 0,15 g")
+        XCTAssertEqual(FoodEntryCard.detail(entry), "140 g, Madeta, " + ClockText.format("08:00"))
+        XCTAssertEqual(FoodEntryCard.extras(entry), "vláknina –, cukry 6,0 g, sůl 0,15 g")
     }
 
     func testRoundThreeScreens() throws {
@@ -855,13 +874,13 @@ final class SnapshotTests: XCTestCase {
                        DataSource(provider: "intervals", name: nil, lastSuccessAt: nil)]
         let stale = DataAgePill.stale(sources, now: now)
         XCTAssertEqual(stale.count, 1, "\(stale)")
-        XCTAssertTrue(stale[0].hasPrefix("Google Health · data z "), stale[0])
+        XCTAssertTrue(stale[0].hasPrefix("Google Health, data z "), stale[0])
 
         // In words, no ratio (Today audit D4).
         let raised = TrainingSnapshot.ACWR(level: "above")
         let monotonous = TrainingSnapshot.Monotony(value: 2.3, strain: 900, high: true)
         let normal = TrainingSnapshot.Monotony(value: 1.2, strain: 500, high: false)
-        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou · jednotvárný týden")
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou, jednotvárný týden")
         XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Posledních 7 dní vs. obvyklých 28: Nad obvyklou")
         XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "below"), monotony: monotonous), "Jednotvárný týden")
         XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(level: "wellBelow"), monotony: normal))
@@ -993,6 +1012,9 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
         // The end of the first setup (point 7): no way back, "Teď ne" under the button.
         try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
+        // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
+        // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
+        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)
@@ -1053,7 +1075,7 @@ final class SnapshotTests: XCTestCase {
         try render("pro-settings-active", height: 1100, window: true) { ProPage(state: active, calendar: calendar) }
         var week = active
         week.freeWeek = DateInterval(start: day(10, 29, 2026), end: day(11, 5, 2026))
-        week.firstPayment = "Čt 5. 11. · 149 Kč"
+        week.firstPayment = "Čt 5. 11., 149 Kč"
         week.allowance = nil
         try render("pro-settings-free-week", height: 1000, window: true) { ProPage(state: week, now: day(10, 31, 2026), calendar: calendar) }
         var monthly = active
@@ -1108,7 +1130,7 @@ final class SnapshotTests: XCTestCase {
     func testPlanComplianceScreens() throws {
         func step(_ label: String, _ role: String, _ min: Double, _ lo: Double?, _ hi: Double?, _ v: Double?, _ status: String?) -> PlanCompliance.Step {
             PlanCompliance.Step(label: label, role: role, seconds: min * 60, plannedSeconds: min * 60, lo: lo, hi: hi, value: v,
-                                text: v.map { "\(Int(min)):00 · \(Int($0)) W" }, status: status)
+                                text: v.map { "\(Int(min)):00, \(Int($0)) W" }, status: status)
         }
         let ride = PlanCompliance(percent: 92, word: "Podle plánu",
             rows: [.init(kind: "tss", done: 73, plan: 79, percent: 92), .init(kind: "time", done: 68, plan: 60, percent: 113)],

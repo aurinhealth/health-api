@@ -125,7 +125,7 @@ export async function drunkByDay(db, from, to) {
   for (const r of rows.results || []) out[r.date] = (out[r.date] || 0) + hydrationMl(r.ml, r.kind);
   for (const r of food.results || []) {
     const drink = drinkFromFoodEntry(r);
-    if (drink) out[r.date] = (out[r.date] || 0) + hydrationMl(drink.ml, drink.kind);
+    if (drink) out[r.date] = (out[r.date] || 0) + drink.hydrationMl;
   }
   return out;
 }

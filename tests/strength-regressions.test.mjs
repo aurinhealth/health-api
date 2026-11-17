@@ -267,7 +267,7 @@ test("generator reduces leg dose while retaining strength work around hard rides
     strength: { recentCompletedSets: [] }
   }, { maxExercises: 5 });
   assert.equal(plan.protectedLegs, true);
-  assert.equal(plan.planName, "Full Body · s rezervou");
+  assert.equal(plan.planName, "Full Body s rezervou");
   assert.ok(plan.rows.length > 0);
   const legs=plan.loadEstimates.filter(x => ["Pivot leg press", "Pendulum squat", "Prone leg curl Prime", "Hip thrust", "DB Romanian deadlift", "DB Bulgarian split squat", "Leg extension Prime"].includes(x.exercise));
   assert.ok(legs.length>=2);assert.ok(legs.every(x=>x.reducedDose&&x.sets<=2));

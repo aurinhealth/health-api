@@ -10,10 +10,10 @@ export async function ensureOnboarding(db){
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY(user_id,id))').run();
 }
-export async function trainingSetup(db){
-  await ensureOnboarding(db);const row=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
+// `history`: trainingHistory(db) a caller has already started (onboardingStatus), read once.
+export async function trainingSetup(db,history=trainingHistory(db)){
+  const [row,trained]=await Promise.all([ensureOnboarding(db).then(()=>db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first()),history]);history=trained;
   let saved={};try{saved=JSON.parse(row?.training_json||'{}');}catch{}
-  const history=await trainingHistory(db);
   const places=Array.isArray(saved.places)&&saved.places.length?{places:saved.places,activePlace:saved.activePlace}:legacyPlaces(saved);
   // Experience per sport, auto unless chosen. The single "experience" of older
   // versions was set in the gym settings: it is the gym's manual level.
@@ -70,15 +70,16 @@ export async function hasRecentActivityData(db,userId=db.userId){
 }
 export async function onboardingStatus(env){
   const db=env.DB;await ensureOnboarding(db);
-  const [row,saved,suggestions,weight,tracked]=await Promise.all([
+  // All side by side, so they share database trips instead of following each other.
+  const historyLoading=trainingHistory(db);
+  const [row,saved,suggestions,weight,tracked,history,training]=await Promise.all([
     db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first(),
     db.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(db.userId).first(),readSuggestions(db,db.userId),
-    latestStoredWeight(db),hasRecentActivityData(db)]);
-  const history=await trainingHistory(db),savedProfile=JSON.parse(saved?.profile_json||'{}');
+    latestStoredWeight(db),hasRecentActivityData(db),historyLoading,trainingSetup(db,historyLoading)]);
+  const savedProfile=JSON.parse(saved?.profile_json||'{}');
   const profile=effectiveProfile(savedProfile,suggestions);
   if(!profile.goal)profile.goal='maintain';
   const baseline=energyBaseline(profile,weight?.value_numeric,{activityTracked:tracked});
-  const training=await trainingSetup(db);
   return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,baseline,training,history,automaticPlan:starterPlan(history,Object.fromEntries(Object.entries(training.experienceBySport).map(([s,e])=>[s,e.mode==='manual'?e.level:'auto']))),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
 }
 export function normalizeTraining(input={}){

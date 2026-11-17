@@ -87,7 +87,7 @@ struct FormDetailContent: View {
             }
 
             if let intensity = training.load.intensity {
-                header("Intenzita · 4 týdny", trailing: nil)
+                header("Intenzita za 4 týdny", trailing: nil)
                 ZoneBar(parts: [("Lehká", intensity.low, Palette.sand), ("Vysoká", intensity.high, Palette.amberBar), ("Anaerobní", intensity.anaerobic, Palette.rust)])
                     .padding(.top, 14)
             }
@@ -114,7 +114,7 @@ struct FormDetailContent: View {
     }
 }
 
-/// Well below · Below · Usual · Above · Well above, the current step filled.
+/// Well below, Below, Usual, Above, Well above, the current step filled.
 struct LoadLevelScale: View {
     let level: String
     @Environment(\.dynamicTypeSize) private var typeSize

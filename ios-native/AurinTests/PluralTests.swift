@@ -22,17 +22,20 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("Zbývá %lld sérií", 3), "Zbývají 3 série")
         XCTAssertEqual(L10n.plural("%lld položek", 1), "1 položku")
         XCTAssertEqual(L10n.plural("%lld z %lld sérií", 2, 3), "2 z 3 sérií")
-        XCTAssertEqual(L10n.plural("%lld/%lld sérií · %lld cviků", 2, 7, 3), "2/7 sérií · 3 cviky")
+        XCTAssertEqual(L10n.plural("%lld/%lld sérií, %lld cviků", 2, 7, 3), "2/7 sérií, 3 cviky")
         XCTAssertEqual(L10n.plural("%lld týdnů od %@", 1, "28. prosince"), "1 týden od 28. prosince")
         XCTAssertEqual(L10n.plural("%@ bodů připravenosti", "−8", 8), "−8 bodů připravenosti")
         XCTAssertEqual(L10n.plural("%@ kroků", "8 432", 8432), "8 432 kroků")
-        XCTAssertEqual(L10n.plural("%@ · %lld nových cviků", "Lavice", 2), "Lavice · 2 nové cviky")
+        XCTAssertEqual(L10n.plural("%@, %lld nových cviků", "Lavice", 2), "Lavice, 2 nové cviky")
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 1), "1 věc dnes")
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 3), "3 věci dnes")
         XCTAssertEqual(L10n.plural("%lld věcí dnes", 5), "5 věcí dnes")
         XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 1), "zbývá 1 trénink")
         XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 2), "zbývají 2 tréninky")
         XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 5), "zbývá 5 tréninků")
+        XCTAssertEqual(L10n.plural("%lld kroků", 1), "1 krok")
+        XCTAssertEqual(L10n.plural("%lld kroků", 3), "3 kroky")
+        XCTAssertEqual(L10n.plural("%lld kroků", 7), "7 kroků")
     }
 
     /// What VoiceOver says for a sleep shown as "7:12" (audit 20.c1).
@@ -59,11 +62,14 @@ final class PluralTests: XCTestCase {
         XCTAssertEqual(L10n.plural("%lld sérií", 1), "1 set")
         XCTAssertEqual(L10n.plural("Zbývá %lld sérií", 3), "3 sets left")
         XCTAssertEqual(L10n.plural("%lld z %lld sérií", 2, 7), "2 of 7 sets")
-        XCTAssertEqual(L10n.plural("%lld/%lld sérií · %lld cviků", 2, 1, 1), "2/1 set · 1 exercise")
+        XCTAssertEqual(L10n.plural("%lld/%lld sérií, %lld cviků", 2, 1, 1), "2/1 set, 1 exercise")
         XCTAssertEqual(L10n.plural("%@ %% za %lld týdnů", "+5", 4), "+5% in 4 weeks")
         XCTAssertEqual(L10n.plural("%@ bodů připravenosti", "+1", 1), "+1 readiness point")
         XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 1), "1 session left")
         XCTAssertEqual(L10n.plural("zbývá %lld tréninků", 2), "2 sessions left")
+        XCTAssertEqual(L10n.plural("%lld kroků", 1), "1 step")
+        XCTAssertEqual(L10n.plural("%lld kroků", 7), "7 steps")
+        XCTAssertEqual(L10n.f("Odpověď za %lld s, %@", 9, L10n.plural("%lld kroků", 7)), "Answered in 9 s, 7 steps")
     }
 
     /// Both languages have every key, each count with a plural rule and its one and other forms.

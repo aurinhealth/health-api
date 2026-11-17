@@ -102,7 +102,7 @@ extension APIClient {
 
     /// A proposal for the day (not saved): the length, and either a focus
     /// ("upper", "lower") or 1–5 muscle groups to work.
-    /// fromWeek: the focus is the week plan's role ("Posilovna · s rezervou"),
+    /// fromWeek: the focus is the week plan's role ("Posilovna, s rezervou"),
     /// which keeps a full body with lighter legs, not the athlete's "upper body".
     /// gymDays and weekSessions: the week plan's other gym days (all of their
     /// dates, and the rows of those built so far), so the days follow on from
@@ -179,9 +179,11 @@ extension APIClient {
     /// library workout that fits the readiness, load and week plan best.
     /// Another variant gives the next of its few best picks. The first pick
     /// of today is the AI's among the safe candidates (ai-workout-pick.js).
-    func generateWorkout(sport: String, minutes: Int?, indoor: Bool, variant: Int) async throws -> GeneratedWorkout {
+    /// background: the coach may write its own after the answer (aiPending).
+    func generateWorkout(sport: String, minutes: Int?, indoor: Bool, variant: Int, background: Bool = false) async throws -> GeneratedWorkout {
         var body: JSONObject = ["date": .string(AppModel.localDate(Date())), "sport": .string(sport),
                                 "environment": .string(indoor ? "indoor" : "outdoor"), "variant": .number(Double(variant)), "ai": .bool(true)]
+        if background { body["background"] = .bool(true) }
         if let minutes { body["availabilityMinutes"] = .number(Double(minutes)); body["userInitiated"] = .bool(true) }
         return try await send("/app/api/workouts/generate", method: "POST", body: body)
     }

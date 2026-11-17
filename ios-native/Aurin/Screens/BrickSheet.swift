@@ -96,7 +96,7 @@ struct BrickSheet: View {
                 Text(verbatim: first.title + " + " + second.title)
                     .font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: [Fmt.capitalized(Fmt.weekdayName(first.date)), total > 0 ? Fmt.duration(total) : nil].compactMap { $0 }.joined(separator: " · "))
+                Text(verbatim: [Fmt.capitalized(Fmt.weekdayName(first.date)), total > 0 ? Fmt.duration(total) : nil].compactMap { $0 }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 2)
                 Picker("Jak", selection: $together) {
                     Text("Hned po sobě").tag(true)
@@ -152,7 +152,7 @@ struct BrickSheet: View {
             }
             .padding(.vertical, 10)
             divider
-            legRow(second, trailing: [second.minutes.map { Fmt.duration($0) }, secondStart.map { "≈ " + ClockText.format($0) }].compactMap { $0 }.joined(separator: " · "))
+            legRow(second, trailing: [second.minutes.map { Fmt.duration($0) }, secondStart.map { "≈ " + ClockText.format($0) }].compactMap { $0 }.joined(separator: ", "))
         }
         .padding(.horizontal, 14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

@@ -32,6 +32,14 @@ test("a report is stored with its screenshot and diagnostics and e-mailed to sup
   assert.match(sent[0].text, /"offline": false/);
 });
 
+test("a line break in the screen name never reaches the e-mail's headers", async () => {
+  const { env, sent } = setup();
+  const response = await handleSupportReport(post({ message: "Nejde to", diagnostics: { screens: ["Today\r\nBcc: someone@example.com"] } }), env, { signedIn: true, origin: "https://x.test" });
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(sent[0].subject, /[\r\n]/);
+  assert.match(sent[0].subject, /\(Today Bcc: someone@example\.com\)$/);
+});
+
 test("without e-mail set up the report is still kept", async () => {
   const { raw, env } = setup({ EMAIL: undefined });
   assert.deepEqual(await saveSupportReport(env, { message: "Chyba" }), { id: 1, emailed: false });
@@ -101,6 +109,11 @@ test("the e-mail leads with what is worth a look, the server's side included", a
 test("the app's crashes are flagged with the latest one", () => {
   const crashes = [{ at: "2026-10-14T07:00:00Z", app: "1.0 (412)", ios: "26.0", exception: "1 code 2", signal: 11, frames: ["Loadwise +0x1a2b", "UIKitCore +0x40"] }, { at: "2026-10-10T07:00:00Z", app: "1.0 (400)", ios: "26.0", frames: [] }];
   assert.deepEqual(reportFindings({ crashes }, null), ["2 crash(es) in the app in the last two weeks, latest 2026-10-14T07:00:00Z 1.0 (412) 1 code 2 signal 11 Loadwise +0x1a2b"]);
+});
+
+test("the app's freezes are flagged with the latest one", () => {
+  const hangs = [{ at: "2026-11-11T07:00:00Z", app: "1.0.1 (556)", ios: "26.1", seconds: 2.4, frames: ["Aurin +0x1a2b", "SwiftUI +0x40"] }, { at: "2026-11-09T07:00:00Z", app: "1.0.1 (555)", ios: "26.1", seconds: 0.6, frames: [] }];
+  assert.deepEqual(reportFindings({ hangs }, null), ["2 freeze(s) in the app in the last two weeks, latest 2026-11-11T07:00:00Z 1.0.1 (556) 2.4 s Aurin +0x1a2b"]);
 });
 
 test("nothing to flag says so", () => {

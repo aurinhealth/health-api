@@ -10,6 +10,7 @@ import { revokeUltrahuman } from "./ultrahuman.js";
 import { revokeWahoo } from "./wahoo.js";
 import { revokeIntervals } from "./intervals-oauth.js";
 import { rememberAiLimits } from "./ai-limit-memory.js";
+import { keepEndedPurchases, withColumns } from "./app-store.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -151,10 +152,14 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
   // removed: the session no longer signs anyone in, signing in again needs a
   // new invitation (and gets a new id), and the cron finishes the data if this
   // request runs out of time or fails halfway.
-  await env.DB.batch([
+  // Its purchases are settled in the same step: one that had ended or was
+  // refunded stays known without the account, so its old record gives no Pro to
+  // a new one; the running one can be restored by a new account (app-store.js).
+  await withColumns(env.DB, () => env.DB.batch([
+    ...keepEndedPurchases(env.DB, env.USER_ID),
     env.DB.prepare("INSERT INTO account_deletions(user_id) VALUES(?) ON CONFLICT(user_id) DO NOTHING").bind(env.USER_ID),
     env.DB.prepare("DELETE FROM users WHERE id = ?").bind(env.USER_ID)
-  ]);
+  ]));
   // The address leaves the website's waitlist and the list for a free place too.
   await forgetWaitlistEmail(env.RAW_DB || env.DB, user.email);
   let purge;

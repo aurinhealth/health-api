@@ -70,11 +70,11 @@ enum Fmt {
         return formatted(date, L10n.isEnglish ? "MMMM d" : "d. MMMM")
     }
 
-    /// The day in the pinned bar: "Dnes · st 14. 10." or "Po 12. 10.".
+    /// The day in the pinned bar: "Dnes, st 14. 10." or "Po 12. 10.".
     static func dayShort(_ isoDate: String, today: String) -> String {
         guard let date = isoDay(isoDate) else { return isoDate }
         let short = formatted(date, L10n.isEnglish ? "EEE, MMM d" : "EEE d. M.")
-        if let word = dayWord(isoDate, today: today) { return L10n.tr(word) + " · " + short }
+        if let word = dayWord(isoDate, today: today) { return L10n.tr(word) + ", " + short }
         return short.prefix(1).uppercased(with: locale) + short.dropFirst()
     }
 

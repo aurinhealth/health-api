@@ -1,0 +1,243 @@
+# Basic foods listed first in food search (src/staples.js), from USDA FoodData Central SR Legacy (public domain).
+# Built by scripts/build-staples.mjs. Columns: Czech name | English name | USDA description (prefix, exact match wins) | portion (USDA modifier text, or =grams / =ml) | portion in Czech | in English | ml for drinks
+Káva, překapávaná | Coffee, brewed | Beverages, coffee, brewed, prepared with tap water | cup (8 fl oz) | šálek | cup | ml
+Espresso | Espresso | Beverages, coffee, brewed, espresso, restaurant-prepared | fl oz | panák | shot | ml
+Káva bez kofeinu | Coffee, decaf | Beverages, coffee, brewed, prepared with tap water, decaffeinated | cup (8 fl oz) | šálek | cup | ml
+Čaj, černý | Tea, black | Beverages, tea, black, brewed, prepared with tap water | cup (8 fl oz) | šálek | cup | ml
+Čaj, zelený | Tea, green | Beverages, tea, green, brewed, regular | cup | šálek | cup | ml
+Čaj, bylinný | Tea, herbal | Beverages, tea, herb, other than chamomile, brewed | cup (8 fl oz) | šálek | cup | ml
+Voda | Water | Beverages, water, tap, drinking | =250 | sklenice | glass | ml
+Pomerančový džus | Orange juice | Orange juice, raw | cup | sklenice | glass | ml
+Jablečný džus | Apple juice | Apple juice, canned or bottled, unsweetened, without added ascorbic acid | cup | sklenice | glass | ml
+Kola | Cola | Beverages, carbonated, cola, regular | can | plechovka | can | ml
+Pivo, světlé | Beer | Alcoholic beverage, beer, regular, all | =500 | půllitr | large glass | ml
+Víno, červené | Wine, red | Alcoholic beverage, wine, table, red | =150 | sklenka | glass | ml
+Víno, bílé | Wine, white | Alcoholic beverage, wine, table, white | =150 | sklenka | glass | ml
+Mléko, plnotučné | Milk, whole | Milk, whole, 3.25% milkfat, with added vitamin D | cup | hrnek | cup | ml
+Mléko, polotučné | Milk, semi-skimmed | Milk, reduced fat, fluid, 2% milkfat, with added nonfat milk solids | cup | hrnek | cup | ml
+Mléko, nízkotučné | Milk, low-fat | Milk, lowfat, fluid, 1% milkfat, with added vitamin A and vitamin D | cup | hrnek | cup | ml
+Mléko, odtučněné | Milk, skimmed | Milk, nonfat, fluid, with added vitamin A and vitamin D | cup | hrnek | cup | ml
+Sójový nápoj | Soy milk | Soymilk, original and vanilla, unfortified | cup | hrnek | cup | ml
+Mandlový nápoj | Almond milk | Beverages, almond milk, unsweetened, shelf stable | cup | hrnek | cup | ml
+Kefír | Kefir | Kefir, lowfat, plain | cup | hrnek | cup | ml
+Jogurt, bílý | Yogurt, plain | Yogurt, plain, whole milk | container (6 oz) | kelímek | pot |
+Jogurt, bílý nízkotučný | Yogurt, plain, low-fat | Yogurt, plain, low fat | container (6 oz) | kelímek | pot |
+Řecký jogurt, netučný | Greek yogurt, fat-free | Yogurt, Greek, plain, nonfat | container | kelímek | pot |
+Řecký jogurt | Greek yogurt | Yogurt, Greek, plain, whole milk | | | |
+Cottage sýr | Cottage cheese | Cheese, cottage, lowfat, 2% milkfat | =150 | kelímek | pot |
+Tvaroh | Quark | Cheese, cottage, creamed, large or small curd | =250 | balení | pack |
+Ricotta | Ricotta | Cheese, ricotta, part skim milk | | | |
+Mozzarella | Mozzarella | Cheese, mozzarella, whole milk | oz | plátek | slice |
+Čedar | Cheddar | Cheese, cheddar | slice | plátek | slice |
+Ementál | Swiss cheese | Cheese, swiss | slice | plátek | slice |
+Parmazán, strouhaný | Parmesan, grated | Cheese, parmesan, grated | tbsp | lžíce | tbsp |
+Feta | Feta | Cheese, feta | | | |
+Gouda | Gouda | Cheese, gouda | oz | plátek | slice |
+Eidam | Edam | Cheese, edam | oz | plátek | slice |
+Lučina, smetanový sýr | Cream cheese | Cheese, cream | =14.5 | lžíce | tbsp |
+Máslo | Butter | Butter, salted | tbsp | lžíce | tbsp |
+Máslo, nesolené | Butter, unsalted | Butter, without salt | tbsp | lžíce | tbsp |
+Smetana ke šlehání | Whipping cream | Cream, fluid, heavy whipping | tbsp | lžíce | tbsp |
+Zakysaná smetana | Sour cream | Cream, sour, cultured | tbsp | lžíce | tbsp |
+Vejce | Egg | Egg, whole, raw, fresh | =50 | kus | egg |
+Vejce natvrdo | Egg, hard-boiled | Egg, whole, cooked, hard-boiled | large | kus | egg |
+Vejce, smažené | Egg, fried | Egg, whole, cooked, fried | large | kus | egg |
+Míchaná vejce | Scrambled eggs | Egg, whole, cooked, scrambled | large | vejce | egg |
+Bílek | Egg white | Egg, white, raw, fresh | large | kus | white |
+Chléb, celozrnný | Bread, wholemeal | Bread, whole-wheat, commercially prepared | slice | krajíc | slice |
+Chléb, žitný | Bread, rye | Bread, rye | slice, regular | krajíc | slice |
+Chléb, bílý | Bread, white | Bread, white, commercially prepared (includes soft | slice | krajíc | slice |
+Chléb, vícezrnný | Bread, multigrain | Bread, multi-grain (includes whole-grain) | slice regular | krajíc | slice |
+Rohlík | Bread roll | Rolls, hamburger or hotdog, plain | roll | kus | roll |
+Bagel | Bagel | Bagels, plain, enriched, with calcium | medium | kus | bagel |
+Croissant | Croissant | Croissants, butter | medium | kus | croissant |
+Knäckebrot, žitný | Crispbread, rye | Crackers, rye, wafers, plain | cracker (4 | kus | piece |
+Ovesné vločky | Oats | Cereals, oats, regular and quick, not fortified, dry | cup | hrnek | cup |
+Ovesná kaše, na vodě | Porridge, made with water | Cereals, oats, regular and quick and instant, unenriched, cooked with water | cup | miska | bowl |
+Granola | Granola | Cereals ready-to-eat, granola, homemade | cup | hrnek | cup |
+Kukuřičné lupínky | Corn flakes | Cereals ready-to-eat, RALSTON Corn Flakes | cup | hrnek | cup |
+Rýže, bílá, syrová | Rice, white, raw | Rice, white, long-grain, regular, raw, enriched | | | |
+Rýže, bílá, vařená | Rice, white, cooked | Rice, white, long-grain, regular, enriched, cooked | cup | hrnek | cup |
+Rýže, natural, syrová | Rice, brown, raw | Rice, brown, long-grain, raw | | | |
+Rýže, natural, vařená | Rice, brown, cooked | Rice, brown, long-grain, cooked | cup | hrnek | cup |
+Rýže, basmati, vařená | Rice, basmati, cooked | Rice, white, long-grain, parboiled, enriched, cooked | cup | hrnek | cup |
+Rýžový chlebíček | Rice cake | Snacks, rice cakes, brown rice, plain | cake | kus | cake |
+Těstoviny, suché | Pasta, dry | Pasta, dry, enriched | | | |
+Těstoviny, vařené | Pasta, cooked | Pasta, cooked, enriched, without added salt | cup spaghetti | hrnek | cup |
+Těstoviny, celozrnné, suché | Pasta, wholewheat, dry | Pasta, whole-wheat, dry | | | |
+Těstoviny, celozrnné, vařené | Pasta, wholewheat, cooked | Pasta, whole-wheat, cooked | cup spaghetti | hrnek | cup |
+Kuskus, suchý | Couscous, dry | Couscous, dry | | | |
+Kuskus, vařený | Couscous, cooked | Couscous, cooked | cup, cooked | hrnek | cup |
+Quinoa, syrová | Quinoa, raw | Quinoa, uncooked | | | |
+Quinoa, vařená | Quinoa, cooked | Quinoa, cooked | cup | hrnek | cup |
+Bulgur, suchý | Bulgur, dry | Bulgur, dry | | | |
+Bulgur, vařený | Bulgur, cooked | Bulgur, cooked | cup | hrnek | cup |
+Pohanka, suchá | Buckwheat, dry | Buckwheat groats, roasted, dry | | | |
+Pohanka, vařená | Buckwheat, cooked | Buckwheat groats, roasted, cooked | cup | hrnek | cup |
+Jáhly, syrové | Millet, raw | Millet, raw | | | |
+Jáhly, vařené | Millet, cooked | Millet, cooked | cup | hrnek | cup |
+Kroupy | Pearl barley | Barley, pearled, raw | | | |
+Mouka, hladká | Flour, plain | Wheat flour, white, all-purpose, enriched, bleached | cup | hrnek | cup |
+Mouka, celozrnná | Flour, wholemeal | Wheat flour, whole-grain | cup | hrnek | cup |
+Vaječné nudle, suché | Egg noodles, dry | Noodles, egg, dry, enriched | | | |
+Tortilla, pšeničná | Tortilla, wheat | Tortillas, ready-to-bake or -fry, flour, refrigerated | | | |
+Pita chléb | Pita bread | Bread, pita, white, unenriched | pita, large | kus | pita |
+Lívance | Pancakes | Pancakes, plain, frozen | pancake | kus | pancake |
+Vafle | Waffle | Waffles, plain, frozen, ready-to-heat | waffle | kus | waffle |
+Popcorn, bez tuku | Popcorn, air-popped | Snacks, popcorn, air-popped | cup | hrnek | cup |
+Brambory, syrové | Potatoes, raw | Potatoes, flesh and skin, raw | medium | kus | potato |
+Brambory, vařené | Potatoes, boiled | Potatoes, boiled, cooked without skin, flesh, without salt | medium | kus | potato |
+Brambory, pečené | Potatoes, baked | Potatoes, baked, flesh and skin, without salt | medium | kus | potato |
+Bramborová kaše | Mashed potatoes | Potatoes, mashed, home-prepared, whole milk and butter added | cup | hrnek | cup |
+Hranolky, pečené | French fries, oven-baked | Potatoes, french fried, all types, salt not added in processing, frozen, oven-heated | | | |
+Batáty, pečené | Sweet potato, baked | Sweet potato, cooked, baked in skin, flesh, without salt | medium | kus | sweet potato |
+Hranolky z fastfoodu | French fries, fast food | Fast foods, potato, french fried in vegetable oil | small | malá porce | small |
+Bramborové lupínky | Potato chips | Snacks, potato chips, plain, salted | =30 | hrst | handful |
+Kuřecí prsa, syrová | Chicken breast, raw | Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw | | | |
+Kuřecí prsa, pečená | Chicken breast, cooked | Chicken, broilers or fryers, breast, meat only, cooked, roasted | | | |
+Kuřecí stehno, pečené | Chicken thigh, roasted | Chicken, broilers or fryers, thigh, meat only, cooked, roasted | thigh | kus | thigh |
+Krůtí prsa, pečená | Turkey breast, roasted | Turkey, whole, breast, meat only, cooked, roasted | | | |
+Hovězí, mleté 10 % tuku, syrové | Beef mince, 10% fat, raw | Beef, ground, 90% lean meat / 10% fat, raw | | | |
+Hovězí, mleté 20 % tuku, syrové | Beef mince, 20% fat, raw | Beef, ground, 80% lean meat / 20% fat, raw | | | |
+Hovězí, mleté, opečené | Beef mince, cooked | Beef, ground, 90% lean meat / 10% fat, crumbles, cooked, pan-browned | | | |
+Hovězí steak, grilovaný | Beef steak, grilled | Beef, top sirloin, steak, separable lean only, trimmed to 1/8" fat, choice, cooked, broiled | | | |
+Vepřová panenka, pečená | Pork tenderloin, roasted | Pork, fresh, loin, tenderloin, separable lean only, cooked, roasted | | | |
+Vepřová kotleta | Pork chop | Pork, fresh, loin, center loin (chops), bone-in, separable lean only, cooked, broiled | chop | kus | chop |
+Slanina | Bacon | Pork, cured, bacon, pre-sliced, cooked, pan-fried | slice | plátek | slice |
+Šunka, vepřová | Ham | Ham, sliced, regular (approximately 11% fat) | slice | plátek | slice |
+Párky | Frankfurters | Frankfurter, beef, unheated | hot dog | kus | piece |
+Salám | Salami | Salami, Italian, pork | =10 | plátek | slice |
+Klobása | Sausage | Sausage, smoked link sausage, pork and beef (nonfat dry milk added) | link | kus | sausage |
+Jehněčí, pečené | Lamb, roasted | Lamb, leg, shank half, separable lean only, trimmed to 1/4" fat, choice, cooked, roasted | | | |
+Losos, syrový | Salmon, raw | Fish, salmon, Atlantic, farmed, raw | | | |
+Losos, pečený | Salmon, baked | Fish, salmon, Atlantic, farmed, cooked, dry heat | =125 | filet | fillet |
+Tuňák ve vlastní šťávě | Tuna in water | Fish, tuna, light, canned in water, drained solids | can | plechovka | can |
+Tuňák v oleji | Tuna in oil | Fish, tuna, light, canned in oil, drained solids | can | plechovka | can |
+Treska, pečená | Cod, baked | Fish, cod, Atlantic, cooked, dry heat | fillet | filet | fillet |
+Pstruh, pečený | Trout, baked | Fish, trout, rainbow, farmed, cooked, dry heat | fillet | filet | fillet |
+Makrela, pečená | Mackerel, baked | Fish, mackerel, Atlantic, cooked, dry heat | fillet | filet | fillet |
+Sardinky v oleji | Sardines in oil | Fish, sardine, Atlantic, canned in oil, drained solids with bone | can | plechovka | can |
+Krevety, vařené | Shrimp, cooked | Crustaceans, shrimp, cooked | | | |
+Tofu | Tofu | Tofu, raw, firm, prepared with calcium sulfate | | | |
+Tempeh | Tempeh | Tempeh | | | |
+Čočka, suchá | Lentils, dry | Lentils, raw | | | |
+Čočka, vařená | Lentils, cooked | Lentils, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Cizrna, vařená | Chickpeas, cooked | Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Cizrna, sterilovaná | Chickpeas, canned | Chickpeas (garbanzo beans, bengal gram), mature seeds, canned, drained, rinsed | cup | hrnek | cup |
+Fazole, červené, vařené | Kidney beans, cooked | Beans, kidney, red, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Fazole, černé, vařené | Black beans, cooked | Beans, black, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Fazole, bílé, vařené | White beans, cooked | Beans, white, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Fazole v tomatě | Baked beans | Beans, baked, canned, plain or vegetarian | cup | hrnek | cup |
+Hrách, žlutý, vařený | Split peas, cooked | Peas, split, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
+Edamame | Edamame | Edamame, frozen, prepared | cup | hrnek | cup |
+Hummus | Hummus | Hummus, commercial | tbsp | lžíce | tbsp |
+Jablko | Apple | Apples, raw, with skin | medium | kus | apple |
+Banán | Banana | Bananas, raw | medium | kus | banana |
+Pomeranč | Orange | Oranges, raw, all commercial varieties | fruit | kus | orange |
+Mandarinka | Mandarin | Tangerines, (mandarin oranges), raw | medium | kus | mandarin |
+Hruška | Pear | Pears, raw | medium | kus | pear |
+Hroznové víno | Grapes | Grapes, red or green (European type, such as Thompson seedless), raw | cup | hrnek | cup |
+Jahody | Strawberries | Strawberries, raw | cup, whole | hrnek | cup |
+Borůvky | Blueberries | Blueberries, raw | cup | hrnek | cup |
+Maliny | Raspberries | Raspberries, raw | cup | hrnek | cup |
+Ostružiny | Blackberries | Blackberries, raw | cup | hrnek | cup |
+Třešně | Cherries | Cherries, sweet, raw | cup, with pits | hrnek | cup |
+Švestky | Plums | Plums, raw | fruit | kus | plum |
+Meruňka | Apricot | Apricots, raw | apricot | kus | apricot |
+Broskev | Peach | Peaches, yellow, raw | medium | kus | peach |
+Nektarinka | Nectarine | Nectarines, raw | medium | kus | nectarine |
+Kiwi | Kiwi | Kiwifruit, green, raw | fruit | kus | kiwi |
+Ananas | Pineapple | Pineapple, raw, all varieties | cup, chunks | hrnek | cup |
+Mango | Mango | Mangos, raw | cup pieces | hrnek | cup |
+Meloun, vodní | Watermelon | Watermelon, raw | cup, diced | hrnek | cup |
+Meloun, cukrový | Melon | Melons, cantaloupe, raw | cup, diced | hrnek | cup |
+Grapefruit | Grapefruit | Grapefruit, raw, pink and red, all areas | =123 | půlka | half |
+Citron | Lemon | Lemons, raw, without peel | fruit | kus | lemon |
+Avokádo | Avocado | Avocados, raw, all commercial varieties | avocado | kus | avocado |
+Granátové jablko | Pomegranate | Pomegranates, raw | pomegranate | kus | pomegranate |
+Datle | Dates | Dates, medjool | date | kus | date |
+Rozinky | Raisins | Raisins, dark, seedless | oz | hrst | handful |
+Sušené švestky | Prunes | Plums, dried (prunes), uncooked | prune | kus | prune |
+Sušené meruňky | Dried apricots | Apricots, dried, sulfured, uncooked | half | kus | piece |
+Brusinky, sušené | Cranberries, dried | Cranberries, dried, sweetened | | | |
+Rajče | Tomato | Tomatoes, red, ripe, raw, year round average | medium | kus | tomato |
+Cherry rajčata | Cherry tomatoes | Tomatoes, red, ripe, raw, year round average | cherry | kus | tomato |
+Okurka | Cucumber | Cucumber, with peel, raw | cucumber (8-1/4") | kus | cucumber |
+Paprika, červená | Pepper, red | Peppers, sweet, red, raw | medium | kus | pepper |
+Paprika, zelená | Pepper, green | Peppers, sweet, green, raw | medium | kus | pepper |
+Mrkev | Carrot | Carrots, raw | medium | kus | carrot |
+Cibule | Onion | Onions, raw | =110 | kus | onion |
+Česnek | Garlic | Garlic, raw | clove | stroužek | clove |
+Brokolice, vařená | Broccoli, cooked | Broccoli, cooked, boiled, drained, without salt | cup, chopped | hrnek | cup |
+Brokolice, syrová | Broccoli, raw | Broccoli, raw | cup chopped | hrnek | cup |
+Květák | Cauliflower | Cauliflower, raw | cup | hrnek | cup |
+Špenát, syrový | Spinach, raw | Spinach, raw | cup | hrnek | cup |
+Špenát, vařený | Spinach, cooked | Spinach, cooked, boiled, drained, without salt | cup | hrnek | cup |
+Ledový salát | Iceberg lettuce | Lettuce, iceberg (includes crisphead types), raw | cup shredded | hrnek | cup |
+Římský salát | Romaine lettuce | Lettuce, cos or romaine, raw | cup shredded | hrnek | cup |
+Rukola | Rocket | Arugula, raw | cup | hrnek | cup |
+Zelí, bílé | Cabbage | Cabbage, raw | cup, chopped | hrnek | cup |
+Kysané zelí | Sauerkraut | Sauerkraut, canned, solids and liquids | cup | hrnek | cup |
+Červená řepa | Beetroot | Beets, raw | beet | kus | beet |
+Cuketa | Courgette | Squash, summer, zucchini, includes skin, raw | medium | kus | courgette |
+Lilek | Aubergine | Eggplant, raw | cup, cubes | hrnek | cup |
+Žampiony | Mushrooms | Mushrooms, white, raw | cup, pieces | hrnek | cup |
+Kukuřice, sterilovaná | Sweetcorn, canned | Corn, sweet, yellow, canned, whole kernel, drained solids | cup | hrnek | cup |
+Hrášek | Green peas | Peas, green, frozen, cooked, boiled, drained, without salt | cup | hrnek | cup |
+Zelené fazolky | Green beans | Beans, snap, green, cooked, boiled, drained, without salt | cup | hrnek | cup |
+Chřest | Asparagus | Asparagus, cooked, boiled, drained | spear | kus | spear |
+Celer, řapíkatý | Celery | Celery, raw | stalk, medium | řapík | stalk |
+Ředkvičky | Radishes | Radishes, raw | medium | kus | radish |
+Dýně | Pumpkin | Pumpkin, raw | cup | hrnek | cup |
+Kapusta, kadeřavá | Kale | Kale, raw | cup | hrnek | cup |
+Pórek | Leek | Leeks, (bulb and lower leaf-portion), raw | leek | kus | leek |
+Růžičková kapusta | Brussels sprouts | Brussels sprouts, cooked, boiled, drained, without salt | cup | hrnek | cup |
+Olivy | Olives | Olives, ripe, canned (small-extra large) | large | kus | olive |
+Okurky, sterilované | Pickles | Pickles, cucumber, dill or kosher dill | spear, small | kus | pickle |
+Rajčatová passata | Tomato passata | Tomato products, canned, puree, without salt added | cup | hrnek | cup |
+Rajčatový protlak | Tomato paste | Tomato products, canned, paste, without salt added | tbsp | lžíce | tbsp |
+Kečup | Ketchup | Catsup | tbsp | lžíce | tbsp |
+Hořčice | Mustard | Mustard, prepared, yellow | tsp | lžička | tsp |
+Majonéza | Mayonnaise | Salad dressing, mayonnaise, regular | tbsp | lžíce | tbsp |
+Sójová omáčka | Soy sauce | Soy sauce made from soy and wheat (shoyu) | tbsp | lžíce | tbsp |
+Pesto | Pesto | Sauce, pesto, ready-to-serve, refrigerated | =16 | lžíce | tbsp |
+Olivový olej | Olive oil | Oil, olive, salad or cooking | tablespoon | lžíce | tbsp |
+Řepkový olej | Rapeseed oil | Oil, canola | tbsp | lžíce | tbsp |
+Slunečnicový olej | Sunflower oil | Oil, sunflower, linoleic (less than 60%) | tbsp | lžíce | tbsp |
+Kokosový olej | Coconut oil | Oil, coconut | tbsp | lžíce | tbsp |
+Sádlo | Lard | Lard | tbsp | lžíce | tbsp |
+Margarín | Margarine | Margarine-like, vegetable oil-butter spread, reduced calorie, tub, with salt | tablespoon | lžíce | tbsp |
+Mandle | Almonds | Nuts, almonds | oz | hrst | handful |
+Vlašské ořechy | Walnuts | Nuts, walnuts, english | oz (14 halves) | hrst | handful |
+Lískové ořechy | Hazelnuts | Nuts, hazelnuts or filberts | oz | hrst | handful |
+Kešu | Cashews | Nuts, cashew nuts, raw | oz | hrst | handful |
+Arašídy | Peanuts | Peanuts, all types, dry-roasted, with salt | oz | hrst | handful |
+Pistácie | Pistachios | Nuts, pistachio nuts, dry roasted, with salt added | oz | hrst | handful |
+Para ořechy | Brazil nuts | Nuts, brazilnuts, dried, unblanched | kernels | kus | nut |
+Arašídové máslo | Peanut butter | Peanut butter, smooth style, without salt | tbsp | lžíce | tbsp |
+Mandlové máslo | Almond butter | Nuts, almond butter, plain, without salt added | tbsp | lžíce | tbsp |
+Chia semínka | Chia seeds | Seeds, chia seeds, dried | =12 | lžíce | tbsp |
+Lněné semínko | Flaxseed | Seeds, flaxseed | tbsp, whole | lžíce | tbsp |
+Slunečnicová semínka | Sunflower seeds | Seeds, sunflower seed kernels, dried | cup | hrnek | cup |
+Dýňová semínka | Pumpkin seeds | Seeds, pumpkin and squash seed kernels, dried | oz | hrst | handful |
+Sezam | Sesame seeds | Seeds, sesame seeds, whole, dried | tbsp | lžíce | tbsp |
+Tahini | Tahini | Seeds, sesame butter, tahini, from roasted and toasted kernels (most common type) | tbsp | lžíce | tbsp |
+Kokos, strouhaný | Coconut, desiccated | Nuts, coconut meat, dried (desiccated), not sweetened | oz | hrst | handful |
+Med | Honey | Honey | tbsp | lžíce | tbsp |
+Cukr | Sugar | Sugars, granulated | tsp | lžička | tsp |
+Javorový sirup | Maple syrup | Syrups, maple | tbsp | lžíce | tbsp |
+Džem | Jam | Jams and preserves | tbsp | lžíce | tbsp |
+Nutella | Chocolate spread | Chocolate-flavored hazelnut spread | =15 | lžíce | tbsp |
+Hořká čokoláda | Dark chocolate | Chocolate, dark, 70-85% cacao solids | oz | porce | serving |
+Mléčná čokoláda | Milk chocolate | Candies, milk chocolate | =100 | tabulka | bar |
+Kakao | Cocoa powder | Cocoa, dry powder, unsweetened | tbsp | lžíce | tbsp |
+Zmrzlina, vanilková | Ice cream, vanilla | Ice creams, vanilla | =60 | kopeček | scoop |
+Sušenky, máslové | Butter biscuits | Cookies, butter, commercially prepared, enriched | cookie | kus | biscuit |
+Piškoty | Sponge fingers | Cookies, ladyfingers, without lemon juice and rind | ladyfinger | kus | piece |
+Koblih | Doughnut | Doughnuts, yeast-leavened, glazed, enriched | medium | kus | doughnut |
+Proteinový prášek, syrovátkový | Whey protein powder | Beverages, Protein powder whey based | =30 | odměrka | scoop |
+Energetický nápoj | Energy drink | Beverages, Energy drink, RED BULL | can | plechovka | can | ml
+Pizza, sýrová | Pizza, cheese | Pizza, cheese topping, thin crust, frozen, cooked | slice | dílek | slice |
+Hamburger | Hamburger | Fast foods, hamburger; single, regular patty; plain | sandwich | kus | burger |
+Kuřecí nugety | Chicken nuggets | Fast foods, chicken tenders | strip | kus | piece |
+Sůl | Salt | Salt, table | tsp | lžička | tsp |

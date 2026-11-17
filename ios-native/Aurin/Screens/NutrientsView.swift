@@ -449,7 +449,7 @@ struct NutrientFavoritesList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.f("Oblíbené · %@ ze 3", String(chosen.count))).padding(.bottom, 2)
+            SectionLabel(text: L10n.f("Oblíbené (%@ ze 3)", String(chosen.count))).padding(.bottom, 2)
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                 let on = chosen.contains(item.key)
@@ -485,12 +485,12 @@ struct NutrientTargetSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    /// "Auto · vegetariánsky · 20 mg" or "Vlastní · 25 mg".
+    /// "Auto, vegetariánsky, 20 mg" or "Vlastní, 25 mg".
     static func value(_ detail: NutrientDetail) -> String {
         let amount = NutrientItem.amount(detail.target ?? 0) + " " + detail.unit
-        if detail.custom == true { return L10n.tr("Vlastní") + " · " + amount }
-        if let basis = detail.autoBasis { return "Auto · " + L10n.tr(basis == "vegan" ? "vegansky" : "vegetariánsky") + " · " + amount }
-        return "Auto · " + amount
+        if detail.custom == true { return L10n.tr("Vlastní") + ", " + amount }
+        if let basis = detail.autoBasis { return "Auto, " + L10n.tr(basis == "vegan" ? "vegansky" : "vegetariánsky") + ", " + amount }
+        return "Auto, " + amount
     }
 
     private var auto: Double { detail.autoTarget ?? detail.target ?? 1 }
@@ -555,10 +555,10 @@ struct NutrientTargetSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    /// "20 mg · vegetariánsky, rostlinné železo se vstřebá hůř".
+    /// "20 mg, vegetariánsky, rostlinné železo se vstřebá hůř".
     private var autoHint: String {
         let amount = NutrientItem.amount(auto) + " " + detail.unit
         guard detail.autoBasis != nil else { return amount }
-        return amount + " · " + L10n.tr(detail.key == "zn" ? "z rostlin se zinek vstřebá hůř" : "z rostlin se železo vstřebá hůř")
+        return amount + ", " + L10n.tr(detail.key == "zn" ? "z rostlin se zinek vstřebá hůř" : "z rostlin se železo vstřebá hůř")
     }
 }

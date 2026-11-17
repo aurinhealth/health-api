@@ -9,12 +9,14 @@ import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTena
 import { resolvePrincipal, handleSignOutEverywhere } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
+// The owner's notice at half the day's codes (email-login.js warnAtHalf) is kept apart from the codes.
+const halfWarnings = [];
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { (/polovina kódů/.test(message.subject) ? halfWarnings : sent).push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   return { env, sent };
@@ -186,6 +188,42 @@ test("App Review: the review address gets the fixed code, which still needs send
   assert.notEqual(codeIn(sent[1]), "246810");
 });
 
+test("App Review: wrong codes lock the fixed code for the day only, and the owner hears of the lock", async () => {
+  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "review@example.com", APP_REVIEW_CODE: "246810", APP_REVIEW_UNTIL: "2999-12-31" });
+  await inviteUser(env.DB, "review@example.com", 1);
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  let caller = 0;
+  const guess = (code, time) => at(time, () => verify(env, "review@example.com", code, { ip: "198.51.100." + (++caller) }));
+  const alerts = () => sent.filter(message => message.to === "owner@example.com");
+  // Twenty wrong tries, over five sendings of the code.
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + round * 61_000;
+    await at(time, () => start(env, "review@example.com", { ip: "203.0.113." + round }));
+    for (let i = 0; i < 4; i++) {
+      assert.equal(alerts().length, 0);
+      assert.equal((await guess("000000", time + 1000)).status, 400);
+    }
+  }
+  assert.equal(alerts().length, 1, "the try that locked the address");
+  assert.match(alerts()[0].subject, /App Review/);
+  assert.doesNotMatch(alerts()[0].text, /246810/);
+  assert.equal((await guess("246810", t0 + 5 * 61_000)).status, 429, "locked for the day");
+  assert.equal(alerts().length, 1);
+  // The next day the reviewer signs in again.
+  const tomorrow = Date.parse("2026-10-08T00:01:00Z");
+  await at(tomorrow, () => start(env, "review@example.com"));
+  assert.equal((await guess("246810", tomorrow + 1000)).status, 200);
+  // Another address locked the same way is nothing the owner hears of.
+  await inviteUser(env.DB, "friend@example.com", 1);
+  for (let round = 0; round < 5; round++) {
+    const time = tomorrow + round * 61_000;
+    await at(time, () => start(env, "friend@example.com", { ip: "203.0.113." + (10 + round) }));
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) await at(time + 1000, () => verify(env, "friend@example.com", wrong, { ip: "198.51.100." + (++caller) }));
+  }
+  assert.equal(alerts().length, 1);
+});
+
 test("OPEN_SIGNUP: any address gets a code and an account", async () => {
   const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
   await start(env, "stranger@example.com");
@@ -257,6 +295,49 @@ test("addresses that get a code only through OPEN_SIGNUP use at most four fifths
   assert.equal(sent.length, 5);
   // The page answers the same either way.
   assert.deepEqual(await (await quietly(() => start(env, "junk5@example.com"))).json(), { status: "ok" });
+});
+
+test("at half the day's codes for new addresses the owner gets one notice that day, and the code still goes out", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  for (let i = 0; i < 3; i++) assert.equal(await sendCode(env, "n" + i + "@example.com", "cs", { now }), true);
+  assert.equal(halfWarnings.length, 0, "3 of 8");
+  assert.equal(await quietly(() => sendCode(env, "n3@example.com", "cs", { now })), true);
+  assert.equal(halfWarnings.length, 1, "4 of 8");
+  assert.equal(halfWarnings[0].to, "owner@example.com");
+  assert.match(halfWarnings[0].text, /odešlo 4 z 8 kódů pro nové adresy/);
+  for (let i = 4; i < 8; i++) await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1, "once a day");
+  assert.equal(sent.length, 8);
+});
+
+test("a half-budget notice that fails to go out is tried again with the next code", async () => {
+  const { env } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const send = env.EMAIL.send;
+  let fail = true;
+  env.EMAIL.send = async message => { if (fail && /polovina kódů/.test(message.subject)) throw new Error("down"); return send(message); };
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  const errors = console.error;
+  console.error = () => {};
+  try { for (let i = 0; i < 4; i++) assert.equal(await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now })), true, "the code goes out anyway"); }
+  finally { console.error = errors; }
+  assert.equal(halfWarnings.length, 0);
+  fail = false;
+  await quietly(() => sendCode(env, "n4@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1);
+});
+
+test("the half-budget notice starts again the next day", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "10" });
+  halfWarnings.length = 0;
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  for (let i = 0; i < 8; i++) await quietly(() => sendCode(env, "n" + i + "@example.com", "cs", { now }));
+  assert.equal(halfWarnings.length, 1, "once a day");
+  assert.equal(sent.length, 8);
+  await quietly(() => sendCode(env, "x@example.com", "cs", { now: Date.parse("2026-10-08T08:00:00Z") }));
+  assert.equal(halfWarnings.length, 1, "a new day starts from nothing");
 });
 
 test("one caller takes at most a twentieth of the day's sign-in codes (point 4)", async () => {

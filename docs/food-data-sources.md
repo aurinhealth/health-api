@@ -17,6 +17,12 @@ Food values come from:
 - **Personal foods**: the user's own saved foods, a separate D1 table
   (`personal_foods`), searched by name or barcode in the app (`/app/api/food/search`).
   They are never shared with any provider.
+- **Basic foods** (`staples.js`): about 240 everyday foods (coffee, banana,
+  rice, chicken breast…) from USDA FoodData Central SR Legacy (public domain),
+  with a Czech and English name and the usual portion (cup, piece, tbsp). Search
+  lists up to 4 that fit the query before the world catalogue, with a check
+  mark in the app. The list is `scripts/staples.txt`; `scripts/build-staples.mjs`
+  writes it into the Worker as `src/staples-data.js` (no D1 or R2 read).
 - **World catalogue** (`world-foods.js`): about 3.4 million foods from the
   kCalori release (Open Food Facts ODbL, USDA FoodData Central, Fineli, Ciqual,
   CoFID), read only from the R2 bucket `aurin-food-catalog` (Eastern Europe), listed after saved and

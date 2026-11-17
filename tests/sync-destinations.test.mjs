@@ -82,7 +82,8 @@ test("workouts from other apps: off at first, each turned on with its own start,
   // Google Health takes Wahoo's (not Apple Health's: its app reads Apple Health), Apple Health Wahoo's and Google's, Wahoo none.
   assert.deepEqual((await saveSyncPrefs(d, 7, "google", { forward: ["wahoo", "apple", "google"] }, { now: NOW })).forward, ["wahoo"]);
   assert.deepEqual(await forwardSince(d, 7, "google"), { wahoo: new Date(NOW).toISOString() });
-  assert.deepEqual((await readSyncPrefs(d, 7, "google")).health, "all");
+  // Google's old "all" (and no choice yet) means weight and food: water waits for its tick.
+  assert.deepEqual((await readSyncPrefs(d, 7, "google")).health, ["weight", "nutrition"]);
   assert.deepEqual((await saveSyncPrefs(d, 7, "apple", { forward: ["google", "wahoo"] })).forward, ["wahoo", "google"]);
   assert.equal((await saveSyncPrefs(d, 7, "wahoo", { forward: ["google"] })).forward, undefined);
   // Each destination keeps its own: Intervals.icu's is still off.
@@ -117,7 +118,7 @@ test("the overview lists the destinations the app can send to; never Strava", as
   const google = overview.destinations.find(x => x.id === "google");
   // Weight writing is the extra Google permission not given yet.
   assert.deepEqual(google.missingScopes, ["weightWrite"]);
-  assert.deepEqual(google.healthTypes, ["weight", "nutrition"]);
+  assert.deepEqual(google.healthTypes, ["weight", "nutrition", "water"]);
   overview = await syncOverview({ ...env, STRAVA_CLIENT_ID: "183664", STRAVA_CLIENT_SECRET: "s", STRAVA_TOKEN: "{}" });
   assert.deepEqual(overview.destinations.map(x => x.id), ["apple", "google", "intervals"]);
   assert.deepEqual(googleMissingScopes({ GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite] }, { pushActivities: true, health: "all" }), ["activityWrite"]);
@@ -133,6 +134,13 @@ test("a done activity: the gym's own start in the user's zone, noon without one"
   assert.equal(googleExercise({ ...a, startUtc: null, startLocal: "2026-10-10T12:00:00" }).exercise.interval.startTime, "2026-10-10T10:00:00.000Z");
   assert.throws(() => normalizeActivity({ ...activity, minutes: 0 }));
   assert.deepEqual(googleExercise(a).exercise, { interval: { startTime: "2026-10-10T16:05:00.000Z", startUtcOffset: "7200s", endTime: "2026-10-10T17:07:00.000Z", endUtcOffset: "7200s" }, exerciseType: "STRENGTH_TRAINING", displayName: "Push", activeDuration: "3720s", notes: "Bench 4 × 8" });
+});
+
+test("Google Health gets only exercise types from its own list", () => {
+  const a = normalizeActivity(activity);
+  // INDOOR_BIKING was refused with HTTP 400 for every Wahoo indoor ride (2026-11-10).
+  for (const [type, google] of [["VirtualRide", "STATIONARY_BIKE"], ["VirtualRun", "TREADMILL"], ["MountainBikeRide", "MOUNTAIN_BIKE"], ["Ride", "BIKING"]]) assert.equal(googleExercise({ ...a, type }).exercise.exerciseType, google, type);
+  assert.equal(googleExercise({ ...a, sport: "tennis" }).exercise.exerciseType, "OTHER");
 });
 
 test("Intervals.icu gets the activity as a manual one, recorded; a retry updates it", async () => {

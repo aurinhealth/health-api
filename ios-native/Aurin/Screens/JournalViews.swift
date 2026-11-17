@@ -120,7 +120,7 @@ struct JournalStateMark: View {
 
 // MARK: - Zdraví
 
-/// On Zdraví under Připravenost: "Včerejšek čeká · Doplnit" while yesterday
+/// On Zdraví under Připravenost: "Včerejšek čeká, Doplnit" while yesterday
 /// has open items, and the biggest effects on readiness to swipe through.
 /// A widget, so it can be removed like the others.
 struct JournalHealthCard: View {

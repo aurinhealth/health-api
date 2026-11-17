@@ -138,4 +138,79 @@ final class GymAdjustmentTests: XCTestCase {
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "E")
         XCTAssertNil(GymSessionMath.adjustment(next, after: done))
     }
+
+    // A first try: a warm-up done well off its plan moves the sets to come
+    // (warm-up 35 for 22.5, work planned 35.5 → 55).
+    private func warmupDay(done kg: String) -> GymExercise {
+        exercise([
+            GymSet(row: 1, warmup: true, number: "W", plannedKg: "22.5", plannedReps: "5", kg: kg, reps: "5", rpe: nil, done: true, note: nil),
+            GymSet(row: 2, warmup: false, number: "1", plannedKg: "35.5", plannedReps: "5", kg: nil, reps: nil, rpe: nil, done: false, note: nil),
+            GymSet(row: 3, warmup: false, number: "2", plannedKg: "35.5", plannedReps: "5", kg: nil, reps: nil, rpe: nil, done: false, note: nil),
+        ])
+    }
+
+    func testFirstTryFollowsTheWarmup() {
+        let ex = warmupDay(done: "35")
+        XCTAssertEqual(GymSessionMath.carried(ex.sets[1], in: ex, firstTry: true)?.kg, "55")
+        XCTAssertEqual(GymSessionMath.carried(ex.sets[2], in: ex, firstTry: true)?.kg, "55")
+        XCTAssertNil(GymSessionMath.carried(ex.sets[2], in: ex, firstTry: true)?.reps)
+        // Lighter too.
+        XCTAssertEqual(GymSessionMath.carried(ex.sets[1], in: warmupDay(done: "15"), firstTry: true)?.kg, "22.5")
+    }
+
+    func testWarmupKeepsThePlanWithHistoryNearThePlanOrTypedAhead() {
+        let ex = warmupDay(done: "35")
+        // With history the plan rests on real sets.
+        XCTAssertNil(GymSessionMath.carried(ex.sets[1], in: ex))
+        // Within 15 % (25 for 22.5): the plan stays.
+        XCTAssertNil(GymSessionMath.carried(ex.sets[1], in: warmupDay(done: "25"), firstTry: true))
+        // A weight typed in ahead stays.
+        XCTAssertNil(GymSessionMath.carried(ex.sets[2], in: ex, typed: GymSessionMath.Typed(kg: [3]), firstTry: true))
+        // At most twice the plan.
+        XCTAssertEqual(GymSessionMath.carried(ex.sets[1], in: warmupDay(done: "60"), firstTry: true)?.kg, "70")
+    }
+
+    func testAfterTheFirstWorkSetTheSetBeforeLeads() {
+        var sets = warmupDay(done: "35").sets
+        sets[1] = GymSet(row: 2, warmup: false, number: "1", plannedKg: "35.5", plannedReps: "5", kg: "50", reps: "5", rpe: nil, done: true, note: nil)
+        let ex = exercise(sets)
+        XCTAssertEqual(GymSessionMath.carried(ex.sets[2], in: ex, firstTry: true)?.kg, "50")
+    }
+
+    func testTechniqueSetGoesBackToThePlan() {
+        // Petr 2026-11-16: low row planned 62.5 × 5–8, set 1 done at 50 × 8 as T
+        // (technique). Set 2 is not "easy, heavier" (55): it keeps its plan, 62.5.
+        let done = GymSet(row: 1, warmup: false, number: "1", plannedKg: "62.5", plannedReps: "5–8", kg: "50", reps: "8",
+                          rpe: nil, done: true, note: nil, intensity: "T")
+        let next = GymSet(row: 2, warmup: false, number: "2", plannedKg: "62.5", plannedReps: "5–8", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "H")
+        let ex = exercise([done, next])
+        XCTAssertNil(GymSessionMath.previous(next, in: ex))
+        XCTAssertNil(GymSessionMath.carried(next, in: ex))
+    }
+
+    func testAfterATechniqueSetTheWorkSetBeforeLeads() {
+        let first = GymSet(row: 1, warmup: false, number: "1", plannedKg: "62.5", plannedReps: "5–8", kg: "62.5", reps: "8",
+                           rpe: nil, done: true, note: nil, intensity: "M")
+        let technique = GymSet(row: 2, warmup: false, number: "2", plannedKg: "62.5", plannedReps: "5–8", kg: "50", reps: "8",
+                               rpe: nil, done: true, note: nil, intensity: "T")
+        let next = GymSet(row: 3, warmup: false, number: "3", plannedKg: "62.5", plannedReps: "5–8", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "M")
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([first, technique, next]))?.kg, "62.5")
+    }
+
+    func testTechniqueSetsInARowFollowEachOther() {
+        let done = set(1, "1", kg: "50", reps: "12", done: true, letter: "T")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "T")
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([done, next]))?.kg, "50")
+    }
+
+    func testModerateAtTheTopBeforeTheLastHardSetStays() {
+        // Petr 2026-11-16: preacher curl 100 × 12 of 8–12 at M, set 2 planned H.
+        // F chosen for set 2 after doing it rates set 2: TrainingModeView keeps
+        // the plan's H for its weight, so set 1 is not "easy" and 100 stays.
+        let done = set(1, "1", kg: "100", reps: "12", done: true, letter: "M", planned: "8–12")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "H", planned: "8–12")
+        XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+    }
 }

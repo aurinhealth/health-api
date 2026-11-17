@@ -624,7 +624,7 @@ const baseName = id => {
   if (!w) return null;
   if (w.sport === "swim") w = L(w, SWIMMING_WORKOUTS_EN.find(x => x.id === w.id) || w);
   const name = w.sport === "swim" ? w.name : L(w.name, workoutNameEn(w.name));
-  return name.replace(/ · \d+ min$/, "");
+  return name.replace(/(?: · |, )\d+ min$/, "");
 };
 
 // A plan's test session by sport.
@@ -1104,7 +1104,7 @@ export function gymPhaseFor(plan, date, days = []) {
   if (!picked.includes(weekday)) return null;
   // Without the athlete's own number the phase stays as the plan was made: full body.
   const chosen = sessions !== g.sessions || Number(plan?.perWeek) > 0, part = chosen ? gymPart(sessions, picked.indexOf(weekday)) : null;
-  const head = pw.template.name + " · " + g.name + (part ? " · " + GYM_PARTS()[part] : ""), week = L(" · týden ", " · week ") + pw.week + "/" + pw.weeks;
+  const head = pw.template.name + ", " + g.name + (part ? ", " + GYM_PARTS()[part] : ""), week = L(", týden ", ", week ") + pw.week + "/" + pw.weeks;
   const equipment = pw.template.equipment || null;
   // A test week: its first session is the strength test (one heavy set of 3–5
   // after the warm-up sets, the estimated max from it); the others are light.

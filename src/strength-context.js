@@ -241,7 +241,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // The morning check-in lowers the readiness (morning-checkin.js).
   try { const { readinessCheckin } = await import("./morning-checkin.js"); context.checkin = await readinessCheckin(env.DB, date); } catch { context.checkin = null; }
   // The sleep goal sets the sleep need, as on Today (readiness.js).
-  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); const { readinessLocks } = await import("./readiness-lock.js"); const locks = await readinessLocks(env.DB, date).catch(() => ({})); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "", ...(Object.keys(locks).length ? { readinessLocks: locks } : {}) }; } catch { context.profile = { sex: "" }; }
+  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); const { readinessLocks } = await import("./readiness-lock.js"); const locks = await readinessLocks(env.DB, date).catch(() => ({})); context.goal = profile?.goal || ""; context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "", ...(Object.keys(locks).length ? { readinessLocks: locks } : {}) }; } catch { context.profile = { sex: "" }; }
   // The last 30 days of Google Health and Apple Health sleep (nights and
   // naps) with the Intervals.icu nights they miss, as Today has them: the
   // recovery score's sleep part and the sleep need.
@@ -256,6 +256,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const athleteState=await getAthleteState(env.DB);
   // Memories too: a remembered pain leaves out exercises (Revize 2026-10-16, nález 24).
   context.athleteState={status:athleteState.status,note:athleteState.note,memories:usedMemories(athleteState),brokenStations:brokenStations(athleteState,date),focusGroups:focusGroups(athleteState,date),recoveredAt:athleteState.recoveredAt||null};
+  // The weight goal from the profile (lose/maintain/gain) steers the trend correction.
   context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });
   const { buildAdaptiveDecision } = await import("./adaptive-engine.js");
   context.adaptive = buildAdaptiveDecision(context, null);

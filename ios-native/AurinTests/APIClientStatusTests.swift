@@ -2,7 +2,8 @@ import XCTest
 @testable import Aurin
 
 /// What the app does with each kind of answer: 401 signs out, 426 asks for
-/// the update and keeps the write, 5xx and 429 try again, other 4xx drop it,
+/// the update and keeps the write, a missing health consent keeps it too,
+/// 5xx and 429 try again, other 4xx drop it,
 /// no connection waits. A stand-in server (URLProtocol) answers.
 final class APIClientStatusTests: XCTestCase {
     private let api = APIClient(baseURL: URL(string: "https://stub.test")!, protocols: [StubServer.self])
@@ -37,6 +38,17 @@ final class APIClientStatusTests: XCTestCase {
         let asked = Flag()
         api.onUpdateRequired = { asked.set() }
         guard case .outdated? = await refusal(426) as? OutboxRefusal else { return XCTFail("not outdated") }
+        XCTAssertTrue(asked.value)
+    }
+
+    func testWriteWithoutHealthConsentWaitsForIt() async {
+        let asked = Flag()
+        api.onHealthConsentRequired = { asked.set() }
+        StubServer.answer = .status(403, body: #"{"status":"health_consent_required","message":"Consent first."}"#)
+        do { _ = try await api.sendQueued(item); XCTFail("no error") } catch {
+            guard case .outdated? = error as? OutboxRefusal else { return XCTFail("dropped instead of kept") }
+            XCTAssertTrue(WriteVerdict.of(error).waits)
+        }
         XCTAssertTrue(asked.value)
     }
 

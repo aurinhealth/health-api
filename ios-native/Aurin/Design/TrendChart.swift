@@ -3,9 +3,9 @@ import Charts
 import SwiftUI
 
 /// A value over days: each day a faint dot, the 7-day average as a line, the
-/// usual range as a band, a finger to read any day ("8. října · 64 ms")
+/// usual range as a band, a finger to read any day ("8. října, 64 ms")
 /// and 7 / 30 / 90 days to pick above it. Over the chart the average of the
-/// picked days ("97 ms · 7-day average · rising", "average of 22 nights" when
+/// picked days ("97 ms, 7-day average, rising", "average of 22 nights" when
 /// fewer have a value), one day only while a finger is on it (chart review 2).
 struct TrendChart: View {
     /// What one dot is: a night or a day.
@@ -194,12 +194,12 @@ struct TrendChart: View {
         }
     }
 
-    /// "7-day average · rising", or "average of 22 nights · rising" when fewer
+    /// "7-day average, rising", or "average of 22 nights, rising" when fewer
     /// of the picked days have a value.
     private func periodLabel(count: Int) -> String {
         guard count > 0 else { return "" }
         let span = count >= days ? L10n.f("průměr za %@ dní", String(days)) : L10n.plural(per.averageOf, count)
-        return [span, trend == "–" ? nil : trend].compactMap { $0 }.joined(separator: " · ")
+        return [span, trend == "–" ? nil : trend].compactMap { $0 }.joined(separator: ", ")
     }
 
     static func average(_ values: [Double]) -> Double? {
@@ -225,7 +225,7 @@ struct TrendChart: View {
     }
 }
 
-/// "7 dní · 30 dní · 90 dní" over a detail chart, the chosen one filled.
+/// "7 dní, 30 dní, 90 dní" over a detail chart, the chosen one filled.
 struct RangePicker: View {
     let ranges: [Int]
     @Binding var days: Int

@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { readSyncPrefs, EXTERNAL_PREFIX } from './sync-destinations.js';
 import { syncWahooWorkout, readWahooTokens } from './wahoo.js';
@@ -75,6 +76,8 @@ export async function syncIntervalsWorkout(env,id,fetchImpl=fetch,{force=false}=
       // Keep a provider event id through date/environment edits.
       // Joined pairs (planned-links.js) and the race mark stay in the app.
       const {id:ignoredId,after:ignoredAfter,next:ignoredNext,race:ignoredRace,...providerEvent}=event;void ignoredId;void ignoredAfter;void ignoredNext;void ignoredRace;
+      // A type only Aurin knows (Basketball from Log workout → More) goes as a Workout with its name.
+      if(providerEvent.type)providerEvent.type=intervalsTypeOf(providerEvent.type);
       const put=remoteId=>fetchImpl(remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
       let r=await put(remoteId);
       // Deleted in Intervals.icu (404): sent again by hand, it is made anew.
@@ -114,12 +117,33 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   }else{
     const next={...event,...change};
     const link=await db.prepare('SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?').bind(db.userId,row.id).first();
-    const key=link?'pfd-library:'+link.workout_id+':'+next.start_date_local.slice(0,10)+(/Virtual/.test(next.type)?'':':outdoor'):row.event_key;
+    // Indoors: the place picked in the app, else the type (VirtualRide, VirtualRun, a pool Swim).
+    const indoor=typeof next.indoor==='boolean'?next.indoor:/Virtual/.test(next.type)||next.type==='Swim';
+    const key=link?'pfd-library:'+link.workout_id+':'+next.start_date_local.slice(0,10)+(indoor?'':':outdoor'):row.event_key;
     await storeLocalEvent(db,next,{key,id:row.id});
     if(link)await db.prepare('UPDATE workout_schedule_links SET intervals_external_id=? WHERE user_id=? AND intervals_event_id=?').bind(key,db.userId,row.id).run();
-    await db.prepare('UPDATE workout_schedule_links SET scheduled_date=?,environment=? WHERE user_id=? AND intervals_event_id=?').bind(next.start_date_local.slice(0,10),/Virtual/.test(next.type)?'indoor':'outdoor',db.userId,row.id).run();
+    await db.prepare('UPDATE workout_schedule_links SET scheduled_date=?,environment=? WHERE user_id=? AND intervals_event_id=?').bind(next.start_date_local.slice(0,10),indoor?'indoor':'outdoor',db.userId,row.id).run();
   }
   const sync=await syncLocalWorkout(env,row.id,fetchImpl);return {status:'ok',eventId:row.id,sync};
+}
+// "Vrátit" of a workout the coach took off the plan (activity-chat-edits.js
+// planned): back as it was, with its library link, and sent out again (the
+// provider's copy was deleted, so it is made anew).
+export async function restoreLocalWorkout(env,id,link=null,fetchImpl=fetch){
+  const db=env.DB,row=await localWorkout(db,id);if(!row||row.status!=='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
+  // Intervals.icu keeps the deleted id: it is sent anew and matched by
+  // external_id. Wahoo drops its ids once the delete is through, and keeps
+  // them (and its copy) when the delete failed, so its copy is updated.
+  // One transaction: its first statement fails (malformed JSON) and so rolls
+  // back the rest unless the workout is still the deleted one read above and
+  // no export of it is running, which would write its old id back over this.
+  await db.batch([db.prepare("SELECT json(CASE WHEN EXISTS(SELECT 1 FROM local_workouts WHERE user_id=? AND id=? AND status='deleted' AND revision=?) AND NOT EXISTS(SELECT 1 FROM workout_exports WHERE user_id=? AND local_id=? AND status='running' AND updated_at>=datetime('now','-5 minutes')) THEN '1' ELSE 'restore refused' END) AS ok").bind(db.userId,row.id,row.revision,db.userId,row.id),
+    db.prepare("UPDATE local_workouts SET status='scheduled',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND status='deleted'").bind(db.userId,row.id),
+    await projection(db,row.id,JSON.parse(row.event_json)),
+    db.prepare("UPDATE workout_exports SET remote_id=CASE WHEN provider='intervals' THEN NULL ELSE remote_id END,status='pending',attempts=0,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=?").bind(db.userId,row.id),
+    ...(link?[db.prepare('INSERT OR IGNORE INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)').bind(db.userId,link.sport,link.workout_id,link.family??null,link.scheduled_date,link.environment,link.intervals_external_id,row.id,'scheduled')]:[])
+  ]).catch(()=>{throw new Error(L('Trénink se mezitím změnil nebo se právě posílá, zkus to za chvíli.', 'The workout has changed or is being sent right now, try again in a moment.'));});
+  return {status:'ok',eventId:row.id,sync:await syncLocalWorkout(env,row.id,fetchImpl)};
 }
 export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal,pairedWith}={}){
   const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));

@@ -92,7 +92,7 @@ test('the site is English whatever the browser says; privacy and terms also have
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
     assert.doesNotMatch(html,/data-lang-choice|lang-switch/,'no language switch');
-    assert.match(html,/<li lang="cs">Česky: <a href="\/cs\/privacy" hreflang="cs">Soukromí<\/a> · <a href="\/cs\/terms" hreflang="cs">Podmínky<\/a><\/li>/);
+    assert.match(html,/<li lang="cs">Česky: <a href="\/cs\/privacy" hreflang="cs">Soukromí<\/a>, <a href="\/cs\/terms" hreflang="cs">Podmínky<\/a><\/li>/);
   }
   assert.match(await privacyPage().text(),/<a href="\/cs\/privacy" lang="cs" hreflang="cs">Česká verze<\/a>/);
   assert.match(await termsPage(new Request('https://aurin.health/cs/terms')).text(),/<a href="\/terms" lang="en" hreflang="en">English version<\/a>/);
@@ -105,7 +105,7 @@ test('the overview speaks English and sends people to the App Store, black badge
   assert.match(en,/Get the app/);
   assert.equal((en.match(/<a class="badge" href="https:\/\/apps\.apple\.com\/app\/id6827125354"><picture><source srcset="\/site\/badges\/app-store-white\.svg" media="\(prefers-color-scheme:dark\)"><img src="\/site\/badges\/app-store-black\.svg" alt="Download on the App Store"/g)||[]).length,2);
   assert.doesNotMatch(en,/early access|TestFlight|<form class="wl"|while we test|during testing/);
-  assert.match(en,/Not in the EU yet, coming soon\./);
+  assert.match(en,/Free to download on iPhone\./);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
   assert.match(await privacyPage().text(),/Google user data is used only to provide/);
@@ -327,7 +327,8 @@ test('app screens on the site are real shots, not an empty screen', () => {
 });
 
 // Right under the hero's form, the watches and rings Aurin reads, as plain names in one row: only devices the app
-// supports (Apple Watch through Apple Health, Fitbit and Pixel Watch through Google Health, WHOOP and Ultrahuman directly).
+// supports (Apple Watch through Apple Health, Fitbit through Google Health, WHOOP and Ultrahuman directly). Pixel Watch
+// pairs only with Android, so it is not named.
 test('the hero names the wearables Aurin reads under the form, and no device it does not support',async()=>{
   const html=await overviewPage().text();
   const hero=html.slice(html.indexOf('<div class="hero">'),html.indexOf('<section class="morning">'));
@@ -338,8 +339,9 @@ test('the hero names the wearables Aurin reads under the form, and no device it 
   assert.deepEqual([...list.slice(0,list.indexOf('</ul>')).matchAll(/<li[^>]*>(?:([^<]+)|[\s\S]*?alt="([^"]+)"[\s\S]*?)<\/li>/g)].map(m=>m[1]||m[2]),WEARABLES);
   for(const [file] of Object.values(WORDMARKS))for(const c of ['black','white'])assert.ok(existsSync(new URL(`../public/site/logos/${file}-${c}.svg`,import.meta.url)),file+'-'+c);
   assert.deepEqual(Object.keys(WORDMARKS),['WHOOP','Ultrahuman'],'Apple and Google allow no device wordmark');
-  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','Pixel Watch','WHOOP','Ultrahuman']);
+  assert.deepEqual(WEARABLES,['Apple Watch','Fitbit','WHOOP','Ultrahuman']);
   assert.doesNotMatch(hero,/garmin|oura|strava|polar|coros|amazfit/i);
+  assert.doesNotMatch(html,/pixel watch/i,'Pixel Watch pairs only with Android');
   assert.match(hero,/Works with what you already wear/);
 });
 
@@ -403,8 +405,8 @@ test('the launch terms drop only the testing sentences and keep the change rules
   for(const re of testing.cs){assert.match(cs,re);assert.doesNotMatch(csPro,re);}
   assert.match(enPro,/<p>Aurin Pro adds Aurin Intelligence/);
   assert.match(csPro,/<p>Aurin Pro přidává funkce Aurin Intelligence/);
-  assert.match(enPro,/Last updated: 10 November 2026/);
-  assert.match(csPro,/Poslední změna: 10. listopadu 2026/);
+  assert.match(enPro,/Last updated: 16 November 2026/);
+  assert.match(csPro,/Poslední změna: 16. listopadu 2026/);
   for(const t of [en,enPro]){
     assert.match(t,/only for a good reason/);
     assert.match(t,/at least 30 days ahead by e-mail and in the app\. You can then end the subscription without any fee, including the remaining payments/);

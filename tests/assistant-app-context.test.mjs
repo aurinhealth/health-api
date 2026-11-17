@@ -53,9 +53,9 @@ test('assistant progress appears before readable reply and validated actions',as
 });
 
 test('Training mode tells where in the workout the athlete is, and nothing else',()=>{
-  const c=assistantAppContext({view:'workouts',date:today,sport:'gym',exercise:'DB curl',subject:{kind:'workout',title:'Upper Body · 12 of 19 sets'},
+  const c=assistantAppContext({view:'workouts',date:today,sport:'gym',exercise:'DB curl',subject:{kind:'workout',title:'Upper Body, 12 of 19 sets'},
     live:{phase:'restBeforeExercise',exercise:'DB curl',set:1,restSeconds:120,previousExercise:'Lat pulldown',sets:[{kg:999}]}},today);
-  assert.deepEqual(c.subject,{kind:'workout',id:null,title:'Upper Body · 12 of 19 sets',metric:null});
+  assert.deepEqual(c.subject,{kind:'workout',id:null,title:'Upper Body, 12 of 19 sets',metric:null});
   assert.deepEqual(c.live,{phase:'restBeforeExercise',exercise:'DB curl',set:1,restSeconds:120,previousExercise:'Lat pulldown'});
   assert.deepEqual(assistantAppContext({live:{phase:'resting',exercise:'DB curl'}},today).live,undefined);
   assert.deepEqual(assistantAppContext({live:{phase:'rest',set:-2,restSeconds:99999}},today).live,{phase:'rest'});

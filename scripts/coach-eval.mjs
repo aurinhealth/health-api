@@ -13,7 +13,7 @@ const host = process.env.COACH_EVAL_HOST || "staging.aurin.health";
 const { ACTIONS_ID_TOKEN_REQUEST_URL: oidcUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: oidcAuth } = process.env;
 if (!process.env.COACH_EVAL_TOKEN && !oidcUrl) { console.error("COACH_EVAL_TOKEN is missing."); process.exit(2); }
 const wanted = String(process.env.COACH_EVAL_SCENARIOS || "").split(/[,\s]+/).filter(Boolean);
-const rounds = Math.max(1, Math.min(5, Math.round(Number(process.env.COACH_EVAL_REPEAT) || 1)));
+let rounds = Math.max(1, Math.min(5, Math.round(Number(process.env.COACH_EVAL_REPEAT) || 1)));
 
 async function token() {
   if (!oidcUrl || !oidcAuth) return process.env.COACH_EVAL_TOKEN;
@@ -29,45 +29,91 @@ async function call(body) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(6 * 60 * 1000)
   });
-  const json = await response.json().catch(() => ({ status: "error", message: `HTTP ${response.status}` }));
+  // A page that is not JSON (Cloudflare's own error, e.g. "error code: 1102") keeps its first words (run 56).
+  const text = await response.text();
+  let json; try { json = JSON.parse(text); } catch { json = { status: "error", message: `HTTP ${response.status} ${text.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)}`.trim() }; }
   if (!response.ok && json.status !== "error") json.status = "error";
   return json;
 }
 
 const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
-const scenarios = list.scenarios.filter(s => !wanted.length || wanted.includes(s.id));
+// COACH_EVAL_CALIBRATE (luna, sol, both, haiku (Anthropic) or judge, the eval's judge): only the checker's calibration (coach-calibration.js), no coach answers.
+const calibrate = String(process.env.COACH_EVAL_CALIBRATE || "").trim();
+if (calibrate) {
+  const models = calibrate === "both" ? ["luna", "sol"] : [["sol", "judge", "haiku"].includes(calibrate) ? calibrate : "luna"], out = [], lines = [`# Kalibrace AI kontrolora, ${host}`, ""];
+  for (const model of models) {
+    const rows = [];
+    for (const id of list.calibration || []) { const r = await call({ calibrate: id, model }).catch(error => ({ id, status: "error", message: error.message })); r.id ??= id; r.run = model; rows.push(r); out.push(r);
+      console.log(r.status === "ok" ? `${model} ${id} ${r.correct ? "ok" : "CHYBA"} ${(r.flags || []).map(f => f.cat).join(",")}` : `${model} ${id} ${r.status}: ${r.message || ""}`); }
+    const ok = rows.filter(r => r.status === "ok"), faults = ok.filter(r => r.expect === "flag"), clean = ok.filter(r => r.expect === "ok");
+    const usd = ok.reduce((sum, r) => sum + (r.usd || 0), 0), times = ok.map(r => r.ms).sort((a, b) => a - b);
+    lines.push(`## ${model}`, "", `Chytil chyb: ${faults.filter(r => r.correct).length}/${faults.length}`, `Falešné poplachy: ${clean.filter(r => !r.correct).length}/${clean.length}`,
+      `Cena ${usd.toFixed(3)} USD, medián ${times.length ? (times[times.length >> 1] / 1000).toFixed(1) : "–"} s${rows.length - ok.length ? `, chyb serveru ${rows.length - ok.length}` : ""}`, "",
+      ...ok.filter(r => !r.correct).map(r => `- ${r.id} (${r.persona}, ${r.expect === "flag" ? "nechytil" : "falešný poplach"}: ${r.why})${(r.flags || []).map(f => ` ${f.cat}: „${f.quote}“ (${f.why})`).join(";")}`), "");
+  }
+  writeFileSync("coach-eval.json", JSON.stringify(out, null, 2));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n"); else console.log(lines.join("\n"));
+  process.exit(out.some(r => r.status !== "ok") ? 1 : 0);
+}
+// Empty = every S, L, W and K situation; the personas only when named, or "P" for all of them (each is four answers).
+const scenarios = list.scenarios.filter(s => wanted.length ? wanted.includes(s.id) || (s.turns && wanted.includes("P")) : !s.turns);
+// A persona is four answers with a growing conversation: at most 2 rounds of them (critic 2026-11-14, 20 personas × 5 rounds would be 800 calls).
+if (rounds > 2 && scenarios.some(s => s.turns)) { console.log(`Personas: ${rounds} rounds lowered to 2.`); rounds = 2; }
+// COACH_EVAL_COACH (haiku or sonnet): the coach on Anthropic's Claude instead of OpenAI, to compare.
+const coach = ["haiku", "sonnet"].includes(String(process.env.COACH_EVAL_COACH || "").trim()) ? { coach: String(process.env.COACH_EVAL_COACH).trim() } : {};
 const results = [];
 const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
+// A persona (P01–P20) is a conversation: each message goes with the coach's earlier answers.
 for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
-  const result = await call({ id: s.id }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
-  if (rounds > 1) result.round = round;
-  results.push(result);
-  const failed = (result.checks || []).filter(c => !c.ok);
-  console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? " · " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
+  const conversation = [];
+  for (let turn = 1; turn <= (s.turns || 1); turn++) {
+    const result = await call(s.turns ? { id: s.id, turn, conversation, ...coach } : { id: s.id, ...coach }).catch(error => ({ id: s.id, title: s.title, status: "error", message: error.message }));
+    // An error page knows no situation: keep its id, so the summary names it (run 56 printed "undefined").
+    result.id ??= s.turns ? `${s.id}.${turn}` : s.id; result.title ??= s.title;
+    if (rounds > 1) result.round = round;
+    results.push(result);
+    const failed = (result.checks || []).filter(c => !c.ok);
+    console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? ", " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
+    if (result.status !== "ok") break;
+    conversation.push({ role: "user", content: result.message }, { role: "assistant", content: result.historyNote || result.answer || "" });
+  }
 }
 
 const mark = (r, severity) => { const list = (r.checks || []).filter(c => c.severity === severity); return list.length ? `${list.filter(c => c.ok).length}/${list.length}` : "–"; };
 const quote = text => String(text || "").split("\n").map(line => "> " + line).join("\n");
 const action = a => [a.type, a.kind, a.minutes ? a.minutes + " min" : "", a.date, a.eventId].filter(Boolean).join(" ");
 const lines = [
-  `# Coach evaluation · ${host}`, "",
+  `# Coach evaluation, ${host}${coach.coach ? `, kouč ${coach.coach}` : ""}`, "",
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
   ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
+// The AI checker (coach-checker.js): what it cost and how long it took.
+// What the run cost on OpenAI (the coach's answers and the checker).
+const coachUsd = results.reduce((sum, r) => sum + (r.usd || 0), 0), checkerUsd = results.reduce((sum, r) => sum + (r.checker?.usd || 0), 0);
+const coachTimes = results.filter(r => r.ms != null && r.task !== "checker").map(r => r.ms).sort((a, b) => a - b);
+if (coachTimes.length) lines.push(`Kouč: ${coachTimes.length} odpovědí, ${(coachUsd / coachTimes.length).toFixed(4)} USD na odpověď, medián ${(coachTimes[coachTimes.length >> 1] / 1000).toFixed(1)} s`, "");
+lines.push(`Cena běhu: kouč ${coachUsd.toFixed(2)} USD + kontrolor ${checkerUsd.toFixed(2)} USD = ${(coachUsd + checkerUsd).toFixed(2)} USD`, "");
+// How much of the capability map the situations cover, each sport on its own (coach-capabilities.js).
+if (list.coverage) {
+  const c = list.coverage, pct = p => `${p.covered}/${p.total} (${Math.round(100 * p.covered / p.total)} %)`;
+  lines.push("## Mapa schopností", "", `Celkem ${pct(c.total)}: ${Object.entries(c.bySport).map(([sport, p]) => `${sport} ${pct(p)}`).join(", ")}`, "", `Bez scénáře: ${c.gaps.join(", ") || "nic"}`, "");
+}
+const checked = results.filter(r => r.checker?.ms != null), times = checked.map(r => r.checker.ms).sort((a, b) => a - b);
+if (checked.length) lines.push(`AI kontrolor: ${checked.length} odpovědí, ${checked.reduce((sum, r) => sum + (r.checker.usd || 0), 0).toFixed(3)} USD, medián ${(times[times.length >> 1] / 1000).toFixed(1)} s`, "");
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
-const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)} · ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
 // Stable = every check passed in every round (Petr 2026-11-06: a fail that passes on a rerun is still a flaw).
 if (rounds > 1) {
   const clean = r => r.status === "ok" && (r.checks || []).every(c => c.ok);
-  lines.push(`## Stabilita: všechny kontroly v ${rounds} kolech`, "", ...scenarios.map(s => { const all = results.filter(r => r.id === s.id), ok = all.filter(clean).length; return `- ${ok === all.length ? "✅" : "❌"} ${s.id} ${ok}/${all.length}`; }), "");
+  lines.push(`## Stabilita: všechny kontroly v ${rounds} kolech`, "", ...scenarios.map(s => { const all = results.filter(r => r.id === s.id || r.id.startsWith(s.id + ".")), ok = all.filter(clean).length; return `- ${ok === all.length ? "✅" : "❌"} ${s.id} ${ok}/${all.length}`; }), "");
 }
 for (const r of results) {
-  lines.push(`## ${label(r)} · ${r.title}`, "");
+  lines.push(`## ${label(r)}, ${r.title}`, "");
   if (r.status !== "ok") { lines.push(`⚠️ ${r.status}: ${r.message || ""}`, ""); continue; }
   lines.push(`**Sportovec:** ${r.message}`, "", quote(r.answer), "");
-  if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")} · prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");
+  if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")}, prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");
   const failed = r.checks.filter(c => !c.ok);
   if (failed.length) lines.push(...failed.map(c => `- ${c.severity === "safety" ? "❌" : "⚠️"} ${c.name}${c.detail ? ` (${c.detail})` : ""}`), "");
 }

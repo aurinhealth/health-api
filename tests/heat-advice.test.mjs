@@ -19,13 +19,13 @@ test("a run outdoors on a hot day: by heart rate, slower, in the cool morning", 
   const run = heatAdvice({ sport: "run", weather: hot });
   assert.equal(run.temp, 31);
   assert.equal(run.text, "Horko až 31 °C. Běž podle tepu, tempo nech o 10–20 s/km pomalejší a vezmi pití, vyraž nejlíp před 10:00. Když tep v intervalu vyletí, zkrať ho.");
-  assert.equal(run.short, "Horko 31 °C · tempo o 10–20 s/km pomaleji, víc pít");
+  assert.equal(run.short, "Horko 31 °C: tempo o 10–20 s/km pomaleji, víc pít");
 });
 
 test("a planned ride gets the temperature at its own time", () => {
   const ride = heatAdvice({ sport: "ride", weather: hot, time: "17:30" });
   assert.equal(ride.text, "V 17:30 kolem 30 °C. Jeď podle tepu, intervaly dej o 5 % slabší a pij 0,5–1 l za hodinu. Když tep v intervalu vyletí, zkrať ho.");
-  assert.equal(ride.short, "Horko 30 °C · intervaly o 5 % slabší, víc pít");
+  assert.equal(ride.short, "Horko 30 °C: intervaly o 5 % slabší, víc pít");
   // The morning is cool enough: nothing.
   assert.equal(heatAdvice({ sport: "ride", weather: hot, time: "08:00" }), null);
 });
@@ -35,7 +35,7 @@ test("nothing indoors, for other sports or below 25 °C", () => {
   assert.equal(heatAdvice({ sport: "strength", weather: hot }), null);
   assert.equal(heatAdvice({ sport: "run", weather: { max: 24 } }), null);
   assert.equal(heatAdvice({ sport: "run", weather: null }), null);
-  assert.ok(indoorText("Kolo · Zwift") && indoorText("Běh na pásu") && !indoorText("Kolo · tempo"));
+  assert.ok(indoorText("Kolo, Zwift") && indoorText("Běh na pásu") && !indoorText("Kolo, tempo"));
   // 25–29 °C: the advice without cutting efforts short.
   assert.ok(!heatAdvice({ sport: "run", weather: { max: 27 } }).text.includes("zkrať"));
 });
@@ -47,11 +47,11 @@ test("English and imperial units", () => withLang("en", () => withUnits("imperia
 
 test("Plán dne: a ride still ahead outdoors carries the short line", () => {
   const day = buildToday({ date: "2026-07-12", hour: 9, forecast: hot, daily: { training: { planned: [
-    { id: "planned:1", name: "Kolo · 4 × 8 min sweet spot", type: "Ride", start: "2026-07-12T17:30:00", durationHours: 1.1, tss: 82 },
-    { id: "planned:2", name: "Zwift · tempo", type: "VirtualRide", start: "2026-07-12T19:00:00", durationHours: 1, tss: 60 }
+    { id: "planned:1", name: "Kolo, 4 × 8 min sweet spot", type: "Ride", start: "2026-07-12T17:30:00", durationHours: 1.1, tss: 82 },
+    { id: "planned:2", name: "Zwift, tempo", type: "VirtualRide", start: "2026-07-12T19:00:00", durationHours: 1, tss: 60 }
   ], completed: [] } } });
   const items = day.plan.filter(i => i.kind === "workout");
-  assert.equal(items.find(i => i.title.startsWith("Kolo")).heat, "Horko 30 °C · intervaly o 5 % slabší, víc pít");
+  assert.equal(items.find(i => i.title.startsWith("Kolo")).heat, "Horko 30 °C: intervaly o 5 % slabší, víc pít");
   assert.equal(items.find(i => i.title.startsWith("Zwift")).heat, undefined);
 });
 
@@ -62,7 +62,7 @@ test("a 4 h ride from 09:00 is judged up to 13:00, a steady one without interval
   const ride = heatAdvice({ sport: "ride", weather: warming, time: "09:00", minutes: 240, intervals: false });
   assert.equal(ride.temp, 29);
   assert.equal(ride.text, "Mezi 09:00 a 13:00 až 29 °C. Jeď podle tepu a pij 0,5–1 l za hodinu.");
-  assert.equal(ride.short, "Horko 29 °C · podle tepu, víc pít");
+  assert.equal(ride.short, "Horko 29 °C: podle tepu, víc pít");
   // From 10:00 it reaches 30 °C at 14:00; still no interval to cut short.
   const later = heatAdvice({ sport: "ride", weather: warming, time: "10:00", minutes: 240, intervals: false });
   assert.equal(later.text, "Mezi 10:00 a 14:00 až 30 °C. Jeď podle tepu a pij 0,5–1 l za hodinu.");
@@ -85,8 +85,8 @@ test("the Pití card's line, in imperial units without litres", () => {
 test("Pití: today's food screen carries the heat line of a ride still ahead outdoors", () => {
   const today = localToday();
   const daily = d => ({ training: { planned: [{ id: "planned:1", name: d, type: "Ride", start: today + "T10:00:00", durationHours: 4, tss: 200 }], completed: [] } });
-  const food = buildFood({ date: today, hour: 8, daily: daily("Kolo · dlouhá vytrvalost"), forecast: warming });
+  const food = buildFood({ date: today, hour: 8, daily: daily("Kolo, dlouhá vytrvalost"), forecast: warming });
   assert.equal(food.water.heat, "Na jízdě až 30 °C. Pij na ní 0,5–1 l za hodinu; v horku můžeš potřebovat víc, než ukazuje cíl.");
-  assert.equal(buildFood({ date: today, hour: 8, daily: daily("Zwift · vytrvalost"), forecast: warming }).water.heat, undefined);
-  assert.equal(buildFood({ date: today, hour: 8, daily: daily("Kolo · dlouhá vytrvalost"), forecast: null }).water.heat, undefined);
+  assert.equal(buildFood({ date: today, hour: 8, daily: daily("Zwift, vytrvalost"), forecast: warming }).water.heat, undefined);
+  assert.equal(buildFood({ date: today, hour: 8, daily: daily("Kolo, dlouhá vytrvalost"), forecast: null }).water.heat, undefined);
 });

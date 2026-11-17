@@ -173,7 +173,7 @@ struct NightHeartChart: View {
                         .position(x: x(low.m), y: y(avg))
                     // Beside the dot, on the side with more room.
                     let right = x(low.m) < width - 80
-                    Text(verbatim: detailed ? Fmt.int(avg) + " · " + clock(low.m) : Fmt.int(avg))
+                    Text(verbatim: detailed ? Fmt.int(avg) + ", " + clock(low.m) : Fmt.int(avg))
                         .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.ink).fixedSize()
                         .padding(.horizontal, 10)
                         .frame(width: 120, alignment: right ? .leading : .trailing)

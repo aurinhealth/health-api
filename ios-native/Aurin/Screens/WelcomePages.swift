@@ -272,7 +272,7 @@ private struct WelcomeTraining: View {
                     .frame(width: 106, height: 106)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Teď").font(Typo.small).foregroundStyle(Palette.muted)
-                    Text(verbatim: L10n.tr("Dřep") + " · " + L10n.f("série %@", "3")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.tr("Dřep") + ", " + L10n.f("série %@", "3")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                     Text(verbatim: "80 kg × 8").font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
                     HStack(spacing: 6) {
                         chip("−15 s")
@@ -302,7 +302,7 @@ private struct WelcomeTraining: View {
                     MuscleFigurePair(colors: play.shown ? ["quads": Palette.rust, "chest": Palette.amberBar] : [:], spacing: 2)
                         .frame(height: 92)
                         .animation(.easeInOut(duration: 0.8).delay(1.0), value: play.shown)
-                    Text(verbatim: L10n.tr("Stehna") + " · " + L10n.tr("Hrudník"))
+                    Text(verbatim: L10n.tr("Stehna") + ", " + L10n.tr("Hrudník"))
                         .font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .welcomeCard(padding: 12)
@@ -442,7 +442,7 @@ private struct WelcomeCoach: View {
                 .frame(width: 40, height: 40).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nohy, lehčeji").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(verbatim: "40 min · " + L10n.f("%@ cviky", "4")).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: "40 min, " + L10n.f("%@ cviky", "4")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 0)
             Text("Přidat").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)

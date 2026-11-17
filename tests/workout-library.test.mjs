@@ -7,6 +7,7 @@ import {
 } from "../src/workout-library.js";
 import { renderForEnvironment, intervalsText, step, rep, sec } from "../src/workout-model.js";
 import { carbsPerHour } from "../src/workout-explanation.js";
+import { rideCarbsPerHour, buildNutritionPlan } from "../src/nutrition-intelligence.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -146,13 +147,29 @@ test("the planned event reads like IcuSync: kinds, one focus line with watts, ca
 });
 
 test("carbs per hour grow with the kind of session and its length", () => {
-  assert.equal(carbsPerHour(30, "vo2max"), 40);
+  // Up to 45 min nothing is needed during the session (IOC 2011, ACSM 2016).
+  for (const system of ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"]) {
+    assert.equal(carbsPerHour(30, system), null, system);
+    assert.equal(carbsPerHour(45, system), null, system);
+  }
   assert.equal(carbsPerHour(60, "endurance"), 40);
   assert.equal(carbsPerHour(90, "sweet_spot"), 70);
   assert.equal(carbsPerHour(240, "endurance"), 75);
   assert.equal(carbsPerHour(45, "recovery"), null);
   assert.equal(carbsPerHour(60, "endurance", "run"), null);
   assert.equal(carbsPerHour(150, "endurance", "run"), 45);
+});
+
+test("the day's ride fuelling gives the same g/h as the workout card", () => {
+  assert.equal(rideCarbsPerHour({ durationHours: 0.75, intensity: true }), 0);
+  assert.equal(rideCarbsPerHour({ durationHours: 1, intensity: true }), carbsPerHour(60, "threshold"));
+  assert.equal(rideCarbsPerHour({ durationHours: 2.5, intensity: false }), carbsPerHour(150, "endurance"));
+  const ride = buildNutritionPlan({ cycling: { nextRide: { name: "VO2", durationHours: 0.5, intensity: true } } }).fueling.plannedRide;
+  assert.equal(ride.carbsPerHourGrams, 0);
+  assert.equal(ride.carbsDuringRideGrams, 0);
+  const long = buildNutritionPlan({ cycling: { nextRide: { name: "Long", durationHours: 3, intensity: false } } }).fueling.plannedRide;
+  assert.equal(long.carbsPerHourGrams, carbsPerHour(180, "endurance"));
+  assert.equal(long.carbsDuringRideGrams, 3 * carbsPerHour(180, "endurance"));
 });
 
 test("Intervals event is deterministic per environment", () => {

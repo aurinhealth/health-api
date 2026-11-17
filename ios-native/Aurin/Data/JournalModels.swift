@@ -46,7 +46,7 @@ struct JournalItem: Decodable, Equatable, Identifiable {
     /// "HH:MM"
     var time: String? = nil
     var extra: [String: Double]? = nil
-    /// "2 · do 21:40", "300 mg", "21:15".
+    /// "2, do 21:40", "300 mg", "21:15".
     var value: String? = nil
     /// The row's value without the time, which has its own column: "2 nápoje", "vždy ne".
     var short: String? = nil
@@ -386,7 +386,7 @@ enum DemoJournal {
         ("\"Spánek\"", "\"Sleep\""),
         ("\"Hluboký spánek\"", "\"Deep sleep\""),
         ("\"Od 2 nápojů výš je to −22 %\"", "\"From 2 drinks up it is −22 %\""),
-        (" · do ", " · last ")
+        (", do ", ", last ")
     ]
 
     static var today: JournalToday {
@@ -418,10 +418,10 @@ enum DemoJournal {
         let json = """
         {"date":"%yesterday%","today":"%today%","week":[%week%],"answered":6,"total":9,"enabled":true,"sections":[
         {"key":"day","title":"Přes den","items":[
-        {"key":"caffeine","name":"Kofein","category":"food","type":"amount","icon":"cup.and.saucer.fill","auto":true,"unit":"mg","units":["mg","mg","mg"],"step":20,"usual":100,"limit":1000,"withTime":true,"answered":true,"answer":1,"amount":180,"time":"15:10","value":"180 mg · do 15:10","short":"180 mg","part":"day","fromData":true},
+        {"key":"caffeine","name":"Kofein","category":"food","type":"amount","icon":"cup.and.saucer.fill","auto":true,"unit":"mg","units":["mg","mg","mg"],"step":20,"usual":100,"limit":1000,"withTime":true,"answered":true,"answer":1,"amount":180,"time":"15:10","value":"180 mg, do 15:10","short":"180 mg","part":"day","fromData":true},
         {"key":"outdoors","name":"Venku 30+ min","category":"recovery","type":"yesno","icon":"sun.max.fill","auto":true,"answered":true,"answer":1,"part":"day","fromData":true}]},
         {"key":"evening","title":"Večer","items":[
-        {"key":"alcohol","name":"Alkohol","category":"food","type":"amount","icon":"wineglass.fill","auto":true,"units":%drinks%,"step":1,"usual":1,"limit":15,"withTime":true,"answered":true,"answer":1,"amount":2,"time":"21:40","value":"2 · do 21:40","short":"%twodrinks%","part":"evening","fromData":true},
+        {"key":"alcohol","name":"Alkohol","category":"food","type":"amount","icon":"wineglass.fill","auto":true,"units":%drinks%,"step":1,"usual":1,"limit":15,"withTime":true,"answered":true,"answer":1,"amount":2,"time":"21:40","value":"2, do 21:40","short":"%twodrinks%","part":"evening","fromData":true},
         {"key":"sauna","name":"Sauna","category":"recovery","type":"yesno","icon":"flame","part":"evening","answered":true,"answer":1,"extra":{"minutes":15,"temp":90},
         "follow":[{"key":"minutes","label":"Kolik minut","kind":"stepper","unit":"min","low":5,"high":90,"step":5,"initial":15},{"key":"temp","label":"Teplota","kind":"chips","unit":"°C","options":[70,80,90],"initial":80}]},
         {"key":"magnesium","name":"Hořčík","category":"supplements","type":"amount","icon":"capsule.portrait","unit":"mg","units":["mg","mg","mg"],"step":50,"usual":300,"limit":1000,"part":"evening","answered":false}]},

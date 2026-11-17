@@ -14,12 +14,12 @@ const week = (completed = []) => ({ days: completed.map(a => ({ date: a.date, da
 const coach = args => buildCyclingCoachV2({ date, week: week([{ date: day(-3), type: "Ride", name: "Endurance", tss: 60, durationHours: 1.25 }]), fitness: { wellness: wellness() }, health: sleep, gym: { history: [] }, ...args });
 
 test("library interval sessions count as quality, easy ones do not", () => {
-  for (const name of ["Billat 30-30", "Norský 4×4", "Seiler 4×8 min", "Rønnestad 30/15 · 3×13", "Long VO₂ efforts 7×3", "Prahové úseky", "Daniels cruise intervals 5×6 min", "UAE-style 40/20 Over-Unders"]) assert.ok(qualityDomain(name), name);
+  for (const name of ["Billat 30-30", "Norský 4×4", "Seiler 4×8 min", "Rønnestad 30/15, 3×13", "Long VO₂ efforts 7×3", "Prahové úseky", "Daniels cruise intervals 5×6 min", "UAE-style 40/20 Over-Unders"]) assert.ok(qualityDomain(name), name);
   for (const name of ["Endurance – Aerobic Base", "Endurance 3x20 Z2", "Lehký běh", "Long Endurance", "Dlouhý běh", "Morning Ride"]) assert.equal(qualityDomain(name), null, name);
   // Tempo is a quality session in both sports.
   assert.equal(qualityDomain("Tempo"), "moderate");
   assert.equal(qualityDomain("Tempo", "run"), "moderate");
-  assert.equal(qualityDomain("Norský double threshold · odpolední 10×1000 m"), "moderate");
+  assert.equal(qualityDomain("Norský double threshold, odpolední 10×1000 m"), "moderate");
   // Two library interval rides this week use up the quality budget.
   const result = coach({ week: week([{ date: day(-4), type: "Ride", name: "Norský 4×4", tss: 80, durationHours: 1.2 }, { date: day(-2), type: "Ride", name: "Seiler 4×8 min", tss: 85, durationHours: 1.3 }]) });
   assert.equal(result.load.hardBikeDaysRolling7d, 2);

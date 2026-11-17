@@ -23,7 +23,13 @@ extension WatchSnapshot.Alarm {
             return wake
         }
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: morning)
-        return weekday == 1 || weekday == 7 ? weekend : work
+        if AlarmDays.has(weekendDays ?? AlarmDays.weekend, weekday) { return weekend }
+        return AlarmDays.has(workDays ?? AlarmDays.work, weekday) ? work : nil
+    }
+
+    /// The morning is one of the weekend alarm's days (Saturday and Sunday unless chosen).
+    func weekendMorning(_ morning: Date) -> Bool {
+        AlarmDays.has(weekendDays ?? AlarmDays.weekend, Calendar(identifier: .gregorian).component(.weekday, from: morning))
     }
 
     /// "6:45" on that day.
@@ -38,5 +44,26 @@ extension WatchSnapshot.Alarm {
         let parts = text.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
         return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2], hour: 12))
+    }
+}
+
+/// The days an alarm rings as bits, Sunday the lowest (Calendar's weekday 1),
+/// as Reminders counts them. The profile keeps them as wakeDays and
+/// wakeDaysWeekend, 0 = Sunday … 6 = Saturday; without them Monday to Friday
+/// and the weekend.
+enum AlarmDays {
+    static let work = 0b0111110
+    static let weekend = 0b1000001
+
+    static func has(_ days: Int, _ weekday: Int) -> Bool { days & (1 << (weekday - 1)) != 0 }
+
+    /// The profile's list, or `fallback` when it has none.
+    static func mask(_ value: JSONValue?, fallback: Int) -> Int {
+        guard case .array(let list)? = value else { return fallback }
+        return list.compactMap { $0.number.map { Int($0) } }.filter { (0...6).contains($0) }.reduce(0) { $0 | (1 << $1) }
+    }
+
+    static func json(_ days: Int) -> JSONValue {
+        .array((0...6).filter { days & (1 << $0) != 0 }.map { .number(Double($0)) })
     }
 }

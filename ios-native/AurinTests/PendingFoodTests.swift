@@ -28,7 +28,7 @@ final class PendingFoodTests: XCTestCase {
         XCTAssertEqual(item.state, .found)
         XCTAssertEqual(item.title, "Rohlík")
         XCTAssertEqual(item.meal, "snack")
-        XCTAssertEqual(model.foodReady?.text, "“Rohlík” found · waiting in Food")
+        XCTAssertEqual(model.foodReady?.text, "“Rohlík” found, waiting in Food")
         // Kept for the next start of the app, the same day only.
         XCTAssertEqual(PendingFood.saved().map(\.id), [id])
         XCTAssertTrue(PendingFood.saved(now: Date().addingTimeInterval(86_400 * 2)).isEmpty)

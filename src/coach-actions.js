@@ -1,13 +1,15 @@
 import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
-import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
+import { PAIN_WORDS, sorePartsFor, painAreas, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
-import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
+import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
+import { scalePlanLoads, weightsName } from './coach-quick-change.js';
 import { parseStrengthPlan } from './strength-history.js';
+import { unwantedExercises } from './strength-generator.js';
 import { planTemplates, getTemplate, planStart } from './training-plans.js';
 import { actionInstructions } from './private/coach-actions.js';
 import { MAX_MINUTES } from './workout-model.js';
@@ -21,7 +23,7 @@ export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','
 // The muscle groups a gym card can be built around (strength-generator.js
 // FOCUS_GROUPS, the same ids; a test keeps them equal).
 export const GYM_MUSCLES=['chest','upper_back','lats','front_delts','side_delts','rear_delts','biceps','triceps','abs','obliques','quads','hamstrings','hips','calves','forearms','traps','lower_back'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group','station','muscles','until'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']},station:{type:'string'},muscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},until:{type:'string'}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:[...Object.keys(ATHLETE_STATUSES),'']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['save','forget','update'],properties:{save:{type:'array',items:{type:'object',additionalProperties:false,required:['text','group','station','muscles','until'],properties:{text:{type:'string'},group:{type:'string',enum:['goals','training','health','life']},station:{type:'string'},muscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},until:{type:'string'}}}},forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','place','activityId','otherActivityId','time','kcal','gymFocus','gymMuscles','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','gym_add','gym_remove','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','swim','']},minutes:{type:'integer'},status:{type:'string',enum:[...Object.keys(ATHLETE_STATUSES),'']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},place:{type:'string',enum:['','pool','open_water']},gymFocus:{type:'string',enum:['','upper','lower']},gymMuscles:{type:'array',items:{type:'string',enum:GYM_MUSCLES}},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
@@ -32,8 +34,25 @@ export const coachPlanTemplates=()=>planTemplates().filter(t=>!t.choose).map(t=>
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
 const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',swim:'plavání',gym:'gym'},{ride:'ride',run:'run',swim:'swim',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
+// Pain in one part told in the chat (T-KOUC-1, 2026-11-16): the coach saved
+// it to the memory and plans around it (eval S50, S53: never Injured for one
+// knee). The server adds one card, "Plan around your knee?", whose chips are
+// the sports that load the part (pain-words.js PAIN_AREAS); confirmed, the
+// chosen sports rest while the memory holds (athlete-state.js pausedSports).
+// Only for one part with sports to pause, and not when the sports are paused already.
+export function planAroundCard(saves, { paused = [], date = null } = {}) {
+  const pains = (saves || []).map(s => String(s?.text || s || '')).filter(t => PAIN_WORDS.test(t));
+  if (pains.length !== 1) return null;
+  const areas = painAreas(pains);
+  if (areas.length !== 1) return null;
+  const sports = areas[0].sports.filter(s => !paused.includes(s));
+  if (!sports.length) return null;
+  return { type: 'plan_around', memory: pains[0], part: areas[0].id, label: L(areas[0].label[0], areas[0].label[1]), sports, date, reason: '' };
+}
+
 // One line per validated proposal, stored with the answer so later turns know it.
 export function actionSummary(a){
+  if(a.type==='plan_around')return L('Plánovat s ohledem na bolest '+a.label+'?','Plan around your '+a.label+'?');
   const workout=a.eventSnapshot?.name||L('trénink','workout');
   if(a.type==='activity_delete')return L('Smazat ','Delete ')+(a.activityName||L('aktivitu','the activity'))+' ('+shortDate(a.date)+L(', jen v Aurinu)',', in Aurin only)');
   if(a.type==='activity_merge')return L('Sloučit ','Merge ')+(a.activityName||'')+' + '+(a.otherName||'')+' ('+shortDate(a.date)+')';
@@ -41,14 +60,38 @@ export function actionSummary(a){
   if(a.type==='activity_kcal')return L('Kalorie ','Calories of ')+(a.activityName||L('aktivity','the activity'))+' ('+shortDate(a.date)+'): '+a.kcal+' kcal';
   if(a.type==='plan')return L('Založit plán ','Start the plan ')+(a.planName||'')+(a.raceDate?L(' (závod ',' (race on ')+shortDate(a.raceDate)+')':a.startDate?L(' (od ',' (from ')+shortDate(a.firstDay||a.startDate)+')':'');
   if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
+  if(a.type==='gym_add')return L('Přidat ','Add ')+a.toExercise+' '+a.sets+'× '+a.reps+' ('+shortDate(a.date)+')';
+  if(a.type==='gym_remove')return L('Odebrat ','Remove ')+a.fromExercise+' ('+shortDate(a.date)+')';
   if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdenního plánu na ','Add a '+SPORT_NAMES()[a.sport]+' to the week plan on ')+shortDate(a.date);
   if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
   if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
   if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
   if(a.trim)return a.workoutName+' ('+shortDate(a.date)+')';
   const half=a.gymFocus?L({upper:' (horní polovina)',lower:' (nohy)'},{upper:' (upper body)',lower:' (legs)'})[a.gymFocus]:'';
-  return L('Připravit '+SPORT_NAMES()[a.sport]+half,'Prepare a '+SPORT_NAMES()[a.sport]+half)+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);
+  return L('Připravit '+SPORT_NAMES()[a.sport]+half,'Prepare a '+SPORT_NAMES()[a.sport]+half)+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date)+(a.replace?L(' místo dosavadního plánu',' instead of the current plan'):'');
 }
+// Chat v1 (coach vision, Petr 2026-11-14): the coach's new changes from the
+// chat reach users together, once the new eval passes; until then only a
+// server with CHAT_V1 (staging) offers them.
+export const chatV1On = env => env?.CHAT_V1 === 'true';
+// A new plan in place of the day's only when the athlete asks for another
+// focus instead of it ("Dneska místo celého těla jen horní polovinu"), never
+// when they ask for another length or one more exercise (review of #1088:
+// "Prodluž mi to a přidej něco na nohy" replaced a full-body plan). "Místo"
+// says it even beside a length ("Místo nohou záda, mám hodinu").
+const REPLACE_ASK=/(?:m[ií]sto|sp[ií][sš]|(?<!\p{L})(?:swap|vym[eě][nň]|proho[dď])\p{L}*|ud[eě]lej\s+z\s+toho|make\s+it\s+an?\s|(?<!\p{L})(?:jen|jenom|pouze)(?!\p{L})|rad[sš]i|nahra[dď]|zm[eě][nň]\p{L}*\s+(?:to\s+|zam[eě][řr]en[ií]\s+)?na|jin[eéáý]\s+zam[eě][řr]|only|instead|rather|switch\s+(?:it\s+)?to|change\s+(?:it\s+|the\s+focus\s+)?to)/iu;
+const LENGTH_OR_ADD=/(?:prodl|zkra[tť]|zkr[aá]t|del[sš]|krat[sš]|longer|shorter|extend|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L}))|p[řr]id|(?<!\p{L})add)/iu;
+const LENGTH_ASK=/(?:prodl|del[sš]|d[ée]le|longer|extend|more\s+time|v[íi]c\s+[čc]asu|\d+\s*(?:min|h(?!\p{L})|hod)|(?<!\p{L})(?:hodin(?!k)|p[uů]l\s*hod|minut|hour|minutes?(?!\p{L})))/iu,
+  SHORTEN_ASK=/(?:zkra[tť]|zkr[aá]t|krat[sš]|(?<!\p{L})(?:do|max(?:imáln[eě])?|nejv[ýy][šs]|under|within|at\s+most|shorter)\s+\d+\s*(?:min|h(?!\p{L})|hod))/iu;
+const INSTEAD=/(?:m[ií]sto|nahra[dď]|instead)/iu,ADD_ASK=/(?:p[řr]id|(?<!\p{L})add)/iu;
+// "Dej to dneska lehčí" / "Make it heavier" for the gym: −1 or +1 load step, 0
+// when the message asks for no such thing or also for another length. Only
+// phrases about the session's weights: "Mám dneska těžší den" is not one.
+const NOT_LOAD=String.raw`(?!\p{L})(?!\s+(?:den|dn[eyí]|noc|t[ýy]d|tr[ée]nin|ve[čc]er|r[áa]no|j[íi]d|sva[čc]|day|night|week|session|workout|training|meal|food))`,LOAD=String.raw`(?:v[áa]h|z[áa]t[ěe][žz]|kil|weights?|loads?)`;
+const LIGHTER=new RegExp(String.raw`(?:(?<!\p{L})(?:dej|ud[ěe]lej|nastav)\s+(?:\p{L}+\s+){0,3}?(?:leh[čck])\p{L}*${NOT_LOAD}|(?:leh[čc]|ni[žz]š|men[šs])\p{L}*\s+${LOAD}|(?:m[ée]n[ěe]|m[íi][ňn])\s+${LOAD}|(?<!\p{L})(?:ub[eě]?r|sni[žz])\p{L}*\s+(?:\p{L}+\s+)?${LOAD}|(?<!\p{L})odleh[čc]i(?!\p{L})|make\s+it\s+(?:lighter|easier)|go\s+lighter|lighter\s+${LOAD}|(?:lower|less|reduce|drop)\s+(?:the\s+)?${LOAD})`,'iu');
+const HEAVIER=new RegExp(String.raw`(?:(?<!\p{L})(?:dej|ud[ěe]lej|nastav)\s+(?:\p{L}+\s+){0,3}?(?:t[ěe][žz][šsk])\p{L}*${NOT_LOAD}|(?:t[ěe][žz]š|vy[šs]š|v[ěe]t[šs])\p{L}*\s+${LOAD}|(?:v[íi]c|v[íi]ce)\s+${LOAD}|(?<!\p{L})(?:zvy[šs]|zv[ěe]t[šs])\p{L}*\s+(?:\p{L}+\s+)?${LOAD}|make\s+it\s+(?:heavier|harder)|go\s+heavier|heavier\s+${LOAD}|(?:higher|more|increase|raise)\s+(?:the\s+)?${LOAD})`,'iu');
+export const gymLoadAsked=message=>{const m=String(message||'');if(LENGTH_OR_ADD.test(m))return 0;const down=LIGHTER.test(m),up=HEAVIER.test(m);return down===up?0:down?-1:1;};
+export const replaceAsked=message=>{const m=String(message||'');return INSTEAD.test(m)?!ADD_ASK.test(m):REPLACE_ASK.test(m)&&!LENGTH_OR_ADD.test(m);};
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
 // `planFor(date)` returns the week plan (availability Monday..Sunday).
@@ -104,9 +147,10 @@ const MUSCLE_WORDS=[
   [/přední\s+stehn\p{L}*|predni\s+stehn\p{L}*|quads?(?!\p{L})|quadriceps/iu,['quads']]
 ];
 const MUSCLE_ANY=new RegExp(MUSCLE_WORDS.map(([re])=>'(?:'+re.source+')').join('|'),'iu');
-// "na prsa a triceps", "for chest and arms", "procvičit záda", "chest day", "cviky na prsa".
+// "na prsa a triceps", "for chest and arms", "procvičit záda", "chest day", "cviky na prsa",
+// "přidej tam i ty bicepsy", "add some biceps" (Petr 2026-11-14).
 const MUSCLE_LIST='(?:'+MUSCLE_ANY.source+')(?:\\s*(?:,|a|and|i|\\+|&)\\s*(?:'+MUSCLE_ANY.source+'))*';
-const MUSCLE_WISH=new RegExp('(?:(?<!\\p{L})(?:na|for|on|train|training|work|hit|target)|procvi\\p{L}*|posíl\\p{L}*|posil\\p{L}*|zaměř\\p{L}*\\s+na|zamer\\p{L}*\\s+na)\\s+(?:(?:the|my|moje|mé|me|si)\\s+)?'+MUSCLE_LIST+'|'+MUSCLE_LIST+'\\s+(?:day|exercises?|workout|session|cviky|cvičení|cviceni|trénink|trenink)','giu');
+const MUSCLE_WISH=new RegExp('(?:(?<!\\p{L})(?:na|for|on|train|training|work|hit|target)|(?<!\\p{L})p[řr]id\\p{L}*(?:\\s+(?:tam|tu|sem|i|ty|ten|ještě|jeste|něco|neco|nějak\\p{L}*|nejak\\p{L}*)){0,4}|(?<!\\p{L})add(?:\\s+(?:some|more|a|an|also|in)){0,3}|procvi\\p{L}*|posíl\\p{L}*|posil\\p{L}*|zaměř\\p{L}*\\s+na|zamer\\p{L}*\\s+na)\\s+(?:(?:the|my|moje|mé|me|si)\\s+)?'+MUSCLE_LIST+'|'+MUSCLE_LIST+'\\s+(?:day|exercises?|workout|session|cviky|cvičení|cviceni|trénink|trenink)','giu');
 export function requestedMuscles(message){
   const out=[];
   for(const m of String(message||'').matchAll(MUSCLE_WISH))for(const [re,groups] of MUSCLE_WORDS)if(new RegExp(re.source,'giu').test(m[0]))for(const g of groups)if(!out.includes(g))out.push(g);
@@ -160,6 +204,11 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
       try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory,context.outOfOrder||[]);return swap.date===a.date?[swap]:[];}catch{return [];}
     }
+    // One exercise more or less in the stored plan; an app too old to show the card gets none.
+    if(['gym_add','gym_remove'].includes(a.type)&&!context.oldAppCards&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
+      if(taken().some(x=>x.type===a.type&&(x.toExercise||x.fromExercise)===(a.type==='gym_add'?a.toExercise:a.fromExercise)))return [];
+      try{const change=a.type==='gym_add'?prepareGymAdd(context.gymPlan,a.toExercise,reason,context.preferenceMemory,context.outOfOrder||[]):prepareGymRemove(context.gymPlan,a.fromExercise,reason);return change.date===a.date?[change]:[];}catch{return [];}
+    }
     // Calories of a done activity it was shown, set in Aurin only (activity-edits.js).
     if(a.type==='activity_kcal'){
       const activity=kcalTargets(context).get(String(a.activityId||'')),kcal=Number(a.kcal);
@@ -194,7 +243,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const raceKm=template.race?.options?.includes(Number(a.raceKm))?Number(a.raceKm):template.race?.km??null;
       return [{type:'plan',planId:template.id,sport:template.sport,planName:template.name,weeksCount:template.weeks.length,date:when.raceDate&&template.race?when.raceDate:when.firstDay||when.startDate,startDate:when.startDate,...(when.firstDay?{firstDay:when.firstDay}:{}),...(template.race?{raceDate:when.raceDate,raceKm}:{}),...(!template.race&&validDay(a.date)&&a.date>today?{requestedStart:a.date}:{}),...(chosen?{days:chosen}:{}),reason}];
     }
-    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
+    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&!(context.pausedSports||[]).includes(a.sport)&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
     if(a.type==='status'&&Object.hasOwn(ATHLETE_STATUSES,a.status)){
@@ -234,6 +283,8 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // cold said now today's hard work, insisted or not (pain-words.js;
       // audit "Kouč jako skutečný trenér" 2026-11-07, point 2).
       if(intense&&sorePartsFor(a.sport,[context.userMessage,...(context.preferenceMemory||[])]).length)return [];
+      // A sport paused for a pain ("Plan around your knee?") gets no session.
+      if((context.pausedSports||[]).includes(a.sport))return [];
       if(intense&&a.date===today&&unwellNow(context.userMessage))return [];
       // The athlete asked for it again in this chat after the coach's concern:
       // their call passes the 48 h and two-in-7 rules (Petr 2026-10-19).
@@ -243,18 +294,32 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       if(a.sport==='gym'){
         // No gym today on a red morning or with signs of illness, not even shortened (S20).
         if(a.date===today&&(holdBackToday(context)||unwellNow(context.userMessage)))return [];
-        // A day that already has a gym plan gets that plan shortened, never a
-        // second one (it could not be saved next to it).
-        let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
-        if(planDate&&planDate===a.date){
-          const trimmed=trimGymPlan(context.gymPlan.values,a.minutes);if(!trimmed)return [];
-          return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:context.gymPlan.values,removed:trimmed.removed}}];
-        }
         // Named muscle groups set the half of the body too, so the card, its
         // name and the next days' rule (never the same half twice) agree.
         const muscles=gymMusclesOf(a,context.userMessage),legs=muscles.filter(g=>LEG_GROUPS.includes(g)).length;
         const focus=muscles.length?(legs===muscles.length?'lower':legs?null:'upper'):gymFocusOf(a,context.userMessage);
-        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{})}];
+        // Exercises the athlete turned down in this chat ("Nechci floor press")
+        // stay out of the card, as the answer promises (Petr 2026-11-12).
+        const avoid=unwantedExercises([...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content),context.userMessage]);
+        const session={type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{}),...(muscles.length?{gymMuscles:muscles}:{}),...(avoid.length?{gymAvoid:avoid}:{})};
+        // A day that already has a gym plan gets that plan changed, never a
+        // second one (it could not be saved next to it): shortened, and in
+        // Chat v1 lengthened, or a new plan of another focus in its place
+        // while nothing of it is done yet.
+        let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
+        if(planDate&&planDate===a.date){
+          const values=context.gymPlan.values;
+          if(context.chatV1&&replaceAsked(context.userMessage)&&focusChanges(values,{focus,muscles}))return planStarted(values)?[]:[{...session,replace:{source:values}}];
+          // Lighter or heavier weights of the same plan (Chat v1), not another length.
+          // Cut to the asked length first, then the weights (review of #1091).
+          const trimmed=trimGymPlan(values,a.minutes),load=context.chatV1?gymLoadAsked(context.userMessage):0,base=trimmed?.values||values,scaled=load?scalePlanLoads(base,load):null;
+          if(scaled)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,loadStep:load,workoutName:weightsName(load),trim:{values:scaled,base,source:values,removed:trimmed?.removed||[],weights:true}}];
+          if(trimmed)return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:values,removed:trimmed.removed}}];
+          // Only on an ask for more time: a card of another focus at the plan's own length is no lengthening (persona run 77, P07.1).
+          const longer=context.chatV1&&LENGTH_ASK.test(String(context.userMessage||''))&&!SHORTEN_ASK.test(String(context.userMessage||''))?extendGymPlan(context.gymPlan,a.minutes,context.preferenceMemory,context.outOfOrder||[]):null;
+          return longer?[{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:longer.name,trim:{values:longer.values,source:values,removed:[],added:longer.added}}]:[];
+        }
+        return [session];
       }
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(openWater?{openWater:true}:{}),...(insisted?{insisted:true}:{}),...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }

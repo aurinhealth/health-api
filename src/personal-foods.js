@@ -8,9 +8,12 @@ export function foodSimilarity(a,b){a=foodKey(a);b=foodKey(b);if(!a||!b)return 0
 // use_count: how often the food was logged, for "Časté" in the app.
 const counted=new WeakSet();
 async function ensure(db){await db.prepare('CREATE TABLE IF NOT EXISTS personal_foods (user_id INTEGER NOT NULL,food_key TEXT NOT NULL,product_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY (user_id,food_key))').run();if(!counted.has(db)){try{await db.prepare('ALTER TABLE personal_foods ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0').run();}catch{}counted.add(db);}}
-export async function savePersonalFood(db,input,{used=false}={}){
+export async function savePersonalFood(db,input,{used=false,last=null}={}){
   const p=productFromLabel(input),serving=foodPackageSize(p?.serving_size);
+  // The amount just logged (g, ml or servings), for "+" and the amount screen next time.
+  let lastAmount=Number(last)>0&&Number(last)<=100000?Number(last):null;
   if(p?.nutrition_basis==='portion'&&serving){
+    if(lastAmount)lastAmount*=serving.amount;
     for(const key of ['calories_100g','protein_100g','carbs_100g','fat_100g','sugars_100g','fiber_100g','salt_100g'])if(p[key]!=null)p[key]=p[key]*100/serving.amount;
     if(p.micros_100g)p.micros_100g=scaleMicros(p.micros_100g,100/serving.amount);
     p.nutrition_basis=serving.unit;
@@ -19,11 +22,17 @@ export async function savePersonalFood(db,input,{used=false}={}){
   await ensure(db);
   const existing=input.id?await db.prepare('SELECT product_json FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(input.id)).first():null;
   if(input.id&&!existing)throw new Error(L('Potravina nebyla nalezena.', 'The food was not found.'));
+  // Saved again without its id (the scanner's editor): the same row keeps its last amount.
+  const same=!input.id&&!lastAmount&&p?.name?await db.prepare('SELECT product_json FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,foodKey(p.name)+'|'+foodKey(p.brand)).first():null;
   // Values the AI looked up or estimated keep that origin when the food is
   // edited later. A catalogue food the user corrected ('edited') is marked too.
-  const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate','edited'].includes(input.origin)?input.origin:(()=>{try{return JSON.parse(existing?.product_json||'{}').origin||null;}catch{return null;}})();
+  const before=(()=>{try{return JSON.parse(existing?.product_json||'{}');}catch{return {};}})();
+  const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate','edited'].includes(input.origin)?input.origin:before.origin||null;
+  // An edit keeps the amount last logged.
+  const kept=existing?before:(()=>{try{return JSON.parse(same?.product_json||'{}');}catch{return {};}})();
+  if(!lastAmount&&Number(kept.last_amount)>0)lastAmount=Number(kept.last_amount);
   if(!p?.name||p.name.length>180||!['g','ml','portion'].includes(p.nutrition_basis)||['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||p[k]<0||p[k]>(k==='calories_100g'?(portion?10000:1000):(portion?1000:100))))throw new Error(L('Doplň název, jednotku a platné nutriční hodnoty.', 'Fill in the name, the unit and valid nutrition values.'));
-  await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user',...(origin?{origin}:{})};
+  await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user',...(origin?{origin}:{}),...(lastAmount?{last_amount:Math.round(lastAmount*10)/10}:{})};
   await db.prepare('INSERT INTO personal_foods(user_id,food_key,product_json,use_count) VALUES(?,?,?,?) ON CONFLICT(user_id,food_key) DO UPDATE SET product_json=excluded.product_json,updated_at=CURRENT_TIMESTAMP,use_count=personal_foods.use_count+excluded.use_count').bind(db.userId,input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand),JSON.stringify(product),used?1:0).run();
   const id=input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand);
   // A saved food stays the user's own. It reaches everyone only as a suggestion

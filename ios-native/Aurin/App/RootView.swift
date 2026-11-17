@@ -77,7 +77,7 @@ struct RootView: View {
     @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
         switch tab {
         case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
-        case .training: TrainingView().environment(\.tabActions, tabActions)
+        case .training: TrainingView().environment(\.tabActions, tabActions).environment(\.compactTabBar, compactBar)
         case .food: FoodView().environment(\.tabActions, tabActions)
         case .health: HealthView().environment(\.tabActions, tabActions)
         }
@@ -493,8 +493,8 @@ struct OfflineBanner: View {
     var waiting = 0
 
     private var text: String {
-        let parts = [offline ? L10n.tr("Bez připojení · uložená data") : nil, waiting > 0 ? Self.waitingText(waiting) : nil]
-        return parts.compactMap { $0 }.joined(separator: " · ")
+        let parts = [offline ? L10n.tr("Bez připojení, uložená data") : nil, waiting > 0 ? Self.waitingText(waiting) : nil]
+        return parts.compactMap { $0 }.joined(separator: ", ")
     }
 
     static func waitingText(_ n: Int) -> String {
@@ -530,7 +530,7 @@ struct SyncPill: View {
                     Text("Synchronizováno")
                 case .failed:
                     Image(systemName: "exclamationmark.circle")
-                    Text("Nepodařilo se · Zkusit znovu")
+                    Text("Nepodařilo se. Zkusit znovu")
                 }
             }
             .font(.footnote.weight(.semibold))
@@ -660,9 +660,11 @@ struct TabBar: View {
 
     /// The icon with the section's name under it (Petr, 2026-10-24), all in
     /// ink: grey on glass reads too faintly. The open one is bolder, on a soft
-    /// fill like the system tab bar's (it still shows with Bold Text on). The
-    /// fill sits 6 pt inside its slot on every side, so at the ends of the bar
-    /// it follows the capsule's curve and is the same size for every section.
+    /// fill like the system tab bar's (it still shows with Bold Text on): 12 %
+    /// ink, as the 8 % of the tracks read too faintly on glass (design review
+    /// 2026-11-10, point 15). The fill sits 6 pt inside its slot on every side,
+    /// so at the ends of the bar it follows the capsule's curve and is the same
+    /// size for every section.
     private func item(_ value: AppTab, _ label: String) -> some View {
         let open = tab == value
         return Button { tab = value } label: {
@@ -677,7 +679,7 @@ struct TabBar: View {
             .foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
-                if open { Capsule().fill(Palette.track).padding(6) }
+                if open { Capsule().fill(Palette.ink.opacity(0.12)).padding(6) }
             }
             .contentShape(Rectangle())
         }

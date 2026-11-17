@@ -13,7 +13,7 @@ const intervals = [
   iv(2947, 30, 625, 160, 181, 886), iv(2977, 300, 272, 174, 182, 549), iv(3277, 303, 147, 144, 169, 317),
   iv(3580, 1500, 177, 149, 173, 714), iv(5080, 80, 144, 141, 156, 281)
 ];
-const activity = { id: 'activity:i194737568', type: 'Ride', name: 'Threshold s ostrým startem 4×5 · 90 min', start: '2026-10-07T16:43:03', durationHours: 4933 / 3600, tss: 141, calories: 983, payload: { icu_ftp: 260 } };
+const activity = { id: 'activity:i194737568', type: 'Ride', name: 'Threshold s ostrým startem 4×5, 90 min', start: '2026-10-07T16:43:03', durationHours: 4933 / 3600, tss: 141, calories: 983, payload: { icu_ftp: 260 } };
 const detail = { activity: { icu_ftp: 260, icu_normalized_watts: 264, average_watts: 202, hr_load: 88, carbs_used: 256, total_elevation_gain: 452 }, intervals };
 const plan = { tss: 87, durationHours: 1.5, description };
 const wellness = [
@@ -38,7 +38,7 @@ test('the ride review reads like a coach: blocks, targets, wins, fixes and recov
   const r = review('cs'), text = JSON.stringify(r);
   assert.match(r.verdict, /lehce přepálená/);
   assert.match(r.target, /95–101 %, tedy zhruba 247–263 W při FTP 260 W/);
-  assert.deepEqual(r.table.rows[0], ['1', '675 W (974)', '268 W · 4:29', '173 / 183']);
+  assert.deepEqual(r.table.rows[0], ['1', '675 W (974)', '268 W, 4:29', '173 / 183']);
   assert.equal(r.table.rows.length, 4);
   assert.match(text, /rozptylem jen 7 W/);
   assert.match(text, /Rozjetí bylo moc ostré: průměr 195 W \(75 %\) místo 53–63 %, tep až 172/);

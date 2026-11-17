@@ -19,7 +19,7 @@ struct TrainingLibraryView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: sport?.label ?? "Knihovna tréninků") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
+                SectionLabel(text: "Knihovna tréninků").padding(.top, 24)
                 Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 if let sport {
@@ -305,7 +305,7 @@ struct LibraryBrickSheet: View {
                                 .background(s?.color ?? Palette.green, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                             Text(L10n.tr(s?.label ?? leg.sport)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                             Spacer()
-                            Text(verbatim: [Fmt.duration(leg.minutes), leg.meters.map { Fmt.int($0) + " m" }].compactMap { $0 }.joined(separator: " · "))
+                            Text(verbatim: [Fmt.duration(leg.minutes), leg.meters.map { Fmt.int($0) + " m" }].compactMap { $0 }.joined(separator: ", "))
                                 .font(Typo.small).foregroundStyle(Palette.muted)
                         }
                         if !leg.steps.isEmpty {
@@ -389,6 +389,11 @@ struct WorkoutLibrarySection: View {
     @State private var variant = 0
     @State private var proposing = false
     @State private var proposalError: String?
+    /// The athlete opened the proposal, asked for another or changed the length:
+    /// the coach's own workout no longer replaces it.
+    @State private var touched = false
+    /// Each proposal's own wait for the coach: an older one stops when a new one starts.
+    @State private var proposeRun = 0
     /// Few workouts of the chosen type: the AI's own for these filters (Na míru od AI).
     @State private var composeWanted = false
     @State private var composed: LibraryWorkout?
@@ -454,7 +459,7 @@ struct WorkoutLibrarySection: View {
                 Text(composeShown ? "V knihovně tomuto výběru nic neodpovídá." : "Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text(L10n.plural(composeShown ? "Z knihovny · %lld tréninků" : "%lld tréninků", workouts.count))
+                Text(L10n.plural(composeShown ? "Z knihovny, %lld tréninků" : "%lld tréninků", workouts.count))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -475,14 +480,21 @@ struct WorkoutLibrarySection: View {
         VStack(alignment: .leading, spacing: 10) {
             if let workout = proposal?.workout {
                 SectionLabel(text: "Návrh kouče")
-                Button { open = workout } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                Button { open = workout; touched = true } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                if proposal?.aiPending == true && !touched {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Kouč píše…").font(Typo.small).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
                 if (proposal?.variantCount ?? 0) > 1 {
-                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { variant += 1; await propose() } }
+                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { touched = true; variant += 1; await propose() } }
                         .disabled(proposing)
                 }
             } else {
                 PrimaryButton(title: proposing ? "Hledám…" : "Navrhnout trénink na dnes", systemImage: "sparkles", busy: proposing) {
-                    Task { variant = 0; await propose() }
+                    Task { variant = 0; touched = false; await propose() }
                 }
                 .disabled(model.demo)
             }
@@ -491,7 +503,7 @@ struct WorkoutLibrarySection: View {
             }
         }
         .padding(.top, 20)
-        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil }
+        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil; touched = true }
     }
 
     /// Shown while the AI writes and once it has; a failure or an empty answer hides it.
@@ -541,14 +553,27 @@ struct WorkoutLibrarySection: View {
     }
 
     private func propose() async {
+        proposeRun += 1
+        let run = proposeRun
         proposing = true
-        defer { proposing = false }
         do {
-            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant)
+            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant, background: variant == 0)
             proposalError = nil
         } catch {
             proposalError = error.localizedDescription
         }
+        proposing = false
+        // The coach writes its own workout after the answer (within ~25 s):
+        // asked again at most four times, and it takes the card's place only
+        // while the card is untouched (not opened, no other suggestion, same length).
+        for _ in 0..<4 where variant == 0 && proposal?.aiPending == true && !touched && run == proposeRun {
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled, !touched, run == proposeRun else { break }
+            guard let fresh = try? await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: 0, background: true),
+                  !touched, run == proposeRun else { continue }
+            withAnimation(.snappy) { proposal = fresh }
+        }
+        if run == proposeRun, proposal?.aiPending == true { proposal?.aiPending = nil }
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far
@@ -852,7 +877,7 @@ struct ExerciseLibraryView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Cviky") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · knihovna cviků").padding(.top, 24)
+                SectionLabel(text: "Knihovna cviků").padding(.top, 24)
                 Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 ExerciseCatalog(muscle: muscle)
             }
@@ -914,6 +939,11 @@ struct ExerciseCatalog: View {
                 Text("Velké svaly se ještě zotavují. Zkus krátký trénink středu těla nebo volno.")
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
+                // Something to do anyway: 30 minutes of the smaller muscles rested today.
+                if model.muscles?.shortFocus.isEmpty == false {
+                    PrimaryButton(title: L10n.tr("Sestavit krátký trénink"), systemImage: "sparkles") { model.push(.gymShort) }
+                        .padding(.top, 8)
+                }
             }
 
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
@@ -973,7 +1003,7 @@ struct ExerciseCatalog: View {
             BodyMap(load: ex.muscles ?? [:], height: 54, compact: true).frame(width: 64).allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 2) {
                 Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 if let m = tired(ex), let data = model.muscles {
                     Text(verbatim: L10n.f("%@ unavené, odpočaté %@", m.label, m.readyText(today: data.date)))
                         .font(Typo.caption).foregroundStyle(Palette.rust).lineLimit(1)
@@ -1049,7 +1079,7 @@ struct ExerciseSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 Text(exercise.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
+                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted)
                 BodyMap(load: exercise.muscles ?? [:], height: 280, legend: true)
                 if let note = exercise.note?.nilIfBlank {

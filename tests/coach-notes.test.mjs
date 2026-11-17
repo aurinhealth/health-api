@@ -215,3 +215,19 @@ test('deleting a chat that runs for months clears the notes of its recent days',
     assert.equal((await raw.prepare('SELECT COUNT(*) AS n FROM coach_notes').first()).n, 0);
   });
 });
+
+test('the night drops the day unasked for an account without Pro once the paywall is on', async () => {
+  const raw = createD1(), db = scopedDb(raw, 1);
+  const env = { DB: db, OPENAI_API_KEY: 'test', USER_IS_OWNER: true, USER_ID: 1, AI_PAYWALL_ENABLED: 'true' };
+  await withTimeZone('Europe/Prague', async () => {
+    await appendChatTurn(db, null, 'Kolo jen o víkendu.', 'Super.');
+    await raw.prepare("UPDATE assistant_messages SET created_at='2026-11-02 18:00:00'").run();
+    await raw.prepare("UPDATE assistant_chats SET created_at='2026-11-02 18:00:00', updated_at='2026-11-02 18:00:00'").run();
+    await queueDayNote(db, '2026-11-02');
+    let asked = 0;
+    const r = await runCoachNotes(env, { now: Date.parse('2026-11-03T05:00:00Z'), ask: async () => { asked++; return { text: '{}' }; } });
+    assert.equal(asked, 0);
+    assert.equal(r.days, 0);
+    assert.equal((await raw.prepare('SELECT COUNT(*) AS n FROM coach_note_queue').first()).n, 0);
+  });
+});

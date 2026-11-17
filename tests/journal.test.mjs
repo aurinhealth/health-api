@@ -120,8 +120,8 @@ test("a day's state: the athlete's answer wins over the day's data; unanswered i
   assert.deepEqual(dayState(late, null, { time: "21:15" }), { yes: true, level: timeLevel("21:15") });
   assert.deepEqual(dayState(stress, { answer: 1, amount: 4 }, null), { yes: true, level: 4 });
   assert.deepEqual(dayState(stress, { answer: 1, amount: 2 }, null), { yes: false, level: 2 });
-  assert.equal(withLang("cs", () => valueText(alcohol, { yes: true, amount: 2, time: "21:40" })), "2 · do 21:40");
-  assert.equal(withLang("en", () => valueText(catalogItem("caffeine"), { yes: true, amount: 180, time: "15:10" })), "180 mg · last 15:10");
+  assert.equal(withLang("cs", () => valueText(alcohol, { yes: true, amount: 2, time: "21:40" })), "2, do 21:40");
+  assert.equal(withLang("en", () => valueText(catalogItem("caffeine"), { yes: true, amount: 180, time: "15:10" })), "180 mg, last 15:10");
   assert.equal(valueText(catalogItem("magnesium"), { yes: true, amount: 300 }), "300 mg");
   assert.equal(withLang("cs", () => valueText(catalogItem("melatonin"), { yes: true, amount: 0.5 })), "0,5 mg");
 });
@@ -236,7 +236,7 @@ test("the day's data fills in alcohol, caffeine, the last meal and an evening wo
   // The journal day shows them as answered from the data; Today's card lists them.
   const day = await withLang("cs", () => journalDay(db, d, today));
   const items = day.sections.flatMap(s => s.items);
-  assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["caffeine", "145 mg · do 15:10"], ["outdoors", null], ["evening_training", "19:00"], ["late_meal", "21:15"], ["alcohol", "2 · do 21:40"]]);
+  assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["caffeine", "145 mg, do 15:10"], ["outdoors", null], ["evening_training", "19:00"], ["late_meal", "21:15"], ["alcohol", "2, do 21:40"]]);
   // By part of the day and time; the row's value without the time.
   assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna", "mood"]], ["Noc", ["phone_in_bed", "late_bed"]], ["Dnešní noc", ["sleep_away"]]]);
   assert.deepEqual(items.filter(i => i.key === "alcohol" || i.key === "late_meal").map(i => i.short), [null, "2 nápoje"]);
@@ -532,7 +532,7 @@ test("the mood is pinned, belongs to the evening and reads as a word with its la
   assert.ok(DEFAULT_PINNED.includes("mood"));
   assert.equal(catalogItem("mood").type, "scale");
   assert.equal(usualPart(catalogItem("mood")), "evening");
-  assert.equal(withLang("cs", () => moodText(4, 5)), "Příjemná · Klid, Radost");
+  assert.equal(withLang("cs", () => moodText(4, 5)), "Příjemná: Klid, Radost");
   assert.equal(withLang("en", () => moodText(1, 0)), "Very unpleasant");
   assert.equal(moodText(null, 0), null);
 });

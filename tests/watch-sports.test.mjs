@@ -10,7 +10,8 @@ const row = (exerciseType, family = "apple-health") => ({ source_family: family,
 test("a watch's sport becomes the app's type, named in words", () => {
   for (const [watch, type, group] of [["SWIMMING", "Swim", "swim"], ["OPEN_WATER_SWIMMING", "OpenWaterSwim", "swim"], ["TENNIS", "Tennis", "other"],
     ["TABLE_TENNIS", "TableTennis", "other"], ["HIIT", "HighIntensityIntervalTraining", "other"], ["YOGA", "Yoga", "other"], ["ROWING", "Rowing", "other"],
-    ["MOUNTAIN_BIKING", "MountainBikeRide", "ride"], ["STATIONARY_BIKING", "VirtualRide", "ride"], ["STRENGTH_TRAINING", "WeightTraining", "strength"],
+    ["MOUNTAIN_BIKING", "MountainBikeRide", "ride"], ["STATIONARY_BIKING", "VirtualRide", "ride"],
+    ["STATIONARY_BIKE", "VirtualRide", "ride"], ["MOUNTAIN_BIKE", "MountainBikeRide", "ride"], ["TREADMILL", "VirtualRun", "run"], ["ELECTRIC_BIKE", "EBikeRide", "ride"], ["STRENGTH_TRAINING", "WeightTraining", "strength"],
     ["ROCK_CLIMBING", "RockClimbing", "other"], ["CROSS_COUNTRY_SKIING", "NordicSki", "other"], ["Tennis", "Tennis", "other"]]) {
     assert.equal(watchType(watch), type, watch);
     assert.equal(groupOfType(type), group, watch);

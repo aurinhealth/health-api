@@ -65,13 +65,36 @@ final class GymWorkout: NSObject, ObservableObject {
         }
         let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned), HKObjectType.workoutType()]
-        try? await store.requestAuthorization(toShare: share, read: read)
+        do {
+            try await store.requestAuthorization(toShare: share, read: read)
+        } catch {
+            WatchReport.failed("workout/authorization", message: error.localizedDescription)
+        }
         // Without leave to save workouts the session doesn't run: said on the set screen.
         // (A denied heart rate can't be told apart from none yet; the session still tries.)
         noHealth = store.authorizationStatus(for: HKObjectType.workoutType()) != .sharingAuthorized
         let now = Date()
         start = now
         if await !startSession(at: now) { noHealth = true }
+        checkReadings(since: now)
+    }
+
+    /// 45 s into the workout without one reading: the watch measures the heart
+    /// every few seconds in a workout, so Apple Health keeps it from Aurin (the
+    /// heart rate or calories not allowed to be read, which can't be asked) or
+    /// the workout no longer runs. The set screen says what to allow instead of
+    /// a bare dash, and the iPhone's "Nahlásit problém" gets the state
+    /// (Petr 2026-11-12: a dash from the start, on the watch and the iPhone).
+    private func checkReadings(since begun: Date) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(45))
+            guard self.start == begun, self.heartRate == nil, self.calories == 0 else { return }
+            let state = self.session.map { String($0.state.rawValue) } ?? "none"
+            let shares = [HKObjectType.workoutType(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
+                .map { String(self.store.authorizationStatus(for: $0).rawValue) }.joined(separator: "/")
+            WatchReport.failed("workout/no reading", message: "session \(state), share \(shares), retried \(self.retried)")
+            self.noHealth = true
+        }
     }
 
     /// The HealthKit workout from `date`: false when it can't be made.
@@ -79,7 +102,13 @@ final class GymWorkout: NSObject, ObservableObject {
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .traditionalStrengthTraining
         configuration.locationType = .indoor
-        guard let session = try? HKWorkoutSession(healthStore: store, configuration: configuration) else { return false }
+        let session: HKWorkoutSession
+        do {
+            session = try HKWorkoutSession(healthStore: store, configuration: configuration)
+        } catch {
+            WatchReport.failed("workout/session", message: error.localizedDescription)
+            return false
+        }
         let builder = session.associatedWorkoutBuilder()
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
         builder.delegate = self
@@ -87,7 +116,11 @@ final class GymWorkout: NSObject, ObservableObject {
         self.session = session
         self.builder = builder
         session.startActivity(with: date)
-        try? await builder.beginCollection(at: date)
+        do {
+            try await builder.beginCollection(at: date)
+        } catch {
+            WatchReport.failed("workout/collection", message: error.localizedDescription)
+        }
         return true
     }
 
@@ -389,8 +422,10 @@ final class GymWorkout: NSObject, ObservableObject {
 
     /// The system ended the session (another workout started, an error): the
     /// gym goes on with its clock, the next workout starts from here.
-    fileprivate func lost(_ ended: ObjectIdentifier, failed: Bool = false) {
+    fileprivate func lost(_ ended: ObjectIdentifier, error: String? = nil) {
         guard let session, ObjectIdentifier(session) == ended else { return }
+        let after = start.map { Int(Date().timeIntervalSince($0)) } ?? 0
+        WatchReport.failed("workout/ended", message: "after \(after) s" + (error.map { ": " + $0 } ?? ""))
         let builder = self.builder
         self.session = nil
         self.builder = nil
@@ -409,7 +444,7 @@ final class GymWorkout: NSObject, ObservableObject {
             }
             return
         }
-        if failed { noHealth = true }
+        if error != nil { noHealth = true }
         Task {
             try? await builder?.endCollection(at: Date())
             _ = try? await builder?.finishWorkout()
@@ -428,7 +463,8 @@ extension GymWorkout: HKWorkoutSessionDelegate {
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         let id = ObjectIdentifier(workoutSession)
-        Task { @MainActor in GymWorkout.shared.lost(id, failed: true) }
+        let message = error.localizedDescription
+        Task { @MainActor in GymWorkout.shared.lost(id, error: message) }
     }
 }
 

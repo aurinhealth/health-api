@@ -30,6 +30,12 @@ test("the last choice wins over the name: leg extensions by sides, a split squat
   assert.deepEqual(out.map(r => r[13]), ["L", "P", ""]);
 });
 
+test("set 1 by sides, then back to both at once: next time both at once", () => {
+  const set = (row, side, type = "WORK") => ({ exercise: "Bulharský dřep", workout_date: "2026-11-13", plan_row: row, type, side });
+  assert.deepEqual(lastSideChoice([set(9, ""), set(10, ""), set(5, "L", "WARMUP"), set(7, "L"), set(8, "P")]), { "Bulharský dřep": "both" });
+  assert.deepEqual(lastSideChoice([set(7, ""), set(8, "L"), set(9, "P")]), { "Bulharský dřep": "sides" });
+});
+
 test("the balance compares the last session's sides and names the weaker one past 5 %", () => {
   const set = (date, side, kg, reps) => ({ exercise: "Bulharský dřep", workout_date: date, side, actual_kg: kg, actual_reps: reps });
   const [b] = sideBalance([set("2026-10-12", "L", 16, 10), set("2026-10-12", "P", 16, 8), set("2026-10-01", "L", 16, 5)]);

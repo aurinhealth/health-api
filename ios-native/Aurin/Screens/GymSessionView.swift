@@ -102,9 +102,8 @@ struct GymSessionView: View {
             TechniqueSheet(exercise: item.name, replace: { Task { try? await Task.sleep(for: .milliseconds(450)); alternativesFor = item.name } })
         }
         .sheet(item: Binding(get: { alternativesFor.map { Named(name: $0) } }, set: { alternativesFor = $0?.name })) { item in
-            AlternativesSheet(date: date, exercise: item.name) { replacement in
-                Task { await replace(item.name, with: replacement) }
-            }
+            AlternativesSheet(date: date, exercise: item.name, choose: { _ in },
+                              chooseAlternative: { alt in Task { await replace(item.name, with: alt) } })
         }
         .sheet(isPresented: $changing) {
             GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
@@ -122,7 +121,7 @@ struct GymSessionView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
+                SectionLabel(text: L10n.tr("Posilovna") + ", " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
                 Spacer()
                 // Move or cancel the day's session (GymPlanActions.swift).
                 if !model.demo && !showsDone && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
@@ -165,6 +164,21 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
+                // Dokončit by mistake today: back to the workout where it stopped.
+                if !model.demo, date == AppModel.localDate(Date()), let day, day.finishedAt != nil,
+                   day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                    Button {
+                        TrainingModeView.resumeOnOpen = date
+                        model.push(.trainingMode(date))
+                    } label: {
+                        Label("Pokračovat v tréninku", systemImage: "play.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                            .frame(maxWidth: .infinity).frame(height: 54)
+                            .background(Palette.green, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 24)
+                }
                 // A session done live, logged by hand or from the watch can be rated too.
                 if !model.demo, !(day?.exerciseNames.isEmpty ?? true) {
                     Button { ratingDone = true } label: {
@@ -321,7 +335,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.plural("%lld/%lld sérií · %lld cviků", done, total, day.exercises.count))
+            Text(L10n.plural("%lld/%lld sérií, %lld cviků", done, total, day.exercises.count))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
         }
@@ -404,8 +418,8 @@ struct GymSessionView: View {
         rating = true
     }
 
-    private func replace(_ exercise: String, with name: String) async {
-        day?.replace(exercise: exercise, with: name)
+    private func replace(_ exercise: String, with alt: GymAlternative) async {
+        day?.replace(exercise: exercise, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
         await save()
         await load()
     }
@@ -789,7 +803,7 @@ struct AlternativesSheet: View {
     let exercise: String
     /// The proposal's other exercises (not saved yet), so they are not offered.
     var inPlan: [String] = []
-    /// Under the exercise's name: "Zadní ramena · Zbývají 2 série".
+    /// Under the exercise's name: "Zadní ramena, Zbývají 2 série".
     var subtitle: String? = nil
     var footnote: String? = "Nahradí jen série, které ještě nejsou hotové."
     var choose: (String) -> Void

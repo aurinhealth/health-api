@@ -99,7 +99,7 @@ struct PlannedSendSheet: View {
                     .padding(.vertical, 10)
                 }
                 if let multisport, let legs {
-                    row(icon: AnyView(symbol("applewatch")), name: L10n.tr("Apple Watch · multisport"), status: legs, statusColor: Palette.muted,
+                    row(icon: AnyView(symbol("applewatch")), name: L10n.tr("Apple Watch (multisport)"), status: legs, statusColor: Palette.muted,
                         action: "Přidat", primary: false, busy: false) { multisportShowing = true }
                         .workoutPreview(multisport, isPresented: $multisportShowing)
                 } else if let watchPlan {
@@ -233,7 +233,7 @@ struct PlannedSendSheet: View {
 
     private func statusText(_ d: PlannedDestinations.Destination) -> String {
         switch d.status {
-        case "sent": return d.at.flatMap(Self.when).map { L10n.f("Odesláno · %@", $0) } ?? L10n.tr("Odesláno")
+        case "sent": return d.at.flatMap(Self.when).map { L10n.f("Odesláno %@", $0) } ?? L10n.tr("Odesláno")
         case "sending": return L10n.tr("Odesílá se")
         case "failed": return L10n.tr("Nedorazilo")
         case "origin": return L10n.tr("Je v kalendáři Intervals.icu")

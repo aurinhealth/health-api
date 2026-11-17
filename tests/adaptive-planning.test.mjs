@@ -131,7 +131,7 @@ test('simple, planning and block requests route to configurable Luna and Sol',as
     assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol','gpt-6-luna']);
     assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','low','low','low']);assert.deepEqual(calls.map(c=>c.max_output_tokens),[4000,16000,25000,6000]);
     // A quick question still sees the athlete's data.
-    assert.match(calls[3].input[0].content,/"ftp":265/);
+    assert.match(calls[3].input[0].content,/"ftp":265/);assert.equal(calls[3].prompt_cache_options,undefined,"Luna keeps the default cache");
     assert.ok(calls.every(c=>c.store===false));
     // The effort of complex answers can be raised on the server.
     await askCoach({...env,OPENAI_REASONING_EFFORT:'medium'},'Naplánuj zítřejší posilovnu',{});
@@ -211,4 +211,24 @@ test('sessions cancelled for an illness are kept for the coach, at most 21 days'
   await updateAthleteState(db,{cancelled:[{date:'2026-10-25',name:'Long ride'}]},{date:'2026-10-24'});
   s=await getAthleteState(db,{date:'2026-10-24'});
   assert.deepEqual(s.cancelled.map(c=>c.name),['Long ride']);
+});
+test('the coach evaluation can run the coach on Claude: Haiku for short tasks, Sonnet for plans, same schema',async()=>{
+  const original=globalThis.fetch,calls=[];
+  globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,headers:options.headers,body});return Response.json({model:body.model,stop_reason:'end_turn',content:[{type:'text',text:'{"answer":"Dnes lehce.","visuals":[],"actions":[],"memory":{"save":[],"forget":[],"update":[]}}'}],usage:{input_tokens:100,cache_read_input_tokens:900,cache_creation_input_tokens:0,output_tokens:50}});};
+  try{
+    const env={OPENAI_API_KEY:'test',ANTHROPIC_API_KEY:'k',COACH_EVAL:true,COACH_EVAL_COACH:'sonnet'};
+    const quick=await askCoach(env,'Díky!',{});
+    const plan=await askCoach(env,'Naplánuj zítřejší posilovnu',{},{actions:true});
+    assert.deepEqual(calls.map(c=>c.body.model),['claude-haiku-5-5','claude-sonnet-5-5']);
+    assert.ok(calls.every(c=>c.url==='https://api.anthropic.com/v1/messages'&&c.headers['x-api-key']==='k'));
+    assert.equal(calls[1].body.output_config.format.type,'json_schema');assert.equal(calls[1].body.messages[0].role,'user');
+    assert.equal(calls[1].body.messages[0].content[0].cache_control?.type,'ephemeral','the data stays cached');
+    assert.equal(plan.answer,'Dnes lehce.');assert.equal(plan.usage.input_tokens,1000);assert.equal(plan.usage.input_tokens_details.cached_tokens,900);
+    assert.equal(quick.model,'claude-haiku-5-5');
+    // Outside the evaluation the setting does nothing: the app stays on OpenAI.
+    calls.length=0;
+    globalThis.fetch=async(url,options)=>{const body=JSON.parse(options.body);calls.push({url,body});return Response.json({model:body.model,output_text:'Odpověď'});};
+    await askCoach({OPENAI_API_KEY:'test',ANTHROPIC_API_KEY:'k',COACH_EVAL_COACH:'sonnet'},'Díky!',{});
+    assert.equal(calls[0].url,'https://api.openai.com/v1/responses');
+  }finally{globalThis.fetch=original;}
 });

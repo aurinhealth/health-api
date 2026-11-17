@@ -74,7 +74,7 @@ export function heatAdvice({ sport, weather, time = null, minutes = null, interv
       : L(`Jeď podle tepu a pij ${perHour} za hodinu`, `Ride by heart rate and drink ${perHour} an hour`);
   const go = when ? (run ? L(`, vyraž ${when}`, `, go ${when}`) : L(`, vyjeď ${when}`, `, go ${when}`)) : "";
   const cut = very && intervals ? " " + L("Když tep v intervalu vyletí, zkrať ho.", "If your heart rate shoots up in an interval, cut it short.") : "";
-  const short = L(`Horko ${shown} · `, `Heat ${shown} · `) + (run
+  const short = L(`Horko ${shown}: `, `Heat ${shown}: `) + (run
     ? L(`tempo ${slower} pomaleji, víc pít`, `pace ${slower} slower, drink more`)
     : intervals ? L("intervaly o 5 % slabší, víc pít", "intervals 5 % easier, drink more") : L("podle tepu, víc pít", "by heart rate, drink more"));
   // Pití: no extra on the goal (sweat differs too much between people), only the hint.

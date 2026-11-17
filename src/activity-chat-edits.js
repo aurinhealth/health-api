@@ -1,7 +1,9 @@
 // Changes to done activities the coach proposes in the chat and the athlete
 // confirms (coach-actions.js activity_delete, activity_merge, activity_time).
 // They stay in Aurin: the watch, Apple or Google Health and Intervals.icu keep
-// their records. Each change can be undone ("Vrátit") with the token it returns.
+// their records. Each change can be undone ("Vrátit") with the token it returns,
+// and so can a change of the day's gym plan in Chat v1 (kind gym_plan) and a
+// ride, run or swim the coach added, moved or took off the app's plan (kind planned).
 //
 // - Delete hides the activity the way activity-edits.js does (record_role
 //   'duplicate', matched_activity_id 'deleted'), whatever its source, so it is
@@ -83,7 +85,7 @@ export function mergedPayload(parts) {
 const hide = (env, row) => env.DB.prepare("UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = ?, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(DELETED, row.id, env.USER_ID);
 const before = row => ({ id: row.id, record_role: row.record_role ?? null, matched_activity_id: row.matched_activity_id ?? null, match_confidence: row.match_confidence ?? null });
 
-async function remember(env, change) {
+export async function rememberChange(env, change) {
   await ensure(env.DB);
   const token = crypto.randomUUID();
   await env.DB.prepare('INSERT INTO activity_undo (user_id, token, change_json) VALUES (?, ?, ?)').bind(env.USER_ID, token, JSON.stringify(change)).run();
@@ -94,7 +96,7 @@ async function remember(env, change) {
 export async function hideActivity(env, id) {
   const row = await rowOf(env, id);
   if (!row) throw notFound();
-  const undo = await remember(env, { kind: 'hide', rows: [before(row)] });
+  const undo = await rememberChange(env, { kind: 'hide', rows: [before(row)] });
   await hide(env, row).run();
   return { status: 'ok', id: row.external_id, undo };
 }
@@ -118,7 +120,7 @@ export async function mergeActivities(env, ids) {
         payload_json = excluded.payload_json, record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP`).bind(env.USER_ID, key, start, start, end, JSON.stringify(payload)),
     hide(env, first), hide(env, second)
   ]);
-  const undo = await remember(env, { kind: 'merge', created: key, rows: [before(first), before(second)] });
+  const undo = await rememberChange(env, { kind: 'merge', created: key, rows: [before(first), before(second)] });
   return { status: 'ok', id: key, undo, merged: { start, end, distanceM: payload.distance ?? null, movingSec: payload.moving_time ?? null } };
 }
 
@@ -131,7 +133,7 @@ export async function setActivityTime(env, id, time) {
   if (row.source_family !== 'local' || payload.pairedWith) throw fail(L('Čas změřily hodinky, ten se nemění.', 'The watch measured the time; it doesn\'t change.'));
   const facts = activityFacts(row), start = facts.start.slice(0, 11) + time + ':00';
   const length = ms(facts.end) - ms(facts.start), end = row.end_time ? wall(ms(start) + length) : null;
-  const undo = await remember(env, { kind: 'time', id: row.id, sample_time: row.sample_time, start_time: row.start_time, end_time: row.end_time, start_date_local: payload.start_date_local ?? null });
+  const undo = await rememberChange(env, { kind: 'time', id: row.id, sample_time: row.sample_time, start_time: row.start_time, end_time: row.end_time, start_date_local: payload.start_date_local ?? null });
   await env.DB.prepare('UPDATE health_datapoints SET sample_time = ?, start_time = ?, end_time = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
     .bind(start, start, end, JSON.stringify({ ...payload, start_date_local: start }), row.id, env.USER_ID).run();
   return { status: 'ok', id: row.external_id, undo, from: facts.start.slice(11, 16), to: time };
@@ -143,6 +145,57 @@ export async function undoActivityChange(env, token) {
   const stored = await env.DB.prepare('SELECT change_json FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token || '')).first();
   if (!stored) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
   const change = parse(stored.change_json), batch = [];
+  // A change of the day's gym plan from the coach (Chat v1): the plan as it
+  // was, only while it is still as the change left it.
+  if (change.kind === 'gym_plan') {
+    // As the confirm: not on a cancelled day, not while the status holds training.
+    const { assertTrainingAllowed, getAthleteState } = await import('./athlete-state.js');
+    assertTrainingAllowed(await getAthleteState(env.DB));
+    const cancelled = await env.DB.prepare('SELECT 1 AS c FROM gym_plan_cancellations WHERE user_id = ? AND workout_date = ?').bind(env.USER_ID, change.date).first().catch(() => null);
+    if (cancelled) throw fail(L('Trénink na ten den je zrušený, změnu už vrátit nejde.', 'The workout for that day is cancelled, the change can no longer be undone.'));
+    const back = await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.before), env.USER_ID, change.date, JSON.stringify(change.after)).run();
+    if (back.meta?.changes !== 1) throw fail(L('Plán se od té změny upravil, vrátit ho už nejde.', 'The plan has changed since, it can no longer be undone.'));
+    // A plan of another focus put back: its calendar event as it was too (name,
+    // length). If that can't be saved, the plan goes forward again and the
+    // token stays, so Vrátit can be tried again. The export retries itself.
+    if (change.event) {
+      const { storeLocalEvent, syncLocalWorkout } = await import('./local-workouts.js');
+      const local = await storeLocalEvent(env.DB, change.event, { key: 'health-strength-' + change.date }).catch(async error => {
+        await env.DB.prepare('UPDATE gym_plans SET values_json = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND workout_date = ? AND values_json = ?').bind(JSON.stringify(change.after), env.USER_ID, change.date, JSON.stringify(change.before)).run().catch(() => null);
+        console.error('Gym event not put back', error?.message);
+        throw fail(L('Změnu se teď nepodařilo vrátit, zkus to znovu.', 'The change couldn\'t be undone right now, try again.'));
+      });
+      await syncLocalWorkout(env, local.id).catch(() => null);
+    }
+    await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
+    return { status: 'ok', kind: 'gym_plan', date: change.date, values: change.before, proposal: change.proposal || null };
+  }
+  // A planned workout of the app (local-workouts.js) back where it was, only
+  // while it is still as the change left it and its day has not passed.
+  if (change.kind === 'planned') {
+    const { localWorkout, restoreLocalWorkout } = await import('./local-workouts.js');
+    const { deletePlannedEvent, movePlannedEvent } = await import('./planned-events.js');
+    const { localToday } = await import('./user-time.js');
+    const row = await localWorkout(env.DB, change.id), start = String(parse(row?.event_json).start_date_local || '');
+    const changed = () => fail(L('Trénink se od té změny upravil, vrátit ho už nejde.', 'The workout has changed since, it can no longer be undone.'));
+    if (change.undone) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
+    if (String(change.op === 'move' ? change.from : change.start).slice(0, 10) < localToday()) throw fail(L('Ten den už je pryč, změnu už vrátit nejde.', 'That day has passed, the change can no longer be undone.'));
+    if (change.op !== 'add') { const { assertTrainingAllowed, getAthleteState } = await import('./athlete-state.js'); assertTrainingAllowed(await getAthleteState(env.DB)); }
+    if (change.op === 'add' ? row?.status !== 'scheduled' || start !== change.start : change.op === 'delete' ? row?.status !== 'deleted' || start !== change.start : change.op !== 'move' || row?.status !== 'scheduled' || start !== change.to) throw changed();
+    // Claimed first, so a double tap acts once; kept as undone, so the chat's
+    // "vrať to" never goes one change further back (coach-chat-confirm.js).
+    const claim = await env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ? AND change_json = ?').bind(JSON.stringify({ ...change, undone: true }), env.USER_ID, String(token), stored.change_json).run();
+    if (claim.meta?.changes !== 1) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
+    try {
+      if (change.op === 'add') await deletePlannedEvent(env, { eventId: change.id });
+      else if (change.op === 'delete') await restoreLocalWorkout(env, change.id, change.link || null);
+      else await movePlannedEvent(env, { eventId: change.id, date: change.from.slice(0, 10), time: change.from.slice(11, 16) || null });
+    } catch (error) {
+      await env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ?').bind(stored.change_json, env.USER_ID, String(token)).run().catch(() => null);
+      throw error;
+    }
+    return { status: 'ok', kind: 'planned', op: change.op, proposal: change.proposal || null };
+  }
   for (const r of change.rows || []) batch.push(env.DB.prepare('UPDATE health_datapoints SET record_role = ?, matched_activity_id = ?, match_confidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(r.record_role, r.matched_activity_id, r.match_confidence, r.id, env.USER_ID));
   if (change.kind === 'merge') batch.push(env.DB.prepare("DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'local' AND data_type = 'activity' AND external_id = ?").bind(env.USER_ID, change.created));
   if (change.kind === 'time') {

@@ -226,7 +226,7 @@ struct TileRange: View {
     }
 }
 
-/// A detail's range bar under its big number: "níž · obvyklé rozmezí 52–68 ms · výš".
+/// A detail's range bar under its big number: "níž, obvyklé rozmezí 52–68 ms, výš".
 struct DetailRange: View {
     let value: Double
     let low: Double

@@ -5,6 +5,7 @@
 import { L } from './lang.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { normalizeBarcode } from "./food-sources.js";
+import { marketOf } from "./world-foods.js";
 import { macroEnergy, nutritionConsistency } from "./food-label.js";
 import { foodLookupInstructionsText, foodLookupOrderText, foodEstimateInstructionsText } from './private/food-ai.js';
 export { foodLookupInstructionsText, foodLookupOrderText, foodEstimateInstructionsText };
@@ -80,12 +81,13 @@ export function foodLookupLanguages(language='cs'){
   const valid=/^[a-z]{2,3}$/.test(code)?code:'cs';
   return [...new Set([valid,'en','any'])];
 }
-export async function lookupFoodWithAI(env, { name = "", barcode = "", language=env.INTERFACE_LANGUAGE||'cs' } = {}) {
+// market (world-foods.js MARKETS): cz tells the search where the user shops.
+export async function lookupFoodWithAI(env, { name = "", barcode = "", language=env.INTERFACE_LANGUAGE||'cs', market } = {}) {
   const product = String(name || "").trim().slice(0, 180), code = normalizeBarcode(barcode);
   if (!product && !code) throw new Error(L("Napiš název potraviny nebo načti čárový kód.", "Write the food name or scan the barcode."));
   const r = await callOpenAI(env, { feature: "food-lookup",
     instructions: foodLookupInstructionsText() + foodLookupOrderText(foodLookupLanguages(language)),
-    input: L("Potravina: ", "Food: ") + JSON.stringify({ name: product || null, barcode: code || null }),
+    input: L("Potravina: ", "Food: ") + JSON.stringify({ name: product || null, barcode: code || null, ...(marketOf(market, language) === "cz" ? { sold_in: "Czechia or Slovakia" } : {}) }),
     tools: [{ type: "web_search" }], format: FOOD_LOOKUP_SCHEMA,
     maxOutputTokens: 2000, model: lightModel(env)
   });

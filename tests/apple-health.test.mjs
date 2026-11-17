@@ -99,6 +99,22 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
   assert.ok(rows(raw).every(r => r.updated_at === "2000-01-01"), "unchanged records are not written again");
   assert.equal(before.length, 4);
   assert.ok(rows(raw).every(r => r.record_role === "primary"));
+  // Only what changed is written: the same records again send no upsert, one new step count sends one.
+  let upserts = 0;
+  const prepare = raw.prepare;
+  raw.prepare = sql => { if (/^\s*INSERT INTO health_datapoints/.test(sql)) upserts++; return prepare(sql); };
+  await saveAppleHealth(db, 1, body);
+  assert.equal(upserts, 0, "nothing new: no upsert");
+  const more = { ...body, records: body.records.map(r => r.type === "steps" ? { ...r, value: 3100 } : r) };
+  assert.equal((await saveAppleHealth(db, 1, more)).changed, 1);
+  raw.prepare = prepare;
+  assert.equal(upserts, 1, "one changed row: one upsert");
+  assert.equal(rows(raw, "data_type='steps'")[0].value_numeric, 3100);
+  // The same key twice in one upload: the last one is kept, as the upserts in order keep it.
+  const steps = body.records.find(r => r.type === "steps");
+  await saveAppleHealth(db, 1, { ...body, records: [{ ...steps, value: 3200 }, { ...steps, value: 3100 }] });
+  assert.equal(rows(raw, "data_type='steps'")[0].value_numeric, 3100);
+  await saveAppleHealth(db, 1, body);
 
   const summary = await googleDashboard(db, "2026-10-10");
   assert.equal(summary.today.restingHR, 51);
@@ -112,32 +128,35 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
   assert.equal(providers.find(p => p.id === "apple").connected, true);
 });
 
+// Dates inside the last 35 days the Google sync rereads (fixed October dates fell out of it on 2026-11-13).
+const ago = k => new Date(Date.now() - k * 86400000).toISOString().slice(0, 10);
+const [D10, D09, D08] = [ago(4), ago(5), ago(6)];
 test("Google rows of the days Apple covers become duplicates; disconnecting keeps the data", async () => {
   const { raw, db } = setup();
-  google(raw, "steps", "2026-10-10", 2900);
-  google(raw, "steps", "2026-10-08", 5000);
-  google(raw, "daily-resting-heart-rate", "2026-10-10", 52);
+  google(raw, "steps", D10, 2900);
+  google(raw, "steps", D08, 5000);
+  google(raw, "daily-resting-heart-rate", D10, 52);
   await saveAppleHealth(db, 1, { records: [
-    { type: "steps", id: "steps:2026-10-10T08", start: "2026-10-10T08:00:00Z", end: "2026-10-10T09:00:00Z", value: 3000 },
-    { type: "steps", id: "steps:2026-10-09T08", start: "2026-10-09T08:00:00Z", end: "2026-10-09T09:00:00Z", value: 100 }
+    { type: "steps", id: `steps:${D10}T08`, start: `${D10}T08:00:00Z`, end: `${D10}T09:00:00Z`, value: 3000 },
+    { type: "steps", id: `steps:${D09}T08`, start: `${D09}T08:00:00Z`, end: `${D09}T09:00:00Z`, value: 100 }
   ] });
   const role = id => rows(raw, `external_id='${id}'`)[0].record_role;
-  assert.equal(role("steps2026-10-10"), "duplicate");
-  assert.equal(role("steps2026-10-08"), "primary", "a day Apple did not send keeps Google");
-  assert.equal(role("daily-resting-heart-rate2026-10-10"), "primary", "a type Apple did not send keeps Google");
-  assert.equal((await googleDashboard(db, "2026-10-10")).today.steps, 3000, "the day is counted once");
+  assert.equal(role(`steps${D10}`), "duplicate");
+  assert.equal(role(`steps${D08}`), "primary", "a day Apple did not send keeps Google");
+  assert.equal(role(`daily-resting-heart-rate${D10}`), "primary", "a type Apple did not send keeps Google");
+  assert.equal((await googleDashboard(db, D10)).today.steps, 3000, "the day is counted once");
 
   // A later Google sync writes a new row for a covered day.
-  google(raw, "steps", "2026-10-09", 120, "late");
+  google(raw, "steps", D09, 120, "late");
   await afterGoogleSync({ DB: db, USER_ID: 1 }, "steps", [{}]);
   await flushGoogleSync({ DB: db, USER_ID: 1 });
   assert.equal(role("late"), "duplicate");
 
   await disconnectAppleHealth(db, 1);
   assert.equal(rows(raw, "source_family='apple-health'").length, 2);
-  assert.equal((await googleDashboard(db, "2026-10-10")).today.steps, 3000);
+  assert.equal((await googleDashboard(db, D10)).today.steps, 3000);
   // Nothing new replaces Google once disconnected.
-  google(raw, "steps", "2026-10-09", 130, "after");
+  google(raw, "steps", D09, 130, "after");
   await afterGoogleSync({ DB: db, USER_ID: 1 }, "steps", [{}]);
   await flushGoogleSync({ DB: db, USER_ID: 1 });
   assert.equal(role("after"), "primary");

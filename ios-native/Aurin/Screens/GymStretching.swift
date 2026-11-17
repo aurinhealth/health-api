@@ -339,12 +339,12 @@ struct StretchTimerView: View {
         }
     }
 
-    /// "Série 1/2 · levá".
+    /// "Série 1/2, levá".
     private func subtitle(_ hold: GymStretching.Hold) -> String {
         var parts: [String] = []
         if hold.item.rounds > 1 { parts.append(L10n.f("Série %@", "\(hold.round)/\(hold.item.rounds)")) }
         if let side = hold.side { parts.append(side) }
-        return parts.isEmpty ? hold.item.duration : parts.joined(separator: " · ")
+        return parts.isEmpty ? hold.item.duration : parts.joined(separator: ", ")
     }
 
     private func progress(_ hold: GymStretching.Hold) -> CGFloat {
@@ -659,7 +659,7 @@ struct GymPreferencesGroup: View {
         save(["cardioType": .string(value)], unchanged: saved == value)
     }
 
-    /// "Cíl  Auto · Síla a svaly ⌃⌄": opens the sheet with the goals.
+    /// "Cíl  Auto, Síla a svaly ⌃⌄": opens the sheet with the goals.
     private var goalRow: some View {
         HStack(spacing: 12) {
             Text(L10n.tr("Cíl")).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
@@ -673,17 +673,17 @@ struct GymPreferencesGroup: View {
         .contentShape(Rectangle())
     }
 
-    /// "Auto · Síla a svaly" (what the main sport recommends) or the chosen goal.
+    /// "Auto, Síla a svaly" (what the main sport recommends) or the chosen goal.
     private var goalValue: String {
         guard goal == "auto" else { return Self.goals.first { $0.0 == goal }.map { L10n.tr($0.1) } ?? L10n.tr("automaticky") }
         let guess = prefs?.recommendedGoal.flatMap { id in Self.goals.first { $0.0 == id }?.1 }
-        return guess.map { L10n.f("Auto · %@", L10n.tr($0)) } ?? L10n.tr("Automaticky")
+        return guess.map { L10n.f("Auto (%@)", L10n.tr($0)) } ?? L10n.tr("Automaticky")
     }
 
-    /// "Auto · Mírně pokročilý" or the chosen level: the gym's experience (set in Profil).
+    /// "Auto, Mírně pokročilý" or the chosen level: the gym's experience (set in Profil).
     private var experienceValue: String? {
         guard let gym = prefs?.experienceBySport?["strength"] else { return nil }
-        return gym.mode == "auto" ? L10n.f("Auto · %@", ExperienceGroup.name(gym.autoLevel)) : ExperienceGroup.name(gym.level)
+        return gym.mode == "auto" ? L10n.f("Auto (%@)", ExperienceGroup.name(gym.autoLevel)) : ExperienceGroup.name(gym.level)
     }
 
     private func load() async {
@@ -760,7 +760,7 @@ struct GymGoalSheet: View {
                                 Text(L10n.tr(item.1)).font(.body).foregroundStyle(Palette.ink)
                                 Spacer(minLength: 8)
                                 if let numbers = Self.numbers[item.0] {
-                                    Text(L10n.f("%@ opakování · %@", numbers.reps, numbers.rest)).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+                                    Text(L10n.f("%@ opakování, %@", numbers.reps, numbers.rest)).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
                                 }
                                 check(item.0)
                             }

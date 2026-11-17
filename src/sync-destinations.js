@@ -32,15 +32,22 @@ const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 // The health data each destination accepts. Intervals.icu: what
 // wellness-sync.js (and weight-sync.js for weight) really writes there, and
 // workouts: Apple Health's workouts watch-forward.js copies there.
-// Apple Health: what the iPhone writes from the app's own entries. Google
-// Health: weight (weight-sync.js, with the weight-writing permission) and
-// the food log (food-google-sync.js).
+// Apple Health: what the iPhone writes from the app's own entries, and with
+// the user's yes what other apps sent to Aurin (OTHER_TYPES). Google
+// Health: weight (weight-sync.js, with the weight-writing permission), the
+// food log and the plain water logged in Aurin (food-google-sync.js).
 export const HEALTH_TYPES = {
-  apple: ['weight', 'nutrition', 'water'],
-  google: ['weight', 'nutrition'],
+  apple: ['weight', 'nutrition', 'water', 'sleep', 'heartRate', 'restingHR', 'spO2', 'respiration', 'steps'],
+  google: ['weight', 'nutrition', 'water'],
   intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max', 'workouts'],
   wahoo: []
 };
+
+// Apple Health's types that come from other apps (apple-health-forward.js),
+// not from what the user logs in Aurin. They go only after the user's yes.
+export const OTHER_TYPES = ['sleep', 'heartRate', 'restingHR', 'spO2', 'respiration', 'steps'];
+// That yes and where sending starts: "consent:health@<at>" and "from:health@<since>" in Apple's health_json.
+const OTHERS = /^(from|consent):health@(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z)$/;
 
 // What each destination can do at all; the app shows only these rows.
 export const SUPPORTS = {
@@ -59,9 +66,12 @@ export const SUPPORTS = {
 // permission, the weight, and its workouts came in; writing workouts there
 // needs a permission nobody has yet, so it starts off. Apple Health got
 // nothing.
+// Google Health's "all" from before water was there still means weight and
+// food: water starts only once the user ticks it (or Vše, saved as the list).
+const GOOGLE_BEFORE_WATER = ['weight', 'nutrition'];
 const DEFAULTS = {
   apple: { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] },
-  google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: 'all' },
+  google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: GOOGLE_BEFORE_WATER },
   intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: [] },
   // Whoever connects Wahoo wants the plan on the head unit and the rides back.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
@@ -122,10 +132,11 @@ export function normalizeSyncPrefs(destination, input = {}, base = defaultSyncPr
 // The saved "from:" and "consent:" entries apart from the health types.
 function splitHealth(stored) {
   const list = Array.isArray(stored) ? stored.map(String) : stored === 'all' ? ['all'] : [];
-  const since = {}, consent = {};
+  const since = {}, consent = {}, others = {};
   for (const item of list) { const m = FORWARD.exec(item); if (m) (m[1] === 'from' ? since : consent)[m[2]] = m[3]; }
-  const rest = list.filter(item => !FORWARD.test(item));
-  return { health: rest.includes('all') ? 'all' : rest, since, consent };
+  for (const item of list) { const m = OTHERS.exec(item); if (m) others[m[1]] = m[2]; }
+  const rest = list.filter(item => !FORWARD.test(item) && !OTHERS.test(item));
+  return { health: rest.includes('all') ? 'all' : rest, since, consent, others };
 }
 
 async function forwardEntries(db, userId, destination = 'intervals') {
@@ -134,7 +145,13 @@ async function forwardEntries(db, userId, destination = 'intervals') {
     let stored = [];
     try { stored = JSON.parse(row?.health_json || '[]'); } catch { stored = []; }
     return splitHealth(stored);
-  } catch { return { since: {}, consent: {} }; }
+  } catch { return { since: {}, consent: {}, others: {} }; }
+}
+
+// Where Apple Health's data from other apps starts (apple-health-forward.js); null before the user's yes.
+export async function othersSince(db, userId) {
+  const { others } = await forwardEntries(db, userId, 'apple');
+  return others.consent ? others.from || others.consent : null;
 }
 
 // When sending each source's workouts starts from ({ wahoo: ISO, … }).
@@ -153,6 +170,9 @@ const fromRow = (destination, row) => {
   try { stored = JSON.parse(row.health_json || '[]'); } catch { stored = []; }
   let { health, since } = splitHealth(stored);
   if (destination === 'intervals' && Array.isArray(health) && health.length && !health.includes('workouts') && savedAt(row.updated_at) < WORKOUTS_CHOICE) health = [...health, 'workouts'];
+  // Apple Health's "all" chosen before other apps' data was there, or without its yes: Aurin's own types only.
+  if (destination === 'apple' && health === 'all' && !splitHealth(stored).others.consent) health = HEALTH_TYPES.apple.filter(type => !OTHER_TYPES.includes(type));
+  if (destination === 'google' && health === 'all') health = GOOGLE_BEFORE_WATER;
   return { prefs: normalizeSyncPrefs(destination, { pushPlanned: Boolean(row.push_planned), pushActivities: Boolean(row.push_activities), pullActivities: Boolean(row.pull_activities), health, forward: Object.keys(since) }), since };
 };
 
@@ -180,6 +200,7 @@ export async function saveSyncPrefs(db, userId, destination, input, { now = Date
   // A source kept on keeps its start; one turned on now starts now, or
   // BACKFILL_DAYS before when the user also wanted the last two weeks.
   let health = next.health, started = [], stopped = [];
+  if (destination === 'google' && health === 'all') health = [...HEALTH_TYPES.google];
   if (FORWARD_TO[destination]) {
     const { since: before, consent } = await forwardEntries(db, userId, destination);
     const at = new Date(now).toISOString(), from = new Date(now - (input?.backfill === true ? BACKFILL_DAYS * 86400000 : 0)).toISOString();
@@ -187,6 +208,13 @@ export async function saveSyncPrefs(db, userId, destination, input, { now = Date
     stopped = Object.keys(before).filter(source => !next.forward.includes(source));
     if (healthAllowed(current, 'workouts') && !healthAllowed(next, 'workouts')) stopped.push('apple');
     const entries = next.forward.flatMap(source => ['from:' + source + '@' + (before[source] || from), 'consent:' + source + '@' + (consent[source] || at)]);
+    // Health data from other apps (Apple Health only): kept while any of its types is on,
+    // given anew only with the app's yes (consent: true), so an older app's "All" sends nothing.
+    if (destination === 'apple' && OTHER_TYPES.some(type => healthAllowed(next, type))) {
+      const { others } = await forwardEntries(db, userId, destination);
+      if (others.consent) entries.push('from:health@' + (others.from || others.consent), 'consent:health@' + others.consent);
+      else if (input?.consent === true) entries.push('from:health@' + from, 'consent:health@' + at);
+    }
     if (entries.length) health = [...(health === 'all' ? ['all'] : health), ...entries];
   }
   await db.prepare(`INSERT INTO sync_preferences (user_id, destination, push_planned, push_activities, pull_activities, health_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -243,7 +271,7 @@ export function googleMissingScopes(env, prefs) {
   const extras = grantedExtras(env), missing = [];
   if ((prefs.pushActivities || prefs.forward?.length) && !extras.activityWrite) missing.push('activityWrite');
   if (healthAllowed(prefs, 'weight') && !extras.weightWrite) missing.push('weightWrite');
-  if (healthAllowed(prefs, 'nutrition') && !hasGoogleScope(env, HEALTH_PERMISSIONS.nutritionWrite)) missing.push('nutritionWrite');
+  if ((healthAllowed(prefs, 'nutrition') || healthAllowed(prefs, 'water')) && !hasGoogleScope(env, HEALTH_PERMISSIONS.nutritionWrite)) missing.push('nutritionWrite');
   return missing;
 }
 
@@ -259,9 +287,11 @@ const offered = (env, id) => id === 'wahoo' ? Boolean(String(env.WAHOO_CLIENT_ID
 
 // GET /app/api/sync/prefs: every destination with its state and preferences.
 export async function syncOverview(env) {
-  const destinations = [];
-  for (const id of DESTINATIONS.filter(d => offered(env, d))) {
-    const { stored, ...prefs } = await readSyncPrefs(env.DB, env.USER_ID, id);
+  const destinations = [], ids = DESTINATIONS.filter(d => offered(env, d));
+  // Side by side: when D1 is busy, each read in turn would wait in its queue again.
+  const read = await Promise.all(ids.map(id => readSyncPrefs(env.DB, env.USER_ID, id)));
+  for (const [i, id] of ids.entries()) {
+    const { stored, ...prefs } = read[i];
     const row = { id, connected: destinationConnected(env, id), stored, prefs, supports: SUPPORTS[id], healthTypes: HEALTH_TYPES[id] };
     // The apps whose workouts can go on there: the connected ones.
     if (FORWARD_TO[id]) row.forwardSources = FORWARD_TO[id].filter(source => destinationConnected(env, source) && offered(env, source));
@@ -410,8 +440,11 @@ async function pushIntervals(env, row, { fetchImpl, absent = false }) {
 // reads back, apple-health.js and index.js googleExerciseActivity). A known
 // record (its resource name) is patched instead of made again.
 const GOOGLE_EXERCISE = /^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[^/?#]+$/;
-const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'EXERCISE');
-const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL_RUNNING', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'INDOOR_BIKING', MountainBikeRide: 'MOUNTAIN_BIKING', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
+// Only names from Google's Exercise.ExerciseType list: any other one is refused
+// with HTTP 400 (INDOOR_BIKING for a Wahoo indoor ride, 2026-11-10). OTHER keeps
+// the workout's own name, the other types get Google's.
+const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'OTHER');
+const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'STATIONARY_BIKE', MountainBikeRide: 'MOUNTAIN_BIKE', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
 export const utcOffset = at => Math.round(zoneOffsetMs(at) / 1000) + 's';
 export function googleExercise(activity) {
   const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : zonedTime(activity.startLocal));
@@ -477,6 +510,8 @@ async function pushGoogle(env, row, { fetchImpl, googleToken, pollMs = 1000 }) {
     response = await write(point);
   }
   const data = await response.json().catch(() => ({}));
+  // Google's reason (which field), for the log: the error text alone does not say.
+  if (response.status === 400) console.warn('Google Health refused the workout', JSON.stringify(data.error || {}).slice(0, 300));
   if (!response.ok) throw new Error('Google Health HTTP ' + response.status);
   if (data.error) throw new Error('Google operation failed');
   if (data.done === false) {

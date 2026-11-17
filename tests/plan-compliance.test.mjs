@@ -62,7 +62,7 @@ test("one exercise counts at most 150 % of its sets", () => {
 test("the review chart's steps get numbers and the count in band", () => {
   const out = complianceSteps({ steps: [
     { role: "warmup", label: "Rozjetí", seconds: 600, planned: 600, lo: 150, hi: 195, watts: 175, status: "in" },
-    { role: "work", label: "Práh", seconds: 480, planned: 480, lo: 285, hi: 300, watts: 291, status: "in", text: "8:00 · 291 W" },
+    { role: "work", label: "Práh", seconds: 480, planned: 480, lo: 285, hi: 300, watts: 291, status: "in", text: "8:00, 291 W" },
     { role: "work", label: "Práh", seconds: 480, planned: 480, lo: 285, hi: 300, watts: 264, status: "under" },
     { role: "cooldown", label: "Vyjetí", seconds: 360, planned: 360, lo: 135, hi: 180, watts: null, missing: true }
   ] });

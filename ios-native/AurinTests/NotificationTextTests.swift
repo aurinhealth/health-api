@@ -8,9 +8,9 @@ final class NotificationTextTests: XCTestCase {
         let content = UNMutableNotificationContent()
         content.title = "Připravenost"
         content.body = "Dnešní připravenost je spočítaná."
-        content.userInfo = ["private": ["title": "Připravenost 72 · Dnes klidně naplno", "subtitle": "Spánek 7:12",
+        content.userInfo = ["private": ["title": "Připravenost 72, Dnes klidně naplno", "subtitle": "Spánek 7:12",
                                         "body": "Nic naplánováno.", "readiness": ["score": 72, "zone": "green"] as [String: Any]] as [String: Any]]
-        XCTAssertEqual(NotificationText(content), NotificationText(title: "Připravenost 72 · Dnes klidně naplno", subtitle: "Spánek 7:12", body: "Nic naplánováno."))
+        XCTAssertEqual(NotificationText(content), NotificationText(title: "Připravenost 72, Dnes klidně naplno", subtitle: "Spánek 7:12", body: "Nic naplánováno."))
         XCTAssertEqual(NotificationText.shown(content).body, "Dnešní připravenost je spočítaná.")
         XCTAssertEqual((NotificationText.readiness(content.userInfo)?["score"] as? NSNumber)?.intValue, 72)
         XCTAssertTrue(NotificationText.isMorning(content.userInfo))

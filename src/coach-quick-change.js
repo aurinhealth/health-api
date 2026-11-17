@@ -4,11 +4,12 @@ import { isHardSession, isHardKind } from './session-intensity.js';
 import { hardDayConflict, holdBackToday } from './coach-actions.js';
 import { trainingStatus } from './training-status.js';
 import { trimGymPlan } from './gym-trim.js';
+import { parseStrengthPlan } from './strength-history.js';
 import { EASIER, HARDER, MIN_MINUTES, MAX_MINUTES, kindOfSystem } from './week-ai.js';
 import { MAX_MINUTES as LONGEST } from './workout-model.js';
 import { shiftDate } from './dashboard-shared.js';
 
-// "Kratší · Delší · Lehčí · Těžší · Jiný den" under the coach's workout card
+// "Kratší, Delší, Lehčí, Těžší, Jiný den" under the coach's workout card
 // (návrh 11, 2026-10-24): the card changes by rules, without the AI and
 // without counting as a message. The coach's context of the moment is kept
 // with the draft, so a change later checks the same days and the same morning.
@@ -53,12 +54,13 @@ export function quickOptions(a, quick) {
   const hard = !gym && isHardKind(kind);
   const days = (quick.days || []).filter(d => d !== a.date && d >= quick.today).slice(0, 6).map(date => ({ date, fits: dayFits(a, date, quick, hard) }));
   return {
-    shorter: shorterMinutes(a) < a.minutes,
+    // A lengthened plan (Chat v1) is not shortened again by a chip; a new plan of another focus stays on its day.
+    shorter: !a.trim?.added?.length && shorterMinutes(a) < a.minutes,
     longer: !a.trim && longerMinutes(a, quick) > a.minutes,
     // Open water is one steady swim by time: only its length changes.
     easier: gym ? true : !a.openWater && EASIER[kind] !== kind,
     harder: !a.openWater && !(gym ? quick.red && a.date === quick.today : HARDER[kind] === kind || !hardFits(a.date, quick)),
-    day: !a.trim && days.some(d => d.fits),
+    day: !a.trim && !a.replace && days.some(d => d.fits),
     days
   };
 }
@@ -92,9 +94,8 @@ export function quickChange(a, chip, quick, { date } = {}) {
     if (!options[chip]) throw new Error(chip === 'shorter' ? L('Kratší už to být nemůže.', 'It can\'t be any shorter.') : L('Delší trénink se do dne nevejde.', 'A longer session doesn\'t fit the day.'));
     out.minutes = chip === 'shorter' ? shorterMinutes(a) : longerMinutes(a, quick);
     if (a.trim) {
-      const trimmed = trimGymPlan(a.trim.source, out.minutes);
-      out.trim = trimmed ? { ...a.trim, values: trimmed.values, removed: trimmed.removed } : { ...a.trim, values: a.trim.source, removed: [] };
-      if (a.loadStep) out.trim.values = scaleTrimValues(out.trim.values, a.loadStep);
+      const trimmed = trimGymPlan(a.trim.source, out.minutes), base = trimmed ? trimmed.values : a.trim.source;
+      out.trim = { ...a.trim, base, values: (a.loadStep && scalePlanLoads(base, a.loadStep)) || base, removed: trimmed ? trimmed.removed : [] };
     }
     const diff = Math.abs(out.minutes - a.minutes);
     return { action: out, change: chip === 'shorter' ? L('Kratší o ' + diff + ' min', diff + ' min shorter') : L('Delší o ' + diff + ' min', diff + ' min longer') };
@@ -104,7 +105,9 @@ export function quickChange(a, chip, quick, { date } = {}) {
     if (a.sport === 'gym') {
       out.loadStep = Math.max(-3, Math.min(3, (a.loadStep || 0) + (chip === 'easier' ? -1 : 1)));
       if (out.loadStep === (a.loadStep || 0)) throw new Error(L('Víc už to upravit nejde.', 'It can\'t be changed any further.'));
-      if (a.trim) out.trim = { ...a.trim, values: scaleTrimValues(a.trim.values, out.loadStep - (a.loadStep || 0)) };
+      // Always from the unscaled plan, so Lehčí then Těžší is the plan again.
+      if (a.trim) { const base = a.trim.base || a.trim.values; out.trim = { ...a.trim, base, values: scalePlanLoads(base, out.loadStep) || base }; }
+      if (a.trim?.weights) out.workoutName = weightsName(out.loadStep);
       return { action: out, change: chip === 'easier' ? L('Lehčí váhy', 'Lighter weights') : L('Těžší váhy', 'Heavier weights') };
     }
     const from = kindOf(a), to = (chip === 'easier' ? EASIER : HARDER)[from];
@@ -122,10 +125,16 @@ export function quickChange(a, chip, quick, { date } = {}) {
   }
   throw new Error(L('Neznámá úprava.', 'Unknown change.'));
 }
-const scaleTrimValues = (values, step) => {
-  const header = values.findIndex(r => r?.[0] === 'Typ' && r?.[1] === 'Cvik');
-  return header < 0 ? values : [...values.slice(0, header + 1), ...scaleGymRows(values.slice(header + 1), step)];
-};
+// The plan's loads `step` steps lighter or heavier (scaleGymRows), sets already
+// done or written in kept as they are. Null when nothing changes.
+export function scalePlanLoads(values, step) {
+  let parsed; try { parsed = parseStrengthPlan(values); } catch { return null; }
+  if (!step) return null;
+  const done = new Set(parsed.rows.filter(r => r.completed || r.actualKg != null || r.actualReps != null || r.rpe != null).map(r => r.planRow - 1));
+  const out = values.map((r, i) => i >= parsed.headerRow && r?.[1] && !done.has(i) ? scaleGymRows([r], step)[0] : r);
+  return JSON.stringify(out) === JSON.stringify(values) ? null : out;
+}
+export const weightsName = step => step < 0 ? L('Dnešní plán s lehčími vahami', 'Today\'s plan with lighter weights') : step > 0 ? L('Dnešní plán s těžšími vahami', 'Today\'s plan with heavier weights') : L('Dnešní plán', 'Today\'s plan');
 
 // The rebuilt preview went the way the choice asked (the generator may hold a
 // hard session back): a ride or run of the asked kind, or at least a step that way.

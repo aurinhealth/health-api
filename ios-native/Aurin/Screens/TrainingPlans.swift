@@ -271,14 +271,14 @@ struct PlanRace: Decodable, Equatable {
         return [Leg(sport: "swim", meters: legs.swim.meters, minutes: legs.swim.minutes), Leg(sport: "ride", km: legs.ride.km, minutes: legs.ride.minutes), Leg(sport: "run", km: legs.run.km, minutes: legs.run.minutes)]
     }
 
-    /// "Plavání ~29 min · kolo ~1:03 h · běh ~50 min".
+    /// "Plavání ~29 min, kolo ~1:03 h, běh ~50 min".
     var legsText: String? {
         let list = orderedLegs
         guard !list.isEmpty else { return nil }
         return list.enumerated().map { i, leg in
             let name = L10n.tr(["swim": "plavání", "ride": "kolo", "run": "běh"][leg.sport ?? ""] ?? "")
             return (i == 0 ? name.prefix(1).uppercased() + name.dropFirst() : name) + " ~" + planDuration(leg.minutes)
-        }.joined(separator: " · ")
+        }.joined(separator: ", ")
     }
 }
 
@@ -500,11 +500,11 @@ struct PlanWeekRow: View {
                     if let done {
                         Text("\(done)" + Fmt.percentSign).font(.footnote.weight(.semibold)).foregroundStyle(PlanColors.done(done))
                     } else if let sessions, let minutes {
-                        Text("\(sessions)× · " + planDuration(minutes)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text("\(sessions)×, " + planDuration(minutes)).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 if !keys.isEmpty {
-                    Text(keys.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    Text(keys.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             if chevron {
@@ -704,7 +704,7 @@ struct ActivePlanSummary: View {
             Text(active.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, active: active), current: active.started ? active.week : 0, compact: true)
             if active.started, let week = active.template.weeks.first(where: { $0.week == active.week }) {
-                Text(([active.returning == true ? L10n.tr("návrat") : week.phaseLabel] + week.keys.prefix(active.returning == true ? 1 : week.keys.count)).joined(separator: " · "))
+                Text(([active.returning == true ? L10n.tr("návrat") : week.phaseLabel] + week.keys.prefix(active.returning == true ? 1 : week.keys.count)).joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let countdown {
@@ -722,7 +722,7 @@ struct ActivePlanSummary: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// A race plan: "Závod za 9 dní" and "sobota 13. června · 160 km".
+    /// A race plan: "Závod za 9 dní" and "sobota 13. června, 160 km".
     private var countdown: (String, String)? {
         guard active.template.race != nil, let race = active.raceDate, let day = ISODay.date(race),
               let today = ISODay.date(APIClient.localToday()) else { return nil }
@@ -731,7 +731,7 @@ struct ActivePlanSummary: View {
         let title = days == 0 ? L10n.tr("Závod dnes") : days == 1 ? L10n.tr("Závod zítra") : L10n.plural("Závod za %lld dní", days)
         let km = active.raceKm ?? active.template.race?.km
         let heading = Fmt.dayHeading(race)
-        return (title, (L10n.isEnglish ? heading.capitalized : heading.lowercased()) + (km.map { " · " + raceDistance($0) } ?? ""))
+        return (title, (L10n.isEnglish ? heading.capitalized : heading.lowercased()) + (km.map { ", " + raceDistance($0) } ?? ""))
     }
 }
 
@@ -1141,7 +1141,7 @@ struct PlanHRVChart: View {
             }
             .frame(height: 64)
             HStack {
-                Text(verbatim: "HRV · " + L10n.plural("%lld dní", chart.values.count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: "HRV, " + L10n.plural("%lld dní", chart.values.count)).font(Typo.caption).foregroundStyle(Palette.muted)
                 Spacer()
                 Text("pás = obvyklé rozmezí").font(Typo.caption).foregroundStyle(Palette.muted)
             }
@@ -1290,13 +1290,13 @@ struct PlanChangeCard: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "55 min · út 10. 3.": the original length and its day.
+    /// "55 min, út 10. 3.": the original length and its day.
     private func originalLine(_ o: PlanWeekDetail.Change.Original) -> String {
         var parts: [String] = []
         if let m = o.minutes { parts.append(planDuration(Int(m.rounded()))) }
         if let d = o.date { parts.append(Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d)) }
         if let now = o.now { parts.append(L10n.f("teď %@", Fmt.weekdayShort(now) + " " + Fmt.dayMonth(now))) }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: ", ")
     }
 }
 

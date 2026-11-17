@@ -9,6 +9,7 @@
 // within it is cut from that one answer. A personal API key (5000 requests a
 // day) reads as before.
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
+import { endedRequestError } from "./api-cache.js";
 
 const STATUS = "intervals_reads";
 const TTL = 3600;
@@ -102,6 +103,7 @@ export function intervalsReads(env, ctx, { fetchImpl: rawFetch = fetch, store = 
     // The same read already on its way (Today asks for the wellness window
     // three times at once): one request to Intervals.icu, an answer for each.
     let pending = inFlight.get(key);
+    const borrowed = Boolean(pending);
     if (!pending) {
       pending = (async () => {
         const response = await fetchImpl(url.href, init);
@@ -116,7 +118,15 @@ export function intervalsReads(env, ctx, { fetchImpl: rawFetch = fetch, store = 
       inFlight.set(key, pending);
       pending.finally(() => inFlight.delete(key)).catch(() => {});
     }
-    const { body, status, headers } = await pending;
+    let answer;
+    try { answer = await pending; }
+    catch (error) {
+      // A read of a request that has since ended never arrives (api-cache.js endedRequestError): this one asks itself.
+      if (!borrowed || !endedRequestError(error)) throw error;
+      if (inFlight.get(key) === pending) inFlight.delete(key);
+      return cachedGet(url, init, kinds);
+    }
+    const { body, status, headers } = answer;
     return new Response(body.slice(0), { status, headers });
   }
 
