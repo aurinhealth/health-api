@@ -60,7 +60,7 @@ struct CoachEntry: View {
         if let model, model.aiOff && !model.demo { consent = true } else { open = true }
     }
 
-    /// The chat about the subject (CoachPill did this before), or about the day.
+    /// The chat about the subject, or about the day.
     @ViewBuilder static func chat(subject: CoachSubject?, view: String, date: String?) -> some View {
         if let subject {
             CoachView(view: subject.view, date: subject.date, subject: subject, openChat: WorkoutCoachChat.id(for: subject),
