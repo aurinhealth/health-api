@@ -73,6 +73,8 @@ enum AppRoute: Hashable {
     case journalItem(String, String)
     /// The running plan, from "Otevřít plán" under a plan the coach started.
     case trainingPlan
+    /// Training → Load: "balance" (every workout) or "muscle" (gym sets only).
+    case load(String)
 
     /// The tab a deep link (aurin://open/sleep) opens the route on.
     var tab: AppTab {
@@ -229,6 +231,8 @@ struct RouteScreen: View {
         case .journalImpact: JournalImpactView()
         case .journalItem(let key, let metric): JournalItemView(key: key, metric: metric)
         case .trainingPlan: TrainingPlanRouteView()
+        case .load(let kind):
+            if let training = model.training { LoadDetailView(kind: LoadKind(rawValue: kind) ?? .balance, training: training) } else { LoadingScreen { await model.refreshTraining() } }
         }
     }
 }

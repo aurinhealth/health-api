@@ -43,6 +43,10 @@ extension DemoData {
         "Praha": "Prague",
         "Podle dostupné předpovědi.": "Based on the available forecast.",
         // Training
+        "Posledních 7 dní bylo zhruba jako tvé obvyklé 4 týdny.": "The last 7 days were about as hard as your usual 4 weeks.",
+        "Posledních 7 dní bylo lehčích než tvé obvyklé 4 týdny.": "The last 7 days were easier than your usual 4 weeks.",
+        "obvyklá": "usual",
+        "pod obvyklou": "below usual",
         "Silový trénink, celé tělo": "Strength, full body",
         "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen lehký dřep po ranním běhu, ať jsou v sobotu čerstvé na dlouhý běh.":
             "Why today: high readiness and a rested upper body. Legs get only light squats after this morning's run, to stay fresh for Saturday's long run.",

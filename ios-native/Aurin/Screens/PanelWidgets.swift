@@ -40,7 +40,8 @@ enum WidgetPanel: String {
         switch self {
         case .today: return "Dnes"
         case .health: return "Zdraví"
-        case .training: return "Trénink"
+        // Training's widgets are its OVERVIEW (redesign T): Form, VO2max, Muscle freshness.
+        case .training: return "Přehled"
         case .food: return "Jídlo"
         }
     }
@@ -59,8 +60,9 @@ enum WidgetPanel: String {
                     .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small),
                     .init(kind: .weight, size: .medium), .init(kind: .bodyFat, size: .medium), .init(kind: .muscle, size: .medium)]
         case .training:
-            return [.init(kind: .form, size: .small), .init(kind: .vo2max, size: .small), .init(kind: .thisWeek, size: .medium),
-                    .init(kind: .sessions, size: .medium), .init(kind: .activeCalories, size: .medium), .init(kind: .zones, size: .medium)]
+            // Redesign T: the Overview of the concept; the week, its workouts and the
+            // zones stay in the gallery to add back.
+            return [.init(kind: .form, size: .small), .init(kind: .vo2max, size: .small), .init(kind: .musclesFigure, size: .medium)]
         case .food:
             return [.init(kind: .drinks, size: .medium)]
         }
@@ -71,7 +73,7 @@ enum WidgetPanel: String {
         switch self {
         case .today: return [.cycle, .sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
         case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
-        case .training: return [.musclesFigure, .musclesGlance, .sleep, .hrv, .restingHR, .steps, .food, .weight]
+        case .training: return [.musclesFigure, .thisWeek, .zones, .activeCalories, .sessions, .musclesGlance, .sleep, .hrv, .restingHR, .steps]
         case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
     }
@@ -233,7 +235,9 @@ enum WidgetLayoutStore {
         let size: String
     }
 
-    static func key(_ panel: WidgetPanel) -> String { "widgets." + panel.rawValue }
+    /// Training's key changed with the redesign (T): its Overview starts from the
+    /// new defaults once, the old layout held the tools and the week's widgets.
+    static func key(_ panel: WidgetPanel) -> String { panel == .training ? "widgets.training.overview" : "widgets." + panel.rawValue }
 
     /// The saved layout; before the first change the panel's defaults (on
     /// Today without the cards hidden in the old "Upravit přehled").

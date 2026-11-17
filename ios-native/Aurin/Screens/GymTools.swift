@@ -252,6 +252,8 @@ struct GymBuilderView: View {
     @State private var askPlace = false
     /// The length was picked on the proposal, so the server no longer chooses it.
     @State private var lengthPicked = false
+    /// The own gym lengths of the length control ("+ Save").
+    @AppStorage("libraryPresetsGym") private var gymPresets = "30,45,60,90"
     /// "Změnit zadání" on the quick path: the full form from then on.
     @State private var showForm = false
     /// The kept proposal was looked for once (GymKeptProposal).
@@ -366,6 +368,14 @@ struct GymBuilderView: View {
 
     // MARK: Form
 
+    /// The length control's choice: nil is "Recommended", the usual length.
+    private var pickedLength: Binding<Int?> {
+        Binding(get: { lengthPicked ? minutes : nil },
+                set: { value in
+                    if let value { minutes = value; lengthPicked = true } else { minutes = GymLength.usual ?? 60; lengthPicked = false }
+                })
+    }
+
     /// Svaly on top: what is ready today and what is still tired; a tap opens Svaly.
     private func musclesCard(_ data: MuscleFatigue) -> some View {
         RouteLink(route: .muscles) {
@@ -399,11 +409,10 @@ struct GymBuilderView: View {
             Card {
                 DatePicker("Den", selection: $day, in: earliest..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
-                Picker("Délka", selection: $minutes) {
-                    ForEach([30, 45, 60, 75, 90, 120], id: \.self) { Text("\($0)").tag($0) }
-                }
-                .pickerStyle(.segmented)
-                Text("minut").font(Typo.caption).foregroundStyle(Palette.muted)
+                // The one length control of every sport, without the tolerance (Petr decision 6).
+                // Until a length is picked, "Recommended" shows the length the form sends.
+                LengthControl(minutes: pickedLength, recommended: lengthPicked ? (GymLength.usual ?? 60) : minutes, range: 20...120, step: 5,
+                              presets: $gymPresets, fallback: 60)
             }
             .padding(.top, 10)
 
