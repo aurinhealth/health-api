@@ -385,6 +385,7 @@ struct CoachView: View {
                 Task {
                     do {
                         try await model.api.allowAI()
+                        model.setAIOff(false)
                         needsConsent = false
                         error = nil
                         // The question that ran into the consent goes out now, no need to type it again.

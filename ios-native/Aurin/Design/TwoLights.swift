@@ -13,20 +13,28 @@ struct TwoLights: View {
     var mode: Mode = .idle
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var scenePhase
+
+    /// The halo reaches past the lights: the canvas is larger than the symbol,
+    /// so the blur never ends in a straight edge, and lays out at `size`.
+    private static let bleed: CGFloat = 1.6
 
     var body: some View {
         Group {
             if LowPower.shared.on {
                 Canvas { context, canvas in draw(&context, canvas, time: 0, still: true) }
             } else {
-                TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+                // A slow brightness change needs few frames; the symbol is small.
+                TimelineView(.animation(minimumInterval: reduceMotion ? 1 / 10 : 1 / 24, paused: scenePhase != .active)) { timeline in
                     Canvas { context, canvas in
                         draw(&context, canvas, time: timeline.date.timeIntervalSinceReferenceDate, still: false)
                     }
                 }
             }
         }
-        .frame(width: size, height: size)
+        .frame(width: size * Self.bleed, height: size * Self.bleed)
+        .padding(-size * (Self.bleed - 1) / 2)
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
@@ -45,8 +53,8 @@ struct TwoLights: View {
     }
 
     private func draw(_ context: inout GraphicsContext, _ canvas: CGSize, time: Double, still: Bool) {
-        // Drawn on the concept's 160-point box.
-        let s = canvas.width / 160
+        // Drawn on the concept's 160-point box, inside the larger canvas.
+        let s = canvas.width / (160 * Self.bleed)
         let moving = !still && !reduceMotion
         let drift = moving ? Self.wave(time, periods.drift) : 0
         let orbit = moving ? Self.wave(time, periods.orbit) : 0.45

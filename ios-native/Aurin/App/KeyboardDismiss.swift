@@ -46,8 +46,10 @@ enum KeyboardDismiss {
                 text.inputAccessoryView = HideBar(done: true)
                 text.reloadInputViews()
             }
-        } else if let text = field as? UITextView, text.isEditable, text.inputAccessoryView == nil {
-            text.inputAccessoryView = HideBar(done: false)
+        } else if let text = field as? UITextView, text.isEditable {
+            // Several lines: return is a new line, whatever the root's Done label says.
+            text.returnKeyType = .default
+            if text.inputAccessoryView == nil { text.inputAccessoryView = HideBar(done: false) }
             text.reloadInputViews()
         }
         if let view = field as? UIView, let window = view.window { dragHides(in: window) }

@@ -312,8 +312,9 @@ final class SmokeTests: XCTestCase {
     /// found by its identifier, read by VoiceOver as "Kouč", and it opens.
     func test6CoachOnSubpages() {
         for (route, file) in [("strain", "namaha"), ("sleep", "spanek"), ("readiness", "pripravenost")] {
+            // The detail opens at launch; details have no tab bar.
             launch("-demo", "-open", route)
-            XCTAssertTrue(tab("Dnes").waitForExistence(timeout: 20), "the app did not start")
+            XCTAssertTrue(app.buttons["coach.entry"].waitForExistence(timeout: 20), "no coach on \(route)")
             pause(4)
             shot(file)
             let entry = hittable(app.buttons.matching(identifier: "coach.entry"))

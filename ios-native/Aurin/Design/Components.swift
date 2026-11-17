@@ -392,6 +392,7 @@ struct ChromeButton: View {
                 Text(L10n.tr(text))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Palette.ink)
+                    .lineLimit(1).fixedSize()
                     .padding(.horizontal, 14)
                     .frame(height: height)
                     .contentShape(Capsule())
@@ -580,7 +581,7 @@ private struct PinnedTopBar: ViewModifier {
                     Text(L10n.tr(title))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.85)
                         .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
                 }
                 Spacer(minLength: 0)

@@ -20,8 +20,8 @@ struct CoachEntry: View {
     var companion: ChromeAction? = nil
     /// The first subpage opened shows "Ask Coach about this" once.
     var hint = true
-    /// The tab header uses its own capsule (HeaderCapsule) and passes only the tap.
-    var height: CGFloat = 40
+    /// As high as the back button (ChromeButton); 44 pt to tap.
+    private let height: CGFloat = 40
 
     /// Optional: screen renders in the tests draw pages without the app.
     @Environment(AppModel.self) private var model: AppModel?
@@ -38,6 +38,7 @@ struct CoachEntry: View {
                         .foregroundStyle(companion.tint ?? Palette.ink)
                         .frame(width: height, height: height)
                         .contentShape(Rectangle())
+                        .tapTarget(width: height, height: height)
                 }
                 .buttonStyle(.plain)
                 .disabled(!companion.enabled)
@@ -55,6 +56,7 @@ struct CoachEntry: View {
     }
 
     private func tap() {
+        CoachEntryTip().invalidate(reason: .actionPerformed)
         if let model, model.aiOff && !model.demo { consent = true } else { open = true }
     }
 
@@ -78,7 +80,7 @@ struct CoachEntryButton: View {
 
     var body: some View {
         Button(action: action) {
-            TwoLights(size: size * 0.55)
+            TwoLights(size: size * 0.7)
                 .frame(width: size, height: size)
                 .contentShape(Rectangle())
                 .tapTarget(width: size, height: size)
@@ -95,6 +97,7 @@ struct CoachEntryButton: View {
 /// the two lights alone could read as a status dot (tester, 2026-11-16).
 struct CoachEntryTip: Tip {
     var title: Text { Text(verbatim: L10n.tr("Zeptej se kouče na tohle")) }
+    var options: [any TipOption] { [Tips.MaxDisplayCount(1)] }
 }
 
 private struct CoachEntryHint: ViewModifier {
