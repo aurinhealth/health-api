@@ -376,8 +376,8 @@ export function meaningfulChange(written, today) {
 }
 
 // The rows the upsert would change: new ones, and those with a value it
-// compares (its WHERE) not as stored. One read per type, side by side (one
-// trip, d1-batch.js); when a read fails, every row is sent as before.
+// compares (its WHERE) not as stored. One read per type, side by side (one or
+// two trips, d1-batch.js); when a read fails, every row is sent as before.
 const COMPARED = ["sample_time", "start_time", "end_time", "value_numeric", "value_unit"];
 async function changedRows(db, userId, rows) {
   const byType = new Map();
@@ -389,9 +389,12 @@ async function changedRows(db, userId, rows) {
         WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND external_id IN (SELECT value FROM json_each(?))`).bind(userId, type, JSON.stringify(ids)).all();
       for (const r of found.results || []) stored.set(type + "\u0000" + r.external_id, r);
     }));
+    // A key sent twice: the later record is compared with the earlier one, as the upserts would run.
     return rows.filter(row => {
-      const was = stored.get(row.data_type + "\u0000" + row.external_id);
-      return !was || COMPARED.some(k => (was[k] ?? null) !== (row[k] ?? null)) || was.payload_json !== healthPointJson(row.payload);
+      const key = row.data_type + "\u0000" + row.external_id, was = stored.get(key), json = healthPointJson(row.payload);
+      const write = !was || COMPARED.some(k => (was[k] ?? null) !== (row[k] ?? null)) || was.payload_json !== json;
+      stored.set(key, { ...row, payload_json: json });
+      return write;
     });
   } catch (error) {
     console.error("Apple Health: stored rows not read", error?.message || error);

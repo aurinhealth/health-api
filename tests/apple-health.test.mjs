@@ -110,6 +110,10 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
   raw.prepare = prepare;
   assert.equal(upserts, 1, "one changed row: one upsert");
   assert.equal(rows(raw, "data_type='steps'")[0].value_numeric, 3100);
+  // The same key twice in one upload: the last one is kept, as the upserts in order keep it.
+  const steps = body.records.find(r => r.type === "steps");
+  await saveAppleHealth(db, 1, { ...body, records: [{ ...steps, value: 3200 }, { ...steps, value: 3100 }] });
+  assert.equal(rows(raw, "data_type='steps'")[0].value_numeric, 3100);
   await saveAppleHealth(db, 1, body);
 
   const summary = await googleDashboard(db, "2026-10-10");
