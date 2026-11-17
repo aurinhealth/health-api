@@ -127,7 +127,7 @@ struct TrainingModeView: View {
     private var screen: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
+            if let day, !finishedSession, let exercise = current(day) { tools(exercise) }
             if loading && day == nil {
                 Spacer()
                 ProgressView().frame(maxWidth: .infinity)
@@ -369,25 +369,28 @@ struct TrainingModeView: View {
                         .disabled(saving)
                     }
                 }
+                // The coach top right, after Dokončit, as the live mode concept draws it
+                // (Petr 2026-11-17): it knows the workout and where in it the athlete is.
+                if !finishedSession, let exercise = current(day) {
+                    CoachEntry(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), hint: false)
+                }
             } else {
                 Spacer()
             }
         }
     }
 
-    /// Under the header: the heart rate, the coach, the plan and ⋯ (History, Sound and vibration).
-    private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
+    /// Under the header: the heart rate, the plan and ⋯ (History, Sound and vibration).
+    private func tools(_ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
-            // Heart, Coach and Plan from the left, ⋯ on the right. Coach, Plan and ⋯ keep
-            // their size; the heart drops "Bez tepu" when the row is too narrow, e.g. with
-            // larger text, so nothing wraps or ends in "…". Coach stays outside
-            // ViewThatFits: a switch must not close its open chat.
+            // Heart and Plan from the left, ⋯ on the right. Plan and ⋯ keep their size;
+            // the heart drops "Bez tepu" when the row is too narrow, e.g. with larger
+            // text, so nothing wraps or ends in "…".
             HStack(spacing: 8) {
                 ViewThatFits(in: .horizontal) {
                     HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
                     HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
                 }
-                CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date))
                 Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Upravit plán"))
