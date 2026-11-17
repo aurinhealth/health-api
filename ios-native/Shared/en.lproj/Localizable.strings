@@ -4314,3 +4314,18 @@
 "odh." = "est.";
 "Práce" = "Work";
 "Trénink %@ z %@" = "Workout %@ of %@";
+
+/* Redesign J: the top of Food, the macros, the meals and the drinks */
+"Snězeno dnes" = "Eaten today";
+"Snězeno %@" = "Eaten on %@";
+"%@ navíc" = "%@ over";
+"Otevře, z čeho se cíl skládá" = "Opens where the target comes from";
+"Nastav si denní cíl" = "Set your daily target";
+"Cíl se řídí tvou váhou, výškou, tréninkem a cílem." = "Your target follows your weight, height, training and goal.";
+"Nastavit cíl" = "Set target";
+"Den volna, žádný trénink navíc" = "Rest day, no training added";
+"Zapiš první jídlo a pomůžu ti s energií na trénink." = "Log your first meal and I'll help you fuel your training.";
+"Časy jídel" = "Meal times";
+"%@ navíc z %@ g" = "%@ over %@ g";
+"z max %@ g" = "of max %@ g";
+"z %@ g" = "of %@ g";

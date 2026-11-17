@@ -143,97 +143,71 @@ struct FoodContent: View {
         WidgetBoard(panel: .food,
                     data: WidgetData(panel: .food, today: page.map(\.today) ?? model.today, health: page.map(\.health) ?? model.health, training: model.training, food: food),
                     editing: $editing,
-                    editTitle: nil)
+                    editTitle: "Upravit přehled")
     }
 
     @ViewBuilder private var content: some View {
-        // A wide window: the day's numbers and the widgets on the left, the meals on the right.
+        let today = AppModel.localDate(Date())
+        // A wide window: the day's numbers and the coach on the left, the meals and drinks on the right.
         WideColumns {
-            HStack(alignment: .lastTextBaseline, spacing: 12) {
-                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                if let target = food.target {
-                    // With its parts the target opens where the numbers come from.
-                    let more = food.targetParts != nil ? " ›" : ""
-                    let over = (food.kcal ?? 0).rounded() - target.rounded()
-                    let label = Group {
-                        if over >= 1 {
-                            // Past the target (its workouts done and planned included): a calm note
-                            // in rust, as a limit past on the macros, not the number in red.
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(L10n.f("%@ kcal navíc", Fmt.int(over))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust)
-                                Text(L10n.f("z %@ kcal", Fmt.int(target)) + more).font(Typo.small).foregroundStyle(Palette.muted)
-                            }
-                            .lineLimit(1)
-                        } else {
-                            Text(L10n.f("z %@\nkcal", Fmt.int(target)) + more)
-                                .font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
-                        }
-                    }
-                    if food.targetParts != nil {
-                        // A real button, 44 pt tall to tap, read by VoiceOver as one (design review 2026-11-10, point 12).
-                        Button { showingParts = true } label: {
-                            label.frame(minWidth: 44, minHeight: 44, alignment: .leading).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.tr("Cíl dne"))
-                        .accessibilityValue(over >= 1
-                            ? L10n.f("%@ kcal navíc", Fmt.int(over)) + ", " + L10n.f("z %@ kcal", Fmt.int(target))
-                            : L10n.f("%@ kcal", Fmt.int(target)))
-                    } else {
-                        label
-                    }
-                }
-            }
-            .padding(.top, 30)
-            // The target's parts: the base, the workouts done and the planned ones.
-            if let parts = food.targetParts {
-                Button { showingParts = true } label: { TargetPartsRow(parts: parts) }
-                    .buttonStyle(.plain)
-                    .padding(.top, 20)
-                    .sheet(isPresented: $showingParts) {
-                        let today = AppModel.localDate(Date())
+            FoodHero(food: food,
+                     openTarget: food.targetParts != nil ? { showingParts = true } : nil,
+                     setTarget: actions.settings)
+                .padding(.top, 22)
+                .sheet(isPresented: $showingParts) {
+                    if let parts = food.targetParts {
                         TargetPartsSheet(parts: parts, target: food.target ?? parts.base + parts.workouts + parts.planned,
                                          isToday: food.date == today, past: food.date < today)
                     }
-            }
-            // The macros right under the target, so they show without scrolling; the coach's card under them.
-            MacroCells(macros: food.macros).padding(.top, 20)
-            // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
-            ForEach(food.nutrients ?? []) { item in
-                NutrientRow(item: item).padding(.top, 8)
-            }
-            NavigationLink { NutrientsView(date: food.date) } label: {
-                HStack(spacing: 6) {
-                    Text("Všechny živiny").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                    Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
                 }
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
+            // The macros in one card with "All nutrients" (and the Pro nutrients pinned under them).
+            if food.target != nil || (food.kcal ?? 0) > 0 {
+                VStack(alignment: .leading, spacing: 0) {
+                    MacroCells(macros: food.macros)
+                    ForEach(food.nutrients ?? []) { item in
+                        NutrientRow(item: item).padding(.bottom, 8)
+                    }
+                    NavigationLink { NutrientsView(date: food.date) } label: {
+                        VStack(spacing: 0) {
+                            Rectangle().fill(Palette.hairline).frame(height: 1)
+                            HStack {
+                                Text("Všechny živiny").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                                Spacer()
+                                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                            }
+                            .frame(minHeight: 48)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .cardSurface(cornerRadius: 22)
+                .padding(.top, 20)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 8)
 
-            // An earlier day shows only its data; a day ahead keeps its sentence.
+            // The coach: today and the days ahead; a day gone by shows only its data.
             let day = page.map(\.selectedDate) ?? model.selectedDate
-            if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
-                CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 10)
+            if day.map({ $0 > today }) ?? true {
+                CoachTextCard(screen: "food", fallbackText: food.target == nil ? L10n.tr("Zapiš první jídlo a pomůžu ti s energií na trénink.") : food.sentence,
+                              live: day == nil)
+                    .padding(.top, 14)
             }
-
-            // In a wide window the widgets stay one column under the numbers.
-            board.environment(\.wideLayout, false).padding(.top, 18)
         } right: {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Jídla dne")
+                SectionLabel(text: "Jídla")
                 Spacer()
                 NavigationLink { MealSlotsSettingsView() } label: {
-                    Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    Text("Časy jídel").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .frame(minHeight: 44).contentShape(Rectangle())
                 }
-                .accessibilityLabel("Upravit jídla dne")
+                .buttonStyle(.plain)
             }
-            .padding(.top, wide ? 30 : 28)
+            .padding(.top, wide ? 22 : 24)
+            .padding(.horizontal, 4)
             VStack(spacing: 0) {
                 ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
-                    MealRow(meal: meal, add: { add(meal.type) })
+                    MealRow(meal: meal, showTargets: food.target != nil, add: { add(meal.type) })
                     pendingRows(pending.filter { $0.meal == meal.type })
                     if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                 }
@@ -243,23 +217,32 @@ struct FoodContent: View {
                     Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
                 }
             }
-            .padding(.top, 6)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+            .cardSurface(cornerRadius: 22)
             .sheet(item: $adding) { item in AddFoodSheet(meal: item.meal, pending: item) }
 
-            VStack(spacing: 28) {
-                Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
-                    Label("Přidat jídlo", systemImage: "plus")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .background(Palette.button, in: Capsule())
-                }
-                WidgetEditButton { editing = true }
+            // Also on a day gone by: it is added to the day shown (D-JIDLO-5).
+            Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : "dinner") } label: {
+                Label("Přidat jídlo", systemImage: "plus")
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(Palette.track, in: Capsule())
+                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
             }
-            .padding(.top, 22)
+            .buttonStyle(.plain)
+            .padding(.top, 14)
+
+            // The drinks and anything added under Edit overview.
+            board.environment(\.wideLayout, false).padding(.top, 24)
         }
     }
 }
 
+/// Carbs, protein and fat in three columns (redesign J): the signature
+/// colours, "177 g", a bar and "of 330 g". Past a target the bar runs on in a
+/// lighter shade and the line reads "14 over 287 g", calmly: only the total
+/// kcal turns red (Petr 2026-11-12).
 struct MacroCells: View {
     let macros: FoodSnapshot.Macros
 
@@ -273,41 +256,72 @@ struct MacroCells: View {
             cell("Tuky", macros.fat, Palette.fat)
         }
         .fixedSize(horizontal: false, vertical: true)
-        .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
     }
 
-    private func share(_ amount: FoodSnapshot.Amount) -> Double {
-        guard let target = amount.target, target > 0 else { return 0 }
-        return (amount.eaten ?? 0) / target
+    /// "of 330 g", "of max 66 g", "14 over 287 g".
+    static func caption(eaten: Double, target: Double?, limit: Bool) -> String {
+        guard let target else { return "" }
+        let over = eaten.rounded() - target.rounded()
+        if over >= 1 { return L10n.f("%@ navíc z %@ g", Fmt.int(over), Fmt.int(target)) }
+        return L10n.f(limit ? "z max %@ g" : "z %@ g", Fmt.int(target))
     }
 
     private func cell(_ title: String, _ amount: FoodSnapshot.Amount, _ color: Color, first: Bool = false) -> some View {
         let limit = amount.limit == true
-        let over = limit && (amount.eaten ?? 0) > (amount.target ?? .infinity)
+        let eaten = amount.eaten ?? 0
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
                 Circle().fill(color).frame(width: 7, height: 7)
-                Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(Fmt.int(amount.eaten ?? 0)).font(Typo.number(28)).foregroundStyle(Palette.ink)
-                if let target = amount.target {
-                    Text(verbatim: (limit ? "/ max " : "/ ") + Fmt.int(target) + " g").font(Typo.number(15)).foregroundStyle(Palette.faint)
-                }
+                Text(verbatim: Fmt.int(eaten)).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                Text(verbatim: "g").font(Typo.caption).foregroundStyle(Palette.muted)
             }
             .lineLimit(1).minimumScaleFactor(0.7)
-            // A limit ends in a tick and turns rust once it is passed.
-            ProgressLine(fraction: share(amount), color: over ? Palette.rust : color, height: 3)
+            OverBar(eaten: eaten, target: amount.target, color: color, height: 4)
+                // A limit ends in a tick.
                 .overlay(alignment: .trailing) {
-                    if limit { Rectangle().fill(Palette.ink).frame(width: 2, height: 9) }
+                    if limit, eaten <= (amount.target ?? 0) { Rectangle().fill(Palette.ink).frame(width: 2, height: 9) }
                 }
-                .padding(.trailing, 14)
+            Text(verbatim: Self.caption(eaten: eaten, target: amount.target, limit: limit))
+                .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.vertical, 16)
         .padding(.leading, first ? 0 : 14)
+        .padding(.trailing, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr(title) + " " + Fmt.int(eaten) + " g, " + Self.caption(eaten: eaten, target: amount.target, limit: limit))
+    }
+}
+
+/// A bar against a target; past it the target is the bar's first part and the
+/// rest runs on in a lighter shade of the same colour, never red.
+struct OverBar: View {
+    let eaten: Double
+    let target: Double?
+    let color: Color
+    var height: CGFloat = 4
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = Double(geo.size.width)
+            let t = max(target ?? 0, 0)
+            if t > 0, eaten > t {
+                HStack(spacing: 2) {
+                    Capsule().fill(color).frame(width: max(w * t / eaten - 2, 0))
+                    Capsule().fill(color.opacity(0.4))
+                }
+            } else {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Capsule().fill(color).frame(width: w * (t > 0 ? min(eaten / t, 1) : 0))
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
     }
 }
 
@@ -432,34 +446,55 @@ struct DrinksCard: View {
         }
     }
 
-    private var full: some View {
-        Card {
-            HStack(spacing: 8) {
-                WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
-                Button { other = true } label: {
-                    Image(systemName: "plus")
-                        .scaledFont(15, weight: .bold, cap: .denseCap)
-                        .foregroundStyle(Palette.onAccent)
-                        .frame(width: 34, height: 34)
-                        .background(Palette.blue, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Přidat pití")
+    /// "1.5 of 2.6 L" over "1.1 L to go" (redesign J).
+    private var amountText: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(verbatim: Self.bigNumber(water.ml ?? 0)).font(Typo.number(44)).foregroundStyle(Palette.ink)
+                Text(verbatim: L10n.f("z %@", Self.litres(target))).font(Typo.small).foregroundStyle(Palette.muted)
             }
-            if figure == .line {
-                NavigationLink { DrinkHistoryView() } label: {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        amount(34)
-                        Spacer()
-                        drunkNote
+            Text(verbatim: Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.small).foregroundStyle(Palette.muted)
+            drunkNote
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var addButton: some View {
+        Button { other = true } label: {
+            Image(systemName: "plus").scaledFont(15, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(Palette.ink)
+                .frame(width: 44, height: 44)
+                .background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Přidat pití")
+    }
+
+    /// On Food the card sits under its own section label, as in the concept;
+    /// on another tab it carries its widget header.
+    private var full: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if panel == .food { SectionLabel(text: "Pití").padding(.horizontal, 4) }
+            fullCard
+        }
+    }
+
+    private var fullCard: some View {
+        Card {
+            if panel != .food { WidgetHeader(title: "Pití a hydratace", color: Palette.blue) }
+            HStack(alignment: .top, spacing: 14) {
+                if figure == .line {
+                    NavigationLink { DrinkHistoryView() } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            amountText
+                            ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
+                        }
                     }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Otevře dnešní pití")
-                ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
-            } else {
-                HStack(spacing: 16) {
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Otevře dnešní pití")
+                } else {
                     DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate, idle: idle, shown: shown)
                         .scaleEffect(pop ? 1.12 : 1)
                         .contentShape(Rectangle())
@@ -469,19 +504,11 @@ struct DrinksCard: View {
                         .accessibilityLabel(quickLabel)
                         .accessibilityAction { Task { await quickAdd() } }
                         .accessibilityAction(named: "Vybrat postavičku") { choosing = true }
-                    NavigationLink { DrinkHistoryView() } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            amount(40)
-                            Text(Fmt.int(fraction * 100) + Fmt.percentSign).font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
-                            Text(Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.caption).foregroundStyle(Palette.muted)
-                            drunkNote
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Otevře dnešní pití")
+                    NavigationLink { DrinkHistoryView() } label: { amountText.padding(.top, 14) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Otevře dnešní pití")
                 }
+                addButton
             }
             if let added {
                 HStack(spacing: 10) {
@@ -655,38 +682,79 @@ struct PendingFoodRow: View {
     }
 }
 
+/// One meal of the day (redesign J): "Breakfast 07:40", its foods, "520 of
+/// 600 kcal" and +, and under it the carbs, protein and fat against the meal's
+/// targets in three columns. An empty meal shows its target ("630 kcal", Petr
+/// 2026-11-16) and "Nothing yet". A tap opens the meal with every food.
 struct MealRow: View {
     let meal: FoodSnapshot.Meal
+    /// false without a day's target: only the name, the time and +.
+    var showTargets = true
     var add: () -> Void = {}
 
     private var empty: Bool { meal.entries.isEmpty }
     private var goal: FoodSnapshot.Suggestion? { meal.target ?? meal.suggestion }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            NavigationLink { MealDetailView(type: meal.type) } label: { summary }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                NavigationLink { MealDetailView(type: meal.type) } label: { summary }
+                    .buttonStyle(.plain)
+                addButton
+            }
+            if showTargets {
+                NavigationLink { MealDetailView(type: meal.type) } label: {
+                    HStack(alignment: .top, spacing: 14) {
+                        column("Sacharidy", sum(\.carbs), goal?.carbs, Palette.carbs)
+                        column("Bílkoviny", sum(\.protein), goal?.protein, Palette.protein)
+                        column("Tuky", sum(\.fat), goal?.fat, Palette.fat)
+                    }
+                    .contentShape(Rectangle())
+                }
                 .buttonStyle(.plain)
-            addButton.padding(.top, 2)
+                .accessibilityElement(children: .combine)
+            }
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
 
     private var summary: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.faint)
-                Spacer(minLength: 6)
-                Text(Fmt.int(meal.kcal ?? 0)).font(Typo.number(20)).foregroundStyle(empty ? Palette.faint : Palette.ink)
-                if let goal { Text("/ " + Fmt.int(goal.kcal) + " kcal").font(Typo.number(14)).foregroundStyle(Palette.faint) }
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                Text(empty ? L10n.tr("Zatím nic") : meal.entries.map(\.name).joined(separator: ", "))
+                    .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
             }
-            MacroBars(carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat), goal: goal)
-            if !empty {
-                Text(meal.entries.map(\.name).joined(separator: ", "))
-                    .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Spacer(minLength: 6)
+            if empty {
+                if showTargets, let goal { Text(verbatim: Fmt.int(goal.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted) }
+            } else {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(verbatim: Fmt.int(meal.kcal ?? 0)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                    if showTargets, let goal { Text(verbatim: L10n.f("z %@ kcal", Fmt.int(goal.kcal))).font(Typo.caption).foregroundStyle(Palette.muted) }
+                    else { Text(verbatim: "kcal").font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                .lineLimit(1)
             }
         }
         .contentShape(Rectangle())
+    }
+
+    private func column(_ title: String, _ eaten: Double, _ target: Double?, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Circle().fill(color).frame(width: 6, height: 6)
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            OverBar(eaten: eaten, target: target, color: color, height: 3)
+            (Text(verbatim: Fmt.int(eaten)).fontWeight(.semibold).foregroundColor(Palette.ink)
+             + Text(verbatim: target.map { " / " + Fmt.int($0) + " g" } ?? " g").foregroundColor(Palette.muted))
+                .font(Typo.caption.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func sum(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double {
@@ -694,15 +762,11 @@ struct MealRow: View {
     }
 
     private var addButton: some View {
-        let fill: Color = empty ? Palette.button : .clear
-        let tint: Color = empty ? Palette.onButton : Palette.ink
-        let ring: Double = empty ? 0 : 0.2
-        return Button(action: add) {
-            Image(systemName: "plus").scaledFont(13, weight: .bold, cap: .denseCap)
-                .frame(width: 32, height: 32)
-                .foregroundStyle(tint)
-                .background(fill, in: Circle())
-                .overlay { Circle().stroke(Palette.ink.opacity(ring), lineWidth: 1) }
+        Button(action: add) {
+            Image(systemName: "plus").scaledFont(15, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(Palette.ink)
+                .frame(width: 44, height: 44)
+                .background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(MealSlot.addText(meal.type))

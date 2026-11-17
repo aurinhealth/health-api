@@ -387,7 +387,8 @@ struct DrinkKind: Identifiable {
         DrinkKind(id: "milk", label: "Mléko", symbol: "carton.fill", factor: 1.1),
         DrinkKind(id: "sport", label: "Ionťák", symbol: "bolt.fill", factor: 1.1),
         DrinkKind(id: "soda", label: "Limonáda", symbol: "bubbles.and.sparkles.fill", factor: 0.9),
-        DrinkKind(id: "beer", label: "Pivo", symbol: "wineglass", factor: 0.5),
+        // The preview only; the numbers come from the server (HYDRATION_FACTORS in src/fluids.js, beer 0 since NUT-2).
+        DrinkKind(id: "beer", label: "Pivo", symbol: "wineglass", factor: 0),
         DrinkKind(id: "wine", label: "Víno", symbol: "wineglass.fill", factor: 0),
         DrinkKind(id: "other", label: "Jiné", symbol: "waterbottle.fill", factor: 1)
     ]

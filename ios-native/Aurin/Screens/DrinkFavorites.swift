@@ -89,21 +89,16 @@ struct DrinkPresetRow: View {
                 withAnimation(.easeOut(duration: 0.2)) { if done == p.id { done = nil } }
             }
         } label: {
-            HStack(spacing: 8) {
-                Group {
-                    if busy == p.id { ProgressView().controlSize(.small) }
-                    else { Image(systemName: done == p.id ? "checkmark" : kind?.symbol ?? "drop.fill").scaledFont(14, weight: .semibold, cap: .denseCap) }
-                }
-                .foregroundStyle(Palette.blue)
-                .frame(width: 18)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(kind?.label ?? p.kind).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                    Text(Units.volumeText(Double(p.ml))).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
-                }
+            // Text only, "Water 250 ml", 44 pt tall (redesign J, Plus thread 2026-11-14).
+            HStack(spacing: 6) {
+                if busy == p.id { ProgressView().controlSize(.small) }
+                else if done == p.id { Image(systemName: "checkmark").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.blue) }
+                Text(verbatim: L10n.tr(kind?.label ?? p.kind) + " " + Units.volumeText(Double(p.ml)))
+                    .font(.footnote.weight(.medium).monospacedDigit()).foregroundStyle(Palette.ink).lineLimit(1)
             }
-            .padding(.leading, 12).padding(.trailing, 14)
-            .frame(height: 48)
-            .background(Palette.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(Palette.track, in: Capsule())
         }
         .buttonStyle(.plain)
         .disabled(busy != nil)

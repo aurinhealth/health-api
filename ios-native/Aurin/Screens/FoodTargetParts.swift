@@ -1,76 +1,71 @@
 import SwiftUI
 
-/// The day's calorie target in three parts under the big number on Food: the
-/// base, the workouts already done and the ones still planned (targetParts in
-/// src/app-food.js). A tap opens where the numbers come from.
+/// The day's calorie target in its parts under the bar on Food: "Base 2,300,
+/// Workouts +200, Planned +150 ›" on one line (redesign J); Base is neutral,
+/// only the workouts (green) and the plans (an amber ring) have a colour. A day
+/// without training says so; an own calorie goal has no parts.
 struct TargetPartsRow: View {
-    let parts: FoodSnapshot.TargetParts
+    let parts: FoodSnapshot.TargetParts?
+    let target: Double
+    /// A chevron: the row opens where the numbers come from.
+    var more = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TargetPartsBar(parts: parts)
-            HStack(alignment: .top, spacing: 0) {
-                column("Základ", Fmt.int(parts.base), color: Palette.brown)
-                column("Tréninky", added(parts.workouts), color: Palette.green, empty: parts.workouts <= 0)
-                column("Naplánováno", added(parts.planned), color: Palette.amber, empty: parts.planned <= 0, planned: true)
+        HStack(spacing: 12) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) { line }
+                VStack(alignment: .leading, spacing: 4) { line }
+            }
+            Spacer(minLength: 0)
+            if more {
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                    .accessibilityHidden(true)
             }
         }
-        .contentShape(Rectangle())
+        .font(Typo.caption)
+        .frame(minHeight: 32)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(spoken)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(more ? .isButton : [])
+    }
+
+    @ViewBuilder private var line: some View {
+        if let parts {
+            part("Základ", Fmt.int(parts.base), dot: nil)
+            if parts.workouts <= 0 && parts.planned <= 0 {
+                Text(verbatim: L10n.tr("Den volna, žádný trénink navíc")).foregroundStyle(Palette.muted).lineLimit(1)
+            } else {
+                if parts.workouts > 0 { part("Tréninky", "+" + Fmt.int(parts.workouts), dot: AnyView(Circle().fill(Palette.green))) }
+                if parts.planned > 0 { part("Naplánováno", "+" + Fmt.int(parts.planned), dot: AnyView(Circle().strokeBorder(Palette.amber, lineWidth: 1.5))) }
+            }
+        } else {
+            part("Vlastní cíl", Fmt.int(target), dot: nil)
+        }
+    }
+
+    private func part(_ title: String, _ value: String, dot: AnyView?) -> some View {
+        HStack(spacing: 5) {
+            if let dot { dot.frame(width: 7, height: 7) }
+            Text(verbatim: L10n.tr(title)).foregroundStyle(Palette.muted)
+            Text(verbatim: value).fontWeight(.semibold).monospacedDigit().foregroundStyle(Palette.ink)
+        }
+        .lineLimit(1)
+        .fixedSize()
     }
 
     /// "Base 2,300, Workouts +200, Planned +150" for VoiceOver.
     private var spoken: String {
-        let base: String = L10n.tr("Základ") + " " + Fmt.int(parts.base)
-        let done: String = L10n.tr("Tréninky") + " " + added(parts.workouts)
-        let planned: String = L10n.tr("Naplánováno") + " " + added(parts.planned)
-        return [base, done, planned].joined(separator: ", ")
-    }
-
-    private func added(_ value: Double) -> String { value > 0 ? "+" + Fmt.int(value) : "0" }
-
-    private func column(_ title: String, _ value: String, color: Color, empty: Bool = false, planned: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                // A plan is not done yet: a ring, as its part of the bar is striped.
-                Group {
-                    if planned { Circle().strokeBorder(color, lineWidth: 1.5) } else { Circle().fill(color) }
-                }
-                .frame(width: 7, height: 7)
-                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-            }
-            Text(verbatim: value).font(Typo.number(22)).foregroundStyle(empty ? Palette.faint : Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// One thin bar: the base, the workouts done and the planned ones (striped).
-struct TargetPartsBar: View {
-    let parts: FoodSnapshot.TargetParts
-
-    var body: some View {
-        let total: Double = max(parts.base + parts.workouts + parts.planned, 1)
-        GeometryReader { geo in
-            let gaps = CGFloat([parts.workouts, parts.planned].filter { $0 > 0 }.count) * 2
-            let width: Double = Double(max(geo.size.width - gaps, 0))
-            HStack(spacing: 2) {
-                Rectangle().fill(Palette.brown).frame(width: width * parts.base / total)
-                if parts.workouts > 0 { Rectangle().fill(Palette.green).frame(width: width * parts.workouts / total) }
-                if parts.planned > 0 { Stripes(color: Palette.amber).frame(width: width * parts.planned / total) }
-            }
-        }
-        .frame(height: 6)
-        .clipShape(Capsule())
-        .accessibilityHidden(true)
+        guard let parts else { return L10n.tr("Vlastní cíl") + " " + Fmt.int(target) }
+        var list = [L10n.tr("Základ") + " " + Fmt.int(parts.base)]
+        if parts.workouts <= 0 && parts.planned <= 0 { list.append(L10n.tr("Den volna, žádný trénink navíc")) }
+        if parts.workouts > 0 { list.append(L10n.tr("Tréninky") + " +" + Fmt.int(parts.workouts)) }
+        if parts.planned > 0 { list.append(L10n.tr("Naplánováno") + " +" + Fmt.int(parts.planned)) }
+        return list.joined(separator: ", ")
     }
 }
 
 /// A plan is not done yet: its part of the bar is striped.
-private struct Stripes: View {
+struct Stripes: View {
     let color: Color
 
     var body: some View {
