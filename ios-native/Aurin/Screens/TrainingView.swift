@@ -3,7 +3,6 @@ import SwiftUI
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tabActions) private var actions
-    @State private var addingWorkout = false
     /// A moved or cancelled session with its undo (Tréninky týdne).
     @State private var toast: PlanToast?
     /// The day chosen in the calendar, shown in the pinned bar.
@@ -22,7 +21,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true },
+                        TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
                             .padding(.bottom, 100)
                     }
@@ -34,7 +33,7 @@ struct TrainingView: View {
                                    move: { jumpDay = DayJump(date: ISODay.shift(day, $0)) },
                                    showToday: { jumpDay = DayJump(date: training.date) })
                         Spacer(minLength: 0)
-                        HeaderCapsule(coach: actions.coach, settings: actions.settings)
+                        HeaderCapsule(coach: actions.coach, settings: actions.settings) { LibraryHeaderIcon() }
                     }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
@@ -86,7 +85,6 @@ struct TrainingView: View {
         .task { await model.refreshIfStale(.training) }
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
-        .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
     }
 
     /// Today's Začít trénink while its place in the card is under the tab bar
@@ -132,7 +130,6 @@ struct TrainingView: View {
 struct TrainingContent: View {
     @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
-    var addWorkout: () -> Void = {}
     /// "Dnes" in the header: the calendar back on today.
     var showToday: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
@@ -149,27 +146,37 @@ struct TrainingContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 // The same top as Dnes (TabHeader); the calendar picks the day, "Dnes" brings it back.
-                // Zapsat trénink ručně is in the tools below and in "+" (Petr, 2026-10-25).
+                // The coach first, then the Library (a book), the account last (redesign T, D-TRENINK-11).
+                // Log a workout is in "+" (Tools = A, Petr 2026-11-14).
                 TabHeader(date: day ?? training.date, followsDay: false,
                           showToday: shownDay == training.date ? nil : showToday,
-                          coach: actions.coach, settings: actions.settings)
+                          coach: actions.coach, settings: actions.settings) {
+                    LibraryHeaderIcon()
+                }
 
                 if wide {
                     // Petr, 2026-11-03: today's workout with its Start at the top on the
-                    // right, seen without scrolling; the week and the strain on the left.
+                    // right, seen without scrolling; the week, the plan and the load on the left.
                     HStack(alignment: .top, spacing: WideLayout.gap) {
-                        VStack(alignment: .leading, spacing: 0) { week }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         VStack(alignment: .leading, spacing: 0) {
-                            sessions(top: 18)
+                            week
+                            coachAndLoad
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 0) {
+                            todayList(top: 18)
                             // One column of widgets beside the week.
-                            board.environment(\.wideLayout, false).padding(.top, upcomingShown ? 14 : 18)
+                            if shownDay == training.date {
+                                board.environment(\.wideLayout, false).padding(.top, 28)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 } else {
                     week
-                    board.padding(.top, 28)
+                    todayList(top: 24)
+                    coachAndLoad
+                    if shownDay == training.date { board.padding(.top, 28) }
                 }
             } else {
                 board
@@ -180,7 +187,8 @@ struct TrainingContent: View {
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 
-    /// The calendar, the strain, the coach and the tools.
+    /// The calendar and the plan under it (redesign T: no strain, no race card,
+    /// no tools row; Strain lives on Today, the race in the plan).
     @ViewBuilder private var week: some View {
         // Until the main sport and goal are set (FocusSheet.swift).
         if training.profileIncomplete == true {
@@ -192,52 +200,62 @@ struct TrainingContent: View {
                              plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
             .padding(.top, 18)
 
-        // Right under the week (Petr, 2026-10-25): every workout left today,
-        // else the next planned day's, with Začít trénink. In a wide window
-        // it heads the right column instead.
-        if !wide { sessions(top: 14) }
+        TrainingPlanCard(training: training)
+            .padding(.top, 14)
+    }
 
-        // Today's opens the same Námaha detail as Dnes, a past day its own;
-        // a day ahead has no detail yet.
+    /// "TODAY" with Week plan on the right, then today's workouts still to do
+    /// with Start workout. On another day the line that today holds the rest.
+    @ViewBuilder private func todayList(top: CGFloat) -> some View {
         if shownDay == training.date {
-            RouteLink(route: .strain) { StrainHero(training: training) }
-                .padding(.top, 26)
-        } else if shownDay < training.date {
-            RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
-                .padding(.top, 26)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Dnes")
+                Spacer(minLength: 8)
+                NavigationLink(value: AppRoute.weekPlan) {
+                    Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, top - 12)
+            if !upcoming.isEmpty {
+                TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+            }
         } else {
-            StrainHero(training: training, day: shownDay)
-                .padding(.top, 26)
+            // D-TRENINK-8: the load and the overview are today's, never shown under another day.
+            Button(action: showToday) {
+                HStack {
+                    Text(verbatim: L10n.tr("Zátěž a přehled jsou u dneška")).font(Typo.body).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 8)
+                    Text(verbatim: L10n.tr("Dnes")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, top)
         }
+    }
+
+    /// The coach's card and, today, the two Load dials.
+    @ViewBuilder private var coachAndLoad: some View {
         CoachTextCard(screen: "training").padding(.top, 18)
-
-        WeekStrainBars(days: training.days)
-            .padding(.top, 22)
-
-        if let event = training.event {
-            EventCard(event: event)
-                .padding(.top, 28)
-        }
-
-        TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
-                      addWorkout: addWorkout)
-            .padding(.top, 28)
-    }
-
-    /// Today's workouts still to do with Začít trénink. It belongs to today, not to a day looked back at.
-    @ViewBuilder private func sessions(top: CGFloat) -> some View {
-        if upcomingShown {
-            TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                .padding(.top, top)
+        if shownDay == training.date {
+            LoadSection(training: training).padding(.top, 28)
         }
     }
-
-    private var upcomingShown: Bool { shownDay == training.date && !upcoming.isEmpty }
 
     private var board: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !editing { SectionLabel(text: "Přehled") }
+            boardWidgets
+        }
+    }
+
+    private var boardWidgets: some View {
         WidgetBoard(panel: .training,
                     data: WidgetData(panel: .training, today: model.today, health: model.health, training: training, food: model.food, planToast: toast),
-                    editing: $editing)
+                    editing: $editing, editTitle: "Upravit přehled")
     }
 
     private var shownDay: String { day ?? training.date }
@@ -246,6 +264,17 @@ struct TrainingContent: View {
     private var upcoming: [TrainingSnapshot.Session] {
         if let today = training.todaySessions, !today.isEmpty { return today }
         return training.next.map { [$0] } ?? []
+    }
+}
+
+/// The Library in Training's header capsule, between the coach and the
+/// account: a book, the same glyph as the Library tile of "+" (Tools = A).
+struct LibraryHeaderIcon: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HeaderIcon(systemImage: "books.vertical", label: "Knihovna") { model.open(.library) }
+            .accessibilityIdentifier("open.library")
     }
 }
 

@@ -18,6 +18,12 @@ struct TrainingSnapshot: Decodable, Equatable {
     let acwr: ACWR?
     /// Foster's training monotony and the week's strain (older saved answers lack it).
     let monotony: Monotony?
+    /// Training → Load (redesign): the last 7 days against the usual 28 in
+    /// words, every workout's load; nil without any load on record.
+    var loadBalance: LoadView? = nil
+    /// The same from the gym's work sets only; nil without a gym session (a
+    /// swimmer's empty dial) and from an older server.
+    var muscleLoad: LoadView? = nil
     let zones: Zones?
     let vo2max: VO2max?
     let activeCalories: ActiveCalories?
@@ -27,6 +33,36 @@ struct TrainingSnapshot: Decodable, Equatable {
     /// No main sport and goal saved yet: Training shows "Nastav si zaměření a
     /// cíle" (older saved answers lack it).
     let profileIncomplete: Bool?
+
+    /// One Load dial (src/workload-ratio.js loadView): words only, never the
+    /// ratio. `plot` places the dial's dot and the chart's line against `band`.
+    struct LoadView: Decodable, Equatable {
+        /// "learning", "quiet" or "ready".
+        let state: String
+        /// "wellBelow", "below", "usual", "above" or "wellAbove"; nil until ready.
+        let level: String?
+        /// The server's sentence ("The last 7 days were harder than your usual 4 weeks.").
+        let text: String?
+        let band: Band
+        let historyDays: Int?
+        let needsDays: Int?
+        let series: [Point]
+
+        struct Band: Decodable, Equatable {
+            let low: Double
+            let high: Double
+        }
+
+        struct Point: Decodable, Equatable, Identifiable {
+            let date: String
+            let level: String?
+            let plot: Double?
+            var id: String { date }
+        }
+
+        /// Today's place for the dot; nil while learning.
+        var plot: Double? { state == "ready" ? series.last?.plot : nil }
+    }
 
     struct Strain: Decodable, Equatable {
         let score: Double?
