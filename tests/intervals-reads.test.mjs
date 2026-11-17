@@ -136,3 +136,22 @@ test("the same read asked for at once goes to Intervals.icu once, each caller ge
   await failing("https://intervals.icu/api/v1/athlete/0");
   assert.equal(calls.length, 3);
 });
+
+test("a read waiting for one of a request that has since ended asks Intervals.icu itself", async () => {
+  const calls = [];
+  let end;
+  const fetchImpl = async url => {
+    calls.push(String(url));
+    if (calls.length === 1) return new Promise((resolve, reject) => { end = reject; });
+    return Response.json({ id: "x" });
+  };
+  const reads = intervalsReads({ INTERVALS_API_KEY: "Bearer tok", USER_ID: 3, DB: fakeDb() }, null, { fetchImpl, store: fakeStore(), now: () => NOW });
+  const first = reads("https://intervals.icu/api/v1/athlete/0");
+  first.catch(() => {});
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const second = reads("https://intervals.icu/api/v1/athlete/0");
+  await new Promise(resolve => setTimeout(resolve, 5));
+  end(new Error("This promise was created by a request that has since ended, so it can never settle."));
+  assert.deepEqual(await (await second).json(), { id: "x" });
+  assert.equal(calls.length, 2);
+});
