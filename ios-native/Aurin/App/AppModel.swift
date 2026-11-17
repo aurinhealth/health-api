@@ -149,6 +149,11 @@ final class AppModel {
     /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
     /// the app shows only the paused screen, also before the server answers.
     var healthPaused = UserDefaults.standard.bool(forKey: AppModel.healthPausedKey)
+    /// AI turned off by its consent (Settings → Privacy & data, AppModel+AI):
+    /// the coach's rows and tiles hide, the coach entry asks for the consent.
+    /// Not the same as no Aurin Pro, which shows the paywall as before.
+    var aiOff = UserDefaults.standard.bool(forKey: AppModel.aiOffKey)
+    @ObservationIgnored var aiConsentLoaded = false
     /// "Zapnout znovu" on the paused screen: the setup shows only the consent.
     var resumingHealth = false
     /// The "Příště přes Face ID" sheet, the next time the app opens after the

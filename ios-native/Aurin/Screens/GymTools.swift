@@ -280,7 +280,7 @@ struct GymBuilderView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink") {
+        DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink", showsCoach: false) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
                 Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
@@ -958,7 +958,7 @@ struct EquipmentView: View {
     @MainActor static var pendingSave: Task<Void, Never>?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
+        DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?", showsCoach: false) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Vybavení posilovny").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

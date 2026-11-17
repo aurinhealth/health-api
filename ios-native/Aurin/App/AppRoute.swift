@@ -270,7 +270,8 @@ struct LoadingScreen: View {
     var load: () async -> Void
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health) {
+        // A spinner or an error has nothing to ask the coach about.
+        DetailScreen(glow: Palette.Glow.health, showsCoach: false) {
             VStack(spacing: 16) {
                 if let message {
                     Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)

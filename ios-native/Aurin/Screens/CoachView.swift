@@ -151,7 +151,6 @@ struct CoachView: View {
                         }
                         .padding(20)
                     }
-                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) {
                         if let found { proxy.scrollTo(found, anchor: .center) } else { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                     }
@@ -381,6 +380,7 @@ struct CoachView: View {
     /// question that ran into it goes out once it is given.
     private var consentCard: some View {
         AIConsentCard(allow: { try await model.api.allowAI() }) {
+            model.setAIOff(false)
             needsConsent = false
             error = nil
             // The question that ran into the consent goes out now, no need to type it again.
@@ -1388,7 +1388,6 @@ struct ChatsPanel: View {
                         }
                     }
                     .listStyle(.plain)
-                    .scrollDismissesKeyboard(.immediately)
                     .scrollContentBackground(.hidden)
                     Divider().overlay(Palette.ink.opacity(0.08))
                     Button { close(); memory() } label: {

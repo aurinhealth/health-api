@@ -40,7 +40,7 @@ struct NutrientsView: View {
         }
         .floatingBack(title: "Živiny",
                       trailing: page?.pro == true ? ChromeAction(systemImage: "slider.horizontal.3", label: "Upravit živiny na Jídle", text: "Upravit") { editing = true } : nil,
-                      pinTitle: true) { dismiss() }
+                      pinTitle: true, coach: CoachEntry(view: "food")) { dismiss() }
         .navBarVisibility(.hidden)
         .navigationDestination(isPresented: $editing) { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) }
         .task(id: week) { await load() }
@@ -260,7 +260,7 @@ struct NutrientDetailView: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: detail?.name, pinTitle: true) { dismiss() }
+        .floatingBack(title: detail?.name, pinTitle: true, coach: CoachEntry(view: "food")) { dismiss() }
         .navBarVisibility(.hidden)
         .task {
             do { detail = try await model.api.nutrientDetail(key: key, date: date) }

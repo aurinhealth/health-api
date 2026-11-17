@@ -19,7 +19,7 @@ struct VO2maxDetailView: View {
                 }
             }
         }
-        .floatingBack(title: "VO2max") { dismiss() }
+        .floatingBack(title: "VO2max", coach: CoachEntry(view: "health")) { dismiss() }
         .navBarVisibility(.hidden)
     }
 }

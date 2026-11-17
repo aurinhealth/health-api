@@ -392,6 +392,7 @@ struct ChromeButton: View {
                 Text(L10n.tr(text))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Palette.ink)
+                    .lineLimit(1).fixedSize()
                     .padding(.horizontal, 14)
                     .frame(height: height)
                     .contentShape(Capsule())
@@ -516,6 +517,8 @@ private struct PinnedTopBar: ViewModifier {
     var leading: ChromeAction?
     var extra: ChromeAction?
     var pinTitle = false
+    /// The coach top right (CoachEntry); the page's icon action shares its capsule.
+    var coach: CoachEntry? = nil
     var back: () -> Void
     @Environment(\.scrollReport) private var parent
     /// While the sync pill shows (RootView), it takes the title's place.
@@ -578,14 +581,21 @@ private struct PinnedTopBar: ViewModifier {
                     Text(L10n.tr(title))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.85)
                         .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
                 }
                 Spacer(minLength: 0)
                 if let extra {
                     ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
                 }
-                if let trailing {
+                if let coach {
+                    // A word ("Uložit") keeps its own button; an icon ("+", "i") joins the coach's capsule.
+                    if let trailing, trailing.text != nil {
+                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
+                                     tint: trailing.tint, action: trailing.action)
+                    }
+                    withCompanion(coach)
+                } else if let trailing {
                     ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
                                  tint: trailing.tint, action: trailing.action)
                 } else if extra == nil {
@@ -596,13 +606,20 @@ private struct PinnedTopBar: ViewModifier {
         }
         .padding(.horizontal, 22)
     }
+
+    private func withCompanion(_ coach: CoachEntry) -> CoachEntry {
+        var coach = coach
+        if coach.companion == nil, let trailing, trailing.text == nil { coach.companion = trailing }
+        return coach
+    }
 }
 
 extension View {
     /// Pins the back button (and the page's action) in a bar over the page.
     func floatingBack(title: String? = nil, trailing: ChromeAction? = nil, extra: ChromeAction? = nil,
-                      leading: ChromeAction? = nil, pinTitle: Bool = false, _ action: @escaping () -> Void) -> some View {
-        modifier(PinnedTopBar(title: title, trailing: trailing, leading: leading, extra: extra, pinTitle: pinTitle, back: action))
+                      leading: ChromeAction? = nil, pinTitle: Bool = false, coach: CoachEntry? = nil,
+                      _ action: @escaping () -> Void) -> some View {
+        modifier(PinnedTopBar(title: title, trailing: trailing, leading: leading, extra: extra, pinTitle: pinTitle, coach: coach, back: action))
     }
 }
 
@@ -701,7 +718,6 @@ struct PageScroll<Content: View>: View {
         .coordinateSpace(.named("pageScroll"))
         .reportingInsetOffset(report)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        .scrollDismissesKeyboard(.interactively)
         .reportingDrags(dragReport)
     }
 }

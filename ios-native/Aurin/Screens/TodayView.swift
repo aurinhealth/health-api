@@ -540,8 +540,8 @@ extension TabHeader where Extra == EmptyView {
     }
 }
 
-/// The tab header's glass capsule: the tab's own button (Sdílet only on Dnes,
-/// the barcode on Jídlo), Kouč and the account. The pinned bar shows the same
+/// The tab header's glass capsule: Kouč (Two lights, CoachEntryButton), the
+/// tab's own button (Sdílet only on Dnes, the barcode on Jídlo) and the account. The pinned bar shows the same
 /// capsule once the header has scrolled away (Petr, 2026-10-25). The same
 /// visible gap between every icon, the account and the left edge (Petr,
 /// 2026-10-26): each icon is as wide as its symbol plus padding. SF Symbols keep
@@ -554,16 +554,19 @@ struct HeaderCapsule<Extra: View>: View {
     @ViewBuilder var extra: Extra
 
     var body: some View {
+        // The coach first, then the tab's own button, the account last
+        // (Petr's "B", 2026-11-16: the same order in every capsule).
         HStack(spacing: 0) {
+            CoachEntryButton(size: 42, action: coach)
+                .padding(.trailing, -4)
             extra
             if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", lift: HeaderIcon.shareLift, action: share) }
-            HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
             Button(action: settings) { AvatarView(size: 37) }
                 .buttonStyle(.plain)
                 .padding(.leading, 9.5)
                 .accessibilityLabel("Profil a nastavení")
         }
-        .padding(.leading, 10)
+        .padding(.leading, 4)
         .padding(.trailing, (TabChrome.height - 37) / 2)
         .frame(height: TabChrome.height)
         .chromeGlass(in: Capsule())

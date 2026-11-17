@@ -117,7 +117,6 @@ struct SetupFlowView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
-                .scrollDismissesKeyboard(.interactively)
                 .sheet(isPresented: $equipment) { NavigationStack { EquipmentView() } }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
@@ -159,7 +158,7 @@ struct SetupFlowView: View {
         // The free week, once, after the last page (SetupProOffer); Today when it closes.
         .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
             PaywallView(close: { proOffer = false }, step: 2, notNow: true,
-                        allowAI: proNeedsAI ? { [api = model.api] in try await api.allowAI() } : nil)
+                        allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
         }
         .interactiveDismissDisabled()
     }

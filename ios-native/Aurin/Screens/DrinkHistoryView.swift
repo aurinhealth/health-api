@@ -29,7 +29,8 @@ struct DrinkHistoryView: View {
                         Spacer()
                         SectionLabel(text: "Pití dnes")
                         Spacer()
-                        BackSlot {}.hidden()
+                        // The pinned bar carries the coach (SelectionBar).
+                        Color.clear.frame(width: 36, height: 36)
                     }
                     summary.padding(.top, 28)
                     HStack(spacing: 6) {

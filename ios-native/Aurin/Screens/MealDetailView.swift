@@ -121,7 +121,7 @@ struct SelectionBar: ViewModifier {
                                  trailing: onAdd == nil ? nil : ChromeAction(systemImage: "plus", label: add ?? "Přidat") { onAdd?() },
                                  extra: allIds.isEmpty ? nil : ChromeAction(systemImage: "checkmark.circle", label: "Vybrat", text: "Vybrat") {
                                      withAnimation(.easeOut(duration: 0.2)) { selecting = true }
-                                 }, back)
+                                 }, coach: CoachEntry(view: "food"), back)
         }
     }
 }

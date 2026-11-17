@@ -38,6 +38,7 @@ struct CoachTextCard: View {
     /// also when the coach is off on Dnes.
     var tip: AnyView? = nil
 
+    @Environment(\.tabActions) private var actions
     @State private var loaded: CoachText?
     @State private var showWhy = false
     /// The free week's line: the App Store's page of the subscription.
@@ -190,6 +191,11 @@ struct CoachTextCard: View {
                     }
                     .transition(.opacity)
                 }
+            }
+
+            // "Ask Coach" under the coach's word (consistency point 4), the same on every tab.
+            if text != nil || advice != nil {
+                CoachActionRow(action: actions.coach).padding(.bottom, -10)
             }
         }
         .padding(18)

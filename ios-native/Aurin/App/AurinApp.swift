@@ -22,6 +22,7 @@ struct AurinApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .keyboardRule()
                 // aurin://open/sleep from the home-screen widgets.
                 .onOpenURL { model.handle($0) }
                 // A planned session found in Spotlight (AurinSpotlight.swift).

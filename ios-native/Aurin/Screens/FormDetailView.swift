@@ -13,7 +13,7 @@ struct FormDetailView: View {
                     .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: "Forma a kondice") { dismiss() }
+        .floatingBack(title: "Forma a kondice", coach: CoachEntry(view: "training")) { dismiss() }
         .navBarVisibility(.hidden)
     }
 }
