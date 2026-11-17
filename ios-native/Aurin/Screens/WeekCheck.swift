@@ -79,21 +79,6 @@ extension APIClient {
         return r.check
     }
 
-    /// The check of a week built in Plán týdne before it is saved.
-    func weekCheckDraft(start: String, sessions: [WeekSessionDraft]) async throws -> WeekCheck? {
-        let list: [JSONValue] = sessions.filter { $0.built && ["ride", "run", "gym"].contains($0.sport) }.map { s in
-            var x: JSONObject = ["key": .string(s.id.uuidString), "date": .string(s.date), "sport": .string(s.sport),
-                                 "minutes": .number(Double(s.minutes)), "name": .string(s.title)]
-            if let kind = s.kind { x["kind"] = .string(kind) }
-            if let system = s.workout?.primary_system { x["system"] = .string(system) }
-            if let role = s.role { x["role"] = .string(role) }
-            return .object(x)
-        }
-        let body: JSONObject = ["start": .string(start), "sessions": .array(list)]
-        let r: WeekCheckResponse = try await send("/app/api/coach/week-check/draft", method: "POST", body: body)
-        return r.check
-    }
-
     /// Stretching into a day's plan (not done yet).
     func addStretching(date: String) async throws {
         let body: JSONObject = ["date": .string(date), "kind": .string("stretch")]

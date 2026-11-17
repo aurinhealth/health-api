@@ -211,11 +211,10 @@ struct TrainingContent: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Dnes")
                 Spacer(minLength: 8)
-                NavigationLink(value: AppRoute.weekPlan) {
+                WeekPlanLink {
                     Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
                         .frame(minHeight: 44).contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
             .padding(.top, top - 12)
             // The coach above the workout card (concept a-hlavni/000, D-TRENINK-3).
