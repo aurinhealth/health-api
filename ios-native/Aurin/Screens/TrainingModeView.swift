@@ -59,6 +59,9 @@ struct TrainingModeView: View {
     @State private var replacing: String?
     /// The day's swaps, for "Vyměněno dnes" in the summary (GymSwaps).
     @State private var swaps: [GymSwap] = []
+    /// The last swap, undoable at the top of the exercise until its first set
+    /// is done (Petr decision 7: never beside Set done).
+    @State private var lastSwap: SwapUndo?
     /// The exercise whose Moje poznámka is being written.
     @State private var noteFor: String?
     /// The barbell set whose plates are being loaded.
@@ -444,6 +447,24 @@ struct TrainingModeView: View {
                 if live.running { PartClock(live: live, key: exercise.name) }
             }
             .padding(.top, 18)
+            // The swap just made, with its Undo at the top, far from Set done (decision 7).
+            if let undo = lastSwap, undo.to == exercise.name, Self.canUndo(undo, in: day) {
+                HStack(spacing: 8) {
+                    Text(verbatim: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(undo.from)))
+                        .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button { Task { await undoSwap() } } label: {
+                        Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 14).frame(minHeight: 36)
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .tapTarget(width: 44, height: 44)
+                    .accessibilityLabel(L10n.f("Vrátit výměnu, zpět na %@", ExerciseCatalog.shownName(undo.from)))
+                }
+                .padding(.top, 6)
+            }
             // Named, not bare icons: what each one does shows at first use.
             HStack(spacing: 8) {
                 if set != nil {
@@ -1986,6 +2007,7 @@ struct TrainingModeView: View {
     /// A rest under way goes on.
     private func swapExercise(_ name: String, for alt: GymAlternative) async {
         guard var next = day else { return }
+        let before = next, swapsBefore = swaps, indexBefore = index
         let rows = Set(next.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done }.map(\.row))
         let onScreen = next.exercises[safe: index]?.name == name
         next.replace(exercise: name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
@@ -1994,6 +2016,8 @@ struct TrainingModeView: View {
         day = next
         GymSwaps.record(date, from: name, to: alt.name)
         swaps = GymSwaps.list(date)
+        lastSwap = SwapUndo(from: name, to: alt.name, day: before, swaps: swapsBefore, index: indexBefore,
+                            renamed: !next.exercises.contains(where: { $0.name == name }))
         // The exercise on screen stays on screen, now as the alternative.
         if onScreen, let at = next.exercises.firstIndex(where: { $0.sets.contains { rows.contains($0.row) } }) {
             index = at
@@ -2008,6 +2032,35 @@ struct TrainingModeView: View {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
         await loadMuscles(next)
+    }
+
+    /// Back to the exercise before the last swap: the day, the swaps and the
+    /// place as they were. Only until a set of the new exercise is done.
+    private func undoSwap() async {
+        guard let undo = lastSwap, Self.canUndo(undo, in: day) else { lastSwap = nil; return }
+        lastSwap = nil
+        if undo.renamed { live.rename(undo.to, to: undo.from) }
+        day = undo.day
+        swaps = undo.swaps
+        GymSwaps.save(undo.swaps, date: date)
+        index = undo.index
+        if let exercise = undo.day.exercises[safe: index] { prefill(nextSet(exercise), in: exercise) }
+        syncActivity()
+        guard !model.demo else { return await loadMuscles(undo.day) }
+        do {
+            try await model.saveGym(undo.day, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
+        await loadMuscles(undo.day)
+    }
+
+    /// The swap can go back while the new exercise has no set done since.
+    static func canUndo(_ undo: SwapUndo, in day: GymDay?) -> Bool {
+        let doneBefore = undo.day.exercises.filter { $0.name == undo.to }.reduce(0) { $0 + $1.doneCount }
+        let doneNow = (day?.exercises ?? []).filter { $0.name == undo.to }.reduce(0) { $0 + $1.doneCount }
+        return doneNow == doneBefore
     }
 
     /// An exercise added on the way (or the first one of an empty workout),
@@ -2582,4 +2635,16 @@ struct PartClock: View {
         }
         .accessibilityLabel(Text("Čas cviku"))
     }
+}
+
+/// One swap in Training mode, kept so it can be undone (decision 7).
+struct SwapUndo: Equatable {
+    let from: String
+    let to: String
+    /// The day, the swaps and the place before the swap.
+    let day: GymDay
+    let swaps: [GymSwap]
+    let index: Int
+    /// The old exercise left the day, so the watch's time went with it.
+    let renamed: Bool
 }
