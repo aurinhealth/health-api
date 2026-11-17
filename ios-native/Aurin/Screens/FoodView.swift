@@ -106,6 +106,8 @@ struct FoodContent: View {
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
+    /// The month with a ring a day (redesign J, a-jidlo/001).
+    @State private var showMonth = false
     /// "Přidat" on a food that AI found after "Co přidáme?" closed.
     @State private var adding: PendingFood?
     @Environment(\.wideLayout) private var wide
@@ -117,7 +119,7 @@ struct FoodContent: View {
             // day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) {
-                    TabHeader(date: model.headerDay(food.date), coach: actions.coach, settings: actions.settings) {
+                    TabHeader(date: model.headerDay(food.date), month: { showMonth = true }, coach: actions.coach, settings: actions.settings) {
                         HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
                     }
                     WeekStrip(date: model.headerDay(food.date), ahead: true).padding(.top, 14)
@@ -136,6 +138,7 @@ struct FoodContent: View {
             .padding(.top, editing ? 16 : 0)
             .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
         }
+        .sheet(isPresented: $showMonth) { FoodMonthSheet(date: food.date) }
     }
 
     private var board: some View {

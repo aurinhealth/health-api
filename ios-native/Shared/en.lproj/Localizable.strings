@@ -4352,3 +4352,8 @@
 "co tělo spálí v klidu" = "what your body uses at rest";
 "kroky a běžný den" = "steps and a normal day";
 "Tréninky se počítají ze %@ %% toho, co spálí. Klidový výdej se odhaduje z tvé váhy, výšky a věku." = "Workouts count at %@%% of what they burn. Resting energy is estimated from your weight, height and age.";
+"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the target, a dashed ring is a day without food logged.";
+"Tento měsíc zatím bez zapsaného jídla." = "No food logged this month yet.";
+"Průměr %@ na zapsaný den." = "Average %@ on logged days.";
+"bez zapsaného jídla" = "no food logged";
+"nad cílem" = "over the target";

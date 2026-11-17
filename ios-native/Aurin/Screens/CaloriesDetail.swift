@@ -406,3 +406,135 @@ struct TargetSourceCard: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// Food → a tap on the month (redesign J, concept a-jidlo/001): the Z2 month
+/// with Calories, Carbs, Protein and Fat; each day a ring of what was eaten
+/// out of that day's target, red past it (from the first unit over), dashed
+/// on a day without food logged. A tap on a day opens it on Food.
+struct FoodMonthSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    /// The day Food shows.
+    let date: String
+    @State private var month: String
+    @State private var history: FoodHistory?
+    @AppStorage("foodMonthValue") private var valueRaw = FoodValue.calories.rawValue
+
+    init(date: String) {
+        self.date = date
+        _month = State(initialValue: ISODay.monthStart(date))
+    }
+
+    private var today: String { AppModel.localDate(Date()) }
+    private var value: FoodValue { FoodValue(rawValue: valueRaw) ?? .calories }
+    /// The server keeps 90 days for this sheet: back to that month.
+    private var firstMonth: String { ISODay.monthStart(ISODay.shift(today, -89)) }
+    private var days: [String: FoodHistory.Day] {
+        Dictionary((history?.list ?? []).map { ($0.date, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Picker("Zobrazit", selection: $valueRaw) {
+                        ForEach(FoodValue.allCases, id: \.rawValue) { Text(L10n.tr($0.title)).tag($0.rawValue) }
+                    }
+                    .pickerStyle(.segmented)
+                    if let summary {
+                        Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Card {
+                        MonthCalendar(month: month, today: today, selected: date,
+                                      pick: { day in
+                                          dismiss()
+                                          Task { await model.showDate(day) }
+                                      },
+                                      move: move,
+                                      spoken: { spoken($0) }) { day in
+                            FoodDayRing(day: days[day], value: value, future: day > today)
+                        }
+                    }
+                    Text(verbatim: L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla."))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
+            }
+            .background { Palette.background.ignoresSafeArea() }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Zavřít")
+                }
+            }
+        }
+        .tint(Palette.ink)
+        .presentationDetents([.large])
+        .task { await load() }
+    }
+
+    private func move(_ by: Int) {
+        let next = ISODay.addMonths(month, by)
+        guard next >= firstMonth, next <= ISODay.monthStart(today) else { return }
+        withAnimation(.snappy(duration: 0.25)) { month = next }
+    }
+
+    private func load() async {
+        if model.demo {
+            history = FoodHistory.demo(today: today, target: model.food?.target ?? 2650, days: 90)
+            return
+        }
+        history = try? await model.api.foodHistory(days: 90)
+    }
+
+    /// The month in one sentence: the average over logged days, the days at or under and over.
+    private var summary: String? {
+        let list = ISODay.range(month, min(ISODay.monthEnd(month), today)).compactMap { days[$0] }.filter(\.logged)
+        guard history != nil else { return nil }
+        guard !list.isEmpty else { return L10n.tr("Tento měsíc zatím bez zapsaného jídla.") }
+        let eaten = list.compactMap { value.eaten($0) }
+        let mean = eaten.reduce(0, +) / Double(max(eaten.count, 1))
+        let count = TargetDays.count(list, value: value)
+        return L10n.f("Průměr %@ na zapsaný den.", Fmt.int(mean) + " " + value.unit) + " "
+            + L10n.plural("%lld dní v cíli nebo pod ním", count.at + count.below) + ", "
+            + L10n.plural("%lld nad ním", count.over) + "."
+    }
+
+    private func spoken(_ day: String) -> String? {
+        guard day <= today else { return nil }
+        guard let d = days[day], d.logged, let eaten = value.eaten(d) else { return L10n.tr("bez zapsaného jídla") }
+        let target = value.target(d)
+        var text = Fmt.int(eaten) + " " + value.unit
+        if let target, target > 0 { text += ", " + L10n.f("z %@", Fmt.int(target) + " " + value.unit) }
+        if let target, FoodHero.over(eaten: eaten, target: target) >= 1 { text += ", " + L10n.tr("nad cílem") }
+        return text
+    }
+}
+
+/// One day's ring under its number: eaten out of the target, red over it,
+/// dashed without a log, nothing for days ahead.
+struct FoodDayRing: View {
+    let day: FoodHistory.Day?
+    let value: FoodValue
+    var future = false
+
+    var body: some View {
+        ZStack {
+            if future {
+                Color.clear
+            } else if let day, day.logged, let eaten = value.eaten(day) {
+                let target = value.target(day) ?? 0
+                let over = target > 0 && FoodHero.over(eaten: eaten, target: target) >= 1
+                Circle().stroke(Palette.track, lineWidth: 3)
+                Circle().trim(from: 0, to: target > 0 ? min(eaten / target, 1) : 1)
+                    .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            } else {
+                Circle().stroke(Palette.faint, style: StrokeStyle(lineWidth: 1.2, dash: [2, 3]))
+            }
+        }
+        .frame(width: 16, height: 16)
+    }
+}
