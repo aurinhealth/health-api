@@ -225,7 +225,7 @@ struct DayReviewView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.today, title: "Kouč") {
+        DetailScreen(glow: Palette.Glow.today, title: "Kouč", showsCoach: false) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.tr("Kouč") + ", " + Fmt.dayHeading(date)).padding(.top, 24)
                 if loading {

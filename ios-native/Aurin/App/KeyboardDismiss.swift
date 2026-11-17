@@ -1,13 +1,20 @@
+import SwiftUI
 import UIKit
 
-// The keyboard can always be hidden, on every screen and sheet:
-// - a tap anywhere outside a text field: each window of the app gets one tap
-//   recogniser that ends editing. It never cancels the tap, so the button or
-//   row under the finger still works; a tap into another text field keeps the
-//   keyboard up.
-// - the button above the keyboard, on the right: every text field and text
-//   view (SwiftUI's TextField and TextEditor) that starts editing gets it as
-//   its input accessory, so the screen moves up above it like above the keys.
+// One keyboard rule for the whole app (Petr 2026-11-16), set here once and not
+// per screen:
+// - dragging scrolled content hides it (keyboardRule at the root, and every
+//   scroll view in the window once a field starts editing, for the sheets);
+// - a tap anywhere outside a text field hides it: each window of the app gets
+//   one tap recogniser that ends editing. It never cancels the tap, so the
+//   button or row under the finger still works, and a pick from a list hides
+//   it too; a tap into another text field keeps the keyboard up;
+// - a text field's return key is Done (a screen may make it Search or Send)
+//   and acts and hides;
+// - a number pad has no return key, so it gets a bar with Done above it; the
+//   weight keeps its decimal pad;
+// - a text view (several lines, return is a new line) gets the keyboard-down
+//   button above it.
 
 @MainActor
 enum KeyboardDismiss {
@@ -31,31 +38,51 @@ enum KeyboardDismiss {
         }
     }
 
+    static let numberPads: Set<UIKeyboardType> = [.numberPad, .decimalPad, .phonePad, .asciiCapableNumberPad]
+
     private static func addHideButton(to field: UIResponder) {
-        if let text = field as? UITextField, text.inputAccessoryView == nil {
-            text.inputAccessoryView = HideBar()
-            text.reloadInputViews()
+        if let text = field as? UITextField {
+            if text.inputAccessoryView == nil, numberPads.contains(text.keyboardType) {
+                text.inputAccessoryView = HideBar(done: true)
+                text.reloadInputViews()
+            }
         } else if let text = field as? UITextView, text.isEditable, text.inputAccessoryView == nil {
-            text.inputAccessoryView = HideBar()
+            text.inputAccessoryView = HideBar(done: false)
             text.reloadInputViews()
         }
+        if let view = field as? UIView, let window = view.window { dragHides(in: window) }
     }
 
-    /// The strip above the keys with the keyboard-down button on the right.
+    /// Every scroll view on screen hides the keyboard when dragged, also in
+    /// sheets and lists the root's keyboardRule does not reach.
+    private static func dragHides(in view: UIView) {
+        if let scroll = view as? UIScrollView, !(scroll is UITextView), scroll.keyboardDismissMode == .none { scroll.keyboardDismissMode = .interactive }
+        for child in view.subviews { dragHides(in: child) }
+    }
+
+    /// The strip above the keys: Done for a number pad, the keyboard-down
+    /// button for a text view, on the right.
     private final class HideBar: UIInputView {
-        init() {
+        init(done: Bool) {
             super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44), inputViewStyle: .keyboard)
             autoresizingMask = .flexibleWidth
             var config = UIButton.Configuration.gray()
-            config.image = UIImage(systemName: "keyboard.chevron.compact.down",
-                                   withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .medium))
+            if done {
+                var title = AttributedString(L10n.tr("Hotovo"))
+                title.uiKit.font = UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .semibold)
+                config.attributedTitle = title
+            } else {
+                config.image = UIImage(systemName: "keyboard.chevron.compact.down",
+                                       withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .medium))
+            }
             config.cornerStyle = .capsule
-            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12)
+            config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
             config.baseForegroundColor = .label
             let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
                 self?.window?.endEditing(true)
             })
-            button.accessibilityLabel = L10n.tr("Skrýt klávesnici")
+            button.accessibilityLabel = L10n.tr(done ? "Hotovo" : "Skrýt klávesnici")
+            button.accessibilityIdentifier = done ? "keyboard.done" : "keyboard.hide"
             button.translatesAutoresizingMaskIntoConstraints = false
             addSubview(button)
             NSLayoutConstraint.activate([
@@ -98,5 +125,13 @@ enum KeyboardDismiss {
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
             true
         }
+    }
+}
+
+extension View {
+    /// The keyboard rule's SwiftUI half, once at the root (AurinApp): dragging a
+    /// scroll view hides the keyboard and a text field's return key reads Done.
+    func keyboardRule() -> some View {
+        scrollDismissesKeyboard(.interactively).submitLabel(.done)
     }
 }

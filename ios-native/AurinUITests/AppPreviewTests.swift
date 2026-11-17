@@ -13,16 +13,16 @@ final class AppPreviewTests: XCTestCase {
     private var video = "en"
 
     private struct Labels {
-        let today, training, food, start, setDone, skip, coach, question, glutes: String
+        let today, training, food, start, setDone, skip, question, glutes: String
     }
 
     private let labels = [
         "en": Labels(today: "Today", training: "Training", food: "Food",
                      start: "Start workout", setDone: "Set done", skip: "Skip",
-                     coach: "Coach", question: "How should I train today?", glutes: "Glutes"),
+                     question: "How should I train today?", glutes: "Glutes"),
         "cs": Labels(today: "Dnes", training: "Trénink", food: "Jídlo",
                      start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit",
-                     coach: "Kouč", question: "Jak mám dnes trénovat?", glutes: "Hýždě")]
+                     question: "Jak mám dnes trénovat?", glutes: "Hýždě")]
 
     override func setUp() {
         continueAfterFailure = true
@@ -94,7 +94,8 @@ final class AppPreviewTests: XCTestCase {
 
             // The coach: a suggested question, "thinking", then the answer written out.
             launch("-tab", "today")
-            let coach = tab(l.coach)
+            // The coach's entry by its identifier, the same in every language.
+            let coach = tab("coach.entry")
             guard coach.waitForExistence(timeout: 20) else { continue }
             mark("in")
             tapIfThere(coach)

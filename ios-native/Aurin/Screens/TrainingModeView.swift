@@ -182,7 +182,6 @@ struct TrainingModeView: View {
                         .padding(.bottom, 24)
                     }
                     .scrollIndicators(.hidden)
-                    .scrollDismissesKeyboard(.interactively)
                 } else {
                     ScrollView { finished(day).padding(.bottom, 24) }
                     .scrollIndicators(.hidden)
@@ -199,9 +198,7 @@ struct TrainingModeView: View {
 
     var body: some View {
         ZStack {
-            // A tap beside the fields puts the keyboard away.
             ScreenBackground(glow: Palette.Glow.training)
-                .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
@@ -390,7 +387,7 @@ struct TrainingModeView: View {
                     HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
                     HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
                 }
-                CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
+                CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date))
                 Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Upravit plán"))

@@ -76,7 +76,7 @@ struct RootView: View {
 
     @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
         switch tab {
-        case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
+        case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true }).environment(\.tabActions, tabActions)
         case .training: TrainingView().environment(\.tabActions, tabActions).environment(\.compactTabBar, compactBar)
         case .food: FoodView().environment(\.tabActions, tabActions)
         case .health: HealthView().environment(\.tabActions, tabActions)
@@ -246,7 +246,13 @@ struct RootView: View {
             .onChange(of: openSheet) { _, sheet in
                 if let sheet { ScreenTrail.visit(sheet) } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
             }
-            .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
+            // AI off by its consent: the coach asks for it, never answers with an error (AppModel.aiOff).
+            .sheet(isPresented: $showCoach) {
+                Group {
+                    if model.aiOff && !model.demo { AIConsentAsk { showCoach = true } } else { CoachView(view: coachView, date: model.selectedDate) }
+                }
+                .dynamicTypeSize(Self.textSizes)
+            }
             .sheet(isPresented: $showShare) {
                 if let today = model.today {
                     ShareSheet(source: .today(today), start: model.tab == .food ? .food : model.tab == .training ? .activity : nil)

@@ -118,7 +118,7 @@ struct AvailabilityView: View {
     @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Kdy mám čas") {
+        DetailScreen(glow: Palette.Glow.training, title: "Kdy mám čas", showsCoach: false) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Tréninkový týden").padding(.top, 24)
                 Text("Kdy mám čas").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

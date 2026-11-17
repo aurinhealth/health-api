@@ -325,14 +325,12 @@ struct ActivityDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title) {
+        DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title,
+                     coach: session.status == "done" ? .activity(model.liveSession(session)) : nil) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if session.status == "done" {
-                        CoachPill(subject: .activity(model.liveSession(session))).padding(.trailing, 4)
-                    }
                     if session.status == "done", detail != nil {
                         Button { sharing = true } label: {
                             Image(systemName: "square.and.arrow.up").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
@@ -879,12 +877,11 @@ struct PlannedWorkoutView: View {
     private var timeEditable: Bool { session.eventId != nil && PlanSessionActions.upcoming(session) && !model.demo }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: session.title) {
+        DetailScreen(glow: Palette.Glow.training, title: session.title, coach: session.status != "done" ? .planned(session) : nil) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { ", " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if session.status != "done" { CoachPill(subject: .planned(session)) }
                 }
                 .padding(.top, 24)
                 Text(session.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

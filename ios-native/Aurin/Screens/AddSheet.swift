@@ -27,7 +27,10 @@ struct AddSheet: View {
 
     @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
 
-    private var shown: [PlusItem] { PlusItem.tiles(PlusItem.list(stored), favorites: DrinkPrefs.list(favorites)) }
+    /// Without the AI consent the coach's tile is gone (AppModel.aiOff).
+    private var shown: [PlusItem] {
+        PlusItem.tiles(PlusItem.list(stored), favorites: DrinkPrefs.list(favorites)).filter { !(model.aiOff && !model.demo && $0.id == "coach") }
+    }
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4)
 
     var body: some View {
@@ -37,6 +40,7 @@ struct AddSheet: View {
                 HStack(alignment: .center) {
                     Spacer()
                     ChromeButton(systemImage: "pencil", label: "Upravit +") { editing = true }
+                        .accessibilityIdentifier("plus.edit")
                     ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                         .padding(.leading, 6)
                 }
@@ -124,6 +128,7 @@ struct AddSheet: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(PressableCardStyle())
+        .accessibilityIdentifier("plus." + item.id)
     }
 
     /// The amounts of the drink tapped, one tap adds it.

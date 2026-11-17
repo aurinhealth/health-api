@@ -29,7 +29,7 @@ struct DrinkHistoryView: View {
                         Spacer()
                         SectionLabel(text: "Pití dnes")
                         Spacer()
-                        BackSlot {}.hidden()
+                        CoachEntry(view: "food", hint: false, height: 36)
                     }
                     summary.padding(.top, 28)
                     HStack(spacing: 6) {

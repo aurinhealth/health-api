@@ -109,6 +109,7 @@ extension AppModel {
                 if self.health != nil { scope.task { await self.refreshHealth() } }
             }
             async let status = try? api.athleteStatus()
+            if !aiConsentLoaded { scope.task { await self.loadAIConsent() } }
             if selectedDate == nil, let today {
                 // Muscles and older days' strain follow new workouts too; with
                 // nothing new from Health or the outbox they stay as loaded.

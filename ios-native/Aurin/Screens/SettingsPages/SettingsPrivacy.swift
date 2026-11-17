@@ -73,8 +73,10 @@ struct PrivacySettingsView: View {
         .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
             guard !model.demo, !model.healthPaused else { return }
-            ai = (try? await model.api.aiAllowed()) ?? false
+            guard let allowed = try? await model.api.aiAllowed() else { return }
+            ai = allowed
             aiLoaded = true
+            model.setAIOff(!allowed)
         }
         // Shared or not, the export does not stay on the phone after the page.
         .onDisappear {
@@ -118,7 +120,7 @@ struct PrivacySettingsView: View {
         let before = ai
         ai = value
         Task {
-            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
+            do { try await model.api.setAI(value); model.setAIOff(!value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 

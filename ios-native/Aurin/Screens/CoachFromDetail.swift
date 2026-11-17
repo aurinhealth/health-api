@@ -172,30 +172,35 @@ struct CoachSubject: Equatable {
     }
 }
 
-/// "✦ Kouč" in a detail's header: opens the coach about what the screen shows.
+/// "Kouč" among the chips of Režim tréninku, the one place where the coach is
+/// not top right (its top right holds Dokončit, and the coach never sits beside
+/// a button): Two lights and the word. Every other screen uses CoachEntry.
 struct CoachPill: View {
     let subject: CoachSubject
-    /// 34 beside the chips of Režim tréninku.
-    var height: CGFloat = 32
+    var height: CGFloat = 34
+    @Environment(AppModel.self) private var model
     @State private var open = false
+    @State private var consent = false
 
     // Also in the demo, which answers from the sample day (CoachView.demoAnswer),
     // so the sample day and the App Store screenshots show the coach where a real phone does.
     var body: some View {
-        Button { open = true } label: {
-            Label("Kouč", systemImage: "sparkles")
-                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
-                // Never wraps to two lines or shortens with "…" beside other chips.
-                .lineLimit(1).fixedSize()
-                .padding(.horizontal, 12).frame(height: height)
-                .background(Palette.greenSoft, in: Capsule())
+        Button { if model.aiOff && !model.demo { consent = true } else { open = true } } label: {
+            HStack(spacing: 6) {
+                TwoLights(size: 18)
+                Text(verbatim: L10n.tr("Kouč")).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
+            // Never wraps to two lines or shortens with "…" beside other chips.
+            .lineLimit(1).fixedSize()
+            .padding(.leading, 9).padding(.trailing, 12).frame(height: height)
+            .background(Palette.track, in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Zeptat se kouče"))
-        .sheet(isPresented: $open) {
-            CoachView(view: subject.view, date: subject.date, subject: subject, openChat: WorkoutCoachChat.id(for: subject),
-                      keepChat: { WorkoutCoachChat.keep($0, for: subject) })
-        }
+        .accessibilityLabel(Text(verbatim: L10n.tr("Kouč")))
+        .accessibilityHint(Text(verbatim: L10n.tr("Zeptej se kouče na tohle")))
+        .accessibilityIdentifier("coach.entry")
+        .sheet(isPresented: $open) { CoachEntry.chat(subject: subject, view: subject.view, date: subject.date) }
+        .sheet(isPresented: $consent) { AIConsentAsk { open = true } }
     }
 }
 

@@ -41,8 +41,13 @@ struct DetailScreen<Content: View>: View {
     var glow: Color = Palette.Glow.health
     /// Shown in the pinned bar once the page is scrolled.
     var title: String? = nil
-    /// "✦ Kouč" beside the back button: the coach about this detail.
+    /// The coach top right asks about this (CoachEntry); nil asks about the day.
     var coach: CoachSubject? = nil
+    /// Every subpage has the coach top right (PRAVIDLO-KOUC-VPRAVO-NAHORE);
+    /// off only where it is the coach itself or an add flow.
+    var showsCoach = true
+    /// The page's "i" or "…", in the coach's capsule.
+    var info: ChromeAction? = nil
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
@@ -51,11 +56,7 @@ struct DetailScreen<Content: View>: View {
             ScreenBackground(glow: glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        BackSlot { dismiss() }
-                        Spacer()
-                        if let coach { CoachPill(subject: coach) }
-                    }
+                    BackSlot { dismiss() }
                     content
                 }
                 .padding(.horizontal, 24)
@@ -63,8 +64,18 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: title) { dismiss() }
+        .floatingBack(title: title, coach: showsCoach ? CoachEntry(subject: coach, view: Self.coachView(glow), companion: info) : nil) { dismiss() }
         .navBarVisibility(.hidden)
+    }
+
+    /// The section the page belongs to, for the coach asked about the day.
+    static func coachView(_ glow: Color) -> String {
+        switch glow {
+        case Palette.Glow.training: return "training"
+        case Palette.Glow.health: return "health"
+        case Palette.Glow.food: return "food"
+        default: return "today"
+        }
     }
 }
 

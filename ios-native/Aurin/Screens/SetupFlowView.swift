@@ -117,7 +117,6 @@ struct SetupFlowView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
-                .scrollDismissesKeyboard(.interactively)
                 .sheet(isPresented: $equipment) { NavigationStack { EquipmentView() } }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }

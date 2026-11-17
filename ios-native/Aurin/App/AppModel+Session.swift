@@ -311,6 +311,9 @@ extension AppModel {
         resumingHealth = false
         healthPaused = false
         UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
+        aiOff = false
+        aiConsentLoaded = false
+        UserDefaults.standard.removeObject(forKey: Self.aiOffKey)
         passkeyOffer = false
         PasskeyOfferLater.forget()
         FirstDays.forget()

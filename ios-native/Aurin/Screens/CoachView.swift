@@ -151,7 +151,6 @@ struct CoachView: View {
                         }
                         .padding(20)
                     }
-                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) {
                         if let found { proxy.scrollTo(found, anchor: .center) } else { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                     }
@@ -1399,7 +1398,6 @@ struct ChatsPanel: View {
                         }
                     }
                     .listStyle(.plain)
-                    .scrollDismissesKeyboard(.immediately)
                     .scrollContentBackground(.hidden)
                     Divider().overlay(Palette.ink.opacity(0.08))
                     Button { close(); memory() } label: {

@@ -574,7 +574,7 @@ struct ActivePlanView: View {
             }
             .refreshable { await reload() }
         }
-        .floatingBack(title: active?.name) { dismiss() }
+        .floatingBack(title: active?.name, coach: CoachEntry(view: "training")) { dismiss() }
         .navBarVisibility(.hidden)
         .task {
             guard !model.demo else { return }
@@ -1505,7 +1505,7 @@ struct PlanResultView: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: result.name) { dismiss() }
+        .floatingBack(title: result.name, coach: CoachEntry(view: "training")) { dismiss() }
         .navBarVisibility(.hidden)
     }
 

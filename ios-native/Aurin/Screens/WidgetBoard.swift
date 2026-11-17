@@ -378,7 +378,6 @@ struct WidgetGallery: View {
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }
-            .scrollDismissesKeyboard(.interactively)
             .background { Palette.background.ignoresSafeArea() }
             .navigationTitle("Widgety")
             .navBarVisibility(.hidden)

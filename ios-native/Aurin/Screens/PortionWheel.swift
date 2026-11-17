@@ -83,12 +83,6 @@ struct PortionWheel: View {
             .frame(height: 50)
             .background(Palette.track, in: Capsule())
             .overlay { Capsule().stroke(Palette.amber, lineWidth: typing ? 1.5 : 0) }
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Hotovo") { typing = false }.fontWeight(.semibold)
-                }
-            }
 
             HStack(spacing: 0) {
                 column(selection: wholeChoice, values: Array(0...current.most), width: 90) { String($0) }

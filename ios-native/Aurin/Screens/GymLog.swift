@@ -589,7 +589,6 @@ struct GymExerciseSearch: View {
             .padding(.top, 24)
             .padding(.bottom, 20)
         }
-        .scrollDismissesKeyboard(.interactively)
         .background(alignment: .top) {
             RadialGradient(colors: [Palette.amberSoft, Palette.background.opacity(0)], center: .top, startRadius: 0, endRadius: 320)
                 .frame(height: 260).ignoresSafeArea().allowsHitTesting(false)

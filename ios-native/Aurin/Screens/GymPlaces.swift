@@ -34,7 +34,7 @@ struct GymPlaceView: View {
     var body: some View {
         Group {
             if scrolls {
-                DetailScreen(glow: Palette.Glow.training, title: place.name) { page }
+                DetailScreen(glow: Palette.Glow.training, title: place.name, showsCoach: false) { page }
             } else {
                 page.padding(.horizontal, 24).padding(.top, 30)
             }

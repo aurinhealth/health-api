@@ -1998,7 +1998,7 @@
 "Hledat jídlo" = "Search food";
 "Jídlo z galerie" = "Food from photos";
 "Jídlo ručně" = "Food by hand";
-"Zeptat se kouče" = "Ask the coach";
+"Zeptat se kouče" = "Ask Coach";
 "Upravit +" = "Edit +";
 "Zobrazené" = "Shown";
 "Přidat %@" = "Add %@";
@@ -4230,3 +4230,6 @@
 "Jiná možnost" = "Another option";
 "Tri" = "Tri";
 "Upravit cviky" = "Edit exercises";
+
+/* The coach top right on every screen (Design/CoachEntry.swift): VoiceOver's hint and the one-time tip. */
+"Zeptej se kouče na tohle" = "Ask Coach about this";

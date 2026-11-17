@@ -40,7 +40,6 @@ struct LiveGymView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ScreenBackground(glow: Palette.Glow.gym)
-                .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             if let day {
                 if summary {
                     PageScroll {

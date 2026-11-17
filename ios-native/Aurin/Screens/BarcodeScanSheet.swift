@@ -112,7 +112,6 @@ struct BarcodeScanSheet: View {
                 .padding(.horizontal, 12).padding(.top, 24).padding(.bottom, 20)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.immediately)
         }
         .background { Palette.background.ignoresSafeArea() }
         .task { await askCamera() }

@@ -61,14 +61,14 @@ struct CoachView: View {
     /// The microphone: a tap opens the watch's input (dictation first, then
     /// scribble or the keyboard), and the question goes when it closes.
     private var input: some View {
-        TextFieldLink(prompt: Text(W.tr("Zeptej se kouče", "Ask the coach"))) {
+        TextFieldLink(prompt: Text(W.tr("Zeptej se kouče", "Ask Coach"))) {
             VStack(spacing: 4) {
                 Image(systemName: "mic.fill")
                     .watchFont(24, .semibold)
                     .foregroundStyle(.black)
                     .frame(width: 58, height: 58)
                     .background(W.indigo, in: Circle())
-                Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask the coach") : W.tr("Další otázka", "Ask again"))
+                Text(coach.turns.isEmpty ? W.tr("Zeptej se kouče", "Ask Coach") : W.tr("Další otázka", "Ask again"))
                     .watchFont(12)
                     .foregroundStyle(W.muted)
             }
@@ -79,7 +79,7 @@ struct CoachView: View {
             coach.ask(question, view: view)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(W.tr("Zeptej se kouče", "Ask the coach"))
+        .accessibilityLabel(W.tr("Zeptej se kouče", "Ask Coach"))
     }
 }
 
