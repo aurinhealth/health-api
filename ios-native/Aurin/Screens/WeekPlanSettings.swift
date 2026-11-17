@@ -15,7 +15,7 @@ struct WeekPlanChoice: Equatable {
     var rest: Set<Int>
 
     init(prefs: JSONValue?) {
-        days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(2)) }
+        days = WeekPlanPrefs.days(prefs)
         rest = Set(WeekPlanPrefs.minutes(prefs).enumerated().filter { $0.element == 0 }.map(\.offset))
     }
 
@@ -32,7 +32,7 @@ struct WeekPlanChoice: Equatable {
             list.remove(at: i)
         } else {
             list.append(sport)
-            if list.count > 2 { list.removeFirst() }
+            while list.count > 2 { list.removeFirst() }
         }
         days[day] = list
     }
@@ -77,6 +77,10 @@ struct WeekPlanSettingsView: View {
     @State private var usualBefore = Array(repeating: -1, count: 7)
     @State private var saving = false
     @State private var error: String?
+    /// The day the tiles under the weeks set.
+    @State private var selected: String?
+    /// The settings did not load: no cards, Try again (nothing to save over).
+    @State private var failed = false
 
     private var nextMonday: String { ISODay.shift(monday, 7) }
     private var weeks: [String] { [monday, nextMonday] }
@@ -92,6 +96,18 @@ struct WeekPlanSettingsView: View {
                     header
                     if !loaded && !model.demo {
                         ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                    } else if failed {
+                        VStack(spacing: 12) {
+                            Text(verbatim: error ?? L10n.tr("Nastavení se nepodařilo načíst.")).font(Typo.body).foregroundStyle(Palette.ink)
+                                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                            Button { Task { loaded = false; failed = false; await load() } } label: {
+                                Text(verbatim: L10n.tr("Zkusit znovu")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                    .padding(.horizontal, 16).frame(minHeight: 44)
+                                    .background(Palette.track, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .frame(maxWidth: .infinity).padding(.top, 40)
                     } else {
                         sportsCard.padding(.top, 22)
                         timeCard.padding(.top, 14)
@@ -129,86 +145,159 @@ struct WeekPlanSettingsView: View {
 
     // MARK: Sports
 
+    /// Concept 027/028: per week a row of seven day discs (dashed: the coach
+    /// picks, a sport's disc, grey with a dot: rest); a tap selects the day and
+    /// the six tiles under the weeks set it.
     private var sportsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(verbatim: L10n.tr("Sporty")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            weekSection(monday, title: "Tento týden")
-            Rectangle().fill(Palette.hairline).frame(height: 1)
-            weekSection(nextMonday, title: "Příští týden")
-            Text(verbatim: L10n.tr("Klepni na den a dej mu sport nebo volno. Dny, které necháš prázdné, naplánuje kouč podle tvých sportů a toho, co obvykle děláš."))
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: L10n.tr("Sporty")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(verbatim: restLine ?? L10n.tr("Vybere je kouč")).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 14) {
+                weekSection(monday, title: "Tento týden")
+                weekSection(nextMonday, title: "Příští týden")
+                if let selected {
+                    dayPicker(selected)
+                } else {
+                    Text(verbatim: L10n.tr("Klepni na den a dej mu sport nebo volno. Dny, které necháš prázdné, naplánuje kouč podle tvých sportů a toho, co obvykle děláš."))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+            .cardSurface(cornerRadius: 22)
         }
-        .padding(16)
-        .cardSurface(cornerRadius: 22)
+    }
+
+    /// "Rest from today to Sunday." while this week rests to its end.
+    private var restLine: String? {
+        let choice = choices[monday] ?? WeekPlanChoice(prefs: nil)
+        let open = (0..<7).filter { ISODay.shift(monday, $0) >= today }
+        guard let first = open.first, open.allSatisfy({ choice.rest.contains($0) }) else { return nil }
+        return WeekPlanSettingsText.rest(from: ISODay.shift(monday, first), today: today)
     }
 
     @ViewBuilder private func weekSection(_ week: String, title: String) -> some View {
         let choice = choices[week] ?? WeekPlanChoice(prefs: nil)
         let open = (0..<7).filter { ISODay.shift(week, $0) >= today }
         let allRest = !open.isEmpty && open.allSatisfy { choice.rest.contains($0) }
-        HStack(alignment: .firstTextBaseline) {
-            SectionLabel(text: title)
-            Spacer()
-            Button {
-                update(week) { c in
-                    for i in open { if allRest { c.rest.remove(i) } else { c.makeRest(i) } }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                SectionLabel(text: title)
+                Spacer()
+                Button {
+                    update(week) { c in
+                        for i in open { if allRest { c.rest.remove(i) } else { c.makeRest(i) } }
+                    }
+                } label: {
+                    Text(verbatim: L10n.tr(week == monday ? (allRest ? "Zrušit volné dny" : "Volno do neděle") : (allRest ? "Zrušit volný týden" : "Volno celý týden")))
+                        .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 12).frame(minHeight: 32)
+                        .background(Palette.track, in: Capsule())
+                        .frame(minHeight: 44).contentShape(Rectangle())
                 }
-            } label: {
-                Text(verbatim: L10n.tr(week == monday ? (allRest ? "Zrušit volné dny" : "Volno do neděle") : (allRest ? "Zrušit volný týden" : "Volno celý týden")))
-                    .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 12).frame(minHeight: 32)
-                    .background(Palette.track, in: Capsule())
+                .buttonStyle(.plain)
+                .disabled(open.isEmpty || saving)
             }
-            .buttonStyle(.plain)
-            .disabled(open.isEmpty)
-        }
-        if week == monday, allRest, let first = open.first {
-            Text(verbatim: WeekPlanSettingsText.rest(from: ISODay.shift(week, first), today: today))
-                .font(Typo.caption).foregroundStyle(Palette.muted)
-        }
-        VStack(spacing: 6) {
-            ForEach(0..<7, id: \.self) { i in
-                dayRow(week, index: i, choice: choice)
+            HStack(spacing: 2) {
+                ForEach(0..<7, id: \.self) { i in dayCell(week, index: i, choice: choice) }
             }
         }
     }
 
-    private func dayRow(_ week: String, index i: Int, choice: WeekPlanChoice) -> some View {
+    private func dayCell(_ week: String, index i: Int, choice: WeekPlanChoice) -> some View {
         let date = ISODay.shift(week, i)
         let past = date < today
-        return HStack(spacing: 6) {
-            VStack(spacing: 0) {
-                Text(verbatim: WeekPlanText.dayWord(date, today: today)).scaledFont(10, weight: .medium, cap: .denseCap).foregroundStyle(Palette.muted)
-                Text(verbatim: ISODay.day(date)).font(Typo.number(15)).foregroundStyle(Palette.ink)
+        let on = selected == date
+        return Button { withAnimation(.snappy) { selected = on ? nil : date } } label: {
+            VStack(spacing: 5) {
+                Text(verbatim: Fmt.weekdayShort(date)).scaledFont(11, weight: .medium, cap: .denseCap).foregroundStyle(Palette.muted)
+                dayDisc(sports: choice.days[i], rest: choice.rest.contains(i), size: 36)
+                Text(verbatim: ISODay.day(date)).font(Typo.number(17)).foregroundStyle(Palette.ink)
             }
-            .frame(width: 36)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
-            chip(L10n.tr("Auto"), on: choice.days[i].isEmpty && !choice.rest.contains(i), hint: "Sport vybere kouč") {
-                update(week) { $0.auto(i) }
-            }
-            ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
-                chip(WeekPlanSport.name(sport), on: choice.days[i].contains(sport), hint: nil) {
-                    update(week) { $0.toggle(sport, day: i) }
-                }
-            }
-            chip(L10n.tr("Volno"), on: choice.rest.contains(i), hint: nil) {
-                update(week) { $0.makeRest(i) }
-            }
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Palette.ink : .clear, lineWidth: 2) }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .opacity(past ? 0.4 : 1)
         .disabled(past || saving)
+        .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
+        .accessibilityValue(Text(verbatim: dayValue(choice, i)))
         .accessibilityHint(past ? Text(verbatim: L10n.tr("Minulý den, nejde změnit")) : Text(verbatim: ""))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    private func chip(_ title: String, on: Bool, hint: String?, action: @escaping () -> Void) -> some View {
+    /// What VoiceOver says a day holds: the sports, Day off or Coach picks the sport.
+    private func dayValue(_ choice: WeekPlanChoice, _ i: Int) -> String {
+        if choice.rest.contains(i) { return L10n.tr("Volno") }
+        if choice.days[i].isEmpty { return L10n.tr("Sport vybere kouč") }
+        return choice.days[i].map(WeekPlanSport.name).joined(separator: ", ")
+    }
+
+    /// Empty: a dashed ring (the coach picks); rest: grey with a dot; else the sport's disc (two side by side).
+    @ViewBuilder private func dayDisc(sports: [String], rest: Bool, size: CGFloat) -> some View {
+        if rest {
+            Circle().fill(Palette.track).frame(width: size, height: size)
+                .overlay { Circle().fill(Palette.faint).frame(width: 5, height: 5) }
+        } else if let first = sports.first {
+            if sports.count > 1 {
+                HStack(spacing: -size * 0.45) {
+                    WeekPlanSport.disc(first, size: size * 0.75)
+                    WeekPlanSport.disc(sports[1], size: size * 0.75)
+                }
+                .frame(width: size, height: size)
+            } else {
+                WeekPlanSport.disc(first, size: size)
+            }
+        } else {
+            Circle().strokeBorder(Palette.faint, style: StrokeStyle(lineWidth: 1, dash: [3, 3])).frame(width: size, height: size)
+        }
+    }
+
+    /// The selected day: "THURSDAY, NOV 12" and Coach, Ride, Run, Swim, Gym, Rest.
+    private func dayPicker(_ date: String) -> some View {
+        let week = date >= nextMonday ? nextMonday : monday
+        let i = ISODay.weekdayIndex(date)
+        let choice = choices[week] ?? WeekPlanChoice(prefs: nil)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(verbatim: (Fmt.weekdayName(date) + ", " + Fmt.dayMonthShort(date)).uppercased(with: Fmt.locale))
+                .font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
+                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 6) {
+                optionTile(L10n.tr("Kouč"), on: choice.days[i].isEmpty && !choice.rest.contains(i), hint: "Sport vybere kouč") {
+                    dayDisc(sports: [], rest: false, size: 30)
+                } action: { update(week) { $0.auto(i) } }
+                ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
+                    optionTile(WeekPlanSport.name(sport), on: choice.days[i].contains(sport), hint: nil) {
+                        WeekPlanSport.disc(sport, size: 30)
+                    } action: { update(week) { $0.toggle(sport, day: i) } }
+                }
+                optionTile(L10n.tr("Volno"), on: choice.rest.contains(i), hint: nil) {
+                    dayDisc(sports: [], rest: true, size: 30)
+                } action: { update(week) { $0.makeRest(i) } }
+            }
+            Text(verbatim: L10n.tr("Vyber jeden nebo dva sporty na den. Třetí nahradí první."))
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .disabled(saving)
+    }
+
+    private func optionTile<Disc: View>(_ title: String, on: Bool, hint: String?, @ViewBuilder disc: () -> Disc,
+                                        action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(verbatim: title).scaledFont(11, weight: .semibold, cap: .denseCap)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .frame(maxWidth: .infinity, minHeight: 36)
-                .background(on ? Palette.button : Palette.track, in: Capsule())
-                .contentShape(Capsule())
+            VStack(spacing: 5) {
+                disc()
+                Text(verbatim: title).scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Palette.ink : .clear, lineWidth: 2) }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -259,7 +348,7 @@ struct WeekPlanSettingsView: View {
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(saving || model.demo || model.offline)
+            .disabled(saving || model.demo || model.offline || failed || !loaded)
             Text(verbatim: model.offline ? L10n.tr("Jsi offline. Připoj se a plán se sestaví.")
                  : WeekPlanText.replans(from: today, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
@@ -291,6 +380,7 @@ struct WeekPlanSettingsView: View {
             loaded = true
         } catch {
             self.error = error.localizedDescription
+            failed = true
             loaded = true
         }
     }
@@ -311,13 +401,11 @@ struct WeekPlanSettingsView: View {
                                                                                          weeklyActivities: WeekPlanPrefs.weeklyActivities(usualPrefs)))
             }
             for week in weeks {
-                guard let choice = choices[week], choice != original[week] || usual != usualBefore else { continue }
+                guard let choice = choices[week], choice != original[week] else { continue }
                 let prefs = weekPrefs[week] ?? nil
                 // A week without its own plan follows the usual week, the new time included.
                 let base = WeekPlanPrefs.source(prefs) == "week" ? WeekPlanPrefs.minutes(prefs) : usual
                 let before = (original[week]?.rest ?? []).subtracting(choice.rest)
-                // Nothing of its own: the week stays on the usual one.
-                if choice == original[week], WeekPlanPrefs.source(prefs) != "week" { continue }
                 let minutes = choice.minutes(base: base, usual: usual, before: before)
                 try await model.api.saveWeekPlan(start: week, prefs: WeekPlanPrefs.edited(prefs, minutes: minutes, days: choice.days,
                                                                                          weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs)))
@@ -370,7 +458,7 @@ enum WeekPlanGenerator {
                         if let eventId = a.eventId {
                             try await model.api.deletePlanned(eventId: eventId)
                         } else if a.sport == "strength" {
-                            try await model.api.discardGym(date: date)
+                            try await model.api.cancelGym(date: date)
                         }
                     }
                 }
@@ -445,10 +533,12 @@ enum WeekPlanGenerator {
     /// and time, then the old one goes; a gym plan is built again at the length.
     @MainActor
     static func resize(_ model: AppModel, _ a: CalendarActivity, minutes: Int) async throws {
-        if a.sport == "strength" && a.eventId == nil {
+        if a.sport == "strength" {
+            // The gym plan again at the length; one saved as an event leaves it after.
             let gym = try await model.api.previewGym(date: a.date, minutes: minutes, focus: nil, muscles: [], fromWeek: true)
             guard let draftId = gym.draftId else { throw APIError.message(L10n.tr("Trénink se nepodařilo sestavit.")) }
             try await model.api.confirmGym(draftId: draftId, rows: gym.rows)
+            if let eventId = a.eventId { try await model.api.deletePlanned(eventId: eventId) }
             return
         }
         guard let eventId = a.eventId else { return }

@@ -45,7 +45,7 @@ struct WeekPlanWeek: Equatable {
     var minutesToGo: Int {
         sessions.filter { $0.status == "planned" && $0.date >= today }.reduce(0) { $0 + Int(($1.minutes ?? 0).rounded()) }
     }
-    var hasPlanned: Bool { sessions.contains { $0.status != "done" } }
+    var hasPlanned: Bool { sessions.contains { $0.status == "planned" } }
     /// Days before today with a workout: they wait behind "Show earlier days".
     var hasEarlier: Bool { sessions.contains { $0.date < today } }
 
@@ -154,7 +154,7 @@ struct WeekPlanView: View {
                             nextStripLabel.padding(.top, 10)
                             strip(nextWeek) { date in jump(date, proxy) }
                         }
-                        if hasPlan || generating { caption.padding(.top, 8) }
+                        if hasPlan && !generating { caption.padding(.top, 8) }
                         if hasPlan && !generating { pills.padding(.top, 14) }
                         content.padding(.top, 22)
                     }
@@ -183,7 +183,6 @@ struct WeekPlanView: View {
                 }
             }
         }
-        .onDisappear { if let toast { settle(toast, undo: false) } }
     }
 
     // MARK: Header
@@ -197,7 +196,11 @@ struct WeekPlanView: View {
                 }
             }
             Spacer(minLength: 8)
-            CoachEntry(view: "training", companion: ChromeAction(systemImage: "xmark", label: "Zavřít") { dismiss() })
+            CoachEntry(view: "training", companion: ChromeAction(systemImage: "xmark", label: "Zavřít") {
+                // A removal waiting for its toast goes through (pushing Workout details keeps it pending).
+                if let toast { settle(toast, undo: false) }
+                dismiss()
+            })
         }
     }
 
@@ -238,9 +241,7 @@ struct WeekPlanView: View {
     /// "4 of 8 planned workouts done" and "4 h to go"; while building, what is built.
     private var caption: some View {
         HStack(alignment: .firstTextBaseline) {
-            if generating {
-                Text(verbatim: L10n.tr("Sestavuji tvé tréninky")).font(Typo.caption).foregroundStyle(Palette.muted)
-            } else if let week = model.training?.thisWeek, week.planned > 0 {
+            if !generating, let week = model.training?.thisWeek, week.planned > 0 {
                 Text(verbatim: WeekPlanText.done(week.done, of: week.planned)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
             }
             Spacer(minLength: 8)
@@ -251,15 +252,19 @@ struct WeekPlanView: View {
         .padding(.horizontal, 4)
     }
 
+    /// Side by side; on a narrow phone or with large text one under the other.
     private var pills: some View {
-        HStack(spacing: 10) {
-            Spacer(minLength: 0)
-            pill(showNext ? L10n.tr("Skrýt příští týden") : L10n.tr("Ukázat příští týden")) {
-                withAnimation(.snappy) { showNext.toggle() }
-            }
-            pill(L10n.tr("Nastavení plánu")) { settings = true }
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { pillPair }.frame(maxWidth: .infinity)
+            VStack(spacing: 8) { pillPair }.frame(maxWidth: .infinity)
         }
+    }
+
+    @ViewBuilder private var pillPair: some View {
+        pill(showNext ? L10n.tr("Skrýt příští týden") : L10n.tr("Ukázat příští týden")) {
+            withAnimation(.snappy) { showNext.toggle() }
+        }
+        pill(L10n.tr("Nastavení plánu")) { settings = true }
     }
 
     // MARK: Content
@@ -356,7 +361,7 @@ struct WeekPlanView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityAddTraits(open ? .isSelected : [])
+            .accessibilityValue(Text(verbatim: L10n.tr(open ? "Rozbaleno" : "Sbaleno")))
             .accessibilityHint(Text(verbatim: L10n.tr(open ? "Sbalí týden" : "Rozbalí týden")))
             .id(week.monday)
 
@@ -465,7 +470,7 @@ struct WeekPlanView: View {
     private func pill(_ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 16).frame(minHeight: 40)
+                .padding(.horizontal, 16).frame(minHeight: 44)
                 .background(Palette.track, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -501,6 +506,7 @@ struct WeekPlanView: View {
         guard !model.demo else { return }
         plans = try? await model.api.trainingPlans()
         if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
+        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
     }
 
     private func reload() async {
@@ -508,6 +514,7 @@ struct WeekPlanView: View {
         await model.loadCalendar(from: monday, to: ISODay.shift(nextMonday, 6), force: true)
         await model.refreshTraining()
         if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
+        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
     }
 
     // MARK: Changes
@@ -570,7 +577,7 @@ struct WeekPlanView: View {
     private func add(_ sport: String, on date: String) async {
         working = "add"
         defer { working = nil }
-        let available = weekPlans[monday].map { WeekPlanPrefs.available($0.prefs)[ISODay.weekdayIndex(date)] } ?? -1
+        let available = weekPlans[date >= nextMonday ? nextMonday : monday].map { WeekPlanPrefs.available($0.prefs)[ISODay.weekdayIndex(date)] } ?? -1
         do {
             try await WeekPlanGenerator.add(model, sport: sport, date: date, available: available)
             error = nil
@@ -661,6 +668,15 @@ struct WeekPlanRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+        .accessibilityValue(Text(verbatim: accessibilityState))
+    }
+
+    /// "Planned, collapsed" for VoiceOver; a done row says its % of plan already.
+    private var accessibilityState: String {
+        guard activity.status == "planned" else { return "" }
+        let state = L10n.tr("Naplánováno")
+        guard let open else { return state }
+        return state + ", " + L10n.tr(open ? "Rozbaleno" : "Sbaleno")
     }
 
     /// Under the name: the result of a done one ("8.2 km, 520 kcal"), the time of a planned one.
@@ -686,6 +702,8 @@ struct WeekPlanEditor: View {
     let remove: () -> Void
     @State private var length: Double = 60
     @State private var dragging = false
+    /// VoiceOver's swipes change the value without a drag: saved after a pause.
+    @State private var pending: Task<Void, Never>?
 
     private var sport: String { activity.sport == "strength" ? "gym" : activity.sport }
     private var range: ClosedRange<Double> {
@@ -727,7 +745,7 @@ struct WeekPlanEditor: View {
                     .padding(.top, 6)
                     Slider(value: $length, in: range, step: 5, onEditingChanged: { editing in
                         dragging = editing
-                        if !editing, Int(length) != Int((activity.minutes ?? 0).rounded()) { resize(Int(length)) }
+                        if !editing { commitLength() }
                     })
                     .tint(Palette.ink)
                     .accessibilityLabel(Text(verbatim: L10n.tr("Délka")))
@@ -747,13 +765,26 @@ struct WeekPlanEditor: View {
             .disabled(busy)
             Button(action: remove) {
                 Text(verbatim: L10n.tr("Odebrat z plánu")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 16).frame(minHeight: 40)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
                     .background(Palette.track, in: Capsule())
             }
             .buttonStyle(.plain)
             .disabled(busy)
         }
         .onAppear { length = min(max(activity.minutes ?? 60, range.lowerBound), range.upperBound) }
+        .onChange(of: length) {
+            guard !dragging else { return }
+            pending?.cancel()
+            pending = Task {
+                try? await Task.sleep(for: .milliseconds(900))
+                if !Task.isCancelled { commitLength() }
+            }
+        }
+    }
+
+    private func commitLength() {
+        pending?.cancel()
+        if Int(length) != Int((activity.minutes ?? 0).rounded()) { resize(Int(length)) }
     }
 }
 

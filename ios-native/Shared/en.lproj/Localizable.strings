@@ -4358,3 +4358,8 @@
 "týden %@ z %@" = "week %1$@ of %2$@";
 "Čas na trénink" = "Time availability";
 "Žádný trénink" = "No workouts";
+"Vybere je kouč" = "Coach picks them";
+"Vyber jeden nebo dva sporty na den. Třetí nahradí první." = "Pick one or two sports for the day. A third one replaces the first.";
+"Nastavení se nepodařilo načíst." = "Couldn't load your settings.";
+"Rozbaleno" = "Expanded";
+"Sbaleno" = "Collapsed";
