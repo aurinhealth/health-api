@@ -235,9 +235,10 @@ test("a request waiting for one that has since ended computes the entry itself",
   const first = cached(env, null, "pick-base:2026-11-16", () => { calls++; return never; }, { store });
   first.catch(() => {});
   await new Promise(resolve => setTimeout(resolve, 5));
-  const second = cached(env, null, "pick-base:2026-11-16", async () => { calls++; return { status: "ok", day: [] }; }, { store });
+  // Three waiting requests: the first of them computes it, the others wait for that one.
+  const waiting = [1, 2, 3].map(() => cached(env, null, "pick-base:2026-11-16", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 5)); return { status: "ok", day: [] }; }, { store }));
   await new Promise(resolve => setTimeout(resolve, 5));
   end(new Error("This promise was created by a request that has since ended, so it can never settle."));
-  assert.deepEqual(await second, { status: "ok", day: [] });
+  for (const answer of await Promise.all(waiting)) assert.deepEqual(answer, { status: "ok", day: [] });
   assert.equal(calls, 2);
 });

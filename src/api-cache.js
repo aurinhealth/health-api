@@ -148,7 +148,8 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
-  if (computing.has(url)) {
+  // A loop: several waiters of an ended request then wait for the first of them that computes it.
+  while (computing.has(url)) {
     const other = computing.get(url), end = beginWait("shared");
     try { return structuredClone(await other); }
     catch (error) { if (!endedRequestError(error)) throw error; if (computing.get(url) === other) computing.delete(url); }
@@ -176,7 +177,7 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
     : store.put(url, new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + ttl } })).catch(() => {}).then(unmark), unmark);
   if (shared) ctx?.waitUntil?.(finish);
   let value;
-  try { value = await pending; } catch (error) { await finish; throw error; } finally { computing.delete(url); }
+  try { value = await pending; } catch (error) { await finish; throw error; } finally { if (computing.get(url) === pending) computing.delete(url); }
   // A failed read (an error answer, the {} callers fall back to, or an answer
   // marked degraded: part of it failed) is not kept: the next request asks
   // again instead of showing nothing for 10 minutes.

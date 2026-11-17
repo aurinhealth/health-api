@@ -14,7 +14,7 @@
 // Health was switched off in the app, and the
 // Review Notes tell App Review the data is a sample.
 import { saveAppleHealth } from "./apple-health.js";
-import { bumpCacheVersion } from "./api-cache.js";
+import { bumpCacheVersion, endedRequestError } from "./api-cache.js";
 import { localToday, localHour, zonedTime } from "./user-time.js";
 
 export const SAMPLE_DAYS = 42;
@@ -162,6 +162,11 @@ export function sampleRecords(now, days) {
 // Once an hour per isolate is enough: the request after that reads one row.
 // The app's first screens ask at the same moment: they wait for one write.
 const written = new Map(), writing = new Map();
+// Another request's fill; one of a request that has since ended (api-cache.js endedRequestError) is done again here.
+const borrowed = (key, again) => {
+  const job = writing.get(key);
+  return job.catch(error => { if (!endedRequestError(error)) throw error; if (writing.get(key) === job) writing.delete(key); return again(); });
+};
 
 // Fills the review account's sample: everything the first time (or after it
 // was deleted), then today and yesterday. env is the account's own (env.DB
@@ -173,7 +178,7 @@ export async function ensureReviewSample(env, { now = Date.now(), later = null }
   const hour = localToday(new Date(now)) + "T" + pad(localHour(new Date(now)));
   if (written.get(env.USER_ID) === hour) return null;
   const key = env.USER_ID + "@" + hour;
-  if (writing.has(key)) return writing.get(key);
+  if (writing.has(key)) return borrowed(key, () => ensureReviewSample(env, { now, later }));
   // Apple Health switched off in the app (DELETE /app/api/health/apple): no
   // more sample, or the next hour would show it connected again.
   const status = await env.DB.prepare("SELECT status FROM sync_status WHERE user_id = ? AND sync_name = 'apple_health'").bind(env.USER_ID).first().catch(() => null);
@@ -181,8 +186,8 @@ export async function ensureReviewSample(env, { now = Date.now(), later = null }
   const oldest = addDays(localToday(new Date(now)), -(SAMPLE_DAYS - 2));
   const full = !(await env.DB.prepare("SELECT 1 AS found FROM health_datapoints WHERE user_id = ? AND source_family = 'apple-health' AND data_type = 'sleep' AND external_id = ?")
     .bind(env.USER_ID, "apple:" + ID + "sleep:" + addDays(oldest, -1)).first());
-  if (writing.has(key)) return writing.get(key);
-  const job = write(env, now, full ? SAMPLE_DAYS : 2).then(result => { written.set(env.USER_ID, hour); return result; }).finally(() => writing.delete(key));
+  if (writing.has(key)) return borrowed(key, () => ensureReviewSample(env, { now, later }));
+  const job = write(env, now, full ? SAMPLE_DAYS : 2).then(result => { written.set(env.USER_ID, hour); return result; }).finally(() => { if (writing.get(key) === job) writing.delete(key); });
   writing.set(key, job);
   if (!full && later) { later(job.catch(error => console.error("Review sample failed", error.message))); return null; }
   return job;
