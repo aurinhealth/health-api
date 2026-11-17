@@ -15,7 +15,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).fil
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'S77', 'S78', 'S79', 'S80', 'S81', 'S82', ...Array.from({ length: 12 }, (_, i) => 'S' + (83 + i)), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', 'D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12', 'D13', 'D14', 'D15', 'D16', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 45 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S46', 'S50', 'S51', 'S52', 'S53', 'S54', 'S55', 'S56', 'S57', 'S58', 'S59', 'S60', 'S61', 'S62', 'S63', 'S64', 'S65', 'S66', 'S67', 'S68', 'S69', 'S70', 'S71', 'S72', 'S73', 'S74', 'S75', 'S76', 'S77', 'S78', 'S79', 'S80', 'S81', 'S82', ...Array.from({ length: 19 }, (_, i) => 'S' + (83 + i)), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03', 'D01', 'D02', 'D03', 'D04', 'D05', 'D06', 'D07', 'D08', 'D09', 'D10', 'D11', 'D12', 'D13', 'D14', 'D15', 'D16', ...Array.from({ length: 11 }, (_, i) => 'K' + String(i + 1).padStart(2, '0'))]);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -150,11 +150,11 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 144);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 151);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
-  assert.equal((await handleCoachEval(post({ id: 'S99' }), staging, { kind: 'coach-eval' }, { run })).status, 404);
+  assert.equal((await handleCoachEval(post({ id: 'S999' }), staging, { kind: 'coach-eval' }, { run })).status, 404);
   // A failed situation keeps its message: a 502 would reach the workflow as Cloudflare's "Bad gateway" page (run 57).
   const failed = await handleCoachEval(post({ id: 'S38' }), staging, { kind: 'coach-eval' }, { run: async () => { throw new Error('AI je dnes přetížená.'); } });
   assert.equal(failed.status, 200);assert.deepEqual(await failed.json(), { id: 'S38', title: scenarioById('S38').title, status: 'error', message: 'AI je dnes přetížená.' });
@@ -1001,4 +1001,34 @@ test('D09–D16: the gate keeps the library with its reason, without an AI call'
     const r = await runDailyScenario({ OPENAI_API_KEY: 'x' }, scenarioById(id), { daily: (env, pick, a) => import('../src/ai-workout-compose.js').then(m => m.dailyOwnWorkout(env, pick, { ...a, ask: async () => { throw new Error('no AI on the gate'); } })) });
     assert.ok(r.checks.every(c => c.ok), id + ': ' + JSON.stringify(r.checks));
   }
+});
+
+test('P1: the coach from a meal, Load and VO2max detail, back from Sick and the morning answer', () => {
+  const meal = scenarioContext(scenarioById('S99')).ctx;
+  assert.equal(meal.appContext.subject.kind, 'meal');
+  assert.equal(meal.selectedMeal.totals.kcal, 650);
+  assert.match(meal.selectedMeal.items[0].name, /guláš/);
+  assert.equal(scenarioContext(scenarioById('S100')).ctx.loadBalance.level, 'above');
+  assert.equal(scenarioContext(scenarioById('S101')).ctx.vo2maxEstimate.value, 52.4);
+  assert.deepEqual(scenarioContext(scenarioById('S97')).ctx.returnAfterIllness, { day: 1, easyDays: 7, until: '2026-10-27', longIllness: true });
+  assert.equal(scenarioContext(scenarioById('S95')).ctx.today.feeling, 'tired');
+  const limit = scenarioById('S98').checks;
+  const ok = r => checkReply(scenarioById('S98'), { answer: r }).filter(c => c.name !== 'bez nevyžádané karty tréninku');
+  assert.ok(ok('AI funkce mohou mít limity použití, aplikace ti řekne, když se blížíš.').every(c => c.ok), JSON.stringify(ok('AI funkce mohou mít limity použití, aplikace ti řekne, když se blížíš.')));
+  assert.ok(ok('Můžeš mi napsat 30 zpráv týdně.').some(c => !c.ok));
+  assert.ok(limit);
+});
+
+test('P1 checks: a denied illness, an hour or a "not unlimited" is no finding; a late snack is found', async () => {
+  const failed = (id, answer) => checkReply(scenarioById(id), { answer }).filter(c => !c.ok && c.name !== 'bez nevyžádané karty tréninku').map(c => c.name);
+  assert.ok(!failed('S95', 'Únava neznamená, že jsi nemocný. Klidně jeď VO2max podle plánu.').includes('nemluví o nemoci'));
+  assert.ok(failed('S95', 'Asi na tebe leze nemoc, dej si volno.').includes('nemluví o nemoci'));
+  assert.deepEqual(failed('S98', 'Nemáš neomezené zprávy: AI funkce mohou mít limity použití a za 24 hodin ti aplikace řekne víc, když se blížíš.'), []);
+  assert.ok(failed('S98', 'Můžeš napsat 30 zpráv týdně.').length);
+  assert.ok(failed('S98', 'Zprávy máš neomezené, piš kolik chceš. Limity nejsou.').includes('neslíbí neomezené zprávy'));
+  assert.ok(!failed('S100', 'Posledních 7 dní bylo těžších než obvykle, dnes klidně jen 0,5 h lehce.').includes('bez čísla poměru ani ACWR'));
+  assert.ok(failed('S100', 'Tvůj poměr je 1,12, týden byl těžší.').includes('bez čísla poměru ani ACWR'));
+  const { selectedMeal } = await import('../src/assistant-app-context.js');
+  const late = { foodLog: { entries: [{ id: 1, recipe_title: 'Tvaroh', consumed_at: '2026-10-21T21:00', kcal: 200, note: JSON.stringify({ mealType: 'snack' }) }] } };
+  assert.equal(selectedMeal({ kind: 'meal', id: 'snack_late' }, late).selectedMeal.items.length, 1);
 });

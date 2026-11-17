@@ -5,6 +5,7 @@ import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycli
 import { cycleShared } from "./cycle-model.js";
 import { withFocus, racePhase } from "./athlete-focus.js";
 import { brokenStations, pausedSports } from "./athlete-state.js";
+import { illnessReturn } from "./illness-return.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS, requestedMuscles } from './coach-actions.js';
 import { EXERCISES } from './strength-generator.js';
 import { strengthCoverage } from './strength-balance.js';
@@ -301,6 +302,9 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),
     // Only when the athlete shares it (cycle-model.js cycleForCoach).
     ...(cycle?{cycle}:{}),
+    // Back from Sick (illness-return.js): the easy days the server set, the same
+    // as the app's "Easing back in" card; the coach never shortens them.
+    ...(()=>{const r=illnessReturn(athleteState,date);return r?{returnAfterIllness:{day:r.day,easyDays:r.easyDays,until:r.until,longIllness:r.longIllness}}:{};})(),
     // Regenerace on Today (recovery-time.js), only while it still runs.
     ...(recoveryTime?{recoveryTime:recoveryForCoach(recoveryTime)}:{}),
     // Deník: the habits that go with the athlete's next-morning readiness and
