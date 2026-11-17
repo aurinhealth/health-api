@@ -22,6 +22,9 @@ struct HealthSeries: Decodable, Equatable {
     /// The services the newest estimate's workouts and heart rate came from.
     var estimateSources: [String]? = nil
 
+    /// The points, or nil when none came (a failed decode keeps the saved ones).
+    var shown: [ChartPoint]? { points.isEmpty ? nil : points }
+
     struct SourceStretch: Decodable, Equatable {
         let source: String?
         let from: String

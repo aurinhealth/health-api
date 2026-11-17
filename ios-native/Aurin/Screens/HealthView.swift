@@ -177,7 +177,6 @@ enum ReadinessText {
         return value > high ? 1 : value < low ? -1 : 0
     }
 
-    /// "↑ vyšší", "↓ kratší", "obvyklé" on the card.
     /// "lepší než obvykle" in the readiness detail: what the value means, in the
     /// colour of its points, since a lower resting heart rate helps and a shorter
     /// night costs (the bar above already shows the direction).

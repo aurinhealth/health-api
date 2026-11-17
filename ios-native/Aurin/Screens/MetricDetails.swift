@@ -39,14 +39,6 @@ struct MetricStatus {
     let text: String
     let color: Color
 
-    /// Breathing, temperature and blood oxygen: where the value is against the
-    /// athlete's usual range, in ink, never better or worse (MDR, Today audit 1).
-    static func usual(_ value: Double, low: Double, high: Double) -> MetricStatus {
-        if value > high { return MetricStatus(text: "↑ " + L10n.tr("nad obvyklým rozmezím"), color: Palette.ink) }
-        if value < low { return MetricStatus(text: "↓ " + L10n.tr("pod obvyklým rozmezím"), color: Palette.ink) }
-        return MetricStatus(text: L10n.tr("v obvyklém rozmezí"), color: Palette.ink)
-    }
-
     static func compare(_ value: Double, low: Double, high: Double, worseAbove: Bool) -> MetricStatus {
         if value > high { return MetricStatus(text: "↑ " + L10n.tr("nad obvyklým rozmezím"), color: worseAbove ? Palette.rust : Palette.green) }
         if value < low { return MetricStatus(text: "↓ " + L10n.tr("pod obvyklým rozmezím"), color: worseAbove ? Palette.green : Palette.rust) }

@@ -41,7 +41,11 @@ struct VO2maxPage: View {
 
     static func sources(_ list: [String]?) -> String? {
         let names = (list ?? []).map(HealthValueContent.serviceName)
-        return names.isEmpty ? nil : ListFormatter.localizedString(byJoining: names)
+        guard !names.isEmpty else { return nil }
+        // In the app's language, not the phone's.
+        let formatter = ListFormatter()
+        formatter.locale = L10n.locale
+        return formatter.string(from: names) ?? names.joined(separator: ", ")
     }
 
     /// "Men aged 30 to 39 in lab tests (FRIEND registry)".
@@ -87,7 +91,7 @@ struct VO2maxDetailContent: View {
         if let compared {
             Card { FriendBandsView(value: vo2.value, bands: compared) }
         }
-        let points = loaded?.points ?? vo2.series.map { ChartPoint(date: $0.date, value: $0.value) }
+        let points = loaded?.shown ?? vo2.series.map { ChartPoint(date: $0.date, value: $0.value) }
         Card {
             DetailChart(points: points, today: health.date, period: $period, digits: 1,
                         note: "Každý bod je jeden odhad Aurinu, ne laboratorní test.",

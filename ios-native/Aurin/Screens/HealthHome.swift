@@ -125,10 +125,13 @@ struct AurinOrb: View {
                 // Specks along the rim, denser at the bottom.
                 for i in 0..<70 {
                     let seed = Double(i) * 12.9898
-                    let angle = (sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1) * 2 * .pi + t * 0.05 * (i % 2 == 0 ? 1 : -1)
-                    let depth = 0.82 + 0.2 * abs((sin(seed * 1.7) * 9631.3).truncatingRemainder(dividingBy: 1))
-                    let loose = mood == .collecting ? 1.25 : 1.0
-                    let point = CGPoint(x: center.x + cos(angle) * radius * depth * loose, y: center.y + sin(angle) * radius * depth * loose)
+                    let turn: Double = i % 2 == 0 ? 1 : -1
+                    let place: Double = (sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
+                    let angle: Double = place * 2 * Double.pi + t * 0.05 * turn
+                    let depth: Double = 0.82 + 0.2 * abs((sin(seed * 1.7) * 9631.3).truncatingRemainder(dividingBy: 1))
+                    let loose: Double = mood == .collecting ? 1.25 : 1.0
+                    let reach = Double(radius) * depth * loose
+                    let point = CGPoint(x: Double(center.x) + cos(angle) * reach, y: Double(center.y) + sin(angle) * reach)
                     let speck = CGRect(x: point.x - 0.9, y: point.y - 0.9, width: 1.8, height: 1.8)
                     context.fill(Path(ellipseIn: speck), with: .color((dark ? Color.white : tint).opacity(0.25 + 0.5 * max(0, sin(angle)))))
                 }
@@ -856,7 +859,7 @@ struct AurinAgeDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if let age = health.aurinAge {
                 DetailHeadline(value: Fmt.decimal(age.value, digits: 1), unit: L10n.tr("let"), usual: AurinAgeText.versusAge(age))
-                let points = loaded?.points ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) }
+                let points = loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) }
                 Card {
                     DetailChart(points: points, today: health.date, period: $period, digits: 1,
                                 note: "Každý bod je odhad Aurinu z toho dne.")

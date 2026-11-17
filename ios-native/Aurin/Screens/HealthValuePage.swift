@@ -206,7 +206,7 @@ struct HealthValueContent: View {
     /// that is still running (steps, active energy) stays out, so the chart
     /// never shows a drop each morning (D-ZDRAVI-19); the number on top has it.
     private func chartPoints(_ reading: HealthValueReading) -> [ChartPoint] {
-        let points = loaded?.points ?? reading.local
+        let points = loaded?.shown ?? reading.local
         return value.partialToday ? points.filter { $0.date < today } : points
     }
 
@@ -437,8 +437,8 @@ struct StepsThroughDay: View {
     }
 
     var body: some View {
-        let now = steps.hour ?? 23
-        let totals = Self.runningTotals(hourly)
+        let now = min(max(steps.hour ?? 23, 0), 23)
+        let totals = hourly.count == 24 ? Self.runningTotals(hourly) : Array(repeating: 0, count: 24)
         let hours = Array(6...23)
         let done = hours.filter { $0 <= now }.map { Mark(hour: $0, value: totals[$0], series: "today") }
         let usual = (steps.usual ?? []).count == 24 ? hours.map { Mark(hour: $0, value: steps.usual![$0], series: "usual") } : []

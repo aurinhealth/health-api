@@ -128,7 +128,7 @@ struct JournalHealthCard: View {
     @State private var data: JournalToday?
 
     /// One finding, the strongest, and no carousel (D-ZDRAVI-20).
-    private var strongest: JournalEffect? { data?.top.max { abs($0.effect) < abs($1.effect) } }
+    private var strongest: JournalEffect? { data?.top?.max { abs($0.effect) < abs($1.effect) } }
 
     var body: some View {
         Card {

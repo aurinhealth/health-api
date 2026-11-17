@@ -6,7 +6,7 @@ import SwiftUI
 enum AppRoute: Hashable {
     case readiness
     case sleep
-    /// A value of Zdraví with its own detail (MetricDetails.swift).
+    /// A value of Zdraví with its own detail (HealthValuePage.swift).
     case metric(HealthMetric)
     case weight
     case form

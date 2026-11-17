@@ -112,6 +112,9 @@ struct CoachStepSheet: View {
     let count: Int
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    /// The HRV step's page: its cells and periods switch here too.
+    @State private var hrvValue: HealthValue = .hrv
+    @State private var hrvPeriod: ChartPeriod = .days30
 
     var body: some View {
         ScrollView {
@@ -127,7 +130,7 @@ struct CoachStepSheet: View {
                     Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 if step.view == "hrv", let health = model.health, health.hrv != nil {
-                    HealthValueContent(value: .constant(.hrv), period: .constant(.days30))
+                    HealthValueContent(value: $hrvValue, period: $hrvPeriod)
                 }
             }
             .padding(24)
