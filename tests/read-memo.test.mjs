@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, memoizableSql, writtenTable } from "../src/tenancy.js";
+import { batchingD1 } from "../src/d1-batch.js";
+import { timed, timingStore } from "../src/request-timing.js";
 
 function counted() {
   const db = createD1();
@@ -135,4 +137,16 @@ test("tables done by one copy of the server are not checked again by a new copy 
     await scopedDb(Object.create(db), 3, { schemaKey: "https://cache.internal/schema/test/r2/data-001" }).prepare(CREATE).run();
     assert.equal(asked.filter(s => s === CREATE).length, 2);
   } finally { globalThis.caches = saved; }
+});
+
+test("the slow report counts only the schema statements really sent", async () => {
+  const { db } = counted();
+  const CREATE = "CREATE TABLE IF NOT EXISTS coach_pick_less(user_id INTEGER, kind TEXT)";
+  const trips = async () => {
+    let store = null;
+    await timed(async () => { const scoped = scopedDb(batchingD1(db), 3); await Promise.all([scoped.prepare(CREATE).run(), scoped.prepare(CREATE).run()]); store = timingStore(); });
+    return store.trips;
+  };
+  assert.equal(await trips(), 1, "two handlers at once: one statement");
+  assert.equal(await trips(), 0, "already done in this copy: none");
 });

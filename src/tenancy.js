@@ -3,6 +3,7 @@ import { routedUserDb, TARGET_KIND } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
 import { batchingD1 } from './d1-batch.js';
+import { viaBatcher } from './request-timing.js';
 import { allowClient, releaseClient, allowSite, releaseSite } from './ip-rate-limit.js';
 import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
@@ -186,7 +187,9 @@ const schemaDoneByDb = new WeakMap();
 // kept in the data center's cache, per release and database, and a new copy
 // starts from that list. It is read by each request that needs it until one
 // has it (never one request's promise awaited by another: api-cache.js endedRequestError).
-const SCHEMA_TTL_SECONDS = 86400;
+// An hour: a table lost without a release (a Time Travel restore, a manual
+// DROP) is made again by new copies within it, or at once by a release.
+const SCHEMA_TTL_SECONDS = 3600;
 const schemaLoaded = new WeakSet();
 const schemaStore = () => globalThis.caches?.default || null;
 function schemaKeeper(db, schemaDone, key) {
@@ -215,6 +218,8 @@ function schemaStatement(statement, sql, schemaDone, keeper, running) {
     [REAL]: statement,
     bind: (...values) => schemaStatement(statement.bind(...values), sql, schemaDone, keeper, running),
     async run() {
+      // The trips are counted where they happen (d1-batch.js): one skipped or shared here is none.
+      viaBatcher.seen = true;
       const known = keeper.known();
       if (known) await known;
       if (schemaDone.has(sql)) return { success: true, results: [], meta: { changes: 0 } };
@@ -393,11 +398,12 @@ export function scopedDb(db, userId, { memo = false, schemaKey = null } = {}) {
   };
 }
 
-// The cache key of the tables done on env's databases in this release (scopedDb).
+// The cache key of the tables done on env's databases in this release (scopedDb):
+// the food catalogue can move to its own database without a release.
 function schemaKey(env) {
   const release = env.CF_VERSION_METADATA?.id;
   if (!release) return null;
-  return "https://cache.internal/schema/" + encodeURIComponent(env.ENVIRONMENT || "production") + "/" + encodeURIComponent(release) + "/" + encodeURIComponent(env.USER_DATA_SHARD || "legacy");
+  return "https://cache.internal/schema/" + encodeURIComponent(env.ENVIRONMENT || "production") + "/" + encodeURIComponent(release) + "/" + encodeURIComponent(env.USER_DATA_SHARD || "legacy") + "/" + encodeURIComponent(env.FOOD_CATALOG_STATE || "legacy");
 }
 
 // The env every handler sees for one user: scoped DB, identity, and no access
