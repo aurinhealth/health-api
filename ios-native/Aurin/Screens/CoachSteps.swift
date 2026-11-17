@@ -127,7 +127,7 @@ struct CoachStepSheet: View {
                     Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
                 if step.view == "hrv", let health = model.health, health.hrv != nil {
-                    MetricDetailContent(metric: .hrv, health: health)
+                    HealthValueContent(value: .constant(.hrv), period: .constant(.days30))
                 }
             }
             .padding(24)

@@ -184,17 +184,14 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case .readiness, .sleep, .metric, .weight:
+        case .readiness, .sleep, .metric, .weight, .vo2max:
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .vo2max:
-            if let training = model.training { VO2maxDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .activeEnergy:
-            if let training = model.training { ActiveEnergyDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
+        case .activeEnergy: HealthValuePage(value: .activeEnergy)
         case .zones:
             if let training = model.training { ZonesDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .steps: StepsDetailView()
+        case .steps: HealthValuePage(value: .steps)
         case .strain: StrainDetailView()
         case .strainDay(let date): StrainDetailView(date: date)
         case .recoveryTime: RecoveryTimeView()
@@ -254,8 +251,10 @@ struct HealthRoute: View {
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
                     ReadinessDetailContent(health: health, noWearable: model.noWearable)
                 }
-            case .metric(let metric): MetricDetailView(metric: metric, health: health)
-            case .weight: WeightDetailView(health: health)
+            // The new detail template (redesign H): the value, its siblings, chart and trend.
+            case .metric(let metric): HealthValuePage(value: HealthValue(metric: metric) ?? .restingHR)
+            case .weight: HealthValuePage(value: .weight)
+            case .vo2max: VO2maxPage(health: health)
             default: SleepDetailView(health: health)
             }
         } else {
