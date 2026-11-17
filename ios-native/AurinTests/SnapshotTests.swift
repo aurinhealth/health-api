@@ -179,6 +179,32 @@ final class SnapshotTests: XCTestCase {
         try render("health-vo2max-empty", glow: Palette.Glow.health) { VO2maxDetailContent(health: emptyHealth, period: .constant(.months6)).padding(16).padding(.top, 30) }
         XCTAssertEqual(VO2maxPage.position(49.2, in: try XCTUnwrap(health.vo2max?.compared)), L10n.f("v horní čtvrtině mužů ve věku %@ až %@", "30", "39"))
         XCTAssertEqual(StepsThroughDay.runningTotals([1, 2, 3]), [1, 3, 6])
+        // The Health tab (redesign H2): a new account, no Pro, no watch, the Aurin age page.
+        try render("health-new", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: emptyHealth) }.padding(.top, 50).padding(.bottom, 40).environment(empty) }
+        try render("health-aurinage-states", glow: Palette.Glow.health) {
+            NavigationStack {
+                VStack(spacing: 24) {
+                    AurinAgeHero(health: emptyHealth, pro: false)
+                    AurinAgeHero(health: emptyHealth, pro: true, noWearable: true)
+                    NoDeviceCard(connect: {})
+                }
+                .padding(16)
+            }
+            .environment(model)
+        }
+        try render("health-aurinage", glow: Palette.Glow.health) { AurinAgeDetailContent(health: health, period: .constant(.months3)).padding(16).padding(.top, 30) }
+        let age = try XCTUnwrap(health.aurinAge)
+        let groups = AurinAgeText.groups(["vo2max": -2, "restingHeartRate": -1, "activity": 0, "steps": -1, "strength": 0.5, "sleep": 1, "sleepRegularity": 1])
+        XCTAssertEqual(groups.map(\.key), ["fitness", "strength", "sleep"])
+        XCTAssertEqual(groups[0].years, -2.5, accuracy: 0.001)
+        XCTAssertEqual(groups[2].years, 1.5, accuracy: 0.001)
+        XCTAssertNotNil(AurinAgeText.versusAge(age))
+        // Health monitor's sentence uses the detail's words, with no threshold of its own.
+        XCTAssertFalse(HealthMonitorCard.title(HealthMonitorCard.dials(health)).isEmpty)
+        // A Zdraví layout saved before the redesign is converted, not lost.
+        let old: [PlacedWidget] = [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .hrv, size: .small),
+                                   .init(kind: .steps, size: .medium), .init(kind: .oxygen, size: .small), .init(kind: .weight, size: .medium), .init(kind: .bedtime, size: .medium)]
+        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.journal, .night, .healthMonitor, .steps, .body])
     }
 
     func testWorkoutScreens() throws {

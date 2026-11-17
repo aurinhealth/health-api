@@ -11,6 +11,8 @@ enum AppRoute: Hashable {
     case weight
     case form
     case vo2max
+    /// Aurin age from the top of Health (HealthHome.swift).
+    case aurinAge
     /// Active energy day by day with the day's activities (Training → Aktivní výdej).
     case activeEnergy
     /// Minutes in the heart-rate zones week by week (Training → Aktivní minuty v zónách).
@@ -77,7 +79,7 @@ enum AppRoute: Hashable {
     /// The tab a deep link (aurin://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .metric, .weight, .cycle: return .health
+        case .readiness, .sleep, .metric, .weight, .cycle, .aurinAge: return .health
         case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
         }
@@ -116,6 +118,7 @@ enum AppRoute: Hashable {
         case "weight": self = .weight
         case "form": self = .form
         case "vo2max": self = .vo2max
+        case "aurin-age": self = .aurinAge
         case "active-energy": self = .activeEnergy
         case "zones": self = .zones
         case "steps": self = .steps
@@ -184,7 +187,7 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case .readiness, .sleep, .metric, .weight, .vo2max:
+        case .readiness, .sleep, .metric, .weight, .vo2max, .aurinAge:
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
@@ -255,6 +258,7 @@ struct HealthRoute: View {
             case .metric(let metric): HealthValuePage(value: HealthValue(metric: metric) ?? .restingHR)
             case .weight: HealthValuePage(value: .weight)
             case .vo2max: VO2maxPage(health: health)
+            case .aurinAge: AurinAgePage(health: health)
             default: SleepDetailView(health: health)
             }
         } else {
