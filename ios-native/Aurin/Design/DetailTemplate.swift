@@ -48,7 +48,8 @@ struct DetailTitleRow<Trailing: View>: View {
                 .scaledFont(13, weight: .medium, cap: .denseCap)
                 .tracking(3)
                 .foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
+                .lineLimit(2).minimumScaleFactor(0.85)
+                .multilineTextAlignment(.center)
                 .padding(.horizontal, 96)
                 .accessibilityAddTraits(.isHeader)
             HStack {
@@ -79,6 +80,7 @@ struct SiblingCells: View {
     let pick: (String) -> Void
 
     var body: some View {
+        ScrollViewReader { reader in
         ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(cells) { cell in
@@ -107,12 +109,17 @@ struct SiblingCells: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel([L10n.tr(cell.title), cell.value + (cell.unit.map { " " + L10n.tr($0) } ?? ""), cell.spokenState].compactMap { $0 }.joined(separator: ", "))
                     .accessibilityAddTraits(on ? .isSelected : [])
+                    .id(cell.id)
                 }
             }
             .padding(.horizontal, 16)
         }
         .scrollIndicators(.hidden)
         .padding(.horizontal, -16)
+        // The chosen sibling in view, in the middle as in the concept.
+        .onAppear { reader.scrollTo(selected, anchor: .center) }
+        .onChange(of: selected) { withAnimation { reader.scrollTo(selected, anchor: .center) } }
+        }
     }
 }
 

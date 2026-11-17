@@ -18,6 +18,8 @@ struct RangeDial<Center: View>: View {
     var ends: (String, String)? = nil
     var size: CGFloat = 232
     var lineWidth: CGFloat = 12
+    /// What VoiceOver says for the whole dial ("Load balance, as usual").
+    var spoken: String? = nil
     @ViewBuilder var center: Center
 
     /// The arc runs over three quarters of the circle, open at the bottom.
@@ -47,7 +49,13 @@ struct RangeDial<Center: View>: View {
                     .frame(width: lineWidth + 1, height: lineWidth + 1)
                     .offset(x: radius * cos(angle.radians), y: radius * sin(angle.radians))
             }
+            // Inside the arc whatever the text size: two lines at most, shrinking before it spills.
             center
+                .lineLimit(2)
+                .minimumScaleFactor(0.6)
+                .multilineTextAlignment(.center)
+                .dynamicTypeSize(...DynamicTypeSize.denseCap)
+                .frame(maxWidth: (size - 2 * lineWidth) * 0.78, maxHeight: size * 0.5)
             if let ends {
                 HStack {
                     Text(verbatim: L10n.tr(ends.0))
@@ -62,6 +70,7 @@ struct RangeDial<Center: View>: View {
             }
         }
         .frame(width: size, height: size)
+        .modifier(DialSpoken(spoken: spoken))
     }
 
     /// From `a` to `b` of the whole circle, starting at the bottom left.
@@ -70,5 +79,18 @@ struct RangeDial<Center: View>: View {
             .inset(by: lineWidth / 2)
             .trim(from: a, to: max(a, b))
             .rotation(.degrees(135))
+    }
+}
+
+/// The dial read as one element: its own sentence when given, else what its centre says.
+private struct DialSpoken: ViewModifier {
+    let spoken: String?
+
+    func body(content: Content) -> some View {
+        if let spoken {
+            content.accessibilityElement(children: .ignore).accessibilityLabel(spoken)
+        } else {
+            content.accessibilityElement(children: .combine)
+        }
     }
 }

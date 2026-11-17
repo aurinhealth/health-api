@@ -100,9 +100,11 @@ enum ChartBuckets {
     }
 
     /// The points a period shows when it ends on `end`: its days, by week
-    /// from 91 days on.
+    /// from 91 days on, then from the Monday of its first week, so that
+    /// week is whole and the server's Monday points stay in.
     static func shown(_ points: [ChartPoint], period: ChartPeriod, end: String) -> [ChartPoint] {
-        let start = ISODay.shift(end, 1 - period.days)
+        let first = ISODay.shift(end, 1 - period.days)
+        let start = period.weekly ? monday(first) : first
         let inside = points.filter { $0.date >= start && $0.date <= end }.sorted { $0.date < $1.date }
         return period.weekly ? weekly(inside) : inside
     }

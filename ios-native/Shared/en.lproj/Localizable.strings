@@ -4274,3 +4274,5 @@
 "Jako obvykle" = "As usual";
 "Load balance porovnává tvých posledních 7 dní s obvyklými 4 týdny." = "Load balance compares your last 7 days with your usual 4 weeks.";
 "Připoj hodinky nebo prsten a hodnota se ukáže po první noci." = "Connect a watch or a ring and the value shows after the first night.";
+"%@, týdenní průměr" = "%@, weekly average";
+"Souhlas se nepodařilo uložit. Zkus to prosím znovu." = "The consent couldn't be saved. Please try again.";

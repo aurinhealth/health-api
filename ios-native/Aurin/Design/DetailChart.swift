@@ -27,6 +27,9 @@ struct DetailChart: View {
     /// How many periods back the arrows went, 0 = the one ending today.
     @State private var page = 0
     @State private var picked: Date?
+    /// The bubble's measured size: the room kept over the chart grows with the text size.
+    @State private var bubbleWidth: CGFloat = 120
+    @State private var bubbleHeight: CGFloat = 52
 
     private var end: String { ISODay.shift(today, -page * period.days) }
     private var start: String { ISODay.shift(end, 1 - period.days) }
@@ -45,7 +48,8 @@ struct DetailChart: View {
             } else {
                 plot(list)
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(TrendChart.summary(list.map { Point(date: $0.date, value: $0.value) }, unit: unit, digits: digits))
+                    .accessibilityLabel([TrendChart.summary(list.map { Point(date: $0.date, value: $0.value) }, unit: unit, digits: digits),
+                                         list.last.flatMap { MetricState(state: $0.state, side: $0.side)?.words }].compactMap { $0 }.joined(separator: ", "))
                     .accessibilityChartDescriptor(TrendAudioGraph(points: list.map { Point(date: $0.date, value: $0.value) }, unit: unit, digits: digits, days: period.days))
             }
             if periods.count > 1 { PeriodControl(periods: periods, period: $period) }
@@ -76,7 +80,7 @@ struct DetailChart: View {
             .foregroundStyle(hasOlder ? Palette.ink : Palette.faint.opacity(0.5))
             .accessibilityLabel(L10n.tr("Předchozí období"))
             Spacer(minLength: 0)
-            Text(verbatim: L10n.f("%@ až %@", Fmt.dayMonthShort(start), Fmt.dayMonthShort(end)))
+            Text(verbatim: Self.periodTitle(start: start, end: end, year: period == .year))
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 0)
@@ -99,7 +103,8 @@ struct DetailChart: View {
         let lo = values.min() ?? 0, hi = values.max() ?? 1
         let pad = max((hi - lo) * 0.18, hi == lo ? max(abs(hi) * 0.1, 1) : 0)
         let domainStart = ISODay.date(period.weekly ? ChartBuckets.monday(start) : start) ?? Date()
-        let domainEnd = ISODay.date(end) ?? Date()
+        // A little room after the last day for the Avg pill, so it never covers today's dot.
+        let domainEnd = (ISODay.date(end) ?? Date()).addingTimeInterval(Double(period.days) * 86400 * 0.12)
         let selected = picked.flatMap { date in dated.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
         let shownPoint = selected ?? dated.last
         // Every point gets its dot while they stay apart; a long period dots
@@ -143,7 +148,7 @@ struct DetailChart: View {
         .chartXScale(domain: domainStart...max(domainEnd, domainStart))
         .chartYScale(domain: (lo - pad)...(hi + pad))
         .chartXAxis {
-            AxisMarks(values: Self.ticks(start: start, end: end)) { value in
+            AxisMarks(values: Self.ticks(start: period.weekly ? ChartBuckets.monday(start) : start, end: end)) { value in
                 AxisValueLabel {
                     Text(verbatim: tickLabel(value.as(Date.self)))
                         .font(.caption2).foregroundStyle(Palette.faint)
@@ -163,20 +168,25 @@ struct DetailChart: View {
                 if let frame = proxy.plotFrame {
                     let rect = geo[frame]
                     if let average, let y = proxy.position(forY: average) {
+                        // Its right edge on the plot's right edge, in the room after the last day.
                         AveragePill(text: L10n.f("Prům. %@", Fmt.decimal(average, digits: digits)))
-                            .position(x: rect.maxX + 4, y: rect.minY + y)
+                            .frame(width: rect.maxX, alignment: .trailing)
+                            .position(x: rect.maxX / 2, y: rect.minY + y)
                     }
                     if let shownPoint, let x = proxy.position(forX: shownPoint.date) {
-                        DayBubble(date: period.weekly ? weekLabel(shownPoint.point.date) : Fmt.dayMonthShort(shownPoint.point.date),
-                                  value: Fmt.decimal(shownPoint.point.value, digits: digits), unit: unit)
+                        let half = bubbleWidth / 2
+                        DayBubble(date: period.weekly ? L10n.f("%@, týdenní průměr", weekLabel(shownPoint.point.date)) : Fmt.weekdayShort(shownPoint.point.date) + " " + Fmt.dayMonthShort(shownPoint.point.date),
+                                  value: Fmt.decimal(shownPoint.point.value, digits: digits), unit: unit,
+                                  state: MetricState(state: shownPoint.point.state, side: shownPoint.point.side))
                             .fixedSize()
-                            .position(x: min(max(rect.minX + x, rect.minX + 60), rect.maxX - 60), y: rect.minY - 34)
+                            .onGeometryChange(for: CGSize.self) { $0.size } action: { bubbleWidth = $0.width; bubbleHeight = $0.height }
+                            .position(x: min(max(rect.minX + x, half), max(geo.size.width - half, half)), y: rect.minY - bubbleHeight / 2 - 8)
                     }
                 }
             }
         }
         .frame(height: height)
-        .padding(.top, 62)
+        .padding(.top, bubbleHeight + 12)
     }
 
     /// A shown point with its date and the run of the line it belongs to.
@@ -195,11 +205,11 @@ struct DetailChart: View {
         }
     }
 
-    /// The period's first day, two in between and its last ("Today").
+    /// The period's first day, two whole days in between and its last ("Today").
     static func ticks(start: String, end: String) -> [Date] {
-        guard let a = ISODay.date(start), let b = ISODay.date(end) else { return [] }
-        let span = b.timeIntervalSince(a)
-        return [0, 1.0 / 3, 2.0 / 3, 1].map { a.addingTimeInterval(span * $0) }
+        let days = ISODay.range(start, end).count - 1
+        guard days > 0 else { return ISODay.date(end).map { [$0] } ?? [] }
+        return [0, 1.0 / 3, 2.0 / 3, 1].compactMap { ISODay.date(ISODay.shift(start, Int((Double(days) * $0).rounded()))) }
     }
 
     private func tickLabel(_ date: Date?) -> String {
@@ -207,6 +217,14 @@ struct DetailChart: View {
         let iso = ISODay.iso(date)
         if iso == today { return L10n.tr("Dnes") }
         return period == .year ? Fmt.monthShort(iso) : Fmt.dayMonthShort(iso)
+    }
+
+    /// "Oct 14 to Nov 12"; with the year when the period crosses one, and
+    /// "Nov 2025 to Nov 2026" for a year.
+    static func periodTitle(start: String, end: String, year: Bool) -> String {
+        if year { return L10n.f("%@ až %@", Fmt.monthYearShort(start), Fmt.monthYearShort(end)) }
+        if start.prefix(4) != end.prefix(4) { return L10n.f("%@ až %@", Fmt.dayMonthYearShort(start), Fmt.dayMonthYearShort(end)) }
+        return L10n.f("%@ až %@", Fmt.dayMonthShort(start), Fmt.dayMonthShort(end))
     }
 
     /// "Nov 9 to 15" for a week's point.
@@ -220,6 +238,18 @@ extension Fmt {
     static func monthShort(_ isoDate: String) -> String {
         guard let date = ISODay.date(isoDate) else { return isoDate }
         return DateFormatters.make("LLL", locale: locale, timeZone: TimeZone(identifier: "UTC")!).string(from: date)
+    }
+
+    /// "Nov 2026", "lis 2026".
+    static func monthYearShort(_ isoDate: String) -> String {
+        guard let date = ISODay.date(isoDate) else { return isoDate }
+        return DateFormatters.make("LLL yyyy", locale: locale, timeZone: TimeZone(identifier: "UTC")!).string(from: date)
+    }
+
+    /// "Dec 28, 2025", "28. 12. 2025".
+    static func dayMonthYearShort(_ isoDate: String) -> String {
+        guard let date = ISODay.date(isoDate) else { return isoDate }
+        return DateFormatters.make(L10n.isEnglish ? "MMM d yyyy" : "d. M. yyyy", locale: locale, timeZone: TimeZone(identifier: "UTC")!, template: L10n.isEnglish).string(from: date)
     }
 }
 
@@ -269,6 +299,8 @@ struct DayBubble: View {
     let date: String
     let value: String
     var unit: String = ""
+    /// Off the usual range: said in words too, never by the dot's colour alone.
+    var state: MetricState? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -277,9 +309,13 @@ struct DayBubble: View {
                 Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink)
                 if !unit.isEmpty { Text(verbatim: L10n.tr(unit)).font(.caption).foregroundStyle(Palette.faint) }
             }
+            if let state, state != .within {
+                Text(verbatim: state.words).font(.caption).foregroundStyle(state.color)
+            }
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Palette.faint.opacity(0.5), lineWidth: 1))
         .accessibilityHidden(true)
     }
 }
@@ -311,8 +347,8 @@ struct PeriodControl: View {
                     Text(verbatim: p.title)
                         .scaledFont(13, weight: on ? .semibold : .regular, cap: .denseCap)
                         .foregroundStyle(on ? Palette.ink : Palette.muted)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, minHeight: 38)
                         .background(on ? Palette.card : .clear, in: Capsule())
                         .contentShape(Capsule())
                 }

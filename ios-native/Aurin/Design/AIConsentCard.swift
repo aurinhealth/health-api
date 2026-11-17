@@ -28,6 +28,7 @@ struct AIConsentCard: View {
                 .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             Text(verbatim: L10n.tr(AIConsentText.note)).font(Typo.small).foregroundStyle(Palette.muted)
             Link(L10n.tr("Zásady ochrany soukromí"), destination: L10n.legalURL("privacy")).font(Typo.small)
+                .frame(minHeight: 44)
             if let failed {
                 Text(verbatim: failed).font(Typo.small).foregroundStyle(Palette.Status.bad)
                     .fixedSize(horizontal: false, vertical: true)
@@ -41,7 +42,8 @@ struct AIConsentCard: View {
                         failed = nil
                         await allowed()
                     } catch {
-                        failed = error.localizedDescription
+                        // A sentence of ours, not the system's raw text.
+                        failed = L10n.tr("Souhlas se nepodařilo uložit. Zkus to prosím znovu.")
                     }
                 }
             } label: {

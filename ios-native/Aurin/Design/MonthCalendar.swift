@@ -18,6 +18,8 @@ struct MonthCalendar<Mark: View>: View {
     let pick: (String) -> Void
     /// -1 back a month, +1 forward.
     let move: (Int) -> Void
+    /// What VoiceOver says a day holds ("Run done"); the mark itself is not read.
+    var spoken: (String) -> String? = { _ in nil }
     @ViewBuilder var mark: (String) -> Mark
 
     private var first: String { ISODay.monthStart(month) }
@@ -69,17 +71,18 @@ struct MonthCalendar<Mark: View>: View {
         return Button { pick(day) } label: {
             VStack(spacing: 4) {
                 DayNumber(day: day, isToday: isToday, faint: future)
-                mark(day)
+                mark(day).accessibilityHidden(true)
             }
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.vertical, 4)
-            .background(isSelected && !isToday ? Palette.ink.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
+            .background(isSelected ? Palette.ink.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(future && !futurePickable)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Fmt.dayMonth(day) + (isToday ? ", " + L10n.tr("dnes") : ""))
+        .accessibilityValue(spoken(day) ?? "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

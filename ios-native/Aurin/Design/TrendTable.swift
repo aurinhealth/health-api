@@ -42,7 +42,8 @@ enum TrendMath {
     }
 
     /// The rows for `lags` from daily points, the newest day as now. A row
-    /// needs a 7-day average at both ends.
+    /// needs at least one value in the 7 days at each end (the average of
+    /// the days that have one, as the server's 90-day change).
     static func rows(_ points: [ChartPoint], today: String, lags: [Int] = TrendLags.month) -> [TrendRow] {
         guard let now = average7(points, endingOn: today) else { return [] }
         return lags.compactMap { lag in
@@ -85,6 +86,8 @@ struct TrendTable: View {
     var color: Color = Palette.green
     /// Wider sparklines (84 pt) in All metrics.
     var wide = false
+    /// At the accessibility sizes the sparklines step aside, so the words fit.
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -106,7 +109,7 @@ struct TrendTable: View {
                     Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                     header("Tehdy")
                     header("Změna")
-                    header("Trend")
+                    if !typeSize.isAccessibilitySize { header("Trend") }
                 }
                 ForEach(rows) { row in
                     Divider().overlay(Palette.hairline).gridCellUnsizedAxes(.horizontal)
@@ -120,7 +123,9 @@ struct TrendTable: View {
                         Text(verbatim: Fmt.decimal(row.then, digits: digits)).font(Typo.number(20)).foregroundStyle(Palette.ink)
                             .accessibilityHidden(true)
                         changeText(row).accessibilityHidden(true)
-                        Sparkline(values: row.spark, lows: row.lows, highs: row.highs, color: color, width: wide ? 84 : 64)
+                        if !typeSize.isAccessibilitySize {
+                            Sparkline(values: row.spark, lows: row.lows, highs: row.highs, color: color, width: wide ? 84 : 64)
+                        }
                     }
                 }
             }

@@ -504,7 +504,8 @@ final class SnapshotTests: XCTestCase {
     /// large text, in Czech and English.
     func testRedesignComponents() throws {
         try render("z2-components", glow: Palette.Glow.health, window: true) { ComponentGallery() }
-        try render("z2-components-large", glow: Palette.Glow.health, typeSize: .accessibility1, window: true) { ComponentGallery() }
+        try render("z2-components-large-1", glow: Palette.Glow.health, typeSize: .accessibility1, window: true) { ComponentGallery(part: .charts) }
+        try render("z2-components-large-2", glow: Palette.Glow.health, typeSize: .accessibility1, window: true) { ComponentGallery(part: .rest) }
         L10n.setLanguage("en")
         defer {
             L10n.setLanguage("cs")
