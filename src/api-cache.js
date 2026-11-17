@@ -24,6 +24,11 @@ export function closedDay(day, today) {
 // the same coach inputs at the same moment, and each used to compute them
 // (some 400 database reads each) before the first one was kept.
 const computing = new Map();
+// A request the app gave up on (it closed Today, or asked again) ends, and what
+// it was computing never settles: Cloudflare then fails every other request
+// waiting for it with this error (2026-11-16: 9 workout picks answered HTTP 500),
+// and the entry it left would fail the next ones too. Such a waiter computes it itself.
+export const endedRequestError = error => /request that has since ended|can never settle/i.test(String(error?.message || error));
 
 // { version, food }: food counts only meals and drinks (bumpCacheVersion with
 // food: true). Before migration 0030 there is no food counter: food writes
@@ -143,7 +148,12 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
-  if (computing.has(url)) { const end = beginWait("shared"); return computing.get(url).then(value => structuredClone(value)).finally(end); }
+  if (computing.has(url)) {
+    const other = computing.get(url), end = beginWait("shared");
+    try { return structuredClone(await other); }
+    catch (error) { if (!endedRequestError(error)) throw error; if (computing.get(url) === other) computing.delete(url); }
+    finally { end(); }
+  }
   // owner: this copy left the mark and computes; borrowed: another copy's answer.
   const shared = SHARED.test(key), turn = { owner: false, borrowed: false };
   const pending = (async () => {
