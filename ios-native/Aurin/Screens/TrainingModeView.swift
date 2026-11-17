@@ -2427,14 +2427,22 @@ struct TrainingModeView: View {
         prefill(exercise.sets.first { !$0.done }, in: exercise)
     }
 
+    /// The reps a done set keeps: what was typed, else the plan's lower number
+    /// ("5" of "5–8", the range shows as the grey hint); a drop set without
+    /// reps typed keeps none (regression kept by the redesign, PM-souhrn 10).
+    static func savedReps(typed: String, planned: String?, drop: Bool) -> String {
+        let typed = typed.trimmingCharacters(in: .whitespaces)
+        if !typed.isEmpty { return typed }
+        if drop { return "" }
+        return GymCoach.firstNumber(planned).map { String($0) } ?? (planned ?? "")
+    }
+
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
         let letter = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
         if letter != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg, machineLb: lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? ""))
         let r = reps.trimmingCharacters(in: .whitespaces)
-        // Nothing typed in reps: the plan's lower number ("5" of "5–8").
-        let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
         // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
         // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
         let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carried(set, in: $0)?.kg }
@@ -2444,7 +2452,7 @@ struct TrainingModeView: View {
         if !k.isEmpty, LiftWeight.number(k) != LiftWeight.number(showed) {
             mirrorWeight(set, kg: k, in: &next)
         }
-        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: letter, keepDrops: typed.kg)
+        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: Self.savedReps(typed: r, planned: set.plannedReps, drop: set.drop), rpe: "", intensity: letter, keepDrops: typed.kg)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
