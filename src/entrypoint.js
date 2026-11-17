@@ -58,7 +58,7 @@ import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTempla
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
-import { workloadMetrics } from "./workload-ratio.js";
+import { workloadMetrics, loadBalance } from "./workload-ratio.js";
 import { planOverview } from "./plan-overview.js";
 import { MANUAL_SPORTS, manualWorkoutType } from "./activity-type.js";
 import { illnessReturn } from "./illness-return.js";
@@ -2544,6 +2544,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         coachCtx.planTemplates=coachPlanTemplates();
         if(targets?.plan)coachCtx.trainingPlan={name:targets.plan.name,week:targets.plan.week,weeks:targets.plan.weeks,phase:targets.plan.phaseLabel||targets.plan.phase,sessions:(targets.items||[]).filter(x=>x.plan).map(x=>({date:x.date,sport:x.sport,kind:x.plan.kind,label:x.label,minutes:x.minutes}))};
         Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek},selected.selectedActivity?{selectedActivity:selected.selectedActivity}:{},selected.selectedSession?{selectedSession:selected.selectedSession}:{});
+        // A detail screen's own numbers (P1): the meal from the food log, Aurin's
+        // own VO2max estimate (never the watch's, T-SCI-1) and the load in words only.
+        if(selected.selectedMeal)coachCtx.selectedMeal=selected.selectedMeal;
+        const subjectMetric=selected.appContext.subject?.kind==='metric'?selected.appContext.subject.metric:null;
+        if(subjectMetric==='vo2max'){const v=vo2maxView({rows:await fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[]),age:profileAge(inputs.profile,date),sex:inputs.profile?.sex});coachCtx.vo2maxEstimate=v?{value:v.value,date:v.date,change3m:v.change3m}:null;}
+        if(subjectMetric==='load'){const b=loadBalance(inputs.fitness?.wellness||[],date);coachCtx.loadBalance=b?{state:b.state,level:b.level,text:b.text}:null;}
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
         const reviewTraining=reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewed=(reviewTraining?.completed||[]).filter(isRideType);
         step(reviewStep(reviewed));
