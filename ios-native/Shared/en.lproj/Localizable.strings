@@ -4230,3 +4230,47 @@
 "Jiná možnost" = "Another option";
 "Tri" = "Tri";
 "Upravit cviky" = "Edit exercises";
+
+/* Redesign Z2: the shared parts of the new design (detail chart, trend table,
+   detail page, month calendar, learning state, AI consent card). */
+"%@ až %@" = "%1$@ to %2$@";
+"1 rok" = "1 year";
+"Předchozí období" = "Previous period";
+"Další období" = "Next period";
+"Za toto období nejsou data." = "No data for this period.";
+"Prům. %@" = "Avg %@";
+"Odkud: %@" = "From %@";
+"Před 7 dny" = "7 days ago";
+"Před 14 dny" = "14 days ago";
+"Před 30 dny" = "30 days ago";
+"Před 3 měsíci" = "3 months ago";
+"Před 6 měsíci" = "6 months ago";
+"Před rokem" = "1 year ago";
+"Před %@ dny" = "%@ days ago";
+"beze změny" = "no change";
+"o %@ výš" = "%@ higher";
+"o %@ níž" = "%@ lower";
+"Tehdy" = "Then";
+"průměr posledních 7 dní" = "average of the last 7 days";
+"Každý řádek porovnává tvých posledních 7 dní se 7 dny, které tehdy skončily." = "Each row compares your last 7 days with the 7 days that ended then.";
+"v tvém obvyklém rozmezí" = "in your usual range";
+"nad tvým obvyklým rozmezím" = "above your usual range";
+"pod tvým obvyklým rozmezím" = "below your usual range";
+"hodně nad tvým obvyklým rozmezím" = "far above your usual range";
+"hodně pod tvým obvyklým rozmezím" = "far below your usual range";
+"Jak se to měří" = "How it's measured";
+"Aurin se učí tvoje obvyklé hodnoty" = "Learning your usual range";
+"ještě %@" = "%@ to go";
+"Zatím tu nejsou data" = "No data yet";
+"Dnes, nejnižší tep v klidu" = "Today, lowest heart rate at rest";
+"Obvyklé rozmezí 50 až 56 bpm" = "Usual range 50 to 56 bpm";
+"Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období." = "Each point is one day. The grey band is your usual range, the dashed line the period's average.";
+"O něco níž než před měsícem, celou dobu v obvyklém rozmezí." = "A little lower than a month ago, inside your usual range the whole time.";
+"Aurin odhaduje tvůj VO2max ze všech tréninků, klidového tepu a profilu. Je to odhad, ne laboratorní test." = "Aurin estimates your VO2max from all your workouts, your resting heart rate and your profile. It is an estimate, not a lab test.";
+"Data z" = "Data from";
+"Ve srovnání s" = "Compared with";
+"Muži 30 až 39 let v laboratorních testech (registr FRIEND)" = "Men aged 30 to 39 in lab tests (FRIEND registry)";
+"12 tréninků" = "12 workouts";
+"Jako obvykle" = "As usual";
+"Load balance porovnává tvých posledních 7 dní s obvyklými 4 týdny." = "Load balance compares your last 7 days with your usual 4 weeks.";
+"Připoj hodinky nebo prsten a hodnota se ukáže po první noci." = "Connect a watch or a ring and the value shows after the first night.";
