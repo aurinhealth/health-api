@@ -67,8 +67,11 @@ const round1=v=>Number.isFinite(Number(v))?Math.round(Number(v)*10)/10:null;
 export function selectedMeal(subject,nutrition){
   if(subject?.kind!=='meal'||!MEAL_SLOTS.includes(subject.id))return {};
   const entries=(Array.isArray(nutrition?.foodLog?.entries)?nutrition.foodLog.entries:[]).filter(e=>e&&!['planned','cancelled'].includes(e.status));
-  const items=entries.map(e=>{let note={};try{note=JSON.parse(e.note||'{}')||{};}catch{}return {e,note,time:entryTime(e.consumed_at)};})
-    .filter(x=>mealOf(x.note,x.time)===subject.id)
+  const parsed=entries.slice(0,60).map(e=>{let note={};try{note=JSON.parse(e.note||'{}')||{};}catch{}return {e,note,time:entryTime(e.consumed_at)};});
+  // Late snack is a slot only some athletes keep: asked from it, or with an entry logged to it, the late evening goes there as in Food.
+  const slots=subject.id==='snack_late'||parsed.some(x=>x.note?.mealType==='snack_late')?MEAL_SLOTS:undefined;
+  // At most 20 foods, so text the athlete typed stays a small part of the prompt.
+  const items=parsed.filter(x=>mealOf(x.note,x.time,slots)===subject.id).slice(0,20)
     .map(({e,note,time})=>({name:text(String(e.recipe_title||note.product||''),80),time,kcal:Math.round(Number(e.kcal)||0),proteinG:round1(e.protein_g),carbsG:round1(e.carbs_g),fatG:round1(e.fat_g)}));
   const sum=k=>round1(items.reduce((s,i)=>s+(i[k]||0),0));
   return {selectedMeal:{meal:subject.id,items,totals:{kcal:Math.round(sum('kcal')),proteinG:sum('proteinG'),carbsG:sum('carbsG'),fatG:sum('fatG')}}};

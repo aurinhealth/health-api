@@ -1018,3 +1018,17 @@ test('P1: the coach from a meal, Load and VO2max detail, back from Sick and the 
   assert.ok(ok('Můžeš mi napsat 30 zpráv týdně.').some(c => !c.ok));
   assert.ok(limit);
 });
+
+test('P1 checks: a denied illness, an hour or a "not unlimited" is no finding; a late snack is found', async () => {
+  const failed = (id, answer) => checkReply(scenarioById(id), { answer }).filter(c => !c.ok && c.name !== 'bez nevyžádané karty tréninku').map(c => c.name);
+  assert.ok(!failed('S95', 'Únava neznamená, že jsi nemocný. Klidně jeď VO2max podle plánu.').includes('nemluví o nemoci'));
+  assert.ok(failed('S95', 'Asi na tebe leze nemoc, dej si volno.').includes('nemluví o nemoci'));
+  assert.deepEqual(failed('S98', 'Nemáš neomezené zprávy: AI funkce mohou mít limity použití a za 24 hodin ti aplikace řekne víc, když se blížíš.'), []);
+  assert.ok(failed('S98', 'Můžeš napsat 30 zpráv týdně.').length);
+  assert.ok(failed('S98', 'Zprávy máš neomezené, piš kolik chceš. Limity nejsou.').includes('neslíbí neomezené zprávy'));
+  assert.ok(!failed('S100', 'Posledních 7 dní bylo těžších než obvykle, dnes klidně jen 0,5 h lehce.').includes('bez čísla poměru ani ACWR'));
+  assert.ok(failed('S100', 'Tvůj poměr je 1,12, týden byl těžší.').includes('bez čísla poměru ani ACWR'));
+  const { selectedMeal } = await import('../src/assistant-app-context.js');
+  const late = { foodLog: { entries: [{ id: 1, recipe_title: 'Tvaroh', consumed_at: '2026-10-21T21:00', kcal: 200, note: JSON.stringify({ mealType: 'snack' }) }] } };
+  assert.equal(selectedMeal({ kind: 'meal', id: 'snack_late' }, late).selectedMeal.items.length, 1);
+});
