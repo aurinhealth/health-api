@@ -1,5 +1,5 @@
 # Basic foods listed first in food search (src/staples.js), from USDA FoodData Central SR Legacy (public domain).
-# Built by scripts/build-staples.mjs. Columns: Czech name | English name | USDA description (prefix, exact match wins) | portion (USDA modifier text, or =grams / =ml) | portion in Czech | in English | ml for drinks
+# Built by scripts/build-staples.mjs. Columns: Czech name | English name | USDA description (prefix, exact match wins) | portion (USDA modifier text, or =grams / =ml) | portion in Czech | in English | ml for drinks | salt g/100 g when the local food differs from the USDA one (label of the usual product)
 Káva, překapávaná | Coffee, brewed | Beverages, coffee, brewed, prepared with tap water | cup (8 fl oz) | šálek | cup | ml
 Espresso | Espresso | Beverages, coffee, brewed, espresso, restaurant-prepared | fl oz | panák | shot | ml
 Káva bez kofeinu | Coffee, decaf | Beverages, coffee, brewed, prepared with tap water, decaffeinated | cup (8 fl oz) | šálek | cup | ml
@@ -25,7 +25,7 @@ Jogurt, bílý nízkotučný | Yogurt, plain, low-fat | Yogurt, plain, low fat |
 Řecký jogurt, netučný | Greek yogurt, fat-free | Yogurt, Greek, plain, nonfat | container | kelímek | pot |
 Řecký jogurt | Greek yogurt | Yogurt, Greek, plain, whole milk | | | |
 Cottage sýr | Cottage cheese | Cheese, cottage, lowfat, 2% milkfat | =150 | kelímek | pot |
-Tvaroh | Quark | Cheese, cottage, creamed, large or small curd | =250 | balení | pack |
+Tvaroh | Quark | Cheese, cottage, creamed, large or small curd | =250 | balení | pack | | 0.1
 Ricotta | Ricotta | Cheese, ricotta, part skim milk | | | |
 Mozzarella | Mozzarella | Cheese, mozzarella, whole milk | oz | plátek | slice |
 Čedar | Cheddar | Cheese, cheddar | slice | plátek | slice |

@@ -26,7 +26,7 @@ export const STAPLES = [
   {"k":"usda_sr_legacy:170894","cs":"Řecký jogurt, netučný","en":"Greek yogurt, fat-free","e":59,"p":10.2,"c":3.6,"f":0.4,"su":3.2,"fi":0,"sa":0.1,"s":[170,"kelímek","pot"]},
   {"k":"usda_sr_legacy:171304","cs":"Řecký jogurt","en":"Greek yogurt","e":97,"p":9,"c":4,"f":5,"su":4,"fi":0,"sa":0.1},
   {"k":"usda_sr_legacy:172182","cs":"Cottage sýr","en":"Cottage cheese","e":81,"p":10.4,"c":4.8,"f":2.3,"su":4,"fi":0,"sa":0.8,"s":[150,"kelímek","pot"]},
-  {"k":"usda_sr_legacy:172179","cs":"Tvaroh","en":"Quark","e":98,"p":11.1,"c":3.4,"f":4.3,"su":2.7,"fi":0,"sa":0.8,"s":[250,"balení","pack"]},
+  {"k":"usda_sr_legacy:172179","cs":"Tvaroh","en":"Quark","e":98,"p":11.1,"c":3.4,"f":4.3,"su":2.7,"fi":0,"sa":0.1,"s":[250,"balení","pack"]},
   {"k":"usda_sr_legacy:171248","cs":"Ricotta","en":"Ricotta","e":138,"p":11.4,"c":5.1,"f":7.9,"su":0.3,"fi":0,"sa":0.2},
   {"k":"usda_sr_legacy:170845","cs":"Mozzarella","en":"Mozzarella","e":299,"p":22.2,"c":2.4,"f":22.1,"su":0,"fi":0,"sa":1.2,"s":[28,"plátek","slice"]},
   {"k":"usda_sr_legacy:170899","cs":"Čedar","en":"Cheddar","e":410,"p":24.2,"c":2.1,"f":33.8,"su":0.3,"fi":0,"sa":1.6,"s":[28,"plátek","slice"]},
