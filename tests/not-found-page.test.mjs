@@ -16,14 +16,15 @@ function database() {
   return db;
 }
 
-test('the 404 page is the site, with the way home and the waitlist, and stays out of search',async()=>{
+test('the 404 page is the site, with the way home and the App Store, and stays out of search',async()=>{
   const response=notFoundPage(new Request('https://aurin.health/anything-mistyped'));
   assert.equal(response.status,404);
   const html=await response.text();
   assert.match(html,/<html lang="en"/);
   assert.match(html,/<h1>This page doesn’t exist\.<\/h1>/);
   assert.match(html,/<a href="\/">Go to the home page<\/a>/);
-  assert.match(html,/<form class="wl" action="\/waitlist"/);
+  assert.match(html,/<a class="badge" href="https:\/\/apps\.apple\.com\/app\/id6827125354">/);
+  assert.doesNotMatch(html,/<form|leave your email|TestFlight/);
   assert.match(html,/<meta name="robots" content="noindex">/);
 });
 
