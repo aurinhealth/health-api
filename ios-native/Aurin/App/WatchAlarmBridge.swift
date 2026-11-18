@@ -21,6 +21,8 @@ extension WatchBridge {
             if SystemAlarm.backupTime != nil { await SystemAlarm.backup(at: nil) }
             return
         }
+        // Ringing or snoozed on the iPhone: the next morning's waits until it is stopped.
+        if !force, SystemAlarm.backupUnderWay { return }
         let now = Date()
         if !force, let set = SystemAlarm.backupTime, set > now,
            defaults.bool(forKey: Self.snoozedKey) || set.addingTimeInterval(-Self.backupDelay) <= now { return }

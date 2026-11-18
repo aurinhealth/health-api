@@ -79,6 +79,17 @@ enum SystemAlarm {
         UserDefaults.standard.object(forKey: backupKey + "Time") as? Date
     }
 
+    /// The watch's backup rings now or is snoozed: moving it then would silence it.
+    static var backupUnderWay: Bool {
+        #if canImport(AlarmKit)
+        if #available(iOS 26, *), let text = UserDefaults.standard.string(forKey: backupKey), let id = UUID(uuidString: text),
+           let alarm = (try? AlarmManager.shared.alarms)?.first(where: { $0.id == id }) {
+            return alarm.state != .scheduled
+        }
+        #endif
+        return false
+    }
+
     /// One alarm on the iPhone at `date`, for when the watch's doesn't wake
     /// (WatchAlarmBridge): replaces the one before; nil takes it away.
     static func backup(at date: Date?) async {
