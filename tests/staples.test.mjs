@@ -18,6 +18,12 @@ test('every basic food has a key, both names, sane values and a portion name in 
   assert.ok(STAPLES.length >= 200);
 });
 
+test('tvaroh has the salt of Czech unsalted tvaroh, not of salted US cottage cheese', () => {
+  const tvaroh = STAPLES.find(r => r.cs === 'Tvaroh');
+  assert.equal(tvaroh.sa, 0.1);
+  assert.equal(stapleProduct(tvaroh, 'cs').salt_100g, 0.1);
+});
+
 test('a basic food is a product in the app language with its portion', () => {
   const coffee = STAPLES.find(r => r.en === 'Coffee, brewed');
   const cs = stapleProduct(coffee, 'cs'), en = stapleProduct(coffee, 'en');
