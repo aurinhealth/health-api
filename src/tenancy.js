@@ -338,8 +338,19 @@ function memoStatement(statement, sql, memo, values = []) {
 const ID_GUARD_LOGGED = new Set();
 const ID_GUARD_LOG_LIMIT = 200;
 const boundToUser = (values, id) => values.some(v => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id);
+// Read across accounts on purpose (production logs 2026-11-18): the shared
+// catalogues count every account's reports or check that no account still
+// shares an item (shared-foods.js, personal-recipes.js), and the subscriptions
+// are copied into store_originals once (app-store.js). Only these exact
+// pieces are left out, so the rest of such a statement is still checked.
+const CROSS_USER_PARTS = /\(SELECT (?:COUNT\(\*\)|1) FROM (?:food_reports|food_contributions|recipe_contributions) WHERE user_id IS NOT NULL AND catalog_id=[\w.?]+\)/gi;
+const CROSS_USER_STATEMENTS = new Set([
+  "INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) SELECT original_transaction_id,user_id,COALESCE(store_signed_at,0) FROM subscriptions WHERE original_transaction_id IS NOT NULL"
+]);
 export function unboundUserQuery(sql, values, id) {
-  if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql) || !PERSONAL_TABLE_PATTERN.test(sql)) return false;
+  const text = String(sql).replace(/\s+/g, " ").trim();
+  if (CROSS_USER_STATEMENTS.has(text)) return false;
+  if (/^(CREATE|ALTER|DROP|PRAGMA)\b/i.test(text) || !PERSONAL_TABLE_PATTERN.test(text.replace(CROSS_USER_PARTS, ""))) return false;
   return !boundToUser(values || [], id);
 }
 function noteUnboundUser(sql, values, id) {
