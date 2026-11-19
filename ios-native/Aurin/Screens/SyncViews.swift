@@ -195,7 +195,14 @@ struct SyncSendGroup: View {
 
     @ViewBuilder
     private var content: some View {
-        if let destination, destination.supports.pushPlanned || destination.supports.pushActivities || destination.supports.health {
+        if id == "apple" && !AppleHealthExport.shared.writes && AppleHealthExport.shared.isAvailable {
+            // The test server writes nothing to Apple Health (AppleHealthExport.writes).
+            SettingsGroup(title: "Aurin posílá") {
+                Text("Na testovacím serveru Aurin do Apple Health nezapisuje, aby nepřepsal hodnoty z ostrého serveru.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    .padding(16)
+            }
+        } else if let destination, destination.supports.pushPlanned || destination.supports.pushActivities || destination.supports.health {
             let s = destination.supports
             let missing = destination.missingScopes ?? []
             SettingsGroup(title: "Aurin posílá", footer: footer) {
@@ -359,7 +366,7 @@ struct SyncForwardGroup: View {
     private var destination: SyncDestination? { sync.destination(to) }
     private var sources: [String] {
         guard let destination else { return [] }
-        if to == "apple" { guard AppleHealthExport.shared.isAvailable else { return [] } } else if destination.connected != true { return [] }
+        if to == "apple" { guard AppleHealthExport.shared.writes else { return [] } } else if destination.connected != true { return [] }
         let others = (destination.forwardSources ?? []).filter { ["wahoo", "google"].contains($0) && $0 != to }
         return (to == "intervals" && AppleHealth.shared.isAvailable && destination.healthTypes.contains("workouts") ? ["apple"] : []) + others
     }

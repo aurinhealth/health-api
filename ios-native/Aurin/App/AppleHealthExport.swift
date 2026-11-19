@@ -37,6 +37,10 @@ final class AppleHealthExport {
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
+    /// Only the live server writes: the test server's items carry the same sync
+    /// identifiers and would replace the live server's values in Apple Health.
+    var writes: Bool { isAvailable && ServerChoice.current == .live }
+
     /// Something is written to Apple Health.
     var isOn: Bool { prefs.pushActivities || prefs.health.any || forwards(prefs) }
 
@@ -195,6 +199,7 @@ final class AppleHealthExport {
     /// A done workout. nil when it went in, else the message for the sheet.
     func saveWorkout(_ activity: ActivityToSync) async -> String? {
         guard isAvailable else { return L10n.tr("Apple Health na tomhle zařízení není.") }
+        guard writes else { return L10n.tr("Na testovacím serveru Aurin do Apple Health nezapisuje.") }
         guard allowed(HKObjectType.workoutType()) else { return L10n.tr("Aurin nemá povolený zápis tréninků do Apple Health. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin.") }
         let end = (activity.start ?? Self.noon(activity.date)).addingTimeInterval(TimeInterval(activity.minutes * 60))
         let start = end.addingTimeInterval(-TimeInterval(activity.minutes * 60))
@@ -235,7 +240,7 @@ final class AppleHealthExport {
     /// Health is saved again with the new type; the same sync identifier with
     /// a newer version replaces the old one.
     func changeWorkoutType(key: String, type: String) async {
-        guard isAvailable, prefs.pushActivities, allowed(HKObjectType.workoutType()) else { return }
+        guard writes, prefs.pushActivities, allowed(HKObjectType.workoutType()) else { return }
         let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [Self.syncPrefix, Self.legacySyncPrefix].map { $0 + "workout:" + key })
         let found: HKWorkout? = await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 1, sortDescriptors: nil) { _, samples, _ in
@@ -276,7 +281,7 @@ final class AppleHealthExport {
     /// time already (the Wahoo app writes there itself, or the watch recorded it)
     /// stays as it is. At most every ten minutes unless `force`.
     func writeForwarded(api: APIClient, force: Bool = false) async {
-        guard forwards(prefs), isAvailable, api.hasSession, !forwarding, allowed(HKObjectType.workoutType()) else { return }
+        guard forwards(prefs), writes, api.hasSession, !forwarding, allowed(HKObjectType.workoutType()) else { return }
         let defaults = UserDefaults.standard
         if !force, let at = defaults.object(forKey: Self.forwardedAtKey) as? Date, Date().timeIntervalSince(at) < 600 { return }
         forwarding = true
@@ -353,7 +358,7 @@ final class AppleHealthExport {
     /// change is not written again. At most every half hour unless `days` asks.
     func writeOthers(api: APIClient, days: Int? = nil) async {
         let wanted = Self.otherTypes.filter { prefs.health.allows($0.0) && allowed($0.1) }
-        guard !wanted.isEmpty, isAvailable, api.hasSession, !writingOthers else { return }
+        guard !wanted.isEmpty, writes, api.hasSession, !writingOthers else { return }
         let defaults = UserDefaults.standard
         if days == nil, let at = defaults.object(forKey: Self.othersAtKey) as? Date, Date().timeIntervalSince(at) < 1800 { return }
         writingOthers = true
@@ -469,7 +474,7 @@ final class AppleHealthExport {
     /// its effort: Fitness and the watch show it instead of Apple's estimate.
     /// Rating it again replaces it (the same sync identifier, a newer version).
     func saveEffort(_ rpe: Int, session: WeekSession) async {
-        guard #available(iOS 18.0, *), isAvailable, prefs.pushActivities, session.status == "done" else { return }
+        guard #available(iOS 18.0, *), writes, prefs.pushActivities, session.status == "done" else { return }
         let type = HKQuantityType(.workoutEffortScore)
         // Apple Health switched on before this version: iOS asks once, for the effort alone.
         if store.authorizationStatus(for: type) == .notDetermined {
@@ -565,7 +570,7 @@ final class AppleHealthExport {
 
     /// A weigh-in typed in Aurin (one per day, the newest wins).
     func saveWeight(kg: Double, date: String) async {
-        guard prefs.health.allows("weight"), !viaGoogle.contains("weight"), isAvailable, allowed(HKQuantityType(.bodyMass)) else { return }
+        guard prefs.health.allows("weight"), !viaGoogle.contains("weight"), writes, allowed(HKQuantityType(.bodyMass)) else { return }
         // On its own day: now for today, noon for a weigh-in added to another day.
         let now = date == AppModel.localDate(Date()) ? Date() : Self.dayStart(date).addingTimeInterval(12 * 3600)
         let sample = HKQuantitySample(type: HKQuantityType(.bodyMass), quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: kg),
@@ -576,7 +581,7 @@ final class AppleHealthExport {
     /// The day's food and water as one total each (energy, protein, carbs,
     /// fat, water); written again only when a total changed.
     func saveFoodDay(_ food: FoodSnapshot) async {
-        guard isAvailable, prefs.health.allows("nutrition") || prefs.health.allows("water") else { return }
+        guard writes, prefs.health.allows("nutrition") || prefs.health.allows("water") else { return }
         guard food.date <= AppModel.localDate(Date()) else { return }
         let start = Self.dayStart(food.date)
         // The day's last second, also on the 23- and 25-hour days of a clock change.

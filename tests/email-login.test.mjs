@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay, networkCodesPerDay } from "../src/email-login.js";
+import { handleEmailLogin, sendCode, testLoginCode, codesPerDay, openCodesPerDay, networkCodesPerDay } from "../src/email-login.js";
 import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail, emailChangedEmail } from "../src/email-sender.js";
 import { withTimeZone } from "../src/user-time.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
-import { resolvePrincipal, handleSignOutEverywhere } from "../src/dashboard-auth.js";
+import { resolvePrincipal, handleSignOutEverywhere, isPublicPath } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://aurin.health";
 // The owner's notice at half the day's codes (email-login.js warnAtHalf) is kept apart from the codes.
@@ -57,6 +57,17 @@ test("e-mail sign-in stays off until the binding and the sender address exist", 
   const { env } = await setup({ EMAIL_FROM: "" });
   assert.equal((await start(env, "owner@example.com")).status, 404);
   assert.equal(await handleEmailLogin(request("/auth/google", {}), env, "/auth/google"), null);
+});
+
+test("the sign-in screen learns whether e-mail sign-in is on (the test server sends none)", async () => {
+  assert.equal(isPublicPath("/auth/email"), true);
+  const ask = env => handleEmailLogin(new Request(ORIGIN + "/auth/email"), env, "/auth/email");
+  const off = await setup({ EMAIL_FROM: "" });
+  assert.deepEqual(await (await ask(off.env)).json(), { enabled: false });
+  const on = await setup();
+  const response = await ask(on.env);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.deepEqual(await response.json(), { enabled: true });
 });
 
 test("an invited address gets a code and signs in with it once", async () => {
@@ -543,4 +554,43 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   assert.equal((await at(later + 62_000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1", cookie: fresh }))).status, 200);  // A signed-in device without a device cookie gets none; a session alone never mints one.
   const bare = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin } }), env, url, { signedIn: true, user: { id } });
   assert.ok(!bare.headers.getSetCookie().some(c => c.startsWith("aurin_known=")));
+});
+
+test("test addresses sign in with the fixed code on the test server only, with no e-mail", async () => {
+  const staging = { ENVIRONMENT: "staging", STAGING_TEST_CODE: "246810", OPEN_SIGNUP: "true", EMAIL: undefined, EMAIL_FROM: "" };
+  // Fail closed: the live server's settings (no ENVIRONMENT, or "production"), a bad code, another domain.
+  assert.equal(testLoginCode({ STAGING_TEST_CODE: "246810" }, "a@test.aurin.health"), null);
+  assert.equal(testLoginCode({ ENVIRONMENT: "production", STAGING_TEST_CODE: "246810" }, "a@test.aurin.health"), null);
+  assert.equal(testLoginCode({ ENVIRONMENT: "staging", STAGING_TEST_CODE: "12345" }, "a@test.aurin.health"), null);
+  assert.equal(testLoginCode(staging, "a@aurin.health"), null);
+  assert.equal(testLoginCode(staging, "a@test.aurin.health.evil.com"), null);
+  assert.equal(testLoginCode(staging, "a@xtest.aurin.health"), null);
+  assert.equal(testLoginCode(staging, "@test.aurin.health"), null);
+  assert.equal(testLoginCode(staging, "a@test.aurin.health"), "246810");
+
+  // The live server: the same request is refused as before, and the fixed code signs nobody in.
+  const live = await setup({ STAGING_TEST_CODE: "246810", OPEN_SIGNUP: "true" });
+  assert.equal((await start(live.env, "a@test.aurin.health")).status, 200);
+  assert.equal(live.sent.length, 1);
+  assert.notEqual(codeIn(live.sent[0]), "246810");
+  assert.equal((await verify(live.env, "a@test.aurin.health", "246810")).status, 400);
+  const liveOff = await setup({ STAGING_TEST_CODE: "246810", EMAIL_FROM: "" });
+  assert.equal((await start(liveOff.env, "a@test.aurin.health")).status, 404);
+
+  // The test server without e-mail: test addresses get in, others get no code.
+  const { env, sent } = await setup(staging);
+  assert.deepEqual(await (await handleEmailLogin(new Request(ORIGIN + "/auth/email"), env, "/auth/email")).json(), { enabled: true });
+  assert.equal((await start(env, "a@test.aurin.health")).status, 200);
+  assert.equal((await verify(env, "a@test.aurin.health", "135791")).status, 400);
+  const ok = await verify(env, "a@test.aurin.health", "246810");
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).created, true);
+  // Used up: the same code needs a new "send code" first.
+  assert.equal((await verify(env, "a@test.aurin.health", "246810")).status, 400);
+  assert.equal((await start(env, "someone@example.com")).status, 200);
+  assert.equal((await verify(env, "someone@example.com", "246810")).status, 400);
+  assert.equal(sent.length, 0);
+  // The usual limits hold: one code a minute per address.
+  assert.equal((await start(env, "b@test.aurin.health")).status, 200);
+  assert.equal(await sendCode(env, "b@test.aurin.health"), false);
 });

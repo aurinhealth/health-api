@@ -26,6 +26,7 @@ import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emai
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
 import { L, storedLanguage } from "./lang.js";
+import { isStaging } from "./staging.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -62,9 +63,11 @@ export function requestLanguage(request) {
 }
 
 export async function handleEmailLogin(request, env, pathname, ctx) {
+  // The app's sign-in screen asks whether to offer e-mail at all (LoginView.swift): the test server sends none.
+  if (pathname === "/auth/email" && request.method === "GET") return json({ enabled: emailConfigured(env) || Boolean(testLoginCode(env)) });
   if (pathname !== "/auth/email/start" && pathname !== "/auth/email/verify") return null;
   if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
-  if (!emailConfigured(env)) return json({ message: L("Přihlášení kódem z e-mailu není zapnuté.", "Signing in with an email code isn't turned on.") }, 404);
+  if (!emailConfigured(env) && !testLoginCode(env)) return json({ message: L("Přihlášení kódem z e-mailu není zapnuté.", "Signing in with an email code isn't turned on.") }, 404);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
@@ -116,8 +119,21 @@ export function reviewCode(env, email, now = Date.now()) {
   return /^\d{6}$/.test(code) && reviewCodeActive(env, now) ? code : null;
 }
 
+// Test accounts on the test server only: an address at TEST_DOMAIN (no mail server) signs in with
+// the fixed code STAGING_TEST_CODE (six digits, a Worker secret of health-api-staging) and no e-mail
+// goes out, so a test run can open new accounts without an inbox, Apple or Google. Off unless the
+// server is the test server (ENVIRONMENT "staging") and the secret holds six digits; the live
+// server has neither. Every limit of the e-mail sign-in still applies (as for the App Review code).
+const TEST_DOMAIN = "@test.aurin.health";
+export function testLoginCode(env, email = null) {
+  const code = String(env?.STAGING_TEST_CODE || "").trim();
+  if (!isStaging(env) || !/^\d{6}$/.test(code)) return null;
+  if (email !== null && !(email.endsWith(TEST_DOMAIN) && email.length > TEST_DOMAIN.length)) return null;
+  return code;
+}
+
 async function fixedReviewCode(db, env, email, now) {
-  const code = reviewCode(env, email, now);
+  const code = reviewCode(env, email, now) || testLoginCode(env, email);
   if (!code) return null;
   const user = await db.prepare("SELECT role FROM users WHERE email=?").bind(email).first();
   return user?.role === "admin" ? null : code;
@@ -128,8 +144,11 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
   const access = await emailCodeAccess(env.DB, env, email, now);
   if (!access) return false;
   const review = code ? null : await fixedReviewCode(env.DB, env, email, now);
+  // The test server's test addresses (testLoginCode): nothing to send, the code is known.
+  const test = Boolean(review) && review === testLoginCode(env, email);
+  if (!test && !emailConfigured(env)) return false;
   const sent = code || review || randomCode();
-  return (await claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review) })) === "sent";
+  return (await claimAndSend(env.DB, env, email, sent, "email-code", test ? null : signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review) })) === "sent";
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.

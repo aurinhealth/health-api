@@ -670,6 +670,13 @@ final class APIClient: @unchecked Sendable {
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
 
+    /// Whether the server signs in by e-mail code at all (GET /auth/email); the test server sends no e-mail.
+    func emailLoginEnabled() async throws -> Bool {
+        struct Answer: Decodable { let enabled: Bool }
+        let answer: Answer = try await get("/auth/email")
+        return answer.enabled
+    }
+
     /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).
     func startEmailLogin(email: String) async throws {
         let _: JSONValue = try await send("/auth/email/start", method: "POST", body: ["email": JSONValue.string(email)])
