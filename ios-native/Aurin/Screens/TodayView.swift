@@ -181,7 +181,10 @@ struct TodayContent: View {
         // The morning question, for now right under the readiness (concept
         // point 3). Its answer never changes the number.
         if selectedDate == nil && !model.demo {
-            TodayMorningQuestion(date: today.date, feeling: today.checkin).padding(.top, 20)
+            TodayMorningQuestion(date: today.date, feeling: today.checkin)
+                // A new day is a new question, also past midnight in a running app.
+                .id(today.date)
+                .padding(.top, 20)
         }
 
         // The first two weeks after the setup: what fills Today (FirstDaysCard).
