@@ -140,44 +140,6 @@ enum WeatherText {
     }
 }
 
-/// Today's weather as a chip under today's workout in the coach's card (Today
-/// audit D5): the place, the day's temperatures and what falls. A tap opens
-/// the forecast; without a place "Přidat počasí" opens the choice of it, which
-/// asks for the location only when the user picks it.
-struct TodayWeatherChip: View {
-    let weather: TodaySnapshot.Weather?
-    @State private var open = false
-
-    var body: some View {
-        Button { open = true } label: {
-            HStack(spacing: 6) {
-                Image(systemName: weather == nil ? "location.fill" : WeatherText.symbol(weather?.code))
-                    .scaledFont(weather == nil ? 10 : 13, weight: .semibold, cap: .denseCap)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Palette.blue)
-                Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Image(systemName: "chevron.right").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 11).padding(.vertical, 6)
-            .frame(minHeight: 30)
-            .background(Palette.track, in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .tapTarget(width: 44, height: 30)
-        .accessibilityIdentifier("today-weather.chip")
-        .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
-    }
-
-    /// "Prague, 14° / 6°, rain", or "Přidat počasí" without a place.
-    private var text: String {
-        guard let weather else { return L10n.tr("Přidat počasí") }
-        return [weather.place ?? L10n.tr("Počasí"), WeatherText.range(weather), WeatherText.description(weather.code)].compactMap { $0 }.joined(separator: ", ")
-    }
-}
-
 /// The weather's sheet: today's forecast and where to train, or the choice
 /// of the place when none is set.
 struct WeatherSheet: View {

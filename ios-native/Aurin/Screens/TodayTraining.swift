@@ -5,9 +5,9 @@ import SwiftUI
 /// planned for today, the gym one with Start, and under them the activity of
 /// the day when it suggests something else (CoachPickCard, Swap / Keep plan);
 /// without a plan for today the activity of the day in full. The code picks
-/// it from the day's plan and verdict, never the AI. Under it today's weather
-/// as a chip (D5), the plan's line with its sessions left this week
-/// (competitor point 9) and Regenerace when hard training must still wait.
+/// it from the day's plan and verdict, never the AI. Under it the plan's line
+/// with its sessions left this week (competitor point 9) and Regenerace when
+/// hard training must still wait. The weather is in the readiness row (part D).
 struct TodayCoachAction: View {
     let today: TodaySnapshot
 
@@ -31,8 +31,6 @@ struct TodayCoachAction: View {
                 }
                 CoachPickCard(planned: planned, red: today.readiness.zone == "red")
             }
-
-            TodayWeatherChip(weather: today.weather).padding(.top, 10)
 
             if let plan = today.trainingPlan {
                 Label(Self.planLine(plan), systemImage: "flag")
