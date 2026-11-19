@@ -100,6 +100,11 @@ private struct DaySwipe: ViewModifier {
     private var canGoForward: Bool { DayNavigator.canGoForward(model: model, date: shown, ahead: ahead) }
     private var before: String? { AppModel.shift(shown, by: -1) }
     private var after: String? { canGoForward ? AppModel.shift(shown, by: 1) : nil }
+    /// This day's page among the pages: the middle of three, the last of
+    /// [before, this], the first of [this, after].
+    private var initialAnchor: UnitPoint {
+        before == nil ? .leading : after == nil ? .trailing : .center
+    }
 
     @ViewBuilder func body(content: Content) -> some View {
         // Not in the demo (and so not in the screenshots, which cannot draw it).
@@ -144,6 +149,12 @@ private struct DaySwipe: ViewModifier {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .scrollIndicators(.hidden)
         .scrollTargetBehavior(.paging)
+        // Opens on this day, not on the day before: position starts at 1, so
+        // setting it on appear changed nothing, and on iOS 27 the pager opened
+        // on its first page. Today and Health then showed yesterday's walks,
+        // steps and strain under today's date, with this day off screen for
+        // VoiceOver (Tapwright pass 2026-11-19, points 1, 3 and 11).
+        .defaultScrollAnchor(initialAnchor, for: .initialOffset)
         .scrollPosition(id: $position)
         .onAppear {
             var instant = Transaction()
