@@ -538,7 +538,9 @@ struct WeightEntrySheet: View {
 
     /// The last weigh-in, kg, and its day (Health), the starting number.
     private var last: (kg: Double, date: String)? {
-        model.health?.weight.map { ($0.latest, $0.date) }
+        // Health may not have loaded yet when "+" opens this from Today.
+        model.health?.weight.map { (kg: $0.latest, date: $0.date) }
+            ?? model.today?.weight.flatMap { w in w.series.last.map { (kg: w.latest, date: $0.date) } }
     }
 
     var body: some View {
@@ -596,7 +598,7 @@ struct WeightEntrySheet: View {
         }
         .buttonStyle(.plain)
         .buttonRepeatBehavior(.enabled)
-        .accessibilityLabel(L10n.tr(direction < 0 ? "Méně" : "Více"))
+        .accessibilityLabel(L10n.tr(direction < 0 ? "Snížit váhu" : "Zvýšit váhu"))
     }
 
     private func step(_ direction: Double) {
@@ -604,7 +606,7 @@ struct WeightEntrySheet: View {
         text = Fmt.decimal(((shown + direction * 0.1) * 10).rounded() / 10)
     }
 
-    /// "Tuesday" within the week, else the date.
+    /// "on Tuesday" within the week, else the date.
     static func when(_ date: String) -> String {
         let today = AppModel.localDate(Date())
         let f = DateFormatter()
@@ -615,7 +617,7 @@ struct WeightEntrySheet: View {
         let days = Int((a.timeIntervalSince(b) / 86400).rounded())
         if days == 0 { return L10n.tr("dnes") }
         if days == 1 { return L10n.tr("včera") }
-        return days < 7 ? Fmt.capitalized(Fmt.weekdayName(date)) : Fmt.dayMonth(date)
+        return days < 7 ? Fmt.onWeekday(date) : Fmt.dayMonth(date)
     }
 
     private var placeholder: String {

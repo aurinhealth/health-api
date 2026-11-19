@@ -80,7 +80,7 @@ final class SmokeTests: XCTestCase {
 
         // "+": what can be added.
         launch("-demo")
-        let add = app.buttons["Přidat záznam"]
+        let add = app.buttons["tab.plus"]
         XCTAssertTrue(add.waitForExistence(timeout: 20))
         add.tap()
         XCTAssertTrue(app.buttons["plus.photo"].waitForExistence(timeout: 5), "+ did not open")
@@ -224,7 +224,7 @@ final class SmokeTests: XCTestCase {
         shot("jidlo-2")
         english()
         pause(4)
-        if tapIfThere(app.buttons.matching(identifier: "Add entry").firstMatch) {
+        if tapIfThere(app.buttons["tab.plus"]) {
             pause(2)
             shot("pridat")
         }

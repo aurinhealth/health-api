@@ -36,6 +36,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Not capped yet: the screens below cap it (textSizes).
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if model.updateRequired {
@@ -227,7 +228,7 @@ struct RootView: View {
                             .padding(.horizontal, 16)
                             .padding(.bottom, 4)
                             .dynamicTypeSize(Self.textSizes)
-                            .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+                            .transition(reduceMotion ? .opacity : .scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
                         }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
@@ -255,6 +256,8 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
                     .zIndex(showAdd ? 4 : 0)
+                    // Open, the card and the bar are all VoiceOver reads; escape closes.
+                    .accessibilityAddTraits(showAdd ? .isModal : [])
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
@@ -624,6 +627,7 @@ struct TabBar: View {
     /// The "+" card is open: the button shows × and closes it.
     var addOpen = false
     var onAdd: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var glass
 
     var body: some View {
@@ -678,9 +682,10 @@ struct TabBar: View {
 
     private func plus(size: CGFloat) -> some View {
         Button(action: onAdd) {
-            Image(systemName: "plus")
+            // Reduce Motion: × in place of the turn.
+            Image(systemName: reduceMotion && addOpen ? "xmark" : "plus")
                 .scaledFont(19, weight: .semibold, cap: .denseCap)
-                .rotationEffect(.degrees(addOpen ? 45 : 0))
+                .rotationEffect(.degrees(addOpen && !reduceMotion ? 45 : 0))
                 .foregroundStyle(Palette.onButton)
                 .frame(width: size, height: size)
                 .background(Palette.button, in: Circle())

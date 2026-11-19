@@ -23,6 +23,12 @@ final class PlusMenuTests: XCTestCase {
         XCTAssertEqual(PlusItem.withCoach(card), ["barcode", "build", "weight", "coach"])
     }
 
+    /// Every action removed and saved: the card stays empty, the defaults don't come back.
+    func testEmptySavedCardStaysEmpty() {
+        XCTAssertEqual(PlusItem.card(stored: "-", legacy: "photo,search", favorites: "water"), [])
+        XCTAssertEqual(PlusItem.withCoach([]), ["coach"])
+    }
+
     func testSavedCardWinsOverTheOldOne() {
         XCTAssertEqual(PlusItem.card(stored: "water,period", legacy: "start", favorites: ""), ["water", "period"])
     }

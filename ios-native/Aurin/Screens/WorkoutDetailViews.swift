@@ -1479,6 +1479,7 @@ struct ManualWorkoutSheet: View {
     @State private var rpe = 6
     @State private var saving = false
     @State private var error: String?
+    @State private var minutesMoved = false
 
     /// Ride, Run, Swim, Gym: the sport order everywhere in the app.
     static let sports: [(id: String, title: String, symbol: String, color: Color)] = [
@@ -1486,8 +1487,9 @@ struct ManualWorkoutSheet: View {
         ("swim", "Plavání", "figure.pool.swim", Palette.Sport.swim), ("gym", "Posilovna", "dumbbell.fill", Palette.Sport.gym)
     ]
     static let defaults: [String: Int] = ["ride": 90, "run": 45, "swim": 45, "gym": 60, "other": 45]
-    /// "very easy" … "all out" after the number picked (concept 14-plus, Log workout).
-    static let effort = ["velmi lehké", "lehké", "střední", "spíš těžké", "těžké", "těžké", "velmi těžké", "velmi těžké", "extrémně těžké", "naplno"]
+    /// The slider's end: a long ride or an ultra fits, a swim or the gym in 4 h.
+    static let longest: [String: Int] = ["ride": 600, "run": 360, "swim": 240, "gym": 240, "other": 600]
+    private var longest: Int { Self.longest[sport] ?? 600 }
 
     /// The day with the start's clock time; not moved, it ends now (or the
     /// day's same time), so the start is that minus the length.
@@ -1536,6 +1538,7 @@ struct ManualWorkoutSheet: View {
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 30)
         }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
         .glassSheetBackground()
         .tint(Palette.ink)
         .task(id: windowKey) { await loadHeart() }
@@ -1563,7 +1566,8 @@ struct ManualWorkoutSheet: View {
 
     private func choose(_ id: String) {
         sport = id
-        minutes = Self.defaults[id] ?? 60
+        // A length already set on the slider stays (within the sport's range).
+        minutes = minutesMoved ? min(minutes, Self.longest[id] ?? 600) : Self.defaults[id] ?? 60
     }
 
     /// The sport's icon on its pale colour; the one picked has an ink frame and a tick.
@@ -1576,9 +1580,9 @@ struct ManualWorkoutSheet: View {
                     .frame(width: 36, height: 36)
                     .background(color.opacity(0.16), in: Circle())
                 Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .lineLimit(2).minimumScaleFactor(0.92).multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity).frame(height: 76)
+            .frame(maxWidth: .infinity).frame(minHeight: 76)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.ink : Color.clear, lineWidth: 2) }
             .overlay(alignment: .topTrailing) {
@@ -1606,7 +1610,7 @@ struct ManualWorkoutSheet: View {
             HStack {
                 Text("Začátek").foregroundStyle(Palette.ink)
                 Spacer()
-                Text(startAt.formatted(clock)).foregroundStyle(pickingStart ? Palette.ink : Palette.muted).monospacedDigit()
+                Text(startAt.formatted(clock)).foregroundStyle(Palette.ink).monospacedDigit()
                 Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                     .rotationEffect(.degrees(pickingStart ? 90 : 0))
             }
@@ -1628,12 +1632,12 @@ struct ManualWorkoutSheet: View {
                 Spacer()
                 Text(verbatim: Self.length(minutes)).font(Typo.number(26)).foregroundStyle(Palette.ink)
             }
-            Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0) }), in: 5...240, step: 5)
+            Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0); minutesMoved = true }), in: 5...Double(longest), step: 5)
                 .accessibilityValue(Text(verbatim: Self.length(minutes)))
             HStack {
                 Text(verbatim: Self.length(5))
                 Spacer()
-                Text(verbatim: Self.length(240))
+                Text(verbatim: Self.length(longest))
             }
             .font(Typo.caption).foregroundStyle(Palette.muted)
             .accessibilityHidden(true)
@@ -1642,7 +1646,7 @@ struct ManualWorkoutSheet: View {
     }
 
     /// "55 min", "1 h 30", "4 h".
-    static func length(_ minutes: Int) -> String {
+    nonisolated static func length(_ minutes: Int) -> String {
         if minutes < 60 { return "\(minutes) min" }
         return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
     }
@@ -1706,7 +1710,7 @@ struct ManualWorkoutSheet: View {
                             .background(on ? Palette.button : Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(verbatim: "\(value), " + L10n.tr(Self.effort[value - 1])))
+                    .accessibilityLabel(Text(verbatim: "\(value), " + FeedbackSheet.effortWord(value).lowercased(with: L10n.locale)))
                     .accessibilityAddTraits(on ? .isSelected : [])
                 }
             }
@@ -1718,7 +1722,7 @@ struct ManualWorkoutSheet: View {
             }
             .font(Typo.caption).foregroundStyle(Palette.muted)
             .accessibilityHidden(true)
-            Text(verbatim: "\(rpe), " + L10n.tr(Self.effort[rpe - 1])).font(Typo.small).foregroundStyle(Palette.secondary)
+            Text(verbatim: "\(rpe), " + FeedbackSheet.effortWord(rpe).lowercased(with: L10n.locale)).font(Typo.small).foregroundStyle(Palette.secondary)
         }
     }
 

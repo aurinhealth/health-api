@@ -35,7 +35,7 @@ struct PlusCard: View {
         let amount: String
         let localId: Int?
         var undone = false
-        var text: String { L10n.f(undone ? "%@ %@ odebráno" : "%@ %@ přidáno", name, amount) }
+        var text: String { L10n.f(undone ? "Odebráno: %@ %@" : "Přidáno: %@ %@", name.lowercased(with: L10n.locale), amount) }
     }
 
     private var cycleOn: Bool { model.cycle?.enabled == true }
@@ -70,10 +70,14 @@ struct PlusCard: View {
         .chromeGlass(in: RoundedRectangle(cornerRadius: 34, style: .continuous), interactive: false)
         .chromeShadow(0.14, radius: 24, y: 10)
         .sensoryFeedback(.impact(weight: .medium), trigger: editing)
-        .accessibilityAction(named: Text("Upravit +")) { startEditing() }
+        .accessibilityAction(.escape) { editing ? finishEditing() : close() }
         // What "+" adds goes to today, also while the screens show another day.
         .onAppear { model.writesToday = true }
-        .onDisappear { model.writesToday = false }
+        .onDisappear {
+            model.writesToday = false
+            // Closed by a tap beside it or the ×: the edit is kept, as on the home screen.
+            if editing { save() }
+        }
         .sheet(item: $food, onDismiss: close) { start in AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start) }
         .sheet(isPresented: $weight, onDismiss: close) { WeightEntrySheet() }
         .sheet(isPresented: $workout, onDismiss: close) { ManualWorkoutSheet() }
@@ -115,9 +119,13 @@ struct PlusCard: View {
                 .accessibilityIdentifier("plus.cancel")
             Spacer()
             Button {
-                stored = draft.joined(separator: ",")
+                save()
                 finishEditing()
-            } label: { Text("Uložit").font(.body.weight(.semibold)) }
+            } label: {
+                Text("Uložit").font(.body.weight(.semibold))
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Palette.track, in: Capsule())
+            }
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("plus.save")
         }
@@ -151,6 +159,7 @@ struct PlusCard: View {
                             }
                             .buttonStyle(.plain)
                             .frame(width: 84)
+                            .disabled(left == 0)
                             .opacity(left > 0 ? 1 : 0.4)
                             .accessibilityLabel(L10n.f("Přidat %@", L10n.tr(item.title)))
                             .accessibilityIdentifier("plus.add." + item.id)
@@ -163,11 +172,9 @@ struct PlusCard: View {
         }
     }
 
-    /// VoiceOver's "Move up / down" instead of dragging.
-    private func move(_ id: String, _ by: Int) {
-        guard let i = draft.firstIndex(of: id), draft.indices.contains(i + by) else { return }
-        draft.swapAt(i, i + by)
-    }
+    /// An empty card is saved as "-", so it stays empty and the defaults
+    /// don't come back (PlusItem.card).
+    private func save() { stored = draft.isEmpty ? "-" : draft.joined(separator: ",") }
 
     private func finishEditing() {
         held = false
@@ -175,7 +182,7 @@ struct PlusCard: View {
     }
 
     private func startEditing() {
-        draft = saved
+        draft = saved.filter { $0 != "period" || cycleOn }
         pouring = nil
         poured = nil
         withAnimation(.snappy) { editing = true }
@@ -191,18 +198,10 @@ struct PlusCard: View {
                     .modifier(Wiggle(amplitude: fixed ? 0 : 1.6, seed: id.count))
                     .contentShape(Rectangle())
                     .onTapGesture { if !fixed { withAnimation(.snappy) { draft.removeAll { $0 == id } } } }
-                    .onDrag {
-                        dragging = fixed ? nil : id
-                        return NSItemProvider(object: id as NSString)
-                    }
-                    .onDrop(of: [UTType.text], delegate: PlusDrop(target: id, items: $draft, dragging: $dragging))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.tr(item.title))
-                    .accessibilityHint(fixed ? Text("") : Text("Odebere akci z karty."))
-                    .accessibilityAddTraits(fixed ? [] : .isButton)
                     .accessibilityIdentifier("plus." + id)
-                    .accessibilityAction(named: Text("Posunout výš")) { move(id, -1) }
-                    .accessibilityAction(named: Text("Posunout níž")) { move(id, 1) }
+                    .modifier(PlusMovable(id: id, fixed: fixed, draft: $draft, dragging: $dragging))
             } else {
                 Button {
                     if held { held = false; return }
@@ -214,6 +213,7 @@ struct PlusCard: View {
                     startEditing()
                 })
                 .accessibilityIdentifier("plus." + id)
+                .accessibilityAction(named: Text("Upravit +")) { startEditing() }
             }
         }
     }
@@ -226,7 +226,7 @@ struct PlusCard: View {
             ZStack(alignment: .topLeading) {
                 Group {
                     if item.id == PlusItem.coach {
-                        TwoLights(size: 34)
+                        TwoLights(size: 56)
                     } else {
                         icon(item)
                             .foregroundStyle(on ? Palette.onAccent : Palette.ink)
@@ -239,7 +239,7 @@ struct PlusCard: View {
                 if let badge {
                     Image(systemName: badge + ".circle.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Palette.onButton, Palette.button)
+                        .foregroundStyle(Palette.onButton, badge == "minus" ? Palette.secondary : Palette.button)
                         .offset(x: -4, y: -4)
                         .accessibilityHidden(true)
                 }
@@ -306,6 +306,7 @@ struct PlusCard: View {
             pouring = nil
             poured = Poured(name: name, amount: Units.volumeText(Double(ml)), localId: id)
         }
+        if let poured { AccessibilityNotification.Announcement(poured.text).post() }
     }
 
     private func undo() {
@@ -314,6 +315,7 @@ struct PlusCard: View {
         withAnimation(.easeOut(duration: 0.2)) {
             poured = Poured(name: p.name, amount: p.amount, localId: nil, undone: true)
         }
+        if let poured { AccessibilityNotification.Announcement(poured.text).post() }
     }
 
     // MARK: Actions
@@ -355,6 +357,37 @@ struct PlusCard: View {
     private func open(_ route: AppRoute) {
         close()
         model.open(route)
+    }
+}
+
+/// In the edit an action moves by dragging, or with VoiceOver's Move up /
+/// down; the coach keeps its spot and does neither.
+private struct PlusMovable: ViewModifier {
+    let id: String
+    let fixed: Bool
+    @Binding var draft: [String]
+    @Binding var dragging: String?
+
+    func body(content: Content) -> some View {
+        if fixed {
+            content.accessibilityHint(Text("Kouč má na kartě pevné místo."))
+        } else {
+            content
+                .onDrag {
+                    dragging = id
+                    return NSItemProvider(object: id as NSString)
+                }
+                .onDrop(of: [UTType.text], delegate: PlusDrop(target: id, items: $draft, dragging: $dragging))
+                .accessibilityHint(Text("Odebere akci z karty."))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction(named: Text("Posunout výš")) { move(-1) }
+                .accessibilityAction(named: Text("Posunout níž")) { move(1) }
+        }
+    }
+
+    private func move(_ by: Int) {
+        guard let i = draft.firstIndex(of: id), draft.indices.contains(i + by) else { return }
+        draft.swapAt(i, i + by)
     }
 }
 
@@ -422,7 +455,7 @@ struct PlusItem: Identifiable, Equatable {
         PlusItem(id: "wine", title: "Víno", symbol: "wineglass.fill"),
         PlusItem(id: "other", title: "Jiný nápoj", symbol: "plus", asset: "PlusOtherDrink"),
         PlusItem(id: "journal", title: "Deník", symbol: "text.book.closed.fill"),
-        PlusItem(id: "status", title: "Stav", symbol: "person.crop.circle.badge.fill"),
+        PlusItem(id: "status", title: "Stav sportovce", symbol: "person.crop.circle.badge.fill"),
         PlusItem(id: "period", title: "Zapsat menstruaci", symbol: "drop.circle.fill", asset: "PlusPeriod"),
         PlusItem(id: "weight", title: "Zapsat váhu", symbol: "scalemass.fill", asset: "PlusWeight"),
         PlusItem(id: coach, title: "Zeptat se kouče", symbol: "bubble.left.fill")
@@ -472,6 +505,9 @@ struct PeriodLogSheet: View {
     @State private var saving = false
     @State private var error: String?
 
+    /// The concept's Light / Medium / Heavy (the cycle screen keeps its own words).
+    static let flows = ["Slabé", "Středně silné", "Silné"]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center) {
@@ -485,14 +521,14 @@ struct PeriodLogSheet: View {
                     .environment(\.locale, Fmt.locale)
                     .padding(.horizontal, 16).frame(minHeight: 50)
             }
-            Text(verbatim: L10n.tr("Krvácení").uppercased(with: Fmt.locale))
+            Text(verbatim: L10n.tr("Síla krvácení").uppercased(with: Fmt.locale))
                 .font(.caption.weight(.semibold)).tracking(1.2).foregroundStyle(Palette.muted)
                 .accessibilityAddTraits(.isHeader)
             HStack(spacing: 8) {
                 ForEach(1...3, id: \.self) { level in
                     let on = flow == level
                     Button { flow = level } label: {
-                        Text(L10n.tr(CycleText.flows[level - 1])).font(Typo.bodyStrong)
+                        Text(L10n.tr(Self.flows[level - 1])).font(Typo.bodyStrong)
                             .foregroundStyle(on ? Palette.onButton : Palette.ink)
                             .frame(maxWidth: .infinity).frame(height: 48)
                             .background(on ? Palette.button : Palette.track, in: Capsule())
