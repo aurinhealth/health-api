@@ -185,7 +185,8 @@ struct WeatherDetails: View {
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
-            if let outdoors = weather.week?.first?.outdoors {
+            if let outdoors = Self.remaining(weather.week?.first, today: APIClient.localToday(), hour: Calendar.current.component(.hour, from: Date())),
+               outdoors.ride != nil || outdoors.run != nil {
                 bestOutdoors(outdoors)
             }
 
@@ -344,10 +345,10 @@ struct WeatherDetails: View {
     private func bestOutdoors(_ outdoors: TodaySnapshot.Weather.Outdoors) -> some View {
         Card(padding: 14) {
             Text("Nejlepší čas venku").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-            HStack(spacing: 18) {
+            // One sport a line, so two times fit at 320 pt and in 12-hour time.
+            VStack(alignment: .leading, spacing: 8) {
                 span(.ride, outdoors.ride)
                 span(.run, outdoors.run)
-                Spacer(minLength: 0)
             }
         }
     }
@@ -355,18 +356,31 @@ struct WeatherDetails: View {
     private func span(_ sport: WeatherPlace, _ span: TodaySnapshot.Weather.Span?) -> some View {
         let text = span.map { L10n.f("%@ až %@", ClockText.format(minutes: $0.start * 60), ClockText.format(minutes: $0.end * 60)) } ?? L10n.tr("uvnitř")
         return HStack(spacing: 8) {
-            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(15, weight: .semibold, cap: .denseCap)
+            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(15, weight: .semibold)
+                .frame(minWidth: 22)
                 .foregroundStyle(span == nil ? Palette.amberBar : Palette.green)
                 .accessibilityHidden(true)
-            Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? "Kolo" : "Běh") + ", " + text))
     }
 
-    /// Apple's "asOf" as the phone's time of day.
+    /// Today's windows still ahead: one that has ended by this hour is gone
+    /// (the server sends the whole day); nil when the first day isn't today.
+    static func remaining(_ day: TodaySnapshot.Weather.Day?, today: String, hour: Int) -> TodaySnapshot.Weather.Outdoors? {
+        guard let day, day.date == today, let outdoors = day.outdoors else { return nil }
+        let keep = { (span: TodaySnapshot.Weather.Span?) in span.flatMap { $0.end > hour ? $0 : nil } }
+        return .init(ride: keep(outdoors.ride), run: keep(outdoors.run))
+    }
+
+    /// Apple's "asOf" as the phone's time of day ("yesterday" not shown: the
+    /// detail is refreshed with Today).
     static func updated(_ iso: String?) -> String? {
-        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return nil }
+        guard let iso else { return nil }
+        let plain = ISO8601DateFormatter(), fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = plain.date(from: iso) ?? fractional.date(from: iso) else { return nil }
         return ClockText.format(date)
     }
 

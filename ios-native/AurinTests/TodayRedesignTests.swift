@@ -77,5 +77,11 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertNotNil(WeatherDetails.updated(weather.now?.asOf))
         XCTAssertNil(WeatherDetails.updated("yesterday"))
         XCTAssertNil(WeatherDetails.updated(nil))
+        XCTAssertNotNil(WeatherDetails.updated("2026-10-08T07:41:05.123Z"))
+        // An ended window goes; another day's first row shows nothing.
+        let day = try XCTUnwrap(weather.week?.first)
+        XCTAssertEqual(WeatherDetails.remaining(day, today: day.date, hour: 15)?.ride, nil)
+        XCTAssertEqual(WeatherDetails.remaining(day, today: day.date, hour: 15)?.run, .init(start: 9, end: 17))
+        XCTAssertNil(WeatherDetails.remaining(day, today: "2026-10-09", hour: 8))
     }
 }
