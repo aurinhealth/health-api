@@ -1060,7 +1060,7 @@
 "půl roku" = "6 months";
 "roste s každým douškem a vykvete" = "grows with every sip and blooms";
 "rybka vyskočí nad hladinu" = "a fish jumps out of the water";
-"ráno spí, v cíli se rozzáří" = "sleeps in the morning, lights up at the goal";
+"ráno spí, v cíli rozvlní hladinu" = "sleeps in the morning, ripples the water at the goal";
 "sacharidy" = "carbs";
 "silový trénink" = "strength training";
 "sobota a neděle" = "Saturday and Sunday";
@@ -4452,6 +4452,47 @@
 "Trénink %@ z %@" = "Workout %@ of %@";
 "Prostřední čárka je bez vlivu na tvůj věk. Vpravo je lépe." = "Middle mark is no effect on your age. Right is better.";
 
+/* Redesign J: the top of Food, the macros, the meals and the drinks */
+"Snězeno dnes" = "Eaten today";
+"%@ navíc" = "%@ over";
+"Otevře, z čeho se cíl skládá" = "Opens where the target comes from";
+"Nastav si denní cíl" = "Set your daily target";
+"Cíl se řídí tvou váhou, výškou, tréninkem a cílem." = "Your target follows your weight, height, training and goal.";
+"Nastavit cíl" = "Set target";
+"Den volna, žádný trénink navíc" = "Rest day, no training added";
+"Zapiš první jídlo a pomůžu ti s energií na trénink." = "Log your first meal and I'll help you fuel your training.";
+"Časy jídel" = "Meal times";
+"%@ navíc z %@ g" = "%@ over %@ g";
+"z max %@ g" = "of max %@ g";
+"z %@ g" = "of %@ g";
+
+/* Redesign J: the Calories detail (in place of Today's target) */
+"Historii teď nejde načíst. Zkus to za chvíli." = "Your history can't load right now. Try again in a moment.";
+"Kalorie jsou součet jídel, která jsi ten den zapsal. Cíl je odhad, který se mění s tréninkem. Den bez zápisu se vynechá, nepočítá se jako nula." = "Calories are the sum of the foods you logged that day. The target is an estimate that changes with your training. A day you did not log is left out, not counted as zero.";
+"Gramy jsou součet jídel, která jsi ten den zapsal, proti cíli toho dne. Den bez zápisu se vynechá, nepočítá se jako nula." = "Grams are the sum of the foods you logged that day, against that day's target. A day you did not log is left out, not counted as zero.";
+"Zdroj" = "Source";
+"Tvůj jídelníček" = "Your food diary";
+"Zapsané dny za posledních 30" = "Days logged in the last 30";
+"Průměrný cíl" = "Average target";
+"Snězeno dnes, zatím" = "Eaten today, so far";
+"Každá tečka je jeden zapsaný den. Mezera je den bez zápisu." = "Each dot is one logged day. A gap is a day without a log.";
+"Proti cíli, %@" = "Against your target, %@";
+"Nad cílem" = "Over target";
+"V cíli" = "At target";
+"Výrazně pod cílem" = "Well below";
+"Nad cílem už od první jednotky navíc. Výrazně pod cílem znamená o víc než 8 % méně než cíl toho dne." = "Over target counts from the first unit over. Well below means more than 8% under that day's target.";
+"Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat." = "No logged day with a target yet. Log your food and the days start to count here.";
+"Analýza trendu" = "Trend analysis";
+"Z čeho je dnešní cíl" = "Where today's target comes from";
+"Z čeho byl cíl dne" = "Where the day's target came from";
+"co tělo spálí v klidu" = "what your body uses at rest";
+"kroky a běžný den" = "steps and a normal day";
+"Tréninky se počítají ze %@ %% toho, co spálí. Klidový výdej se odhaduje z tvé váhy, výšky a věku." = "Workouts count at %@%% of what they burn. Resting energy is estimated from your weight, height and age.";
+"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the target, a dashed ring is a day without food logged.";
+"Tento měsíc zatím bez zapsaného jídla." = "No food logged this month yet.";
+"Průměr %@ na zapsaný den." = "Average %@ on logged days.";
+"bez zapsaného jídla" = "no food logged";
+"Snězeno: %@" = "Eaten on %@";
 /* Week plan (redesign W) */
 "%@ z %@ naplánovaných tréninků hotovo" = "%1$@ of %2$@ planned workouts done";
 "Cviky, série a váhy" = "Exercises, sets and weights";
