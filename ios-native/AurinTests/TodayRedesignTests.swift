@@ -67,4 +67,31 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(StepsDayLine.totals(hourly, through: 2), [100, 200, 300])
         XCTAssertEqual(StepsDayLine.totals(hourly, through: 30).count, 24)
     }
+
+    /// Weather sheet: the best hours outside, feels like and the time Apple measured.
+    func testWeatherOutdoorsAndUpdated() throws {
+        let weather = try XCTUnwrap(DemoData.today.weather)
+        XCTAssertEqual(weather.week?.first?.outdoors?.ride, .init(start: 11, end: 15))
+        XCTAssertEqual(weather.week?.first?.outdoors?.run, .init(start: 9, end: 17))
+        XCTAssertEqual(weather.now?.feelsLike, 10)
+        XCTAssertNotNil(WeatherDetails.updated(weather.now?.asOf))
+        XCTAssertNil(WeatherDetails.updated("yesterday"))
+        XCTAssertNil(WeatherDetails.updated(nil))
+        XCTAssertNotNil(WeatherDetails.updated("2026-10-08T07:41:05.123Z"))
+        // An ended window goes; another day's first row shows nothing.
+        let day = try XCTUnwrap(weather.week?.first)
+        XCTAssertEqual(WeatherDetails.remaining(day, today: day.date, hour: 15)?.ride, nil)
+        XCTAssertEqual(WeatherDetails.remaining(day, today: day.date, hour: 15)?.run, .init(start: 9, end: 17))
+        XCTAssertNil(WeatherDetails.remaining(day, today: "2026-10-09", hour: 8))
+    }
+
+    /// Tapwright 2026-11-19: no "−0.0", and a debt past 6 h stretches its strip.
+    func testSignedZeroAndDebtScale() {
+        XCTAssertFalse(Fmt.signed(-0.04, digits: 1).hasPrefix("−"))
+        XCTAssertFalse(Fmt.signed(-0.0, digits: 1).hasPrefix("+"))
+        XCTAssertTrue(Fmt.signed(-0.06, digits: 1).hasPrefix("−"))
+        XCTAssertTrue(Fmt.signed(2).hasPrefix("+"))
+        XCTAssertEqual(DebtStrip.scaleHours(200), 6)
+        XCTAssertEqual(DebtStrip.scaleHours(430), 8)
+    }
 }

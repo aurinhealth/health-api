@@ -173,6 +173,8 @@ struct WeatherSheet: View {
 struct WeatherDetails: View {
     let weather: TodaySnapshot.Weather
     var close: () -> Void = {}
+    /// The day and hour to judge today's windows by (snapshots pass the sample day's).
+    var clock: (day: String, hour: Int)? = nil
     @State private var open: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -183,6 +185,12 @@ struct WeatherDetails: View {
             if weather.max == nil {
                 Text("Předpověď teď není k dispozici. Doporučení vychází jen z ročního období.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let outdoors = Self.remaining(weather.week?.first, today: clock?.day ?? APIClient.localToday(),
+                                                hour: clock?.hour ?? Calendar.current.component(.hour, from: Date())),
+               outdoors.ride != nil || outdoors.run != nil {
+                bestOutdoors(outdoors)
             }
 
             if !hours.isEmpty {
@@ -210,6 +218,10 @@ struct WeatherDetails: View {
             .buttonStyle(.plain)
 
             if AppleWeather.credited(weather) {
+                if let updated = Self.updated(weather.now?.asOf) {
+                    Text(verbatim: L10n.f("Aktualizováno %@.", updated)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .padding(.horizontal, 4)
+                }
                 HStack {
                     AppleWeatherMark(size: 13)
                     Spacer()
@@ -242,6 +254,9 @@ struct WeatherDetails: View {
                     Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
                     if let text = WeatherText.description(weather.now?.code ?? weather.code) {
                         Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
+                    }
+                    if let feels = weather.now?.feelsLike, Int(feels.rounded()) != Int((weather.now?.temp ?? feels).rounded()) {
+                        Text(verbatim: L10n.f("Pocitově %@", WeatherText.degrees(feels))).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 Spacer(minLength: 0)
@@ -326,6 +341,50 @@ struct WeatherDetails: View {
                 legend(Palette.amber, "uvnitř")
             }
         }
+    }
+
+    /// "Best time outdoors": today's dry daylight hours for a ride and a run
+    /// (concept 11-pocasi, D-POCASI-1), or the indoor figure when none fits.
+    private func bestOutdoors(_ outdoors: TodaySnapshot.Weather.Outdoors) -> some View {
+        Card(padding: 14) {
+            Text("Nejlepší čas venku").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+            // One sport a line, so two times fit at 320 pt and in 12-hour time.
+            VStack(alignment: .leading, spacing: 8) {
+                span(.ride, outdoors.ride)
+                span(.run, outdoors.run)
+            }
+        }
+    }
+
+    private func span(_ sport: WeatherPlace, _ span: TodaySnapshot.Weather.Span?) -> some View {
+        let text = span.map { L10n.f("%@ až %@", ClockText.format(minutes: $0.start * 60), ClockText.format(minutes: $0.end * 60)) } ?? L10n.tr("uvnitř")
+        return HStack(spacing: 8) {
+            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(15, weight: .semibold)
+                .frame(minWidth: 22)
+                .foregroundStyle(span == nil ? Palette.amberBar : Palette.green)
+                .accessibilityHidden(true)
+            Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? "Kolo" : "Běh") + ", " + text))
+    }
+
+    /// Today's windows still ahead: one that has ended by this hour is gone
+    /// (the server sends the whole day); nil when the first day isn't today.
+    static func remaining(_ day: TodaySnapshot.Weather.Day?, today: String, hour: Int) -> TodaySnapshot.Weather.Outdoors? {
+        guard let day, day.date == today, let outdoors = day.outdoors else { return nil }
+        let keep = { (span: TodaySnapshot.Weather.Span?) in span.flatMap { $0.end > hour ? $0 : nil } }
+        return .init(ride: keep(outdoors.ride), run: keep(outdoors.run))
+    }
+
+    /// Apple's "asOf" as the phone's time of day ("yesterday" not shown: the
+    /// detail is refreshed with Today).
+    static func updated(_ iso: String?) -> String? {
+        guard let iso else { return nil }
+        let plain = ISO8601DateFormatter(), fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = plain.date(from: iso) ?? fractional.date(from: iso) else { return nil }
+        return ClockText.format(date)
     }
 
     private func legend(_ color: Color, _ text: String) -> some View {
