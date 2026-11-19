@@ -52,7 +52,8 @@ struct WidgetHeader: View {
     var body: some View {
         HStack(spacing: 7) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.secondary).lineLimit(1)
+            // "Wrist temperature" fits a small tile (it ended "Wrist tempera…").
+            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.secondary).lineLimit(1).minimumScaleFactor(0.8)
             if appleHealth { HealthKitTag() }
             Spacer(minLength: 4)
             if let trailing {
