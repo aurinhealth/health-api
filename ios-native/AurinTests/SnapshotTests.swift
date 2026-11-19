@@ -652,6 +652,13 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
+    func testEffortSheet() throws {
+        try render("effort-sheet", height: 700) {
+            IntensitySheet(title: "Set 2", selected: "M") { _ in }
+        }
+    }
+
     /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
     func testSetupFocusPages() throws {
         L10n.setLanguage("en")

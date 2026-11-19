@@ -17,14 +17,14 @@ extension GymIntensity {
 
     static func hint(_ letter: String) -> String {
         switch letter {
-        case "W": return L10n.tr("Minimální úsilí")
+        case "W": return L10n.tr("Před pracovními sériemi")
         case "T": return L10n.tr("Soustředění na techniku")
         case "E": return L10n.tr("Mírné úsilí, čistá opakování")
         case "M": return L10n.tr("Náročné, drž soustředění")
         case "H": return L10n.tr("Velmi těžké, blízko limitu")
         case "F": return L10n.tr("Ani jedno opakování navíc")
         case "PR": return L10n.tr("Víc než kdykoli předtím")
-        default: return L10n.tr("Lehčí váha hned bez pauzy")
+        default: return L10n.tr("Lehčí váha hned, bez pauzy")
         }
     }
 
@@ -66,7 +66,8 @@ struct IntensityPill: View {
     }
 }
 
-/// The eight letters with what they mean (tap on a set's letter).
+/// The letters with what they mean (tap on a set's letter): how hard first,
+/// then the kind of set; the record is the app's, never picked (concept 08).
 struct IntensitySheet: View {
     let title: String
     let selected: String?
@@ -77,32 +78,13 @@ struct IntensitySheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.bottom, 6)
-                ForEach(GymIntensity.letters, id: \.self) { letter in
-                    Button {
-                        onPick(letter)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(GymIntensity.name(letter)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                                Text(GymIntensity.hint(letter)).font(Typo.caption).foregroundStyle(Palette.muted)
-                            }
-                            Spacer(minLength: 8)
-                            IntensityPill(letter: letter)
-                        }
-                        .padding(.horizontal, 16).padding(.vertical, 11)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(selected == letter ? Palette.amber.opacity(0.7) : .clear, lineWidth: 1.5)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected == letter ? .isSelected : [])
-                }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text("Jedna značka na sérii").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .padding(.top, 2).padding(.bottom, 10)
+                group(["E", "M", "H", "F"])
+                Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 10)
+                group(["W", "T", "D"])
                 if let onRemoveDrop {
                     Button(role: .destructive) {
                         onRemoveDrop()
@@ -112,13 +94,47 @@ struct IntensitySheet: View {
                             .frame(maxWidth: .infinity).frame(height: 46)
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, 4)
+                    .padding(.top, 8)
                 }
             }
             .padding(20)
         }
-        .background(Palette.background)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func group(_ letters: [String]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(letters.enumerated()), id: \.element) { i, letter in
+                let on = selected == letter
+                Button {
+                    onPick(letter)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 14) {
+                        Text(verbatim: letter).font(.footnote.weight(.bold)).foregroundStyle(GymIntensity.color(letter))
+                            .frame(minWidth: 40, minHeight: 30)
+                            .overlay(Capsule().strokeBorder(GymIntensity.color(letter), lineWidth: 1.5))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(GymIntensity.name(letter)).font(Typo.body).foregroundStyle(Palette.ink)
+                            Text(GymIntensity.hint(letter)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 8)
+                    }
+                    .frame(minHeight: 56)
+                    .padding(.horizontal, 10)
+                    .background(on ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(alignment: .top) {
+                        if i > 0 && !on && selected != letters[i - 1] {
+                            Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 10)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.horizontal, -10)
     }
 }
