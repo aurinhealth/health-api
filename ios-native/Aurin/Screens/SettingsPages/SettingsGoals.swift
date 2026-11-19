@@ -338,6 +338,8 @@ struct GoalsSettingsView: View {
         let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
         // An older race saved without the choice: still a race, until its day passed.
         if goalType.isEmpty, let date, date >= Calendar.current.startOfDay(for: Date()) { goalType = "race" }
+        // Never no choice: a losing pace means Lose weight, anything else Get fitter.
+        if goalType.isEmpty { goalType = goal.hasPrefix("lose_") ? "lose" : "fitness" }
         eventDate = date ?? Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
         original = changes
     }

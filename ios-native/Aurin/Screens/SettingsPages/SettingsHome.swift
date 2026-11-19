@@ -194,10 +194,15 @@ struct SettingsSectionTiles: View {
         NavigationLink {
             destination()
         } label: {
-            HStack(spacing: 12) {
-                SettingsDisc(systemImage: symbol, color: color, size: 40)
+            HStack(spacing: 10) {
+                SettingsDisc(systemImage: symbol, color: color, size: 36)
+                // The name first, so the spacer never splits a word: one line,
+                // a little smaller if it must; two at the accessibility sizes
+                // (one tile a row there).
                 Text(L10n.tr(title)).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(textSize.isAccessibilitySize ? 2 : 1).minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
