@@ -368,6 +368,7 @@ struct AvailabilityBarRow: View {
     private var valueText: some View {
         if shown == 0 {
             Text(verbatim: L10n.tr("volno")).font(Typo.sentenceItalic(20)).foregroundStyle(Palette.faint)
+                .lineLimit(1)
         } else {
             Text(verbatim: Self.text(shown)).font(Typo.number(24)).foregroundStyle(shown < 0 ? Palette.faint : Palette.ink)
                 .lineLimit(1)

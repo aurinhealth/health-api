@@ -100,6 +100,7 @@ extension AppModel {
         let calendarClient = api
         async let calendarSent: Void = CalendarTime.shared.send(api: calendarClient)
         let health = AppleHealth.shared
+        await recheckConsent()
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
         // the day (or after those 8 s) Today loads alongside the sync and again

@@ -148,10 +148,10 @@ struct SetupFlowView: View {
                                   || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 }
                 if page == .notifications {
-                    Button("Později") { Task { await done(notifications: false) } }
+                    Button("Později") { Task { await later() } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving || proOffer)
+                        .disabled(saving || proOffer || turning)
                 }
             }
             .padding(.horizontal, 24)
@@ -570,6 +570,14 @@ struct SetupFlowView: View {
         if askNotifications { step() } else { await done(notifications: false) }
     }
 
+    /// "Později" on the notifications page, one tap like "Zapnout".
+    private func later() async {
+        guard !turning else { return }
+        turning = true
+        defer { settle() }
+        await done(notifications: false)
+    }
+
     /// The next page, never past the last one.
     private func step() {
         withAnimation { index = min(index + 1, pages.count - 1) }
@@ -679,6 +687,8 @@ struct SetupFlowView: View {
         // takes no health data from an account without it (health_consent_required).
         let consentNeeded = await consent ?? true
         consentFirst = consentNeeded
+        // The server said the consent is given: Apple Health may send (AppleHealth.run).
+        if await consent == false { AppModel.healthConsentGiven = true }
         if let s {
             consentOnly = consentNeeded && s.completed == true
             let p = s.savedProfile ?? [:]

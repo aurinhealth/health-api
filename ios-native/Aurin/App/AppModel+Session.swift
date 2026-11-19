@@ -40,16 +40,20 @@ extension AppModel {
     nonisolated static let healthConsentKey = "healthConsentGiven"
 
     /// Whether this account gave the consent to health data, as the server last
-    /// said (checkSetup, the setup's consent page). Until it is known nothing is
-    /// read from Apple Health and sent (AppleHealth.run, GDPR art. 9(2)(a)); an
-    /// account that finished the setup on this phone before this flag existed
-    /// had to give it there.
+    /// said (checkSetup, recheckConsent, the setup's consent page). Until the
+    /// server said so nothing is read from Apple Health and sent
+    /// (AppleHealth.run, GDPR art. 9(2)(a)).
     nonisolated static var healthConsentGiven: Bool {
-        get {
-            let defaults = UserDefaults.standard
-            return defaults.object(forKey: healthConsentKey) as? Bool ?? defaults.bool(forKey: setupDoneKey)
-        }
+        get { UserDefaults.standard.bool(forKey: healthConsentKey) }
         set { UserDefaults.standard.set(newValue, forKey: healthConsentKey) }
+    }
+
+    /// The consent not known yet (the first check had no signal): asked again
+    /// before a sync, so Apple Health does not stay off for the whole session.
+    func recheckConsent() async {
+        guard !demo, phase == .signedIn, !Self.healthConsentGiven,
+              let state = try? await api.healthConsentState() else { return }
+        Self.healthConsentGiven = !state.needed && !state.paused
     }
     nonisolated static let accountInitialKey = "accountInitial"
 

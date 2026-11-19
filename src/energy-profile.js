@@ -187,7 +187,8 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const activity = p.activity || "light";
   const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
   const deficitOf = key => Math.round(-weeklyGoalKg(key, weight, p.height, sportHours) * 7700 / 7) || 0;
-  if (missing.length) {
+  // The owner's calibration stays until the activity is chosen too.
+  if (missing.length || (isOwner && !p.activity)) {
     // The owner keeps the calibrated baseline until the profile is complete;
     // weight stays required for everyone.
     if (isOwner && weight > 0) return { ready: true, source: "owner-calibration", missing, weightKg: weight, bmr: null, sportDaily: 0, targetWeightKg: p.targetWeight ?? OWNER_CALIBRATION.targetWeightKg, ...OWNER_CALIBRATION, deficit: p.goal ? deficitOf(p.goal) : OWNER_CALIBRATION.deficit };

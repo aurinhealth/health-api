@@ -116,7 +116,10 @@ struct RootView: View {
                 // back does not lay out its whole screen again.
                 ZStack {
                     // The app's background alone while the tabs wait.
-                    if !tabsShown { ScreenBackground() }
+                    if !tabsShown {
+                        ScreenBackground()
+                        if !model.needsSetup { ProgressView() }
+                    }
                     ForEach(Self.tabs.filter { tabsShown && ($0 == model.tab || visited.contains($0)) }, id: \.self) { tab in
                         let open = tab == model.tab
                         tabScreen(tab)
