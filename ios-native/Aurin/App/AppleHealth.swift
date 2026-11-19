@@ -436,6 +436,8 @@ final class AppleHealth {
     func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
         if let running { return await running.value }
         guard enabled, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
+        // No health data leaves the phone before the account's consent to it.
+        guard AppModel.healthConsentGiven else { return SyncOutcome(ok: false, changed: false) }
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }

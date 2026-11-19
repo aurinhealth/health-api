@@ -43,7 +43,7 @@ test("weight is required for a calorie target, for everyone", () => {
 test("an incomplete profile lists what is missing; the owner keeps the calibration", () => {
   const b = energyBaseline({ sex: "male" }, 85);
   assert.equal(b.ready, false);
-  assert.deepEqual(b.missing, ["age", "height", "activity", "goal"]);
+  assert.deepEqual(b.missing, ["age", "height", "goal"]);
   const owner = energyBaseline({}, 85, { isOwner: true });
   assert.equal(owner.ready, true);
   assert.equal(owner.source, "owner-calibration");
@@ -163,4 +163,12 @@ test("the daily analysis splits the target by the athlete's diet", async () => {
   assert.equal(m.protein_g, Math.round(80 * 2.2));
   assert.ok(Math.abs(m.protein_g * 4 + m.carbs_g * 4 + m.fat_g * 9 - daily.nutrition.calorieTarget) <= 9);
   assert.deepEqual([daily.nutrition.diet.style, daily.nutrition.diet.eating, daily.nutrition.diet.carbsLimitG, daily.nutrition.diet.netCarbs], ["keto", "vegan", 30, false]);
+});
+
+test("the app's setup (no everyday activity yet) still gets a calorie goal, as lightly active", () => {
+  const profile = { sex: "male", age: 35, height: 180, goal: "maintain" };
+  const b = energyBaseline(profile, 75);
+  assert.equal(b.ready, true);
+  assert.deepEqual(b.missing, []);
+  assert.equal(b.baselineRestTDEE, energyBaseline({ ...profile, activity: "light" }, 75).baselineRestTDEE);
 });
