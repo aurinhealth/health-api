@@ -51,7 +51,7 @@ struct ZonesSettingsView: View {
     enum ZoneGroup: String { case power, heart, pace, runHeart, swim }
 
     var body: some View {
-        SettingsPage(title: "Zóny") {
+        SettingsPage(title: "Zóny", hero: SettingsHero(systemImage: "chart.bar.fill", color: Palette.rust, text: "Tvoje zóny pro každý sport.")) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             SettingsGroup(title: "Tep") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"), note: heartNote)

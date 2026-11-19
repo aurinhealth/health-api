@@ -21,7 +21,7 @@ struct GoalsSettingsView: View {
     @State private var filled = false
 
     var body: some View {
-        SettingsPage(title: "Cíle") {
+        SettingsPage(title: "Cíle", hero: SettingsHero(text: "Tvoje cíle pro spánek, jídlo, váhu a trénink.", art: AnyView(GoalsHeroArt()))) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             SettingsGroup(title: "Tělo") {
                 NavigationLink { SleepSettingsView(given: store) } label: {

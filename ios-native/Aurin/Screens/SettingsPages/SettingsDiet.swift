@@ -68,7 +68,7 @@ struct DietSettingsView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
 
     var body: some View {
-        SettingsPage(title: "Strava") {
+        SettingsPage(title: "Strava", hero: SettingsHero(systemImage: "leaf.fill", color: Palette.green, text: "Co jíš a jak se dělí živiny.")) {
             VStack(alignment: .leading, spacing: 10) {
                 Text(L10n.tr("Jím")).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 4)

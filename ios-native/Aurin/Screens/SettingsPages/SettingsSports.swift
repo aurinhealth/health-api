@@ -22,7 +22,7 @@ struct SportsSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Sporty k navrhování") {
+        SettingsPage(title: "Sporty k navrhování", hero: SettingsHero(systemImage: "figure.mixed.cardio", color: Palette.rust, text: "Sporty, které ti kouč plánuje.")) {
             if let message = error ?? store.errorMessage { Text(message).font(Typo.small).foregroundStyle(Palette.rust) }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: "Kouč navrhuje")
