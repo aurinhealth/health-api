@@ -275,7 +275,6 @@ struct TrainingModeView: View {
         .onChange(of: day) { _, _ in syncActivity(); live.worked() }
         .onChange(of: index) { _, _ in syncActivity(); live.worked() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
-        .onChange(of: keepScreenOn) { _, on in if on { ScreenAwake.hold("training") } else { ScreenAwake.release("training") } }
         // Each part's and exercise's own time (LiveWorkout.segments).
         // Keyed with the recording too: it starts a moment after Začít trénink.
         .onChange(of: "\(live.running)|\(focusKey ?? "")", initial: true) { _, _ in if let key = focusKey { live.focus(key) } }
@@ -318,25 +317,7 @@ struct TrainingModeView: View {
                 Task { await pickIntensity(ref.id, letter) }
             }
         }
-        .sheet(isPresented: $workoutSettings) {
-            NavigationStack {
-                SettingsPage(title: "Nastavení tréninku") {
-                    GymRestGroup()
-                    GymSignalsGroup()
-                    SettingsGroup(title: "Posilovna") {
-                        NavigationLink { EquipmentView() } label: { SettingsRow(title: "Vybavení posilovny") }
-                            .buttonStyle(.plain)
-                    }
-                    SettingsGroup(title: "Obrazovka") {
-                        SettingsToggle(title: "Nechat obrazovku zapnutou", isOn: $keepScreenOn)
-                    }
-                }
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { workoutSettings = false } }
-                }
-            }
-            .presentationDetents([.large])
-        }
+        .sheet(isPresented: $workoutSettings) { workoutSettingsSheet }
         .sheet(isPresented: $sensors) {
             NavigationStack { HeartRateSensorView() }
                 .presentationDetents([.medium, .large])
@@ -465,6 +446,30 @@ struct TrainingModeView: View {
 
     /// "…": the whole workout's actions in a small menu under the button. The
     /// exercise's history is a tab on its card, the sound in Workout settings.
+    /// "…" → Workout settings: rests, sound and vibration, the gym's equipment, the screen.
+    private var workoutSettingsSheet: some View {
+        NavigationStack {
+            SettingsPage(title: "Nastavení tréninku") {
+                GymRestGroup()
+                GymSignalsGroup()
+                SettingsGroup(title: "Posilovna") {
+                    NavigationLink { EquipmentView() } label: { SettingsRow(title: "Vybavení posilovny") }
+                        .buttonStyle(.plain)
+                }
+                SettingsGroup(title: "Obrazovka") {
+                    SettingsToggle(title: "Nechat obrazovku zapnutou", isOn: $keepScreenOn)
+                        // Here, not on the screen's long chain (its type-check time).
+                        .onChange(of: keepScreenOn) { _, on in if on { ScreenAwake.hold("training") } else { ScreenAwake.release("training") } }
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { workoutSettings = false } }
+            }
+        }
+        .presentationDetents([.large])
+    
+    }
+
     private var paused: Bool { live.pausedAt != nil }
 
     @ViewBuilder
