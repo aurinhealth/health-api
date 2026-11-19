@@ -90,7 +90,8 @@ struct CoachTextCard: View {
         VStack(alignment: .leading, spacing: 12) {
             if text != nil || advice != nil {
                 Button { withAnimation(.snappy) { folded.toggle() } } label: {
-                    header(chevron: true).contentShape(Rectangle())
+                    // 44 pt to tap, laid out as the header's own height.
+                    header(chevron: true).frame(minHeight: 44).contentShape(Rectangle()).padding(.vertical, -11)
                 }
                 .buttonStyle(.plain)
                 // Not "Kouč": that is the button that opens the chat.
@@ -144,7 +145,7 @@ struct CoachTextCard: View {
                 Divider().overlay(Palette.hairline)
                 Button { if loaded?.reason == "pro" { Paywall.present(model) } else { manageSubscription = true } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Image(systemName: "sparkles").scaledFont(12, weight: .semibold).foregroundStyle(Palette.indigo)
+                        Image(systemName: "lock.fill").scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
                         Text(verbatim: line).font(Typo.body).foregroundStyle(Palette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 8)
@@ -209,10 +210,11 @@ struct CoachTextCard: View {
         .animation(.easeInOut(duration: 0.25), value: ai?.text)
     }
 
-    /// "Kouč", the time the AI wrote it and the chevron that folds the text.
+    /// The coach's symbol (Two lights) and "Kouč" in ink, no purple (redesign
+    /// D, concept a-hlavni point 5), the time the AI wrote it and the chevron.
     private func header(chevron: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "sparkles").scaledFont(13, weight: .semibold)
+        HStack(spacing: 8) {
+            TwoLights(size: 18).accessibilityHidden(true)
             Text("Kouč").font(Typo.bodyStrong)
             Spacer(minLength: 8)
             if let time = ai?.time {
@@ -223,7 +225,7 @@ struct CoachTextCard: View {
                     .rotationEffect(.degrees(folded ? 180 : 0))
             }
         }
-        .foregroundStyle(Palette.indigo)
+        .foregroundStyle(Palette.ink)
     }
 
     /// The text, then the advice in green italics.

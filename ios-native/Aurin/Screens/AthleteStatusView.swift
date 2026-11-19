@@ -99,44 +99,71 @@ struct AthleteStatusPill: View {
     }
 }
 
-/// On Today to the right of "Připravenost" (Petr, 2026-11-02; until then the
-/// weather card's first row): the state's icon and name in its colour, then
-/// for a state other than Aktivní how long it lasts ("do 17. 10.", "do změny")
-/// and an injury's note, cut short when long. No frame; a tap changes it.
-struct AthleteStatusRow: View {
+/// On Today to the right of "Připravenost" (Petr, 2026-11-02), with the
+/// weather capsule (`trailing`) at the right edge (weather concept round 4,
+/// Petr 2026-11-13): the state's icon and name in its colour, never cut. An
+/// injury's note takes a second line, under the first letter of the name when
+/// it fits, else from under the icon, cut with "…" only after that. The note
+/// never moves the number below; "until" is in the sheet and VoiceOver.
+struct AthleteStatusRow<Trailing: View>: View {
     @Environment(AppModel.self) private var model
+    /// The note only under a readiness number: a title without one (learning,
+    /// no watch) sits where the note would.
+    var showsNote = true
+    @ViewBuilder var trailing: Trailing
     @State private var editing = false
+    @ScaledMetric(relativeTo: .footnote) private var icon: CGFloat = 14
+    /// The note's line under the 44 pt row.
+    @ScaledMetric(relativeTo: .footnote) private var noteDrop: CGFloat = 34
 
     var body: some View {
         let status = model.athleteStatus ?? .active
         let kind = AthleteStatusKind.from(status.status)
-        Button { editing = true } label: {
-            HStack(spacing: 6) {
-                // The state's icon, not a dot: a coloured dot read as "live".
-                Image(systemName: kind.symbol).scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(kind.color)
-                Text(kind.title).font(.footnote.weight(.semibold)).foregroundStyle(kind.color)
-                    .fixedSize()
-                if let detail = Self.detail(status, kind) {
-                    Text(verbatim: detail).font(.footnote).foregroundStyle(Palette.muted)
-                        .lineLimit(1).truncationMode(.tail)
+        let note = Self.note(status, kind)
+        HStack(alignment: .center, spacing: 8) {
+            Button { editing = true } label: {
+                HStack(spacing: 6) {
+                    // The state's icon, not a dot: a coloured dot read as "live".
+                    Image(systemName: kind.symbol).scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(kind.color)
+                        .frame(width: icon)
+                    Text(kind.title).font(.footnote.weight(.semibold)).foregroundStyle(kind.color)
+                        .fixedSize()
+                    // It opens a choice below, not a page: a quiet downward chevron.
+                    Image(systemName: "chevron.down").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint.opacity(0.7))
                 }
-                // It opens a choice below, not a page: a quiet downward chevron.
-                Image(systemName: "chevron.down").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint.opacity(0.7))
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.f("Stav sportovce: %@, %@", [kind.title, note].compactMap { $0 }.joined(separator: ", "), AthleteStatusSheet.untilText(status.statusUntil)))
+            trailing
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.f("Stav sportovce: %@, %@", kind.title, AthleteStatusSheet.untilText(status.statusUntil)))
+        // The note under the row, as wide as the row, outside its layout.
+        .overlay(alignment: .topLeading) {
+            if let note, showsNote {
+                Button { editing = true } label: {
+                    ViewThatFits(in: .horizontal) {
+                        noteText(note).fixedSize().padding(.leading, icon + 6)
+                        noteText(note).lineLimit(1).truncationMode(.tail)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+                .offset(y: noteDrop)
+            }
+        }
         .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }
     }
 
-    /// "koleno, do 20. 10.", "do změny"; nil while active.
-    static func detail(_ status: AthleteStatus, _ kind: AthleteStatusKind) -> String? {
-        guard kind != .active else { return nil }
-        let until = status.statusUntil.map { L10n.f("do %@", Fmt.dayMonth(ISODay.shift($0, -1))) } ?? L10n.tr("do změny")
-        let note = kind == .injured ? status.note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank : nil
-        return [note, until].compactMap { $0 }.joined(separator: ", ")
+    private func noteText(_ note: String) -> some View {
+        Text(verbatim: note).font(.footnote).foregroundStyle(Palette.muted)
+    }
+
+    /// An injury's note ("Left knee"); nil for the other states and without one.
+    static func note(_ status: AthleteStatus, _ kind: AthleteStatusKind) -> String? {
+        kind == .injured ? status.note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank : nil
     }
 }
 

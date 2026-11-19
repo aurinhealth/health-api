@@ -16,6 +16,47 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// Redesign D: the six readiness states on Today (QA-1) with the line
+    /// that only describes the numbers, then the status row with an injury's
+    /// note and the weather capsule, the morning question and the three dials.
+    func testTodayHeroStates() throws {
+        typealias R = TodaySnapshot.Readiness
+        let states: [(String, R, Bool, Bool, Bool)] = [
+            ("score", R(score: 78, zone: "green", numbersLine: "hard"), false, true, false),
+            ("low", R(score: 41, zone: "red", numbersLine: "easy"), false, true, false),
+            ("learning", R(score: nil, zone: nil, learningDays: 3), false, true, false),
+            ("no-wearable", R(score: nil, zone: nil), false, true, true),
+            ("no-night", R(score: nil, zone: nil, flags: ["no_night"]), true, false, false),
+            ("waiting", R(score: nil, zone: nil), true, true, false)
+        ]
+        try render("today-hero-states", height: 1500) {
+            VStack(alignment: .leading, spacing: 28) {
+                ForEach(states.indices, id: \.self) { i in
+                    let state = states[i]
+                    ReadinessHero(readiness: state.1, date: "2026-11-12", nightMissing: state.2, isToday: state.3, noWearable: state.4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(24)
+        }
+        let model = AppModel(demo: true)
+        model.athleteStatus = AthleteStatus(status: "injured", note: "Left knee", statusUntil: nil)
+        try render("today-hero-parts", height: 620) {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack {
+                    Text("Připravenost").font(Typo.body).foregroundStyle(Palette.muted)
+                    Spacer()
+                    AthleteStatusRow { WeatherCapsule(weather: DemoData.today.weather) }
+                }
+                .padding(.bottom, 24)
+                TodayMorningQuestion(date: "2026-11-12", feeling: nil)
+                TodayDials(today: DemoData.today)
+            }
+            .padding(24)
+            .environment(model)
+        }
+    }
+
     /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
     /// of the open display in landscape (317, 475) and the whole of it (951, two
     /// columns: WideLayout).

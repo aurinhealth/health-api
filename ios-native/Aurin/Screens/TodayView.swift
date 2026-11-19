@@ -146,19 +146,46 @@ struct TodayContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
-        // The athlete's status to the right of "Připravenost" (Petr, 2026-11-02),
-        // on top of the link so its tap opens the status, not the readiness.
+        // Row 1 (weather concept, Petr 2026-11-13): "Readiness", then the
+        // athlete's status and the weather capsule at the right edge, on top of
+        // the link so their taps open the status and the forecast. The status's
+        // note takes a second line under it; the number does not move.
         .overlay(alignment: .top) {
             if selectedDate == nil {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                HStack(alignment: .center, spacing: 8) {
                     // The label's width, so a long injury note stops short of it.
                     Text("Připravenost").font(Typo.body).hidden().accessibilityHidden(true)
                     Spacer(minLength: 0)
-                    AthleteStatusRow()
+                    AthleteStatusRow(showsNote: today.readiness.score != nil) { WeatherCapsule(weather: today.weather) }
                 }
+                // The row is 44 pt tall around the label's line.
+                .padding(.top, -12)
+                .dynamicTypeSize(...DynamicTypeSize.denseCap)
             }
         }
         .padding(.top, 40)
+
+        // No watch or ring: one way to add one (D-DNES-1, "Connect a device").
+        if selectedDate == nil && model.noWearable && today.readiness.score == nil && !model.demo {
+            Button(action: openSettings) {
+                Text("Připojit zařízení").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .padding(.horizontal, 18).frame(minHeight: 44)
+                    .background(Palette.button, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 14)
+            .accessibilityHint(Text(verbatim: L10n.tr("Otevře Nastavení, kde připojíš hodinky nebo prsten")))
+        }
+
+        // The morning question, for now right under the readiness (concept
+        // point 3). Its answer never changes the number.
+        if selectedDate == nil && !model.demo {
+            TodayMorningQuestion(date: today.date, feeling: today.checkin)
+                // A new day is a new question, also past midnight in a running app.
+                .id(today.date)
+                .padding(.top, 20)
+        }
 
         // The first two weeks after the setup: what fills Today (FirstDaysCard).
         if selectedDate == nil && !model.demo {
@@ -171,8 +198,8 @@ struct TodayContent: View {
     /// head the right column, the numbers and the workout's Start seen without
     /// scrolling (Petr, 2026-11-03).
     @ViewBuilder private var dayNumbers: some View {
-        KeyNumbers(today: today)
-            .padding(.top, wide ? 0 : 28)
+        TodayDials(today: today)
+            .padding(.top, wide ? 0 : 16)
 
         if selectedDate == nil && !model.demo {
             // Today's pill not logged an hour after the usual time.
@@ -182,7 +209,7 @@ struct TodayContent: View {
         if selectedDate == nil {
             // The coach right under the numbers (Today audit 10): the sentence
             // and its one action, today's workout with Start (or the activity of
-            // the day) with the weather chip, the plan's line and Regenerace
+            // the day), the plan's line and Regenerace
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
             if coachShown {
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
@@ -327,7 +354,7 @@ struct WeekStrip: View {
     /// The day in the strip's middle, as it scrolls.
     @State private var centered: String?
     /// The strip grows with the letter and the date.
-    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 68
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 76
 
     private var today: String { AppModel.localDate(Date()) }
     private var lastDay: String { ahead ? (AppModel.shift(today, by: AppModel.foodDaysAhead) ?? today) : today }
@@ -409,30 +436,42 @@ struct WeekStrip: View {
         return model.dayValues[day]?.readiness?.zone
     }
 
+    /// The day picked sits in a grey pill with its letter and its dot, as the
+    /// week on Training (redesign D, rule T1); today alone keeps a thin ring.
+    /// The dot is the day's readiness, in the colours of the month calendar.
     private func cell(_ day: String) -> some View {
         let isToday = day == today, selected = day == shown, future = day > lastDay
         let color = ReadinessText.pill(zone(day))?.1
         return VStack(spacing: 5) {
-            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
+            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(selected ? .semibold : .medium))
+                .foregroundStyle(selected ? Palette.ink : Palette.muted)
             ZStack {
-                if isToday && selected {
-                    Circle().fill(Palette.ink)
-                } else if selected {
-                    Circle().stroke(color ?? Palette.ink.opacity(0.5), lineWidth: 2)
-                } else if isToday {
+                if isToday && !selected {
                     Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
                 }
                 Text(verbatim: Fmt.dayNumber(day))
                     .scaledFont(15, weight: .semibold, cap: .denseCap)
-                    .foregroundStyle(isToday && selected ? Palette.background : selected ? (color ?? Palette.ink) : future ? Palette.faint : Palette.ink)
+                    .foregroundStyle(future ? Palette.faint : Palette.ink)
             }
-            .frame(width: 38, height: 38)
+            .frame(width: 34, height: 34)
             Circle().fill(color ?? .clear).frame(width: 5, height: 5)
         }
+        .padding(.vertical, 6)
+        .frame(width: 44)
+        .background {
+            if selected { RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.track) }
+        }
+        .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.dayMonth(day))
+        .accessibilityLabel(Self.spoken(day, zone: zone(day)))
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// "Wednesday 11, readiness below your usual range" (D-DNES-5): the dot said aloud.
+    static func spoken(_ day: String, zone: String?) -> String {
+        guard let word = ReadinessText.pill(zone)?.0 else { return Fmt.dayMonth(day) }
+        return L10n.f("%@, připravenost %@", Fmt.dayMonth(day), word)
     }
 }
 
@@ -719,17 +758,20 @@ struct ReadinessHero: View {
             if let score = readiness.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(String(score))
-                        .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
+                        .font(Typo.number(120)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
                     if let pill = ReadinessText.pill(readiness.zone) {
                         Pill(text: pill.0, foreground: pill.1, background: pill.2)
                     }
                 }
-                // What to do today (src/day-verdict.js), only for today.
-                if let verdict = ReadinessText.verdict(readiness.verdict) {
-                    Text(verdict)
-                        .font(Typo.heading(26, relativeTo: .title2))
+                // What the numbers say (D-DNES-2), only for today; what to do
+                // is the coach card's alone.
+                if let line = ReadinessText.numbersLine(readiness.numbersLine) {
+                    Text(line)
+                        .font(Typo.heading(24, relativeTo: .title2))
                         .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
                         .accessibilityIdentifier("today.verdict")
                 }
                 if readiness.flags?.contains("short_night") == true {
@@ -813,7 +855,7 @@ struct ReadinessLearning: View {
             HStack(spacing: 4) {
                 ForEach(0..<14, id: \.self) { i in
                     Capsule()
-                        .fill(i < shown ? Palette.amberBar : Palette.track)
+                        .fill(i < shown ? Palette.ink : Palette.track)
                         .frame(height: 8)
                 }
             }
@@ -927,123 +969,6 @@ struct MorningCheckinCard: View {
             chosen = before
             model.notice = error.localizedDescription
         }
-    }
-}
-
-/// Sleep, Strain, HRV under the readiness number, each on a range bar:
-/// sleep against the night's need, the strain against today's goal, the HRV
-/// against the athlete's usual range (without a watch or ring, the steps
-/// against their goal).
-struct KeyNumbers: View {
-    @Environment(AppModel.self) private var model
-    let today: TodaySnapshot
-    /// Narrower than on any iPhone (iPhone Duo, Aurin on a third of the open
-    /// display): tighter cells and the bars without their band's values, which
-    /// would run into each other.
-    @State private var compact = false
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep,
-                                                       spoken: sleepFailed ? nil : Fmt.hoursMinutesSpoken(today.sleep?.minutes)) }
-                Divider().overlay(Palette.hairline)
-                RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
-                Divider().overlay(Palette.hairline)
-                // Without a watch or ring HRV stays empty for good: the day's steps instead (audit 14.2).
-                if model.noWearable {
-                    RouteLink(route: .steps) { cell("Kroky", Fmt.int(today.steps.today), nil, steps) }
-                } else {
-                    RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            .onGeometryChange(for: Bool.self) { $0.size.width < 300 } action: { compact = $0 }
-            if healthFailed {
-                Divider().overlay(Palette.hairline)
-                PartUnavailableNote(text: "Data ze zdraví se teď nepodařilo načíst")
-            } else if sleepFailed {
-                Divider().overlay(Palette.hairline)
-                PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
-            }
-        }
-        .cardSurface(cornerRadius: 22)
-        .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
-    }
-
-    /// The server could not read the nights this time (not: no night yet).
-    private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
-    /// The watch's day or the fitness rows (HRV, resting HR, strain) could not be read this time.
-    private var healthFailed: Bool { today.unavailable?.contains("health") == true }
-
-    /// A cell's bar (when it has a range), its band's values and the line under it.
-    struct Gauge {
-        var bar: (value: Double, low: Double, high: Double)?
-        var edges: (low: String, high: String)? = nil
-        var note: String?
-        var color: Color
-    }
-
-    /// The night against its need: the band is half an hour either side of it.
-    private var sleep: Gauge {
-        guard let minutes = today.sleep?.minutes else { return Gauge(note: nil, color: Palette.indigo) }
-        guard let need = today.sleep?.need, need > 0 else {
-            return Gauge(note: today.sleep?.index.map { L10n.f("index %@", "\($0)") }, color: Palette.indigo)
-        }
-        let low = Double(need) - 30, high = Double(need) + 30
-        return Gauge(bar: (minutes, low, high), edges: (Fmt.hoursMinutes(low), Fmt.hoursMinutes(high)),
-                     note: L10n.f("%@ %% potřeby", Fmt.int(minutes / Double(need) * 100)),
-                     // Red under three quarters of the need, as on the watch.
-                     color: minutes >= low ? Palette.green : minutes >= Double(need) * 0.75 ? Palette.amber : Palette.red)
-    }
-
-    private var strain: Gauge {
-        if let t = today.strain.target {
-            // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
-            let note = L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
-            guard let score = today.strain.score else { return Gauge(note: note, color: Palette.green) }
-            return Gauge(bar: (score, t.low, t.high), edges: (Fmt.int(t.low), Fmt.int(t.high)), note: note,
-                         color: RangeBar.side(score, t.low, t.high) == 0 ? Palette.green : Palette.amber)
-        }
-        return Gauge(note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, color: Palette.amber)
-    }
-
-    private var steps: Gauge {
-        guard today.steps.goal > 0 else { return Gauge(note: nil, color: Palette.green) }
-        return Gauge(note: L10n.f("cíl %@", Fmt.int(today.steps.goal)),
-                     color: (today.steps.today ?? 0) >= today.steps.goal ? Palette.green : Palette.amber)
-    }
-
-    private var hrv: Gauge {
-        guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
-        if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
-            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.usualWord(value, low, high),
-                         color: RangeBar.color(value, low, high, worseAbove: false))
-        }
-        guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }
-        let d = (value - base).rounded()
-        return Gauge(note: (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms", color: d >= 0 ? Palette.green : Palette.rust)
-    }
-
-    /// `spoken`: what VoiceOver says for the value ("7 hodin 12 minut" for "7:12").
-    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge, spoken: String? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink)
-                    .accessibilityLabel(spoken ?? value)
-                if let unit, value != "–" { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
-            }
-            .lineLimit(1).minimumScaleFactor(0.7)
-            if let bar = gauge.bar {
-                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: compact ? nil : gauge.edges).padding(.vertical, 4)
-            }
-            Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
-        }
-        .padding(compact ? 11 : 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
     }
 }
 

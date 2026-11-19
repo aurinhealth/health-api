@@ -4363,3 +4363,23 @@
 "Nastavení se nepodařilo načíst." = "Couldn't load your settings.";
 "Rozbaleno" = "Expanded";
 "Sbaleno" = "Collapsed";
+
+/* Redesign D: Today */
+"Tvoje čísla zvládnou tvrdý trénink" = "Your numbers support a hard workout";
+"Tvoje čísla jsou pro den s mírou" = "Your numbers support a steady day";
+"Tvoje čísla ukazují na lehký den" = "Your numbers suggest an easy day";
+"Teplota nebo dech jsou nad tvým obvyklým rozmezím" = "Your temperature or breathing is above your usual range";
+"Tvoje čísla jsou v obvyklém rozmezí" = "Your numbers are within your usual range";
+"Trénink je dnes pozastavený" = "Training is paused today";
+"Vybere místo pro počasí" = "Picks a place for the weather";
+"Otevře předpověď" = "Opens the forecast";
+"Připojit zařízení" = "Connect a device";
+"Otevře Nastavení, kde připojíš hodinky nebo prsten" = "Opens Settings, where you connect a watch or ring";
+"o %@ méně než %@" = "%1$@ short of %2$@";
+"o %@ víc než %@" = "%1$@ over %2$@";
+"přesně %@" = "right on %@";
+"z 21" = "of 21";
+"cíl %@ až %@" = "target %1$@ to %2$@";
+"obvykle %@ až %@" = "usual %1$@ to %2$@";
+"Zatím bez obvyklého rozmezí" = "No usual range yet";
+"%@, připravenost %@" = "%1$@, readiness %2$@";
