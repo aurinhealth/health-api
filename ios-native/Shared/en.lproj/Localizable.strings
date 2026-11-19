@@ -4546,3 +4546,17 @@
 "Ťukni na Potvrdit, nebo prostě napiš ano." = "Tap Confirm or just write yes.";
 "Trenérská rada, ne lékařská." = "Coaching guidance, not medical advice.";
 "Kouč si z něj nic nezapamatuje." = "The coach keeps nothing from it.";
+"Nastavit stav Nemoc?" = "Set Sick status?";
+"Nastavit stav Zranění?" = "Set Injured status?";
+"Nastavit Nemoc" = "Set Sick";
+"Nastavit Zranění" = "Set Injured";
+"Bolest na hrudi, mdloby, bušení srdce nebo dušnost v klidu ať před dalším tréninkem posoudí lékař." = "Chest pain, fainting, a racing heart or breathlessness at rest should be checked by a doctor before you train again.";
+"Bolest, která se zhoršuje, otok nebo bolest trvající déle než pár dní ať posoudí lékař nebo fyzioterapeut." = "Pain that gets worse, swelling or pain that lasts more than a few days should be checked by a doctor or a physio.";
+"Plánuji s ohledem na bolest %@" = "Planning around your %@";
+"Odpočívá" = "Pauses";
+"Jede dál" = "Keeps going";
+"odpočívá" = "pauses";
+"jede dál" = "keeps going";
+"Odpočívá: %@." = "Pausing: %@.";
+"Jede dál: %@." = "Keeps going: %@.";
+"Vyber, co si odpočine." = "Pick what pauses.";

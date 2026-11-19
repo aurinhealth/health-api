@@ -300,6 +300,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
             return title.map { L10n.tr($0) } ?? type
         case "status":
+            // Sick and Injured ask, so the card never reads as already decided (kouc-4).
+            if status == "sick" { return L10n.tr("Nastavit stav Nemoc?") }
+            if status == "injured" { return L10n.tr("Nastavit stav Zranění?") }
             let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))
             return L10n.f("Stav: %@", label)
         default: return type

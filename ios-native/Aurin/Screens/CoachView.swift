@@ -363,7 +363,7 @@ struct CoachView: View {
             }
             if usedUp {
                 Text(CoachAllowance.placeholder).font(Typo.small).foregroundStyle(Palette.muted)
-            } else if let allowance, allowance.left <= 4 {
+            } else if let allowance, allowance.left > 0, allowance.left <= 4 {
                 Text(allowance.counter).font(Typo.small).foregroundStyle(Palette.muted)
             }
             composer
@@ -1078,7 +1078,7 @@ struct ActionCard: View {
                     Button {
                         if action.type == "plan_around" { confirmSports(Array(resting ?? Set(action.sports ?? []))) } else { decide(true) }
                     } label: {
-                        Text("Potvrdit").font(.body.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        Text(verbatim: confirmTitle).font(.body.weight(.semibold)).foregroundStyle(Palette.onButton)
                             .frame(maxWidth: .infinity).frame(minHeight: 50)
                             .background(Palette.button, in: Capsule())
                     }
@@ -1092,6 +1092,9 @@ struct ActionCard: View {
                 .buttonStyle(.plain)
                 .disabled(adjusting != nil || (action.type == "plan_around" && (resting ?? Set(action.sports ?? [])).isEmpty))
                 .padding(.top, 4)
+                if let redFlag {
+                    Text(verbatim: redFlag).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
                 if let quick = action.quick { quickChoices(quick) }
                 if adjusting != nil { CoachThinkingLine(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 2) }
                 if let failure {
@@ -1120,6 +1123,27 @@ struct ActionCard: View {
                 if let line = cardLine { Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.muted) }
             }
         }
+    }
+
+    /// "Set Sick" on a status card (kouc-4), else Confirm.
+    private var confirmTitle: String {
+        guard action.type == "status" else { return L10n.tr("Potvrdit") }
+        switch action.status {
+        case "sick": return L10n.tr("Nastavit Nemoc")
+        case "injured": return L10n.tr("Nastavit Zranění")
+        default: return L10n.tr("Potvrdit")
+        }
+    }
+
+    /// When to see a doctor, always under a Sick or pain card (D-KOUC-3).
+    private var redFlag: String? {
+        if action.type == "status", action.status == "sick" {
+            return L10n.tr("Bolest na hrudi, mdloby, bušení srdce nebo dušnost v klidu ať před dalším tréninkem posoudí lékař.")
+        }
+        if action.type == "plan_around" || (action.type == "status" && action.status == "injured") {
+            return L10n.tr("Bolest, která se zhoršuje, otok nebo bolest trvající déle než pár dní ať posoudí lékař nebo fyzioterapeut.")
+        }
+        return nil
     }
 
     /// The workout's own name when the card is about one, else the change.
@@ -1296,7 +1320,7 @@ struct WorkoutPreviewBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "calendar.badge.plus")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
                 Text(verbatim: workout.name).font(Typo.heading(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -1443,7 +1467,7 @@ struct ChatsPanel: View {
                     .scrollContentBackground(.hidden)
                     Divider().overlay(Palette.ink.opacity(0.08))
                     Button { close(); memory() } label: {
-                        Label("Co si kouč pamatuje", systemImage: "sparkles")
+                        Label("Co si kouč pamatuje", systemImage: "text.book.closed")
                             .font(Typo.body).foregroundStyle(Palette.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 18).frame(height: 52)

@@ -283,7 +283,7 @@ struct PlanAroundBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(verbatim: L10n.f("Plánovat s ohledem na bolest %@?", action.label ?? ""))
+            Text(verbatim: L10n.f(decided ? "Plánuji s ohledem na bolest %@" : "Plánovat s ohledem na bolest %@?", action.label ?? ""))
                 .font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if !decided {
@@ -307,18 +307,33 @@ struct PlanAroundBlock: View {
                                             .offset(x: 6, y: -4)
                                     }
                                 }
-                                Text(verbatim: L10n.tr(Self.names[sport] ?? sport)).font(Typo.caption.weight(.medium)).foregroundStyle(on ? Palette.ink : Palette.muted)
+                                Text(verbatim: L10n.tr(Self.names[sport] ?? sport)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.ink)
+                                // The word says what the tick means, so an unticked sport never looks switched off.
+                                Text(verbatim: on ? L10n.tr("Odpočívá") : L10n.tr("Jede dál")).font(Typo.caption).foregroundStyle(Palette.muted)
                             }
                             .frame(maxWidth: .infinity).padding(.vertical, 10)
                             .background(Palette.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(L10n.tr(Self.names[sport] ?? sport))
-                        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+                        .accessibilityValue(on ? L10n.tr("odpočívá") : L10n.tr("jede dál"))
+                        .accessibilityAddTraits(.isButton)
                     }
                 }
+                Text(verbatim: summary).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// "Běh si odpočine. Kolo jede dál.": what Confirm will do, live.
+    private var summary: String {
+        let rest = sports.filter { resting.contains($0) }.map { L10n.tr(Self.names[$0] ?? $0) }
+        let go = sports.filter { !resting.contains($0) }.map { L10n.tr(Self.names[$0] ?? $0) }
+        var parts: [String] = []
+        if !rest.isEmpty { parts.append(L10n.f("Odpočívá: %@.", rest.joined(separator: ", "))) }
+        if !go.isEmpty { parts.append(L10n.f("Jede dál: %@.", go.joined(separator: ", "))) }
+        return parts.isEmpty ? L10n.tr("Vyber, co si odpočine.") : parts.joined(separator: " ")
     }
 
     static let names = ["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna", "strength": "Posilovna"]
