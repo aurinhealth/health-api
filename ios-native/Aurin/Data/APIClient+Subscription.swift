@@ -92,13 +92,9 @@ struct CoachAllowance: Decodable, Equatable {
     /// The new messages come tomorrow when it is Sunday.
     static var tomorrow: Bool { Calendar.current.component(.weekday, from: Date()) == 1 }
 
-    /// "zbývají 3 zprávy" by the input.
+    /// "3 coach messages left this week" above the field, from 4 left (AI-4).
     var counter: String {
-        L10n.plural("zbývá %lld zpráv", left)
-    }
-    /// The one-time line in the chat.
-    var chatNotice: String {
-        L10n.plural("Tento týden ti zbývá %lld zpráv koučovi.", left)
+        L10n.plural("Tento týden zbývá %lld zpráv koučovi.", left)
     }
     /// Settings → Aurin Pro: nothing under 75 %, then what is left and when it renews.
     var settingsLine: String? {
