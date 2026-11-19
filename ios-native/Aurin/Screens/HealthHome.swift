@@ -195,9 +195,6 @@ struct AurinAgeHero: View {
                 }
                 .padding(.horizontal, 40)
             }
-            if let change = AurinAgeText.change(age) {
-                Pill(text: change, foreground: Palette.ink, background: Palette.track)
-            }
             Text(verbatim: updated(age)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
         .accessibilityElement(children: .ignore)
@@ -236,15 +233,14 @@ struct AurinAgeHero: View {
     /// Without Pro (Pro concept): the orb locked with its dots and the way to unlock.
     private var locked: some View {
         VStack(spacing: 12) {
-            ZStack {
-                AurinOrb(mood: .collecting)
-                Image(systemName: "lock.fill").font(.title2).foregroundStyle(Palette.muted)
-            }
+            AurinOrb(mood: .collecting)
             Text("Aurin age").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+            // The lock in the button, styled like Add entry (Pro concept).
             NavigationLink { SubscriptionView() } label: {
-                Text("Odemknout s Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .padding(.horizontal, 22).frame(minHeight: 46)
-                    .background(Palette.button, in: Capsule())
+                Label { Text("Odemknout s Aurin Pro") } icon: { Image(systemName: "lock.fill") }
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 22).frame(minHeight: 48)
+                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
         }
@@ -348,7 +344,7 @@ struct AurinAgeShapes: View {
     }
 }
 
-/// A short bar from the middle mark: left is younger (better), right older.
+/// A short bar from the middle mark: right is younger (better), left older (concept 2).
 struct EffectBar: View {
     let years: Double
     var scale = 3.0
@@ -362,7 +358,7 @@ struct EffectBar: View {
                 Rectangle().fill(Palette.ink.opacity(0.5)).frame(width: 1.5).offset(x: mid - 0.75)
                 Capsule().fill(years < 0 ? Palette.Status.good : Palette.amber)
                     .frame(width: max(2, len))
-                    .offset(x: years < 0 ? mid - len : mid)
+                    .offset(x: years < 0 ? mid : mid - len)
             }
         }
     }
@@ -866,6 +862,8 @@ struct AurinAgeDetailContent: View {
                 }
                 .padding(.top, 12)
                 AurinAgeShapes(age: age, health: health).padding(.top, 28)
+                Text("Prostřední čárka je bez vlivu na tvůj věk. Vpravo je lépe.").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 8)
             } else {
                 Card { LearningState(kind: .missing, text: "Aurin age potřebuje jeden odhad VO2max a pár týdnů tréninku a spánku.") }
                     .padding(.top, 20)

@@ -416,8 +416,9 @@ struct WidgetData {
         // Zdraví always had the weight card, with an offer to weigh in.
         case .weight: return weight != nil || panel == .health
         case .bodyFat: return health?.weight?.bodyFat != nil
-        case .healthMonitor: return health.map { !HealthMonitorCard.dials($0).isEmpty } ?? false
-        case .night: return health != nil
+        // No watch or ring: one card says what is missing instead (D-ZDRAVI-1).
+        case .healthMonitor: return today?.readiness.noWearable != true && (health.map { !HealthMonitorCard.dials($0).isEmpty } ?? false)
+        case .night: return health != nil && today?.readiness.noWearable != true
         // Always, with Add entry (Zdraví always had the weight card).
         case .body: return health != nil
         }

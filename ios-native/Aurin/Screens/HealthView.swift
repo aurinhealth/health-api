@@ -177,14 +177,14 @@ enum ReadinessText {
         return value > high ? 1 : value < low ? -1 : 0
     }
 
-    /// "lepší než obvykle" in the readiness detail: what the value means, in the
-    /// colour of its points, since a lower resting heart rate helps and a shorter
-    /// night costs (the bar above already shows the direction).
+    /// Where the value is against the usual range, in words only (intended
+    /// purpose); the colour of its points says whether it helps.
     static func longWord(_ part: HealthSnapshot.Part) -> String {
-        if side(part) == 0 { return L10n.tr("v obvyklém rozmezí") }
-        if part.points > 0 { return L10n.tr("lepší než obvykle") }
-        if part.points < 0 { return L10n.tr("horší než obvykle") }
-        return side(part) == 1 ? "↑ " + L10n.tr("nad obvyklým rozmezím") : "↓ " + L10n.tr("pod obvyklým rozmezím")
+        switch side(part) {
+        case 1: return L10n.tr("nad obvyklým rozmezím")
+        case -1: return L10n.tr("pod obvyklým rozmezím")
+        default: return L10n.tr("v obvyklém rozmezí")
+        }
     }
 
     /// Green when the value helps the readiness, rust when it costs points.
@@ -232,6 +232,7 @@ struct ReadinessDetailContent: View {
     var noWearable = false
     /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
     var checkin: String?? = nil
+    @Environment(\.tabActions) private var actions
 
     var body: some View {
         let r = health.readiness
@@ -247,7 +248,7 @@ struct ReadinessDetailContent: View {
                 // Without a number, why (audit 14.4): the same as the Health card.
                 ReadinessLearning(days: days, date: health.date, title: Typo.heading(30, relativeTo: .title))
             } else if noWearable {
-                NoWearableText(title: Typo.heading(30, relativeTo: .title))
+                NoDeviceCard(connect: actions.settings).padding(.top, 12)
             } else {
                 Text("Zatím bez čísla").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")

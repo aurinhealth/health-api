@@ -183,7 +183,7 @@ struct JournalHealthCard: View {
                 Text(verbatim: effect.name).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(48)).foregroundStyle(color)
+                Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(28)).foregroundStyle(Palette.ink)
                 Text("připravenost další ráno").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
         }
