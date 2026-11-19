@@ -72,6 +72,7 @@ struct CoachOpening: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("coach.opening")
             if let subject {
                 CoachSubjectCard(subject: subject).padding(.top, 22)
             } else {
