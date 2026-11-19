@@ -34,6 +34,14 @@ struct PrivacySettingsView: View {
                     SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
                 }
             }
+            // Cycle data is the most sensitive: it shows here too, and is
+            // turned on only in Cyklus with its own consent (plan, decision 3).
+            SettingsGroup {
+                NavigationLink { CycleSettingsView() } label: {
+                    SettingsRow(title: "Sledovat cyklus", value: L10n.tr(model.cycle?.enabled == true ? "Zapnuto" : "Vypnuto"))
+                }
+                .buttonStyle(.plain)
+            }
             SettingsGroup {
                 if let exportURL {
                     ShareLink(item: exportURL) { SettingsRow(title: "Sdílet soubor s daty", chevron: false, titleColor: Palette.blue) }

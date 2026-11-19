@@ -29,7 +29,7 @@ struct JournalImpactView: View {
                 } else {
                     chart(impact).padding(.top, 16)
                 }
-                Text("Srovnávám rána po dnech s ✓ a s ✕ za posledních 90 dní, bez dnů nemoci.")
+                Text(verbatim: L10n.tr("Srovnávám rána po dnech s ✓ a s ✕ za posledních 90 dní, bez dnů nemoci.") + " " + L10n.tr("Spojené neznamená způsobené."))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 18)
@@ -136,15 +136,20 @@ struct ImpactBarRow: View {
                 } else {
                     value.fixedSize().offset(x: half + length + 8, y: 8)
                 }
-                HStack(spacing: 6) {
-                    Image(systemName: item.icon).scaledFont(13, cap: .denseCap).foregroundStyle(Palette.muted)
-                    Text(verbatim: item.name).font(.footnote.weight(.medium)).foregroundStyle(Palette.secondary).lineLimit(1)
+                VStack(alignment: hurts ? .leading : .trailing, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Image(systemName: item.icon).scaledFont(13, cap: .denseCap).foregroundStyle(Palette.muted)
+                        Text(verbatim: item.name).font(.footnote.weight(.medium)).foregroundStyle(Palette.secondary).lineLimit(1)
+                    }
+                    // How many mornings the number stands on (D-ZDRAVI-15).
+                    Text(verbatim: L10n.f("%@ dní s ✓, %@ s ✕", String(item.yes), String(item.no)))
+                        .font(.caption2).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .frame(width: half - 10, alignment: hurts ? .leading : .trailing)
-                .offset(x: hurts ? half + 10 : 0, y: 11)
+                .offset(x: hurts ? half + 10 : 0, y: 9)
             }
         }
-        .frame(height: 40)
+        .frame(height: 48)
         .contentShape(Rectangle())
     }
 }

@@ -170,6 +170,7 @@ struct WidgetBoard: View {
 
     private func save(_ list: [PlacedWidget]) {
         stored = WidgetLayoutStore.encode(list)
+        if panel == .health { UserDefaults.standard.set(true, forKey: WidgetLayoutStore.healthRedesignKey) }
     }
 
     private func add(_ kind: WidgetKind, _ size: WidgetSize) {

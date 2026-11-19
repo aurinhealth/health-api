@@ -18,6 +18,11 @@ in words that name an illness. Settings in the app says "Aurin isn't a medical d
 before making medical decisions." (App Store 1.4.1); the site and the App Store listing get the same line before
 the App Store submission.
 
+Aurin age and VO2max (redesign H) are Aurin's own fitness estimates from workouts, resting heart rate,
+sleep and the profile, compared with people of the same sex and age (FRIEND registry). They are always
+labelled as estimates, Aurin age says "Not a medical assessment", and neither is called a biological age
+or used to talk about health risk or life expectancy.
+
 Not yet in line (Today audit 17 and 26, with their mockups): HRV and resting heart rate words in Health
 ("v normě", "nad normou", `MetricStatus.compare`), the readiness parts in Health ("tvůj normál"), the widget,
 the Apple Watch ("Normal") and the site's "HRV above normal". New texts follow this purpose; these move to

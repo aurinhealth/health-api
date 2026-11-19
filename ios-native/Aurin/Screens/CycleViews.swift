@@ -125,6 +125,11 @@ struct CycleStateSummary: View {
                     if let next = state.nextText {
                         Text(next).font(Typo.small).foregroundStyle(Palette.muted)
                     }
+                    // Under 3 logged periods the length is the default (src/cycle-model.js, D-ZDRAVI-16).
+                    if state.learned == false {
+                        Text("Odhady se zpřesní po 3 zapsaných menstruacích.").font(Typo.small).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         } else {
@@ -134,10 +139,11 @@ struct CycleStateSummary: View {
 }
 
 extension CycleState {
-    /// "menstruace asi za 5 dní", "menstruace asi dnes" or "menstruace se čeká".
+    /// "menstruace asi za 5 dní", "menstruace asi dnes" or, past the expected day, "Zapiš menstruaci, až začne.".
     var nextText: String? {
         guard let next else { return nil }
-        if next.late { return L10n.tr("menstruace se čeká") }
+        // Past the expected day: no date, no "late", no comment (D-ZDRAVI-16, MDR).
+        if next.late { return L10n.tr("Zapiš menstruaci, až začne.") }
         let days = daysToNext ?? 0
         if days == 0 { return L10n.tr("menstruace asi dnes") }
         return L10n.plural("menstruace asi za %lld dní", days)
