@@ -1110,7 +1110,7 @@ final class SnapshotTests: XCTestCase {
             HealthValueContent(value: .constant(.activeEnergy), period: .constant(.days30)).padding(16).environment(model)
         }
         try render("weather-details", height: 900) {
-            NavigationStack { WeatherDetails(weather: weather) }.environment(model)
+            NavigationStack { WeatherDetails(weather: weather, clock: ("2026-10-08", 9)) }.environment(model)
         }
     }
 

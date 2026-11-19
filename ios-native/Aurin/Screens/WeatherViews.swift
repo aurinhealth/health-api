@@ -173,6 +173,8 @@ struct WeatherSheet: View {
 struct WeatherDetails: View {
     let weather: TodaySnapshot.Weather
     var close: () -> Void = {}
+    /// The day and hour to judge today's windows by (snapshots pass the sample day's).
+    var clock: (day: String, hour: Int)? = nil
     @State private var open: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -185,7 +187,8 @@ struct WeatherDetails: View {
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
-            if let outdoors = Self.remaining(weather.week?.first, today: APIClient.localToday(), hour: Calendar.current.component(.hour, from: Date())),
+            if let outdoors = Self.remaining(weather.week?.first, today: clock?.day ?? APIClient.localToday(),
+                                                hour: clock?.hour ?? Calendar.current.component(.hour, from: Date())),
                outdoors.ride != nil || outdoors.run != nil {
                 bestOutdoors(outdoors)
             }
