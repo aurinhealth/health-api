@@ -24,6 +24,45 @@ struct SaveButton: ToolbarContent {
     }
 }
 
+/// "Uložit" in the bar, and while something is changed the back button asks
+/// "Zahodit změny?" first (D-NAST-7: Save stays, leaving no longer drops the
+/// changes silently). The swipe back is off while it asks.
+struct SettingsSaveBar: ViewModifier {
+    let enabled: Bool
+    let saving: Bool
+    let action: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var asking = false
+
+    func body(content: Content) -> some View {
+        content
+            .navigationBarBackButtonHidden(enabled)
+            .toolbar {
+                if enabled {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { asking = true } label: {
+                            Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                        }
+                        .accessibilityLabel("Zpět")
+                    }
+                }
+                SaveButton(enabled: enabled, saving: saving, action: action)
+            }
+            .confirmationDialog("Zahodit změny?", isPresented: $asking, titleVisibility: .visible) {
+                Button("Zahodit změny", role: .destructive) { dismiss() }
+                Button("Zůstat", role: .cancel) {}
+            } message: {
+                Text("Změny na této stránce se neuložily.")
+            }
+    }
+}
+
+extension View {
+    func settingsSaveBar(enabled: Bool, saving: Bool, action: @escaping () -> Void) -> some View {
+        modifier(SettingsSaveBar(enabled: enabled, saving: saving, action: action))
+    }
+}
+
 /// A picker row: title on the left, the chosen option on the right (menu).
 struct SettingsPicker: View {
     let title: String

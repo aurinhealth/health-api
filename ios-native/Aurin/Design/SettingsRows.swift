@@ -60,10 +60,19 @@ struct SettingsIcon: View {
     let systemImage: String
     let color: Color
     var disc = false
+    /// Something to look at (a source to connect again): a rust dot on the disc's corner.
+    var alert = false
 
     var body: some View {
         if disc {
             SettingsDisc(systemImage: systemImage, color: color, size: 34)
+                .overlay(alignment: .topTrailing) {
+                    if alert {
+                        Circle().fill(Palette.rust).frame(width: 9, height: 9)
+                            .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
+                            .offset(x: 2, y: -2)
+                    }
+                }
         } else {
             Image(systemName: systemImage)
                 .scaledFont(18, weight: .regular, cap: .denseCap)

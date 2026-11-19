@@ -3,40 +3,94 @@ import UserNotifications
 
 // MARK: - Goals
 
-/// Cíle: every goal in one place. Sleep (its own page with the alarm), the
-/// weight, what sets the calorie target, the sports and the main race.
+/// Cíle: every goal in one place (concept 10, D-NAST-1). The main goal is the
+/// onboarding's choice (Get fitter, Race, Lose weight); a race takes its name,
+/// sport, day and distance, losing weight its pace and target weight. Training
+/// has one time to train (the week plan's free time, Plan settings) and what
+/// the athlete trains now (Auto from the records, or own hours), which sets
+/// the calories. "Uložit" saves; leaving with changes asks first.
 struct GoalsSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
+    @State private var goalType = ""
     @State private var goal = ""
     @State private var targetWeight = ""
     @State private var activity = ""
+    @State private var trainingNow = "auto"
     @State private var sportHours = ""
     @State private var sportGoal = ""
     @State private var eventName = ""
-    @State private var hasEvent = false
+    @State private var eventSport = ""
+    @State private var eventKm = ""
     @State private var eventDate = Date()
     @State private var weeklyHours = ""
     @State private var original: JSONObject = [:]
     @State private var filled = false
+    /// The usual week's own minutes per weekday (-1 not set), from the week plan.
+    @State private var freeTime: [Int]?
+    @State private var planSettings = false
 
     var body: some View {
         SettingsPage(title: "Cíle", hero: SettingsHero(text: "Tvoje cíle pro spánek, jídlo, váhu a trénink.", art: AnyView(GoalsHeroArt()))) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            SettingsGroup(title: "Hlavní cíl") {
+                ForEach(FocusChoice.goals.indices, id: \.self) { i in
+                    let item = FocusChoice.goals[i]
+                    if i > 0 { SettingsDivider() }
+                    Button { pick(item.0) } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L10n.tr(item.1)).font(.body).foregroundStyle(Palette.ink)
+                                if let sub = SetupGoalPage.subtitles[item.0] {
+                                    Text(L10n.tr(sub)).font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if goalType == item.0 {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                            }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 11)
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(goalType == item.0 ? .isSelected : [])
+                }
+            }
+            .sensoryFeedback(.selection, trigger: goalType)
+
+            if goalType == "race" {
+                SettingsGroup(title: "Hlavní závod", footer: weeksToRace) {
+                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: L10n.tr("Pražský půlmaraton"))
+                    SettingsDivider()
+                    SettingsPicker(title: "Sport", selection: $eventSport, options: Self.raceSports)
+                    SettingsDivider()
+                    DatePicker("Datum", selection: $eventDate, in: Date()..., displayedComponents: .date)
+                        .environment(\.locale, Fmt.locale)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 50)
+                    SettingsDivider()
+                    SettingsField(title: "Vzdálenost", text: $eventKm, unit: "km")
+                }
+            }
+
             SettingsGroup(title: "Tělo") {
                 NavigationLink { SleepSettingsView(given: store) } label: {
                     SettingsRow(title: "Spánek", value: sleepValue)
                 }
                 .buttonStyle(.plain)
                 SettingsDivider()
-                SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
-                SettingsDivider()
-                SettingsField(title: "Cílová váha", text: $targetWeight, unit: Units.weightUnit)
+                if goalType == "lose" {
+                    SettingsPicker(title: "Tempo hubnutí", selection: $goal, options: goalOptions.filter { $0.0.hasPrefix("lose_") || $0.0 == goal })
+                    SettingsDivider()
+                    SettingsField(title: "Cílová váha", text: $targetWeight, unit: Units.weightUnit)
+                } else {
+                    SettingsPicker(title: "Váha", selection: $goal, options: goalOptions.filter { !$0.0.hasPrefix("lose_") || $0.0 == goal })
+                }
             }
             SettingsGroup(title: "Jídlo a pití") {
                 SettingsPicker(title: "Běžný den", selection: $activity, options: activityOptions)
-                SettingsDivider()
-                SettingsPicker(title: "Sport týdně", selection: $sportHours, options: sportHourOptions)
                 SettingsDivider()
                 Button { editing = .kcal } label: { SettingsRow(title: "Kalorie", value: kcalValue) }
                     .buttonStyle(.plain)
@@ -44,13 +98,23 @@ struct GoalsSettingsView: View {
                 Button { editing = .water } label: { SettingsRow(title: "Pití", value: waterValue) }
                     .buttonStyle(.plain)
             }
-            SettingsGroup(title: "Trénink") {
+            SettingsGroup(title: "Trénink", footer: "Čas na trénink je strop pro plán. Kolik trénuješ teď, počítá kalorie a první týden plánu.") {
                 NavigationLink { SportsSettingsView(store: store) } label: {
                     SettingsRow(title: "Sporty", value: sportsValue)
                 }
                 .buttonStyle(.plain)
                 SettingsDivider()
-                SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h", placeholder: recentHours.map { Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) } ?? "–")
+                Button { planSettings = true } label: {
+                    SettingsRow(title: "Čas na trénink", value: freeTimeValue, chevron: false)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.demo)
+                SettingsDivider()
+                SettingsPicker(title: "Teď trénuješ", selection: $trainingNow, options: trainingNowOptions)
+                if trainingNow == "own" {
+                    SettingsDivider()
+                    SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h")
+                }
                 SettingsDivider()
                 TextField("Cíl vlastními slovy, třeba „zaběhnout půlmaraton pod 1:40“", text: $sportGoal, axis: .vertical)
                     .lineLimit(2...4)
@@ -66,24 +130,25 @@ struct GoalsSettingsView: View {
                     }
                 }
             }
-            SettingsGroup(title: "Hlavní závod") {
-                SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
-                if hasEvent {
-                    SettingsDivider()
-                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: L10n.tr("Pražský půlmaraton"))
-                    SettingsDivider()
-                    DatePicker("Datum", selection: $eventDate, in: Date()..., displayedComponents: .date)
-                        .environment(\.locale, Fmt.locale)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 50)
-                }
-            }
         }
-        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .settingsSaveBar(enabled: changes != original, saving: store.saving) { Task { await save() } }
         .sheet(item: $editing) { goal in
             switch goal {
             case .kcal: CalorieGoalSheet(store: store, auto: model.today?.nutrition.autoTarget ?? model.today?.nutrition.target)
             case .water: WaterGoalSheet(store: store, water: model.today?.nutrition.water, today: model.today?.date ?? "")
+            }
+        }
+        // The one screen of the time by weekday: Plan settings (week plan), here as there.
+        .sheet(isPresented: $planSettings) {
+            let monday = WeekPlanView.monday(), today = APIClient.localToday()
+            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { generate in
+                Task {
+                    if generate {
+                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: today, calendar: model.calendar)
+                        await model.refreshTraining()
+                    }
+                    await loadFreeTime()
+                }
             }
         }
         // A changed goal shows on Today and in the rows above.
@@ -94,6 +159,47 @@ struct GoalsSettingsView: View {
         }
         // Once: coming back from Spánek keeps what was typed here.
         .onAppear { if !filled { fill(); filled = true } }
+        .task { await loadFreeTime() }
+    }
+
+    /// The main goal: losing weight starts at a pace (half a kilo, or a quarter
+    /// under 50 kg); away from it a losing pace becomes maintain.
+    private func pick(_ type: String) {
+        withAnimation(.snappy) {
+            goalType = type
+            if type == "lose", !goal.hasPrefix("lose_") {
+                goal = goalOptions.contains { $0.0 == "lose_0.5" } ? "lose_0.5" : "lose_0.25"
+            } else if type != "lose", goal.hasPrefix("lose_") {
+                goal = "maintain"
+            }
+        }
+    }
+
+    static let raceSports = [("ride", "Kolo"), ("run", "Běh"), ("swim", "Plavání"), ("tri", "Triatlon")]
+
+    /// "13 weeks to race day.": whole weeks from today.
+    private var weeksToRace: String? {
+        let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: Calendar.current.startOfDay(for: eventDate)).day ?? 0
+        guard days >= 7 else { return nil }
+        return L10n.f("%@ do závodu.", L10n.plural("%lld týdnů", days / 7))
+    }
+
+    /// "8 h 15 týdně", the week plan's own time, or "–" before it is set.
+    private var freeTimeValue: String {
+        guard let freeTime, freeTime.contains(where: { $0 >= 0 }) else { return "–" }
+        return WeekPlanSettingsText.total(freeTime)
+    }
+
+    /// "Auto, ≈ 4,5 h" from the last four weeks, or Vlastní.
+    private var trainingNowOptions: [(String, String)] {
+        let hours = history["weeklyHours"]?.number
+        let auto = L10n.tr("Auto") + (hours.map { ", ≈ " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " h" } ?? "")
+        return [("auto", auto), ("own", L10n.tr("Vlastní"))]
+    }
+
+    private func loadFreeTime() async {
+        guard !model.demo else { freeTime = [60, 0, 60, 45, 0, 120, 90]; return }
+        if let plan = try? await model.api.weekPlan(start: nil) { freeTime = WeekPlanPrefs.minutes(plan.prefs) }
     }
 
     enum OwnGoal: String, Identifiable { case kcal, water; var id: String { rawValue } }
@@ -117,11 +223,10 @@ struct GoalsSettingsView: View {
 
     /// "7:30 h", or "automaticky" while the goal follows age and the day.
     private var sleepValue: String {
-        store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" } ?? L10n.tr("automaticky")
+        store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" } ?? L10n.tr("Auto")
     }
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]
-    static let sportHourChoices = [("auto", "podle záznamů"), ("0", "žádný"), ("1-3", "1–3 h"), ("3-6", "3–6 h"), ("6-10", "6–10 h"), ("10+", "víc než 10 h")]
     /// "hubnout 0,5 kg týdně", in pounds when the units are imperial.
     static var goals: [(String, String)] {
         func lose(_ kg: Double, _ digits: Int) -> String {
@@ -146,20 +251,14 @@ struct GoalsSettingsView: View {
         }
     }
 
-    /// "automaticky, Aktivní": the usual day Aurin reads from the steps.
+    /// "Auto, Aktivní": the usual day Aurin reads from the steps (one "Auto" wording, D-NAST-9).
     private var activityOptions: [(String, String)] {
         let guess = store.suggestions["activity"]?.string.flatMap { id in Self.activities.first { $0.0 == id }?.1 }
         return [("", Self.auto(guess.map { L10n.tr($0) }))] + Self.activities
     }
 
-    /// "automaticky, ≈ 4,5 h": the weekly sport of the last four weeks.
-    private var sportHourOptions: [(String, String)] {
-        let hours = history["weeklyHours"]?.number
-        return Self.sportHourChoices.map { $0.0 == "auto" ? ("auto", Self.auto(hours.map { "≈ " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " h" })) : $0 }
-    }
-
     private static func auto(_ value: String?) -> String {
-        value.map { L10n.tr("automaticky") + ", " + $0 } ?? L10n.tr("automaticky")
+        value.map { L10n.tr("Auto") + ", " + $0 } ?? L10n.tr("Auto")
     }
 
     /// A value typed in the chosen unit, sent in metric (rounded to 1/scale).
@@ -174,10 +273,6 @@ struct GoalsSettingsView: View {
         return [:]
     }
 
-    /// The weekly hours of the last four weeks, shown while the field is empty.
-    private var recentHours: Double? {
-        history["weeklyHours"]?.number.flatMap { $0 >= 1 ? $0 : nil }
-    }
 
     /// "Kolo, Běh, Posilovna", or "všechny" while the athlete never chose.
     private var sportsValue: String {
@@ -208,8 +303,17 @@ struct GoalsSettingsView: View {
         return f
     }()
 
+    /// The hours a bucket of the older "Sport týdně" stood for (src/energy-profile.js
+    /// SPORT_HOURS): shown as own hours, and saved as them on the next save.
+    static let bucketHours: [String: Double] = ["0": 0, "1-3": 2, "3-6": 4.5, "6-10": 8, "10+": 12]
+
     private func fill() {
         let p = store.profile
+        let words = p["sportGoal"]?.string ?? ""
+        let fromWords = FocusChoice.goalTexts.first { $0.value == words.trimmingCharacters(in: .whitespaces).lowercased() }?.key
+        goalType = p["goalType"]?.string.flatMap { FocusChoice.goalTexts[$0] != nil ? $0 : nil } ?? fromWords ?? ""
+        // The goal's own words, not the onboarding's choice kept as words.
+        sportGoal = fromWords == nil ? words : ""
         goal = p["goal"]?.string ?? ""
         targetWeight = (p["targetWeight"]?.number).map { (kg: Double) -> String in
             let shown = Units.weight(kg)
@@ -217,24 +321,38 @@ struct GoalsSettingsView: View {
         } ?? ""
         activity = p["activity"]?.string ?? ""
         sportHours = p["sportHours"]?.string ?? ""
-        sportGoal = p["sportGoal"]?.string ?? ""
+        var hours = p["weeklyHours"]?.number
+        trainingNow = sportHours == "auto" || (sportHours.isEmpty && hours == nil) ? "auto" : "own"
+        if hours == nil, let bucket = Self.bucketHours[sportHours] { hours = bucket }
+        weeklyHours = hours.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         eventName = p["eventName"]?.string ?? ""
+        eventSport = p["eventSport"]?.string ?? ""
+        eventKm = (p["eventKm"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
-        hasEvent = date != nil || !eventName.isEmpty
+        // An older race saved without the choice: still a race.
+        if goalType.isEmpty, date != nil || !eventName.isEmpty { goalType = "race" }
         eventDate = date ?? Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
-        weeklyHours = (p["weeklyHours"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         original = changes
     }
 
     private var changes: JSONObject {
-        [
+        let race = goalType == "race"
+        let own = sportGoal.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body: JSONObject = [
             "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10),
-            "activity": .string(activity), "sportHours": .string(sportHours),
-            "sportGoal": .string(sportGoal),
-            "eventName": .string(hasEvent ? eventName : ""),
-            "eventDate": .string(hasEvent ? Self.isoDay.string(from: eventDate) : ""),
+            "activity": .string(activity),
+            // Auto counts the recorded training; own hours replace an older bucket.
+            "sportHours": .string(trainingNow == "auto" ? "auto" : ""),
+            // Older apps read the choice from these words when no own words are set.
+            "sportGoal": .string(own.isEmpty ? FocusChoice.goalTexts[goalType] ?? "" : own),
+            "eventName": .string(race ? eventName : ""),
+            "eventDate": .string(race ? Self.isoDay.string(from: eventDate) : ""),
+            "eventSport": .string(race ? eventSport : ""),
+            "eventKm": race ? .field(eventKm) : .null,
             "weeklyHours": .field(weeklyHours)
         ]
+        if !goalType.isEmpty { body["goalType"] = .string(goalType) }
+        return body
     }
 
     private func save() async {

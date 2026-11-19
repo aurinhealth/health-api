@@ -47,7 +47,7 @@ struct SportsSettingsView: View {
                 }
             }
         }
-        .toolbar { SaveButton(enabled: (choice != original || swims100 != originalSwims) && !choice.kinds.isEmpty, saving: store.saving) { Task { await save() } } }
+        .settingsSaveBar(enabled: (choice != original || swims100 != originalSwims) && !choice.kinds.isEmpty, saving: store.saving) { Task { await save() } }
         .onAppear { if !filled { fill(); filled = true } }
         .task { await loadLess() }
     }

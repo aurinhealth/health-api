@@ -58,12 +58,10 @@ struct SettingsProfileCard: View {
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 18).padding(.vertical, 16)
-            .background(RadialGradient(colors: [Palette.amber.opacity(0.16), .clear], center: .topLeading, startRadius: 0, endRadius: 220),
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .cardSurface(cornerRadius: 24)
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
         .accessibilityLabel([L10n.tr("Účet"), name, details ?? ""].filter { !$0.isEmpty }.joined(separator: ", "))
     }
 }
@@ -73,6 +71,7 @@ struct SettingsProfileCard: View {
 /// ring reads as today's progress, and these are goals (D-NAST-5). Opens Cíle.
 struct SettingsGoalsCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var textSize
     let store: SettingsStore
 
     var body: some View {
@@ -86,43 +85,55 @@ struct SettingsGoalsCard: View {
                 }
                 .padding(.horizontal, 6)
                 Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6)
-                HStack(alignment: .top, spacing: 8) {
+                // Four in a row; two by two at the accessibility text sizes.
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 4),
+                          spacing: 14) {
                     ForEach(cells, id: \.label) { cell in
                         VStack(spacing: 7) {
                             SettingsDisc(systemImage: cell.symbol, color: cell.color, size: 40)
-                            Text(verbatim: cell.value).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                            // The number always 20 pt; the unit small beside it, so the row stays even.
+                            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                Text(verbatim: cell.number ?? "–").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                                if cell.number != nil {
+                                    Text(verbatim: cell.unit).font(Typo.tiny).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            .lineLimit(1)
                             Text(L10n.tr(cell.label)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.secondary)
-                                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+                                .multilineTextAlignment(.center).lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(L10n.tr(cell.label) + " " + cell.value)
+                        .accessibilityLabel(L10n.tr(cell.label) + ", " + (cell.number.map { $0 + " " + cell.unit } ?? L10n.tr("nenastaveno")))
                     }
                 }
             }
             .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 16)
-            .cardSurface(cornerRadius: 24)
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
     }
 
     struct Cell {
         let symbol: String
         let color: Color
-        let value: String
+        /// Nil while the goal is not set: a dash, and "nenastaveno" for VoiceOver.
+        let number: String?
+        let unit: String
         let label: String
     }
 
-    /// "7 h" or "7:30 h".
+    /// "7" or "7:30" (hours).
     static func sleepText(_ minutes: Double) -> String {
         let m = Int(minutes.rounded())
-        return (m % 60 == 0 ? String(m / 60) : Fmt.hoursMinutes(minutes)) + " h"
+        return m % 60 == 0 ? String(m / 60) : Fmt.hoursMinutes(minutes)
     }
 
-    /// "3,2 l" or "108 fl oz".
+    /// "3,2" litres or "108" fl oz.
     static func drinkText(_ ml: Double) -> String {
-        Units.imperial ? Units.volumeText(ml) : Fmt.decimal(ml / 1000, digits: 1) + " l"
+        Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
     }
 
     var cells: [Cell] {
@@ -132,10 +143,10 @@ struct SettingsGoalsCard: View {
         let water = today?.nutrition.water.target
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
         return [
-            Cell(symbol: "moon.fill", color: Palette.indigo, value: sleepGoal.map(Self.sleepText) ?? "–", label: "Spánek"),
-            Cell(symbol: "flame.fill", color: Palette.amber, value: kcal.map { Fmt.int($0) + " kcal" } ?? "–", label: "Kalorie"),
-            Cell(symbol: "drop.fill", color: Palette.blue, value: water.map(Self.drinkText) ?? "–", label: "Pití"),
-            Cell(symbol: "scalemass.fill", color: Palette.green, value: weightGoal.map { Units.weightText($0, digits: 0) } ?? "–", label: "Cílová váha")
+            Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText), unit: "h", label: "Spánek"),
+            Cell(symbol: "flame.fill", color: Palette.amber, number: kcal.map { Fmt.int($0) }, unit: "kcal", label: "Kalorie"),
+            Cell(symbol: "drop.fill", color: Palette.blue, number: water.map(Self.drinkText), unit: Units.imperial ? Units.volumeUnit : "l", label: "Pití"),
+            Cell(symbol: "scalemass.fill", color: Palette.green, number: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) }, unit: Units.weightUnit, label: "Cílová váha")
         ]
     }
 }
@@ -164,8 +175,11 @@ struct SettingsSectionTiles: View {
         store.profile["sex"]?.string == "female" || model.cycle?.enabled == true
     }
 
+    @Environment(\.dynamicTypeSize) private var textSize
+
+    /// Two a row; one a row at the accessibility text sizes, where a name no longer fits half the width.
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: 2), alignment: .leading, spacing: 12) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: textSize.isAccessibilitySize ? 1 : 2), alignment: .leading, spacing: 12) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.rust) { GymSettingsView() }
             tile("Výživa", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
@@ -183,7 +197,7 @@ struct SettingsSectionTiles: View {
             HStack(spacing: 12) {
                 SettingsDisc(systemImage: symbol, color: color, size: 40)
                 Text(L10n.tr(title)).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
@@ -231,7 +245,7 @@ struct JournalSettingsView: View {
                 SettingsGroup {
                     Button { tracking = true } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.indigo), title: "Co sledovat",
-                                    value: tracked.map { String($0) })
+                                    value: tracked.map { String($0) }, chevron: false)
                     }
                     .buttonStyle(.plain)
                 }

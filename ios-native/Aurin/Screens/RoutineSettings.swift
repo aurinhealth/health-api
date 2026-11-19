@@ -147,7 +147,7 @@ struct MealSlotsSettingsView: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             }
         }
-        .toolbar { SaveButton(enabled: store != nil && chosen != original, saving: store?.saving == true) { Task { await save() } } }
+        .settingsSaveBar(enabled: store != nil && chosen != original, saving: store?.saving == true) { Task { await save() } }
         .task {
             guard store == nil else { return }
             let s = SettingsStore(api: model.api, demo: model.demo)
