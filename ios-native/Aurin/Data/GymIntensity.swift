@@ -77,11 +77,15 @@ struct IntensitySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+        VStack(alignment: .leading, spacing: 0) {
+            // Over the list, not in it: the scroll edge never blurs the title.
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Text("Jedna značka na sérii").font(Typo.caption).foregroundStyle(Palette.muted)
-                    .padding(.top, 2).padding(.bottom, 10)
+            }
+            .padding(.horizontal, 20).padding(.top, 28).padding(.bottom, 10)
+            ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                 group(["E", "M", "H", "F"])
                 Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 10)
                 group(["W", "T", "D"])
@@ -97,9 +101,11 @@ struct IntensitySheet: View {
                     .padding(.top, 8)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 20).padding(.bottom, 20)
+            }
         }
-        .presentationDetents([.large])
+        // As tall as the list, near the thumb; large for big text.
+        .presentationDetents([.height(onRemoveDrop == nil ? 600 : 654), .large])
         .presentationDragIndicator(.visible)
     }
 
@@ -123,7 +129,7 @@ struct IntensitySheet: View {
                     }
                     .frame(minHeight: 56)
                     .padding(.horizontal, 10)
-                    .background(on ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(on ? Palette.ink.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(alignment: .top) {
                         if i > 0 && !on && selected != letters[i - 1] {
                             Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 10)

@@ -440,11 +440,12 @@ struct HeadClock: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let time = TrainingModeView.clock(live.seconds(of: key, at: context.date))
             // Paused (concept 08): the time stands, in amber.
-            Text(verbatim: live.pausedAt == nil ? time : L10n.f("Pozastaveno v %@", time))
+            Text(verbatim: live.pausedAt == nil ? time : L10n.f("Pozastaveno na %@", time))
                 .font(Typo.small.weight(.medium)).monospacedDigit()
                 .foregroundStyle(live.pausedAt == nil ? Palette.secondary : Palette.amber)
         }
         .accessibilityLabel(Text("Čas"))
-        .accessibilityValue(TrainingModeView.clock(live.seconds(of: key)))
+        .accessibilityValue(live.pausedAt == nil ? TrainingModeView.clock(live.seconds(of: key))
+                            : L10n.f("Pozastaveno na %@", TrainingModeView.clock(live.seconds(of: key))))
     }
 }

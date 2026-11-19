@@ -165,8 +165,17 @@ struct TrainingModeView: View {
                                 .frame(maxWidth: .infinity).padding(.top, 8)
                         }
                         .padding(.bottom, 24)
+                        .opacity(paused ? 0.42 : 1)
+                        .disabled(paused)
                     }
                     .scrollIndicators(.hidden)
+                    // Paused in a part too: Resume under it (its own buttons stay dimmed).
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if paused {
+                            PrimaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { live.resumeFromPause(); syncActivity() }
+                                .padding(.top, 8).padding(.bottom, 6)
+                        }
+                    }
                 } else if !finishedSession, let exercise = current(day) {
                     // The workout's time, heart rate, calories and volume stay over the list.
                     if live.running {
@@ -188,7 +197,8 @@ struct TrainingModeView: View {
                             .padding(.bottom, 24)
                             // Paused: the workout waits under Resume workout (concept 08).
                             .opacity(paused ? 0.42 : 1)
-                            .allowsHitTesting(!paused)
+                            .disabled(paused)
+                            .animation(.easeInOut(duration: 0.2), value: paused)
                         }
                         .scrollIndicators(.hidden)
                         // The exercise under way goes under the panel when it changes.
