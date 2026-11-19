@@ -588,7 +588,14 @@ struct PanelWidget: View {
         case .zones:
             if let value = data.training?.zones { ZonesWidget(zones: value, size: item.size) }
         case .food:
-            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true) }
+            if let t = data.today {
+                // Redesign D: the concept's FOOD card on Today; the gallery sizes elsewhere.
+                if data.panel == .today && item.size == .medium {
+                    TodayFoodCard(nutrition: t.nutrition, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
+                } else {
+                    FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
+                }
+            }
         case .drinks:
             if let f = data.food { DrinksCard(water: f.water, size: item.size, panel: data.panel, live: linked) }
         case .macros:
@@ -605,7 +612,9 @@ struct PanelWidget: View {
         case .bedtime:
             if let h = data.health { SleepSettingsCard(tonight: h.sleep.tonight) }
         case .steps:
-            if let t = data.today { StepsWidget(steps: t.steps, size: item.size) }
+            if let t = data.today {
+                if data.panel == .today && item.size == .medium { TodayStepsCard(steps: t.steps) } else { StepsWidget(steps: t.steps, size: item.size) }
+            }
         case .activeCalories:
             if let value = data.training?.activeCalories { ActiveCaloriesWidget(active: value, size: item.size) }
         case .weight:

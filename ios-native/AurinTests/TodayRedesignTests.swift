@@ -55,7 +55,16 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(TodayDials.length(425), "7\u{00A0}h\u{00A0}05")
         XCTAssertEqual(TodayDials.length(45), "45\u{00A0}min")
         let dials = TodayDials(today: DemoData.today)
+        // The need in the same "8 h 05" as the dial.
+        XCTAssertEqual(dials.sleep.note, "53 min short of 8\u{00A0}h\u{00A0}05")
         XCTAssertNotNil(dials.strain.note)
         XCTAssertTrue(dials.strain.note?.hasPrefix("target ") ?? false)
+    }
+
+    /// Activity: the running total through the day stops at the current hour.
+    func testStepsDayTotals() {
+        let hourly = Array(repeating: 100.0, count: 24)
+        XCTAssertEqual(StepsDayLine.totals(hourly, through: 2), [100, 200, 300])
+        XCTAssertEqual(StepsDayLine.totals(hourly, through: 30).count, 24)
     }
 }

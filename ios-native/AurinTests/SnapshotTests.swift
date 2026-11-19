@@ -57,6 +57,21 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Redesign D2: Today's Food, Day and Activity cards with the label above
+    /// each card, in ink, and the steps through the day as one line.
+    func testTodayCards() throws {
+        let today = DemoData.today
+        try render("today-cards", height: 1300) {
+            VStack(alignment: .leading, spacing: 24) {
+                TodayFoodCard(nutrition: today.nutrition)
+                DayTimeline(today: today)
+                TodayStepsCard(steps: today.steps)
+            }
+            .padding(24)
+            .environment(AppModel(demo: true))
+        }
+    }
+
     /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
     /// of the open display in landscape (317, 475) and the whole of it (951, two
     /// columns: WideLayout).

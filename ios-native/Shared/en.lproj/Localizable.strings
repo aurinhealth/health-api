@@ -4561,3 +4561,6 @@
 "obvykle %@ až %@" = "usual %1$@ to %2$@";
 "Zatím bez obvyklého rozmezí" = "No usual range yet";
 "%@, připravenost %@" = "%1$@, readiness %2$@";
+"Včetně %@ kcal za dnešní trénink" = "Includes %@ kcal for today's training";
+"z %@ kroků" = "of %@ steps";
+"Déšť dnes" = "Rain today";

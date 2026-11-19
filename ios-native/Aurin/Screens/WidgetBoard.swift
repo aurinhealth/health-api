@@ -229,20 +229,23 @@ extension View {
     }
 }
 
-/// "Upravit přehled" under the widgets.
+/// "Upravit přehled" under the widgets: a plain grey pill with words only,
+/// as the Today concept draws it (redesign D, rule "Edit = Today pattern").
 struct WidgetEditButton: View {
     var title: String = "Upravit widgety"
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(L10n.tr(title), systemImage: "slider.horizontal.3")
-                .font(Typo.bodyStrong)
+            Text(L10n.tr(title))
+                .font(Typo.caption.weight(.medium))
                 .foregroundStyle(Palette.ink)
                 .padding(.horizontal, 18)
-                .frame(height: 40)
-                .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                .frame(minHeight: 40)
+                .background(Palette.track, in: Capsule())
+                .tapTarget(width: 44, height: 40)
         }
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
     }
 }
