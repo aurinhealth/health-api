@@ -465,9 +465,9 @@ struct TrainingModeView: View {
 
     /// "…": the whole workout's actions in a small menu under the button. The
     /// exercise's history is a tab on its card, the sound in Workout settings.
-    @ViewBuilder
     private var paused: Bool { live.pausedAt != nil }
 
+    @ViewBuilder
     private func menuItems(_ day: GymDay, _ exercise: GymExercise) -> some View {
         if live.canPause, !paused {
             Button { live.pause(); syncActivity() } label: { Label("Pozastavit trénink", systemImage: "pause.fill") }
