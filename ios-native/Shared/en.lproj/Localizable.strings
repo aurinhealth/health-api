@@ -4317,7 +4317,6 @@
 
 /* Redesign J: the top of Food, the macros, the meals and the drinks */
 "Snězeno dnes" = "Eaten today";
-"Snězeno %@" = "Eaten on %@";
 "%@ navíc" = "%@ over";
 "Otevře, z čeho se cíl skládá" = "Opens where the target comes from";
 "Nastav si denní cíl" = "Set your daily target";
@@ -4357,3 +4356,4 @@
 "Průměr %@ na zapsaný den." = "Average %@ on logged days.";
 "bez zapsaného jídla" = "no food logged";
 "nad cílem" = "over the target";
+"Snězeno: %@" = "Eaten on %@";

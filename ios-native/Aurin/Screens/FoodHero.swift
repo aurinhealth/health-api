@@ -49,7 +49,8 @@ struct FoodHero: View {
         if date == today { return L10n.tr("Snězeno dnes") }
         guard let day = DateFormatters.iso().date(from: date) else { return L10n.tr("Snězeno") }
         let text = DateFormatters.make(L10n.isEnglish ? "EEE, MMM d" : "EEEE d. M.", locale: Fmt.locale, template: L10n.isEnglish).string(from: day)
-        return L10n.f("Snězeno %@", text)
+        // "Snězeno: čtvrtek 8. 10." (a weekday after "Snězeno" alone is not Czech).
+        return L10n.f("Snězeno: %@", text)
     }
 
     /// Kcal past the target, from the first one (no tolerance): 0 when not over.

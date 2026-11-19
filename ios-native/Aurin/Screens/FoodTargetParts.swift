@@ -12,9 +12,10 @@ struct TargetPartsRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // One line; where it doesn't fit (Czech), Planned goes to a second one.
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 14) { line }
-                VStack(alignment: .leading, spacing: 4) { line }
+                HStack(spacing: 14) { head; tail }
+                VStack(alignment: .leading, spacing: 4) { HStack(spacing: 14) { head }; tail }
             }
             Spacer(minLength: 0)
             if more {
@@ -29,17 +30,22 @@ struct TargetPartsRow: View {
         .accessibilityAddTraits(more ? .isButton : [])
     }
 
-    @ViewBuilder private var line: some View {
+    @ViewBuilder private var head: some View {
         if let parts {
             part("Základ", Fmt.int(parts.base), dot: nil)
             if parts.workouts <= 0 && parts.planned <= 0 {
                 Text(verbatim: L10n.tr("Den volna, žádný trénink navíc")).foregroundStyle(Palette.muted).lineLimit(1)
-            } else {
-                if parts.workouts > 0 { part("Tréninky", "+" + Fmt.int(parts.workouts), dot: AnyView(Circle().fill(Palette.green))) }
-                if parts.planned > 0 { part("Naplánováno", "+" + Fmt.int(parts.planned), dot: AnyView(Circle().strokeBorder(Palette.amber, lineWidth: 1.5))) }
+            } else if parts.workouts > 0 {
+                part("Tréninky", "+" + Fmt.int(parts.workouts), dot: AnyView(Circle().fill(Palette.green)))
             }
         } else {
             part("Vlastní cíl", Fmt.int(target), dot: nil)
+        }
+    }
+
+    @ViewBuilder private var tail: some View {
+        if let parts, parts.planned > 0 {
+            part("Naplánováno", "+" + Fmt.int(parts.planned), dot: AnyView(Circle().strokeBorder(Palette.amber, lineWidth: 1.5)))
         }
     }
 

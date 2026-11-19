@@ -208,7 +208,8 @@ struct FoodContent: View {
                 // A meal the day has no row for.
                 pendingRows(pending.filter { item in !food.meals.contains { $0.type == item.meal } })
                 if food.meals.isEmpty {
-                    Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
+                    Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 14)
                 }
             }
             .padding(.horizontal, 16)
@@ -714,12 +715,21 @@ struct MealRow: View {
         .padding(.vertical, 14)
     }
 
+    private var mealName: some View {
+        Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+    }
+
+    private var mealTime: some View {
+        Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
+    }
+
     private var summary: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                    Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.muted)
+                // The time drops under the name rather than cutting it.
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) { mealName; mealTime }
+                    VStack(alignment: .leading, spacing: 1) { mealName; mealTime }
                 }
                 Text(empty ? L10n.tr("Zatím nic") : meal.entries.map(\.name).joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
