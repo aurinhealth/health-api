@@ -242,6 +242,8 @@ struct SleepSettingsForm: View {
             "wake": .string(wake.map { Self.text(minutes: $0) } ?? "")
         ])
         guard await store.saveProfile(["sleepTonight": value]) else { return }
+        // Tomorrow's own wake time rings on the iPhone too.
+        if systemAlarm { await syncAlarm(true) }
         await model.refreshHealth()
         await model.refresh()
     }
@@ -287,7 +289,8 @@ struct SleepSettingsForm: View {
             alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend.")
             return
         }
-        if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays) {
+        if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays,
+                                                  once: SystemAlarm.onceWake(store.profile["sleepTonight"])) {
             alarmOK = false
             alarmNote = problem
             systemAlarm = false
