@@ -1,10 +1,11 @@
 import SwiftUI
 
 /// The coach's thinking steps above his answer (src/coach-steps.js): while he
-/// works, the steps come in one under another, the running one with a spinner
-/// and its seconds; once answered, one row "Answered in 9 s, 7 steps" that
-/// opens them again (the choice is remembered). Each step opens a sheet with
-/// its sentence and, for HRV, the HRV detail of Health itself (no new chart).
+/// works, the steps come in one under another, done ones with a tick and the
+/// running one with a ring; once answered, one grey line of what he looked
+/// at with a chevron that opens them again (concept 09, 1/2; the choice is
+/// remembered). Each step opens a sheet with its sentence and, for HRV, the
+/// HRV detail of Health itself (no new chart).
 struct CoachSteps: View {
     let steps: [CoachStep]
     /// Seconds of the whole answer; nil while the coach still works.
@@ -14,66 +15,61 @@ struct CoachSteps: View {
 
     private var live: Bool { answeredIn == nil }
 
+    /// The folded line: the steps' titles one after another.
+    static func summary(_ steps: [CoachStep]) -> String {
+        steps.map(\.title).enumerated().map { i, t in i == 0 ? t : t.prefix(1).lowercased() + t.dropFirst() }.joined(separator: ", ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            if !live { header }
             if live || open {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                        row(step, last: index == steps.count - 1)
-                    }
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(steps) { step in row(step) }
                 }
-                .padding(.top, 8)
+                .padding(.top, live ? 0 : 8)
                 .transition(.opacity)
             }
         }
-        .padding(.leading, 4)
         .sheet(item: $opened) { step in
             CoachStepSheet(step: step, number: (steps.firstIndex(of: step) ?? 0) + 1, count: steps.count)
         }
     }
 
-    @ViewBuilder private var header: some View {
-        if let seconds = answeredIn {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
-            } label: {
-                HStack(spacing: 6) {
-                    if !open {
-                        ForEach(steps.prefix(3)) { step in
-                            Image(systemName: step.icon ?? "circle").font(.caption2)
-                        }
-                    }
-                    Text(verbatim: L10n.f("Odpověď za %lld s, %@", seconds, L10n.plural("%lld kroků", steps.count)))
-                    Image(systemName: open ? "chevron.up" : "chevron.right").font(.caption2.weight(.semibold))
-                }
-                .font(Typo.caption).foregroundStyle(Palette.faint)
-                .contentShape(Rectangle())
+    private var header: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
+        } label: {
+            HStack(alignment: .center, spacing: 8) {
+                Text(verbatim: Self.summary(steps)).lineLimit(2).multilineTextAlignment(.leading)
+                Spacer(minLength: 4)
+                Image(systemName: open ? "chevron.up" : "chevron.right").font(.caption2.weight(.semibold))
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(L10n.tr(open ? "Skryje kroky kouče." : "Ukáže kroky kouče."))
-        } else {
-            Text(L10n.tr("Pracuji")).font(Typo.caption).foregroundStyle(Palette.faint)
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .frame(minHeight: 32)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.tr(open ? "Skryje kroky kouče." : "Ukáže kroky kouče."))
     }
 
-    private func row(_ step: CoachStep, last: Bool) -> some View {
+    private func row(_ step: CoachStep) -> some View {
         let running = live && step.running
         return Button { if step.text != nil { opened = step } } label: {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(spacing: 0) {
-                    Group {
-                        if running { ProgressView().controlSize(.mini) } else { Image(systemName: step.icon ?? "circle").font(.footnote) }
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Group {
+                    if running {
+                        Circle().strokeBorder(Palette.ink.opacity(0.8), lineWidth: 2).frame(width: 9, height: 9)
+                    } else {
+                        Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold))
                     }
-                    .frame(width: 18, height: 18)
-                    .foregroundStyle(Palette.muted)
-                    if !last { Rectangle().fill(Palette.faint.opacity(0.35)).frame(width: 1).frame(minHeight: 12) }
                 }
+                .frame(width: 14)
+                .foregroundStyle(Palette.muted)
                 StepTitle(title: step.title, since: running ? Date() : nil)
                     .font(Typo.small)
                     .foregroundStyle(running ? Palette.ink : Palette.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, last ? 0 : 10)
             }
             .contentShape(Rectangle())
         }
