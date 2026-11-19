@@ -124,11 +124,14 @@ export function reviewCode(env, email, now = Date.now()) {
 // goes out, so a test run can open new accounts without an inbox, Apple or Google. Off unless the
 // server is the test server (ENVIRONMENT "staging") and the secret holds six digits; the live
 // server has neither. Every limit of the e-mail sign-in still applies (as for the App Review code).
+// The owner never gets it. All test addresses together get TEST_CODES_PER_DAY codes a day, so the
+// one shared code cannot be guessed by cycling through addresses (security review 2026-11-19).
 const TEST_DOMAIN = "@test.aurin.health";
+const TEST_CODES_PER_DAY = 100;
 export function testLoginCode(env, email = null) {
   const code = String(env?.STAGING_TEST_CODE || "").trim();
   if (!isStaging(env) || !/^\d{6}$/.test(code)) return null;
-  if (email !== null && !(email.endsWith(TEST_DOMAIN) && email.length > TEST_DOMAIN.length)) return null;
+  if (email !== null && !(email.endsWith(TEST_DOMAIN) && email.length > TEST_DOMAIN.length && email !== ownerEmail(env))) return null;
   return code;
 }
 
@@ -148,7 +151,7 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
   const test = Boolean(review) && review === testLoginCode(env, email);
   if (!test && !emailConfigured(env)) return false;
   const sent = code || review || randomCode();
-  return (await claimAndSend(env.DB, env, email, sent, "email-code", test ? null : signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review) })) === "sent";
+  return (await claimAndSend(env.DB, env, email, sent, "email-code", test ? null : signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review), test })) === "sent";
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
@@ -162,7 +165,7 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // at most NETWORK_SHARE of the day's sign-in codes, and as much of the known devices' ones. `review`: the fixed App Review code, outside every budget of the day.
 // Returns "sent", or why not: "resend" (one went out less than a minute ago), "daily" (the day's
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, test = false, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   let shared = false;
   // The address's own limits are checked first, so a code it would not get spends no budget.
@@ -177,6 +180,8 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (!(await allowRequest(db, "email-codes:step-up:day", { day: stepUpCodesPerDay(env) }, now))) { console.warn("Step-up code budget of the day is used up"); return "budget"; }
   } else if (change) {
     if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return "budget"; }
+  } else if (test) {
+    if (!(await allowRequest(db, "email-codes:test:day", { day: TEST_CODES_PER_DAY }, now))) { console.warn("Test sign-in codes of the day are used up"); return "budget"; }
   } else if (review) {
     // The fixed App Review code: outside every budget of the day.
   } else if (known && (!network || await allowRequest(db, "email-codes:network-known:" + network, { day: networkCodesPerDay(env) }, now))

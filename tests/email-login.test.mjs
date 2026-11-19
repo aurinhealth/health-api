@@ -567,6 +567,7 @@ test("test addresses sign in with the fixed code on the test server only, with n
   assert.equal(testLoginCode(staging, "a@xtest.aurin.health"), null);
   assert.equal(testLoginCode(staging, "@test.aurin.health"), null);
   assert.equal(testLoginCode(staging, "a@test.aurin.health"), "246810");
+  assert.equal(testLoginCode({ ...staging, OWNER_EMAIL: "boss@test.aurin.health" }, "boss@test.aurin.health"), null);
 
   // The live server: the same request is refused as before, and the fixed code signs nobody in.
   const live = await setup({ STAGING_TEST_CODE: "246810", OPEN_SIGNUP: "true" });
@@ -593,4 +594,7 @@ test("test addresses sign in with the fixed code on the test server only, with n
   // The usual limits hold: one code a minute per address.
   assert.equal((await start(env, "b@test.aurin.health")).status, 200);
   assert.equal(await sendCode(env, "b@test.aurin.health"), false);
+  // All test addresses share 100 codes a day, so the one code can't be guessed address by address.
+  for (let i = 0; i < 98; i++) assert.equal(await sendCode(env, `t${i}@test.aurin.health`), true, String(i));
+  assert.equal(await quietly(() => sendCode(env, "last@test.aurin.health")), false);
 });
