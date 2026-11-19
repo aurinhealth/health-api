@@ -57,6 +57,21 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Redesign D2: Today's Food, Day and Activity cards with the label above
+    /// each card, in ink, and the steps through the day as one line.
+    func testTodayCards() throws {
+        let today = DemoData.today
+        try render("today-cards", height: 1300) {
+            VStack(alignment: .leading, spacing: 24) {
+                TodayFoodCard(nutrition: today.nutrition)
+                DayTimeline(today: today)
+                TodayStepsCard(steps: today.steps)
+            }
+            .padding(24)
+            .environment(AppModel(demo: true))
+        }
+    }
+
     /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
     /// of the open display in landscape (317, 475) and the whole of it (951, two
     /// columns: WideLayout).
@@ -274,6 +289,18 @@ final class SnapshotTests: XCTestCase {
         var pinned = DemoData.food
         pinned.nutrients = DemoData.pinnedNutrients
         try render("food-nutrients-pinned", glow: Palette.Glow.food) { FoodContent(food: pinned).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        // Redesign J: past the target (red total, calm macros) and a new user without a target.
+        let macros = #"{"carbs":{"eaten":301,"target":287},"protein":{"eaten":137,"target":130},"fat":{"eaten":73,"target":70}}"#
+        let water = #"{"ml":0,"target":2600,"entries":0}"#
+        let over = try JSONDecoder().decode(FoodSnapshot.self, from: Data(#"{"date":"2026-10-05","kcal":2420,"target":2300,"trainingBonus":0,"sentence":null,"macros":\#(macros),"meals":[],"water":\#(water),"targetParts":{"base":2300,"workouts":0,"planned":0}}"#.utf8))
+        try render("food-over", glow: Palette.Glow.food) { FoodHero(food: over, linked: false).padding(24).padding(.top, 30) }
+        let empty = #"{"carbs":{"eaten":0,"target":null},"protein":{"eaten":0,"target":null},"fat":{"eaten":0,"target":null}}"#
+        let newUser = try JSONDecoder().decode(FoodSnapshot.self, from: Data(#"{"date":"2026-10-08","kcal":0,"target":null,"trainingBonus":null,"sentence":null,"macros":\#(empty),"meals":[],"water":\#(water)}"#.utf8))
+        try render("food-no-target", glow: Palette.Glow.food) { FoodContent(food: newUser).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        try render("food-calories", glow: Palette.Glow.food) {
+            CaloriesDetailContent(food: DemoData.food, value: .constant(.calories), history: FoodHistory.demo(today: DemoData.food.date, target: DemoData.food.target ?? 2650))
+                .padding(24).padding(.top, 30).environment(AppModel(demo: true))
+        }
         try render("nutrients", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}) { Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted) }; NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("nutrients-free", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}); NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("nutrient-detail", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: DemoData.nutrientDetail.name, back: {}); NutrientDetailContent(detail: DemoData.nutrientDetail) }.padding(24).padding(.top, 30) }
@@ -1148,7 +1175,7 @@ final class SnapshotTests: XCTestCase {
             HealthValueContent(value: .constant(.activeEnergy), period: .constant(.days30)).padding(16).environment(model)
         }
         try render("weather-details", height: 900) {
-            NavigationStack { WeatherDetails(weather: weather) }.environment(model)
+            NavigationStack { WeatherDetails(weather: weather, clock: ("2026-10-08", 9)) }.environment(model)
         }
     }
 

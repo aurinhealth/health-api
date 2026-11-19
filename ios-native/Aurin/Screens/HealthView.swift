@@ -431,15 +431,19 @@ struct SleepDebtWidget: View {
 }
 
 /// The week's debt on a strip from 0 to 6 h, its ends labelled and in one
-/// colour: no red past 3 h that nothing explains (chart review 15).
+/// colour: no red past 3 h that nothing explains (chart review 15). A debt
+/// over 6 h stretches the strip to its whole hour, so the bar isn't just full.
 struct DebtStrip: View {
     let minutes: Int
     var height: CGFloat = 4
 
+    static func scaleHours(_ minutes: Int) -> Int { max(6, Int((Double(minutes) / 60).rounded(.up))) }
+
     var body: some View {
+        let hours = Self.scaleHours(minutes)
         VStack(spacing: 4) {
-            ProgressLine(fraction: Double(minutes) / 360, color: Palette.amberBar, height: height)
-            ChartSpan(start: "0", end: "6 h")
+            ProgressLine(fraction: Double(minutes) / Double(hours * 60), color: Palette.amberBar, height: height)
+            ChartSpan(start: "0", end: "\(hours) h")
         }
     }
 }
