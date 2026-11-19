@@ -122,6 +122,23 @@ export const watchType = exerciseType => {
   return WATCH_TYPES[s] || BY_UPPER.get(s.replace(/_/g, '')) || null;
 };
 
+// Plus → Log workout (POST /app/api/workouts/manual): the sports it takes and
+// the Intervals.icu type a typed-in workout is stored and sent with. Ride, run,
+// swim and gym have their own; "other" (More) takes the type picked from
+// GET /app/api/activity/types, else "Workout" with its own name. Google Health
+// gets the type's exercise type or OTHER with the name (sync-destinations.js
+// googleExercise); the iPhone writes Apple Health from the returned `type`.
+export const MANUAL_SPORTS = ['ride', 'run', 'swim', 'gym', 'other'];
+const MANUAL_DEFAULT = { ride: 'Ride', run: 'Run', swim: 'Swim', gym: 'WeightTraining', other: 'Workout' };
+const MANUAL_GROUP = { ride: 'ride', run: 'run', swim: 'swim', gym: 'strength' };
+export function manualWorkoutType(sport, type = null) {
+  const picked = BY_TYPE.has(String(type || '')) ? String(type) : null;
+  if (!MANUAL_DEFAULT[sport]) return null;
+  // A picked type of the sport itself (Trail run, Open water swim); "other" any known one.
+  if (picked && (sport === 'other' || BY_TYPE.get(picked)[3] === MANUAL_GROUP[sport])) return picked;
+  return MANUAL_DEFAULT[sport];
+}
+
 /** GET /app/api/activity/types: the list in the user's language. */
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 

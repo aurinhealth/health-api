@@ -379,6 +379,8 @@ struct RootView: View {
                 if phase == .background { QuickActions.update(model.today); model.left() }
                 guard phase == .active else { return }
                 model.cameBack()
+                // Tomorrow's own wake time has passed: the usual alarm again (SystemAlarm.swift).
+                if !model.demo { Task { await SystemAlarm.restoreAfterOnce(api: model.api) } }
                 // Mid-workout (a look at the lock screen, another app between
                 // sets) the screen stays as it is; the workout's end refreshes.
                 guard !model.immersive, !LiveWorkout.shared.running else { return }

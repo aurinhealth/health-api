@@ -6,11 +6,16 @@
   // AsyncLocalStorage (node:async_hooks) holds the user's language during a
   // request, see src/lang.js.
   "compatibility_flags": ["nodejs_als"],
-  // Smart Placement runs the Worker near the D1 database instead of near the
-  // visitor when that is faster: one page load makes many database reads.
-  // Its status is under Workers → health-api → Settings → Placement.
+  // The Worker runs next to the databases, not next to the visitor: one screen
+  // makes 20-50 trips to D1 one after another, and the databases are in eastern
+  // Europe (the central one in Prague, the users' ones in Warsaw and Bucharest).
+  // With Smart Placement a request ran where it arrived (a probe from Chicago ran
+  // "local-ORD"), so a far one crossed the distance on every trip: on 2026-11-18
+  // the workout pick waited ~150 ms a trip on both databases (47 trips, 7.3 s).
+  // Warsaw (Google Cloud europe-central2) is close to all three; the cf-placement
+  // header says where a request ran (the slow report shows it, request-timing.js).
   "placement": {
-    "mode": "smart"
+    "region": "gcp:europe-central2"
   },
   // The Worker version: the public site pages are kept per version (src/page-cache.js).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
@@ -98,6 +103,9 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
+    // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn):
+    // on since the evals passed (run 92, D01–D16 × 3, 48/48; Petr "vydej" 2026-11-16).
+    "COACH_FIRST": "true",
     // The account the deploy smoke test acts as: its own, empty and disabled, never the
     // owner's (src/tenancy.js smokeUser; security audit 2026-11, SEC-010). Nobody receives mail there.
     "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
@@ -168,7 +176,7 @@
       "workers_dev": false,
       "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "placement": {
-        "mode": "smart"
+        "region": "gcp:europe-central2"
       },
       "d1_databases": [
         {
@@ -202,7 +210,7 @@
         "APP_ORIGIN": "https://staging.aurin.health",
         // Chat v1 (src/coach-actions.js chatV1On): on here, off on the live server until it ships.
         "CHAT_V1": "true",
-        // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn): here only until the evals pass.
+        // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn).
         "COACH_FIRST": "true",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",

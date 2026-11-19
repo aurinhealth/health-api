@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyCheckin } from "../src/recovery-model.js";
-import { manualReadinessFor, saveCheckin, getCheckin } from "../src/morning-checkin.js";
+import { saveCheckin, getCheckin } from "../src/morning-checkin.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 
 const week = days => ({ days: days.map(([date, planned = [], completed = []]) => ({ date, daily: { training: { planned, completed } } })) });
@@ -9,28 +9,47 @@ const ride = (date, hours) => [date, [], [{ type: "Ride", name: "Endurance", dur
 const history = [ride("2026-09-22", 1.5), ride("2026-09-24", 1.25), ride("2026-09-26", 2), ride("2026-09-28", 1.5), ride("2026-09-29", 1.25), ride("2026-09-30", 1.5)];
 const coach = extra => buildCyclingCoachV2({ date: "2026-10-01", week: week(history), fitness: { wellness: [{ id: "2026-10-01", ctl: 55, atl: 53 }] }, health: { sleep: [{ type: "sleep", durationMin: 480, endTime: "2026-10-01T06:30:00" }] }, ...extra });
 
-test("the check-in only lowers readiness", () => {
+test("the morning answer never changes readiness, only Sick from the Journal does", () => {
   const green = { score: 82, zone: "green", flags: [] };
-  assert.deepEqual(applyCheckin(green, "fresh"), { ...green, checkin: "fresh" });
-  assert.equal(applyCheckin(green, "normal").zone, "green");
-  assert.deepEqual([applyCheckin(green, "tired").zone, applyCheckin(green, "tired").score], ["yellow", 60]);
+  for (const feeling of ["fresh", "normal", "tired", null]) {
+    const r = applyCheckin(green, feeling);
+    assert.deepEqual([r.score, r.zone, r.flags], [82, "green", []], String(feeling));
+  }
   assert.deepEqual([applyCheckin(green, "sick").zone, applyCheckin(green, "sick").score], ["red", 25]);
-  // A red morning stays red and keeps its lower score.
-  assert.deepEqual([applyCheckin({ score: 20, zone: "red" }, "tired").zone, applyCheckin({ score: 20, zone: "red" }, "tired").score], ["red", 20]);
-  // Without the body's number the answer alone gives the zone.
+  // Without the body's number Sick alone gives the zone, the answer nothing.
   assert.deepEqual([applyCheckin({ score: null, zone: null }, "sick").zone, applyCheckin({ score: null, zone: null }, "sick").score], ["red", null]);
-  assert.equal(applyCheckin({ score: null, zone: null }, "fresh").zone, null);
+  assert.equal(applyCheckin({ score: null, zone: null }, "tired").zone, null);
 });
 
-test("normal leaves the coach's zone alone, tired and sick cap it", () => {
-  assert.equal(manualReadinessFor("normal") >= 67, true);
-  assert.equal(manualReadinessFor(null), null);
+test("Tired on Today: same score and zone, one reason to hold back", async () => {
+  const { readinessFor } = await import("../src/readiness.js");
+  const { adviceSignals } = await import("../src/morning-advice.js");
+  const { dayVerdict } = await import("../src/day-verdict.js");
+  const day = k => new Date(Date.parse("2026-10-11T12:00:00Z") - k * 86400000).toISOString().slice(0, 10);
+  const google = Array.from({ length: 30 }, (_, i) => ({ id: day(29 - i), hrv: 70 + (i % 3), restingHR: 52 }));
+  const plain = readinessFor({ date: day(0), google });
+  const tired = readinessFor({ date: day(0), google, checkin: "tired" });
+  assert.deepEqual([tired.score, tired.zone], [plain.score, plain.zone]);
+  assert.deepEqual(adviceSignals({ date: day(0), context: { feeling: "tired" } }).map(s => s.id), ["tired"]);
+  assert.deepEqual(adviceSignals({ date: day(0), context: { feeling: "fresh" } }), []);
+  // Green with Tired: keep it steady, the zone stays green.
+  const v = dayVerdict({ score: 80, zone: "green", date: day(0), context: { feeling: "tired" } });
+  assert.deepEqual([v.key, v.shown], ["steady", "green"]);
+});
+
+test("the ride and run coach: tired leaves the zone alone, Journal Sick rests", () => {
   const plain = coach({}).readiness.status;
-  assert.equal(coach({ checkin: "normal" }).readiness.status, plain);
-  assert.equal(coach({ checkin: "sick" }).readiness.status, "red");
-  assert.ok(coach({ checkin: "tired" }).readiness.reasons.some(r => /ranní pocit: unavený|morning check-in: tired/.test(r)));
-  // A number sent with the request wins over the stored answer.
+  for (const checkin of ["fresh", "normal", "tired"]) {
+    const c = coach({ checkin });
+    assert.equal(c.readiness.status, plain, checkin);
+    assert.ok(!c.readiness.reasons.some(r => /ranní pocit|morning check-in/.test(r)), checkin);
+  }
+  const sick = coach({ checkin: "sick" });
+  assert.equal(sick.readiness.status, "red");
+  assert.equal(sick.recommendation.decisionRule, "journal_sick");
+  // A number sent with the request wins over Sick from the Journal.
   assert.equal(coach({ checkin: "sick", manualReadiness: 90 }).readiness.status, plain);
+  assert.notEqual(coach({ checkin: "sick", manualReadiness: 90 }).recommendation.decisionRule, "journal_sick");
 });
 
 test("one answer a day, cleared with null", async () => {

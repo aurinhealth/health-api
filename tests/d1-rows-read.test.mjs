@@ -62,3 +62,18 @@ test("the day filters of source choice and Apple replacement seek the day index"
   const update = plan(`UPDATE health_datapoints SET record_role = 'duplicate' WHERE user_id = 1 AND source_family IN ('google-wearables') AND data_type = 'heart-rate' AND ${day.replace("?", "'2026-10-01'")}`);
   assert.match(update, /idx_health_datapoints_user_day .*<expr>>\?/, update);
 });
+
+// Health's and Today's daily values (google-dashboard.js) and the Health detail
+// charts (health-series-store.js) take the days of the window from the index
+// too: COALESCE(...,'') is another expression and read every day ever stored.
+test("the daily values of Today, Health and the detail charts seek the day index", () => {
+  const day = "COALESCE(sample_time,end_time,start_time)";
+  for (const name of ["google-dashboard.js", "health-series-store.js"]) {
+    assert.ok(src(name).includes(`'${day}'`) || src(name).includes(`"${day}"`), name);
+    assert.ok(!src(name).includes(day.slice(0, -1) + ",''"), name);
+  }
+  const db = new DatabaseSync(":memory:");
+  db.exec(schema);
+  const plan = db.prepare(`EXPLAIN QUERY PLAN SELECT value_numeric FROM health_datapoints WHERE user_id = 1 AND source_family IN ('apple-health','whoop') AND data_type IN ('daily-resting-heart-rate') AND record_role='primary' AND ${day}>='2026-01-01' AND ${day}<'2026-02-01' ORDER BY id`).all().map(r => r.detail).join(" | ");
+  assert.match(plan, /idx_health_datapoints_user_day \(user_id=\? AND source_family=\? AND data_type=\? AND <expr>>\? AND <expr><\?\)/, plan);
+});

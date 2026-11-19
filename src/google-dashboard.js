@@ -75,7 +75,10 @@ export async function googleDashboard(db,today){
   // the (user, source, type, start_time) index, so it reads only that month
   // instead of every steps and energy row ever saved (~60k rows per load).
   // An interval starts at most a day before it ends, hence the extra day.
-  const recent='COALESCE(sample_time,end_time,start_time,\'\')';
+  // Exactly the (user, source, type, day) index's expression: with a fourth
+  // argument ('') SQLite could not use it for the window and read every day of
+  // every type the user ever had. Rows without any time fail the >= either way.
+  const recent='COALESCE(sample_time,end_time,start_time)';
   // The daily values and the sync state are read alongside the summary (two database trips instead of four in a row).
   const syncing=db.prepare("SELECT status,updated_at,details_json FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent') ORDER BY updated_at DESC LIMIT 1").bind(db.userId).first();
   const dailyLoading=db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-skin-temperature-deviation','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery','daily-wrist-temperature') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-91),end).all();

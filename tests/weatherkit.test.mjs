@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dailyFromWeatherKit, detailFromWeatherKit as dailyDetail, hourlyFromWeatherKit, wmoCode, weatherKitWeek, weatherKitJwt, weatherKitConfigured } from '../src/weatherkit.js';
+import { dailyFromWeatherKit, detailFromWeatherKit as dailyDetail, outdoorWindow, hourlyFromWeatherKit, wmoCode, weatherKitWeek, weatherKitJwt, weatherKitConfigured } from '../src/weatherkit.js';
 import { pickHours, weekWeather, weatherReason } from '../src/adaptive-week.js';
 import { withTimeZone } from '../src/user-time.js';
 
@@ -83,7 +83,7 @@ test('the detail: now, the hours from now and seven days with their hours', () =
   const days = Array.from({ length: 9 }, (_, d) => ({ forecastStart: new Date(Date.UTC(2026, 9, 25 + d, 23)).toISOString().replace('.000', ''), conditionCode: 'Clear', temperatureMax: 12, temperatureMin: 3, precipitationChance: 0.1 }));
   const now = Date.UTC(2026, 9, 26, 13, 20); // 14:20 in Prague
   const detail = dailyDetail({ currentWeather: { temperature: 12.6, conditionCode: 'PartlyCloudy', windSpeed: 17.6, windDirection: 315.4, daylight: true }, forecastDaily: { days }, forecastHourly: { hours } }, '2026-10-26', now);
-  assert.deepEqual(detail.now, { temp: 13, code: 2, wind: 18, windDirection: 315, daylight: true });
+  assert.deepEqual(detail.now, { temp: 13, code: 2, wind: 18, windDirection: 315, daylight: true, feelsLike: null, asOf: null });
   // The next 24 hours go on past midnight, each with its date.
   assert.equal(detail.next.length, 24);
   assert.equal(detail.next[0].hour, 14);
@@ -101,4 +101,45 @@ test('the reason names what decided the day', () => {
   assert.match(weatherReason('2026-10-28', 'run', { max: 12, wind: 10, rain: 4.5, rainProb: 90, code: 61 }), /Naprší 4,5 mm/);
   assert.match(weatherReason('2026-10-28', 'run', { max: 12, wind: 10, rain: 0.5, rainProb: 40, code: 61 }), /Nejvýš 12°, déšť na 40 %/);
   assert.match(weatherReason('2026-10-28', 'run', { max: 20, wind: 10, rain: 0, rainProb: 20, code: 99 }), /bouřky/);
+});
+
+// Hours of 2026-11-20 in Prague (UTC+1) with their rain, for the time outdoors.
+const day = (overrides = {}) => Array.from({ length: 24 }, (_, hour) => ({
+  at: Date.UTC(2026, 10, 19, 23 + hour), date: '2026-11-20', hour, temp: 12, code: 2, rainProb: 10, rain: 0, wind: 15, ...(overrides[hour] || {})
+}));
+const sun = { sunrise: Date.UTC(2026, 10, 20, 6, 30), sunset: Date.UTC(2026, 10, 20, 15, 10) };
+
+test('the time outdoors is daylight from 7:00 or sunrise to sunset', () => {
+  // Sunrise 7:30 local, sunset 16:10: whole hours 8:00 to 16:00.
+  assert.deepEqual(outdoorWindow(day(), '2026-11-20', 'run', sun), { start: 8, end: 16 });
+  // Without the sun's times, from 7:00 to midnight.
+  assert.deepEqual(outdoorWindow(day(), '2026-11-20', 'run'), { start: 7, end: 24 });
+  // Polar night: the day has no sun times, so no time outdoors.
+  assert.equal(outdoorWindow(day(), '2026-11-20', 'run', null), null);
+  assert.equal(outdoorWindow(day(), '2026-11-20', 'run', { sunrise: null, sunset: null }), null);
+});
+
+test('the longest dry stretch of 2+ hours wins; one dry hour is no window', () => {
+  const wet = { rain: 1.2, rainProb: 90 };
+  const hours = day({ 9: wet, 12: wet, 13: wet, 14: wet, 16: wet });
+  assert.deepEqual(outdoorWindow(hours, '2026-11-20', 'run', sun), { start: 10, end: 12 });
+  const rainy = day(Object.fromEntries([8, 10, 12, 14].map(h => [h, wet])));
+  assert.equal(outdoorWindow(rainy, '2026-11-20', 'run', sun), null);
+});
+
+test('a ride needs 8°, little wind and a road that has dried', () => {
+  assert.equal(outdoorWindow(day(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, { temp: 6 }]))), '2026-11-20', 'ride', sun), null);
+  assert.deepEqual(outdoorWindow(day(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, { temp: 6 }]))), '2026-11-20', 'run', sun), { start: 8, end: 16 });
+  // 2 mm at 7:00: at 12° the road is dry after 3 dry hours, so from 11:00.
+  assert.deepEqual(outdoorWindow(day({ 7: { rain: 2 } }), '2026-11-20', 'ride', sun), { start: 11, end: 16 });
+  // At 9° it takes 6 dry hours, so from 14:00.
+  assert.deepEqual(outdoorWindow(day(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, h === 7 ? { rain: 2, temp: 9 } : { temp: 9 }]))), '2026-11-20', 'ride', sun), { start: 14, end: 16 });
+  // 3 mm in the night before keeps the whole day indoors.
+  assert.equal(outdoorWindow(day({ 2: { rain: 3.5 } }), '2026-11-20', 'ride', sun), null);
+  // The drying hours count, not the hour itself: 9° while drying, 11° at 11:00, so 6 hours.
+  assert.deepEqual(outdoorWindow(day(Object.fromEntries(Array.from({ length: 24 }, (_, h) => [h, h === 7 ? { rain: 2, temp: 9 } : { temp: h < 11 ? 9 : 11 }]))), '2026-11-20', 'ride', sun), { start: 14, end: 16 });
+  // A missing hour doesn't stretch the look-back: 3.5 mm at 2:00 still keeps the day indoors.
+  assert.equal(outdoorWindow(day({ 2: { rain: 3.5 } }).filter(h => h.hour !== 5), '2026-11-20', 'ride', sun), null);
+  // A run doesn't wait for the road.
+  assert.deepEqual(outdoorWindow(day({ 7: { rain: 2 } }), '2026-11-20', 'run', sun), { start: 8, end: 16 });
 });

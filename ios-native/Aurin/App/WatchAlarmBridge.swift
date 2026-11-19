@@ -10,26 +10,33 @@ import SwiftUI
 extension WatchBridge {
     private static let movedKey = "systemAlarmOnWatch"
     private static let backupDelay: TimeInterval = 5 * 60
+    /// The backup follows a snooze: kept until it rings, not moved to the next wake time.
+    private static let snoozedKey = "systemAlarmBackupSnoozed"
 
     /// The backup for the next wake time; kept while that alarm is under way.
     func updateAlarmBackup(_ alarm: WatchSnapshot.Alarm?, force: Bool = false) async {
-        guard UserDefaults.standard.bool(forKey: Self.movedKey), Self.settings.alarmOnWatch else {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: Self.movedKey), Self.settings.alarmOnWatch else {
             if SystemAlarm.backupTime != nil { await SystemAlarm.backup(at: nil) }
             return
         }
+        // Ringing or snoozed on the iPhone: the next morning's waits until it is stopped.
+        if !force, SystemAlarm.backupUnderWay { return }
         let now = Date()
-        if !force, let set = SystemAlarm.backupTime, set > now, set.addingTimeInterval(-Self.backupDelay) <= now { return }
+        if !force, let set = SystemAlarm.backupTime, set > now,
+           defaults.bool(forKey: Self.snoozedKey) || set.addingTimeInterval(-Self.backupDelay) <= now { return }
         let next = alarm?.nextWake(after: now).map { $0.addingTimeInterval(Self.backupDelay) }
         guard force || next != SystemAlarm.backupTime else { return }
         await SystemAlarm.backup(at: next)
     }
 
     /// The watch's alarm was stopped (the next morning's backup) or snoozed
-    /// (the backup five minutes after the snooze).
+    /// (the backup five minutes after the snooze, kept when the wake times are sent again).
     func watchAlarm(stopped: Bool, snoozedUntil: Date?) async {
         guard UserDefaults.standard.bool(forKey: Self.movedKey) else { return }
         if let snoozedUntil {
             await SystemAlarm.backup(at: snoozedUntil.addingTimeInterval(Self.backupDelay))
+            UserDefaults.standard.set(SystemAlarm.backupTime != nil, forKey: Self.snoozedKey)
         } else if stopped {
             await updateAlarmBackup(currentAlarm, force: true)
         }

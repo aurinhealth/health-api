@@ -1,6 +1,6 @@
 import { sportAllowed } from './sport-choice.js';
 import { L } from './lang.js';
-import { PAIN_WORDS, sorePartsFor, illNow, unwellNow } from './pain-words.js';
+import { PAIN_WORDS, sorePartsFor, painAreas, illNow, unwellNow } from './pain-words.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus, ATHLETE_STATUSES } from './training-status.js';
 import { prepareGymSwap,prepareGymAdd,prepareGymRemove,gymAdjustmentRequest,extendGymPlan,focusChanges,planStarted } from './coach-gym-adjustment.js';
@@ -34,8 +34,25 @@ export const coachPlanTemplates=()=>planTemplates().filter(t=>!t.choose).map(t=>
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
 const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',swim:'plavání',gym:'gym'},{ride:'ride',run:'run',swim:'swim',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
+// Pain in one part told in the chat (T-KOUC-1, 2026-11-16): the coach saved
+// it to the memory and plans around it (eval S50, S53: never Injured for one
+// knee). The server adds one card, "Plan around your knee?", whose chips are
+// the sports that load the part (pain-words.js PAIN_AREAS); confirmed, the
+// chosen sports rest while the memory holds (athlete-state.js pausedSports).
+// Only for one part with sports to pause, and not when the sports are paused already.
+export function planAroundCard(saves, { paused = [], date = null } = {}) {
+  const pains = (saves || []).map(s => String(s?.text || s || '')).filter(t => PAIN_WORDS.test(t));
+  if (pains.length !== 1) return null;
+  const areas = painAreas(pains);
+  if (areas.length !== 1) return null;
+  const sports = areas[0].sports.filter(s => !paused.includes(s));
+  if (!sports.length) return null;
+  return { type: 'plan_around', memory: pains[0], part: areas[0].id, label: L(areas[0].label[0], areas[0].label[1]), sports, date, reason: '' };
+}
+
 // One line per validated proposal, stored with the answer so later turns know it.
 export function actionSummary(a){
+  if(a.type==='plan_around')return L('Plánovat s ohledem na bolest '+a.label+'?','Plan around your '+a.label+'?');
   const workout=a.eventSnapshot?.name||L('trénink','workout');
   if(a.type==='activity_delete')return L('Smazat ','Delete ')+(a.activityName||L('aktivitu','the activity'))+' ('+shortDate(a.date)+L(', jen v Aurinu)',', in Aurin only)');
   if(a.type==='activity_merge')return L('Sloučit ','Merge ')+(a.activityName||'')+' + '+(a.otherName||'')+' ('+shortDate(a.date)+')';
@@ -226,7 +243,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const raceKm=template.race?.options?.includes(Number(a.raceKm))?Number(a.raceKm):template.race?.km??null;
       return [{type:'plan',planId:template.id,sport:template.sport,planName:template.name,weeksCount:template.weeks.length,date:when.raceDate&&template.race?when.raceDate:when.firstDay||when.startDate,startDate:when.startDate,...(when.firstDay?{firstDay:when.firstDay}:{}),...(template.race?{raceDate:when.raceDate,raceKm}:{}),...(!template.race&&validDay(a.date)&&a.date>today?{requestedStart:a.date}:{}),...(chosen?{days:chosen}:{}),reason}];
     }
-    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
+    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&!(context.pausedSports||[]).includes(a.sport)&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&allowed(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
     if(a.type==='status'&&Object.hasOwn(ATHLETE_STATUSES,a.status)){
@@ -266,6 +283,8 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // cold said now today's hard work, insisted or not (pain-words.js;
       // audit "Kouč jako skutečný trenér" 2026-11-07, point 2).
       if(intense&&sorePartsFor(a.sport,[context.userMessage,...(context.preferenceMemory||[])]).length)return [];
+      // A sport paused for a pain ("Plan around your knee?") gets no session.
+      if((context.pausedSports||[]).includes(a.sport))return [];
       if(intense&&a.date===today&&unwellNow(context.userMessage))return [];
       // The athlete asked for it again in this chat after the coach's concern:
       // their call passes the 48 h and two-in-7 rules (Petr 2026-10-19).

@@ -37,11 +37,22 @@ export const MAX_LOSS_SHARE = 0.01;
 // Below BMI 18.5 (WHO's underweight line) a losing goal plans maintenance
 // instead: no deficit for someone already light (onboarding review point 11).
 export const MIN_LOSS_BMI = 18.5;
+// Heavy training (T-NUT-2, 2026-11-16): from 10 hours of sport a week (the
+// "10+" choice of SPORT_HOURS) losing goes at most 0.5 % a week, the low end
+// of Helms 2014, so a deficit on top of a big training load keeps energy for
+// recovery (low energy availability, Mountjoy 2018).
+export const HEAVY_TRAINING_HOURS = 10;
+export const HEAVY_MAX_LOSS_SHARE = 0.005;
+const lossShare = weeklyHours => num(weeklyHours) >= HEAVY_TRAINING_HOURS ? HEAVY_MAX_LOSS_SHARE : MAX_LOSS_SHARE;
 // No goal (or an unknown one) plans maintenance: no deficit nobody asked for.
-export function weeklyGoalKg(goalKey, weightKg, heightCm = null) {
+export function weeklyGoalKg(goalKey, weightKg, heightCm = null, weeklyHours = null) {
   const goal = (GOALS[goalKey] || GOALS.maintain).kgPerWeek, kg = num(weightKg), m = num(heightCm) / 100;
   if (goal < 0 && kg > 0 && m >= 1 && kg / (m * m) < MIN_LOSS_BMI) return 0;
-  return goal < 0 && kg > 0 ? Math.max(goal, -kg * MAX_LOSS_SHARE) : goal;
+  return goal < 0 && kg > 0 ? Math.max(goal, -kg * lossShare(weeklyHours)) : goal;
+}
+// Whether heavy training slowed the chosen loss (the coach card says why).
+export function heavyTrainingCap(goalKey, weightKg, heightCm = null, weeklyHours = null) {
+  return num(weeklyHours) >= HEAVY_TRAINING_HOURS && weeklyGoalKg(goalKey, weightKg, heightCm, weeklyHours) > weeklyGoalKg(goalKey, weightKg, heightCm);
 }
 
 // The highest calorie target of a day, morning and evening alike: a sanity
@@ -134,6 +145,9 @@ export function normalizeProfile(p = {}) {
     // Sleep: an own goal (6–10 h, in minutes) and the alarm on work days and
     // at the weekend ("HH:MM"); empty means the usual from recorded nights.
     sleepGoal: inRange(p.sleepGoal, 360, 600),
+    // The norm fitness age and Aurin age compare VO2max with: empty is FRIEND
+    // (the default), "hunt" the Norwegian HUNT 3 (own-vo2max.js).
+    fitnessNorm: p.fitnessNorm === "hunt" ? "hunt" : "",
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
     // The days each alarm rings (Friday off: no work day alarm that morning).
@@ -167,7 +181,8 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
   for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
-  const deficitOf = key => Math.round(-weeklyGoalKg(key, weight, p.height) * 7700 / 7) || 0;
+  const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
+  const deficitOf = key => Math.round(-weeklyGoalKg(key, weight, p.height, sportHours) * 7700 / 7) || 0;
   if (missing.length) {
     // The owner keeps the calibrated baseline until the profile is complete;
     // weight stays required for everyone.
@@ -175,7 +190,6 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     return { ready: false, source: null, missing, weightKg: weight > 0 ? weight : null };
   }
   const bmr = restingMetabolicRate(p, weight);
-  const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
   const sportDaily = activityTracked ? 0 : sportHours * weight * SPORT_KCAL_PER_KG_HOUR / 7;
   return {
     ready: true,
@@ -187,6 +201,9 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     sportDaily: Math.round(sportDaily),
     // Calories below expenditure per day; 0 when maintaining.
     deficit: deficitOf(p.goal),
+    // Sport hours a week the deficit was planned with, and whether they slowed the loss.
+    weeklyHours: num(sportHours) || 0,
+    heavyTraining: heavyTrainingCap(p.goal, weight, p.height, sportHours),
     // Never plan below resting metabolism, nor below common safe minimums.
     // On a training day the training comes on top (index.js energyForDate).
     floor: Math.round(Math.max(bmr, p.sex === "male" ? 1500 : 1200)),
@@ -215,10 +232,10 @@ export function proteinReferenceKg(weightKg, heightCm) {
 // The loop also corrects a systematic error of the wearable's energy figures.
 // With the weight, losing is measured against the pace capped at 1 % a week;
 // with the height too, below BMI 18.5 against maintaining.
-export function trendAdjustment(goalKey, trend, weightKg = null, heightCm = null) {
+export function trendAdjustment(goalKey, trend, weightKg = null, heightCm = null, weeklyHours = null) {
   const rate = Number(trend?.weeklyRateKg), samples = Number(trend?.samples || 0), span = trend?.spanDays;
   if (trend?.weeklyRateKg == null || !Number.isFinite(rate) || samples < 4 || (span != null && Number(span) < 21)) return { adjustment: 0, reason: "insufficient_weight_history" };
-  const goal = weeklyGoalKg(goalKey, weightKg, heightCm);
+  const goal = weeklyGoalKg(goalKey, weightKg, heightCm, weeklyHours);
   const step = gap => { const kcal = Math.max(-250, Math.min(250, -gap * 7700 / 7 * 0.5)); return Math.round(kcal / 25) * 25 || 0; };
   if (goal < 0) {
     if (rate > goal / 2) return { adjustment: step(rate - goal), reason: "loss_below_target" };

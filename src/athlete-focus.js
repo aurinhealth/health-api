@@ -94,6 +94,36 @@ export function mainSportOfKinds(mains = []) {
 // The main sports as kinds: the chosen list, else the one main sport's.
 export const mainKindsOf = p => Array.isArray(p?.mainSports) ? sportKinds(p.mainSports) : [...(MAIN_KINDS[p?.mainSport] || [])];
 
+// The main goal as a key (DATA-2, redesign S2): Get fitter, Race or Lose
+// weight. Older apps wrote the choice as Czech words into sportGoal, the
+// athlete's own words; those three texts read as the key. sportGoal stays as
+// it is, so an older app still shows its choice.
+export const GOAL_TYPES = ["fitness", "race", "lose"];
+const GOAL_TEXTS = { "zlepšit kondici": "fitness", "závod": "race", "zhubnout": "lose" };
+export function goalTypeOf(p = {}) {
+  if (GOAL_TYPES.includes(p.goalType)) return p.goalType;
+  return GOAL_TEXTS[String(p.sportGoal || "").trim().toLowerCase()] || "";
+}
+// A profile being saved over `saved`: away from Lose weight to Race or Get
+// fitter, a losing calorie goal the athlete did not change becomes maintain
+// (no hidden deficit; the default since PR #1118 is maintain too).
+export function withGoalType(next = {}, saved = {}, sent = next.goalType) {
+  const norm = v => String(v || "").trim().toLowerCase();
+  const words = norm(next.sportGoal), changed = words !== norm(saved?.sportGoal), before = goalTypeOf(saved || {});
+  // An older app picks a goal by writing its words; a newer one sends the key
+  // (`sent`, the request's own goalType). An older app never sends the key
+  // (normalizeProfile keeps only known fields), so unchanged words keep the saved one.
+  const type = GOAL_TEXTS[words] && changed ? GOAL_TEXTS[words]
+    : GOAL_TYPES.includes(sent) ? sent
+      : !changed ? goalTypeOf(saved || {}) : goalTypeOf(next);
+  const out = { ...next };
+  if (type) out.goalType = type; else delete out.goalType;
+  // The choice kept as words too, so older apps and the coach read the same goal.
+  if (type && GOAL_TEXTS[words] && GOAL_TEXTS[words] !== type) out.sportGoal = Object.keys(GOAL_TEXTS).find(k => GOAL_TEXTS[k] === type);
+  if (before === "lose" && type && type !== "lose" && String(out.goal || "").startsWith("lose") && out.goal === saved?.goal) out.goal = "maintain";
+  return out;
+}
+
 // The settings fields as stored in the profile.
 export function normalizeFocus(p = {}) {
   const hours = Number(p.weeklyHours);
@@ -111,6 +141,7 @@ export function normalizeFocus(p = {}) {
     ...(sports ? { sports } : {}),
     ...(mainSports ? { mainSports } : {}),
     sportGoal: text(p.sportGoal, 300),
+    ...(goalTypeOf(p) ? { goalType: goalTypeOf(p) } : {}),
     eventName: text(p.eventName, 120),
     eventDate: /^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || "")) && Number.isFinite(Date.parse(p.eventDate + "T12:00:00Z")) ? p.eventDate : "",
     weeklyHours: Number.isFinite(hours) && hours >= 1 && hours <= 40 ? Math.round(hours * 2) / 2 : null,
@@ -137,6 +168,7 @@ export function athleteFocus(profile, today) {
     // The sports the coach may suggest; none when the athlete never chose.
     ...(f.sports ? { sports: f.sports } : {}),
     goal: f.sportGoal || null,
+    ...(f.goalType ? { goalType: f.goalType } : {}),
     // Sports done regularly in the last year (effectiveProfile), none when unknown.
     ...(Array.isArray(profile?.regularSports) && profile.regularSports.length ? { regular: profile.regularSports.filter(k => typeof k === "string").slice(0, 4) } : {}),
     // "How many hours a week do you train now?" (first week without history, adaptive-week.js startWeek).

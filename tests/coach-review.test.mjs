@@ -48,8 +48,9 @@ test("the review gets the recovery model's readiness and may not be more aggress
   assert.equal(readiness.zone, "red");
   assert.equal(readiness.score, 0);
   assert.deepEqual(readiness.parts.map(p => p.key), ["restingHR", "hrv"]);
-  assert.deepEqual(readiness.flags, ["hrv_trend_down", "checkin_tired"]);
-  assert.equal(readiness.checkin, "tired");
+  // The morning answer never acts on the readiness (QA-2).
+  assert.deepEqual(readiness.flags, ["hrv_trend_down"]);
+  assert.equal(readiness.checkin, null);
   // Without any body signal only a check-in says something; otherwise nothing is sent.
   assert.deepEqual(dayReadiness({ date: "2026-10-07", fitness: {}, health: {}, checkin: "sick" }).flags, ["checkin_sick"]);
   assert.equal(dayReadiness({ date: "2026-10-07", fitness: {}, health: {} }), null);
