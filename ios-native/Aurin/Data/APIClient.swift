@@ -434,10 +434,12 @@ final class APIClient: @unchecked Sendable {
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
     /// A done one comes back with where it was sent (Aurin posílá).
     @discardableResult
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
+    /// `type`: an Intervals.icu type picked under More (sport "other") or a kind of the sport itself.
+    func manualWorkout(name: String, date: String, sport: String, type: String? = nil, minutes: Int, completed: Bool, rpe: Int?, notes: String,
                        start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
+        if let type { body["type"] = .string(type) }
         if let rpe { body["rpe"] = .number(Double(rpe)) }
         if let start {
             // The window the heart rate was read for; the start's clock time in the phone's zone.

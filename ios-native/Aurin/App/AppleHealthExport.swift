@@ -199,7 +199,9 @@ final class AppleHealthExport {
         let end = (activity.start ?? Self.noon(activity.date)).addingTimeInterval(TimeInterval(activity.minutes * 60))
         let start = end.addingTimeInterval(-TimeInterval(activity.minutes * 60))
         let configuration = HKWorkoutConfiguration()
-        configuration.activityType = Self.activityType(activity.sport)
+        configuration.activityType = activity.type.map(Self.workoutType) ?? Self.activityType(activity.sport)
+        // A swim typed in by hand has no pool length: Health takes it as unknown.
+        if configuration.activityType == .swimming { configuration.swimmingLocationType = activity.type == "OpenWaterSwim" ? .openWater : .unknown }
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: HKDevice.local())
         var meta = metadata("workout:" + activity.key)
         meta[HKMetadataKeyWorkoutBrandName] = "Aurin"

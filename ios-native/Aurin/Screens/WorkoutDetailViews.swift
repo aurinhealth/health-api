@@ -1457,135 +1457,197 @@ struct FeedbackSheet: View {
     }
 }
 
-/// A session typed in by hand: done today or before, or planned ahead.
-/// Zapsat trénink: a workout already done. The length from the sport's
-/// presets, the day and when it ended (now unless moved); the heart rate and
-/// calories of that window come from Apple or Google Health.
+/// "+" → Log workout (concept 14-plus): a workout already done. Ride, Run,
+/// Swim, Gym or any type under More; the day, the start (ending now unless
+/// moved) and the length on a slider; the heart rate and calories of that
+/// window from Apple or Google Health, else how hard it was from 1 to 10.
 struct ManualWorkoutSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    /// ride, run, swim, gym, or other with a type picked under More.
     @State private var sport = "gym"
+    @State private var other: ActivityTypeOption?
+    @State private var pickingType = false
     @State private var minutes = 60
     @State private var day = Date()
-    @State private var end = Date()
-    @State private var endMoved = false
-    @State private var pickingEnd = false
+    @State private var start = Date()
+    @State private var startMoved = false
+    @State private var pickingStart = false
     @State private var heart: WindowHeartRate?
     @State private var watch: WatchMatch?
     @State private var pair = true
-    @State private var rpe = 6.0
+    @State private var rpe = 6
     @State private var saving = false
     @State private var error: String?
 
-    static let presets: [String: [Int]] = ["gym": [30, 45, 60, 75, 90], "ride": [60, 90, 120, 180, 240], "run": [20, 30, 45, 60, 90]]
-    private static let defaults: [String: Int] = ["gym": 60, "ride": 90, "run": 45]
+    /// Ride, Run, Swim, Gym: the sport order everywhere in the app.
+    static let sports: [(id: String, title: String, symbol: String, color: Color)] = [
+        ("ride", "Kolo", "bicycle", Palette.Sport.ride), ("run", "Běh", "figure.run", Palette.Sport.run),
+        ("swim", "Plavání", "figure.pool.swim", Palette.Sport.swim), ("gym", "Posilovna", "dumbbell.fill", Palette.Sport.gym)
+    ]
+    static let defaults: [String: Int] = ["ride": 90, "run": 45, "swim": 45, "gym": 60, "other": 45]
+    /// "very easy" … "all out" after the number picked (concept 14-plus, Log workout).
+    static let effort = ["velmi lehké", "lehké", "střední", "spíš těžké", "těžké", "těžké", "velmi těžké", "velmi těžké", "extrémně těžké", "naplno"]
 
-    /// The day's date with the end's clock time; today and not moved means now.
-    private var endAt: Date {
+    /// The day with the start's clock time; not moved, it ends now (or the
+    /// day's same time), so the start is that minus the length.
+    private var startAt: Date {
         let calendar = Calendar.current
-        let clock = calendar.dateComponents([.hour, .minute], from: endMoved ? end : Date())
-        let at = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0, second: 0, of: day) ?? day
-        return min(at, Date())
+        let latest = Date().addingTimeInterval(-Double(minutes) * 60)
+        if startMoved {
+            let clock = calendar.dateComponents([.hour, .minute], from: start)
+            let at = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0, second: 0, of: day) ?? day
+            return min(at, latest)
+        }
+        let clock = calendar.dateComponents([.hour, .minute], from: Date())
+        let end = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0, second: 0, of: day) ?? day
+        return min(end.addingTimeInterval(-Double(minutes) * 60), latest)
     }
-    private var startAt: Date { endAt.addingTimeInterval(-Double(minutes) * 60) }
-    private var windowKey: String { "\(sport)|\(minutes)|\(Int(endAt.timeIntervalSince1970 / 60))" }
+    private var endAt: Date { startAt.addingTimeInterval(Double(minutes) * 60) }
+    private var windowKey: String { "\(sport)|\(minutes)|\(Int(startAt.timeIntervalSince1970 / 60))" }
+    private var clock: Date.FormatStyle { Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale) }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Zapsat trénink") {
+        PageScroll {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .center) {
+                    Text("Zapsat trénink").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                }
                 sportTiles
-                lengthChips
                 SettingsGroup {
-                    DatePicker("Den", selection: $day, in: ...Date(), displayedComponents: .date)
+                    DatePicker("Datum", selection: $day, in: ...Date(), displayedComponents: .date)
                         .environment(\.locale, Fmt.locale)
                         .padding(.horizontal, 16).frame(minHeight: 50)
                     SettingsDivider()
-                    endRow
+                    startRow
+                    SettingsDivider()
+                    durationRow
                 }
                 watchCard
                 heartCard
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
+                    .disabled(saving)
+                    .accessibilityIdentifier("log.save")
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await save() } } label: { Text(saving ? "Ukládám…" : "Uložit").bold() }.disabled(saving)
-                }
-            }
-            .task(id: windowKey) { await loadHeart() }
+            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 30)
         }
+        .presentationDetents([.large])
+        .glassSheetBackground()
         .tint(Palette.ink)
+        .task(id: windowKey) { await loadHeart() }
+        .sheet(isPresented: $pickingType) {
+            ActivityTypeSheet(pick: { option in
+                other = option
+                choose("other")
+            })
+        }
     }
+
+    // MARK: Sport
 
     private var sportTiles: some View {
         HStack(spacing: 8) {
-            sportTile("ride", "Kolo", "figure.outdoor.cycle")
-            sportTile("run", "Běh", "figure.run")
-            sportTile("gym", "Posilovna", "dumbbell.fill")
+            ForEach(Self.sports, id: \.id) { s in
+                sportTile(id: s.id, title: L10n.tr(s.title), symbol: s.symbol, color: s.color) { choose(s.id) }
+            }
+            sportTile(id: "other", title: other?.name ?? L10n.tr("Další"),
+                      symbol: other.map { SportIcon.symbol($0.group, type: $0.type) } ?? "ellipsis", color: other == nil ? Palette.muted : Palette.Sport.other) {
+                pickingType = true
+            }
         }
     }
 
-    private func sportTile(_ id: String, _ title: String, _ symbol: String) -> some View {
+    private func choose(_ id: String) {
+        sport = id
+        minutes = Self.defaults[id] ?? 60
+    }
+
+    /// The sport's icon on its pale colour; the one picked has an ink frame and a tick.
+    private func sportTile(id: String, title: String, symbol: String, color: Color, action: @escaping () -> Void) -> some View {
         let on = sport == id
-        return Button {
-            sport = id
-            minutes = Self.defaults[id] ?? 60
-        } label: {
+        return Button(action: action) {
             VStack(spacing: 6) {
-                Image(systemName: symbol).scaledFont(17, weight: .semibold)
-                Text(title).font(Typo.small).lineLimit(1).minimumScaleFactor(0.8)
+                Image(systemName: symbol).scaledFont(16, weight: .semibold, cap: .denseCap)
+                    .foregroundStyle(color)
+                    .frame(width: 36, height: 36)
+                    .background(color.opacity(0.16), in: Circle())
+                Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
-            .foregroundStyle(on ? Palette.onButton : Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 64)
-            .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .frame(maxWidth: .infinity).frame(height: 76)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.ink : Color.clear, lineWidth: 2) }
+            .overlay(alignment: .topTrailing) {
+                if on {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Palette.onButton, Palette.button)
+                        .offset(x: 5, y: -5)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: title))
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityIdentifier("log.sport." + id)
     }
 
-    private var lengthChips: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Délka").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
-            HStack(spacing: 6) {
-                ForEach(Self.presets[sport] ?? [], id: \.self) { value in lengthChip(value) }
-            }
-        }
-    }
+    // MARK: When and how long
 
-    private func lengthChip(_ value: Int) -> some View {
-        let on = minutes == value
-        return Button { minutes = value } label: {
-            Text("\(value)").font(Typo.bodyStrong).monospacedDigit()
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .frame(maxWidth: .infinity).frame(height: 40)
-                .background(on ? Palette.button : Palette.card, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("\(value) min"))
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    @ViewBuilder private var endRow: some View {
+    @ViewBuilder private var startRow: some View {
         Button {
-            if !endMoved { end = endAt }
-            withAnimation(.snappy) { pickingEnd.toggle() }
+            if !startMoved { start = startAt }
+            withAnimation(.snappy) { pickingStart.toggle() }
         } label: {
             HStack {
-                Text("Skončil").foregroundStyle(Palette.ink)
+                Text("Začátek").foregroundStyle(Palette.ink)
                 Spacer()
-                Text(endMoved ? endAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)) : L10n.tr("Právě teď"))
-                    .foregroundStyle(pickingEnd ? Palette.amber : Palette.muted)
+                Text(startAt.formatted(clock)).foregroundStyle(pickingStart ? Palette.ink : Palette.muted).monospacedDigit()
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                    .rotationEffect(.degrees(pickingStart ? 90 : 0))
             }
             .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        if pickingEnd {
-            DatePicker("Skončil", selection: Binding(get: { end }, set: { end = $0; endMoved = true }), displayedComponents: .hourAndMinute)
+        if pickingStart {
+            DatePicker("Začátek", selection: Binding(get: { start }, set: { start = $0; startMoved = true }), displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel).labelsHidden()
                 .environment(\.locale, Fmt.locale)
                 .frame(maxWidth: .infinity)
         }
     }
+
+    private var durationRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Doba trvání").foregroundStyle(Palette.ink)
+                Spacer()
+                Text(verbatim: Self.length(minutes)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+            }
+            Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0) }), in: 5...240, step: 5)
+                .accessibilityValue(Text(verbatim: Self.length(minutes)))
+            HStack {
+                Text(verbatim: Self.length(5))
+                Spacer()
+                Text(verbatim: Self.length(240))
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+    }
+
+    /// "55 min", "1 h 30", "4 h".
+    static func length(_ minutes: Int) -> String {
+        if minutes < 60 { return "\(minutes) min" }
+        return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
+    }
+
+    // MARK: Heart rate or effort
 
     /// The watch already recorded this workout: pair with it, not twice.
     @ViewBuilder private var watchCard: some View {
@@ -1604,10 +1666,9 @@ struct ManualWorkoutSheet: View {
     }
 
     private func watchText(_ watch: WatchMatch) -> String {
-        let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
         let f = ISO8601DateFormatter()
         guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
-        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: ", ")
+        return [watch.name, a.formatted(clock) + "–" + b.formatted(clock)].compactMap { $0 }.joined(separator: ", ")
     }
 
     @ViewBuilder private var heartCard: some View {
@@ -1620,19 +1681,44 @@ struct ManualWorkoutSheet: View {
                     heartValue("Max.", heart.maxHr)
                     heartValue("Kalorie", heart.kcal)
                 }
-                Text(windowText).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(L10n.f("Tep z %@–%@", startAt.formatted(clock), endAt.formatted(clock))).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
             .cardSurface(cornerRadius: 18)
         } else {
             // No watch on: how hard it felt stands in for the heart rate.
-            SettingsGroup(title: "Náročnost") {
-                HStack {
-                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.ink)
-                    Text("\(Int(rpe))").font(Typo.number(22)).frame(width: 30)
+            effortGrid
+        }
+    }
+
+    private var effortGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(verbatim: L10n.tr("Jak náročné to bylo").uppercased(with: Fmt.locale))
+                .font(.caption.weight(.semibold)).tracking(1.2).foregroundStyle(Palette.muted)
+                .accessibilityAddTraits(.isHeader)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
+                ForEach(1...10, id: \.self) { value in
+                    let on = rpe == value
+                    Button { rpe = value } label: {
+                        Text("\(value)").font(Typo.bodyStrong).monospacedDigit()
+                            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                            .frame(maxWidth: .infinity).frame(height: 44)
+                            .background(on ? Palette.button : Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(verbatim: "\(value), " + L10n.tr(Self.effort[value - 1])))
+                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
-                .padding(.horizontal, 16).frame(minHeight: 50)
             }
+            // The ends of the scale, as WHOOP and Apple Fitness label them (D-PLUS-4).
+            HStack {
+                Text("1 Velmi lehké")
+                Spacer()
+                Text("10 Maximum")
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+            .accessibilityHidden(true)
+            Text(verbatim: "\(rpe), " + L10n.tr(Self.effort[rpe - 1])).font(Typo.small).foregroundStyle(Palette.secondary)
         }
     }
 
@@ -1643,13 +1729,8 @@ struct ManualWorkoutSheet: View {
         }
     }
 
-    private var windowText: String {
-        let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
-        return L10n.f("Tep z %@–%@", startAt.formatted(style), endAt.formatted(style))
-    }
-
     private func loadHeart() async {
-        if model.demo { heart = WindowHeartRate(avgHr: 118, maxHr: 156, kcal: 410); return }
+        if model.demo { heart = nil; return }
         try? await Task.sleep(for: .milliseconds(250))
         if Task.isCancelled { return }
         let found = await WorkoutHeartRate.window(start: startAt, end: endAt, api: model.api, appleHealth: AppleHealth.shared.enabled)
@@ -1659,17 +1740,20 @@ struct ManualWorkoutSheet: View {
         watch = found.watch
     }
 
+    // MARK: Save
+
     private func save() async {
         if model.demo { dismiss(); return }
         saving = true
         defer { saving = false }
-        let title = L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna")
+        let type = sport == "other" ? other?.type : nil
+        let title = sport == "other" ? (other?.name ?? L10n.tr("Trénink")) : L10n.tr(["ride": "Jízda", "run": "Běh", "swim": "Plavání"][sport] ?? "Posilovna")
         let start = startAt, date = AppModel.localDate(start)
         let measured = heart?.avgHr != nil ? heart : nil
-        let effort = measured == nil ? Int(rpe) : nil
+        let effort = measured == nil ? rpe : nil
         let pairWith = pair ? watch?.key : nil
         do {
-            let result = try await model.api.manualWorkout(name: title, date: date, sport: sport, minutes: minutes, completed: true, rpe: effort, notes: "",
+            let result = try await model.api.manualWorkout(name: title, date: date, sport: sport, type: type, minutes: minutes, completed: true, rpe: effort, notes: "",
                                                            start: start, heart: measured, pairWith: pairWith)
             // Paired: the watch put it in Apple or Google Health already.
             if pairWith != nil {
@@ -1679,7 +1763,7 @@ struct ManualWorkoutSheet: View {
             }
             // Done: to the apps chosen in Zdroje dat (Aurin posílá) (the server sent its part already).
             let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: date,
-                                          start: start, minutes: minutes, notes: "", rpe: effort)
+                                          start: start, minutes: minutes, notes: "", rpe: effort, type: type)
             await model.shareActivity(activity, sends: result.sends ?? [])
             await model.refreshTraining()
             dismiss()

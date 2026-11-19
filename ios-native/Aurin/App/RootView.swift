@@ -205,8 +205,30 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
+                // "+" open: the page dims under its card; a tap there closes it.
+                if showAdd && !model.immersive {
+                    Color.black.opacity(0.18)
+                        .ignoresSafeArea()
+                        .contentShape(Rectangle())
+                        .onTapGesture { closeAdd() }
+                        .accessibilityHidden(true)
+                        .transition(.opacity)
+                        .zIndex(3)
+                }
                 if !model.immersive {
                     VStack(spacing: 8) {
+                        // The "+" card floats above the bar (PlusCard.swift).
+                        if showAdd {
+                            PlusCard(close: closeAdd, openCoach: {
+                                closeAdd()
+                                showCoach = true
+                            })
+                            .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 4)
+                            .dynamicTypeSize(Self.textSizes)
+                            .transition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+                        }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
                             MinimizedGymBar(gym: gym, live: LiveWorkout.shared) { model.open(.trainingMode(gym.date)) }
@@ -221,7 +243,7 @@ struct RootView: View {
                                    onExpand: {
                                        barHeld = true
                                        withAnimation(.snappy) { compactBar = false }
-                                   }, onAdd: { showAdd = true })
+                                   }, addOpen: showAdd, onAdd: { showAdd ? closeAdd() : openAdd() })
                                 .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 8)
@@ -232,15 +254,8 @@ struct RootView: View {
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
+                    .zIndex(showAdd ? 4 : 0)
                 }
-            }
-            .sheet(isPresented: $showAdd) {
-                AddSheet(openCoach: {
-                    showAdd = false
-                    // One sheet at a time: the coach opens once "+" has closed.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showCoach = true }
-                })
-                .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
             .onChange(of: openSheet) { _, sheet in
@@ -400,6 +415,9 @@ struct RootView: View {
         closeSheets { Task { await open(id) } }
     }
 
+    private func openAdd() { withAnimation(.snappy) { showAdd = true } }
+    private func closeAdd() { withAnimation(.snappy) { showAdd = false } }
+
     /// The sheet on top of the tabs, for ScreenTrail; nil on the tab itself.
     private var openSheet: String? {
         if model.needsSetup { return "setup" }
@@ -458,6 +476,7 @@ struct RootView: View {
 
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
+        if showAdd { closeAdd() }
         // A tab kept from before shows where it was scrolled.
         let compact = model.tab != tab && scrolledTabs.contains(tab) && (model.paths[tab] ?? []).isEmpty
         if model.tab != tab { barHeld = false }
@@ -602,6 +621,8 @@ struct TabBar: View {
     @Binding var tab: AppTab
     var compact: Bool = false
     var onExpand: () -> Void = {}
+    /// The "+" card is open: the button shows × and closes it.
+    var addOpen = false
     var onAdd: () -> Void
     @Namespace private var glass
 
@@ -659,11 +680,13 @@ struct TabBar: View {
         Button(action: onAdd) {
             Image(systemName: "plus")
                 .scaledFont(19, weight: .semibold, cap: .denseCap)
+                .rotationEffect(.degrees(addOpen ? 45 : 0))
                 .foregroundStyle(Palette.onButton)
                 .frame(width: size, height: size)
                 .background(Palette.button, in: Circle())
         }
-        .accessibilityLabel("Přidat záznam")
+        .accessibilityLabel(L10n.tr(addOpen ? "Zavřít" : "Přidat záznam"))
+        .accessibilityIdentifier("tab.plus")
     }
 
     /// The icon with the section's name under it (Petr, 2026-10-24), all in

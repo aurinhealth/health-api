@@ -12,6 +12,15 @@ extension AppModel {
         return true
     }
 
+    /// A drink from the "+" card: logged as addDrink does, and the local id its
+    /// Undo hands to deleteDrink (nil in the demo).
+    func addDrinkForUndo(ml: Int, kind: String) -> Int? {
+        guard !demo else { return nil }
+        let item = Self.drinkItem(ml: ml, kind: kind, date: writeDay)
+        write(item)
+        return item.overlay?.id
+    }
+
     /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
     func addDrinkToday(ml: Int, kind: String) {
         guard !demo else { return }

@@ -1513,5 +1513,25 @@
 			<string>%lld nad ním</string>
 		</dict>
 	</dict>
+	<key>%lld volných míst</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld volná místa</string>
+			<key>many</key>
+			<string>%lld volných míst</string>
+			<key>one</key>
+			<string>%lld volné místo</string>
+			<key>other</key>
+			<string>%lld volných míst</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

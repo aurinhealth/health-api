@@ -637,7 +637,12 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testNewScreens() throws {
-        try render("add-sheet", height: 1000) { AddSheet().environment(AppModel(demo: true)) }
+        // "+" (redesign N): the card over Today, its edit, and the sheets it opens.
+        try render("plus-card", height: 560, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}).padding(16) }.environment(AppModel(demo: true)) }
+        try render("plus-card-edit", height: 760, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}, editing: true).padding(16) }.environment(AppModel(demo: true)) }
+        try render("plus-log-workout", height: 1000, window: true) { ManualWorkoutSheet().environment(AppModel(demo: true)) }
+        try render("plus-log-weight", height: 420, window: true) { WeightEntrySheet().environment(AppModel(demo: true)) }
+        try render("plus-log-period", height: 420, window: true) { PeriodLogSheet().environment(AppModel(demo: true)) }
         try render("body-map", height: 320) {
             BodyMap(load: ["chest": 1, "biceps": 0.6, "quads": 0.3], selected: ["chest"]).padding(20)
         }

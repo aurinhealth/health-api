@@ -526,6 +526,8 @@ struct SleepIndexNights: View {
 
 // MARK: - Weight
 
+/// Log weight ("+", Health → Weight; concept 14-plus): the last weigh-in to
+/// start from, − and + by 0.1, a tap on the number types it.
 struct WeightEntrySheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -534,27 +536,86 @@ struct WeightEntrySheet: View {
     @State private var error: String?
     @FocusState private var focused: Bool
 
+    /// The last weigh-in, kg, and its day (Health), the starting number.
+    private var last: (kg: Double, date: String)? {
+        model.health?.weight.map { ($0.latest, $0.date) }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Zapsat váhu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-            HStack(alignment: .firstTextBaseline) {
-                TextField(placeholder, text: $text).keyboardType(.decimalPad).font(Typo.number(56)).focused($focused)
-                Text(Units.weightUnit).font(Typo.body).foregroundStyle(Palette.faint)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center) {
+                Text("Zapsat váhu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+            }
+            // − and + by 0.1 (held, they repeat); a tap on the number types it (D-PLUS-3).
+            HStack(alignment: .center, spacing: 12) {
+                stepButton(-1)
+                Spacer(minLength: 0)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    TextField(placeholder, text: $text)
+                        .keyboardType(.decimalPad)
+                        .font(Typo.number(64))
+                        .multilineTextAlignment(.center)
+                        .fixedSize()
+                        .focused($focused)
+                        .foregroundStyle(Palette.ink)
+                        .accessibilityLabel(Text("Váha"))
+                        .accessibilityIdentifier("weight.value")
+                    Text(Units.weightUnit).font(Typo.body).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 0)
+                stepButton(1)
+            }
+            if let last {
+                Text(L10n.f("Poslední záznam %@, %@", Units.weightText(last.kg), Self.when(last.date)))
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            Button {
-                Task { await save() }
-            } label: {
-                Text(saving ? "Ukládám…" : "Uložit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-            }
-            .disabled(saving || value == nil)
-            Spacer()
+            PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
+                .disabled(saving || value == nil)
+            Spacer(minLength: 0)
         }
         .padding(24)
-        .presentationDetents([.medium])
+        .presentationDetents([.height(340), .medium])
         .glassSheetBackground()
-        .onAppear { focused = true }
+        .onAppear {
+            // The last weigh-in to start from; nothing yet: type it.
+            if text.isEmpty, let last { text = Fmt.decimal((Units.weight(last.kg) * 10).rounded() / 10) } else if last == nil { focused = true }
+        }
+    }
+
+    private func stepButton(_ direction: Double) -> some View {
+        Button { step(direction) } label: {
+            Image(systemName: direction < 0 ? "minus" : "plus").scaledFont(18, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(Palette.ink)
+                .frame(width: 48, height: 48)
+                .background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .buttonRepeatBehavior(.enabled)
+        .accessibilityLabel(L10n.tr(direction < 0 ? "Méně" : "Více"))
+    }
+
+    private func step(_ direction: Double) {
+        let shown = Double(text.replacingOccurrences(of: ",", with: ".")) ?? last.map { Units.weight($0.kg) } ?? (Units.imperial ? 180 : 80)
+        text = Fmt.decimal(((shown + direction * 0.1) * 10).rounded() / 10)
+    }
+
+    /// "Tuesday" within the week, else the date.
+    static func when(_ date: String) -> String {
+        let today = AppModel.localDate(Date())
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let a = f.date(from: today), let b = f.date(from: date) else { return date }
+        let days = Int((a.timeIntervalSince(b) / 86400).rounded())
+        if days == 0 { return L10n.tr("dnes") }
+        if days == 1 { return L10n.tr("včera") }
+        return days < 7 ? Fmt.capitalized(Fmt.weekdayName(date)) : Fmt.dayMonth(date)
     }
 
     private var placeholder: String {
