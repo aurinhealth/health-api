@@ -261,10 +261,7 @@ struct TrainingModeView: View {
             Task { await Reminders.restEnds(at: end) }
             syncActivity()
             // Over (ran out, skipped or a set began): its length stays between the rows.
-            if old != nil, end == nil, let row = restAfter, let start = restStart {
-                restTaken[row] = max(1, Int(Date().timeIntervalSince(start).rounded()))
-                restAfter = nil
-            }
+            if let old, end == nil { keepRest(until: old) }
         }
         // The rest's ticks and end, whatever is open on the screen.
         .task(id: restEnd) { if let end = restEnd { await runRest(end) } }
@@ -512,7 +509,7 @@ struct TrainingModeView: View {
                 }
             }
             // The rest before this exercise, after the last set of the one before.
-            if let end = restEnd, !exercise.sets.contains(where: \.done) {
+            if let end = restEnd, !exercise.sets.contains(where: { $0.row == restAfter }) {
                 LiveRestGap(end: end, total: restTotal)
             }
             if let partner, let letter = ExerciseOrder.letter(exercise.superset) {
@@ -873,6 +870,26 @@ struct TrainingModeView: View {
     }
 
     // MARK: The rest
+
+    /// The rest ends now (a set began during it).
+    private func endRest() {
+        if let end = restEnd { keepRest(until: end) }
+        restEnd = nil
+    }
+
+    /// A rest that ended: how long it was (never past its end, though it was
+    /// cleared later, e.g. back from the lock screen) under the set before it.
+    private func keepRest(until end: Date) {
+        guard let row = restAfter, let start = restStart else { return }
+        restTaken[row] = max(1, Int(min(Date(), end).timeIntervalSince(start).rounded()))
+        restAfter = nil
+    }
+
+    /// Rows moved (a set deleted, a drop set added or removed): the rests follow their sets.
+    private func moveRests(_ to: (Int) -> Int?) {
+        restTaken = Dictionary(restTaken.compactMap { row, seconds in to(row).map { ($0, seconds) } }, uniquingKeysWith: { a, _ in a })
+        restAfter = restAfter.flatMap(to)
+    }
 
     /// The rest's ticks and its end, whatever is on screen (the countdown
     /// shows between the set rows and in the pinned button).
@@ -1781,12 +1798,6 @@ struct TrainingModeView: View {
         WatchBridge.shared.sendRest(rest)
     }
 
-    private func move(_ by: Int) {
-        guard let count = day?.exercises.count else { return }
-        index = min(max(0, index + by), count - 1)
-        restEnd = nil
-    }
-
     /// Only this rest: the default stays as set.
     private func shiftRest(_ seconds: Int) {
         guard let end = restEnd else { return }
@@ -2332,6 +2343,7 @@ struct TrainingModeView: View {
         planLetters = Self.moved(planLetters) { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         kept = Set(kept.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
         typed.move { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
+        moveRests { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         if !next.exercises.isEmpty {
             index = min(index, next.exercises.count - 1)
             if !next.exercises[index].sets.contains(where: { !$0.done }) {
@@ -2358,6 +2370,7 @@ struct TrainingModeView: View {
             kept = Set(kept.map { $0 > row ? $0 + 1 : $0 })
             planLetters = Self.moved(planLetters) { $0 > row ? $0 + 1 : $0 }
             typed.move { $0 > row ? $0 + 1 : $0 }
+            moveRests { $0 > row ? $0 + 1 : $0 }
         }
         let old = day
         await saveDay(next)
@@ -2371,6 +2384,7 @@ struct TrainingModeView: View {
         planLetters = Self.moved(planLetters) { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         kept = Set(kept.compactMap { $0 == row ? nil : $0 > row ? $0 - 1 : $0 })
         typed.move { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
+        moveRests { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         await saveDay(next)
     }
 
@@ -2465,6 +2479,8 @@ struct TrainingModeView: View {
 
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
+        // A set begun during the rest ends the rest: its length stays between the rows.
+        if restEnd != nil { endRest() }
         let letter = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
         if letter != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg, machineLb: lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? ""))
@@ -2512,10 +2528,6 @@ struct TrainingModeView: View {
         }
         // A rest only before a set still to do on the screen it leads to.
         if next.exercises[safe: index]?.sets.contains(where: { !$0.done }) == true, rest > 0 {
-            // A rest cut short by this set: its length stays between the rows.
-            if restEnd != nil, let row = restAfter, let start = restStart {
-                restTaken[row] = max(1, Int(Date().timeIntervalSince(start).rounded()))
-            }
             restAfter = set.row
             restTotal = rest
             restStart = Date()

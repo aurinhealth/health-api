@@ -250,7 +250,7 @@ struct GymSetTableHeader: View {
             }
         }
         .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
-        .padding(.horizontal, 10).padding(.bottom, 4)
+        .padding(.horizontal, effort ? 8 : 10).padding(.bottom, 4)
     }
 
     @ViewBuilder
