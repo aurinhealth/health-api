@@ -515,18 +515,21 @@ struct OxygenWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Kyslík v krvi", color: Palette.blue)
-            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: oxygen.high <= oxygen.low) {
+            // One night is a dot, not a chart: the chart and the 14-day span wait for a second night.
+            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: oxygen.high <= oxygen.low && values.count > 1) {
                 NumberText(value: Fmt.decimal(oxygen.value, digits: oxygen.value.rounded() == oxygen.value ? 0 : 1), unit: "%")
                 if oxygen.high > oxygen.low {
                     TileRange(value: oxygen.value, low: oxygen.low, high: oxygen.high, edges: (Fmt.int(oxygen.low), Fmt.int(oxygen.high)), tint: Palette.blue)
-                } else {
+                } else if values.count > 1 {
                     // Too few nights for a usual range: the span of the 14 days shown.
                     Text(L10n.f("14 dní %@–%@ %%", Fmt.int(values.min() ?? oxygen.value), Fmt.int(values.max() ?? oxygen.value))).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
-                VStack(spacing: 6) {
-                    LineChart(values: values, color: Palette.blue, lo: (values.min() ?? 90) - 1, hi: 100, height: height)
-                    ChartSpan(dates: oxygen.series.map(\.date))
+                if values.count > 1 {
+                    VStack(spacing: 6) {
+                        LineChart(values: values, color: Palette.blue, lo: (values.min() ?? 90) - 1, hi: 100, height: height)
+                        ChartSpan(dates: oxygen.series.map(\.date))
+                    }
                 }
             }
         }

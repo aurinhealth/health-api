@@ -99,8 +99,8 @@ struct ActiveEnergyDayRow: View {
         let done = (day?.activities ?? []).filter { $0.status == "done" }
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(verbatim: heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer()
+                Text(verbatim: heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize()
+                Spacer(minLength: 8)
                 if let kcal {
                     Text(verbatim: L10n.f("%@ kcal aktivně", Fmt.int(kcal))).font(Typo.bodyStrong).foregroundStyle(Palette.rust)
                 } else {

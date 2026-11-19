@@ -408,12 +408,14 @@ struct CalendarDayList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer()
+                // The day's word stays whole ("Yester…" next to a long total, Tapwright 2026-11-19).
+                Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize()
+                Spacer(minLength: 8)
                 // The day's total only once there is something to add up: with
                 // one activity it repeated the row's own numbers.
                 if let day, day.count > 1 {
                     Text(Fmt.hoursMinutesLong(day.minutes) + ", " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
             }
             .padding(.bottom, 4)

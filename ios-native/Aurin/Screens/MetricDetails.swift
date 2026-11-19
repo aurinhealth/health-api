@@ -209,13 +209,16 @@ struct MetricDetailContent: View {
                 DetailRange(value: o.value, low: o.low, high: o.high, label: L10n.f("obvyklé rozmezí %@–%@ %%", Fmt.int(o.low), Fmt.int(o.high)), tint: Palette.blue)
                     .padding(.top, 14)
             }
-            MetricChart(title: "Kyslík po nocích", color: Palette.blue) {
-                TrendChart(points: o.series, color: Palette.blue, unit: "%", band: o.high > o.low ? o.low...o.high : nil, bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1,
-                           trend: MetricMath.trend(o.series, step: 0.5))
+            // One night is a lone dot: the chart and the lowest night wait for a second one (Tapwright 2026-11-19).
+            if o.series.count > 1 {
+                MetricChart(title: "Kyslík po nocích", color: Palette.blue) {
+                    TrendChart(points: o.series, color: Palette.blue, unit: "%", band: o.high > o.low ? o.low...o.high : nil, bandLabel: L10n.tr("obvyklé rozmezí"), digits: 1,
+                               trend: MetricMath.trend(o.series, step: 0.5))
+                }
+                // The lowest night, shown nowhere else.
+                StatRow(title: "Nejnižší noc", value: Fmt.decimal(o.series.map(\.value).min(), digits: digits), unit: "%")
+                    .padding(.top, 12)
             }
-            // The lowest night, shown nowhere else.
-            StatRow(title: "Nejnižší noc", value: Fmt.decimal(o.series.map(\.value).min(), digits: digits), unit: "%")
-                .padding(.top, 12)
         } else {
             MetricEmpty()
         }
