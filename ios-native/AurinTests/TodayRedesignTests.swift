@@ -51,9 +51,9 @@ final class TodayRedesignTests: XCTestCase {
             L10n.setLanguage("cs")
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
-        XCTAssertEqual(TodayDials.length(414), "6 h 54")
-        XCTAssertEqual(TodayDials.length(425), "7 h 05")
-        XCTAssertEqual(TodayDials.length(45), "45 min")
+        XCTAssertEqual(TodayDials.length(414), "6\u{00A0}h\u{00A0}54")
+        XCTAssertEqual(TodayDials.length(425), "7\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(TodayDials.length(45), "45\u{00A0}min")
         let dials = TodayDials(today: DemoData.today)
         XCTAssertNotNil(dials.strain.note)
         XCTAssertTrue(dials.strain.note?.hasPrefix("target ") ?? false)

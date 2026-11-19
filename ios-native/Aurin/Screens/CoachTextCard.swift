@@ -90,7 +90,8 @@ struct CoachTextCard: View {
         VStack(alignment: .leading, spacing: 12) {
             if text != nil || advice != nil {
                 Button { withAnimation(.snappy) { folded.toggle() } } label: {
-                    header(chevron: true).contentShape(Rectangle())
+                    // 44 pt to tap, laid out as the header's own height.
+                    header(chevron: true).frame(minHeight: 44).contentShape(Rectangle()).padding(.vertical, -11)
                 }
                 .buttonStyle(.plain)
                 // Not "Kouč": that is the button that opens the chat.

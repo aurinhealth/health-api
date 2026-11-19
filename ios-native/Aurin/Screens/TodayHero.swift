@@ -13,7 +13,7 @@ extension ReadinessText {
         case "hard": return L10n.tr("Tvoje čísla zvládnou tvrdý trénink")
         case "steady": return L10n.tr("Tvoje čísla jsou pro den s mírou")
         case "easy": return L10n.tr("Tvoje čísla ukazují na lehký den")
-        case "signs": return L10n.tr("Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím")
+        case "signs": return L10n.tr("Teplota nebo dech jsou nad tvým obvyklým rozmezím")
         case "usual": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí")
         case "paused": return L10n.tr("Trénink je dnes pozastavený")
         default: return nil
@@ -52,7 +52,7 @@ struct WeatherCapsule: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .tapTarget(width: 44, height: 44)
+        .tapTarget(width: 30, height: 30)
         .accessibilityLabel(Text(verbatim: spoken))
         .accessibilityHint(Text(verbatim: L10n.tr(weather == nil ? "Vybere místo pro počasí" : "Otevře předpověď")))
         .accessibilityIdentifier("today-weather.capsule")
@@ -209,7 +209,8 @@ struct TodayDials: View {
     static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
         let m = Int(minutes.rounded())
-        return m < 60 ? "\(m) min" : "\(m / 60) h " + String(format: "%02d", m % 60)
+        // No-break spaces: "6 h 54" never splits inside the dial.
+        return m < 60 ? "\(m)\u{00A0}min" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
     }
 
     /// The night against its need: "6 min short of 7 h", amber below the need,
@@ -266,9 +267,10 @@ struct TodayDials: View {
 
     private func cell(_ title: String, _ c: Cell) -> some View {
         VStack(spacing: 6) {
-            RangeDial(value: c.value, scale: c.scale, band: c.band, fill: c.fill, size: dial, lineWidth: 6) {
+            RangeDial(value: c.value, scale: c.scale, band: c.band, fill: c.fill, size: min(dial, 96), lineWidth: 6) {
                 VStack(spacing: 0) {
                     Text(verbatim: c.number).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                        .lineLimit(1)
                     if let unit = c.unit, c.number != "–" {
                         Text(verbatim: unit).font(Typo.tiny).foregroundStyle(Palette.muted)
                     }

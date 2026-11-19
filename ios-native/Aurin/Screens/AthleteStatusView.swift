@@ -107,9 +107,14 @@ struct AthleteStatusPill: View {
 /// never moves the number below; "until" is in the sheet and VoiceOver.
 struct AthleteStatusRow<Trailing: View>: View {
     @Environment(AppModel.self) private var model
+    /// The note only under a readiness number: a title without one (learning,
+    /// no watch) sits where the note would.
+    var showsNote = true
     @ViewBuilder var trailing: Trailing
     @State private var editing = false
     @ScaledMetric(relativeTo: .footnote) private var icon: CGFloat = 14
+    /// The note's line under the 44 pt row.
+    @ScaledMetric(relativeTo: .footnote) private var noteDrop: CGFloat = 34
 
     var body: some View {
         let status = model.athleteStatus ?? .active
@@ -135,7 +140,7 @@ struct AthleteStatusRow<Trailing: View>: View {
         }
         // The note under the row, as wide as the row, outside its layout.
         .overlay(alignment: .topLeading) {
-            if let note {
+            if let note, showsNote {
                 Button { editing = true } label: {
                     ViewThatFits(in: .horizontal) {
                         noteText(note).fixedSize().padding(.leading, icon + 6)
@@ -146,7 +151,7 @@ struct AthleteStatusRow<Trailing: View>: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityHidden(true)
-                .offset(y: 34)
+                .offset(y: noteDrop)
             }
         }
         .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }

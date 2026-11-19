@@ -156,10 +156,11 @@ struct TodayContent: View {
                     // The label's width, so a long injury note stops short of it.
                     Text("Připravenost").font(Typo.body).hidden().accessibilityHidden(true)
                     Spacer(minLength: 0)
-                    AthleteStatusRow { WeatherCapsule(weather: today.weather) }
+                    AthleteStatusRow(showsNote: today.readiness.score != nil) { WeatherCapsule(weather: today.weather) }
                 }
                 // The row is 44 pt tall around the label's line.
                 .padding(.top, -12)
+                .dynamicTypeSize(...DynamicTypeSize.denseCap)
             }
         }
         .padding(.top, 40)
