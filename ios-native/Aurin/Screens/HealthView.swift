@@ -95,6 +95,12 @@ struct HealthContent: View {
                 VStack(alignment: .leading, spacing: 0) {
                     TabHeader(date: model.headerDay(health.date), coach: actions.coach, settings: actions.settings)
                     WeekStrip(date: model.headerDay(health.date)).padding(.top, 14)
+                    // Stale or broken sources, as on Today (DATA-4: freshness and
+                    // connection states stay).
+                    if model.selectedDate == nil && !model.demo {
+                        DataAgePill()
+                        ConnectionProblemCard()
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 16)
@@ -111,13 +117,17 @@ struct HealthContent: View {
     private var day: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
-                RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness, date: health.date) }
-                    .padding(.top, 24)
-
-                // Cycle tracking, only for today, with the morning question
-                // (on Today only in the Cyklus widget).
-                if (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
-                    CycleHealthSection(state: state, today: (page.map(\.today) ?? model.today)?.cycle).padding(.top, 12)
+                // Redesign H: Aurin age on top, readiness is a row of Health
+                // monitor below (D-ZDRAVI-1, -3).
+                AurinAgeHero(health: health, pro: ProStore.shared.entitled || model.demo, noWearable: model.noWearable)
+                    .padding(.top, 20)
+                if let age = health.aurinAge {
+                    AurinAgeTrendCard(age: age).padding(.top, 20)
+                    AurinAgeShapes(age: age, health: health).padding(.top, 28)
+                    AurinAgeCoachCard(age: age).padding(.top, 12)
+                }
+                if model.noWearable {
+                    NoDeviceCard(connect: actions.settings).padding(.top, 20)
                 }
             }
 
@@ -125,83 +135,17 @@ struct HealthContent: View {
                         data: WidgetData(panel: .health, today: page.map(\.today) ?? model.today, health: health, training: model.training, food: page.map(\.food) ?? model.food),
                         editing: $editing)
                 .padding(.top, editing ? 0 : 30)
+
+            // Cycle tracking, only for today and for those who track it, under
+            // Body (D-ZDRAVI-20), with the morning question.
+            if !editing, (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                CycleHealthSection(state: state, today: (page.map(\.today) ?? model.today)?.cycle).padding(.top, 20)
+            }
         }
     }
 }
 
 // MARK: - Readiness
-
-struct ReadinessCard: View {
-    @Environment(AppModel.self) private var model
-    let readiness: HealthSnapshot.Readiness
-    var date: String = ""
-
-    var body: some View {
-        Card {
-            HStack {
-                Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
-                Spacer()
-            }
-            if let score = readiness.score {
-                HStack(alignment: .lastTextBaseline, spacing: 12) {
-                    Text(String(score)).font(Typo.number(88)).foregroundStyle(Palette.ink)
-                    if let pill = ReadinessText.pill(readiness.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
-                }
-                PartsRow(parts: readiness.parts)
-            } else if let days = readiness.learningDays {
-                ReadinessLearning(days: days, date: date, title: Typo.heading(30, relativeTo: .title))
-            } else if model.noWearable {
-                NoWearableText(title: Typo.heading(30, relativeTo: .title))
-            } else {
-                Text("Zatím bez čísla").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
-                    .font(Typo.small).foregroundStyle(Palette.muted)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// Sleep, resting heart rate and HRV under the readiness: today's value,
-/// higher or lower than usual and a band with the usual range. Parts without
-/// a range (breathing, temperature, the morning check-in) follow in one line
-/// as readiness points.
-struct PartsRow: View {
-    let parts: [HealthSnapshot.Part]
-
-    private var measured: [HealthSnapshot.Part] { parts.filter { $0.value != nil && $0.low != nil && $0.high != nil } }
-    private var others: [HealthSnapshot.Part] { parts.filter { !measured.contains($0) } }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 0) {
-                ForEach(Array(measured.enumerated()), id: \.element.id) { index, part in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(width: 1).padding(.vertical, 2) }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(ReadinessText.label(part.key)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Text(ReadinessText.value(part)).font(Typo.number(24)).foregroundStyle(Palette.ink)
-                            Text(ReadinessText.unit(part.key)).font(Typo.caption).foregroundStyle(Palette.muted)
-                        }
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        Text(ReadinessText.word(part)).font(Typo.caption.weight(.medium))
-                            .foregroundStyle(ReadinessText.color(part)).lineLimit(1).minimumScaleFactor(0.8)
-                        RangeBand(part: part).padding(.top, 6)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, index > 0 ? 12 : 0)
-                    .padding(.trailing, index < measured.count - 1 ? 12 : 0)
-                }
-            }
-            if !others.isEmpty {
-                Text(others.map { L10n.tr(ReadinessText.label($0.key)) + " " + Fmt.signed(Double($0.points)) }.joined(separator: ", "))
-                    .font(Typo.caption).foregroundStyle(others.contains { $0.points < 0 } ? Palette.rust : Palette.green)
-            }
-        }
-        .padding(.top, 4)
-    }
-}
 
 /// The readiness part on the shared range bar.
 struct RangeBand: View {
@@ -227,49 +171,20 @@ enum ReadinessText {
         }
     }
 
-    static func unit(_ key: String) -> String {
-        switch key {
-        case "hrv": return "ms"
-        case "restingHR": return "bpm"
-        case "sleep": return "h"
-        default: return ""
-        }
-    }
-
-    static func value(_ part: HealthSnapshot.Part) -> String {
-        part.key == "sleep" ? Fmt.hoursMinutes(part.value) : Fmt.int(part.value)
-    }
-
-    /// "58–70 ms", "7:10–8:00 h".
-    static func range(_ part: HealthSnapshot.Part) -> String {
-        let show = { (x: Double?) in part.key == "sleep" ? Fmt.hoursMinutes(x) : Fmt.int(x) }
-        // "7:20–8:10" needs no "h"; heart rate in bpm as everywhere else.
-        return show(part.low) + "–" + show(part.high) + (part.key == "sleep" ? "" : " " + unit(part.key))
-    }
-
     /// -1 under the usual range, 1 above it, 0 within.
     static func side(_ part: HealthSnapshot.Part) -> Int {
         guard let value = part.value, let low = part.low, let high = part.high else { return 0 }
         return value > high ? 1 : value < low ? -1 : 0
     }
 
-    /// "↑ vyšší", "↓ kratší", "obvyklé" on the card.
-    static func word(_ part: HealthSnapshot.Part) -> String {
-        switch side(part) {
-        case 1: return "↑ " + L10n.tr(part.key == "sleep" ? "delší" : "vyšší")
-        case -1: return "↓ " + L10n.tr(part.key == "sleep" ? "kratší" : "nižší")
-        default: return L10n.tr("obvyklé")
-        }
-    }
-
-    /// "lepší než obvykle" in the readiness detail: what the value means, in the
-    /// colour of its points, since a lower resting heart rate helps and a shorter
-    /// night costs (the bar above already shows the direction).
+    /// Where the value is against the usual range, in words only (intended
+    /// purpose); the colour of its points says whether it helps.
     static func longWord(_ part: HealthSnapshot.Part) -> String {
-        if side(part) == 0 { return L10n.tr("v obvyklém rozmezí") }
-        if part.points > 0 { return L10n.tr("lepší než obvykle") }
-        if part.points < 0 { return L10n.tr("horší než obvykle") }
-        return side(part) == 1 ? "↑ " + L10n.tr("nad obvyklým rozmezím") : "↓ " + L10n.tr("pod obvyklým rozmezím")
+        switch side(part) {
+        case 1: return L10n.tr("nad obvyklým rozmezím")
+        case -1: return L10n.tr("pod obvyklým rozmezím")
+        default: return L10n.tr("v obvyklém rozmezí")
+        }
     }
 
     /// Green when the value helps the readiness, rust when it costs points.
@@ -311,10 +226,13 @@ enum ReadinessText {
 
 struct ReadinessDetailContent: View {
     let health: HealthSnapshot
+    /// Today's rule-based sentence and advice (TodaySnapshot.summary) for the coach card.
+    var summary: TodaySnapshot.Summary? = nil
     /// No watch or ring (AppModel.noWearable): why no number is coming.
     var noWearable = false
     /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
     var checkin: String?? = nil
+    @Environment(\.tabActions) private var actions
 
     var body: some View {
         let r = health.readiness
@@ -330,11 +248,17 @@ struct ReadinessDetailContent: View {
                 // Without a number, why (audit 14.4): the same as the Health card.
                 ReadinessLearning(days: days, date: health.date, title: Typo.heading(30, relativeTo: .title))
             } else if noWearable {
-                NoWearableText(title: Typo.heading(30, relativeTo: .title))
+                NoDeviceCard(connect: actions.settings).padding(.top, 12)
             } else {
                 Text("Zatím bez čísla").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
                 Text("Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
+            }
+
+            // The coach card stays (redesign H); Ask Coach is its last row,
+            // the coach itself is top right.
+            if let summary, let lead = summary.headline ?? summary.text {
+                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
             }
 
             if let checkin {
@@ -342,7 +266,8 @@ struct ReadinessDetailContent: View {
             }
 
             if !r.parts.isEmpty {
-                SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
+                // Not "What shapes it": that is Aurin age's (D-ZDRAVI-22).
+                SectionLabel(text: "Minulá noc proti tvému obvyklému").padding(.top, 32)
                 VStack(spacing: 0) {
                     ForEach(r.parts) { part in
                         if let route = Self.route(part.key) {
@@ -405,8 +330,8 @@ struct ReadinessDetailContent: View {
                 Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
             }
             if part.low != nil, part.high != nil, part.value != nil {
+                // The word and the bar, no range numbers on readiness (SCI-4).
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("obvyklé rozmezí %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Spacer()
                     Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
                 }

@@ -55,10 +55,9 @@ enum WidgetPanel: String {
             // weight) are on Health.
             return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
-            return [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
-                    .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
-                    .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small),
-                    .init(kind: .weight, size: .medium), .init(kind: .bodyFat, size: .medium), .init(kind: .muscle, size: .medium)]
+            // Redesign H: the five values as one monitor, the night and the body as one card each.
+            return [.init(kind: .journal, size: .medium), .init(kind: .healthMonitor, size: .medium),
+                    .init(kind: .night, size: .medium), .init(kind: .body, size: .medium)]
         case .training:
             // Redesign T: the Overview of the concept; the week, its workouts and the
             // zones stay in the gallery to add back.
@@ -72,7 +71,7 @@ enum WidgetPanel: String {
     var recommended: [WidgetKind] {
         switch self {
         case .today: return [.cycle, .sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
-        case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
+        case .health: return [.steps, .vo2max, .hrv, .restingHR, .sleepDebt, .form, .drinks, .food, .activeCalories]
         case .training: return [.musclesFigure, .thisWeek, .zones, .activeCalories, .sessions, .musclesGlance, .sleep, .hrv, .restingHR, .steps]
         case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
@@ -135,6 +134,8 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case journal
     /// Cyklus (CycleViews.swift): off until added; offered to those who track a cycle.
     case cycle
+    /// Redesign H (HealthHome.swift): Health monitor, last night with tonight, weight with body fat and muscle.
+    case healthMonitor, night, body
 
     var id: String { rawValue }
 
@@ -167,17 +168,20 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .muscle: return "Svalová hmota"
         case .journal: return "Deník"
         case .cycle: return "Cyklus"
+        case .healthMonitor: return "Health monitor"
+        case .night: return "Spánek a dnešní noc"
+        case .body: return "Tělo"
         }
     }
 
     var section: WidgetSection {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal, .cycle: return .health
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal, .cycle, .healthMonitor: return .health
         case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
         case .food, .drinks, .macros, .weekCalories: return .food
-        case .sleep, .sleepDebt, .bedtime: return .sleep
+        case .sleep, .sleepDebt, .bedtime, .night: return .sleep
         case .steps, .activeCalories: return .movement
-        case .weight, .bodyFat, .muscle: return .body
+        case .weight, .bodyFat, .muscle, .body: return .body
         }
     }
 
@@ -188,7 +192,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
             return [.small, .medium, .large]
         case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance, .cycle:
             return [.small, .medium]
-        case .sessions, .plan, .macros, .bedtime, .journal, .weekCalories:
+        case .sessions, .plan, .macros, .bedtime, .journal, .weekCalories, .healthMonitor, .night, .body:
             return [.medium]
         }
     }
@@ -204,7 +208,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     var source: AppTab? {
         switch self {
         case .restingHR, .hrv, .weight, .plan, .food, .steps, .cycle: return .today
-        case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
+        case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat, .healthMonitor, .night, .body: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
         case .muscle, .musclesFigure, .musclesGlance, .journal, .weekCalories: return nil
@@ -257,6 +261,30 @@ enum WidgetLayoutStore {
         // Deník came to Zdraví after the layouts were saved: on top, until removed.
         if panel == .health, !seen.contains(.journal), !UserDefaults.standard.bool(forKey: journalRemovedKey) {
             out.insert(PlacedWidget(kind: .journal, size: .medium), at: 0)
+        }
+        if panel == .health, !UserDefaults.standard.bool(forKey: healthRedesignKey) { out = redesigned(out) }
+        return out
+    }
+
+    /// Set once the athlete saves Zdraví after the redesign, so the layout is
+    /// converted only until then.
+    static let healthRedesignKey = "widgets.healthRedesign"
+
+    /// A Zdraví layout saved before redesign H, in the new cards: the five
+    /// values become Health monitor, the sleep cards the night, the weight
+    /// cards Tělo, each where the first of them was; the rest stays (plan:
+    /// layouts are converted, not lost).
+    static func redesigned(_ items: [PlacedWidget]) -> [PlacedWidget] {
+        let into: [WidgetKind: WidgetKind] = [.hrv: .healthMonitor, .restingHR: .healthMonitor, .respiration: .healthMonitor, .skinTemp: .healthMonitor, .oxygen: .healthMonitor,
+                                              .sleep: .night, .sleepDebt: .night, .bedtime: .night,
+                                              .weight: .body, .bodyFat: .body, .muscle: .body]
+        var seen = Set<WidgetKind>()
+        var out: [PlacedWidget] = []
+        for item in items {
+            let kind = into[item.kind] ?? item.kind
+            guard !seen.contains(kind) else { continue }
+            seen.insert(kind)
+            out.append(kind == item.kind ? item : PlacedWidget(kind: kind, size: .medium))
         }
         return out
     }
@@ -388,6 +416,11 @@ struct WidgetData {
         // Zdraví always had the weight card, with an offer to weigh in.
         case .weight: return weight != nil || panel == .health
         case .bodyFat: return health?.weight?.bodyFat != nil
+        // No watch or ring: one card says what is missing instead (D-ZDRAVI-1).
+        case .healthMonitor: return today?.readiness.noWearable != true && (health.map { !HealthMonitorCard.dials($0).isEmpty } ?? false)
+        case .night: return health != nil && today?.readiness.noWearable != true
+        // Always, with Add entry (Zdraví always had the weight card).
+        case .body: return health != nil
         }
     }
 }
@@ -599,6 +632,12 @@ struct PanelWidget: View {
             JournalHealthCard().allowsHitTesting(linked)
         case .weekCalories:
             FoodWeekWidget()
+        case .healthMonitor:
+            if let h = data.health { HealthMonitorCard(health: h).allowsHitTesting(linked) }
+        case .night:
+            if let h = data.health { SleepNightCard(sleep: h.sleep).allowsHitTesting(linked) }
+        case .body:
+            if let h = data.health { BodyCard(health: h).allowsHitTesting(linked) }
         case .cycle:
             if let t = data.today, let cycle = t.cycle {
                 CycleWidget(cycle: cycle, date: t.date, past: t.steps.hour == nil, size: item.size).allowsHitTesting(linked)

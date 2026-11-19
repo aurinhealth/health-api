@@ -384,7 +384,8 @@ final class SmokeTests: XCTestCase {
         let cards = app.descendants(matching: .any).matching(identifier: "open.\(route)")
         XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 8), "the \(route) card is missing")
         var card = hittable(cards)
-        if !card.isHittable { app.swipeUp(); card = hittable(cards) }
+        // Zdraví's readiness is a row of Health monitor, under Aurin age.
+        for _ in 0..<3 where !card.isHittable { app.swipeUp(); card = hittable(cards) }
         card.tap()
         pause(2)
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5), "the app quit on \(route)")

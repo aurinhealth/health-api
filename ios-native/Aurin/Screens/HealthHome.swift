@@ -1,0 +1,876 @@
+import Charts
+import SwiftUI
+
+// The new Health tab (redesign H2): Aurin age on top with its last 12 weeks,
+// what shapes it and the coach, then the cards the athlete can reorder:
+// Health monitor, Sleep, Body and Journal. Free accounts see Aurin age
+// locked (Pro concept), a new account "Collecting your data." with one next
+// step, no watch a card with "Connect a device" (D-ZDRAVI-1, -6).
+
+// MARK: - Aurin age words
+
+extension AurinAgeText {
+    /// "2.4 years younger" under the number: against the real age.
+    static func versusAge(_ age: HealthAurinAge) -> String? {
+        guard let real = age.age else { return nil }
+        let diff = age.value - real
+        if abs(diff) < 0.05 { return L10n.tr("stejně jako tvůj věk") }
+        return effect(diff)
+    }
+
+    /// "−1.3 years since Aug 17" (D-ZDRAVI-2): the change, with its unit and start.
+    static func change(_ age: HealthAurinAge) -> String? {
+        let weeks = twelveWeeks(age)
+        guard let first = weeks.first, let last = weeks.last, first.date != last.date else { return nil }
+        let diff = last.value - first.value
+        let size = Fmt.decimal(abs(diff), digits: 1)
+        if abs(diff) < 0.05 { return L10n.f("beze změny od %@", Fmt.dayMonth(first.date)) }
+        return L10n.f(diff < 0 ? "−%@ roku od %@" : "+%@ roku od %@", size, Fmt.dayMonth(first.date))
+    }
+
+    /// The estimates of the last 12 weeks (84 days up to the newest).
+    static func twelveWeeks(_ age: HealthAurinAge) -> [Point] {
+        guard let last = age.series.last, let from = AppModel.shift(last.date, by: -84) else { return age.series }
+        return age.series.filter { $0.date >= from }
+    }
+
+    /// The three groups of "What shapes it", years + older / − younger, as the
+    /// server adds them up (own-vo2max.js compositeYears): fitness is VO2max with
+    /// a quarter of resting heart rate, activity and steps, capped at ±5; sleep
+    /// is length and regularity, capped at ±1.5.
+    static func groups(_ parts: [String: Double]) -> [(key: String, years: Double)] {
+        var out: [(key: String, years: Double)] = []
+        if let vo2 = parts["vo2max"] {
+            let rest = (parts["restingHeartRate"] ?? 0) + (parts["activity"] ?? 0) + (parts["steps"] ?? 0)
+            out.append(("fitness", max(-5, min(5, vo2 + 0.25 * rest))))
+        }
+        if let strength = parts["strength"] { out.append(("strength", strength)) }
+        if parts["sleep"] != nil || parts["sleepRegularity"] != nil {
+            out.append(("sleep", max(-1.5, min(1.5, (parts["sleep"] ?? 0) + (parts["sleepRegularity"] ?? 0)))))
+        }
+        if let waist = parts["waist"] { out.append(("waist", waist)) }
+        return out
+    }
+
+    static func groupTitle(_ key: String) -> String {
+        switch key {
+        case "fitness": return "Kondice"
+        case "strength": return "Síla"
+        case "sleep": return "Spánek"
+        default: return "Pas"
+        }
+    }
+
+    /// The coach card's sentence, from rules, no AI (plan): the biggest chance
+    /// to win years back, or what does most of the work.
+    static func coachSentence(_ age: HealthAurinAge) -> (String, String?) {
+        if let best = age.gains.max(by: { $0.value < $1.value }), best.value >= 0.3 {
+            let what: String
+            switch best.key {
+            case "sleep", "sleepRegularity": what = "Spánek je tvoje největší šance."
+            case "strength": what = "Posilovna je tvoje největší šance."
+            case "steps", "activity": what = "Pohyb přes den je tvoje největší šance."
+            default: what = "Kondice je tvoje největší šance."
+            }
+            return (L10n.tr(what), L10n.f("Mohl by ti ubrat asi %@ roku z Aurin age.", Fmt.decimal(best.value, digits: 1)))
+        }
+        if let top = groups(age.parts).min(by: { $0.years < $1.years }), top.years < -0.05 {
+            return (L10n.f("Nejvíc pro tebe dělá %@.", L10n.isEnglish ? L10n.tr(groupTitle(top.key)) : L10n.tr(groupTitle(top.key)).lowercased(with: Fmt.locale)), L10n.tr("Drž to tak dál."))
+        }
+        return (L10n.tr("Aurin age se počítá z kondice, síly a spánku."), nil)
+    }
+}
+
+// MARK: - Orb
+
+/// The Aurin age orb: a slowly moving soft shape with a lit rim, warm green
+/// when the estimate is younger, warm orange when older, grey with loose dots
+/// while it collects data. Drawn in Canvas; it stands still with Reduce Motion
+/// or Low Power Mode. In light mode the glow becomes a soft shadow.
+struct AurinOrb: View {
+    enum Mood { case younger, older, collecting }
+    var mood: Mood
+    var size: CGFloat = 250
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
+
+    private var tint: Color {
+        switch mood {
+        case .younger: return Palette.Status.good
+        case .older: return Palette.amber
+        case .collecting: return Palette.faint
+        }
+    }
+
+    var body: some View {
+        let still = reduceMotion || LowPower.shared.on
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { timeline in
+            let t = still ? 0.8 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000)
+            Canvas { context, canvas in
+                let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
+                let radius = min(canvas.width, canvas.height) * 0.36
+                let shape = Self.blob(center: center, radius: radius, t: t * 0.35)
+                let dark = scheme == .dark
+                // The halo around the shape.
+                var halo = context
+                halo.addFilter(.blur(radius: radius * 0.22))
+                halo.fill(Self.blob(center: center, radius: radius * 1.06, t: t * 0.35),
+                          with: .color(dark ? tint.opacity(mood == .collecting ? 0.10 : 0.30) : Color.black.opacity(0.10)))
+                // The body: paper in light mode, night in dark, lit from below.
+                context.fill(shape, with: .radialGradient(
+                    Gradient(colors: dark ? [Color(white: 0.06), Color(white: 0.09), tint.opacity(mood == .collecting ? 0.15 : 0.55)]
+                                          : [Palette.card, Palette.card, tint.opacity(mood == .collecting ? 0.12 : 0.35)]),
+                    center: CGPoint(x: center.x, y: center.y - radius * 0.25), startRadius: 0, endRadius: radius * 1.25))
+                context.stroke(shape, with: .color(tint.opacity(dark ? 0.55 : 0.35)), lineWidth: 1.2)
+                // Specks along the rim, denser at the bottom.
+                for i in 0..<70 {
+                    let seed = Double(i) * 12.9898
+                    let turn: Double = i % 2 == 0 ? 1 : -1
+                    let place: Double = (sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)
+                    let angle: Double = place * 2 * Double.pi + t * 0.05 * turn
+                    let depth: Double = 0.82 + 0.2 * abs((sin(seed * 1.7) * 9631.3).truncatingRemainder(dividingBy: 1))
+                    let loose: Double = mood == .collecting ? 1.25 : 1.0
+                    let reach = Double(radius) * depth * loose
+                    let point = CGPoint(x: Double(center.x) + cos(angle) * reach, y: Double(center.y) + sin(angle) * reach)
+                    let speck = CGRect(x: point.x - 0.9, y: point.y - 0.9, width: 1.8, height: 1.8)
+                    context.fill(Path(ellipseIn: speck), with: .color((dark ? Color.white : tint).opacity(0.25 + 0.5 * max(0, sin(angle)))))
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    /// A circle that breathes: three slow waves around its edge.
+    static func blob(center: CGPoint, radius: CGFloat, t: Double) -> Path {
+        var path = Path()
+        let steps = 96
+        for i in 0...steps {
+            let a = Double(i) / Double(steps) * 2 * .pi
+            let r = radius * (1 + 0.05 * sin(3 * a + t) + 0.03 * sin(5 * a - 1.3 * t) + 0.02 * sin(2 * a + 0.7 * t))
+            let p = CGPoint(x: center.x + cos(a) * r, y: center.y + sin(a) * r)
+            if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+// MARK: - Hero
+
+/// Aurin age on top of Health: the orb with the estimate, the words against
+/// the real age, the change since 12 weeks ago and when it was updated.
+struct AurinAgeHero: View {
+    let health: HealthSnapshot
+    var pro: Bool
+    var noWearable = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let age = health.aurinAge {
+                RouteLink(route: .aurinAge) { estimate(age) }
+            } else if !pro {
+                locked
+            } else {
+                collecting
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func estimate(_ age: HealthAurinAge) -> some View {
+        let words = AurinAgeText.versusAge(age)
+        let older = (age.age.map { age.value - $0 } ?? 0) > 0.05
+        return VStack(spacing: 8) {
+            ZStack {
+                AurinOrb(mood: older ? .older : .younger)
+                VStack(spacing: 4) {
+                    Text(verbatim: Fmt.decimal(age.value, digits: 1)).font(Typo.number(76)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text(verbatim: L10n.tr("Odhad Aurin age").uppercased(with: Fmt.locale))
+                        .font(.caption2.weight(.medium)).tracking(2).foregroundStyle(Palette.muted)
+                    if let words {
+                        Text(verbatim: words).font(Typo.body).foregroundStyle(older ? Palette.amber : Palette.Status.good)
+                    }
+                }
+                .padding(.horizontal, 40)
+            }
+            Text(verbatim: updated(age)).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), updated(age)].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    private func updated(_ age: HealthAurinAge) -> String {
+        let real = age.age.map { L10n.f("Tvůj věk %@.", Fmt.int($0)) + " " } ?? ""
+        return real + L10n.f("Aktualizováno %@.", Fmt.dayMonth(age.date))
+    }
+
+    /// Pro concept state 5: the orb with loose dots and one next step.
+    private var collecting: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                AurinOrb(mood: .collecting)
+                Text("Sbírám tvoje data.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).padding(.horizontal, 50)
+            }
+            Text(verbatim: nextStep).font(Typo.body).foregroundStyle(Palette.secondary)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The one thing the estimate misses now (VO2max first: it needs one).
+    private var nextStep: String {
+        if health.vo2max == nil {
+            return L10n.tr(noWearable ? "Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut běhu venku."
+                                      : "Další krok k odhadu Aurin age: jeden odhad VO2max. Dej si 20 minut běhu venku s hodinkami.")
+        }
+        return L10n.tr("Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna.")
+    }
+
+    /// Without Pro (Pro concept): the orb locked with its dots and the way to unlock.
+    private var locked: some View {
+        VStack(spacing: 12) {
+            AurinOrb(mood: .collecting)
+            Text("Aurin age").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+            // The lock in the button, styled like Add entry (Pro concept).
+            NavigationLink { SubscriptionView() } label: {
+                Label { Text("Odemknout s Aurin Pro") } icon: { Image(systemName: "lock.fill") }
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 22).frame(minHeight: 48)
+                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Last 12 weeks
+
+struct AurinAgeTrendCard: View {
+    let age: HealthAurinAge
+
+    private var points: [Point] { AurinAgeText.twelveWeeks(age) }
+
+    var body: some View {
+        RouteLink(route: .aurinAge) {
+            Card {
+                HStack {
+                    SectionLabel(text: "Posledních 12 týdnů")
+                    Spacer()
+                    if let change = AurinAgeText.change(age) {
+                        let down = (points.last?.value ?? 0) < (points.first?.value ?? 0)
+                        Pill(text: change, foreground: down ? Palette.Status.good : Palette.amber,
+                             background: (down ? Palette.Status.good : Palette.amber).opacity(0.14))
+                    }
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                let values = points.map(\.value)
+                let lo = (values.min() ?? 0) - 0.3, hi = (values.max() ?? 1) + 0.3
+                Chart {
+                    ForEach(points, id: \.date) { p in
+                        LineMark(x: .value("Den", ISODay.date(p.date) ?? Date()), y: .value("Věk", p.value))
+                            .foregroundStyle(Palette.ink.opacity(0.8))
+                            .interpolationMethod(.monotone)
+                    }
+                    if let last = points.last {
+                        PointMark(x: .value("Den", ISODay.date(last.date) ?? Date()), y: .value("Věk", last.value))
+                            .foregroundStyle(Palette.ink).symbolSize(40)
+                    }
+                }
+                .chartYScale(domain: lo...hi)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated).locale(Fmt.locale)).foregroundStyle(Palette.faint)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
+                        AxisGridLine().foregroundStyle(Palette.hairline)
+                        AxisValueLabel().foregroundStyle(Palette.faint)
+                    }
+                }
+                .frame(height: 130)
+                .accessibilityLabel(AurinAgeText.change(age) ?? L10n.tr("Posledních 12 týdnů"))
+            }
+        }
+    }
+}
+
+// MARK: - What shapes it
+
+/// "What shapes it": Fitness, Strength and Sleep in years, a bar from the
+/// middle mark (no effect), no icons (D-ZDRAVI-9).
+struct AurinAgeShapes: View {
+    let age: HealthAurinAge
+    var health: HealthSnapshot? = nil
+
+    var body: some View {
+        let groups = AurinAgeText.groups(age.parts).sorted { abs($0.years) > abs($1.years) }
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Co ho tvoří")
+            Card {
+                ForEach(Array(groups.enumerated()), id: \.element.key) { i, g in
+                    if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    row(g.key, g.years)
+                }
+            }
+        }
+    }
+
+    private func row(_ key: String, _ years: Double) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: L10n.tr(AurinAgeText.groupTitle(key))).font(Typo.body).foregroundStyle(Palette.ink)
+                if let note = note(key) { Text(verbatim: note).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            Spacer(minLength: 8)
+            EffectBar(years: years).frame(width: 56, height: 8).accessibilityHidden(true)
+            Text(verbatim: AurinAgeText.effect(years)).font(Typo.caption).foregroundStyle(years < -0.05 ? Palette.Status.good : years > 0.05 ? Palette.amber : Palette.muted)
+                .multilineTextAlignment(.trailing).frame(minWidth: 84, alignment: .trailing)
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func note(_ key: String) -> String? {
+        switch key {
+        case "fitness": return health?.vo2max.map { "VO2max " + Fmt.decimal($0.value, digits: 1) }
+        case "strength": return L10n.tr((age.parts["strength"] ?? 0) < 0 ? "posilovna každý týden" : "zatím bez pravidelné posilovny")
+        default: return nil
+        }
+    }
+}
+
+/// A short bar from the middle mark: right is younger (better), left older (concept 2).
+struct EffectBar: View {
+    let years: Double
+    var scale = 3.0
+
+    var body: some View {
+        GeometryReader { geo in
+            let mid = geo.size.width / 2
+            let len = min(1, abs(years) / scale) * mid
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.track)
+                Rectangle().fill(Palette.ink.opacity(0.5)).frame(width: 1.5).offset(x: mid - 0.75)
+                Capsule().fill(years < 0 ? Palette.Status.good : Palette.amber)
+                    .frame(width: max(2, len))
+                    .offset(x: years < 0 ? mid : mid - len)
+            }
+        }
+    }
+}
+
+/// The coach under Aurin age: a rule-based sentence (no AI) and Ask Coach.
+struct AurinAgeCoachCard: View {
+    let age: HealthAurinAge
+
+    var body: some View {
+        let sentence = AurinAgeText.coachSentence(age)
+        CoachSentenceCard(lead: sentence.0, key: sentence.1)
+    }
+}
+
+/// A coach card without AI: Two lights with "Coach", the sentence in the
+/// coach's serif with the key sentence in green italic, and Ask Coach
+/// (consistency point 4; max 2 sentences).
+struct CoachSentenceCard: View {
+    let lead: String
+    var key: String? = nil
+    var view = "health"
+    @State private var open = false
+
+    var body: some View {
+        Card {
+            HStack(spacing: 8) {
+                TwoLights(size: 20)
+                Text("Kouč").font(.caption.weight(.medium)).tracking(1.2).foregroundStyle(Palette.muted)
+            }
+            (Text(verbatim: lead + (key == nil || lead.isEmpty ? "" : " "))
+                + Text(verbatim: key ?? "").italic().foregroundColor(Palette.Status.good))
+                .font(Typo.coach(21)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            CoachActionRow { open = true }
+        }
+        .sheet(isPresented: $open) { CoachEntry.chat(subject: nil, view: view, date: nil) }
+    }
+}
+
+// MARK: - Health monitor
+
+/// Five values against the athlete's usual range as small dials, one sentence
+/// on top in the words of the details, readiness as a row (D-ZDRAVI-3).
+struct HealthMonitorCard: View {
+    let health: HealthSnapshot
+
+    struct Dial: Identifiable {
+        let id: HealthValue
+        let label: String
+        let value: Double
+        let text: String
+        let unit: String
+        let low: Double?
+        let high: Double?
+        let state: MetricState?
+    }
+
+    static func dials(_ h: HealthSnapshot) -> [Dial] {
+        var out: [Dial] = []
+        let st = { (k: String) in h.states?[k]?.metricState }
+        if let r = h.restingHR, let v = r.value {
+            out.append(Dial(id: .restingHR, label: "Klidový tep", value: v, text: Fmt.int(v), unit: "bpm", low: r.usual?.lowerBound, high: r.usual?.upperBound, state: st("restingHR")))
+        }
+        if let x = h.hrv, let v = x.value {
+            out.append(Dial(id: .hrv, label: "HRV", value: v, text: Fmt.int(v), unit: "ms", low: x.low, high: x.high, state: st("hrv")))
+        }
+        if let o = h.oxygen {
+            out.append(Dial(id: .oxygen, label: "Kyslík", value: o.value, text: Fmt.int(o.value), unit: "%", low: o.high > o.low ? o.low : nil, high: o.high > o.low ? o.high : nil, state: st("oxygen")))
+        }
+        if let r = h.respiration {
+            out.append(Dial(id: .respiration, label: "Dech", value: r.value, text: Fmt.decimal(r.value, digits: 1), unit: "za min",
+                            low: r.baseline.map { $0 - 0.5 }, high: r.baseline.map { $0 + 0.5 }, state: st("respiration") ?? (r.elevated ? .off(above: true) : nil)))
+        }
+        if let d = h.wristTemp?.deviation ?? h.skinTemp?.deviation {
+            let elevated = h.skinTemp?.elevated == true
+            out.append(Dial(id: .temperature, label: "Teplota kůže", value: d, text: Fmt.signed(Units.temperatureChange(d), digits: 1), unit: Units.temperatureUnit,
+                            low: -0.5, high: 0.5, state: elevated ? .off(above: true) : abs(d) <= 0.5 ? .within : .off(above: d > 0)))
+        }
+        return out
+    }
+
+    /// The card's sentence: the first value off its range in the detail's own
+    /// words, else all within; no threshold of its own (tester's D-ZDRAVI-3).
+    static func title(_ dials: [Dial]) -> String {
+        if let off = dials.first(where: { $0.state != nil && $0.state != .within }), let state = off.state {
+            return L10n.tr(off.label) + " " + state.words
+        }
+        if !dials.isEmpty, dials.allSatisfy({ $0.state == .within }) {
+            return dials.count == 5 ? L10n.tr("Všech pět v tvém obvyklém rozmezí.") : L10n.tr("Vše v tvém obvyklém rozmezí.")
+        }
+        return L10n.tr("Minulá noc")
+    }
+
+    var body: some View {
+        let dials = Self.dials(health)
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Health monitor")
+            Card {
+                Text(verbatim: Self.title(dials)).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 6) { ForEach(dials) { dialLink($0) } }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 12) { ForEach(dials) { dialLink($0) } }
+                }
+                Text("Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí.").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let shown = readinessText {
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                    RouteLink(route: .readiness) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Připravenost").font(Typo.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text(verbatim: shown).font(health.readiness.score == nil ? Typo.caption : Typo.number(24))
+                                .foregroundStyle(health.readiness.score == nil ? Palette.muted : Palette.ink)
+                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                }
+            }
+        }
+    }
+
+    /// The score, or how far a new athlete's baseline is.
+    private var readinessText: String? {
+        if let score = health.readiness.score { return String(score) }
+        if let days = health.readiness.learningDays { return L10n.f("učí se, %@ ze 14 dní", String(days)) }
+        return nil
+    }
+
+    private func dialLink(_ d: Dial) -> some View {
+        NavigationLink(value: d.id == .temperature ? AppRoute.metric(.temperature) : AppRoute.metric(HealthMetric(rawValue: d.id.rawValue) ?? .hrv)) {
+            VStack(spacing: 4) {
+                MiniDial(value: d.value, low: d.low, high: d.high, off: d.state != nil && d.state != .within) {
+                    VStack(spacing: 0) {
+                        Text(verbatim: d.text).font(Typo.number(16)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(verbatim: L10n.tr(d.unit)).font(.caption2).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                }
+                .frame(width: 58, height: 58)
+                Text(verbatim: L10n.tr(d.label)).font(.caption2).foregroundStyle(Palette.muted).lineLimit(2).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L10n.tr(d.label), d.text + " " + L10n.tr(d.unit), d.state?.words].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// A 240° dial: the track, the usual range as a green arc, last night as a dot.
+struct MiniDial<Center: View>: View {
+    let value: Double
+    let low: Double?
+    let high: Double?
+    var off = false
+    @ViewBuilder var center: Center
+
+    var body: some View {
+        GeometryReader { geo in
+            let side = min(geo.size.width, geo.size.height)
+            let lineWidth: CGFloat = 4
+            let r = side / 2 - lineWidth
+            let c = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+            let start = 150.0, sweep = 240.0
+            let span = (low != nil && high != nil && high! > low!) ? high! - low! : max(abs(value) * 0.2, 1)
+            let lo = (low ?? value - span) - span, hi = (high ?? value + span) + span
+            let at = { (v: Double) in start + sweep * min(1, max(0, (v - lo) / (hi - lo))) }
+            ZStack {
+                arc(c, r, start, start + sweep).stroke(Palette.track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                if let low, let high, high > low {
+                    arc(c, r, at(low), at(high)).stroke(Palette.Status.good.opacity(0.75), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                }
+                let a = at(value) * .pi / 180
+                Circle().fill(off ? Palette.Status.warn : Palette.ink)
+                    .overlay { Circle().stroke(Palette.card, lineWidth: 1.5) }
+                    .frame(width: 8, height: 8)
+                    .position(x: c.x + cos(a) * r, y: c.y + sin(a) * r)
+                center.position(c)
+            }
+        }
+    }
+
+    private func arc(_ c: CGPoint, _ r: CGFloat, _ from: Double, _ to: Double) -> Path {
+        var p = Path()
+        p.addArc(center: c, radius: r, startAngle: .degrees(from), endAngle: .degrees(to), clockwise: false)
+        return p
+    }
+}
+
+// MARK: - Sleep
+
+/// Last night as an arc from falling asleep to waking on an evening-to-morning
+/// scale (the shared drawing with Today, evening to morning colours), the
+/// week's nights as dots against the need and tonight's plan in one row.
+struct SleepNightCard: View {
+    let sleep: HealthSnapshot.Sleep
+
+    private static func minutes(_ clock: String?) -> Double? {
+        guard let clock, clock.count >= 4 else { return nil }
+        let parts = clock.split(separator: ":").compactMap { Double($0) }
+        guard parts.count >= 2 else { return nil }
+        return parts[0] * 60 + parts[1]
+    }
+
+    /// Minutes after 20:00 on the 20:00 to 10:00 scale.
+    private static func onScale(_ m: Double) -> Double { (m - 20 * 60 + 24 * 60).truncatingRemainder(dividingBy: 24 * 60) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Spánek")
+            Card {
+                RouteLink(route: .sleep) {
+                    VStack(spacing: 6) {
+                        arcView.frame(height: 150)
+                        week
+                    }
+                    .contentShape(Rectangle())
+                }
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                RouteLink(route: .sleepSettings) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Dnes v noci").font(Typo.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Text(verbatim: tonight).font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.trailing)
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+            }
+        }
+    }
+
+    private var tonight: String {
+        let t = sleep.tonight
+        switch (t.bedtime, t.wake) {
+        case let (bed?, wake?): return L10n.f("v posteli do %@, budík %@", ClockText.format(bed), ClockText.format(wake))
+        case let (bed?, nil): return L10n.f("v posteli do %@", ClockText.format(bed))
+        default: return L10n.f("potřeba %@", Fmt.duration(t.need))
+        }
+    }
+
+    private var arcView: some View {
+        let night = sleep.night
+        let span = 14.0 * 60
+        let from = Self.minutes(night?.start).map(Self.onScale)
+        let to = Self.minutes(night?.end).map(Self.onScale)
+        return GeometryReader { geo in
+            let w = geo.size.width
+            let r = min(w / 2 - 20, geo.size.height - 16)
+            let c = CGPoint(x: w / 2, y: geo.size.height - 4)
+            let angle = { (m: Double) in Angle.degrees(180 + 180 * min(1, max(0, m / span))) }
+            ZStack {
+                Path { p in p.addArc(center: c, radius: r, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false) }
+                    .stroke(Palette.track, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                if let from, let to, to > from {
+                    Path { p in p.addArc(center: c, radius: r, startAngle: angle(from), endAngle: angle(to), clockwise: false) }
+                        .stroke(LinearGradient(colors: [Palette.amberBar, Palette.Status.good], startPoint: .leading, endPoint: .trailing),
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                }
+                VStack(spacing: 2) {
+                    Text(verbatim: L10n.tr("Minulá noc").uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
+                    Text(verbatim: night?.minutes.map { Fmt.duration(Int($0)) } ?? "–").font(Typo.number(34)).foregroundStyle(Palette.ink)
+                    if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                .position(x: c.x, y: c.y - r * 0.42)
+                Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 2)
+                Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 2)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L10n.tr("Minulá noc"), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// "6 min short of 7 h 30 min", or "reached your need".
+    private var shortText: String? {
+        guard let m = sleep.night?.minutes else { return nil }
+        let need = Double(sleep.need)
+        if m >= need { return L10n.tr("potřeba splněna") }
+        return L10n.f("%@ méně než %@", Fmt.duration(Int(need - m)), Fmt.duration(sleep.need))
+    }
+
+    private var week: some View {
+        let need = Double(sleep.need)
+        let nights = Array(sleep.week.suffix(7))
+        let reached = nights.filter { $0.value >= need }.count
+        return VOStack(nights: nights, need: need, reached: reached)
+    }
+
+    private struct VOStack: View {
+        let nights: [Point]
+        let need: Double
+        let reached: Int
+
+        var body: some View {
+            VStack(spacing: 6) {
+                HStack(spacing: 14) {
+                    ForEach(nights, id: \.date) { n in
+                        VStack(spacing: 4) {
+                            Circle().fill(n.value >= need ? Palette.Status.good : Palette.track).frame(width: 8, height: 8)
+                            Text(verbatim: Fmt.weekdayShort(n.date)).font(.caption2).foregroundStyle(Palette.faint)
+                        }
+                    }
+                }
+                Text(verbatim: L10n.f("%@ ze %@ nocí s plnou potřebou", String(reached), String(nights.count))).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+// MARK: - Body
+
+/// Weight, body fat and muscle as one card with a switch (concept 1, the
+/// tiles rule): the chosen one's line in ink (D-ZDRAVI-5), what changed,
+/// "Not part of your Aurin age." and Add entry.
+struct BodyCard: View {
+    let health: HealthSnapshot
+    @State private var picked: HealthValue = .weight
+    @State private var adding = false
+
+    private var options: [HealthValue] {
+        [HealthValue.weight, .bodyFat, .muscle].filter { v in
+            switch v {
+            case .weight: return health.weight != nil
+            case .bodyFat: return health.weight?.bodyFat != nil
+            default: return health.weight?.muscle != nil
+            }
+        }
+    }
+
+    private func series(_ v: HealthValue) -> [Point] {
+        switch v {
+        case .bodyFat: return health.weight?.bodyFat?.series ?? []
+        case .muscle: return (health.weight?.muscle?.series ?? []).map { Point(date: $0.date, value: Units.weight($0.value)) }
+        default: return (health.weight?.series ?? []).map { Point(date: $0.date, value: Units.weight($0.value)) }
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Tělo")
+            Card {
+                if options.isEmpty {
+                    Text("Zapiš si váhu a začne se kreslit graf.").font(Typo.body).foregroundStyle(Palette.secondary)
+                } else {
+                    let shown = options.contains(picked) ? picked : options[0]
+                    HStack(spacing: 8) {
+                        ForEach(options) { v in
+                            let list = series(v)
+                            Button { picked = v } label: {
+                                VStack(spacing: 2) {
+                                    Text(verbatim: L10n.tr(v.title)).font(.caption).foregroundStyle(v == shown ? Palette.ink : Palette.muted).lineLimit(1)
+                                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                                        Text(verbatim: list.last.map { Fmt.decimal($0.value, digits: 1) } ?? "–").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                                        Text(verbatim: L10n.tr(v.unit)).font(.caption2).foregroundStyle(Palette.faint)
+                                    }
+                                    .lineLimit(1).minimumScaleFactor(0.7)
+                                }
+                                .frame(maxWidth: .infinity).padding(.vertical, 8)
+                                .background(Palette.track.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(v == shown ? Palette.ink : .clear, lineWidth: 1.5) }
+                                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(v == shown ? .isSelected : [])
+                        }
+                    }
+                    RouteLink(route: shown == .weight ? .weight : .metric(shown == .bodyFat ? .bodyFat : .muscle)) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            line(series(shown)).frame(height: 110)
+                            Text(verbatim: summary(shown)).font(Typo.caption).foregroundStyle(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                }
+                Button { adding = true } label: {
+                    Label { Text("Přidat záznam") } icon: { Image(systemName: "plus") }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("Zapsat váhu"))
+            }
+        }
+        .sheet(isPresented: $adding) { WeightEntrySheet() }
+    }
+
+    private func line(_ list: [Point]) -> some View {
+        let values = list.map(\.value)
+        let lo = (values.min() ?? 0) - 0.3, hi = (values.max() ?? 1) + 0.3
+        return Chart {
+            ForEach(list, id: \.date) { p in
+                LineMark(x: .value("Den", ISODay.date(p.date) ?? Date()), y: .value("Hodnota", p.value))
+                    .foregroundStyle(Palette.ink.opacity(0.85))
+                PointMark(x: .value("Den", ISODay.date(p.date) ?? Date()), y: .value("Hodnota", p.value))
+                    .foregroundStyle(Palette.ink.opacity(0.85)).symbolSize(14)
+            }
+        }
+        .chartYScale(domain: lo...hi)
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                AxisValueLabel(format: .dateTime.day().month(.abbreviated).locale(Fmt.locale)).foregroundStyle(Palette.faint)
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
+                AxisGridLine().foregroundStyle(Palette.hairline)
+                AxisValueLabel().foregroundStyle(Palette.faint)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// "Down 1.2 kg since Aug 17. Not part of your Aurin age."
+    private func summary(_ v: HealthValue) -> String {
+        let list = series(v)
+        var text = ""
+        if let first = list.first, let last = list.last, first.date != last.date {
+            let diff = last.value - first.value
+            let size = Fmt.decimal(abs(diff), digits: 1) + " " + L10n.tr(v.unit)
+            text = abs(diff) < 0.05 ? L10n.f("Beze změny od %@", Fmt.dayMonth(first.date))
+                : L10n.f(diff < 0 ? "O %@ níž od %@" : "O %@ výš od %@", size, Fmt.dayMonth(first.date))
+            text += ". "
+        }
+        return text + L10n.tr("Není součástí Aurin age.")
+    }
+}
+
+// MARK: - No watch
+
+/// No watch or ring (D-ZDRAVI-6): what is missing and one action.
+struct NoDeviceCard: View {
+    var connect: () -> Void
+
+    var body: some View {
+        Card {
+            Text("Bez hodinek nebo prstenu").font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+            Text("Připravenost potřebuje spánek, HRV a klidový tep z hodinek nebo prstenu. Do té doby se plán řídí tvým tréninkem.")
+                .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            Button(action: connect) {
+                Text("Připojit zařízení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Palette.track, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+// MARK: - Aurin age page
+
+/// Aurin age on the detail template: the estimate, its chart, what shapes it
+/// and how it is estimated ("Not a medical assessment", no "biological age").
+struct AurinAgePage: View {
+    @Environment(AppModel.self) private var model
+    let health: HealthSnapshot
+    @State private var period: ChartPeriod = .months3
+    @State private var loaded: [ChartPeriod: HealthSeries] = [:]
+
+    var body: some View {
+        DetailTemplate(title: "Aurin age") {
+            CoachEntry(subject: coach, view: "health")
+        } content: {
+            AurinAgeDetailContent(health: health, period: $period, loaded: loaded[period])
+        }
+        .task(id: period) {
+            guard loaded[period] == nil, !model.demo else { return }
+            if let series = try? await model.api.healthSeries(metric: "aurinAge", period: period) { loaded[period] = series }
+        }
+    }
+
+    private var coach: CoachSubject {
+        CoachSubject(kind: .metric, title: "Aurin age", line: health.aurinAge.map { L10n.f("Odhad Aurin age %@", Fmt.decimal($0.value, digits: 1)) },
+                     metric: "aurinAge", date: health.date, view: "health", symbol: "heart.circle", color: Palette.green,
+                     questions: ["Jak snížit Aurin age?", "Co mi nejvíc pomáhá?"])
+    }
+}
+
+/// The Aurin age page without the scroll view, so tests can render it whole.
+struct AurinAgeDetailContent: View {
+    let health: HealthSnapshot
+    @Binding var period: ChartPeriod
+    var loaded: HealthSeries? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let age = health.aurinAge {
+                DetailHeadline(value: Fmt.decimal(age.value, digits: 1), unit: L10n.tr("let"), usual: AurinAgeText.versusAge(age))
+                let points = loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) }
+                Card {
+                    DetailChart(points: points, today: health.date, period: $period, digits: 1,
+                                note: "Každý bod je odhad Aurinu z toho dne.")
+                }
+                .padding(.top, 12)
+                AurinAgeShapes(age: age, health: health).padding(.top, 28)
+                Text("Prostřední čárka je bez vlivu na tvůj věk. Vpravo je lépe.").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 8)
+            } else {
+                Card { LearningState(kind: .missing, text: "Aurin age potřebuje jeden odhad VO2max a pár týdnů tréninku a spánku.") }
+                    .padding(.top, 20)
+            }
+            HowMeasuredCard(text: "Aurin age je odhad podle tvé kondice, síly a spánku ve srovnání s lidmi různého věku. Nejde o lékařské hodnocení.",
+                            rows: [])
+                .padding(.top, 28)
+        }
+    }
+}
