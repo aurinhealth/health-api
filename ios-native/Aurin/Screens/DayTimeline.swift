@@ -14,9 +14,15 @@ struct DayTimeline: View {
     @State private var busy = false
 
     var body: some View {
-        Card {
-            Text("Den").font(Typo.tiny.weight(.semibold)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
-                .accessibilityAddTraits(.isHeader)
+        // Redesign D: "DAY" above the card as Food and Activity have it, the
+        // day drawn in ink; colour only for the readiness and a missed workout.
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Den").padding(.leading, 4)
+            Card { timeline }
+        }
+    }
+
+    private var timeline: some View {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let rows = DayTimelineRows.make(today, now: nowMinutes(context.date), stepsTime: stepsTime(context.date))
                 VStack(spacing: 0) {
@@ -25,7 +31,6 @@ struct DayTimeline: View {
                     }
                 }
             }
-        }
     }
 
     /// Minutes after midnight now, only while the shown day is today (the
@@ -54,13 +59,13 @@ struct DayTimeline: View {
         switch entry {
         case .sleep(let sleep):
             RouteLink(route: .sleep) {
-                DaySpanRow(color: Palette.indigo, start: sleep.start.map { ClockText.format($0) }, end: sleep.end.map { ClockText.format($0) }, first: first, last: last) {
+                DaySpanRow(color: Palette.ink, start: sleep.start.map { ClockText.format($0) }, end: sleep.end.map { ClockText.format($0) }, first: first, last: last) {
                     sleepContent(sleep)
                 }
             }
         case .nap(let nap):
             RouteLink(route: .sleep) {
-                DaySpanRow(color: Palette.indigo, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
+                DaySpanRow(color: Palette.ink, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(Fmt.hoursMinutes(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
@@ -83,19 +88,19 @@ struct DayTimeline: View {
             workoutRow(item, first: first, last: last).modifier(PlanRowMenu(item: item))
         case .strain(let time, let score, let added):
             RouteLink(route: .strain) {
-                DayPointRow(color: Palette.rust, time: time.map { ClockText.format(minutes: $0) }, first: first, last: last) {
+                DayPointRow(color: Palette.ink, time: time.map { ClockText.format(minutes: $0) }, first: first, last: last) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Námaha").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(Fmt.decimal(score)).font(Typo.number(22)).foregroundStyle(Palette.ink)
                         if let added {
-                            Text(L10n.f("+%@ tréninkem", Fmt.decimal(added))).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
+                            Text(L10n.f("+%@ tréninkem", Fmt.decimal(added))).font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                     }
                 }
             }
         case .steps(let steps, let time):
             RouteLink(route: .steps) {
-                DayPointRow(color: Palette.blue, time: time, first: first, last: last) {
+                DayPointRow(color: Palette.ink, time: time, first: first, last: last) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(Fmt.int(steps)).font(Typo.number(22)).foregroundStyle(Palette.ink)
                         Text("kroků").font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
@@ -112,7 +117,7 @@ struct DayTimeline: View {
     private func sleepContent(_ sleep: TodaySnapshot.Sleep) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("Spánek").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text(Fmt.hoursMinutes(sleep.minutes)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+            Text(sleep.minutes.map { Fmt.hoursMinutesLong($0) } ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
                 .accessibilityLabel(Fmt.hoursMinutesSpoken(sleep.minutes))
             HStack(spacing: 6) {
                 if let hrv = today.hrv?.value { DayChip(label: "HRV", value: Fmt.int(hrv), unit: "ms") }
@@ -129,7 +134,7 @@ struct DayTimeline: View {
         let start = DayTimelineRows.minutes(item.time ?? item.session?.time)
         let length = item.session?.minutes
         let future = !item.done
-        let color = item.status == "missed" ? Palette.rust : Palette.amberBar
+        let color = item.status == "missed" ? Palette.rust : Palette.ink
         let content = workoutContent(item)
         Group {
             if let start, let length, length > 0 {
@@ -213,9 +218,8 @@ struct DayTimeline: View {
     @ViewBuilder
     private func itemRow(_ item: TodaySnapshot.PlanItem, first: Bool, last: Bool) -> some View {
         let color: Color = switch item.kind {
-        case "recovery": item.recovery == "sauna" ? Palette.amber : item.recovery == "swim" ? Palette.blue : Palette.green
         case "pill": Palette.pink
-        default: Palette.indigo
+        default: Palette.ink
         }
         if item.kind == "bedtime" {
             // The night ahead, dashed from bedtime to the planned wake time.
@@ -455,10 +459,9 @@ private struct DayDot: View {
 
     var body: some View {
         Circle()
-            .strokeBorder(color, style: future ? StrokeStyle(lineWidth: 2, dash: [2.6, 2.4]) : StrokeStyle(lineWidth: 3))
+            .strokeBorder(future ? Palette.muted : color, style: future ? StrokeStyle(lineWidth: 2, dash: [2.6, 2.4]) : StrokeStyle(lineWidth: 2.5))
             .background { Circle().fill(Palette.card) }
             .frame(width: Rail.dot, height: Rail.dot)
-            .shadow(color: future ? .clear : color.opacity(0.45), radius: 4)
     }
 }
 
@@ -568,17 +571,15 @@ private struct DaySpanRow<Content: View>: View {
                     p.move(to: CGPoint(x: geo.size.width / 2, y: 0))
                     p.addLine(to: CGPoint(x: geo.size.width / 2, y: geo.size.height))
                 }
-                .stroke(color.opacity(0.7), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [5, 4]))
+                .stroke(Palette.muted, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [4, 4]))
             }
         } else {
-            Capsule().fill(LinearGradient(colors: [color, color.opacity(0.67)], startPoint: .top, endPoint: .bottom))
-                .frame(width: 4)
-                .shadow(color: color.opacity(0.4), radius: 5)
+            Capsule().fill(color).frame(width: 2.5)
         }
     }
 }
 
-/// "teď": the time in amber, a glowing dot and a line fading to the right.
+/// "teď": the time, an ink dot and a line fading to the right (redesign D).
 private struct DayNowRow: View {
     let time: String
     let first: Bool
@@ -586,17 +587,16 @@ private struct DayNowRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
-            Text(time).font(Typo.tiny.weight(.bold)).foregroundStyle(Palette.amber)
+            Text(time).font(Typo.tiny.weight(.bold)).foregroundStyle(Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: Rail.timeWidth, alignment: .trailing)
             ZStack {
                 TrackLine(first: first, last: last)
-                Circle().fill(Palette.amber).frame(width: 9, height: 9)
-                    .background { Circle().fill(Palette.amber.opacity(0.2)).frame(width: 17, height: 17) }
+                Circle().fill(Palette.ink).frame(width: 8, height: 8)
             }
             .frame(width: Rail.width)
             .frame(maxHeight: .infinity)
-            LinearGradient(colors: [Palette.amber, Palette.amber.opacity(0)], startPoint: .leading, endPoint: .trailing)
+            LinearGradient(colors: [Palette.ink.opacity(0.5), Palette.ink.opacity(0)], startPoint: .leading, endPoint: .trailing)
                 .frame(height: 1.5)
         }
         .frame(minHeight: 30)

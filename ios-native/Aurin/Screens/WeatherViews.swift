@@ -195,9 +195,9 @@ struct WeatherDetails: View {
                 weekCard(week)
             } else {
                 SettingsGroup(title: "Kde dnes trénovat") {
-                    advice("bicycle", "Kolo", weather.outdoor)
+                    advice(.ride, weather.outdoor)
                     SettingsDivider()
-                    advice("figure.run", "Běh", weather.outdoorRun)
+                    advice(.run, weather.outdoorRun)
                 }
             }
 
@@ -260,7 +260,7 @@ struct WeatherDetails: View {
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
                 stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windBeside)
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
-                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
+                stat("Déšť dnes", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)
@@ -334,10 +334,24 @@ struct WeatherDetails: View {
         }
     }
 
-    private func advice(_ symbol: String, _ sport: String, _ advice: TodaySnapshot.Advice?) -> some View {
+    private func advice(_ sport: WeatherPlace, _ advice: TodaySnapshot.Advice?) -> some View {
         let indoor = WeatherText.indoor(advice)
-        return SettingsRow(icon: SettingsIcon(systemImage: symbol, color: indoor ? Palette.amberBar : Palette.green),
-                           title: sport, subtitle: advice?.reason, value: L10n.tr(indoor ? "uvnitř" : "venku"), chevron: false)
+        return SettingsRow(icon: SettingsIcon(systemImage: sport.symbol(indoor: indoor), color: indoor ? Palette.amberBar : Palette.green),
+                           title: sport == .ride ? "Kolo" : "Běh", subtitle: advice?.reason, value: L10n.tr(indoor ? "uvnitř" : "venku"), chevron: false)
+    }
+}
+
+/// A ride or a run outside or inside, as SF figures (Petr, 2026-11-13): outside
+/// the road bike and the runner in green, inside the indoor bike and the
+/// treadmill in amber, with the legend's two dots.
+enum WeatherPlace {
+    case ride, run
+
+    func symbol(indoor: Bool) -> String {
+        switch self {
+        case .ride: return indoor ? "figure.indoor.cycle" : "figure.outdoor.cycle"
+        case .run: return indoor ? "figure.run.treadmill" : "figure.run"
+        }
     }
 }
 
@@ -409,10 +423,14 @@ struct WeatherDayRow: View {
                     Text(verbatim: WeatherText.degrees(day.min)).font(Typo.body).foregroundStyle(Palette.muted).frame(width: 30, alignment: .trailing)
                     range.frame(height: 5)
                     Text(verbatim: WeatherText.degrees(day.max)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(width: 32, alignment: .leading)
-                    place("bicycle", day.ride)
-                    place("figure.run", day.run)
+                    place(.ride, day.ride)
+                    place(.run, day.run)
+                    Image(systemName: "chevron.down").scaledFont(11, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.faint)
+                        .rotationEffect(.degrees(open ? 180 : 0))
+                        .accessibilityHidden(true)
                 }
-                .padding(.vertical, 8)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -443,13 +461,13 @@ struct WeatherDayRow: View {
         }
     }
 
-    private func place(_ symbol: String, _ advice: TodaySnapshot.Advice?) -> some View {
+    private func place(_ sport: WeatherPlace, _ advice: TodaySnapshot.Advice?) -> some View {
         let indoor = WeatherText.indoor(advice)
-        return Image(systemName: symbol).scaledFont(12, weight: .semibold, cap: .denseCap)
+        return Image(systemName: sport.symbol(indoor: indoor)).scaledFont(12, weight: .semibold, cap: .denseCap)
             .foregroundStyle(indoor ? Palette.amber : Palette.green)
             .frame(width: 28, height: 24)
             .background(indoor ? Palette.amberSoft : Palette.greenSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .accessibilityLabel(Text(verbatim: L10n.tr(symbol == "bicycle" ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))))
+            .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))))
     }
 
     /// "Kolo uvnitř: Nejvýš 6°, venku je zima." with "Kolo uvnitř" in amber (or green outdoors).
