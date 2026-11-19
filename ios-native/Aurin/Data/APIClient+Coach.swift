@@ -91,47 +91,6 @@ struct WeekProposalResponse: Decodable {
     }
 }
 
-/// POST /app/api/coach/week-ai (src/week-ai.js): the AI's week with its
-/// summary; `ai` is false when the rules made it.
-struct WeekAIResponse: Decodable {
-    let start: String?
-    let ai: Bool?
-    let summary: String?
-    let items: [WeekAIItem]?
-    let warnings: [WeekProposalResponse.Warning]?
-    let message: String?
-}
-
-struct WeekAIItem: Decodable {
-    let date: String
-    let sport: String
-    let minutes: Int?
-    let environment: String?
-    let kind: String?
-    let focus: String?
-    let label: String?
-    let reason: String?
-    let role: String?
-    /// The week's brick: this run straight after the ride before it (src/week-ai.js markBrick).
-    var brick = false
-
-    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role, brick }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        date = try c.decode(String.self, forKey: .date)
-        sport = try c.decode(String.self, forKey: .sport)
-        minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)).flatMap { $0 }.map { Int($0.rounded()) }
-        environment = try? c.decodeIfPresent(String.self, forKey: .environment)
-        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
-        focus = try? c.decodeIfPresent(String.self, forKey: .focus)
-        label = try? c.decodeIfPresent(String.self, forKey: .label)
-        reason = try? c.decodeIfPresent(String.self, forKey: .reason)
-        role = try? c.decodeIfPresent(String.self, forKey: .role)
-        brick = (try? c.decodeIfPresent(Bool.self, forKey: .brick)).flatMap { $0 } ?? false
-    }
-}
-
 /// GET/POST /app/api/coach/revision (src/week-revision.js).
 struct WeekRevisionResponse: Decodable {
     let revision: WeekRevision?
@@ -166,36 +125,6 @@ struct WeekRevision: Decodable, Equatable {
             name = try? c.decodeIfPresent(String.self, forKey: .name)
             minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)).flatMap { $0 }.map { Int($0.rounded()) }
         }
-    }
-}
-
-/// POST /app/api/workouts/adjust: the session's new day, length, place and kind.
-struct AdjustResponse: Decodable {
-    let session: AdjustedSession?
-    let message: String?
-}
-
-struct AdjustedSession: Decodable {
-    let date: String
-    /// nil from an older server: the sport stays.
-    let sport: String?
-    let minutes: Int
-    let environment: String?
-    let kind: String?
-    let focus: String?
-    let note: String?
-
-    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, note }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        date = try c.decode(String.self, forKey: .date)
-        sport = try? c.decodeIfPresent(String.self, forKey: .sport)
-        minutes = Int(((try? c.decode(Double.self, forKey: .minutes)) ?? 60).rounded())
-        environment = try? c.decodeIfPresent(String.self, forKey: .environment)
-        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
-        focus = try? c.decodeIfPresent(String.self, forKey: .focus)
-        note = try? c.decodeIfPresent(String.self, forKey: .note)
     }
 }
 
@@ -483,43 +412,6 @@ extension APIClient {
         let r: WeekRevisionResponse = try await send("/app/api/coach/revision", method: "POST",
                                                      body: ["date": JSONValue.string(date), "decision": .string(apply ? "apply" : "keep")])
         return r.revision
-    }
-
-    /// "Navrhne AI": the whole week from the AI, or the rules' proposal without it.
-    /// `correction` with `previous` fixes the AI's last proposal ("Opravit návrh").
-    func weekAI(start: String, note: String, correction: String? = nil, previous: [WeekSessionDraft] = []) async throws -> WeekAIResponse {
-        var body: JSONObject = ["start": .string(start), "note": .string(note)]
-        if let correction {
-            body["correction"] = .string(correction)
-            body["previous"] = .array(previous.map { s in
-                var x: JSONObject = ["date": .string(s.date), "sport": .string(s.sport), "minutes": .number(Double(s.minutes))]
-                if let environment = s.environment { x["environment"] = .string(environment) }
-                if let kind = s.kind { x["kind"] = .string(kind) }
-                return .object(x)
-            })
-        }
-        return try await send("/app/api/coach/week-ai", method: "POST", body: body)
-    }
-
-    /// "Upravit s AI": a quick chip ("shorter", "easier", "harder", "indoor") or
-    /// the athlete's own words change one session of the week.
-    func adjustSession(_ session: WeekSessionDraft, chip: String?, text: String?, others: [WeekSessionDraft]) async throws -> AdjustedSession {
-        var body: JSONObject = ["date": .string(session.date), "sport": .string(session.sport), "minutes": .number(Double(session.minutes)),
-                                "environment": .string(session.environment ?? "outdoor")]
-        if let kind = session.kind { body["kind"] = .string(kind) }
-        if let system = session.workout?.primary_system { body["system"] = .string(system) }
-        if let tss = session.workout?.target_load { body["tss"] = .number(tss) }
-        if let chip { body["chip"] = .string(chip) }
-        if let text { body["text"] = .string(text) }
-        body["others"] = .array(others.map { o in
-            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport), "minutes": .number(Double(o.minutes))]
-            if let kind = o.kind { x["kind"] = .string(kind) }
-            if let system = o.workout?.primary_system { x["system"] = .string(system) }
-            return .object(x)
-        })
-        let r: AdjustResponse = try await send("/app/api/workouts/adjust", method: "POST", body: body)
-        guard let changed = r.session else { throw APIError.message(r.message ?? L10n.tr("Úpravu se nepodařilo udělat.")) }
-        return changed
     }
 
     /// The AI's review of a day: what to keep, what to change and why.

@@ -1,1084 +1,620 @@
 import SwiftUI
 
-// Plán týdne: the athlete places sports on days ("Rozvrhnu sám") or lets the
-// AI lay out the week ("Navrhne AI"). Either way the sessions are built as
-// previews first; each can be opened, made longer or shorter, moved inside or
-// changed with the AI, and "Uložit do kalendáře" schedules them all, and with
-// "Zapisovat tréninky" also puts them into the iPhone calendar (CalendarTime).
+// MARK: - Week plan (redesign W, concept 05 "H")
+//
+// One screen in a sheet with [Coach, X]: this week's strip (the Training strip,
+// DayCircle), "X of Y planned workouts done", the pills Show next week and Plan
+// settings, then This week and Next week as two identical cards that fold their
+// days. Days before today wait behind Show earlier days, so today comes first.
+// A done workout is the Training row (result, time, % of plan, chevron to its
+// detail); a planned one opens in place: Workout details (the Training detail,
+// back to the same spot), the day tiles to move it (no dragging, Petr
+// 2026-11-15), its length and Remove from the plan with Undo. Plan settings
+// (WeekPlanSettings.swift) sets the sports, rest days and time; Generate there
+// replans the two weeks here (WeekPlanGenerator).
 
-private func sportLabel(_ sport: String) -> String {
-    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení", "brick": "Brick"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
-}
+/// One week of the plan, from the training calendar, so the strip and the list agree.
+struct WeekPlanWeek: Equatable {
+    let monday: String
+    let today: String
+    let days: [String]
+    /// The workouts of the week by day: done ones first, then the planned and the missed.
+    /// A walk counts only when it fulfils a plan.
+    let sessions: [CalendarActivity]
 
-/// The sport's colour (Palette.Sport).
-private func sportColor(_ sport: String) -> Color { Palette.Sport.color(sport) }
-
-private func sportSymbol(_ sport: String) -> String {
-    ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility", "brick": "link"][sport] ?? "figure.mixed.cardio"
-}
-
-/// The session kinds of src/week-ai.js KINDS.
-private func kindLabel(_ kind: String?) -> String? {
-    guard let kind else { return nil }
-    return ["recovery": "Lehce / regenerace", "endurance": "Vytrvalost", "long": "Dlouhý trénink", "tempo": "Tempo",
-            "sweet_spot": "Sweet spot", "threshold": "Práh", "vo2max": "VO₂max", "gym": "Posilovna"][kind].map { L10n.tr($0) }
-}
-
-/// One session of the week before it goes to the calendar: what it should be,
-/// and the workout built for it.
-struct WeekSessionDraft: Identifiable, Equatable {
-    enum Status: Equatable { case waiting, building, ready, saved, failed(String) }
-
-    let id = UUID()
-    var date: String
-    var sport: String
-    var minutes: Int
-    /// "outdoor" or "indoor"; nil for the gym.
-    var environment: String?
-    /// src/week-ai.js KINDS, when the AI or a change chose it.
-    var kind: String?
-    /// The generator's focus (FOCUS_OF), nil when the week plan's role decides.
-    var focus: String?
-    var label: String?
-    var reason: String?
-    var role: String?
-    /// What the AI changed, in its words.
-    var note: String?
-    /// "Přepočteno": the session changed when another one was removed;
-    /// `previous` is what it was before, when the day had one of this sport.
-    var recalculated = false
-    var previous: String?
-    /// The athlete changed it with "Upravit s AI": the asked kind passes the
-    /// coach's load rules (48 h, two quality days…); red and illness still hold.
-    var insisted = false
-    /// The week's brick: a run straight after the day's ride, saved joined to it.
-    var brick = false
-    /// The time of day it goes to the calendar with ("HH:MM"); nil is any time.
-    var time: String? = nil
-    var workout: LibraryWorkout?
-    var gym: GymProposal?
-    var status: Status = .waiting
-    /// The calendar event once saved ("planned:…"), for joining the next race leg to it on a retry.
-    var eventId: String? = nil
-
-    var built: Bool { status == .ready || status == .saved }
-
-    var title: String {
-        if let gym { return gym.planName }
-        return workout?.name ?? label ?? kindLabel(kind) ?? sportLabel(sport)
-    }
-
-    /// "Vytrvalost, 2 h", as the row shows what the session was before a recalculation.
-    var line: String { title + ", " + Fmt.duration(minutes) }
-
-    /// The lengths the detail offers (src/week-planner.js SESSION_MINUTES).
-    static func lengths(_ sport: String, including current: Int) -> [Int] {
-        let list = ["gym": [30, 45, 60, 75, 90], "run": [20, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360],
-                    "swim": [20, 30, 45, 60, 75, 90]][sport]
-            ?? [30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360, 420, 480]
-        return list.contains(current) ? list : (list + [current]).sorted()
-    }
-
-    /// Builds the workout: a gym plan as a draft, a ride or run from the
-    /// library. `resize` keeps the workout and only changes its length.
-    /// `others`: the week's other sessions, so gym days follow on from each other.
-    func building(_ api: APIClient, resize: Bool = false, others: [WeekSessionDraft] = []) async -> WeekSessionDraft {
-        var next = self
-        do {
-            if sport == "gym" {
-                let gymDays = others.filter { $0.sport == "gym" && $0.date != date }
-                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true,
-                                                    gymDays: gymDays.map(\.date),
-                                                    weekSessions: gymDays.compactMap { s in s.gym.map { (date: s.date, rows: $0.rows) } })
-            } else {
-                let r = try await api.generateWeekSession(date: date, sport: sport, minutes: minutes, environment: environment, focus: focus,
-                                                          insisted: insisted, resize: resize ? workout?.id : nil)
-                guard let w = r.workout else { throw APIError.message(r.message ?? L10n.tr("Bez návrhu.")) }
-                next.workout = w
-                // The coach still eased the kind (red, illness…): the pill and the
-                // note say what the steps are, not what was asked.
-                if let eased = r.eased {
-                    next.kind = eased.kind
-                    next.focus = eased.focus
-                    next.label = kindLabel(eased.kind)
-                    next.note = eased.why.map { L10n.f("Kouč nechal trénink lehčí: %@.", $0) } ?? L10n.tr("Kouč nechal trénink lehčí.")
-                }
+    init(monday: String, today: String, calendar: [String: CalendarDay], hidden: Set<String> = []) {
+        self.monday = monday
+        self.today = today
+        days = (0..<7).map { ISODay.shift(monday, $0) }
+        sessions = days.flatMap { date -> [CalendarActivity] in
+            let list = (calendar[date]?.activities ?? []).filter { a in
+                !hidden.contains(a.id) && (a.sport != "walk" || a.plannedId != nil)
             }
-            next.status = .ready
-        } catch {
-            next.status = .failed(error.localizedDescription)
+            let rank = ["done": 0, "planned": 1, "missed": 2]
+            return list.enumerated().sorted { x, y in
+                let a = rank[x.element.status] ?? 3, b = rank[y.element.status] ?? 3
+                return a == b ? x.offset < y.offset : a < b
+            }.map(\.element)
         }
-        return next
+    }
+
+    var sunday: String { days[6] }
+    var count: Int { sessions.count }
+    var minutes: Int { sessions.reduce(0) { $0 + Int(($1.minutes ?? 0).rounded()) } }
+    /// The planned minutes still ahead, today included.
+    var minutesToGo: Int {
+        sessions.filter { $0.status == "planned" && $0.date >= today }.reduce(0) { $0 + Int(($1.minutes ?? 0).rounded()) }
+    }
+    var hasPlanned: Bool { sessions.contains { $0.status == "planned" } }
+    /// Days before today with a workout: they wait behind "Show earlier days".
+    var hasEarlier: Bool { sessions.contains { $0.date < today } }
+
+    func sessions(on date: String) -> [CalendarActivity] { sessions.filter { $0.date == date } }
+}
+
+/// The screen's sentences, in one place for the tests.
+enum WeekPlanText {
+    /// "Nov 9 to Nov 15".
+    static func range(_ monday: String) -> String {
+        L10n.f("%@ až %@", Fmt.dayMonthShort(monday), Fmt.dayMonthShort(ISODay.shift(monday, 6)))
+    }
+
+    /// "8 workouts, 7 h 22".
+    static func summary(count: Int, minutes: Int) -> String {
+        guard count > 0 else { return L10n.tr("Žádný trénink") }
+        return L10n.plural("%lld tréninků", count) + (minutes > 0 ? ", " + planDuration(minutes) : "")
+    }
+
+    /// The one count of the week, the same as Training's (server thisWeek).
+    static func done(_ done: Int, of planned: Int) -> String {
+        L10n.f("%@ z %@ naplánovaných tréninků hotovo", String(done), String(planned))
+    }
+
+    static func toGo(_ minutes: Int) -> String { L10n.f("zbývá %@", planDuration(minutes)) }
+
+    /// The line under Generate: what it changes and what it keeps.
+    static func replans(from today: String, to end: String) -> String {
+        L10n.f("Přeplánuje %@ až %@. Hotové tréninky zůstanou.", Fmt.dayMonthShort(today), Fmt.dayMonthShort(end))
+    }
+
+    /// "Today" or "Fr", over the day's number.
+    static func dayWord(_ date: String, today: String) -> String {
+        date == today ? L10n.tr("Dnes") : Fmt.weekdayShort(date)
     }
 }
 
-/// "Plán týdne" built but not yet in the calendar, by the week's Monday: it
-/// waits while the athlete leaves the screen (to the coach, the calendar…)
-/// and comes back, until it is saved or planned again. Kept for this run of
-/// the app; a sign-out clears it.
-struct WeekPlanDraft {
-    var mode: String
-    var days: [[String]]
-    var bricks: Set<Int> = []
-    var sessions: [WeekSessionDraft]
-    var summary: String?
-    var notice: String?
-    var warnings: [WeekProposalResponse.Warning]
-    var check: WeekCheck?
-    var checkApplied: Bool
+// MARK: - The sheet
+
+/// Week plan as Training opens it: a sheet with its own stack, so Workout
+/// details pushes inside it and comes back to the same spot.
+struct WeekPlanSheet: View {
+    var body: some View {
+        NavigationStack {
+            WeekPlanView().appRoutes()
+        }
+        .presentationDragIndicator(.visible)
+    }
 }
 
-enum WeekPlanDraftMemory {
-    static var drafts: [String: WeekPlanDraft] = [:]
+/// A link that opens Week plan as its sheet (Training's "Week plan", "Plan week").
+struct WeekPlanLink<Label: View>: View {
+    @ViewBuilder let label: () -> Label
+    @State private var open = false
+
+    var body: some View {
+        Button { open = true } label: { label() }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $open) { WeekPlanSheet() }
+    }
 }
 
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var weekStart = WeekPlanView.monday()
-    @AppStorage("weekPlan.mode") private var mode = "manual"
-    @State private var plan: WeekPlanResponse?
-    /// "Rozvrhnu sám": the sports on each weekday, Monday first.
-    @State private var days: [[String]] = Array(repeating: [], count: 7)
-    /// The weekdays whose run goes right after the ride (chip "Brick").
-    @State private var bricks: Set<Int> = []
-    @State private var picked: String?
-    /// Nastavení → Sporty k navrhování (ride, run, swim, strength); nil: never chosen, all are offered.
-    @State private var sports: [String]?
-    @State private var note = ""
-    /// "Opravit návrh": what the AI should fix in its proposal.
-    @State private var correction = ""
-    @State private var summary: String?
-    @State private var notice: String?
-    @State private var warnings: [WeekProposalResponse.Warning] = []
-    @State private var sessions: [WeekSessionDraft] = []
-    @State private var loading = false
-    @State private var working = false
-    @State private var saving = false
+    @State private var plans: TrainingPlans?
+    /// The two weeks' plans (sports per day, time) and the usual week.
+    @State private var weekPlans: [String: WeekPlanResponse] = [:]
+    @State private var showNext = false
+    /// The weeks unfolded; nil until the first tap: this week open.
+    @State private var openWeeks: Set<String>?
+    @State private var showEarlier = false
+    /// The planned workout opened in place.
+    @State private var opened: String?
+    /// "Add workout": the week it adds to, then the sport.
+    @State private var adding: String?
+    @State private var addSport: String?
+    @State private var working: String?
     @State private var error: String?
-    /// "Přesně": the session whose exact time is being picked.
-    @State private var exactFor: UUID?
-    /// The sessions "Upravit sám" set aside: their times come back on the rebuilt week.
-    @State private var timesBefore: [WeekSessionDraft] = []
-    @State private var exactTime = Date()
-    /// "Kontrola týdne" of the built week (WeekCheck.swift); `checkApplied`
-    /// once "Upravit" changed the sessions.
-    @State private var check: WeekCheck?
-    @State private var checkApplied = false
+    @State private var toast: PlanToast?
+    /// Removed, waiting for the toast to go without Undo.
+    @State private var hidden: Set<String> = []
+    @State private var settings = false
+    /// Generate from Plan settings: the weeks are being built; a failure says so.
+    @State private var generating = false
+    @State private var generateFailed = false
 
-    private var thisWeek: String { Self.monday() }
-    private var nextWeek: String { ISODay.shift(Self.monday(), 7) }
-    private var today: String { AppModel.localDate(Date()) }
+    private var today: String { model.demo ? (model.training?.date ?? AppModel.localDate(Date())) : AppModel.localDate(Date()) }
+    private var monday: String { FreeTime.monday(today) }
+    private var nextMonday: String { ISODay.shift(monday, 7) }
+    private var thisWeek: WeekPlanWeek { WeekPlanWeek(monday: monday, today: today, calendar: model.calendar, hidden: hidden) }
+    private var nextWeek: WeekPlanWeek { WeekPlanWeek(monday: nextMonday, today: today, calendar: model.calendar, hidden: hidden) }
+    private var unfolded: Set<String> { openWeeks ?? [monday] }
+    private var hasPlan: Bool { thisWeek.hasPlanned || nextWeek.hasPlanned || plans?.active != nil }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Plán týdne") {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Tréninkový týden").padding(.top, 24)
-                Text("Plán týdne").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-
-                Picker("Týden", selection: $weekStart) {
-                    Text("Tento týden").tag(thisWeek)
-                    Text("Příští týden").tag(nextWeek)
-                }
-                .pickerStyle(.segmented)
-                .disabled(working || saving)
-                .padding(.top, 18)
-
-                if sessions.isEmpty {
-                    Picker("Způsob", selection: $mode) {
-                        Text("Rozvrhnu sám").tag("manual")
-                        Text("Navrhne AI").tag("ai")
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(working)
-                    .padding(.top, 10)
-                }
-
-                timeLink.padding(.top, 14)
-
-                if loading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                } else {
-                    if let error {
-                        Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
-                    }
-                    if !sessions.isEmpty {
-                        generated
-                    } else if mode == "ai" {
-                        aiForm
-                    } else {
-                        layout
-                    }
-                }
-            }
-        }
-        .task {
-            if sessions.isEmpty { await restore() }
-            if plan == nil { await load() }
-        }
-        .onChange(of: weekStart) { old, _ in
-            keep(old)
-            sessions = []
-            check = nil
-            summary = nil
-            Task {
-                await restore()
-                await load()
-            }
-        }
-        .onChange(of: sessions) { _, _ in keep(weekStart) }
-        .onChange(of: check) { _, _ in keep(weekStart) }
-        .onDisappear { keep(weekStart) }
-        .sheet(isPresented: Binding(get: { exactFor != nil }, set: { if !$0 { exactFor = nil } })) { exactSheet }
-    }
-
-    // MARK: The unsaved week
-
-    /// The built week waits for the athlete (WeekPlanDraftMemory); a saved or
-    /// emptied one is forgotten.
-    private func keep(_ week: String) {
-        guard !model.demo else { return }
-        if sessions.isEmpty || sessions.allSatisfy({ $0.status == .saved }) {
-            WeekPlanDraftMemory.drafts[week] = nil
-        } else {
-            WeekPlanDraftMemory.drafts[week] = WeekPlanDraft(mode: mode, days: days, bricks: bricks, sessions: sessions, summary: summary, notice: notice,
-                                                             warnings: warnings, check: check, checkApplied: checkApplied)
-        }
-    }
-
-    /// The week the athlete left; sessions still being built when the screen
-    /// closed are built now.
-    private func restore() async {
-        guard let d = WeekPlanDraftMemory.drafts[weekStart] else { return }
-        mode = d.mode
-        days = d.days
-        bricks = d.bricks
-        sessions = d.sessions.map { s in
-            var s = s
-            if s.status == .building { s.status = .waiting }
-            return s
-        }
-        summary = d.summary
-        notice = d.notice
-        warnings = d.warnings
-        check = d.check
-        checkApplied = d.checkApplied
-        if sessions.contains(where: { $0.status == .waiting }) {
-            working = true
-            defer { working = false }
-            await buildAll()
-        }
-    }
-
-    // MARK: Time
-
-    /// "Čas tento týden": the usual time for training, changed for this week only.
-    private var timeLink: some View {
-        NavigationLink {
-            AvailabilityView(weekStart: weekStart, onSave: { Task { await load() } })
-        } label: {
-            Card(padding: 14) {
-                HStack(spacing: 12) {
-                    Image(systemName: "clock").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
-                        .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(weekStart == nextWeek ? "Čas příští týden" : "Čas tento týden").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        if let summary = timeSummary {
-                            Text(verbatim: summary).font(Typo.caption).foregroundStyle(Palette.muted)
+        ZStack(alignment: .bottom) {
+            ScreenBackground(glow: Palette.Glow.training)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        header
+                        strip(thisWeek) { date in jump(date, proxy) }
+                            .padding(.top, 16)
+                        if showNext && hasPlan && !generating {
+                            nextStripLabel.padding(.top, 10)
+                            strip(nextWeek) { date in jump(date, proxy) }
                         }
+                        if hasPlan && !generating { caption.padding(.top, 8) }
+                        if hasPlan && !generating { pills.padding(.top, 14) }
+                        content.padding(.top, 22)
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, hasPlan && !generating ? 60 : 120)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            }
+            if !hasPlan && !generating {
+                bottomButton(L10n.tr("Nastavit můj plán")) { settings = true }
+            }
+            if let toast {
+                PlanToastView(toast: toast) { settle(toast, undo: true) }
+                    .padding(.horizontal, 16).padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .navBarVisibility(.hidden)
+        .task { await load() }
+        .sheet(isPresented: $settings) {
+            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { generate in
+                Task {
+                    await reload()
+                    if generate { await runGenerate() }
                 }
             }
         }
-        .buttonStyle(.plain)
-        .disabled(working || saving)
     }
 
-    private var timeSummary: String? {
-        guard let prefs = plan?.prefs else { return nil }
-        let total = WeekPlanPrefs.available(prefs).filter { $0 > 0 }.reduce(0, +)
-        var parts = [total > 0 ? Fmt.duration(total) : L10n.tr("Nenastaveno")]
-        parts.append(WeekPlanPrefs.followsCalendar(prefs) ? L10n.tr("podle kalendáře")
-                     : WeekPlanPrefs.source(prefs) == "week" ? L10n.tr("upraveno jen pro tento týden") : L10n.tr("podle tvého běžného týdne"))
-        if let t = plan?.targets, t.recovery == true { parts.append(L10n.tr("odpočinkový týden")) }
-        return parts.joined(separator: ", ")
-    }
+    // MARK: Header
 
-    private func dayMinutes(_ w: Int) -> Int {
-        WeekPlanPrefs.available(plan?.prefs)[w]
-    }
-
-    private func date(_ w: Int) -> String { ISODay.shift(weekStart, w) }
-
-    // MARK: Rozvrhnu sám
-
-    private var layout: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(picked.map { L10n.f("Klepni na den, kam dát: %@", sportLabel($0)) } ?? L10n.tr("Vyber sport a klepni na den."))
-                .font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 18)
-            // The sports fit one line as tiles; at the largest text sizes they scroll.
-            Group {
-                if typeSize.isAccessibilitySize {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) { ForEach(pickable, id: \.self) { sportCapsule($0) } }
-                    }
-                    .scrollClipDisabled()
-                } else {
-                    HStack(spacing: 8) { ForEach(pickable, id: \.self) { sportTile($0) } }
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: L10n.tr("Plán týdne")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                if let subtitle {
+                    Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted)
                 }
             }
-            .padding(.top, 10)
-            if !hiddenSports.isEmpty {
-                NavigationLink {
-                    WeekPlanSportsSettings { kinds in
-                        sports = kinds
-                        if let p = picked, !pickable.contains(p) { picked = nil }
-                    }
-                } label: {
-                    (Text(L10n.f("Vypnuté v Nastavení → Sporty: %@.", hiddenSports.map(sportLabel).joined(separator: ", "))) + Text(verbatim: " ")
-                        + Text("Změnit").foregroundColor(Palette.green))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            CoachEntry(view: "training", companion: ChromeAction(systemImage: "xmark", label: "Zavřít") {
+                // A removal waiting for its toast goes through (pushing Workout details keeps it pending).
+                if let toast { settle(toast, undo: false) }
+                dismiss()
+            })
+        }
+    }
+
+    /// "Half marathon, week 8 of 13, Build"; "No plan yet" without one.
+    private var subtitle: String? {
+        if let active = plans?.active ?? plans?.activeGym, active.started {
+            let phase = active.template.weeks.first { $0.week == active.week }?.phaseLabel
+            return [active.name, L10n.f("týden %@ z %@", String(active.week), String(active.weeksCount)), phase].compactMap { $0 }.joined(separator: ", ")
+        }
+        return hasPlan ? nil : L10n.tr("Zatím bez plánu")
+    }
+
+    // MARK: Strip
+
+    /// The Training strip literally (DayCircle): today in its oval, a tap jumps to the day.
+    private func strip(_ week: WeekPlanWeek, pick: @escaping (String) -> Void) -> some View {
+        HStack(spacing: 0) {
+            ForEach(week.days, id: \.self) { date in
+                Button { pick(date) } label: {
+                    DayCircle(date: date, today: today, selected: date == today, day: model.calendar[date])
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 8)
-            }
-            if picked == "brick" {
-                Text("Brick: běh hned po kole, do hodinek jako jeden trénink.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(spacing: 8) {
-                ForEach(0..<7, id: \.self) { w in dayRow(w) }
-            }
-            .padding(.top, 14)
-
-            let open = (0..<7).filter { date($0) >= today }.reduce(0) { $0 + days[$1].count }
-            PrimaryButton(title: working ? "Sestavuji…" : "Vytvořit tréninky", systemImage: "sparkles", busy: working) {
-                Task { await buildLayout() }
-            }
-            .disabled(working || open == 0 || model.demo)
-            .padding(.top, 20)
-            if working { CoachThinking(text: L10n.tr("Kouč sestavuje tréninky…")).padding(.top, 12) }
-        }
-    }
-
-    private func dayRow(_ w: Int) -> some View {
-        let past = date(w) < today
-        let minutes = dayMinutes(w)
-        return Button {
-            guard let sport = picked, !past else { return }
-            withAnimation(.snappy) { add(sport, to: w) }
-        } label: {
-            Card(padding: 12) {
-                HStack(alignment: .center, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(Fmt.capitalized(Fmt.weekdayShort(date(w)))).font(Typo.bodyStrong).foregroundStyle(past ? Palette.faint : Palette.ink)
-                        Text(verbatim: minutes > 0 ? Fmt.duration(minutes) : minutes == 0 ? L10n.tr("volno") : "–")
-                            .font(Typo.tiny).foregroundStyle(Palette.muted)
-                    }
-                    .frame(width: 58, alignment: .leading)
-                    if days[w].isEmpty {
-                        Text(past ? "" : picked == nil ? L10n.tr("Bez tréninku") : L10n.tr("Přidat sem"))
-                            .font(Typo.caption).foregroundStyle(Palette.faint)
-                    } else {
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 6) {
-                                if liveBricks.contains(w) {
-                                    brickChip(removable: !past) { withAnimation(.snappy) { removeBrick(w) } }
-                                }
-                                ForEach(Array(days[w].enumerated()).filter { !brickPart(w, $0.offset) }, id: \.offset) { k, sport in
-                                    chip(sport, removable: !past) { withAnimation(.snappy) { _ = days[w].remove(at: k) } }
-                                }
-                            }
-                        }
-                        .scrollIndicators(.hidden)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-            .opacity(past ? 0.55 : 1)
-        }
-        .buttonStyle(.plain)
-        .disabled(past || working)
-    }
-
-    /// Ride, Run, Swim, Gym: the sport order everywhere in the app.
-    private static let allSports = ["ride", "run", "swim", "gym"]
-
-    /// The sports to pick: the ones ticked in Nastavení → Sporty k navrhování
-    /// (all when never chosen), and Brick last, a ride and a run together.
-    private var pickable: [String] {
-        let shown = Self.allSports.filter { !hiddenSports.contains($0) }
-        return shown + (shown.contains("ride") && shown.contains("run") ? ["brick"] : [])
-    }
-
-    /// The sports turned off in Nastavení → Sporty k navrhování; none when nothing is ticked.
-    private var hiddenSports: [String] {
-        guard let sports, !sports.isEmpty else { return [] }
-        return Self.allSports.filter { !sports.contains($0 == "gym" ? "strength" : $0) }
-    }
-
-    private func sportTile(_ sport: String) -> some View {
-        let on = picked == sport
-        return Button { picked = on ? nil : sport } label: {
-            VStack(spacing: 5) {
-                Image(systemName: sportSymbol(sport)).scaledFont(17, weight: .semibold)
-                    .foregroundStyle(on ? Palette.onAccent : sportColor(sport))
-                Text(sportLabel(sport)).font(Typo.caption.weight(.semibold))
-                    .foregroundStyle(on ? Palette.onAccent : Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.75)
-            }
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .background(on ? sportColor(sport) : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private func sportCapsule(_ sport: String) -> some View {
-        let on = picked == sport
-        return Button { picked = on ? nil : sport } label: {
-            Label {
-                Text(sportLabel(sport)).foregroundStyle(on ? Palette.onAccent : Palette.ink)
-            } icon: {
-                Image(systemName: sportSymbol(sport)).foregroundStyle(on ? Palette.onAccent : sportColor(sport))
-            }
-                .font(Typo.small.weight(.semibold))
-                .padding(.horizontal, 12).frame(minHeight: 36)
-                .background(on ? sportColor(sport) : Palette.card, in: Capsule())
-                .overlay { Capsule().stroke(Palette.hairline, lineWidth: on ? 0 : 1) }
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    /// The brick days that still hold a ride and a run.
-    private var liveBricks: Set<Int> {
-        bricks.filter { days[$0].contains("ride") && days[$0].contains("run") }
-    }
-
-    /// The day's first ride and first run make its brick, shown as one chip.
-    private func brickPart(_ w: Int, _ k: Int) -> Bool {
-        liveBricks.contains(w) && (days[w].firstIndex(of: "ride") == k || days[w].firstIndex(of: "run") == k)
-    }
-
-    /// A sport goes on the day; a brick adds the ride and the run it needs.
-    private func add(_ sport: String, to w: Int) {
-        guard sport == "brick" else {
-            if days[w].count < WeekPlanPrefs.maxPerDay { days[w].append(sport) }
-            return
-        }
-        guard !liveBricks.contains(w) else { return }
-        let missing = ["ride", "run"].filter { !days[w].contains($0) }
-        guard days[w].count + missing.count <= WeekPlanPrefs.maxPerDay else { return }
-        days[w].append(contentsOf: missing)
-        bricks.insert(w)
-    }
-
-    private func removeBrick(_ w: Int) {
-        for sport in ["ride", "run"] { if let k = days[w].firstIndex(of: sport) { days[w].remove(at: k) } }
-        bricks.remove(w)
-    }
-
-    private func brickChip(removable: Bool, remove: @escaping () -> Void) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: sportSymbol("ride")).scaledFont(11, weight: .semibold)
-            Text(sportLabel("ride")).font(Typo.caption.weight(.semibold))
-            Image(systemName: "link").scaledFont(10, weight: .semibold)
-            Image(systemName: sportSymbol("run")).scaledFont(11, weight: .semibold)
-            Text(sportLabel("run")).font(Typo.caption.weight(.semibold))
-            if removable {
-                Button(action: remove) {
-                    Image(systemName: "xmark").scaledFont(9, weight: .bold).padding(3)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.tr("Odebrat brick"))
             }
         }
-        .foregroundStyle(Palette.amber)
-        .padding(.leading, 9).padding(.trailing, removable ? 5 : 9).frame(height: 28)
-        .background(Palette.amberSoft, in: Capsule())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr("Brick hned po kole"))
     }
 
-    private func chip(_ sport: String, removable: Bool, remove: @escaping () -> Void) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: sportSymbol(sport)).scaledFont(11, weight: .semibold)
-            Text(sportLabel(sport)).font(Typo.caption.weight(.semibold))
-            if removable {
-                Button(action: remove) {
-                    Image(systemName: "xmark").scaledFont(9, weight: .bold).padding(3)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.f("Odebrat %@", sportLabel(sport)))
-            }
-        }
-        .foregroundStyle(sportColor(sport))
-        .padding(.leading, 9).padding(.trailing, removable ? 5 : 9).frame(height: 28)
-        .background(sportColor(sport).opacity(0.16), in: Capsule())
-    }
-
-    /// The layout becomes this week's own plan, the rules give each sport its
-    /// length and role, and every session is built.
-    /// `previous`: the sessions before "Odebrat z plánu"; the ones the new
-    /// layout keeps as they were keep their built workout.
-    private func buildLayout(previous: [WeekSessionDraft]? = nil) async {
-        guard let prefs = plan?.prefs else { return }
-        working = true
-        defer { working = false }
-        error = nil
-        do {
-            var object = WeekPlanPrefs.object(prefs)
-            object["days"] = WeekPlanPrefs.daysValue(days)
-            object["bricks"] = .array(liveBricks.sorted().map { .number(Double($0)) })
-            object["sessions"] = .object([:])
-            object["source"] = nil
-            try await model.api.saveWeekPlan(start: weekStart, prefs: .object(object))
-            let r = try await model.api.weekProposal(start: weekStart)
-            warnings = r.proposal?.warnings ?? []
-            summary = nil
-            notice = nil
-            sessions = (r.proposal?.items ?? []).map { item in
-                let sport = item.sport == "strength" ? "gym" : item.sport
-                let next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? (sport == "run" ? 45 : 60),
-                                            environment: sport == "gym" ? nil : item.environment ?? "outdoor",
-                                            label: item.label, reason: item.reason, role: item.role)
-                guard let previous else { return next }
-                if let same = previous.first(where: { $0.built && $0.date == next.date && $0.sport == next.sport && $0.minutes == next.minutes
-                                                     && $0.environment == next.environment && $0.role == next.role }) {
-                    return same
-                }
-                return Self.recalculated(next, from: previous)
-            }
-            sessions = Self.keepingTimes(sessions, from: previous ?? timesBefore)
-            timesBefore = []
-            if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
-            await buildAll()
-            await runCheck()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    // MARK: Navrhne AI
-
-    private var aiForm: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Card(padding: 14) {
-                if let score = model.today?.readiness.score {
-                    HStack {
-                        Text("Připravenost").font(Typo.body).foregroundStyle(Palette.secondary)
-                        Spacer()
-                        Text(verbatim: "\(score)").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    }
-                    Divider().overlay(Palette.hairline)
-                }
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Poznámka pro AI").font(Typo.caption).foregroundStyle(Palette.muted)
-                    TextField(L10n.tr("Třeba: v sobotu jedu s kamarády, ve čtvrtek nemůžu"), text: $note, axis: .vertical)
-                        .font(Typo.body).lineLimit(2...5)
-                }
-            }
-            .padding(.top, 18)
-            Text("AI vychází ze tvého času, zátěže, spánku, počasí a cíle.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
-            PrimaryButton(title: working ? "Navrhuji…" : "Navrhnout týden", systemImage: "sparkles", busy: working) {
-                Task { await proposeAI() }
-            }
-            .disabled(working || model.demo)
-            .padding(.top, 18)
-            if working { CoachThinking(text: L10n.tr("Kouč navrhuje týden…")).padding(.top, 12) }
-        }
-    }
-
-    /// With a correction the AI fixes its last proposal; a session it keeps
-    /// as it was keeps its built workout.
-    /// `removed`: the session "Odebrat z plánu" took out; it stays out and the
-    /// sessions that changed around it are marked.
-    private func proposeAI(correction: String? = nil, removed: WeekSessionDraft? = nil) async {
-        timesBefore = []
-        working = true
-        defer { working = false }
-        error = nil
-        do {
-            let r = try await model.api.weekAI(start: weekStart, note: note, correction: correction, previous: sessions)
-            let previous = sessions.filter { $0.id != removed?.id }
-            summary = r.summary
-            notice = r.ai == false ? r.message : nil
-            warnings = r.warnings ?? []
-            sessions = (r.items ?? []).filter { item in
-                guard let removed else { return true }
-                return !(item.date == removed.date && (item.sport == "strength" ? "gym" : item.sport) == removed.sport)
-            }.map { item in
-                let sport = item.sport == "strength" ? "gym" : item.sport
-                var next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
-                                            environment: sport == "gym" ? nil : item.environment ?? "outdoor",
-                                            kind: item.kind, focus: item.focus, label: item.label, reason: item.reason, role: item.role)
-                next.brick = item.brick
-                if var same = previous.first(where: { $0.built && $0.date == next.date && $0.sport == next.sport && $0.minutes == next.minutes
-                                                     && $0.environment == next.environment && $0.kind == next.kind }) {
-                    same.reason = next.reason
-                    same.note = nil
-                    same.brick = next.brick
-                    return same
-                }
-                return removed == nil ? next : Self.recalculated(next, from: previous)
-            }
-            sessions = Self.keepingTimes(sessions, from: previous)
-            if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
-            if correction != nil && removed == nil { self.correction = "" }
-            await buildAll()
-            await runCheck()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    /// "Opravit návrh": the athlete tells the AI what it got wrong.
-    private var correctionCard: some View {
-        Card(padding: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Opravit návrh").font(Typo.caption).foregroundStyle(Palette.muted)
-                TextField(L10n.tr("Třeba: v sobotu chci posilovnu, ne běh"), text: $correction, axis: .vertical)
-                    .font(Typo.body).lineLimit(1...4)
-            }
-            HStack {
+    private var nextStripLabel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: L10n.tr("Příští týden")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
-                Button {
-                    Task { await proposeAI(correction: correction.trimmingCharacters(in: .whitespacesAndNewlines)) }
-                } label: {
-                    Label(L10n.tr(working ? "Opravuji…" : "Opravit"), systemImage: "sparkles")
-                        .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.onButton)
-                        .padding(.horizontal, 14).frame(height: 34)
-                        .background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(working || saving || correction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
-            }
-            if working { CoachThinking(text: L10n.tr("Kouč upravuje návrh…")).padding(.top, 10) }
-        }
-    }
-
-    // MARK: The built week
-
-    private var generated: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let check, !(check.changes ?? []).isEmpty, !sessions.contains(where: { $0.status == .saved }) {
-                WeekCheckContent(check: check, today: today, applied: checkApplied,
-                                 appliedText: L10n.tr("Upraveno. Tréninky níže jsou podle kontroly."), busy: working,
-                                 onKeep: { withAnimation { self.check = nil } },
-                                 onApply: { Task { await applyCheck(check) } })
-                    .padding(.top, 18)
-            }
-            if let summary {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    AIMark()
-                    Text(summary).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 18)
-            }
-            if let notice {
-                Text(notice).font(Typo.small).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-            }
-            ForEach(warnings, id: \.self) { w in
-                if let text = w.text {
-                    Text((w.date.map { Fmt.dayHeading($0) + ", " } ?? "") + text)
-                        .font(Typo.small).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
-                }
-            }
-            VStack(spacing: 10) {
-                ForEach($sessions) { $session in
-                    if session.sport == "stretch" {
-                        row(session)
-                    } else {
-                    NavigationLink {
-                        WeekSessionDetailView(session: $session, others: sessions.filter { $0.id != session.id }, weekStart: weekStart,
-                                              onRemove: removal(session.id))
-                    } label: {
-                        row(session)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(session.status == .waiting || session.status == .building)
-                    // The time chip sits over the card, outside the link.
-                    .overlay(alignment: .trailing) {
-                        if timeable(session) { timeChip(session).padding(.trailing, 48) }
-                    }
-                    }
-                }
-            }
-            .padding(.top, 18)
-
-            if mode == "ai" && !sessions.contains(where: { $0.status == .saved }) {
-                correctionCard.padding(.top, 14)
-            }
-
-            let open = sessions.filter { $0.status == .ready }
-            let finished = !sessions.isEmpty && sessions.allSatisfy { $0.status == .saved }
-            PrimaryButton(title: finished ? "Hotovo, je v kalendáři" : saving ? "Ukládám…" : "Uložit do kalendáře",
-                          systemImage: finished ? "checkmark" : "calendar.badge.plus", busy: saving) {
-                Task { await save() }
-            }
-            .disabled(saving || working || finished || open.isEmpty || model.demo)
-            .padding(.top, 20)
-            if !finished {
-                SecondaryButton(title: mode == "ai" ? "Upravit sám" : "Změnit rozvržení", systemImage: "square.grid.2x2") {
-                    editLayout()
-                }
-                .disabled(saving || working)
-                .padding(.top, 10)
-            } else {
-                SecondaryButton(title: "Naplánovat znovu", systemImage: "arrow.counterclockwise") {
-                    sessions = []
-                    timesBefore = []
-                    summary = nil
-                    check = nil
-                }
-                .padding(.top, 10)
+                Text(verbatim: WeekPlanText.range(nextMonday)).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
     }
 
-    private func row(_ s: WeekSessionDraft) -> some View {
-        Card(padding: 14) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: sportSymbol(s.sport)).scaledFont(17, cap: .denseCap).foregroundStyle(sportColor(s.sport))
-                    .frame(width: 38, height: 38).background(sportColor(s.sport).opacity(0.16), in: Circle())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(s.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
-                    Text([Fmt.duration(s.minutes), timeable(s) ? nil : slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
-                        .compactMap { $0 }.joined(separator: ", "))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                    if s.brick {
-                        Label(L10n.tr("Brick hned po kole"), systemImage: "link").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
-                    }
-                    if case .failed(let message) = s.status {
-                        Text(message).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
-                    }
-                    if s.recalculated {
-                        if let previous = s.previous {
-                            Text(verbatim: previous).font(Typo.caption).foregroundStyle(Palette.faint).strikethrough().lineLimit(1)
-                        }
-                        Label(L10n.tr("Přepočteno"), systemImage: "sparkles").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
-                    }
-                    if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
-                        WorkoutProfile(blocks: blocks, sport: s.sport, compact: true).padding(.top, 4)
-                    }
-                }
-                Spacer(minLength: 4)
-                if timeable(s) { chipLabel(s).hidden().accessibilityHidden(true) }
-                Group {
-                switch s.status {
-                case .waiting, .building: ProgressView()
-                case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.green)
-                case .failed: Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.rust)
-                case .ready: Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
-                }
-                }
-                .frame(width: 22)
+    /// "4 of 8 planned workouts done" and "4 h to go"; while building, what is built.
+    private var caption: some View {
+        HStack(alignment: .firstTextBaseline) {
+            if !generating, let week = model.training?.thisWeek, week.planned > 0 {
+                Text(verbatim: WeekPlanText.done(week.done, of: week.planned)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+            }
+            Spacer(minLength: 8)
+            if !generating, thisWeek.minutesToGo > 0 {
+                Text(verbatim: WeekPlanText.toGo(thisWeek.minutesToGo)).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
+        .padding(.horizontal, 4)
     }
 
-    /// A ride, run or swim still to save gets a time of day (mockup B).
-    private func timeable(_ s: WeekSessionDraft) -> Bool {
-        ["ride", "run", "swim"].contains(s.sport) && s.status != .saved
-    }
-
-    /// The brick run starts when the day's ride ends, +5 min to change
-    /// (src/planned-links.js followingTime); nil while the ride has no time.
-    private func brickTime(_ s: WeekSessionDraft) -> String? {
-        guard s.brick, let index = sessions.firstIndex(where: { $0.id == s.id }),
-              let ride = sessions[..<index].last(where: { $0.date == s.date && $0.sport == "ride" }),
-              let time = ride.time, let h = Int(time.prefix(2)), let m = Int(time.suffix(2)) else { return nil }
-        let end = min(23 * 60 + 59, h * 60 + m + ride.minutes + 5)
-        return String(format: "%02d:%02d", end / 60, end % 60)
-    }
-
-    /// The chip's face; the row keeps a hidden copy of it, so the space it
-    /// leaves grows with the text size.
-    private func chipLabel(_ s: WeekSessionDraft) -> some View {
-        let shown = s.brick ? brickTime(s) : s.time
-        return HStack(spacing: 4) {
-            Image(systemName: "clock").scaledFont(11, weight: .medium, cap: .denseCap)
-            Text(verbatim: shown.map { ClockText.format($0) } ?? L10n.tr("Kdykoli")).font(Typo.caption.weight(.medium))
+    /// Side by side; on a narrow phone or with large text one under the other.
+    private var pills: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { pillPair }.frame(maxWidth: .infinity)
+            VStack(spacing: 8) { pillPair }.frame(maxWidth: .infinity)
         }
-        .lineLimit(1)
-        .fixedSize()
-        .foregroundStyle(s.brick ? Palette.amber : Palette.ink)
-        .padding(.horizontal, 10).frame(minHeight: 28)
-        .background(Palette.track, in: Capsule())
     }
 
-    private func timeChip(_ s: WeekSessionDraft) -> some View {
-        let label = chipLabel(s)
-        return Group {
-            if s.brick {
-                // Follows the ride; "Hned po sobě, nebo zvlášť" in Trénink changes it.
-                label.accessibilityLabel(L10n.tr("Brick hned po kole"))
-            } else {
-                Menu {
-                    ForEach(MovePlannedSheet.Slot.allCases) { slot in
-                        Button {
-                            if slot == .exact {
-                                exactTime = Self.date(s.time) ?? Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date()) ?? Date()
-                                exactFor = s.id
-                            } else {
-                                setTime(s.id, slot.clock)
-                            }
-                        } label: {
-                            let current = slot == .exact ? s.time != nil && !MovePlannedSheet.Slot.allCases.contains { $0.clock == s.time } : slot.clock == s.time
-                            if current { Label(L10n.tr(slot.label), systemImage: "checkmark") } else { Text(verbatim: L10n.tr(slot.label) + (slot.clock.map { ", " + ClockText.format($0) } ?? "")) }
-                        }
-                    }
-                } label: { label }
-                .accessibilityLabel(L10n.tr("Čas"))
-                // Fixed while the week saves: the time already went out.
-                .disabled(saving || working)
+    @ViewBuilder private var pillPair: some View {
+        pill(showNext ? L10n.tr("Skrýt příští týden") : L10n.tr("Ukázat příští týden")) {
+            withAnimation(.snappy) { showNext.toggle() }
+        }
+        pill(L10n.tr("Nastavení plánu")) { settings = true }
+    }
+
+    // MARK: Content
+
+    @ViewBuilder private var content: some View {
+        if generating {
+            building
+        } else if generateFailed {
+            failed
+        } else if hasPlan {
+            VStack(spacing: 14) {
+                weekCard(thisWeek, title: L10n.tr("Tento týden"))
+                weekCard(nextWeek, title: L10n.tr("Příští týden"))
+                if let error {
+                    Text(verbatim: error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                }
             }
-        }
-    }
-
-    private func setTime(_ id: UUID, _ time: String?) {
-        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        sessions[i].time = time
-    }
-
-    private static func date(_ time: String?) -> Date? {
-        guard let time, time.count == 5, let h = Int(time.prefix(2)), let m = Int(time.suffix(2)) else { return nil }
-        return Calendar.current.date(bySettingHour: h, minute: m, second: 0, of: Date())
-    }
-
-    /// "Přesně": the wheel for one session's time.
-    private var exactSheet: some View {
-        VStack(spacing: 16) {
-            DatePicker(L10n.tr("Přesný čas"), selection: $exactTime, displayedComponents: .hourAndMinute)
-                .datePickerStyle(.wheel).labelsHidden()
-                .environment(\.locale, Fmt.locale)
-            PrimaryButton(title: "Uložit", systemImage: "checkmark", busy: false) {
-                let c = Calendar.current.dateComponents([.hour, .minute], from: exactTime)
-                if let id = exactFor { setTime(id, String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)) }
-                exactFor = nil
-            }
-        }
-        .padding(24)
-        .presentationDetents([.height(320)])
-        .glassSheetBackground()
-    }
-
-    /// "18:30–19:15": the session's time in the day's free time, when the
-    /// calendar is read; a day's sessions follow one another.
-    private func slot(_ s: WeekSessionDraft) -> String? {
-        let day = sessions.filter { $0.date == s.date }
-        guard let index = day.firstIndex(where: { $0.id == s.id }) else { return nil }
-        return CalendarTime.shared.slotText(date: s.date, minutes: day.map(\.minutes), index: index)
-    }
-
-    /// "Odebrat z plánu": the session goes. "Jen odebrat" keeps the rest as it
-    /// is; "Odebrat a přepočítat" plans the rest of the week again without it:
-    /// by the AI with its proposal, or the layout without that sport on the day.
-    private func remove(_ id: UUID, recalculate: Bool) async {
-        // The detail closes first: its session must not go while it shows it.
-        try? await Task.sleep(for: .milliseconds(500))
-        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
-        let gone = sessions[i], before = sessions
-        check = nil
-        if !recalculate {
-            let w = ISODay.weekdayIndex(gone.date)
-            if let k = days[w].firstIndex(of: gone.sport) { days[w].remove(at: k) }
-            withAnimation { sessions.remove(at: i) }
-            if !sessions.isEmpty { await runCheck() }
-            return
-        }
-        if mode == "ai" {
-            let correction = L10n.f("Odeber %@ (%@) a zbytek týdne přepočítej.", sportLabel(gone.sport).lowercased(), Fmt.dayHeading(gone.date).lowercased())
-            await proposeAI(correction: correction, removed: gone)
         } else {
-            let w = ISODay.weekdayIndex(gone.date)
-            if let k = days[w].firstIndex(of: gone.sport) { days[w].remove(at: k) }
-            sessions.remove(at: i)
-            if days.allSatisfy(\.isEmpty) {
-                sessions = []
-                summary = nil
-                return
-            }
-            await buildLayout(previous: before.filter { $0.id != id })
+            empty
         }
     }
 
-    /// The detail's "Odebrat z plánu" until the week is in the calendar.
-    private func removal(_ id: UUID) -> ((Bool) -> Void)? {
-        guard !sessions.contains(where: { $0.status == .saved }) else { return nil }
-        return { recalculate in Task { await remove(id, recalculate: recalculate) } }
-    }
-
-    /// A session that is new or changed after a removal, with what the day had before.
-    private static func recalculated(_ next: WeekSessionDraft, from previous: [WeekSessionDraft]) -> WeekSessionDraft {
-        var next = next
-        next.recalculated = true
-        next.previous = previous.first { $0.date == next.date && $0.sport == next.sport }?.line
-        return next
-    }
-
-    /// A recalculated week keeps the times the athlete gave: a new session takes
-    /// the time of the one it replaced (same day and sport), each time once.
-    private static func keepingTimes(_ list: [WeekSessionDraft], from previous: [WeekSessionDraft]) -> [WeekSessionDraft] {
-        var left = previous.filter { $0.time != nil }
-        left.removeAll { old in list.contains { $0.id == old.id } }
-        return list.map { s in
-            guard s.time == nil, !s.brick, let k = left.firstIndex(where: { $0.date == s.date && $0.sport == s.sport }) else { return s }
-            var s = s
-            s.time = left.remove(at: k).time
-            return s
-        }
-    }
-
-    /// One at a time: the server builds each session from the whole week.
-    private func buildAll() async {
-        for i in sessions.indices where !sessions[i].built {
-            sessions[i].status = .building
-            let id = sessions[i].id
-            let next = await sessions[i].building(model.api, others: sessions.filter { $0.id != id })
-            if let k = sessions.firstIndex(where: { $0.id == id }) { sessions[k] = next }
-        }
-    }
-
-    /// "Kontrola týdne": the built week against the athlete's state and the form ahead.
-    private func runCheck() async {
-        checkApplied = false
-        check = try? await model.api.weekCheckDraft(start: weekStart, sessions: sessions)
-    }
-
-    /// "Upravit": the check's changes on the built sessions; moved and eased
-    /// ones are built again, a session swapped for stretching becomes one.
-    private func applyCheck(_ c: WeekCheck) async {
-        let focusOf = ["recovery": "recovery", "endurance": "endurance", "long": "long_endurance", "tempo": "tempo",
-                       "sweet_spot": "sweet_spot", "threshold": "threshold", "vo2max": "vo2max"]
-        for change in c.changes ?? [] {
-            guard let i = sessions.firstIndex(where: { $0.id.uuidString == change.id }) else { continue }
-            switch change.type {
-            case "move":
-                guard let date = change.to?.date else { continue }
-                sessions[i].date = date
-                // A gym moved next to another gym comes back shorter (src/week-check.js).
-                if let minutes = change.to?.minutes { sessions[i].minutes = minutes }
-                sessions[i].gym = nil
-                sessions[i].status = .waiting
-            case "cancel":
-                sessions.remove(at: i)
-            case "recovery":
-                let s = sessions[i]
-                sessions[i] = WeekSessionDraft(date: s.date, sport: "stretch", minutes: change.to?.minutes ?? 12, environment: nil,
-                                               label: L10n.tr("Protažení"), status: .ready)
-            default:
-                if let kind = change.to?.kind { sessions[i].kind = kind; sessions[i].focus = focusOf[kind] }
-                if let minutes = change.to?.minutes { sessions[i].minutes = minutes }
-                sessions[i].workout = nil
-                sessions[i].status = .waiting
+    /// No plan: one sentence and the button; done workouts still show (D-PLAN-4).
+    private var empty: some View {
+        VStack(spacing: 8) {
+            Text(verbatim: L10n.tr("Zatím žádné naplánované tréninky")).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                .multilineTextAlignment(.center)
+            Text(verbatim: L10n.tr("Nastav si další dva týdny. Vyber dny a čas, nebo nech všechno na kouči."))
+                .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if !thisWeek.sessions.isEmpty {
+                VStack(spacing: 8) { dayRows(thisWeek, earlier: true) }.padding(.top, 18)
             }
         }
-        sessions.sort { $0.date < $1.date }
-        withAnimation { checkApplied = true }
-        working = true
-        defer { working = false }
-        await buildAll()
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
     }
 
-    /// The AI's week (or the built one) back as a layout to change by hand.
-    private func editLayout() {
-        var next = Array(repeating: [String](), count: 7)
-        for s in sessions where s.status != .saved {
-            let w = ISODay.weekdayIndex(s.date)
-            if next[w].count < WeekPlanPrefs.maxPerDay { next[w].append(s.sport) }
-        }
-        days = next
-        timesBefore = sessions.filter { $0.status != .saved }
-        sessions = []
-        summary = nil
-        check = nil
-        mode = "manual"
-    }
-
-    private func save() async {
-        saving = true
-        defer { saving = false }
-        /// The day's last saved ride, which the brick run follows.
-        var rides: [String: String] = [:]
-        /// The day's last saved race leg, which the next leg follows (a duathlon's run, ride, run).
-        var raceLegs: [String: String] = [:]
-        for i in sessions.indices {
-            let s = sessions[i]
-            // Saved in an earlier try: the legs after it still join it.
-            if s.status == .saved {
-                if s.role == "race", let e = s.eventId { raceLegs[s.date] = e }
-                if s.sport == "ride", let e = s.eventId { rides[s.date] = e }
-                continue
-            }
-            guard s.status == .ready else { continue }
-            do {
-                if s.sport == "stretch" {
-                    try await model.api.addStretching(date: s.date)
-                } else if let gym = s.gym {
-                    guard let draftId = gym.draftId else { throw APIError.message(L10n.tr("Trénink se nepodařilo sestavit.")) }
-                    try await model.api.confirmGym(draftId: draftId, rows: gym.rows)
-                } else if let w = s.workout {
-                    // The brick run gets no time of its own: joining it to the
-                    // saved ride sets it from the ride's real length (planned-links.js).
-                    // A race leg after the first starts when the one before ends, as the brick run does.
-                    let raceLeg = s.role == "race" ? raceLegs[s.date] : nil
-                    let event = try await model.api.scheduleWorkout(id: w.id, date: s.date, indoor: s.environment == "indoor",
-                                                                    time: s.brick || raceLeg != nil ? nil : s.time)
-                    sessions[i].eventId = event
-                    if s.sport == "ride", let event { rides[s.date] = event }
-                    // A race's legs joined in their order: the watch shows the race as one card.
-                    // The next leg follows this one even when joining this one fails (a retry joins it).
-                    if s.role == "race", let event { raceLegs[s.date] = event }
-                    // Joined, it goes to the watch with the ride as one workout.
-                    if s.brick, let event, let ride = rides[s.date] { try await model.api.linkPlanned(eventId: event, after: ride) }
-                    if s.role == "race", let event, let raceLeg { try await model.api.linkPlanned(eventId: event, after: raceLeg) }
+    /// D-PLAN-5: one heading, the weeks' time, and grey rows in the shape of workouts.
+    private var building: some View {
+        VStack(spacing: 8) {
+            Text(verbatim: L10n.tr("Sestavuji tvé tréninky")).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+            Text(verbatim: L10n.tr("Dva týdny podle tvého nastavení")).font(Typo.small).foregroundStyle(Palette.muted)
+            VStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Palette.track).frame(height: 62)
                 }
-                sessions[i].status = .saved
-            } catch {
-                sessions[i].status = .failed(error.localizedDescription)
+            }
+            .padding(.top, 16)
+            .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 12)
+    }
+
+    private var failed: some View {
+        VStack(spacing: 12) {
+            Text(verbatim: L10n.tr("Plán se nepodařilo sestavit. Nastavení je uložené."))
+                .font(Typo.body).foregroundStyle(Palette.ink).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            pill(L10n.tr("Zkusit znovu")) { Task { await runGenerate() } }
+                .disabled(model.offline)
+            if model.offline {
+                Text(verbatim: L10n.tr("Jsi offline. Připoj se a plán se sestaví.")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
-        await model.refreshTraining()
-        await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
-        // All in the calendar: back to where the week was planned from (Trénink),
-        // after a moment with "Hotovo, je v kalendáři" (Petr 2026-10-27).
-        if sessions.allSatisfy({ $0.status == .saved }) {
-            try? await Task.sleep(for: .milliseconds(700))
-            dismiss()
+        .frame(maxWidth: .infinity)
+        .padding(.top, 24)
+    }
+
+    // MARK: A week
+
+    private func weekCard(_ week: WeekPlanWeek, title: String) -> some View {
+        let open = unfolded.contains(week.monday)
+        return VStack(spacing: 8) {
+            Button {
+                withAnimation(.snappy) {
+                    var set = unfolded
+                    if open { set.remove(week.monday) } else { set.insert(week.monday) }
+                    openWeeks = set
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: WeekPlanText.summary(count: week.count, minutes: week.minutes)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Text(verbatim: WeekPlanText.range(week.monday)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Image(systemName: "chevron.up").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                        .rotationEffect(.degrees(open ? 0 : 180))
+                }
+                .padding(.horizontal, 16).frame(minHeight: 58)
+                .cardSurface(cornerRadius: 20)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(Text(verbatim: L10n.tr(open ? "Rozbaleno" : "Sbaleno")))
+            .accessibilityHint(Text(verbatim: L10n.tr(open ? "Sbalí týden" : "Rozbalí týden")))
+            .id(week.monday)
+
+            if open {
+                if week.monday == monday && week.hasEarlier {
+                    pill(showEarlier ? L10n.tr("Skrýt dřívější dny") : L10n.tr("Ukázat dřívější dny")) {
+                        withAnimation(.snappy) { showEarlier.toggle() }
+                    }
+                }
+                dayRows(week, earlier: week.monday != monday || showEarlier)
+                addPanel(week)
+            }
         }
     }
+
+    @ViewBuilder private func dayRows(_ week: WeekPlanWeek, earlier: Bool) -> some View {
+        ForEach(week.days.filter { earlier || $0 >= today }, id: \.self) { date in
+            let list = week.sessions(on: date)
+            if !list.isEmpty {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(spacing: 1) {
+                        Text(verbatim: WeekPlanText.dayWord(date, today: today))
+                            .scaledFont(11, weight: date == today ? .bold : .medium, cap: .denseCap)
+                            .foregroundStyle(date == today ? Palette.ink : Palette.muted)
+                        Text(verbatim: ISODay.day(date)).font(Typo.number(18)).foregroundStyle(Palette.ink)
+                    }
+                    .frame(width: 40)
+                    .padding(.top, 14)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
+                    VStack(spacing: 8) {
+                        ForEach(list) { activity in row(activity, week: week) }
+                    }
+                }
+                .id(date)
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ a: CalendarActivity, week: WeekPlanWeek) -> some View {
+        if a.status == "done" || a.status == "missed" || !PlanSessionActions.upcoming(a.session) {
+            if let route = CalendarDayList.route(a) {
+                NavigationLink(value: route) { WeekPlanRow(activity: a, open: nil) }.buttonStyle(.plain)
+            } else {
+                WeekPlanRow(activity: a, open: nil)
+            }
+        } else {
+            let open = opened == a.id
+            VStack(spacing: 8) {
+                Button {
+                    withAnimation(.snappy) { opened = open ? nil : a.id }
+                } label: { WeekPlanRow(activity: a, open: open) }
+                .buttonStyle(.plain)
+                if open {
+                    WeekPlanEditor(activity: a, days: week.days, today: today, busy: working == a.id,
+                                   move: { date in Task { await move(a, to: date) } },
+                                   resize: { minutes in Task { await resize(a, minutes: minutes) } },
+                                   remove: { remove(a) })
+                }
+            }
+        }
+    }
+
+    // MARK: Add workout
+
+    @ViewBuilder private func addPanel(_ week: WeekPlanWeek) -> some View {
+        if adding == week.monday {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Přidat trénink")
+                HStack(spacing: 8) {
+                    ForEach(enabledSports, id: \.self) { sport in
+                        SportTile(sport: sport, selected: addSport == sport) { addSport = sport }
+                    }
+                }
+                if let sport = addSport {
+                    WeekDayTiles(days: week.days, today: today, selected: nil) { date in Task { await add(sport, on: date) } }
+                        .disabled(working != nil)
+                    Text(verbatim: L10n.f("Vyber den. Kouč přidá jeden trénink (%@), který se k němu hodí.", WeekPlanSport.name(sport).lowercased(with: Fmt.locale)))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(verbatim: L10n.tr("Nejdřív vyber sport.")).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                if working == "add" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")) }
+            }
+            .padding(14)
+            .cardSurface(cornerRadius: 20)
+            pill(L10n.tr("Zrušit")) { withAnimation(.snappy) { adding = nil; addSport = nil } }
+                .disabled(working == "add")
+        } else {
+            pill(L10n.tr("Přidat trénink")) {
+                withAnimation(.snappy) { adding = week.monday; addSport = nil; opened = nil }
+            }
+            .disabled(model.demo)
+        }
+    }
+
+    /// The sports the athlete has on (Settings → Sports), Ride, Run, Swim, Gym.
+    private var enabledSports: [String] {
+        let chosen = (weekPlans[monday]?.sports ?? []).map { $0 == "strength" ? "gym" : $0 }
+        let all = WeekPlanPrefs.sports
+        return chosen.isEmpty ? all : all.filter { chosen.contains($0) }
+    }
+
+    // MARK: Pieces
+
+    private func pill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 16).frame(minHeight: 44)
+                .background(Palette.track, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func bottomButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                .frame(maxWidth: .infinity).frame(height: 54)
+                .background(Palette.button, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20).padding(.bottom, 12)
+    }
+
+    private func jump(_ date: String, _ proxy: ScrollViewProxy) {
+        let week = date >= nextMonday ? nextMonday : monday
+        withAnimation(.snappy) {
+            openWeeks = unfolded.union([week])
+            if date < today { showEarlier = true }
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(120))
+            withAnimation(.snappy) { proxy.scrollTo(date, anchor: .top) }
+        }
+    }
+
+    // MARK: Loading
 
     private func load() async {
-        guard !model.demo else { error = L10n.tr("V ukázce se týden neplánuje."); return }
-        let start = weekStart
-        loading = true
-        defer { loading = false }
-        await CalendarTime.shared.send(api: model.api)
+        await model.loadCalendar(from: monday, to: ISODay.shift(nextMonday, 6))
+        guard !model.demo else { return }
+        plans = try? await model.api.trainingPlans()
+        if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
+        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
+    }
+
+    private func reload() async {
+        guard !model.demo else { return }
+        await model.loadCalendar(from: monday, to: ISODay.shift(nextMonday, 6), force: true)
+        await model.refreshTraining()
+        if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
+        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
+    }
+
+    // MARK: Changes
+
+    private func move(_ a: CalendarActivity, to date: String) async {
+        guard date != a.date, !model.demo else { return }
+        working = a.id
+        defer { working = nil }
         do {
-            let p = try await model.api.weekPlan(start: start)
-            guard start == weekStart else { return }
-            plan = p
-            sports = p.sports
-            if sessions.isEmpty {
-                days = WeekPlanPrefs.days(p.prefs)
-                bricks = WeekPlanPrefs.bricks(p.prefs)
-            }
+            let note = try await PlanSessionActions.move(model, session: a.session, to: date, time: nil)
             error = nil
+            opened = nil
+            await reload()
+            show(PlanToast(title: L10n.f("Přesunuto na %@", Fmt.weekdayName(date)), note: note, cancelled: false, undo: {
+                try? await PlanSessionActions.moveBack(model, session: a.session, from: date)
+                await reload()
+            }))
         } catch {
-            guard start == weekStart else { return }
             self.error = error.localizedDescription
         }
+    }
+
+    private func resize(_ a: CalendarActivity, minutes: Int) async {
+        guard !model.demo else { return }
+        working = a.id
+        defer { working = nil }
+        do {
+            try await WeekPlanGenerator.resize(model, a, minutes: minutes)
+            error = nil
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Gone from the list at once; it leaves the plan when the toast goes without Undo.
+    private func remove(_ a: CalendarActivity) {
+        guard !model.demo else { return }
+        withAnimation(.snappy) {
+            hidden.insert(a.id)
+            opened = nil
+        }
+        show(PlanToast(title: L10n.tr("Trénink odebrán"), note: nil, cancelled: true, undo: {
+            withAnimation(.snappy) { _ = hidden.remove(a.id) }
+        }, commit: {
+            do {
+                if a.sport == "strength" {
+                    try await GymPlanActions.cancel(model, date: a.date, eventId: a.eventId)
+                } else if let eventId = a.eventId {
+                    try await model.api.deletePlanned(eventId: eventId)
+                }
+                await reload()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            hidden.remove(a.id)
+        }))
+    }
+
+    private func add(_ sport: String, on date: String) async {
+        working = "add"
+        defer { working = nil }
+        let available = weekPlans[date >= nextMonday ? nextMonday : monday].map { WeekPlanPrefs.available($0.prefs)[ISODay.weekdayIndex(date)] } ?? -1
+        do {
+            try await WeekPlanGenerator.add(model, sport: sport, date: date, available: available)
+            error = nil
+            withAnimation(.snappy) { adding = nil; addSport = nil }
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func runGenerate() async {
+        guard !model.demo else { return }
+        withAnimation(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil }
+        let ok = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, calendar: model.calendar)
+        await reload()
+        withAnimation(.snappy) {
+            generating = false
+            generateFailed = !ok
+            openWeeks = [monday, nextMonday]
+        }
+    }
+
+    // MARK: Toast
+
+    /// One toast at a time: a new one settles the one before (its remove goes through).
+    private func show(_ next: PlanToast) {
+        if let toast { settle(toast, undo: false) }
+        withAnimation(.snappy) { toast = next }
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if toast?.id == next.id { settle(next, undo: false) }
+        }
+    }
+
+    private func settle(_ t: PlanToast, undo: Bool) {
+        if toast?.id == t.id { withAnimation(.snappy) { toast = nil } }
+        if let action = t.settle(undo: undo) { Task { await action() } }
     }
 
     /// This week's Monday (the plan's weeks start on Monday).
@@ -1090,273 +626,244 @@ struct WeekPlanView: View {
     }
 }
 
-// MARK: - One session
+// MARK: - Rows
 
-/// A session of the week before it is saved: the workout, its length and
-/// place, and "Upravit s AI".
-struct WeekSessionDetailView: View {
-    @Environment(AppModel.self) private var model
-    @Binding var session: WeekSessionDraft
-    let others: [WeekSessionDraft]
-    let weekStart: String
-    /// "Odebrat z plánu" (true: and recalculate the rest), nil once the week is in the calendar.
-    var onRemove: ((Bool) -> Void)? = nil
-    @Environment(\.dismiss) private var dismiss
-    @State private var asking = false
-    @State private var busy = false
-    @State private var confirmRemove = false
+/// One workout of the week. Done: the Training row (sport, result under the
+/// name, time, % of plan, chevron). Planned: the pale sport, its time of day,
+/// its length and a chevron that opens it in place.
+struct WeekPlanRow: View {
+    let activity: CalendarActivity
+    /// nil for a row that opens its detail; else whether it is open in place.
+    let open: Bool?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: session.title) {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: Fmt.dayHeading(session.date) + ", " + sportLabel(session.sport))
-                    Text(session.title).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 24)
-
-                HStack(spacing: 8) {
-                    if let k = kindLabel(session.kind) ?? session.workout?.primary_system.map({ LibraryWorkout.systemLabel($0) }) {
-                        Pill(text: k, foreground: Palette.amber, background: Palette.amberSoft)
-                    }
-                    if let load = session.workout?.target_load { Pill(text: Fmt.int(load) + " TSS", foreground: Palette.secondary, background: Palette.track) }
-                }
-
-                if let note = session.note ?? session.reason {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        AIMark()
-                        Text(note).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-
-                if case .failed(let message) = session.status {
-                    Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
-                }
-
-                if busy || session.status == .building {
-                    CoachThinking(text: L10n.tr("Kouč upravuje trénink…")).padding(.vertical, 12)
-                } else if let gym = session.gym {
-                    Card {
-                        ForEach(Array(gym.exercises.enumerated()), id: \.offset) { _, e in
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(e.name).font(Typo.body).foregroundStyle(Palette.ink)
-                                Spacer(minLength: 8)
-                                Text(verbatim: [e.sets > 0 ? "\(e.sets) × \(e.reps)" : e.reps, e.kg].filter { !$0.isEmpty }.joined(separator: ", "))
-                                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                            }
-                        }
-                    }
-                } else if let blocks = session.workout?.steps, !blocks.isEmpty {
-                    Card { WorkoutProfile(blocks: blocks, sport: session.sport) }
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
-                    }
-                }
-
-                if session.status != .saved {
-                    SectionLabel(text: "Délka").padding(.top, 6)
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            ForEach(WeekSessionDraft.lengths(session.sport, including: session.minutes), id: \.self) { m in
-                                Button {
-                                    guard m != session.minutes else { return }
-                                    session.minutes = m
-                                    Task { await rebuild(resize: true) }
-                                } label: {
-                                    Text(verbatim: Fmt.duration(m)).font(Typo.small.weight(.semibold))
-                                        .foregroundStyle(m == session.minutes ? Palette.onButton : Palette.ink)
-                                        .padding(.horizontal, 12).frame(height: 34)
-                                        .background(m == session.minutes ? Palette.button : Palette.card, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-                    .disabled(busy)
-
-                    if session.sport != "gym" {
-                        Picker("Kde", selection: Binding(get: { session.environment ?? "outdoor" }, set: { v in
-                            guard v != session.environment else { return }
-                            session.environment = v
-                            Task { await rebuild(resize: false) }
-                        })) {
-                            Text("Venku").tag("outdoor")
-                            Text("Uvnitř").tag("indoor")
-                        }
-                        .pickerStyle(.segmented)
-                        .disabled(busy)
-                    }
-
-                    SecondaryButton(title: "Upravit s AI", systemImage: "sparkles") { asking = true }
-                        .disabled(busy)
-                        .padding(.top, 4)
-
-                    if let onRemove {
-                        Button { confirmRemove = true } label: {
-                            Label(L10n.tr("Odebrat z plánu"), systemImage: "trash")
-                                .font(Typo.body.weight(.medium)).foregroundStyle(Palette.rust)
-                                .frame(maxWidth: .infinity).frame(height: 44)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(busy)
-                        .confirmationDialog(L10n.f("Odebrat „%@“?", session.title), isPresented: $confirmRemove, titleVisibility: .visible) {
-                            Button("Jen odebrat", role: .destructive) {
-                                dismiss()
-                                onRemove(false)
-                            }
-                            Button("Odebrat a přepočítat") {
-                                dismiss()
-                                onRemove(true)
-                            }
-                        } message: {
-                            Text("Ostatní tréninky můžeš nechat, jak jsou, nebo je nechat přepočítat.")
-                        }
-                    }
+        let state = PlanState(activity.session)
+        HStack(spacing: 12) {
+            PlanStateIcon(symbol: SportIcon.symbol(activity.sport, type: activity.type), state: state, size: 40, percent: activity.compliance)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: activity.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
+                if let line {
+                    Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
             }
-        }
-        .sheet(isPresented: $asking) {
-            AdjustSessionSheet(session: session, others: others) { changed in
-                apply(changed)
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                if let m = activity.minutes, m > 0 {
+                    Text(verbatim: planDuration(Int(m.rounded()))).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                }
+                if activity.status == "done", let percent = activity.compliance {
+                    Text(verbatim: L10n.f("%@ %% plánu", String(percent)))
+                        .font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
+                } else if activity.status == "missed" {
+                    Text(verbatim: L10n.tr(PlanState.missed.title)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
             }
-            .presentationDetents([.medium, .large])
+            Image(systemName: open == nil ? "chevron.right" : "chevron.down")
+                .scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                .rotationEffect(.degrees(open == true ? 180 : 0))
         }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(minHeight: 60)
+        .cardSurface(cornerRadius: 18)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityValue(Text(verbatim: accessibilityState))
     }
 
-    private func apply(_ changed: AdjustedSession) {
-        session.date = changed.date
-        session.minutes = changed.minutes
-        if let sport = changed.sport, sport != session.sport {
-            // Another sport: the old workout goes and a new one is built.
-            session.sport = sport
-            session.workout = nil
-            session.gym = nil
-            session.role = nil
-            session.environment = sport == "gym" ? nil : changed.environment ?? "outdoor"
-            if sport == "gym" { session.kind = "gym"; session.focus = nil; session.label = kindLabel("gym") }
-        }
-        if session.sport != "gym" { session.environment = changed.environment ?? session.environment }
-        if let kind = changed.kind {
-            session.kind = kind
-            session.focus = changed.focus
-            session.label = kindLabel(kind)
-        }
-        session.insisted = true
-        session.note = changed.note
-        Task { await rebuild(resize: false) }
+    /// "Planned, collapsed" for VoiceOver; a done row says its % of plan already.
+    private var accessibilityState: String {
+        guard activity.status == "planned" else { return "" }
+        let state = L10n.tr("Naplánováno")
+        guard let open else { return state }
+        return state + ", " + L10n.tr(open ? "Rozbaleno" : "Sbaleno")
     }
 
-    private func rebuild(resize: Bool) async {
-        busy = true
-        defer { busy = false }
-        session.status = .building
-        session = await session.building(model.api, resize: resize, others: others)
+    /// Under the name: the result of a done one ("8.2 km, 520 kcal"), the time of a planned one.
+    private var line: String? {
+        if activity.status == "done" {
+            let parts = [activity.km.flatMap { $0 > 0 ? Units.distanceText($0) : nil }, activity.kcal.flatMap { $0 > 0 ? Fmt.int($0) + " kcal" : nil }]
+            let text = parts.compactMap { $0 }.joined(separator: ", ")
+            return text.isEmpty ? nil : text
+        }
+        return activity.time.map { ClockText.format($0) }
     }
 }
 
-/// "Upravit s AI": quick changes, or what to change in the athlete's words.
-private struct AdjustSessionSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    let session: WeekSessionDraft
-    let others: [WeekSessionDraft]
-    let onChange: (AdjustedSession) -> Void
-    @State private var text = ""
-    @State private var busy = false
-    @State private var error: String?
+/// A planned workout opened in place: Workout details, the day tiles, the
+/// length and Remove from the plan (concept 019, D-PLAN-7).
+struct WeekPlanEditor: View {
+    let activity: CalendarActivity
+    let days: [String]
+    let today: String
+    let busy: Bool
+    let move: (String) -> Void
+    let resize: (Int) -> Void
+    let remove: () -> Void
+    @State private var length: Double = 60
+    @State private var dragging = false
+    /// VoiceOver's swipes change the value without a drag: saved after a pause.
+    @State private var pending: Task<Void, Never>?
 
-    private var chips: [(String, String)] {
-        var list = [("shorter", "Kratší"), ("easier", "Lehčí"), ("harder", "Těžší")]
-        if session.sport != "gym" { list.append(session.environment == "indoor" ? ("outdoor", "Venku") : ("indoor", "Uvnitř")) }
-        list.append(("day", "Jiný den"))
-        return list
+    private var sport: String { activity.sport == "strength" ? "gym" : activity.sport }
+    private var range: ClosedRange<Double> {
+        let current = activity.minutes ?? 60
+        return Double(WeekPlanSport.minMinutes(sport))...max(Double(WeekPlanSport.maxMinutes(sport)), current)
     }
+    /// The length changes for a ride, run or swim with its event, and for a gym plan.
+    private var resizable: Bool { activity.eventId != nil || sport == "gym" }
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(chips.indices, id: \.self) { i in
-                            let chip = chips[i]
-                            Button {
-                                Task {
-                                    if chip.0 == "day" { await send(chip: nil, text: L10n.tr("Přesuň trénink na jiný vhodný den tohoto týdne.")) }
-                                    else { await send(chip: chip.0, text: nil) }
-                                }
-                            } label: {
-                                Text(L10n.tr(chip.1)).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
-                                    .padding(.horizontal, 14).frame(height: 36)
-                                    .background(Palette.card, in: Capsule())
-                                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-                            }
-                            .buttonStyle(.plain)
+        VStack(spacing: 8) {
+            if let route = CalendarDayList.route(activity) {
+                NavigationLink(value: route) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: L10n.tr("Detail tréninku")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(verbatim: L10n.tr(sport == "gym" ? "Cviky, série a váhy" : "Kroky, cíle a poznámky")).font(Typo.caption).foregroundStyle(Palette.muted)
                         }
+                        Spacer()
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                     }
+                    .padding(.horizontal, 14).frame(minHeight: 58)
+                    .cardSurface(cornerRadius: 18)
+                    .contentShape(Rectangle())
                 }
-                .scrollIndicators(.hidden)
-                TextField(L10n.tr("Třeba: bude pršet, chci kratší a uvnitř"), text: $text, axis: .vertical)
-                    .font(Typo.body).lineLimit(2...5)
-                    .padding(12).background(Palette.card, in: RoundedRectangle(cornerRadius: 14))
-                if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
-                }
-                PrimaryButton(title: busy ? "Upravuji…" : "Upravit", systemImage: "sparkles", busy: busy) {
-                    Task { await send(chip: nil, text: text) }
-                }
-                .disabled(busy || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Spacer(minLength: 0)
+                .buttonStyle(.plain)
             }
-            .padding(20)
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Den")
+                WeekDayTiles(days: days, today: today, selected: activity.date) { move($0) }
+                Text(verbatim: L10n.tr("Klepni na jiný den a trénink se přesune.")).font(Typo.caption).foregroundStyle(Palette.muted)
+                if resizable {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(text: "Délka")
+                        Spacer()
+                        Text(verbatim: planDuration(Int(length))).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                            .contentTransition(.numericText()).animation(.snappy, value: Int(length))
+                    }
+                    .padding(.top, 6)
+                    Slider(value: $length, in: range, step: 5, onEditingChanged: { editing in
+                        dragging = editing
+                        if !editing { commitLength() }
+                    })
+                    .tint(Palette.ink)
+                    .accessibilityLabel(Text(verbatim: L10n.tr("Délka")))
+                    .accessibilityValue(Text(verbatim: planDuration(Int(length))))
+                    HStack {
+                        Text(verbatim: planDuration(Int(range.lowerBound)))
+                        Spacer()
+                        Text(verbatim: planDuration(Int(range.upperBound)))
+                    }
+                    .font(Typo.caption).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
+                }
+                if busy { CoachThinking(text: L10n.tr("Kouč upravuje trénink…")) }
+            }
+            .padding(14)
+            .cardSurface(cornerRadius: 20)
             .disabled(busy)
-            .navigationTitle(L10n.tr("Upravit s AI"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Zavřít")) { dismiss() } }
+            Button(action: remove) {
+                Text(verbatim: L10n.tr("Odebrat z plánu")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+                    .background(Palette.track, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+        }
+        .onAppear { length = min(max(activity.minutes ?? 60, range.lowerBound), range.upperBound) }
+        .onChange(of: length) {
+            guard !dragging else { return }
+            pending?.cancel()
+            pending = Task {
+                try? await Task.sleep(for: .milliseconds(900))
+                if !Task.isCancelled { commitLength() }
             }
         }
     }
 
-    private func send(chip: String?, text: String?) async {
-        busy = true
-        defer { busy = false }
-        error = nil
-        do {
-            let changed = try await model.api.adjustSession(session, chip: chip, text: text, others: others)
-            onChange(changed)
-            dismiss()
-        } catch {
-            self.error = error.localizedDescription
+    private func commitLength() {
+        pending?.cancel()
+        if Int(length) != Int((activity.minutes ?? 0).rounded()) { resize(Int(length)) }
+    }
+}
+
+/// The week's seven days to pick one; days before today are greyed and not
+/// tappable. 44 pt tall (D-PLAN-7).
+struct WeekDayTiles: View {
+    let days: [String]
+    let today: String
+    let selected: String?
+    let pick: (String) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(days, id: \.self) { date in
+                let on = date == selected, past = date < today
+                Button { pick(date) } label: {
+                    VStack(spacing: 1) {
+                        Text(verbatim: Fmt.weekdayShort(date)).scaledFont(11, weight: .medium, cap: .denseCap)
+                        Text(verbatim: ISODay.day(date)).font(Typo.number(17))
+                    }
+                    .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .opacity(past ? 0.4 : 1)
+                }
+                .buttonStyle(.plain)
+                .disabled(past || on)
+                .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityHint(past ? Text(verbatim: L10n.tr("Minulý den, nejde změnit")) : Text(verbatim: ""))
+            }
         }
     }
 }
 
-/// Nastavení → Sporty k navrhování opened from the week plan: the profile
-/// loads first; on the way back the plan shows the sports as saved.
-private struct WeekPlanSportsSettings: View {
-    @Environment(AppModel.self) private var model
-    let done: ([String]) -> Void
-    @State private var store: SettingsStore?
+/// A sport to pick: its tinted disc and name (Add workout, Plan settings).
+struct SportTile: View {
+    let sport: String
+    let selected: Bool
+    let action: () -> Void
 
     var body: some View {
-        Group {
-            if let store {
-                SportsSettingsView(store: store)
-            } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        Button(action: action) {
+            VStack(spacing: 5) {
+                WeekPlanSport.disc(sport, size: 32)
+                Text(verbatim: WeekPlanSport.name(sport)).scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(selected ? Palette.ink : .clear, lineWidth: 2) }
         }
-        .task {
-            guard store == nil else { return }
-            let s = SettingsStore(api: model.api, demo: model.demo)
-            await s.load()
-            store = s
-        }
-        .onDisappear {
-            // Only a saved list: a profile that never chose keeps every sport.
-            if case .array(let items)? = store?.profile["sports"] { done(items.compactMap { $0.string }) }
-        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
+}
+
+/// The plan's four sports: names, discs and the lengths the server takes.
+enum WeekPlanSport {
+    static func name(_ sport: String) -> String {
+        L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna", "strength": "Posilovna"][sport] ?? sport)
+    }
+
+    /// The sport's disc as in Training's strip: the colour tinted, the glyph in the colour.
+    static func disc(_ sport: String, size: CGFloat) -> some View {
+        let color = Palette.Sport.color(sport == "gym" ? "strength" : sport)
+        return Image(systemName: SportIcon.symbol(sport == "gym" ? "strength" : sport))
+            .font(.system(size: size * 0.45, weight: .medium))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.14), in: Circle())
+    }
+
+    /// The server's shortest (src/week-ai.js MIN_MINUTES).
+    static func minMinutes(_ sport: String) -> Int { ["ride": 30, "run": 20, "swim": 15, "gym": 30][sport] ?? 20 }
+
+    /// The slider's end: long rides and runs fit, a swim and the gym stay short.
+    static func maxMinutes(_ sport: String) -> Int { ["ride": 480, "run": 360, "swim": 120, "gym": 120][sport] ?? 180 }
+
+    /// A new workout's length when the day's time is not set.
+    static func usualMinutes(_ sport: String) -> Int { ["ride": 60, "run": 45, "swim": 45, "gym": 45][sport] ?? 45 }
 }
