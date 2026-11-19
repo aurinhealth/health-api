@@ -115,8 +115,15 @@ export function detailFromWeatherKit(data, start, now = Date.now()) {
   const end = shift(start, 6), days = dailyFromWeatherKit(data, start, end);
   const hours = (data?.forecastHourly?.hours || []).map(h => {
     const at = Date.parse(h.forecastStart), local = localDateTime(h.forecastStart), chance = num(h.precipitationChance);
-    return { at, date: local.slice(0, 10), hour: Number(local.slice(11, 13)), temp: num(h.temperature), code: wmoCode(h.conditionCode), rainProb: chance == null ? null : Math.round(chance * 100) };
+    return { at, date: local.slice(0, 10), hour: Number(local.slice(11, 13)), temp: num(h.temperature), code: wmoCode(h.conditionCode), rainProb: chance == null ? null : Math.round(chance * 100),
+      chance: chance == null ? null : chance * 100, rain: num(h.precipitationAmount), wind: num(h.windSpeed) };
   }).filter(h => Number.isFinite(h.at) && h.temp != null).sort((a, b) => a.at - b.at);
+  // Sunrise and sunset by the day's date, for the time outdoors.
+  const sun = {};
+  for (const d of data?.forecastDaily?.days || []) {
+    const date = localDate(new Date(Date.parse(d.forecastStart) + 12 * 3600000));
+    if (date) sun[date] = { sunrise: Date.parse(d.sunrise) || null, sunset: Date.parse(d.sunset) || null };
+  }
   const out = h => ({ hour: h.hour, temp: Math.round(h.temp), code: h.code, rainProb: h.rainProb });
   const current = data?.currentWeather, temp = num(current?.temperature);
   return {
@@ -124,12 +131,61 @@ export function detailFromWeatherKit(data, start, now = Date.now()) {
       temp: Math.round(temp), code: wmoCode(current.conditionCode),
       wind: num(current.windSpeed) == null ? null : Math.round(num(current.windSpeed)),
       windDirection: num(current.windDirection) == null ? null : Math.round(num(current.windDirection)) % 360,
-      daylight: typeof current.daylight === "boolean" ? current.daylight : null
+      daylight: typeof current.daylight === "boolean" ? current.daylight : null,
+      feelsLike: num(current.temperatureApparent) == null ? null : Math.round(num(current.temperatureApparent)),
+      // When Apple measured it ("Updated 9:41").
+      asOf: typeof current.asOf === "string" ? current.asOf : null
     },
     // From the hour that is running now.
     next: hours.filter(h => h.date >= start && h.at > now - 3600000).slice(0, NEXT_HOURS).map(h => ({ ...out(h), date: h.date })),
-    week: Object.keys(days).sort().map(date => ({ date, ...days[date], hours: hours.filter(h => h.date === date).map(out) }))
+    week: Object.keys(days).sort().map(date => ({
+      date, ...days[date], hours: hours.filter(h => h.date === date).map(out),
+      outdoors: {
+        ride: outdoorWindow(hours, date, "ride", sun[date]?.sunrise, sun[date]?.sunset),
+        run: outdoorWindow(hours, date, "run", sun[date]?.sunrise, sun[date]?.sunset)
+      }
+    }))
   };
+}
+
+// The best time outdoors on one day (Today's weather sheet, redesign D): the
+// longest run of 2+ daylight hours, from 7:00 or sunrise to sunset, when a ride
+// or a run fits outside. Practice limits from the cycling and running coaches
+// (2026-11-19), with the plan's own limits (adaptive-week.js environmentFor):
+// rain chance under 70 %, no storm, ride from 8° and wind under 35 km/h, run
+// from 0° and under 50 km/h; dry = under 0.2 mm (ride) or 0.5 mm (run) an hour.
+// A ride also waits for the road to dry: 3 mm or more in the 24 h before is
+// indoors; 1 mm in the 6 h before needs 3 dry hours (from 10°) or 6 (colder),
+// and a wet road under 3° stays indoors. Hours: {at, hour, temp, code, chance
+// (%), rain (mm), wind (km/h)}, sorted, including the day before. Null when
+// nothing fits or the forecast lacks the numbers.
+export function outdoorWindow(hours, date, sport, sunrise = null, sunset = null) {
+  const ride = sport === "ride", HOUR = 3600000;
+  const from = sunrise ?? -Infinity, to = sunset ?? Infinity;
+  const ok = (h, i) => {
+    if (h.date !== date || h.hour < 7 || h.at < from || h.at + HOUR > to) return false;
+    if (h.temp == null || h.wind == null || h.rain == null) return false;
+    if ((h.chance ?? 0) >= 70 || (h.code ?? 0) >= 95) return false;
+    if (h.temp < (ride ? 8 : 0) || h.wind >= (ride ? 35 : 50) || h.rain >= (ride ? 0.2 : 0.5)) return false;
+    if (!ride) return true;
+    const before = n => hours.slice(Math.max(0, i - n), i);
+    const sum = list => list.reduce((t, x) => t + (x.rain ?? 0), 0);
+    if (sum(before(24)) >= 3) return false;
+    if (sum(before(6)) < 1) return true;
+    if (h.temp < 3) return false;
+    return before(h.temp >= 10 ? 3 : 6).every(x => (x.rain ?? 0) < 0.2);
+  };
+  let best = null, start = null;
+  hours.forEach((h, i) => {
+    const fits = ok(h, i) && (start == null || h.at === hours[i - 1].at + HOUR);
+    if (fits && start == null) start = i;
+    if (!fits) start = ok(h, i) ? i : null;
+    if (start != null) {
+      const length = i - start + 1;
+      if (length >= 2 && (!best || length > best.length)) best = { length, start: hours[start].hour, end: h.hour + 1 };
+    }
+  });
+  return best && { start: best.start, end: best.end };
 }
 
 export async function weatherKitDetail(env, location, date, fetchImpl = fetch) {
