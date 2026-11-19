@@ -180,7 +180,11 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const weight = num(weightKg);
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
-  for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
+  for (const key of ["sex", "age", "height", "goal"]) if (!p[key]) missing.push(key);
+  // Everyday activity comes from the steps (profile-suggestions.js) or Settings;
+  // a new account has neither yet, and the app's setup does not ask, so it
+  // counts as lightly active until it does (no calorie goal at all otherwise).
+  const activity = p.activity || "light";
   const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
   const deficitOf = key => Math.round(-weeklyGoalKg(key, weight, p.height, sportHours) * 7700 / 7) || 0;
   if (missing.length) {
@@ -197,7 +201,7 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     missing: [],
     weightKg: weight,
     bmr: Math.round(bmr),
-    baselineRestTDEE: Math.round(bmr * ACTIVITY_LEVELS[p.activity].factor),
+    baselineRestTDEE: Math.round(bmr * ACTIVITY_LEVELS[activity].factor),
     sportDaily: Math.round(sportDaily),
     // Calories below expenditure per day; 0 when maintaining.
     deficit: deficitOf(p.goal),
