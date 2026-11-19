@@ -9,11 +9,11 @@
   // The Worker runs next to the databases, not next to the visitor: one screen
   // makes 20-50 trips to D1 one after another, and the databases are in eastern
   // Europe (the central one in Prague, the users' ones in Warsaw and Bucharest).
-  // With Smart Placement every request ran where it arrived ("local", it had too
-  // little traffic to move), so each trip crossed the distance again: on
-  // 2026-11-18 the workout pick waited ~150 ms a trip on both databases (47 trips,
-  // 7.3 s). Warsaw (Google Cloud europe-central2) is close to all three; the
-  // response header cf-placement says where a request ran.
+  // With Smart Placement a request ran where it arrived (a probe from Chicago ran
+  // "local-ORD"), so a far one crossed the distance on every trip: on 2026-11-18
+  // the workout pick waited ~150 ms a trip on both databases (47 trips, 7.3 s).
+  // Warsaw (Google Cloud europe-central2) is close to all three; the cf-placement
+  // header says where a request ran (the slow report shows it, request-timing.js).
   "placement": {
     "region": "gcp:europe-central2"
   },
