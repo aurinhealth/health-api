@@ -185,6 +185,10 @@ struct WeatherDetails: View {
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
+            if let outdoors = weather.week?.first?.outdoors {
+                bestOutdoors(outdoors)
+            }
+
             if !hours.isEmpty {
                 Card(padding: 14) {
                     Text("Po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
@@ -210,6 +214,10 @@ struct WeatherDetails: View {
             .buttonStyle(.plain)
 
             if AppleWeather.credited(weather) {
+                if let updated = Self.updated(weather.now?.asOf) {
+                    Text(verbatim: L10n.f("Aktualizováno %@.", updated)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .padding(.horizontal, 4)
+                }
                 HStack {
                     AppleWeatherMark(size: 13)
                     Spacer()
@@ -242,6 +250,9 @@ struct WeatherDetails: View {
                     Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
                     if let text = WeatherText.description(weather.now?.code ?? weather.code) {
                         Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
+                    }
+                    if let feels = weather.now?.feelsLike, Int(feels.rounded()) != Int((weather.now?.temp ?? feels).rounded()) {
+                        Text(verbatim: L10n.f("Pocitově %@", WeatherText.degrees(feels))).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 Spacer(minLength: 0)
@@ -326,6 +337,37 @@ struct WeatherDetails: View {
                 legend(Palette.amber, "uvnitř")
             }
         }
+    }
+
+    /// "Best time outdoors": today's dry daylight hours for a ride and a run
+    /// (concept 11-pocasi, D-POCASI-1), or the indoor figure when none fits.
+    private func bestOutdoors(_ outdoors: TodaySnapshot.Weather.Outdoors) -> some View {
+        Card(padding: 14) {
+            Text("Nejlepší čas venku").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+            HStack(spacing: 18) {
+                span(.ride, outdoors.ride)
+                span(.run, outdoors.run)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func span(_ sport: WeatherPlace, _ span: TodaySnapshot.Weather.Span?) -> some View {
+        let text = span.map { L10n.f("%@ až %@", ClockText.format(minutes: $0.start * 60), ClockText.format(minutes: $0.end * 60)) } ?? L10n.tr("uvnitř")
+        return HStack(spacing: 8) {
+            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(15, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(span == nil ? Palette.amberBar : Palette.green)
+                .accessibilityHidden(true)
+            Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? "Kolo" : "Běh") + ", " + text))
+    }
+
+    /// Apple's "asOf" as the phone's time of day.
+    static func updated(_ iso: String?) -> String? {
+        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return nil }
+        return ClockText.format(date)
     }
 
     private func legend(_ color: Color, _ text: String) -> some View {
