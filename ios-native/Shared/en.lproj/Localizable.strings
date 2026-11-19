@@ -4566,3 +4566,5 @@
 "Déšť dnes" = "Rain today";
 "Nejlepší čas venku" = "Best time outdoors";
 "Pocitově %@" = "Feels like %@";
+"Týden se teď nepodařilo načíst." = "Couldn't load the week right now.";
+"Načítám týden…" = "Loading the week…";
