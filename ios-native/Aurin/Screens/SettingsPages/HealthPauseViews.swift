@@ -161,7 +161,7 @@ struct HealthPausedView: View {
             ScreenBackground(glow: Palette.Glow.today)
             VStack(spacing: 0) {
                 Spacer()
-                Image(systemName: "pause.fill")
+                Image(systemName: "heart.slash")
                     .scaledFont(30, weight: .semibold)
                     .foregroundStyle(Palette.muted)
                     .frame(width: 84, height: 84)
@@ -204,7 +204,7 @@ struct PausedSettingsView: View {
                 ProSettingsRow()
                 SettingsGroup {
                     NavigationLink { PrivacySettingsView() } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "lock", color: Palette.muted), title: "Soukromí a data")
+                        SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.brown, disc: true), title: "Soukromí a data")
                     }
                 }
                 .buttonStyle(.plain)

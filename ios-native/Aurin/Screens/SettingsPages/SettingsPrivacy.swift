@@ -15,6 +15,8 @@ struct PrivacySettingsView: View {
     @State private var pausing = false
     @State private var stepUp: StepUpRequest?
     @State private var error: String?
+    /// A consent that did not save: shown under the consents, not at the bottom.
+    @State private var consentError: String?
 
     var body: some View {
         SettingsPage(title: "Soukromí a data", hero: SettingsHero(systemImage: "lock.fill", color: Palette.brown, text: "Tvoje data jsou tvoje. Tady je, kde leží a co ovládáš.")) {
@@ -22,15 +24,11 @@ struct PrivacySettingsView: View {
             // feature pages only link here. Paused health data takes them all
             // with it (src/health-pause.js).
             if !model.healthPaused {
-                PrivacyConsentsGroup(ai: $ai, aiLoaded: aiLoaded, setAI: setAI, error: $error)
-            }
-            // Cycle data is the most sensitive: it shows here too, and is
-            // turned on only in Cyklus with its own consent (plan, decision 3).
-            SettingsGroup {
-                NavigationLink { CycleSettingsView() } label: {
-                    SettingsRow(title: "Sledovat cyklus", value: L10n.tr(model.cycle?.enabled == true ? "Zapnuto" : "Vypnuto"))
+                PrivacyConsentsGroup(ai: $ai, aiLoaded: aiLoaded, setAI: setAI, error: $consentError)
+                if let consentError {
+                    Text(consentError).font(Typo.small).foregroundStyle(Palette.rust)
+                        .onAppear { AccessibilityNotification.Announcement(consentError).post() }
                 }
-                .buttonStyle(.plain)
             }
             // What happens to the data, in three lines (the policy says it in full).
             SettingsGroup(title: "Tvoje data") {
@@ -63,9 +61,12 @@ struct PrivacySettingsView: View {
             // Taking back the consent to health data without deleting the account
             // (GDPR art. 7(3)); "withdraw", the word the onboarding promises (PRIV-3).
             if !model.healthPaused {
-                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou.") {
-                    Button { pausing = true } label: { SettingsRow(title: "Odvolat souhlas se zdravotními daty", chevron: false) }
-                        .buttonStyle(.plain)
+                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane.") {
+                    Button { pausing = true } label: {
+                        SettingsRow(title: "Odvolat souhlas se zdravotními daty", chevron: false, titleColor: Palette.rust)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Nejdřív ukáže, co se smaže a co zůstane.")
                         .disabled(model.demo)
                 }
             }
@@ -76,6 +77,7 @@ struct PrivacySettingsView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
+        .environment(\.inPrivacySettings, true)
         .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
             guard !model.demo, !model.healthPaused else { return }
@@ -127,7 +129,7 @@ struct PrivacySettingsView: View {
         let before = ai
         ai = value
         Task {
-            do { try await model.api.setAI(value); model.setAIOff(!value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
+            do { try await model.api.setAI(value); model.setAIOff(!value); consentError = nil } catch { ai = before; consentError = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 

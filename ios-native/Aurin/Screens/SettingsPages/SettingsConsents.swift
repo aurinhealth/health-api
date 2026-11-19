@@ -32,31 +32,29 @@ struct PrivacyConsentsGroup: View {
             SettingsToggle(title: "AI funkce", subtitle: "Kouč, fotky jídla, dohledání potravin",
                            isOn: Binding(get: { ai }, set: { on in if on { askingAI = true } else { setAI(false) } }),
                            disabled: !aiLoaded || model.demo)
-            // What the coach may see only matters while the coach is on; a
-            // consent still given always shows, so it can be withdrawn.
-            if (ai && journalOn) || shareSensitive {
-                SettingsDivider()
-                SettingsToggle(title: "Citlivé položky", subtitle: "Kouč vidí náladu, úzkost, konopí, CBD a léky z deníku",
-                               isOn: Binding(get: { shareSensitive }, set: { on in
-                                   if on { askingSensitive = true } else { Task { await setSensitive(false) } }
-                               }), disabled: saving || model.demo)
+            // All four always show, so a page that links here never lands on a
+            // missing switch: one that needs AI, the journal or cycle tracking
+            // first says so, and one still given can always be turned off.
+            SettingsDivider()
+            consent("Citlivé položky", "Kouč vidí náladu, úzkost, konopí, CBD a léky z deníku",
+                    blocked: !ai ? "Nejdřív zapni AI funkce" : !journalOn ? "Nejdřív zapni Deník" : nil,
+                    isOn: shareSensitive, ask: { askingSensitive = true }, off: { await setSensitive(false) })
+            SettingsDivider()
+            consent("Kouč ví o cyklu", "Kouč vidí, ve které části cyklu jsi",
+                    blocked: !ai ? "Nejdřív zapni AI funkce" : !cycleOn ? "Nejdřív zapni sledování cyklu" : nil,
+                    isOn: cycleShared, ask: { askingCycle = true }, off: { await setCycle(false) })
+            SettingsDivider()
+            consent("Sexuální aktivita", "Z Apple Health do deníku, nikdy do AI",
+                    blocked: !journalOn ? "Nejdřív zapni Deník" : nil,
+                    isOn: appleSex, ask: { askingSex = true }, off: { await setAppleSex(false) })
+            // Cycle data is the most sensitive: tracking shows here too, and is
+            // turned on only in Cyklus with its own consent (plan, decision 3).
+            SettingsDivider()
+            NavigationLink { CycleSettingsView() } label: {
+                SettingsRow(title: "Sledovat cyklus", value: L10n.tr(cycleOn ? "Zapnuto" : "Vypnuto"))
             }
-            if (ai && cycleOn) || cycleShared {
-                SettingsDivider()
-                SettingsToggle(title: "Kouč ví o cyklu", subtitle: "Kouč vidí, ve které části cyklu jsi",
-                               isOn: Binding(get: { cycleShared }, set: { on in
-                                   if on { askingCycle = true } else { Task { await setCycle(false) } }
-                               }), disabled: saving || model.demo)
-            }
-            if journalOn || appleSex {
-                SettingsDivider()
-                SettingsToggle(title: "Sexuální aktivita", subtitle: "Z Apple Health do deníku, nikdy do AI",
-                               isOn: Binding(get: { appleSex }, set: { on in
-                                   if on { askingSex = true } else { Task { await setAppleSex(false) } }
-                               }), disabled: saving || model.demo)
-            }
+            .buttonStyle(.plain)
         }
-        .animation(.snappy, value: ai)
         .sheet(isPresented: $askingAI) {
             // The onboarding's full consent text (PRIV-1), the same card as in the coach.
             NavigationStack {
@@ -86,6 +84,15 @@ struct PrivacyConsentsGroup: View {
             CoachCycleConsentSheet(isOn: cycleShared) { Task { await setCycle(true) } }
         }
         .task { await load() }
+    }
+
+    /// A consent switch; `blocked` names what must be on first, and greys the
+    /// switch out unless the consent is still given.
+    private func consent(_ title: String, _ subtitle: String, blocked: String?, isOn: Bool,
+                         ask: @escaping () -> Void, off: @escaping () async -> Void) -> some View {
+        SettingsToggle(title: title, subtitle: blocked.map { L10n.tr($0) } ?? L10n.tr(subtitle),
+                       isOn: Binding(get: { isOn }, set: { on in if on { ask() } else { Task { await off() } } }),
+                       disabled: saving || model.demo || (blocked != nil && !isOn))
     }
 
     private func load() async {
@@ -147,13 +154,22 @@ struct PrivacyConsentsGroup: View {
 /// On Deník and Cyklus: their consents live in Soukromí a data.
 struct PrivacyLinkRow: View {
     let subtitle: String
+    @Environment(\.inPrivacySettings) private var inPrivacy
 
     var body: some View {
-        SettingsGroup {
-            NavigationLink { PrivacySettingsView() } label: {
-                SettingsRow(title: "Soukromí a data", subtitle: subtitle)
+        // Opened from Soukromí a data: no way round to it again.
+        if !inPrivacy {
+            SettingsGroup {
+                NavigationLink { PrivacySettingsView() } label: {
+                    SettingsRow(title: "Soukromí a data", subtitle: subtitle)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Inside Soukromí a data and the pages it opens.
+    @Entry var inPrivacySettings = false
 }
