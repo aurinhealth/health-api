@@ -89,7 +89,7 @@ struct ZonesSettingsView: View {
         }
         // Also without a change while Intervals.icu has not taken the zones yet
         // (after connecting it again, one tap sends them).
-        .settingsSaveBar(enabled: canSave, saving: store.saving) { Task { await save() } }
+        .settingsSaveBar(enabled: canSave, dirty: changes != original || heart != heartOriginal, saving: store.saving) { Task { await save() } }
         .onAppear { fill(); fillHeart() }
         .onChange(of: store.training) { fill() }
         // A new threshold moves the zones: the typed starts follow.

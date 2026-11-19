@@ -26,9 +26,11 @@ struct SaveButton: ToolbarContent {
 
 /// "Uložit" in the bar, and while something is changed the back button asks
 /// "Zahodit změny?" first (D-NAST-7: Save stays, leaving no longer drops the
-/// changes silently). The swipe back is off while it asks.
+/// changes silently). The swipe back is off while it asks. `dirty` is
+/// whether anything changed, also when it cannot be saved yet.
 struct SettingsSaveBar: ViewModifier {
     let enabled: Bool
+    let dirty: Bool
     let saving: Bool
     let action: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -36,9 +38,9 @@ struct SettingsSaveBar: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .navigationBarBackButtonHidden(enabled)
+            .navigationBarBackButtonHidden(dirty)
             .toolbar {
-                if enabled {
+                if dirty {
                     ToolbarItem(placement: .topBarLeading) {
                         Button { asking = true } label: {
                             Image(systemName: "chevron.left").font(.body.weight(.semibold))
@@ -58,8 +60,8 @@ struct SettingsSaveBar: ViewModifier {
 }
 
 extension View {
-    func settingsSaveBar(enabled: Bool, saving: Bool, action: @escaping () -> Void) -> some View {
-        modifier(SettingsSaveBar(enabled: enabled, saving: saving, action: action))
+    func settingsSaveBar(enabled: Bool, dirty: Bool? = nil, saving: Bool, action: @escaping () -> Void) -> some View {
+        modifier(SettingsSaveBar(enabled: enabled, dirty: dirty ?? enabled, saving: saving, action: action))
     }
 }
 

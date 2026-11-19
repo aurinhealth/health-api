@@ -168,7 +168,9 @@ struct GoalsSettingsView: View {
         withAnimation(.snappy) {
             goalType = type
             if type == "lose", !goal.hasPrefix("lose_") {
-                goal = goalOptions.contains { $0.0 == "lose_0.5" } ? "lose_0.5" : "lose_0.25"
+                // Back to the saved pace, else half a kilo.
+                let saved = original["goal"]?.string ?? ""
+                goal = saved.hasPrefix("lose_") ? saved : goalOptions.contains { $0.0 == "lose_0.5" } ? "lose_0.5" : "lose_0.25"
             } else if type != "lose", goal.hasPrefix("lose_") {
                 goal = "maintain"
             }
@@ -305,6 +307,8 @@ struct GoalsSettingsView: View {
 
     /// The hours a bucket of the older "Sport týdně" stood for (src/energy-profile.js
     /// SPORT_HOURS): shown as own hours, and saved as them on the next save.
+    /// The server counted the bucket before any hours typed beside it, so the
+    /// bucket wins here too and the calories stay the same.
     static let bucketHours: [String: Double] = ["0": 0, "1-3": 2, "3-6": 4.5, "6-10": 8, "10+": 12]
 
     private func fill() {
@@ -323,14 +327,17 @@ struct GoalsSettingsView: View {
         sportHours = p["sportHours"]?.string ?? ""
         var hours = p["weeklyHours"]?.number
         trainingNow = sportHours == "auto" || (sportHours.isEmpty && hours == nil) ? "auto" : "own"
-        if hours == nil, let bucket = Self.bucketHours[sportHours] { hours = bucket }
+        if let bucket = Self.bucketHours[sportHours] { hours = bucket }
         weeklyHours = hours.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         eventName = p["eventName"]?.string ?? ""
-        eventSport = p["eventSport"]?.string ?? ""
+        // An older race without a sport: the main sport, so its distance is kept.
+        let mains = SportsChoice(profile: p).mains
+        let mainSport = ["ride", "run", "swim"].allSatisfy { mains.contains($0) } ? "tri" : mains.first { ["ride", "run", "swim"].contains($0) }
+        eventSport = p["eventSport"]?.string.flatMap { $0.isEmpty ? nil : $0 } ?? mainSport ?? ""
         eventKm = (p["eventKm"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
         let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
-        // An older race saved without the choice: still a race.
-        if goalType.isEmpty, date != nil || !eventName.isEmpty { goalType = "race" }
+        // An older race saved without the choice: still a race, until its day passed.
+        if goalType.isEmpty, let date, date >= Calendar.current.startOfDay(for: Date()) { goalType = "race" }
         eventDate = date ?? Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
         original = changes
     }
@@ -341,15 +348,17 @@ struct GoalsSettingsView: View {
         var body: JSONObject = [
             "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10),
             "activity": .string(activity),
-            // Auto counts the recorded training; own hours replace an older bucket.
-            "sportHours": .string(trainingNow == "auto" ? "auto" : ""),
+            // Auto counts the recorded training; own hours replace an older bucket
+            // ("0" stays a bucket: the server keeps no zero hours).
+            "sportHours": .string(trainingNow == "auto" ? "auto" : Double(weeklyHours.replacingOccurrences(of: ",", with: ".")) == 0 ? "0" : ""),
             // Older apps read the choice from these words when no own words are set.
             "sportGoal": .string(own.isEmpty ? FocusChoice.goalTexts[goalType] ?? "" : own),
             "eventName": .string(race ? eventName : ""),
             "eventDate": .string(race ? Self.isoDay.string(from: eventDate) : ""),
             "eventSport": .string(race ? eventSport : ""),
             "eventKm": race ? .field(eventKm) : .null,
-            "weeklyHours": .field(weeklyHours)
+            // Auto: no hours, so the server counts the recorded training.
+            "weeklyHours": trainingNow == "auto" ? .null : .field(weeklyHours)
         ]
         if !goalType.isEmpty { body["goalType"] = .string(goalType) }
         return body
