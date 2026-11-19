@@ -37,6 +37,8 @@ struct FoodWeekWidget: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var page
     @State private var week: FoodWeek?
+    /// The week couldn't be loaded: said so with a retry, never a bare dash.
+    @State private var failed = false
 
     /// The week of the day on screen (Jídlo can show another day).
     private var date: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -48,8 +50,14 @@ struct FoodWeekWidget: View {
                 content(week, target: target)
             } else if week != nil {
                 Text("Týden spočítám, až budu znát tvůj denní cíl.").font(Typo.small).foregroundStyle(Palette.muted)
+            } else if failed {
+                Text("Týden se teď nepodařilo načíst.").font(Typo.small).foregroundStyle(Palette.muted)
+                Button { Task { await load() } } label: {
+                    Text("Zkusit znovu").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
             } else {
-                Text("–").font(Typo.number(34)).foregroundStyle(Palette.faint)
+                Text("Načítám týden…").font(Typo.small).foregroundStyle(Palette.muted)
             }
         }
         // Again when the day's food changes (a meal added on Jídlo).
@@ -125,7 +133,8 @@ struct FoodWeekWidget: View {
             week = DemoData.foodWeek
             return
         }
-        if let fresh = try? await model.api.foodWeek(date: date) { week = fresh }
+        failed = false
+        do { week = try await model.api.foodWeek(date: date) } catch { if week == nil && !Task.isCancelled { failed = true } }
     }
 }
 
