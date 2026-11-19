@@ -150,6 +150,17 @@ final class SnapshotTests: XCTestCase {
         try render("training", glow: Palette.Glow.training) { TrainingContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// Week plan (redesign W): the sheet with this week open, and Plan settings.
+    func testWeekPlanScreens() throws {
+        try render("week-plan", glow: Palette.Glow.training, height: 1400, window: true) {
+            NavigationStack { WeekPlanView() }.environment(AppModel(demo: true))
+        }
+        try render("week-plan-settings", glow: Palette.Glow.training, height: 1500, window: true) {
+            WeekPlanSettingsView(monday: "2026-10-05", today: "2026-10-08", calendar: DemoData.calendarByDate) { _ in }
+                .environment(AppModel(demo: true))
+        }
+    }
+
     func testFormDetailScreen() throws {
         try render("training-form", glow: Palette.Glow.training) { FormDetailContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40) }
     }
