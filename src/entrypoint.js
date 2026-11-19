@@ -734,6 +734,7 @@ export default {
     const route = `${request.method} ${routeName(new URL(request.url).pathname)}`;
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
     return timed(async work => {
+      work.placement = String(request.headers.get("cf-placement") || request.cf?.colo || "").replace(/[^A-Za-z-]/g, "").slice(0, 16);
       try {
         const answered = await worker.fetch(request, batchedEnv(env), ctx);
         // The owner's report names why (the route's own error text), before it is made plain.

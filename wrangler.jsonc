@@ -6,11 +6,16 @@
   // AsyncLocalStorage (node:async_hooks) holds the user's language during a
   // request, see src/lang.js.
   "compatibility_flags": ["nodejs_als"],
-  // Smart Placement runs the Worker near the D1 database instead of near the
-  // visitor when that is faster: one page load makes many database reads.
-  // Its status is under Workers → health-api → Settings → Placement.
+  // The Worker runs next to the databases, not next to the visitor: one screen
+  // makes 20-50 trips to D1 one after another, and the databases are in eastern
+  // Europe (the central one in Prague, the users' ones in Warsaw and Bucharest).
+  // With Smart Placement every request ran where it arrived ("local", it had too
+  // little traffic to move), so each trip crossed the distance again: on
+  // 2026-11-18 the workout pick waited ~150 ms a trip on both databases (47 trips,
+  // 7.3 s). Warsaw (Google Cloud europe-central2) is close to all three; the
+  // response header cf-placement says where a request ran.
   "placement": {
-    "mode": "smart"
+    "region": "gcp:europe-central2"
   },
   // The Worker version: the public site pages are kept per version (src/page-cache.js).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
@@ -171,7 +176,7 @@
       "workers_dev": false,
       "version_metadata": { "binding": "CF_VERSION_METADATA" },
       "placement": {
-        "mode": "smart"
+        "region": "gcp:europe-central2"
       },
       "d1_databases": [
         {
