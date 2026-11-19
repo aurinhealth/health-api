@@ -4564,3 +4564,5 @@
 "Včetně %@ kcal za dnešní trénink" = "Includes %@ kcal for today's training";
 "z %@ kroků" = "of %@ steps";
 "Déšť dnes" = "Rain today";
+"Týden se teď nepodařilo načíst." = "Couldn't load the week right now.";
+"Načítám týden…" = "Loading the week…";
