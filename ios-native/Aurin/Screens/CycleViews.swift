@@ -681,7 +681,7 @@ struct CycleSettingsView: View {
     private var enabled: Bool { settings?.enabled == true }
 
     var body: some View {
-        SettingsPage(title: "Cyklus") {
+        SettingsPage(title: "Cyklus", hero: SettingsHero(systemImage: "calendar", color: Palette.pink, text: "Trénink podle tvého cyklu.")) {
             SettingsGroup {
                 // On asks for its own consent first (GDPR art. 9); off needs none.
                 SettingsToggle(title: "Sledovat cyklus", isOn: Binding(get: { enabled }, set: { on in

@@ -22,7 +22,7 @@ struct SportsSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Sporty k navrhování") {
+        SettingsPage(title: "Sporty k navrhování", hero: SettingsHero(systemImage: "figure.mixed.cardio", color: Palette.rust, text: "Sporty, které ti kouč plánuje.")) {
             if let message = error ?? store.errorMessage { Text(message).font(Typo.small).foregroundStyle(Palette.rust) }
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: "Kouč navrhuje")
@@ -47,7 +47,8 @@ struct SportsSettingsView: View {
                 }
             }
         }
-        .toolbar { SaveButton(enabled: (choice != original || swims100 != originalSwims) && !choice.kinds.isEmpty, saving: store.saving) { Task { await save() } } }
+        .settingsSaveBar(enabled: (choice != original || swims100 != originalSwims) && !choice.kinds.isEmpty,
+                         dirty: choice != original || swims100 != originalSwims, saving: store.saving) { Task { await save() } }
         .onAppear { if !filled { fill(); filled = true } }
         .task { await loadLess() }
     }

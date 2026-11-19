@@ -563,6 +563,13 @@ final class SnapshotTests: XCTestCase {
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        // Redesign Na1: Customization, the coach cards page, goal texts without rings.
+        try render("settings-customization", height: 900) { NavigationStack { CustomizationSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-coach-cards", height: 640) { NavigationStack { CoachPlacesSettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-units", height: 760) { NavigationStack { UnitsSettingsView() }.environment(AppModel(demo: true)) }
+        XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7:30")
+        XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
         XCTAssertEqual(GymRestSettingsView.short(90), "1:30")

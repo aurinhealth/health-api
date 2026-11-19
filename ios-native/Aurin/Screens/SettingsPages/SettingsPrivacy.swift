@@ -17,7 +17,7 @@ struct PrivacySettingsView: View {
     @State private var error: String?
 
     var body: some View {
-        SettingsPage(title: "Soukromí a data") {
+        SettingsPage(title: "Soukromí a data", hero: SettingsHero(systemImage: "lock.fill", color: Palette.brown, text: "Tvoje data jsou tvoje. Tady je, kde leží a co ovládáš.")) {
             // What happens to the data, in four lines (the policy says it in full).
             SettingsGroup {
                 fact("globe.europe.africa", Palette.blue, "Uložená v EU", "Tvoje data leží v databázi Aurinu v Evropě, šifrovaná.")

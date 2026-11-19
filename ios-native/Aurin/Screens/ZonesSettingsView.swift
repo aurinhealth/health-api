@@ -51,7 +51,7 @@ struct ZonesSettingsView: View {
     enum ZoneGroup: String { case power, heart, pace, runHeart, swim }
 
     var body: some View {
-        SettingsPage(title: "Zóny") {
+        SettingsPage(title: "Zóny", hero: SettingsHero(systemImage: "chart.bar.fill", color: Palette.rust, text: "Tvoje zóny pro každý sport.")) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             SettingsGroup(title: "Tep") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"), note: heartNote)
@@ -89,7 +89,7 @@ struct ZonesSettingsView: View {
         }
         // Also without a change while Intervals.icu has not taken the zones yet
         // (after connecting it again, one tap sends them).
-        .toolbar { SaveButton(enabled: canSave, saving: store.saving) { Task { await save() } } }
+        .settingsSaveBar(enabled: canSave, dirty: changes != original || heart != heartOriginal, saving: store.saving) { Task { await save() } }
         .onAppear { fill(); fillHeart() }
         .onChange(of: store.training) { fill() }
         // A new threshold moves the zones: the typed starts follow.

@@ -15,7 +15,7 @@ struct PasskeysSettingsView: View {
     @State private var error: String?
 
     var body: some View {
-        SettingsPage(title: "Face ID") {
+        SettingsPage(title: "Face ID", hero: SettingsHero(systemImage: "key.fill", color: Palette.blue, text: "Přihlášení přes Face ID místo kódu.")) {
             if !keys.isEmpty {
                 SettingsGroup {
                     ForEach(Array(keys.enumerated()), id: \.element.id) { index, key in

@@ -109,7 +109,7 @@ struct ProfileSettingsView: View {
                 }
             }
         }
-        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .settingsSaveBar(enabled: changes != original, saving: store.saving) { Task { await save() } }
         // Once: back from Změnit e-mail, Face ID or Smazat účet, what was typed stays.
         .onAppear { if !filled { fill(); filled = true } }
         .confirmationDialog("Odhlásit ostatní zařízení?", isPresented: $confirmOthers, titleVisibility: .visible) {

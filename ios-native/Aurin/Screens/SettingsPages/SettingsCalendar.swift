@@ -21,7 +21,7 @@ struct CalendarSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Kalendář") {
+        SettingsPage(title: "Kalendář", hero: SettingsHero(systemImage: "calendar", color: Palette.amber, text: "Tvůj kalendář a volný čas na trénink.")) {
             SettingsGroup(footer: "Počítají se i kalendáře Google, Outlook a iCloud přidané v iPhonu (Nastavení iOS → Aplikace → Kalendář → Účty). Aurin posílá jen volné minuty na každý den, nikdy tvoje události.") {
                 SettingsToggle(title: "Číst kalendář", subtitle: "Plán týdne a Aktivita dne se vejdou do volného času",
                                isOn: Binding(get: { read }, set: { on in Task { await setRead(on) } }),
