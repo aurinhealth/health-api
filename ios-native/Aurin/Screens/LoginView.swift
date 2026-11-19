@@ -7,6 +7,8 @@ struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var page = 0
     @State private var emailLogin = false
+    /// The server's answer (GET /auth/email); until it comes, only the live server offers e-mail.
+    @State private var emailOffered = ServerChoice.current == .live
     @State private var appleNonce = ""
     @Environment(\.colorScheme) private var colorScheme
 
@@ -74,6 +76,7 @@ struct LoginView: View {
             .animation(.easeInOut(duration: 0.25), value: page == Self.signIn)
         }
         .sheet(isPresented: $emailLogin) { EmailLoginSheet() }
+        .task { if let on = try? await model.api.emailLoginEnabled() { emailOffered = on } }
     }
 
     /// "Tvoje data pracují jen pro tebe." over a lock, then the three ways in.
@@ -159,12 +162,14 @@ struct LoginView: View {
             }
             .disabled(model.signingIn)
             .padding(.top, 10)
-            Button { emailLogin = true } label: {
-                Label("Pokračovat e-mailem", systemImage: "envelope")
-                    .modifier(SignInButtonLook())
+            if emailOffered {
+                Button { emailLogin = true } label: {
+                    Label("Pokračovat e-mailem", systemImage: "envelope")
+                        .modifier(SignInButtonLook())
+                }
+                .disabled(model.signingIn)
+                .padding(.top, 10)
             }
-            .disabled(model.signingIn)
-            .padding(.top, 10)
             if ServerChoice.current.passkeys && PasskeyService.mayHaveOne {
                 // A passkey was made on this phone (Data/Passkeys.swift).
                 Button { Task { await signInWithPasskey() } } label: {

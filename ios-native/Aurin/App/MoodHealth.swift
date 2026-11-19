@@ -20,7 +20,8 @@ enum MoodHealth {
 
     /// The mood of `date` to Health; the same day's earlier one is replaced.
     static func save(level: Int, labels: Int, date: String) async {
-        guard #available(iOS 18.0, *), connected else { return }
+        // The test server's mood would replace the live server's (same sync identifier, AppleHealthExport.writes).
+        guard #available(iOS 18.0, *), connected, ServerChoice.current == .live else { return }
         let type = HKObjectType.stateOfMindType()
         if store.authorizationStatus(for: type) == .notDetermined {
             _ = try? await store.requestAuthorization(toShare: [type], read: [type])

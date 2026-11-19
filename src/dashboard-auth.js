@@ -65,6 +65,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/app/apple",
   "/auth/passkey/options",
   "/auth/passkey/verify",
+  // Whether e-mail sign-in is on (email-login.js), for the app's sign-in screen.
+  "/auth/email",
   "/auth/email/start",
   "/auth/email/verify",
   // The website's "Join the waitlist" (testflight-waitlist.js): rate limited per caller.

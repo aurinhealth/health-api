@@ -122,6 +122,18 @@ test("deleting the account also revokes WHOOP, Ultrahuman and Wahoo", async () =
   assert.equal(count(db, "users", 3), 0);
 });
 
+test("the test server never revokes at WHOOP, Ultrahuman or Google: it shares the live server's clients", async () => {
+  const db = database();
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([String(url), init.method]); return new Response("", { status: 200 }); };
+  const token = JSON.stringify({ access_token: "a", refresh_token: "r" });
+  const result = await deleteAccount({ ENVIRONMENT: "staging", DB: scopedDb(db, 3), USER_ID: 3, WHOOP_TOKEN: token, ULTRAHUMAN_TOKEN: token, GOOGLE_REFRESH_TOKEN: "g", ULTRAHUMAN_CLIENT_ID: "id", ULTRAHUMAN_CLIENT_SECRET: "s" }, user, { fetchImpl });
+  assert.deepEqual([result.whoop, result.ultrahuman], ["skipped", "skipped"]);
+  assert.equal(await revokeGoogle({ ENVIRONMENT: "staging", GOOGLE_REFRESH_TOKEN: "g" }, async () => { throw new Error("not called"); }), "skipped");
+  assert.ok(!calls.some(([u]) => /whoop|ultrahuman|googleapis/.test(u)), JSON.stringify(calls));
+  assert.equal(count(db, "users", 3), 0);
+});
+
 test("deleting the account gives the Intervals.icu OAuth access back; a personal API key is only deleted", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => { calls.push([String(url), init.method, init.headers?.Authorization]); return new Response(null, { status: 204 }); };
