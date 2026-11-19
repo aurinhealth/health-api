@@ -110,7 +110,7 @@ struct ExerciseSegments: View {
         }
         .frame(height: 4)
         .accessibilityElement()
-        .accessibilityLabel(L10n.f("Cvik %@ z %@", String((current ?? 0) + 1), String(exercises.count)))
+        .accessibilityLabel(current.map { L10n.f("Cvik %@ z %@", String($0 + 1), String(exercises.count)) } ?? L10n.plural("%lld cviků", exercises.count))
     }
 }
 
@@ -190,7 +190,7 @@ struct LiveRestButton: View {
                     }
                     .foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 22)
-                    .frame(maxWidth: .infinity).frame(height: 56)
+                    .frame(maxWidth: .infinity).frame(height: 50)
                     .background(alignment: .leading) {
                         GeometryReader { geo in
                             Rectangle().fill(Palette.green.opacity(0.45)).frame(width: geo.size.width * share)
@@ -203,6 +203,7 @@ struct LiveRestButton: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(title)
+            .accessibilityValue(TrainingModeView.clock(max(0, Int(end.timeIntervalSinceNow))))
             .accessibilityHint(L10n.tr("Ukončí pauzu"))
             side("+15 s", label: "Prodloužit pauzu o 15 sekund") { shift(15) }
         }
@@ -211,7 +212,7 @@ struct LiveRestButton: View {
     private func side(_ text: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(verbatim: text).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                .frame(width: 52, height: 52)
+                .frame(width: 50, height: 50)
                 .chromeGlass(in: Circle())
         }
         .buttonStyle(.plain)
@@ -276,12 +277,12 @@ struct LiveSetCard<Table: View>: View {
             Rectangle().fill(Palette.hairline).frame(width: 1, height: 16)
             Button(action: rightAction) { label(right) }.buttonStyle(.plain).frame(maxWidth: .infinity)
         }
-        .frame(height: 40)
+        .frame(height: 44)
     }
 
     private func label(_ text: String) -> some View {
         Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-            .frame(maxWidth: .infinity, minHeight: 40).contentShape(Rectangle())
+            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
     }
 }
 
@@ -302,7 +303,7 @@ struct LiveListRow: View {
                 Text(verbatim: detail).font(Typo.caption).monospacedDigit().foregroundStyle(Palette.muted).lineLimit(1)
                 Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(Palette.faint)
             }
-            .padding(.horizontal, 12).frame(minHeight: 40)
+            .padding(.horizontal, 12).frame(minHeight: 44)
             .background(done ? Palette.greenSoft : Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(Rectangle())
         }
@@ -440,6 +441,7 @@ struct HeadClock: View {
             Text(verbatim: TrainingModeView.clock(live.seconds(of: key, at: context.date)))
                 .font(Typo.small.weight(.medium)).monospacedDigit().foregroundStyle(Palette.secondary)
         }
-        .accessibilityLabel(Text("Čas cviku"))
+        .accessibilityLabel(Text("Čas"))
+        .accessibilityValue(TrainingModeView.clock(live.seconds(of: key)))
     }
 }

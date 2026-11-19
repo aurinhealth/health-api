@@ -4578,7 +4578,7 @@
 "%@ zbývá" = "%@ upcoming";
 "Potom %@" = "Next %@";
 "Obě strany" = "Both sides";
-"Klepnutím na písmeno zapíšeš, jak těžká série byla." = "Tap the letter to log how hard the set felt.";
+"Klepnutím na ovál ve sloupci Úsilí zapíšeš, jak těžká série byla." = "Tap the oval in the Effort column to log how hard the set felt.";
 "Zpět na %@" = "Back to %@";
 "Začít rozcvičkovou sérii" = "Start warm-up set";
 "Začít sérii %@" = "Start set %@";

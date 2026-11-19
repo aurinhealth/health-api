@@ -237,8 +237,9 @@ struct GymSetTableHeader: View {
     var body: some View {
         HStack(spacing: effort ? 6 : 8) {
             // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
-            Text("Série").lineLimit(1).fixedSize().frame(width: labelWidth, alignment: .leading)
-            Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+            // In the live table "SÉRIE" may be wider than the set numbers: it takes what it needs.
+            Text("Série").lineLimit(1).fixedSize().frame(minWidth: labelWidth, alignment: .leading)
+            Text("Minule").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, alignment: .leading)
             unit.frame(width: kgWidth)
             Text("Opak.").lineLimit(1).fixedSize().frame(width: repsWidth)
             if effort {
@@ -395,7 +396,7 @@ struct GymSetRow: View {
                 .frame(width: kgWidth, height: fieldHeight)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
-                    if state == .next, focus != field {
+                    if state == .next, focus != field, !large {
                         RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     }
                 }

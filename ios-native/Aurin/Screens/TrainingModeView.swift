@@ -398,7 +398,7 @@ struct TrainingModeView: View {
                 if let day, !day.exercises.isEmpty, !finishedSession {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                            .lineLimit(2).minimumScaleFactor(0.75)
+                            .lineLimit(2).minimumScaleFactor(0.6)
                         HStack(spacing: 8) {
                             if live.running, let key = headKey(day) { HeadClock(live: live, key: key) }
                             if activePart == nil, let letter = ExerciseOrder.letter(current(day)?.superset) {
@@ -411,7 +411,7 @@ struct TrainingModeView: View {
                         // Sets still left here: asked first, a tap by mistake ends nothing.
                         Button { if current(day) != nil { confirmFinish = true } else { Task { await finish() } } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                                .padding(.horizontal, 16).frame(height: 40)
+                                .padding(.horizontal, 12).frame(height: 40)
                                 .chromeGlass(in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -609,7 +609,7 @@ struct TrainingModeView: View {
                 setTable(exercise, offset: offset, current: running ? nextSet(exercise) : nil)
             }
             if running, !effortHintSeen, exercise.sets.contains(where: { !$0.done }) {
-                Text("Klepnutím na písmeno zapíšeš, jak těžká série byla.")
+                Text("Klepnutím na ovál ve sloupci Úsilí zapíšeš, jak těžká série byla.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 8)
             }
@@ -770,7 +770,8 @@ struct TrainingModeView: View {
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg, machineLb: lb(exercise.name)) ?? ""
         let shownReps: String = Fmt.range((s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? "")
         // By sides the number shows on the L row only.
-        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
+        // A warm-up set done without a letter shows W, as its sheet names the kind of set.
+        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) ?? (s.warmup ? "W" : nil) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
         if let target = plateTarget(s, in: exercise, shown: kg.isEmpty ? shownKg : kg) {
             plateTap = { loadingBar = target }
