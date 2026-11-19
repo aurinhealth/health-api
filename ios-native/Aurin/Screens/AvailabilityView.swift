@@ -305,6 +305,8 @@ struct AvailabilityBarRow: View {
 
     static let maxMinutes = 480
     static let step = 15
+    /// The value on the right ("1 h 30", "volno"); AvailabilityAxis keeps the same.
+    static let valueWidth: CGFloat = 76
 
     var body: some View {
         HStack(spacing: 14) {
@@ -343,8 +345,11 @@ struct AvailabilityBarRow: View {
             }
             .frame(height: 30)
 
+            // A fixed width, the same as the axis under the card leaves: wider
+            // values ("1 h 30") shrank the bar and it no longer met its hours.
             valueText
-                .frame(minWidth: 64, alignment: .trailing)
+                .minimumScaleFactor(0.6)
+                .frame(width: Self.valueWidth, alignment: .trailing)
         }
         .padding(.vertical, 10)
         .accessibilityElement(children: .ignore)
@@ -363,6 +368,7 @@ struct AvailabilityBarRow: View {
     private var valueText: some View {
         if shown == 0 {
             Text(verbatim: L10n.tr("volno")).font(Typo.sentenceItalic(20)).foregroundStyle(Palette.faint)
+                .lineLimit(1)
         } else {
             Text(verbatim: Self.text(shown)).font(Typo.number(24)).foregroundStyle(shown < 0 ? Palette.faint : Palette.ink)
                 .lineLimit(1)
@@ -404,7 +410,7 @@ struct AvailabilityAxis: View {
                 }
             }
             .frame(height: 14)
-            Color.clear.frame(width: 64, height: 1)
+            Color.clear.frame(width: AvailabilityBarRow.valueWidth, height: 1)
         }
         .accessibilityHidden(true)
     }

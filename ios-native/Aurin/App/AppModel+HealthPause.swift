@@ -19,6 +19,7 @@ extension AppModel {
     func notePaused(_ paused: Bool) {
         let was = healthPaused
         UserDefaults.standard.set(paused, forKey: Self.healthPausedKey)
+        if paused { Self.healthConsentGiven = false }
         if paused, !was { forgetHealthOnPhone() }
         healthPaused = paused
         if !paused, was {

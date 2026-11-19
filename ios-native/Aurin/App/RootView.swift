@@ -83,6 +83,14 @@ struct RootView: View {
         }
     }
 
+    /// The tabs wait under the setup and, after a new sign-in, until the server
+    /// said whether the setup (and the consent to health data) is still owed:
+    /// Today never loads or syncs before that consent, and VoiceOver finds only
+    /// the setup's pages (Tapwright onboarding test 2026-11-19).
+    private var tabsShown: Bool {
+        !model.needsSetup && (model.setupChecked || UserDefaults.standard.bool(forKey: AppModel.setupDoneKey))
+    }
+
     private var tabActions: TabActions {
         TabActions(share: { showShare = true }, coach: { showCoach = true }, settings: { showSettings = true })
     }
@@ -107,7 +115,12 @@ struct RootView: View {
                 // A tab once opened stays built behind the open one, so coming
                 // back does not lay out its whole screen again.
                 ZStack {
-                    ForEach(Self.tabs.filter { $0 == model.tab || visited.contains($0) }, id: \.self) { tab in
+                    // The app's background alone while the tabs wait.
+                    if !tabsShown {
+                        ScreenBackground()
+                        if !model.needsSetup { ProgressView() }
+                    }
+                    ForEach(Self.tabs.filter { tabsShown && ($0 == model.tab || visited.contains($0)) }, id: \.self) { tab in
                         let open = tab == model.tab
                         tabScreen(tab)
                             .opacity(open ? 1 : 0)
@@ -216,7 +229,7 @@ struct RootView: View {
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         // Details have no tab bar; a hidden workout stays reachable there.
-                        if !barHidden {
+                        if !barHidden && tabsShown {
                             TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
                                    onExpand: {
                                        barHeld = true
