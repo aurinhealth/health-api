@@ -1,5 +1,5 @@
 # Basic foods listed first in food search (src/staples.js), from USDA FoodData Central SR Legacy (public domain).
-# Built by scripts/build-staples.mjs. Columns: Czech name | English name | USDA description (prefix, exact match wins) | portion (USDA modifier text, or =grams / =ml) | portion in Czech | in English | ml for drinks | salt g/100 g when the local food differs from the USDA one (label of the usual product)
+# Built by scripts/build-staples.mjs. Columns: Czech name | English name | USDA description (prefix, exact match wins) | portion (USDA modifier text, or =grams / =ml) | portion in Czech | in English | ml for drinks | values per 100 g of the food as sold here where USDA differs or lacks them (e= p= c= f= su= fi= sa=, from a European table or the usual product's label)
 Káva, překapávaná | Coffee, brewed | Beverages, coffee, brewed, prepared with tap water | cup (8 fl oz) | šálek | cup | ml
 Espresso | Espresso | Beverages, coffee, brewed, espresso, restaurant-prepared | fl oz | panák | shot | ml
 Káva bez kofeinu | Coffee, decaf | Beverages, coffee, brewed, prepared with tap water, decaffeinated | cup (8 fl oz) | šálek | cup | ml
@@ -25,7 +25,7 @@ Jogurt, bílý nízkotučný | Yogurt, plain, low-fat | Yogurt, plain, low fat |
 Řecký jogurt, netučný | Greek yogurt, fat-free | Yogurt, Greek, plain, nonfat | container | kelímek | pot |
 Řecký jogurt | Greek yogurt | Yogurt, Greek, plain, whole milk | | | |
 Cottage sýr | Cottage cheese | Cheese, cottage, lowfat, 2% milkfat | =150 | kelímek | pot |
-Tvaroh | Quark | Cheese, cottage, creamed, large or small curd | =250 | balení | pack | | 0.1
+Tvaroh | Quark | Cheese, cottage, creamed, large or small curd | =250 | balení | pack | | sa=0.1
 Ricotta | Ricotta | Cheese, ricotta, part skim milk | | | |
 Mozzarella | Mozzarella | Cheese, mozzarella, whole milk | oz | plátek | slice |
 Čedar | Cheddar | Cheese, cheddar | slice | plátek | slice |
@@ -118,8 +118,8 @@ Pstruh, pečený | Trout, baked | Fish, trout, rainbow, farmed, cooked, dry heat
 Makrela, pečená | Mackerel, baked | Fish, mackerel, Atlantic, cooked, dry heat | fillet | filet | fillet |
 Sardinky v oleji | Sardines in oil | Fish, sardine, Atlantic, canned in oil, drained solids with bone | can | plechovka | can |
 Krevety, vařené | Shrimp, cooked | Crustaceans, shrimp, cooked | | | |
-Tofu | Tofu | Tofu, raw, firm, prepared with calcium sulfate | | | |
-Tempeh | Tempeh | Tempeh | | | |
+Tofu | Tofu | Tofu, raw, firm, prepared with calcium sulfate | | | | | e=123 p=14 c=1.3 f=6.7 su=0.5 fi=0.7 sa=0
+Tempeh | Tempeh | Tempeh | | | | | fi=4
 Čočka, suchá | Lentils, dry | Lentils, raw | | | |
 Čočka, vařená | Lentils, cooked | Lentils, mature seeds, cooked, boiled, without salt | cup | hrnek | cup |
 Cizrna, vařená | Chickpeas, cooked | Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt | cup | hrnek | cup |

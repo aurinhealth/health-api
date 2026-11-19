@@ -24,6 +24,12 @@ test('tvaroh has the salt of Czech unsalted tvaroh, not of salted US cottage che
   assert.equal(stapleProduct(tvaroh, 'cs').salt_100g, 0.1);
 });
 
+test('tofu has the values of European shop tofu and tempeh has its fibre', () => {
+  const tofu = STAPLES.find(r => r.cs === 'Tofu'), tempeh = STAPLES.find(r => r.cs === 'Tempeh');
+  assert.deepEqual([tofu.e, tofu.p, tofu.f, tofu.fi], [123, 14, 6.7, 0.7]);
+  assert.equal(stapleProduct(tempeh, 'cs').fiber_100g, 4);
+});
+
 test('a basic food is a product in the app language with its portion', () => {
   const coffee = STAPLES.find(r => r.en === 'Coffee, brewed');
   const cs = stapleProduct(coffee, 'cs'), en = stapleProduct(coffee, 'en');
