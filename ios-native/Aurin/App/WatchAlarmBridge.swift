@@ -17,7 +17,6 @@ extension WatchBridge {
     func updateAlarmBackup(_ alarm: WatchSnapshot.Alarm?, force: Bool = false) async {
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: Self.movedKey), Self.settings.alarmOnWatch else {
-            defaults.removeObject(forKey: Self.snoozedKey)
             if SystemAlarm.backupTime != nil { await SystemAlarm.backup(at: nil) }
             return
         }
@@ -28,7 +27,6 @@ extension WatchBridge {
            defaults.bool(forKey: Self.snoozedKey) || set.addingTimeInterval(-Self.backupDelay) <= now { return }
         let next = alarm?.nextWake(after: now).map { $0.addingTimeInterval(Self.backupDelay) }
         guard force || next != SystemAlarm.backupTime else { return }
-        defaults.removeObject(forKey: Self.snoozedKey)
         await SystemAlarm.backup(at: next)
     }
 

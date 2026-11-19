@@ -140,6 +140,8 @@ enum SystemAlarm {
         #if canImport(AlarmKit)
         if #available(iOS 26, *) {
             let manager = AlarmManager.shared
+            // A snooze on the watch sets it again (WatchAlarmBridge.watchAlarm).
+            UserDefaults.standard.removeObject(forKey: "systemAlarmBackupSnoozed")
             if let text = UserDefaults.standard.string(forKey: backupKey), let id = UUID(uuidString: text) {
                 try? manager.cancel(id: id)
             }
@@ -167,13 +169,7 @@ enum SystemAlarm {
             return
         }
         let key = "systemAlarmVersion", version = 3
-        // Tomorrow's own wake time has passed: the usual alarm rings on that weekday again.
-        if let once = defaults.object(forKey: onceKey) as? Date, once < Date(), defaults.integer(forKey: key) >= version,
-           let api, api.hasSession, let profile = try? await api.profile() {
-            _ = await sync(profile: profile)
-            return
-        }
-        guard defaults.integer(forKey: key) < version else { return }
+        guard defaults.integer(forKey: key) < version else { await restoreAfterOnce(api: api); return }
         // No profile (offline, signed out): the next start tries again.
         guard let api, api.hasSession, let profile = try? await api.profile() else { return }
         let wake = { (name: String) in profile[name]?.string.flatMap { $0.isEmpty ? nil : $0 } }
@@ -181,6 +177,27 @@ enum SystemAlarm {
         // The iPhone rings itself, so there is no watch's alarm to back up.
         if !defaults.bool(forKey: "systemAlarmOnWatch") { await backup(at: nil) }
         defaults.set(version, forKey: key)
+    }
+
+    /// Tomorrow's own wake time has passed (the app's start, back from the
+    /// background): the usual alarm repeats on that weekday again. Not while an
+    /// alarm of the app rings or is snoozed: setting them again would silence it.
+    @MainActor static func restoreAfterOnce(api: APIClient?) async {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "systemAlarm"), let once = defaults.object(forKey: onceKey) as? Date, once < Date(),
+              !underWay, let api, api.hasSession, let profile = try? await api.profile() else { return }
+        _ = await sync(profile: profile)
+    }
+
+    /// An alarm of the app (not the watch's backup) rings or is snoozed now.
+    private static var underWay: Bool {
+        #if canImport(AlarmKit)
+        if #available(iOS 26, *) {
+            let saved = Set(UserDefaults.standard.stringArray(forKey: idsKey) ?? [])
+            return ((try? AlarmManager.shared.alarms) ?? []).contains { saved.contains($0.id.uuidString) && $0.state != .scheduled }
+        }
+        #endif
+        return false
     }
 
     /// Snooze on or off, or its length changed (Nastavení → Spánek): the alarms
@@ -201,7 +218,8 @@ enum SystemAlarm {
                         guard case .weekly(let days) = relative.repeats else { continue }
                         (schedule, weekend) = (.relative(relative), days.contains(.saturday))
                     case .fixed(let date)? where date > Date():
-                        (schedule, weekend) = (.fixed(date), false)
+                        let day = Calendar(identifier: .gregorian).component(.weekday, from: date)
+                        (schedule, weekend) = (.fixed(date), day == 1 || day == 7)
                     default: continue
                     }
                     try? manager.cancel(id: alarm.id)
