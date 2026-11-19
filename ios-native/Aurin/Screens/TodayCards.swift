@@ -29,9 +29,10 @@ struct TodayFoodCard: View {
 
     @ViewBuilder private var content: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(verbatim: Fmt.int(nutrition.kcal)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+            Text(verbatim: Fmt.int(nutrition.kcal)).font(Typo.number(34)).foregroundStyle(Palette.ink).layoutPriority(1)
             if let target = nutrition.target {
                 Text(verbatim: L10n.f("z %@ kcal", Fmt.int(target))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
@@ -74,6 +75,7 @@ struct TodayFoodCard: View {
                 Text(verbatim: number(value)).font(Typo.number(19)).foregroundStyle(Palette.ink)
                 if value != nil { Text(verbatim: unit).font(Typo.tiny).foregroundStyle(Palette.faint) }
             }
+            .lineLimit(1).minimumScaleFactor(0.8)
             ProgressLine(fraction: fraction ?? Self.fraction(value, target), color: color, height: 3)
             if let target {
                 Text(verbatim: L10n.f("z %@ %@", number(target), unit)).font(Typo.tiny).foregroundStyle(Palette.faint)
@@ -96,29 +98,29 @@ struct TodayStepsCard: View {
             SectionLabel(text: "Pohyb").padding(.leading, 4)
             Card {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(verbatim: Fmt.int(steps.today)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+                    Text(verbatim: Fmt.int(steps.today)).font(Typo.number(34)).foregroundStyle(Palette.ink).layoutPriority(1)
                     Text(verbatim: L10n.f("z %@ kroků", Fmt.int(steps.goal))).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                         .accessibilityHidden(true)
                 }
-                ProgressLine(fraction: steps.goal > 0 ? (steps.today ?? 0) / steps.goal : 0, color: Palette.ink, height: 6)
-                    .opacity(steps.hourly?.count == 24 ? 0 : 1)
-                    .frame(height: steps.hourly?.count == 24 ? 0 : 6)
                 if let hourly = steps.hourly, hourly.count == 24 {
                     StepsDayLine(hourly: hourly, goal: steps.goal, hour: steps.hour)
                         .frame(height: 110)
                         .accessibilityHidden(true)
+                } else {
+                    ProgressLine(fraction: steps.goal > 0 ? (steps.today ?? 0) / steps.goal : 0, color: Palette.ink, height: 6)
                 }
             }
+            .accessibilityElement(children: .combine)
         }
-        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today.steps")
     }
 }
 
 /// The day's steps adding up from midnight to now, the goal as a dashed line
-/// and the hours 00:00 to 24:00 under it.
+/// and the hours 0, 6, 12 and 18 under it.
 struct StepsDayLine: View {
     let hourly: [Double]
     let goal: Double
@@ -134,7 +136,7 @@ struct StepsDayLine: View {
     var body: some View {
         let last = hour ?? 23
         let totals = Self.totals(hourly, through: last)
-        let top = max(goal * 1.1, totals.last ?? 0, 1)
+        let top = max(goal * 1.3, (totals.last ?? 0) * 1.1, 1)
         VStack(spacing: 6) {
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
@@ -147,7 +149,9 @@ struct StepsDayLine: View {
                     }
                     .stroke(Palette.muted, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     Text("cíl").font(Typo.tiny).foregroundStyle(Palette.muted)
-                        .position(x: w - 10, y: max(8, y(goal) - 9))
+                        .fixedSize()
+                        .frame(width: w, alignment: .trailing)
+                        .position(x: w / 2, y: max(8, y(goal) - 10))
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         for (i, v) in totals.enumerated() { p.addLine(to: CGPoint(x: x(i), y: y(v))) }
@@ -159,18 +163,21 @@ struct StepsDayLine: View {
                     }
                     .stroke(Palette.hairline, lineWidth: 1)
                     if let end = totals.last, hour != nil {
-                        Circle().fill(Palette.background).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
+                        Circle().fill(Palette.card).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
                             .frame(width: 9, height: 9)
                             .position(x: x(totals.count - 1), y: y(end))
                     }
                 }
             }
-            HStack {
+            // Each hour's label starts under its hour.
+            GeometryReader { geo in
                 ForEach([0, 6, 12, 18], id: \.self) { h in
                     Text(verbatim: ClockText.format(minutes: h * 60)).font(Typo.tiny).foregroundStyle(Palette.muted)
-                    Spacer(minLength: 0)
+                        .fixedSize()
+                        .offset(x: geo.size.width * CGFloat(h) / 24)
                 }
             }
+            .frame(height: 14)
         }
     }
 }

@@ -68,19 +68,19 @@ struct DayTimeline: View {
                 DaySpanRow(color: Palette.ink, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(Fmt.hoursMinutes(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                        Text(Fmt.hoursMinutesLong(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
                             .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(nap.minutes)))
                     }
                 }
             }
         case .readiness(let score, let zone):
             RouteLink(route: .readiness) {
-                DayPointRow(color: ReadinessText.pill(zone)?.1 ?? Palette.green, time: nil, first: first, last: last) {
+                DayPointRow(color: ReadinessText.pill(zone)?.1 ?? Palette.ink, time: nil, first: first, last: last) {
                     // No "v obvyklém rozmezí" label here: Readiness at the top of Today
                     // already says it, and next to the name it didn't fit (Petr, 2026-11-07).
                     HStack(alignment: .firstTextBaseline, spacing: 9) {
                         Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.green)
+                        Text(String(score)).font(Typo.number(22)).foregroundStyle(ReadinessText.pill(zone)?.1 ?? Palette.ink)
                     }
                 }
             }
@@ -133,7 +133,8 @@ struct DayTimeline: View {
     private func workoutRow(_ item: TodaySnapshot.PlanItem, first: Bool, last: Bool) -> some View {
         let start = DayTimelineRows.minutes(item.time ?? item.session?.time)
         let length = item.session?.minutes
-        let future = !item.done
+        // A missed workout is drawn solid in rust, not dashed as one still to come.
+        let future = !item.done && item.status != "missed"
         let color = item.status == "missed" ? Palette.rust : Palette.ink
         let content = workoutContent(item)
         Group {
