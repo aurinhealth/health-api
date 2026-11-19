@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Settings: who you are and your goals at the top, the parts of the app as
-/// tiles, then closed groups of names only; each row opens its own page.
+/// Settings (concept 10, "a list like Bevel"): who you are and your goals at
+/// the top, the parts of the app as tiles, then General, Data and Help with
+/// names only; each row opens its own page. Units, zones, the app icon and
+/// the other small things sit one level down in Customization.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -69,118 +71,89 @@ struct SettingsMenu: View {
                 SettingsSectionTiles(store: store)
             }
 
-            // Only the owner: users' corrections of catalogue foods to approve, and what AI costs today.
-            if store.owner && !model.demo {
-                SettingsGroup(title: "Správa") {
-                    NavigationLink { FoodSuggestionsView(store: store) } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "tray", color: Palette.amber), title: "Návrhy oprav potravin",
-                                    badge: store.pendingFoodSuggestions)
-                    }
-                    SettingsDivider()
-                    NavigationLink { AISpendingView(store: store) } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "chart.bar.xaxis", color: Palette.green), title: "Útraty AI",
-                                    value: store.aiSpentToday.map { L10n.f("%@ dnes", AISpendingView.usd($0)) })
-                    }
+            SettingsGroup(title: "Obecné") {
+                NavigationLink { NotificationsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "bell.fill", color: Palette.rust, disc: true), title: "Oznámení")
                 }
-                .buttonStyle(.plain)
-            }
-
-            SettingsGroup(title: "Měření") {
-                NavigationLink { UnitsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Palette.blue), title: "Jednotky")
+                if WatchBridge.inBuild, WatchBridge.shared.watchState.paired {
+                    SettingsDivider()
+                    NavigationLink { WatchSettingsView() } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.brown, disc: true), title: "Apple Watch")
+                    }
                 }
                 SettingsDivider()
-                NavigationLink { ZonesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "chart.bar", color: Palette.rust), title: "Zóny")
+                NavigationLink { AppearanceSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.indigo, disc: true), title: "Vzhled")
                 }
-                if !SettingsSectionTiles.cycleTile(store, model) {
-                    SettingsDivider()
-                    NavigationLink { CycleSettingsView() } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.pink), title: "Cyklus")
-                    }
+                SettingsDivider()
+                NavigationLink { LanguageSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue, disc: true), title: "Jazyk")
+                }
+                SettingsDivider()
+                NavigationLink { CustomizationSettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "slider.horizontal.3", color: Palette.green, disc: true), title: "Přizpůsobení")
                 }
             }
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Data") {
                 NavigationLink { SourcesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.indigo), title: "Zdroje dat")
-                        // A source to connect again: a red dot on the icon.
+                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.green, disc: true), title: "Zdroje dat")
+                        // A source to connect again: a dot on the icon's disc.
                         .overlay(alignment: .topLeading) {
                             if !store.problems.isEmpty {
                                 Circle().fill(Palette.rust).frame(width: 9, height: 9)
                                     .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
-                                    .offset(x: 36, y: 10)
+                                    .offset(x: 44, y: 9)
                                     .accessibilityLabel("Připojit znovu")
                             }
                         }
                 }
                 SettingsDivider()
                 NavigationLink { CalendarSettingsView(onChange: { calendarStatus = CalendarSettingsView.status }) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber), title: "Kalendář", value: calendarStatus)
+                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber, disc: true), title: "Kalendář", value: calendarStatus)
                 }
                 SettingsDivider()
                 NavigationLink { PrivacySettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "lock", color: Palette.muted), title: "Soukromí a data")
-                }
-            }
-            .buttonStyle(.plain)
-
-            SettingsGroup(title: "Aplikace") {
-                NavigationLink { NotificationsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "bell", color: Palette.amber), title: "Oznámení")
-                }
-                if WatchBridge.inBuild, WatchBridge.shared.watchState.paired {
-                    SettingsDivider()
-                    NavigationLink { WatchSettingsView() } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.ink), title: "Apple Watch")
-                    }
-                }
-                SettingsDivider()
-                NavigationLink { CoachPlacesSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "sparkles", color: Palette.indigo), title: "Kouč na obrazovkách")
-                }
-                SettingsDivider()
-                NavigationLink { AppearanceSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
-                }
-                SettingsDivider()
-                NavigationLink { AppIconSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
-                }
-                SettingsDivider()
-                NavigationLink { QuickActionsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "hand.tap", color: Palette.green), title: "Rychlé akce")
-                }
-                SettingsDivider()
-                NavigationLink { LanguageSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk")
-                }
-                SettingsDivider()
-                NavigationLink { WeatherPlaceView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "mappin.and.ellipse", color: Palette.blue), title: "Poloha pro počasí")
+                    SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.brown, disc: true), title: "Soukromí a data")
                 }
             }
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Pomoc") {
                 NavigationLink { ReportProblemView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug", color: Palette.rust), title: "Nahlásit problém")
+                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust, disc: true), title: "Nahlásit problém")
                 }
                 SettingsDivider()
                 NavigationLink { SuggestFeatureView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "lightbulb", color: Palette.amber), title: "Navrhnout funkci")
+                    SettingsRow(icon: SettingsIcon(systemImage: "lightbulb.fill", color: Palette.amber, disc: true), title: "Navrhnout funkci")
                 }
                 SettingsDivider()
                 Button(action: contact) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "envelope", color: Palette.indigo), title: "Kontaktovat nás", chevron: false)
+                    SettingsRow(icon: SettingsIcon(systemImage: "envelope.fill", color: Palette.blue, disc: true), title: "Kontaktovat nás", chevron: false)
                         .overlay(alignment: .trailing) {
-                            Image(systemName: "arrow.up.right.square").scaledFont(14).foregroundStyle(Palette.faint)
+                            Image(systemName: "arrow.up.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                                 .padding(.trailing, 18).accessibilityHidden(true)
                         }
                 }
             }
             .buttonStyle(.plain)
+
+            // Only the owner: users' corrections of catalogue foods to approve, and what AI costs today.
+            if store.owner && !model.demo {
+                SettingsGroup(title: "Správa") {
+                    NavigationLink { FoodSuggestionsView(store: store) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "tray", color: Palette.amber, disc: true), title: "Návrhy oprav potravin",
+                                    badge: store.pendingFoodSuggestions)
+                    }
+                    SettingsDivider()
+                    NavigationLink { AISpendingView(store: store) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "chart.bar.xaxis", color: Palette.green, disc: true), title: "Útraty AI",
+                                    value: store.aiSpentToday.map { L10n.f("%@ dnes", AISpendingView.usd($0)) })
+                    }
+                }
+                .buttonStyle(.plain)
+            }
 
             // Only the internal testers: the live server or the test server (ServerChoice.swift).
             if store.internalTester && !model.demo {
@@ -189,13 +162,13 @@ struct SettingsMenu: View {
                         OptionListPage(title: "Server", selection: serverSelection,
                                        options: ServerChoice.allCases.map { ($0.rawValue, $0.title) })
                     } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "server.rack", color: Palette.muted), title: "Server", value: ServerChoice.current.title)
+                        SettingsRow(icon: SettingsIcon(systemImage: "server.rack", color: Palette.muted, disc: true), title: "Server", value: ServerChoice.current.title)
                     }
                     // The owner only: the website's waitlist, approved into TestFlight.
                     if store.owner {
                         SettingsDivider()
                         NavigationLink { WaitlistView(store: store) } label: {
-                            SettingsRow(icon: SettingsIcon(systemImage: "person.2", color: Palette.green), title: "Zájemci", badge: store.pendingWaitlist)
+                            SettingsRow(icon: SettingsIcon(systemImage: "person.2", color: Palette.green, disc: true), title: "Zájemci", badge: store.pendingWaitlist)
                         }
                     }
                 }

@@ -374,7 +374,7 @@ private struct SleepSaveChrome: ViewModifier {
                               pinTitle: true) { dismiss() }
                 .navBarVisibility(.hidden)
         } else {
-            content.toolbar { SaveButton(enabled: enabled, saving: saving, action: save) }
+            content.settingsSaveBar(enabled: enabled, saving: saving, action: save)
         }
     }
 }

@@ -6,7 +6,7 @@ import SwiftUI
 
 struct CoachPlacesSettingsView: View {
     var body: some View {
-        SettingsPage(title: "Kouč na obrazovkách") {
+        SettingsPage(title: "Karty kouče", hero: SettingsHero(text: "Krátká rada kouče na Dnes, Tréninku a Jídle.", art: AnyView(TwoLights(size: 40).frame(width: 58, height: 58)))) {
             SettingsGroup(footer: "Vypnutá rada kouče se na obrazovce neukáže. Na kartě ji můžeš také jen sbalit šipkou. Tip na regeneraci na Dnes zůstává a chat s koučem funguje dál.") {
                 ForEach(CoachTextPlaces.screens.indices, id: \.self) { i in
                     if i > 0 { SettingsDivider() }

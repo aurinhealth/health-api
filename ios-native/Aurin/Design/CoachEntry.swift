@@ -18,6 +18,8 @@ struct CoachEntry: View {
     var view = "today"
     /// The page's own button that shares the capsule, after the coach.
     var companion: ChromeAction? = nil
+    /// Or a menu after the coach ("…" of the live workout): its items.
+    var menu: AnyView? = nil
     /// The first subpage opened shows "Ask Coach about this" once.
     var hint = true
     /// As high as the back button (ChromeButton); 44 pt to tap.
@@ -44,9 +46,18 @@ struct CoachEntry: View {
                 .disabled(!companion.enabled)
                 .opacity(companion.enabled ? 1 : 0.45)
                 .accessibilityLabel(L10n.tr(companion.label))
+            } else if let menu {
+                Menu { menu } label: {
+                    Image(systemName: "ellipsis")
+                        .scaledFont(15, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.ink)
+                        .frame(width: height, height: height)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(L10n.tr("Další volby"))
             }
         }
-        .padding(.horizontal, companion == nil ? 0 : 2)
+        .padding(.horizontal, companion == nil && menu == nil ? 0 : 2)
         .frame(height: height)
         .chromeGlass(in: Capsule())
         .chromeShadow(0.08, radius: 6, y: 2)

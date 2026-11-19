@@ -12,7 +12,7 @@ struct QuickActionsSettingsView: View {
     private var full: Bool { shown.count >= QuickAction.limit }
 
     var body: some View {
-        SettingsPage(title: "Rychlé akce") {
+        SettingsPage(title: "Rychlé akce", hero: SettingsHero(systemImage: "hand.tap.fill", color: Palette.green, text: "Zkratky, když podržíš ikonu Aurinu.")) {
             SettingsGroup(title: L10n.f("Na ikoně (%d ze %d)", shown.count, QuickAction.limit)) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, action in
                     if i > 0 { SettingsDivider() }

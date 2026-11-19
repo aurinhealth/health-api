@@ -13,7 +13,7 @@ struct GymExerciseTasteView: View {
     @State private var error: String?
 
     var body: some View {
-        SettingsPage(title: "Cviky") {
+        SettingsPage(title: "Cviky", hero: SettingsHero(systemImage: "hand.thumbsup.fill", color: Palette.rust, text: "Cviky, které tě baví, a ty, které vynechat.")) {
             let liked = catalog.filter { opened[$0.name] == true }, disliked = catalog.filter { opened[$0.name] == false }
             if loading && catalog.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)

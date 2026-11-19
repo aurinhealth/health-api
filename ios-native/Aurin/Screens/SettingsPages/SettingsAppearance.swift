@@ -15,7 +15,7 @@ struct AppearanceSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Vzhled") {
+        SettingsPage(title: "Vzhled", hero: SettingsHero(systemImage: "circle.lefthalf.filled", color: Palette.indigo, text: "Aurin ve světlé, nebo tmavé barvě.")) {
             SettingsGroup {
                 ForEach(Array(["system", "light", "dark"].enumerated()), id: \.element) { index, value in
                     if index > 0 { SettingsDivider() }
@@ -70,7 +70,7 @@ struct UnitsSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Jednotky") {
+        SettingsPage(title: "Jednotky", hero: SettingsHero(systemImage: "ruler", color: Palette.blue, text: units == "imperial" ? "Všechno se ukazuje v imperiálních jednotkách." : "Všechno se ukazuje v metrických jednotkách.")) {
             SettingsGroup {
                 SettingsChoiceList(options: [("metric", "Metrické"), ("imperial", "Imperiální")], selected: units) { value in
                     Units.setSystem(value)
@@ -100,7 +100,7 @@ struct LanguageSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Jazyk") {
+        SettingsPage(title: "Jazyk", hero: SettingsHero(systemImage: "globe", color: Palette.blue, text: language == "en" ? "Aurin mluví anglicky." : "Aurin mluví česky.")) {
             SettingsGroup {
                 SettingsChoiceList(options: [("cs", "Čeština"), ("en", "English")], selected: language) { value in
                     guard value != language else { return }

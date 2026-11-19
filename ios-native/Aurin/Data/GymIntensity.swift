@@ -33,7 +33,8 @@ extension GymIntensity {
         case "W": return Palette.muted
         case "T": return Palette.blue
         case "E": return Palette.green
-        case "M": return Palette.indigo
+        // Not indigo: that is Ride and the superset (D-ZIVY-3).
+        case "M": return Palette.coffee
         case "H": return Palette.amber
         case "F": return Palette.red
         case "PR": return Palette.gold

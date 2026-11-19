@@ -1,9 +1,10 @@
 import SwiftUI
 import PhotosUI
-import TipKit
 
-/// The AI coach: today's summary and what matters, then a chat. Answers stream
-/// in as they are written; changes the coach proposes wait for "Potvrdit".
+/// The AI coach (redesign concept 09-kouc-chat): the greeting and the day,
+/// prompts above the field, then the chat. The coach's words stand bare under
+/// the two lights, the athlete's in a grey bubble. Answers stream in as they
+/// are written; changes the coach proposes wait for Confirm on a card.
 struct CoachView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -40,6 +41,8 @@ struct CoachView: View {
     @State private var unsent: (bubble: UUID, text: String, photo: UIImage?)?
     /// One photo for the next message, taken or picked next to the field.
     @State private var photo: UIImage?
+    /// The photo of a message that got no answer, for its Try again.
+    @State private var failedPhoto: UIImage?
     @State private var cameraOpen = false
     @State private var galleryOpen = false
     @State private var galleryItem: PhotosPickerItem?
@@ -67,6 +70,19 @@ struct CoachView: View {
     @State private var reportAfterPanel: String?
     @State private var reporting: ReportedAnswer?
     @FocusState private var focused: Bool
+    /// The line that the coach is an AI (D-KOUC-1), under the field until the first message.
+    @AppStorage("coach.aiNoteSeen") private var aiNoteSeen = false
+
+    init(view: String = "today", date: String? = nil, subject: CoachSubject? = nil, openChat: Int? = nil,
+         keepChat: @escaping (Int) -> Void = { _ in }, preview: [Bubble] = []) {
+        self.view = view
+        self.date = date
+        self.subject = subject
+        self.openChat = openChat
+        self.keepChat = keepChat
+        // Snapshot tests draw a chat without asking the server.
+        _messages = State(initialValue: preview)
+    }
 
     struct Bubble: Identifiable, Equatable {
         let id = UUID()
@@ -74,8 +90,8 @@ struct CoachView: View {
         var text: String
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
-        /// A decision that didn't go through: the error, with Potvrdit and Ne still there.
-        var failed: [Int: String] = [:]
+        /// A decision that didn't go through: the error, with Confirm and Not now still there.
+        var failedActions: [Int: String] = [:]
         /// A confirmed change of a done activity that "Vrátit" can take back.
         var undo: [Int: String] = [:]
         /// The quick change a workout card is waiting for (Kratší, Lehčí…).
@@ -86,8 +102,6 @@ struct CoachView: View {
         var food: FoodDraft? = nil
         var logged: String? = nil
         var loggedOK = false
-        /// A quiet line from the app (how many messages are left), not the coach.
-        var note = false
         /// The photo sent with this question; a reopened chat has only `photoMark`.
         var photo: UIImage? = nil
         var photoMark = false
@@ -101,6 +115,8 @@ struct CoachView: View {
         var at: Date? = nil
         /// "up" or "down".
         var rating: String? = nil
+        /// The athlete's message got no answer: why, and Try again under it.
+        var failed: String? = nil
     }
 
     /// The answer sent to Nahlásit problém.
@@ -112,78 +128,77 @@ struct CoachView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         // Lazy: a long chat lays out only the bubbles on screen.
-                        LazyVStack(alignment: .leading, spacing: 14) {
+                        LazyVStack(alignment: .leading, spacing: 18) {
                             if ghost { ghostCard }
-                            if messages.isEmpty { welcome }
-                            else if let subject = current { CoachSubjectCard(subject: subject) }
+                            if messages.isEmpty {
+                                CoachOpening(headline: current == nil ? home?.morningSummary?.headline : nil, sessions: todaySessions, subject: current)
+                            } else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble,
                                            last: bubble.id == lastAnswer?.id && !sending,
                                            rate: canRate(bubble) ? { rating in rateTapped(bubble.id, rating) } : nil,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
+                                           confirmSports: { action, sports in Task { await decide(action, confirm: true, sports: sports, in: bubble.id) } },
+                                           retry: { retry(bubble) },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            decideMemory: { chip, yes in Task { await decide(chip, yes, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
                                            openPlan: openPlan,
-                                           more: (bubble.note && packsOnSale) ? { morePacks = true } : nil,
                                            found: bubble.id == found)
                                     .id(bubble.id)
                             }
-                            // Questions the app already has, under the last answer; gone once typing starts.
-                            if !followUps.isEmpty { followUpList }
-                            // Until the first words arrive: the coach's bubble with dots and what he is doing;
+                            // Until the first step arrives: the two lights turning and what the coach does;
                             // then the same row under the words while the answer is finished (proposals, preview).
                             if let progress, sending, !stepsShown {
-                                if waiting {
-                                    CoachThinking(text: progress, since: askedAt).id("thinking")
-                                } else {
-                                    CoachThinkingLine(text: progress, since: askedAt).padding(.leading, 4).id("thinking")
-                                }
+                                CoachWorking(text: progress, since: askedAt).id("thinking")
                             }
                             if needsConsent { consentCard }
                             if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
-                            if usedUp { usedUpCard }
-                            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                            if usedUp {
+                                // The app's voice, not the coach's (D-KOUC-2), and no number (Petr, step 5).
+                                CoachSystemLine(text: L10n.tr(CoachAllowance.tomorrow ? "Zprávy na tento týden jsi vyčerpal. Nové přijdou zítra." : "Zprávy na tento týden jsi vyčerpal. Nové přijdou v pondělí."))
+                                CoachUsedUpCard(more: packsOnSale ? { morePacks = true } : nil)
+                            }
+                            if let error { CoachSystemLine(text: error) }
                             if unfinished != nil, !sending { loadAnswerButton }
                             Color.clear.frame(height: 1).id("end")
                         }
-                        .padding(20)
+                        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 20)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) {
                         if let found { proxy.scrollTo(found, anchor: .center) } else { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                     }
                     .onChange(of: sending) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 }
-                inputBar
+                bottomArea
             }
+            // One calm green tone from every entry point (Petr 2026-11-16).
             .background { ScreenBackground(glow: ghost ? Palette.Glow.ghost : Palette.Glow.today) }
-            .navigationTitle(ghost ? L10n.tr("Dočasný chat") : L10n.tr("Kouč"))
             .navigationBarTitleDisplayMode(.inline)
+            // [history, two lights + Coach, ×]: the chat is where the coach
+            // leads, so no coach capsule here (PRAVIDLO-KOUC-VPRAVO-NAHORE).
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { withAnimation(.easeOut(duration: 0.25)) { showChats = true } } label: {
-                        Image(systemName: "line.3.horizontal").scaledFont(16, weight: .semibold)
+                        Image(systemName: "clock.arrow.circlepath").scaledFont(16, weight: .medium)
                     }
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
-                    .accessibilityLabel("Konverzace")
+                    .accessibilityLabel("Historie")
                 }
-                // On an empty new chat only; once it has a message it stays what it is.
-                if ghost || messages.isEmpty {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            ghost.toggle()
-                            GhostChatTip().invalidate(reason: .actionPerformed)
-                        } label: {
-                            GhostGlyph(filled: ghost).frame(width: 19, height: 21)
-                        }
-                        .disabled(sending || !messages.isEmpty)
-                        .popoverTip(GhostChatTip())
-                        .accessibilityLabel("Dočasný chat")
-                        .accessibilityValue(ghost ? L10n.tr("Zapnuto") : L10n.tr("Vypnuto"))
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 6) {
+                        TwoLights(size: 16, mode: sending ? .thinking : focused ? .typing : .idle)
+                        if ghost { GhostGlyph(filled: true).frame(width: 13, height: 15) }
+                        Text(ghost ? "Dočasný chat" : "Kouč").font(.callout.weight(.medium)).foregroundStyle(Palette.ink)
                     }
+                    .accessibilityElement(children: .ignore)
+                    // The header stays "Coach"; VoiceOver says it is an AI (D-KOUC-1).
+                    .accessibilityLabel(L10n.tr(ghost ? "Dočasný chat, AI kouč" : "Kouč, AI"))
+                    .accessibilityAddTraits(.isHeader)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
@@ -231,7 +246,13 @@ struct CoachView: View {
         .overlay {
             if showChats {
                 ChatsPanel(current: chatId, close: { withAnimation(.easeOut(duration: 0.25)) { showChats = false } },
-                           newChat: { newChat() }, open: { id, message in
+                           newChat: { newChat() },
+                           ghost: ghost,
+                           newGhost: {
+                               newChat()
+                               ghost = true
+                           },
+                           open: { id, message in
                                aboutSubject = id == chatId && aboutSubject
                                leaveGhost()
                                Task { await open(id, at: message) }
@@ -284,96 +305,18 @@ struct CoachView: View {
 
     // MARK: Parts
 
-    @ViewBuilder private var welcome: some View {
-        if let subject = current {
-            VStack(alignment: .leading, spacing: 14) {
-                CoachSubjectCard(subject: subject)
-                SectionLabel(text: "Zkus třeba").padding(.top, 10)
-                ForEach(subject.questions.map(L10n.tr), id: \.self) { suggestion($0) }
-            }
-        } else {
-            dayWelcome
-        }
+    /// Today's workouts, done and planned, for the opening's TODAY card.
+    private var todaySessions: [WeekSession] {
+        // The demo's sample day is a fixed date.
+        let today = model.demo ? (model.today?.date ?? "") : AppModel.localDate(Date())
+        return (model.training?.sessions ?? []).filter { $0.date == today }
     }
 
-    /// A question to try: sent as it is.
-    private func suggestion(_ q: String) -> some View {
-        Button { input = q; Task { await send() } } label: {
-            Text(q).font(.subheadline).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// Up to three questions the app already has for this topic or day, not yet
-    /// asked in this chat; no AI is asked for them. A tap sends one as the
-    /// athlete's message (it counts like a typed one).
-    private var followUps: [String] {
-        guard !sending, !usedUp, !needsConsent, !needsSubscription, photo == nil,
-              input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let last = lastAnswer, last.food == nil else { return [] }
-        let asked = Set(messages.filter(\.mine).map { $0.text.lowercased() })
-        // In the language the athlete writes in, as the coach answers: Czech
-        // questions to Czech messages in an English app, and the other way round.
-        let language = messages.last(where: \.mine).flatMap { L10n.written($0.text) } ?? L10n.language
-        let pool = (current?.questions.map { L10n.tr($0, in: language) } ?? [])
-            + CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 8, language: language)
-        var seen = Set<String>()
-        return Array(pool.filter { !asked.contains($0.lowercased()) && seen.insert($0.lowercased()).inserted }.prefix(3))
-    }
-
-    private var followUpList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(followUps, id: \.self) { q in
-                Button { input = q; Task { await send() } } label: {
-                    Text(q).font(.subheadline).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
-                        .padding(.horizontal, 14).padding(.vertical, 9)
-                        .background(Palette.card, in: Capsule())
-                        .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 0.5))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.trailing, 40)
-        .transition(.opacity)
-    }
-
-    private var dayWelcome: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let s = home?.morningSummary, let headline = s.headline {
-                Text(headline).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                if let text = s.text { Text(text).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true) }
-                if let rec = s.recommendation { Text(rec).font(Typo.sentenceItalic(18)).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true) }
-            } else {
-                Text("Na co se chceš zeptat?").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-            }
-            if let priorities = home?.priorities, !priorities.isEmpty {
-                SectionLabel(text: "Dnes je důležité").padding(.top, 6)
-                ForEach(priorities, id: \.self) { p in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("•").foregroundStyle(Palette.faint)
-                        Text(p).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            HStack(spacing: 10) {
-                NavigationLink { DayReviewView() } label: { coachTool("Posoudit dnešek", "checkmark.seal") }
-                NavigationLink { WeekPlanView() } label: { coachTool("Naplánovat týden", "calendar.badge.plus") }
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 6)
-            SectionLabel(text: "Zkus třeba").padding(.top, 6)
-            // After a workout, on a low morning, the day before a hard session: about that.
-            ForEach(CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date())), id: \.self) { suggestion($0) }
-        }
-    }
-
-    private func coachTool(_ title: String, _ symbol: String) -> some View {
-        Label(L10n.tr(title), systemImage: symbol)
-            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 46)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    /// The prompts above the field on the opening: the subject's own, or four about the day.
+    private var prompts: [String] {
+        guard messages.isEmpty, !sending, !usedUp, !needsConsent, !needsSubscription else { return [] }
+        if let subject = current { return Array(subject.questions.map(L10n.tr).prefix(4)) }
+        return CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date()), limit: 4)
     }
 
     /// The AI consent with the onboarding's full text (AIConsentCard); the
@@ -394,22 +337,6 @@ struct CoachView: View {
         }
     }
 
-    /// The week's messages are used up: what happened and when more come.
-    private var usedUpCard: some View {
-        Card {
-            Text("Zprávy koučovi na tento týden jsou vyčerpané.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(CoachAllowance.comesBack).font(Typo.small).foregroundStyle(Palette.muted)
-            if packsOnSale {
-                Button { morePacks = true } label: {
-                    Text("Získat další zprávy").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
     /// The answer being prepared has no words yet (nor a food card).
     /// The answer's thinking steps stand in for the waiting row: the bubble
     /// shows them while the coach works; the row comes back under the words
@@ -424,37 +351,62 @@ struct CoachView: View {
         return last.text.isEmpty && last.food == nil
     }
 
-    private var inputBar: some View {
-        ChromeGlassGroup {
-            HStack(alignment: .bottom, spacing: 10) {
-                photoMenu
-                HStack(alignment: .bottom, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let photo { photoThumb(photo) }
-                        TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
-                            .lineLimit(1...5)
-                            .focused($focused)
-                    }
-                    // From 75 % on: how many are left, until the new week.
-                    if let allowance, allowance.near, !allowance.usedUp, !usedUp {
-                        Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
-                            .padding(.bottom, 2)
-                    }
-                }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .chromeShadow(0.08, radius: 6, y: 2)
-                Button { Task { await send() } } label: {
-                    Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
-                        .frame(width: 40, height: 40).background(Palette.button, in: Circle())
-                }
-                .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil))
-                .accessibilityLabel("Odeslat")
+    private var hasText: Bool { !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || photo != nil }
+
+    /// Under the chat: the prompts on the opening, how many messages are
+    /// left (from 4, AI-4), the field, and once the line that the coach is an AI.
+    private var bottomArea: some View {
+        VStack(spacing: 8) {
+            if !prompts.isEmpty, !focused {
+                CoachPrompts(prompts: prompts) { prompt in input = prompt; Task { await send() } }
+                    .padding(.bottom, 6)
+            }
+            if usedUp {
+                Text(CoachAllowance.placeholder).font(Typo.small).foregroundStyle(Palette.muted)
+            } else if let allowance, allowance.left > 0, allowance.left <= 4 {
+                Text(allowance.counter).font(Typo.small).foregroundStyle(Palette.muted)
+            }
+            composer
+            if !aiNoteSeen, messages.isEmpty {
+                Text("Kouč je AI. Může se splést, tak si důležité věci ověř.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center)
             }
         }
-        .disabled(usedUp)
-        .opacity(usedUp ? 0.55 : 1)
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
+    }
+
+    /// One glass capsule: the camera, the text and the send circle, ink once
+    /// there is something to send and grey otherwise (D-KOUC-2).
+    private var composer: some View {
+        let canSend = hasText && !sending && !usedUp
+        return HStack(alignment: .bottom, spacing: 4) {
+            photoMenu
+            VStack(alignment: .leading, spacing: 8) {
+                if let photo { photoThumb(photo).padding(.top, 8) }
+                TextField(L10n.tr("Napiš kouči"), text: $input, axis: .vertical)
+                    .font(.callout)
+                    .lineLimit(1...5)
+                    .focused($focused)
+                    .padding(.vertical, 15)
+            }
+            .padding(.horizontal, 4)
+            Button { Task { await send() } } label: {
+                Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
+                    .frame(width: 40, height: 40)
+                    .background(Palette.button.opacity(canSend ? 1 : 0.3), in: Circle())
+                    .frame(width: 44, height: 44).contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+            .padding(.bottom, 6)
+            .accessibilityLabel("Odeslat")
+            .accessibilityValue(usedUp ? L10n.tr(CoachAllowance.tomorrow ? "nedostupné do zítřka" : "nedostupné do pondělí") : "")
+        }
+        .padding(.leading, 6).padding(.trailing, 4)
+        .frame(minHeight: 56)
+        .chromeGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .chromeShadow(0.06, radius: 8, y: 2)
     }
 
     /// The camera next to the field: take a photo or pick one. One photo a message.
@@ -463,11 +415,10 @@ struct CoachView: View {
             Button { cameraOpen = true } label: { Label(L10n.tr("Vyfotit"), systemImage: "camera") }
             Button { galleryOpen = true } label: { Label(L10n.tr("Vybrat z Fotek"), systemImage: "photo") }
         } label: {
-            Image(systemName: "camera").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                .frame(width: 40, height: 40).contentShape(Circle())
+            Image(systemName: "camera").scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(Palette.ink)
+                .frame(width: 44, height: 44).contentShape(Circle())
         }
-        .chromeGlass(in: Circle())
-        .chromeShadow(0.08, radius: 6, y: 2)
+        .padding(.bottom, 6)
         .disabled(photo != nil || sending || model.demo)
         .opacity(photo != nil ? 0.35 : 1)
         .accessibilityLabel(L10n.tr("Přidat fotku"))
@@ -506,6 +457,9 @@ struct CoachView: View {
         photo = nil
         error = nil
         unfinished = nil
+        aiNoteSeen = true
+        // A message that failed before goes out again as this one (Try again), not twice.
+        messages.removeAll { $0.mine && $0.failed != nil }
         // A stored answer has a higher id than any before it: how "Načíst odpověď" knows it came.
         let newestStored = messages.compactMap(\.serverId).max() ?? 0
         let mine = Bubble(mine: true, text: text, photo: picture)
@@ -589,8 +543,8 @@ struct CoachView: View {
                         if aboutSubject && !ghost { keepChat(chat) }
                     }
                     if let a = result.coachAllowance {
+                        // No line at 75 %: the counter above the field says it from 4 left (AI-4).
                         allowance = a
-                        if a.notice == true { messages.append(Bubble(mine: false, text: a.chatNotice, note: true)) }
                         // The extra messages are gone too: the card now, not a refused message later.
                         if a.more == false { usedUp = true }
                     }
@@ -622,15 +576,24 @@ struct CoachView: View {
                 unfinished = (savedIn, newestStored)
                 self.error = L10n.tr("Spojení se přerušilo. Kouč odpověď dopíše a uloží ji do chatu.")
             } else if !answered {
-                // Nothing came: the question goes back to the field to send again.
-                messages.removeAll { $0.id == id || $0.id == mine.id }
-                input = text
-                photo = picture
-                self.error = error.localizedDescription
+                // Nothing came: the question stays with why and Try again under it (D-KOUC-5).
+                messages.removeAll { $0.id == id }
+                failedPhoto = picture
+                let offline = (error as? URLError).map { [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains($0.code) } ?? false
+                edit(mine.id) { $0.failed = L10n.tr(offline ? "Jsi offline. Zkus to znovu, až budeš připojený." : "Odpověď se nepodařilo získat.") }
             } else {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    /// Try again under a message that got no answer: it goes out once more.
+    private func retry(_ bubble: Bubble) {
+        guard bubble.mine, bubble.failed != nil, !sending else { return }
+        input = bubble.text
+        photo = failedPhoto
+        failedPhoto = nil
+        Task { await send() }
     }
 
     /// Under the line about the lost connection: the answer from the chat once the server saved it.
@@ -671,13 +634,13 @@ struct CoachView: View {
     /// The coach's answer at the end of the chat (the line about the week's
     /// messages may follow it); nil while the athlete's question waits for one.
     private var lastAnswer: Bubble? {
-        guard let last = messages.last(where: { !$0.note }), !last.mine, !last.text.isEmpty else { return nil }
+        guard let last = messages.last, !last.mine, !last.text.isEmpty else { return nil }
         return last
     }
 
     /// Thumbs need the stored answer; the demo's sample answers keep them on the phone.
     private func canRate(_ bubble: Bubble) -> Bool {
-        !bubble.mine && !bubble.note && !bubble.text.isEmpty && (bubble.serverId != nil || model.demo)
+        !bubble.mine && !bubble.text.isEmpty && (bubble.serverId != nil || model.demo)
     }
 
     /// Up toggles; down fills at once and opens the panel with the reasons,
@@ -741,20 +704,20 @@ struct CoachView: View {
         change(&messages[i])
     }
 
-    private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
+    private func decide(_ action: CoachAction, confirm: Bool, sports: [String]? = nil, in bubble: UUID) async {
         guard let draftId = action.draftId, !deciding.contains(draftId) else { return }
         deciding.insert(draftId)
         defer { deciding.remove(draftId) }
         do {
-            edit(bubble) { $0.failed[draftId] = nil }
-            let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
+            edit(bubble) { $0.failedActions[draftId] = nil }
+            let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm, sports: sports)
             edit(bubble) {
                 $0.decided[draftId] = answer.message ?? (confirm ? "Hotovo." : "Zamítnuto.")
                 if let token = answer.undo { $0.undo[draftId] = token }
             }
             if confirm { await model.refreshTraining(); await model.refresh() }
         } catch {
-            edit(bubble) { $0.failed[draftId] = error.localizedDescription }
+            edit(bubble) { $0.failedActions[draftId] = error.localizedDescription }
         }
     }
 
@@ -762,7 +725,7 @@ struct CoachView: View {
     /// server changes it by rules, no AI and no message counted.
     private func adjust(_ action: CoachAction, chip: String, date: String?, in bubble: UUID) async {
         guard let draftId = action.draftId, messages.first(where: { $0.id == bubble })?.adjusting[draftId] == nil else { return }
-        edit(bubble) { $0.failed[draftId] = nil; $0.adjusting[draftId] = chip }
+        edit(bubble) { $0.failedActions[draftId] = nil; $0.adjusting[draftId] = chip }
         do {
             let answer = try await model.api.adjustCoachAction(draftId: draftId, chip: chip, date: date)
             edit(bubble) { b in
@@ -771,7 +734,7 @@ struct CoachView: View {
                 if let saved = answer.memory?.saved { b.memory.append(CoachMemoryChip(kind: .saved, text: saved, showsText: true)) }
             }
         } catch {
-            edit(bubble) { $0.adjusting[draftId] = nil; $0.failed[draftId] = error.localizedDescription }
+            edit(bubble) { $0.adjusting[draftId] = nil; $0.failedActions[draftId] = error.localizedDescription }
         }
     }
 
@@ -925,19 +888,21 @@ struct CoachView: View {
 
 struct BubbleView: View {
     let bubble: CoachView.Bubble
-    /// The last answer: copy, the thumbs and its time under it. Older answers have them on a long press.
+    /// The last answer: thumbs, copy and its time under it. Older answers have them on a long press.
     var last = false
     /// "up", "down" or nil (taken back); nil when the answer can't be rated.
     var rate: ((String?) -> Void)? = nil
     var decide: (CoachAction, Bool) -> Void
+    /// Confirm on "Plan around your knee?" with the sports that rest.
+    var confirmSports: (CoachAction, [String]) -> Void = { _, _ in }
+    /// Try again under a message that got no answer.
+    var retry: () -> Void = {}
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
     var decideMemory: (CoachMemoryChip, Bool) -> Void = { _, _ in }
     var undoAction: (CoachAction) -> Void = { _ in }
     var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
     var openPlan: () -> Void = {}
-    /// On the line about the week's messages: "Získat další" opens the packs.
-    var more: (() -> Void)? = nil
     /// The message a chat search opened: ringed for a moment.
     var found = false
     /// The messages are long text: they follow the iPhone's text size past the
@@ -950,17 +915,16 @@ struct BubbleView: View {
     @ViewBuilder private var foundRing: some View {
         if found {
             RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.amberBar, lineWidth: 2.5)
-                .padding(-3)
+                .padding(-5)
                 .transition(.opacity)
                 .allowsHitTesting(false)
         }
     }
 
     var body: some View {
-        VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
-            if !bubble.mine, !bubble.note {
-                if !bubble.steps.isEmpty { CoachSteps(steps: bubble.steps, answeredIn: bubble.answeredIn) }
-                else if let seconds = bubble.answeredIn { CoachAnsweredIn(seconds: seconds) }
+        VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 10) {
+            if !bubble.mine, !bubble.steps.isEmpty {
+                CoachSteps(steps: bubble.steps, answeredIn: bubble.answeredIn)
             }
             if let photo = bubble.photo {
                 Image(uiImage: photo).resizable().scaledToFill()
@@ -971,37 +935,27 @@ struct BubbleView: View {
                 Label(L10n.tr("Fotka"), systemImage: "photo")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Palette.card, in: Capsule())
+                    .background(Palette.ink.opacity(0.05), in: Capsule())
             }
-            if bubble.note {
-                HStack(spacing: 6) {
-                    Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
-                        .multilineTextAlignment(.center)
-                    if let more {
-                        Button("Získat další", action: more).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            } else if !bubble.text.isEmpty {
+            if !bubble.text.isEmpty {
                 if bubble.mine {
-                    Text(bubble.text)
-                        .font(.body)
-                        .dynamicTypeSize(messageTypeSize)
-                        .foregroundStyle(Palette.onButton)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Palette.button, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay { foundRing }
-                        .textSelection(.enabled)
+                    CoachUserBubble {
+                        Text(bubble.text).font(.callout)
+                            .dynamicTypeSize(messageTypeSize)
+                            .textSelection(.enabled)
+                    }
+                    .overlay { foundRing }
+                    .frame(maxWidth: 320, alignment: .trailing)
                 } else {
-                    CoachMarkdown(text: bubble.text)
-                        .equatable()
+                    CoachWords(text: bubble.text)
                         .dynamicTypeSize(messageTypeSize)
-                        .padding(.horizontal, 16).padding(.vertical, 14)
-                        .cardSurface(cornerRadius: 18)
                         .overlay { foundRing }
-                        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .contextMenu { AnswerActions.menu(text: bubble.text, rating: bubble.rating, rate: rate) }
                 }
+            }
+            if let failed = bubble.failed {
+                CoachFailedLine(text: failed, retry: retry)
             }
             ForEach(bubble.visuals, id: \.self) { kind in
                 CoachVisual(kind: kind)
@@ -1015,27 +969,29 @@ struct BubbleView: View {
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
-                           failure: action.draftId.flatMap { bubble.failed[$0] },
+                           failure: action.draftId.flatMap { bubble.failedActions[$0] },
                            canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
                            adjusting: action.draftId.flatMap { bubble.adjusting[$0] },
-                           decide: { decide(action, $0) }, undo: { undoAction(action) },
+                           decide: { decide(action, $0) }, confirmSports: { confirmSports(action, $0) }, undo: { undoAction(action) },
                            adjust: { adjust(action, $0, $1) }, openPlan: openPlan)
             }
             if let food = bubble.food {
                 FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
             }
             // Under everything the answer brought (cards, memory lines), as at Bevel.
-            if last, !bubble.mine, !bubble.note, !bubble.text.isEmpty {
+            if last, !bubble.mine, !bubble.text.isEmpty {
                 AnswerActions(text: bubble.text, rating: bubble.rating, at: bubble.at, rate: rate)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)
-        .padding(bubble.mine ? .leading : .trailing, bubble.note ? 0 : 40)
+        .padding(.leading, bubble.mine ? 56 : 0)
     }
 }
 
-/// A proposed change with "Potvrdit" and "Ne"; a workout also with Kratší,
-/// Delší, Lehčí, Těžší and Jiný den under them.
+/// A proposed change as a card (concept 09, 1/3 and 1/4): the workout's icon
+/// and name, only the rows that change (Now and New), why, and Confirm /
+/// Not now; once decided it folds to a tick, what happened and Undo. A
+/// workout also has Kratší, Delší, Lehčí, Těžší and Jiný den.
 struct ActionCard: View {
     let action: CoachAction
     let result: String?
@@ -1044,67 +1000,101 @@ struct ActionCard: View {
     /// The quick change on its way, the chip greys out the others meanwhile.
     var adjusting: String? = nil
     var decide: (Bool) -> Void
+    /// Confirm on "Plan around your knee?" with the sports that rest.
+    var confirmSports: ([String]) -> Void = { _ in }
     var undo: () -> Void = {}
     var adjust: (String, String?) -> Void = { _, _ in }
     var openPlan: () -> Void = {}
     @State private var pickingDay = false
+    /// "Plan around your knee?": the sports ticked to rest, all of them at first.
+    @State private var resting: Set<String>?
+
+    /// A card for today and one day only: a typed yes confirms it too (AI-4);
+    /// a card over more days or one that deletes needs the tap.
+    static func yesConfirms(_ a: CoachAction, today: String = AppModel.localDate(Date())) -> Bool {
+        guard a.draftId != nil, a.date == today else { return false }
+        return !["rest", "activity_delete", "activity_merge", "plan", "week_sport", "status", "plan_around"].contains(a.type)
+    }
+
+    private var health: Bool { action.type == "status" || action.type == "plan_around" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            card
+            if result == nil, action.draftId != nil, Self.yesConfirms(action) {
+                Text("Ťukni na Potvrdit, nebo prostě napiš ano.").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .padding(.leading, 4)
+            }
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if let preview = action.preview, action.type == "workout", preview.workout != nil || preview.plan != nil {
                 WorkoutPreviewBlock(action: action, preview: preview)
             } else if action.type == "plan" {
                 PlanProposalBlock(action: action, decided: result != nil)
+            } else if action.type == "plan_around" {
+                PlanAroundBlock(action: action, resting: Binding(get: { resting ?? Set(action.sports ?? []) }, set: { resting = $0 }), decided: result != nil)
             } else {
-                Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                header
             }
-            if let detail = action.detail, !detail.isEmpty {
-                Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            let rows = CoachChangeRow.rows(action)
+            if result == nil, !rows.isEmpty {
+                CoachChangeTable(rows: rows).padding(.top, 4)
             }
-            if let reason = action.reason, action.type != "plan" { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
-            if result == nil, let change = action.quickChange {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark").font(.caption.weight(.bold))
-                    Text(verbatim: change).font(Typo.caption.weight(.medium))
-                    Button { adjust("undo", nil) } label: { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
-                        .buttonStyle(.plain).padding(.leading, 6)
+            if result == nil {
+                if let detail = action.detail, !detail.isEmpty {
+                    Text(detail).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(Palette.green)
-                .disabled(adjusting != nil)
+                if let reason = action.reason, !reason.isEmpty, action.type != "plan" {
+                    Text(reason).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if result == nil, let change = action.quickChange {
+                doneRow(change, undoable: true) { adjust("undo", nil) }
+                    .disabled(adjusting != nil)
             }
             if let result {
-                HStack(spacing: 6) {
-                    if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
-                    Text(result).font(Typo.caption.weight(.medium))
-                    if canUndo {
-                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
-                            .buttonStyle(.plain).padding(.leading, 6)
-                    }
-                }
-                .foregroundStyle(Palette.green)
+                Rectangle().fill(Palette.hairline).frame(height: 1).padding(.top, 2)
+                doneRow(result, undoable: canUndo, undo: undo)
                 if action.type == "plan", failure == nil {
                     Button(action: openPlan) {
                         HStack(spacing: 4) {
                             Text("Otevřít plán")
                             Image(systemName: "chevron.right").font(.caption2.weight(.bold))
                         }
-                        .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
                 }
             } else if action.draftId != nil {
-                HStack(spacing: 8) {
-                    Button { decide(true) } label: {
-                        Text("Potvrdit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
-                            .padding(.horizontal, 16).frame(height: 34).background(Palette.button, in: Capsule())
+                // One fixed place for the health line (D-KOUC-3): inside the card, above the buttons.
+                if health {
+                    Text("Trenérská rada, ne lékařská.").font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                HStack(spacing: 10) {
+                    Button {
+                        if action.type == "plan_around" { confirmSports(Array(resting ?? Set(action.sports ?? []))) } else { decide(true) }
+                    } label: {
+                        Text(verbatim: confirmTitle).font(.body.weight(.semibold)).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(minHeight: 50)
+                            .background(Palette.button, in: Capsule())
                     }
                     Button { decide(false) } label: {
-                        Text("Ne").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 16).frame(height: 34).overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                        Text("Teď ne").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 18).frame(minHeight: 50)
+                            .background(Palette.ink.opacity(0.05), in: Capsule())
+                            .overlay(Capsule().strokeBorder(Palette.ink.opacity(0.08), lineWidth: 1))
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(adjusting != nil)
+                .disabled(adjusting != nil || (action.type == "plan_around" && (resting ?? Set(action.sports ?? [])).isEmpty))
+                .padding(.top, 4)
+                if let redFlag {
+                    Text(verbatim: redFlag).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
                 if let quick = action.quick { quickChoices(quick) }
                 if adjusting != nil { CoachThinkingLine(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 2) }
                 if let failure {
@@ -1112,9 +1102,79 @@ struct ActionCard: View {
                 }
             }
         }
-        .padding(14)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .cardSurface(cornerRadius: 26)
+    }
+
+    /// The workout's icon in its sport colour and the card's title in serif.
+    private var header: some View {
+        HStack(spacing: 12) {
+            if let sport = action.sport {
+                Image(systemName: SportIcon.symbol(sport == "gym" ? "strength" : sport))
+                    .scaledFont(16, weight: .semibold, cap: .denseCap)
+                    .foregroundStyle(Palette.Sport.color(sport))
+                    .frame(width: 40, height: 40)
+                    .background(Palette.Sport.color(sport).opacity(0.14), in: Circle())
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: cardTitle).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let line = cardLine { Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.muted) }
+            }
+        }
+    }
+
+    /// "Set Sick" on a status card (kouc-4), else Confirm.
+    private var confirmTitle: String {
+        guard action.type == "status" else { return L10n.tr("Potvrdit") }
+        switch action.status {
+        case "sick": return L10n.tr("Nastavit Nemoc")
+        case "injured": return L10n.tr("Nastavit Zranění")
+        default: return L10n.tr("Potvrdit")
+        }
+    }
+
+    /// When to see a doctor, always under a Sick or pain card (D-KOUC-3).
+    private var redFlag: String? {
+        if action.type == "status", action.status == "sick" {
+            return L10n.tr("Bolest na hrudi, mdloby, bušení srdce nebo dušnost v klidu ať před dalším tréninkem posoudí lékař.")
+        }
+        if action.type == "plan_around" || (action.type == "status" && action.status == "injured") {
+            return L10n.tr("Bolest, která se zhoršuje, otok nebo bolest trvající déle než pár dní ať posoudí lékař nebo fyzioterapeut.")
+        }
+        return nil
+    }
+
+    /// The workout's own name when the card is about one, else the change.
+    private var cardTitle: String {
+        if CoachChangeRow.rows(action).isEmpty == false, let name = action.eventSnapshot?.name ?? action.activityName, !name.isEmpty { return name }
+        return action.title
+    }
+
+    /// "Today", "Sun 15": when, under the name; a move has its days in the rows.
+    private var cardLine: String? {
+        guard cardTitle != action.title, action.type != "move", let date = action.date else { return nil }
+        return date == AppModel.localDate(Date()) ? L10n.tr("Dnes") : Fmt.capitalized(Fmt.weekdayShort(date)) + " " + Fmt.dayNumber(date)
+    }
+
+    /// The decided card: an ink disc with a tick, what happened, and Undo.
+    private func doneRow(_ text: String, undoable: Bool, undo: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.onButton)
+                .frame(width: 24, height: 24).background(Palette.button, in: Circle())
+                .accessibilityHidden(true)
+            Text(verbatim: text).font(Typo.body.weight(.medium)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if undoable {
+                Button(action: undo) {
+                    Text("Vrátit").font(Typo.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     /// Kratší, Delší, Lehčí, Těžší, then Jiný den with the days ahead; a
@@ -1260,7 +1320,7 @@ struct WorkoutPreviewBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+            Label(L10n.tr("Naplánovat") + (action.date.map { " " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "calendar.badge.plus")
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             if let workout = preview.workout {
                 Text(verbatim: workout.name).font(Typo.heading(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -1334,6 +1394,9 @@ struct ChatsPanel: View {
     var current: Int?
     var close: () -> Void
     var newChat: () -> Void
+    /// A temporary chat is on, and starting a new one (Dočasný chat, Petr 2026-11-07).
+    var ghost = false
+    var newGhost: () -> Void = {}
     /// The chat, and with a search result the message to show.
     var open: (Int, Int?) -> Void
     var memory: () -> Void
@@ -1365,6 +1428,19 @@ struct ChatsPanel: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 12).padding(.top, 14)
+                    Button { newGhost(); close() } label: {
+                        HStack(spacing: 10) {
+                            GhostGlyph(filled: ghost).frame(width: 15, height: 17)
+                            Text("Dočasný chat").font(Typo.bodyStrong)
+                        }
+                        .foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14).frame(height: 46)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12).padding(.top, 8)
+                    .accessibilityHint(L10n.tr("Kouč si z něj nic nezapamatuje."))
                     List {
                         if searchText.count >= 2 {
                             found
@@ -1391,7 +1467,7 @@ struct ChatsPanel: View {
                     .scrollContentBackground(.hidden)
                     Divider().overlay(Palette.ink.opacity(0.08))
                     Button { close(); memory() } label: {
-                        Label("Co si kouč pamatuje", systemImage: "sparkles")
+                        Label("Co si kouč pamatuje", systemImage: "text.book.closed")
                             .font(Typo.body).foregroundStyle(Palette.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 18).frame(height: 52)
@@ -1593,15 +1669,22 @@ struct CoachWaitRow: View {
     }
 }
 
-/// "Answered in 8 s" above an answer given while the chat was open: the whole
-/// wait, most of it reading the data, so not "Thought for".
-struct CoachAnsweredIn: View {
-    let seconds: Int
+/// While the coach starts on an answer: the two lights turning and what he
+/// does, no bubble (concept 09, 1/2).
+struct CoachWorking: View {
+    let text: String
+    var since: Date? = nil
 
     var body: some View {
-        Text(verbatim: L10n.f("Odpověď za %lld s", seconds))
-            .font(Typo.caption).foregroundStyle(Palette.faint)
-            .padding(.leading, 4)
+        HStack(spacing: 10) {
+            TwoLights(size: 20, mode: .thinking)
+            Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.muted)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
     }
 }
 

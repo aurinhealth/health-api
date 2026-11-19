@@ -100,11 +100,19 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
-    /// Where the set table is, so a swipe on a set row deletes the set
-    /// instead of turning to another exercise.
-    @State private var tableFrame: CGRect = .zero
-    /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
-    @State private var unfolded: Set<String> = []
+    /// An exercise other than the one under way opened in place (concept part 4).
+    @State private var viewing: Int?
+    /// The green "3 done" row and the "6 upcoming" row unfolded.
+    @State private var showDone = false
+    @State private var showUpcoming = false
+    /// The set the rest running now follows, and each rest taken today (by
+    /// the row of the set before it), shown between the rows.
+    @State private var restAfter: Int?
+    @State private var restTaken: [Int: Int] = [:]
+    /// "…" → Workout settings: the rests and the sound and vibration.
+    @State private var workoutSettings = false
+    /// The one-time line under the first table: what the letter is for (D-ZIVY-3).
+    @AppStorage("gym.effortHintSeen") private var effortHintSeen = false
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
     /// card makes way for the first exercise.
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
@@ -130,7 +138,6 @@ struct TrainingModeView: View {
     private var screen: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            if let day, !finishedSession, let exercise = current(day) { tools(exercise) }
             if loading && day == nil {
                 Spacer()
                 ProgressView().frame(maxWidth: .infinity)
@@ -143,7 +150,7 @@ struct TrainingModeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
                             if live.running {
-                                LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
+                                LiveStatsPanel(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 12)
                             }
                             if waiting, part.kind != .cardio {
                                 readyCard(.part(part), day, parts)
@@ -159,32 +166,32 @@ struct TrainingModeView: View {
                     }
                     .scrollIndicators(.hidden)
                 } else if !finishedSession, let exercise = current(day) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            if live.running {
-                                LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
-                            }
-                            if !started, showsParts(day, parts) {
-                                // Before Začít trénink: the whole workout in order, one start for all of it.
-                                partsList(day, parts)
-                                Button { startWhole(day) } label: {
-                                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.top, 16)
-                            } else if waiting {
-                                readyCard(.exercise(index), day, parts)
-                                partsList(day, parts)
-                            } else if let restEnd {
-                                rest(day, exercise, until: restEnd)
-                            } else {
-                                session(day, exercise)
-                            }
-                        }
-                        .padding(.bottom, 24)
+                    // The workout's time, heart rate, calories and volume stay over the list.
+                    if live.running {
+                        LiveStatsPanel(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 12)
                     }
-                    .scrollIndicators(.hidden)
+                    ScrollViewReader { reader in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if !started, showsParts(day, parts) {
+                                    // Before Začít trénink: the whole workout in order, one start for all of it.
+                                    partsList(day, parts)
+                                } else if waiting {
+                                    readyCard(.exercise(index), day, parts)
+                                    partsList(day, parts)
+                                } else {
+                                    workout(day, exercise, parts)
+                                }
+                            }
+                            .padding(.bottom, 24)
+                        }
+                        .scrollIndicators(.hidden)
+                        // The exercise under way goes under the panel when it changes.
+                        .onChange(of: index) { _, _ in
+                            withAnimation(.snappy) { reader.scrollTo(Self.runningID, anchor: .top) }
+                        }
+                    }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { pinned(day, exercise, parts) }
                 } else {
                     ScrollView { finished(day).padding(.bottom, 24) }
                     .scrollIndicators(.hidden)
@@ -201,7 +208,7 @@ struct TrainingModeView: View {
 
     var body: some View {
         ZStack {
-            ScreenBackground(glow: Palette.Glow.training)
+            ScreenBackground(glow: Palette.Glow.gym)
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
@@ -250,7 +257,14 @@ struct TrainingModeView: View {
                 if !live.running { HeartRateSensor.shared.disconnect() }
             }
         }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: restEnd) { old, end in
+            Task { await Reminders.restEnds(at: end) }
+            syncActivity()
+            // Over (ran out, skipped or a set began): its length stays between the rows.
+            if let old, end == nil { keepRest(until: old) }
+        }
+        // The rest's ticks and end, whatever is open on the screen.
+        .task(id: restEnd) { if let end = restEnd { await runRest(end) } }
         // A set ticked or a change: "Still working out?" waits another 10 min (IdleWorkout).
         .onChange(of: day) { _, _ in syncActivity(); live.worked() }
         .onChange(of: index) { _, _ in syncActivity(); live.worked() }
@@ -296,6 +310,18 @@ struct TrainingModeView: View {
                            selected: set?.intensity, onRemoveDrop: remove) { letter in
                 Task { await pickIntensity(ref.id, letter) }
             }
+        }
+        .sheet(isPresented: $workoutSettings) {
+            NavigationStack {
+                SettingsPage(title: "Nastavení tréninku") {
+                    GymRestGroup()
+                    GymSignalsGroup()
+                }
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { workoutSettings = false } }
+                }
+            }
+            .presentationDetents([.large])
         }
         .sheet(isPresented: $sensors) {
             NavigationStack { HeartRateSensorView() }
@@ -345,84 +371,103 @@ struct TrainingModeView: View {
         }
     }
 
+    /// The concept's header: a grab handle (drag down hides the workout, it goes
+    /// on in the bar), the exercise or part in serif with its own time under it,
+    /// Finish, and the capsule [Coach, …] top right (coach first, Petr's "B").
+    /// The dashes under it are the exercises: done green, under way amber.
     private var header: some View {
-        HStack(spacing: 10) {
-            // Under way: the arrow hides it and the workout goes on (MinimizedGymBar).
-            if started, !finishedSession, let day, current(day) != nil || activePart != nil {
-                CircleButton(systemImage: "chevron.down", label: L10n.tr("Skrýt trénink")) { minimize() }
-            } else {
-                CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
-                    .disabled(closeLocked).opacity(closeLocked ? 0.35 : 1)
+        VStack(alignment: .leading, spacing: 10) {
+            if canHide {
+                Capsule().fill(Palette.faint.opacity(0.45)).frame(width: 36, height: 5)
+                    .frame(maxWidth: .infinity, minHeight: 20)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 10).onEnded { drag in
+                        if drag.translation.height > 40 { minimize() }
+                    })
+                    .accessibilityElement()
+                    .accessibilityLabel(L10n.tr("Skrýt trénink"))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { minimize() }
             }
-            // The summary has its own title: no exercise and sets line above it.
-            if let day, !day.exercises.isEmpty, !finishedSession {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text(progressLine(day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            HStack(alignment: .top, spacing: 8) {
+                if !canHide {
+                    CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+                        .disabled(closeLocked).opacity(closeLocked ? 0.35 : 1)
                 }
-                Spacer(minLength: 4)
-                if !finishedSession, current(day) != nil || activePart != nil {
-                    if started {
+                // The summary has its own title: nothing above it.
+                if let day, !day.exercises.isEmpty, !finishedSession {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                            .lineLimit(2).minimumScaleFactor(0.6)
+                        HStack(spacing: 8) {
+                            if live.running, let key = headKey(day) { HeadClock(live: live, key: key) }
+                            if activePart == nil, let letter = ExerciseOrder.letter(current(day)?.superset) {
+                                Text(verbatim: L10n.f("Supersérie %@", letter)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.indigo)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    if started, current(day) != nil || activePart != nil {
                         // Sets still left here: asked first, a tap by mistake ends nothing.
                         Button { if current(day) != nil { confirmFinish = true } else { Task { await finish() } } } label: {
-                            Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
-                                .padding(.horizontal, 18).frame(height: 44).background(Palette.button, in: Capsule())
+                            Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                                .padding(.horizontal, 12).frame(height: 40)
+                                .chromeGlass(in: Capsule())
                         }
                         .buttonStyle(.plain)
+                        .tapTarget(width: 60, height: 40)
                         .disabled(saving)
                     }
+                    if let exercise = current(day) {
+                        CoachEntry(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date),
+                                   menu: AnyView(menuItems(day, exercise)), hint: false)
+                    }
+                } else {
+                    Spacer()
                 }
-                // The coach top right, after Dokončit, as the live mode concept draws it
-                // (Petr 2026-11-17): it knows the workout and where in it the athlete is.
-                if !finishedSession, let exercise = current(day) {
-                    CoachEntry(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), hint: false)
-                }
-            } else {
-                Spacer()
+            }
+            if let day, !finishedSession, started, day.exercises.count > 1 {
+                ExerciseSegments(exercises: day.exercises, current: activePart == nil ? index : nil)
             }
         }
     }
 
-    /// Under the header: the heart rate, the plan and ⋯ (History, Sound and vibration).
-    private func tools(_ exercise: GymExercise) -> some View {
-        HStack(spacing: 8) {
-            // Heart and Plan from the left, ⋯ on the right. Plan and ⋯ keep their size;
-            // the heart drops "Bez tepu" when the row is too narrow, e.g. with larger
-            // text, so nothing wraps or ends in "…".
-            HStack(spacing: 8) {
-                ViewThatFits(in: .horizontal) {
-                    HeartSourceButton(live: live, compact: false) { sensors = true }.fixedSize()
-                    HeartSourceButton(live: live, compact: true) { sensors = true }.fixedSize()
-                }
-                Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")).fixedSize() }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.tr("Upravit plán"))
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            more(exercise)
-        }
-        .padding(.top, 12)
+    /// The workout runs: the grab handle hides it, no close button.
+    private var canHide: Bool {
+        guard started, !finishedSession, let day else { return false }
+        return current(day) != nil || activePart != nil
     }
 
-    /// ⋯: what is seldom needed mid-set. History (the Last time column already shows the last
-    /// workout) and Sound and vibration (set once).
-    private func more(_ exercise: GymExercise) -> some View {
-        let count = history.exercise(exercise.name)?.sessions.filter { $0.date < date }.count ?? 0
-        return Menu {
-            Button { historyFor = exercise.name } label: {
-                Label {
-                    Text("Historie")
-                    if count > 0 { Text(verbatim: L10n.plural("%lld tréninků", count)) }
-                } icon: {
-                    Image(systemName: "chart.bar")
-                }
-            }
-            .accessibilityLabel(L10n.tr("Historie cviku"))
-            GymSignalsMenu(inMenu: true)
-        } label: {
-            ToolChip(systemImage: "ellipsis").fixedSize()
+    /// The exercise under way, or the warm-up, cardio or stretching on screen.
+    private func headTitle(_ day: GymDay) -> String {
+        if let part = activePart { return L10n.tr(part.kind.title) }
+        return current(day)?.name ?? title(day)
+    }
+
+    /// Whose time runs under the title.
+    private func headKey(_ day: GymDay) -> String? {
+        activePart?.rawValue ?? current(day)?.name
+    }
+
+    /// "…": the whole workout's actions in a small menu under the button. The
+    /// exercise's history is a tab on its card, the sound in Workout settings.
+    @ViewBuilder
+    private func menuItems(_ day: GymDay, _ exercise: GymExercise) -> some View {
+        if nextSet(exercise) != nil {
+            Button { swapping = exercise.name } label: { Label("Vyměnit tento cvik", systemImage: "arrow.up.arrow.down") }
         }
-        .accessibilityLabel(L10n.tr("Další volby"))
+        Button { editing = true } label: { Label("Upravit cviky", systemImage: "list.bullet") }
+        Button { sensors = true } label: {
+            Label {
+                Text("Zdroj tepu")
+                if let source = live.heartSource { Text(verbatim: source) }
+            } icon: {
+                Image(systemName: "heart")
+            }
+        }
+        Button { workoutSettings = true } label: { Label("Nastavení tréninku", systemImage: "gearshape") }
+        Divider()
+        Button(role: .destructive) { confirmDiscard = true } label: { Label("Zahodit trénink", systemImage: "trash") }
     }
 
     private func title(_ day: GymDay) -> String {
@@ -439,108 +484,196 @@ struct TrainingModeView: View {
 
     // MARK: The exercise
 
-    private func session(_ day: GymDay, _ exercise: GymExercise) -> some View {
-        let set = nextSet(exercise)
-        let last = history.last(exercise.name, before: date)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(exercise.name).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                if live.running { PartClock(live: live, key: exercise.name) }
-            }
-            .padding(.top, 18)
-            // The swap just made, with its Undo at the top, far from Set done (decision 7).
-            if let undo = lastSwap, undo.to == exercise.name, Self.canUndo(undo, in: day) {
-                HStack(spacing: 8) {
-                    Text(verbatim: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(undo.from)))
-                        .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
-                    Spacer(minLength: 8)
-                    Button { Task { await undoSwap() } } label: {
-                        Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 14).frame(minHeight: 36)
-                            .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .tapTarget(width: 44, height: 44)
-                    .accessibilityLabel(L10n.f("Vrátit výměnu, zpět na %@", ExerciseCatalog.shownName(undo.from)))
+    /// Where the exercise under way is in the list, to scroll it under the panel.
+    static let runningID = "running"
+
+    /// The whole workout on one screen (concept part 4): what is done folded
+    /// into one green row on top, the exercise under way open, its superset
+    /// partner clasped under it, the rest in one row "6 upcoming". A tap opens
+    /// any exercise in place; the one under way then folds with "Now".
+    @ViewBuilder
+    private func workout(_ day: GymDay, _ exercise: GymExercise, _ parts: GymDayParts) -> some View {
+        let rows = partRows(day, parts)
+        let partner = Self.supersetPartner(day.exercises, of: index)
+        let doneRows = rows.filter { $0.done && exerciseAt($0) != index }
+        let upcoming = rows.filter { !$0.done && exerciseAt($0) != index && (partner == nil || exerciseAt($0) != partner) }
+        VStack(alignment: .leading, spacing: 8) {
+            undoSwapRow(day, exercise)
+            if !doneRows.isEmpty {
+                let seconds = doneRows.reduce(0) { $0 + live.seconds(of: $1.key) }
+                LiveListRow(title: L10n.f("%@ hotovo", String(doneRows.count)), detail: Self.clock(seconds), done: true, open: showDone) {
+                    withAnimation(.snappy) { showDone.toggle() }
                 }
-                .padding(.top, 6)
-            }
-            // Named, not bare icons: what each one does shows at first use.
-            HStack(spacing: 8) {
-                if set != nil {
-                    Button { swapping = exercise.name } label: { ToolChip(systemImage: "arrow.triangle.swap", title: L10n.tr("Vyměnit")) }
-                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("Nahradit cvik"))
-                }
-                Button { technique = exercise.name } label: { ToolChip(systemImage: "info.circle", title: L10n.tr("Technika")) }
-                    .buttonStyle(.plain)
-                // No note yet: + Poznámka in the row. A written note shows under it, tap to edit.
-                if notes.note(exercise.name) == nil {
-                    Button { noteFor = exercise.name } label: { ToolChip(systemImage: "plus", title: L10n.tr("Poznámka"), dashed: true) }
-                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("Přidat poznámku ke cviku"))
+                if showDone {
+                    ForEach(doneRows) { row in listItem(row, day) }
                 }
             }
-            .padding(.top, 10)
-
-            if notes.note(exercise.name) != nil {
-                ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
+            // The rest before this exercise, after the last set of the one before.
+            if let end = restEnd, !exercise.sets.contains(where: { $0.row == restAfter }) {
+                LiveRestGap(end: end, total: restTotal)
             }
-
-            chips(day, exercise, set)
-
-            // Only where sides make sense: one-legged or one-armed, or already done by sides.
-            // Any other exercise switches with Každá strana beside + Série.
-            if showsSides(exercise) { sidesPicker(exercise) }
-
-            setTable(exercise, set, last)
-
-            if let note = GymSides.note(exercise) { CoachNote(text: note).padding(.top, 12) }
-
-            if let set {
-                if started {
-                    PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
-                        Task { await complete(set) }
-                    }
-                    .disabled(saving)
-                    .padding(.top, 14)
-                } else {
-                    Button { Task { await start() } } label: {
-                        Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                            .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 14)
+            if let partner, let letter = ExerciseOrder.letter(exercise.superset) {
+                LiveSupersetClasp(letter: letter) {
+                    runningBlock(day, exercise)
+                } second: {
+                    exerciseItem(partner, day)
+                }
+            } else {
+                runningBlock(day, exercise)
+            }
+            if let note = GymSides.note(exercise), viewing == nil { CoachNote(text: note) }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            if !upcoming.isEmpty {
+                LiveListRow(title: L10n.f("%@ zbývá", String(upcoming.count)),
+                            detail: L10n.f("Potom %@", upcoming[0].name), open: showUpcoming) {
+                    withAnimation(.snappy) { showUpcoming.toggle() }
+                }
+                if showUpcoming {
+                    ForEach(upcoming) { row in listItem(row, day) }
                 }
             }
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
-            nextExercise(day).padding(.top, 14)
-            addExerciseButton.padding(.top, 10)
+            addExerciseButton.padding(.top, 4)
         }
-        .onChange(of: set?.fieldKey(in: exercise.name)) { _, _ in prefill(set, in: exercise) }
-        .onAppear { prefill(set, in: exercise) }
-        // A swipe sideways goes to the next or the previous exercise.
-        .contentShape(Rectangle())
-        .coordinateSpace(name: "session")
-        .simultaneousGesture(DragGesture(minimumDistance: 30, coordinateSpace: .named("session")).onEnded { drag in
-            let dx = drag.translation.width, dy = drag.translation.height
-            guard abs(dx) > 70, abs(dx) > abs(dy) * 2, !tableFrame.contains(drag.startLocation) else { return }
-            withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
-        })
+        .padding(.top, 12)
+        .onChange(of: day.exercises.count) { _, count in if let v = viewing, v >= count { viewing = nil } }
         .task(id: exercise.name) { await loadMuscles(day) }
     }
 
-    /// "Obě strany najednou | Každá strana zvlášť": the next time the exercise
-    /// comes, it comes the way it was done last (src/gym-sides.js).
-    private func sidesPicker(_ exercise: GymExercise) -> some View {
-        Picker("", selection: Binding(get: { exercise.sidesAhead }, set: { on in Task { await setSides(exercise, on) } })) {
-            Text("Obě strany najednou").tag(false)
-            Text("Každá strana zvlášť").tag(true)
+    /// The exercise of a list row; nil for a warm-up, cardio or stretching.
+    private func exerciseAt(_ row: PartRow) -> Int? {
+        if case .exercise(let at) = row.step { return at }
+        return nil
+    }
+
+    /// A row of the done or upcoming list: an exercise, or a part.
+    @ViewBuilder
+    private func listItem(_ row: PartRow, _ day: GymDay) -> some View {
+        if let at = exerciseAt(row) {
+            exerciseItem(at, day)
+        } else if row.done {
+            LiveDoneRow(title: row.name, detail: row.detail, value: Self.clock(live.seconds(of: row.key))) { go(row.step, auto: true) }
+        } else {
+            LiveFoldedCard(title: row.name, detail: row.detail, onTechnique: nil) { go(row.step, auto: true) }
         }
-        .pickerStyle(.segmented)
-        .disabled(saving || !sidesOpen(exercise))
-        .padding(.top, 12)
+    }
+
+    /// An exercise other than the one under way: open in place, done (green
+    /// row) or to come (folded card).
+    @ViewBuilder
+    private func exerciseItem(_ at: Int, _ day: GymDay) -> some View {
+        if let e = day.exercises[safe: at] {
+            if viewing == at {
+                card(e, offset: at, running: false)
+            } else if e.sets.allSatisfy(\.done) {
+                let volume = GymSessionMath.volume([e])
+                LiveDoneRow(title: e.name, detail: L10n.plural("%lld sérií", e.workCount) + " " + L10n.f("za %@", Self.clock(live.seconds(of: e.name))),
+                            value: Fmt.int(Units.weight(volume)), unit: Units.imperial ? "lb" : "kg") { open(at) }
+            } else {
+                LiveFoldedCard(title: e.name, detail: nextLoad(e),
+                               onSwap: { swapping = e.name }, onTechnique: { technique = e.name }) { open(at) }
+            }
+        }
+    }
+
+    private func open(_ at: Int) {
+        withAnimation(.snappy) { viewing = at == index ? nil : at }
+    }
+
+    /// The exercise under way: open, or folded with "Now" while another is open.
+    @ViewBuilder
+    private func runningBlock(_ day: GymDay, _ exercise: GymExercise) -> some View {
+        Group {
+            if viewing != nil {
+                LiveFoldedCard(title: exercise.name, detail: nextLoad(exercise), now: true,
+                               onTechnique: { technique = exercise.name }) { open(index) }
+            } else {
+                card(exercise, offset: index, running: true)
+            }
+        }
+        .id(Self.runningID)
+    }
+
+    /// An exercise's sets on the two layers. The one under way has no title
+    /// (the header carries it) unless the lists around it are open.
+    private func card(_ exercise: GymExercise, offset: Int, running: Bool) -> some View {
+        let named = !running || showDone || showUpcoming
+        return VStack(alignment: .leading, spacing: 8) {
+            LiveSetCard(title: named ? exercise.name : nil,
+                        onFold: running ? nil : { withAnimation(.snappy) { viewing = nil } },
+                        onHistory: { historyFor = exercise.name },
+                        onTechnique: { technique = exercise.name },
+                        sidesTitle: sidesOpen(exercise) ? L10n.tr(exercise.sidesAhead ? "Obě strany" : "Každá strana") : nil,
+                        onSides: { Task { await setSides(exercise, !exercise.sidesAhead) } },
+                        onAddSet: { Task { await addSet(at: offset) } },
+                        disabled: saving) {
+                setTable(exercise, offset: offset, current: running ? nextSet(exercise) : nil)
+            }
+            if running, !effortHintSeen, exercise.sets.contains(where: { !$0.done }) {
+                Text("Klepnutím na ovál ve sloupci Úsilí zapíšeš, jak těžká série byla.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 8)
+            }
+        }
+    }
+
+    /// Swapped just now: the old name with Undo at the top, far from Set done (decision 7).
+    @ViewBuilder
+    private func undoSwapRow(_ day: GymDay, _ exercise: GymExercise) -> some View {
+        if let undo = lastSwap, undo.to == exercise.name, Self.canUndo(undo, in: day) {
+            HStack(spacing: 8) {
+                Text(verbatim: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(undo.from)))
+                    .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
+                Spacer(minLength: 8)
+                Button { Task { await undoSwap() } } label: {
+                    Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 14).frame(minHeight: 36)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .tapTarget(width: 44, height: 44)
+                .accessibilityLabel(L10n.f("Vrátit výměnu, zpět na %@", ExerciseCatalog.shownName(undo.from)))
+            }
+        }
+    }
+
+    /// The pinned button: Start before the start, Set done, the rest's
+    /// countdown with −15 s and +15 s, or back to the exercise under way.
+    @ViewBuilder
+    private func pinned(_ day: GymDay, _ exercise: GymExercise, _ parts: GymDayParts) -> some View {
+        Group {
+            if !started {
+                Button {
+                    if showsParts(day, parts) { startWhole(day) } else { Task { await start() } }
+                } label: {
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else if waiting {
+                EmptyView()
+            } else if let end = restEnd {
+                LiveRestButton(title: startTitle(exercise), end: end, total: restTotal, shift: { shiftRest($0) }) {
+                    viewing = nil
+                    restEnd = nil
+                }
+            } else if viewing != nil {
+                PrimaryButton(title: L10n.f("Zpět na %@", exercise.name)) { withAnimation(.snappy) { viewing = nil } }
+            } else if let set = nextSet(exercise) {
+                PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
+                    Task { await complete(set) }
+                }
+                .disabled(saving)
+            }
+        }
+        .padding(.top, 8).padding(.bottom, 6)
+    }
+
+    /// "Start set 3", "Start warm-up set" on the rest's button.
+    private func startTitle(_ exercise: GymExercise) -> String {
+        guard let set = nextSet(exercise) else { return L10n.tr("Začít") }
+        if set.warmup { return L10n.tr("Začít rozcvičkovou sérii") }
+        return L10n.f("Začít sérii %@", set.number)
     }
 
     private func showsSides(_ exercise: GymExercise) -> Bool {
@@ -568,24 +701,50 @@ struct TrainingModeView: View {
         }
     }
 
-    private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
-        VStack(spacing: 2) {
-            GymSetTableHeader(exercise: exercise.name, pounds: lb(exercise.name)) { on in setPounds(exercise, on) }
+    /// The sets with the rest between the rows: taken in ink, planned in grey,
+    /// the one running now filling in green. The coach's change for the set at
+    /// hand ("Set 2 felt moderate. Try 102.5 kg.") under its row.
+    private func setTable(_ exercise: GymExercise, offset: Int, current set: GymSet?) -> some View {
+        let last = history.last(exercise.name, before: date)
+        return VStack(spacing: 0) {
+            GymSetTableHeader(exercise: exercise.name, pounds: lb(exercise.name), effort: true) { on in setPounds(exercise, on) }
             ForEach(exercise.sets) { s in
+                // Swiped left: just this set goes away (a done one, a warm-up too).
+                setRow(s, exercise, current: set, last: last, offset: offset)
+                    .modifier(SwipeToDelete(enabled: !saving) { Task { await deleteSet(s) } })
                 if s.row == set?.row, let change = adjusted(s, in: exercise) {
                     AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }
-                        .padding(.horizontal, 6).padding(.vertical, 4)
+                        .padding(.horizontal, 8).padding(.vertical, 2)
                 }
-                // Swiped left: just this set goes away (a done one, a warm-up too).
-                setRow(s, exercise, current: set, last: last)
-                    .modifier(SwipeToDelete(enabled: !saving) { Task { await deleteSet(s) } })
+                gap(after: s, in: exercise, offset: offset)
             }
-            tableActions(exercise, set)
         }
-        .padding(.vertical, 12).padding(.horizontal, 4)
-        .cardSurface(cornerRadius: 22)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("session")) } action: { tableFrame = $0 }
-        .padding(.top, 14)
+        .padding(.horizontal, 4)
+    }
+
+    /// The line under a set: the rest after it.
+    @ViewBuilder
+    private func gap(after s: GymSet, in exercise: GymExercise, offset: Int) -> some View {
+        let next = exercise.sets.first { $0.row > s.row }
+        if let end = restEnd, restAfter == s.row, next?.done == false {
+            LiveRestGap(end: end, total: restTotal)
+        } else if s.done, next?.done != false, let taken = restTaken[s.row] {
+            LiveRestGap(seconds: taken, taken: true)
+        } else {
+            LiveRestGap(seconds: plannedRest(after: s, next: next, offset: offset))
+        }
+    }
+
+    /// The rest the app gives after a set (as Set done starts it): none into a
+    /// drop set or the other side, a minute after a warm-up, the longer one
+    /// before the next exercise after the last set.
+    private func plannedRest(after s: GymSet, next: GymSet?, offset: Int) -> Int? {
+        guard let next else {
+            guard let day, let after = Self.nextUndone(day.exercises, after: offset), after > offset else { return nil }
+            return GymRestSettingsView.before(day.exercises[safe: after], setting: restExercises)
+        }
+        if next.drop || (s.side == "L" && next.side == "P") { return 0 }
+        return s.warmup ? 60 : GymRestSettingsView.between(s, setting: restSets)
     }
 
     private func lb(_ name: String) -> Bool { pounds.contains(name) }
@@ -604,14 +763,15 @@ struct TrainingModeView: View {
         if let day, !model.demo { WatchBridge.shared.gymSaved(day, date: date) }
     }
 
-    private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?) -> GymSetRow {
+    private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?, offset: Int) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
         // The sets to come show what the set before was done with.
         let carry = s.done ? nil : carried(s, in: exercise)
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg, machineLb: lb(exercise.name)) ?? ""
         let shownReps: String = Fmt.range((s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? "")
         // By sides the number shows on the L row only.
-        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
+        // A warm-up set done without a letter shows W, as its sheet names the kind of set.
+        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) ?? (s.warmup ? "W" : nil) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
         if let target = plateTarget(s, in: exercise, shown: kg.isEmpty ? shownKg : kg) {
             plateTap = { loadingBar = target }
@@ -628,38 +788,23 @@ struct TrainingModeView: View {
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps, kgHint: shownKg, repsHint: s.plannedReps.map(Fmt.range),
                          drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
-                         onIntensity: { intensityFor = SetRef(id: s.row) },
+                         onIntensity: { intensityFor = SetRef(id: s.row); effortHintSeen = true },
                          onEdit: edit,
-                         onKgTap: plateTap) {
+                         onKgTap: plateTap,
+                         large: true) {
             switch phase {
             case .done: Task { await undo(s) }
             case .current: Task { await complete(s) }
-            case .next: break
+            case .next:
+                // The first set of an exercise opened in place: ticked, it
+                // becomes the exercise under way (concept part 4).
+                guard offset != index, s.row == exercise.sets.first(where: { !$0.done })?.row else { break }
+                index = offset
+                viewing = nil
+                prefill(s, in: exercise)
+                Task { await complete(s) }
             }
         }
-    }
-
-    private func tableActions(_ exercise: GymExercise, _ set: GymSet?) -> some View {
-        HStack(spacing: 8) {
-            pill("plus", L10n.tr("Série")) { Task { await addSet() } }.disabled(saving)
-            // Both sides at once so far: the sets left can go one side at a time
-            // (a band leg curl one leg after the first set), the switch then shows.
-            if !showsSides(exercise), sidesOpen(exercise) {
-                Button { Task { await setSides(exercise, true) } } label: {
-                    Label(L10n.tr("Každá strana"), systemImage: "arrow.left.and.right").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-                }
-                .buttonStyle(.plain)
-                .disabled(saving)
-                .accessibilityLabel(L10n.tr("Každá strana zvlášť"))
-            }
-            if let plates = platesText(exercise, kg) {
-                Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
-                    .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10).padding(.top, 8)
     }
 
     /// The bar (or plate-loaded machine) an exercise is done with: its weight is
@@ -702,118 +847,12 @@ struct TrainingModeView: View {
         return L10n.f("Kotouče: %@ na stranu", plates)
     }
 
-    @ViewBuilder
-    private func chips(_ day: GymDay, _ exercise: GymExercise, _ set: GymSet?) -> some View {
-        let main: [String] = mainMuscles(exercise)
-        let record = GymSessionMath.record(history.exercise(exercise.name), before: date)
-        let superset = ExerciseOrder.letter(exercise.superset)
-        let failure = set.map { day.isToFailure(row: $0.row) } ?? false
-        if !main.isEmpty || record != nil || superset != nil || failure {
-            ScrollView(.horizontal) { HStack(spacing: 6) {
-                ForEach(main, id: \.self) { id in
-                    Text(BodyFigure.label(id)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 9).frame(height: 24).background(Palette.track, in: Capsule())
-                }
-                if let record, let text = GymSessionMath.lift(record, machineLb: lb(exercise.name)) {
-                    Text(L10n.f("Rekord %@", text)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
-                        .padding(.horizontal, 9).frame(height: 24).background(Palette.amberSoft, in: Capsule())
-                }
-                if let superset { GymTag.superset(superset) }
-                if failure { GymTag.failure }
-            } }
-            .scrollIndicators(.hidden)
-            .padding(.top, 10)
-        }
-    }
-
-    private func mainMuscles(_ exercise: GymExercise) -> [String] {
-        let map: [String: Double] = muscles[exercise.name] ?? [:]
-        let strong = map.filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }
-        return Array(strong.prefix(3).map { $0.key })
-    }
-
-    private func pill(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr(systemImage == "plus" ? "O sérii víc" : "O sérii méně"))
-    }
-
-    @ViewBuilder
-    private func nextExercise(_ day: GymDay) -> some View {
-        // In a superset the partner comes next (A1, B1, A2…).
-        let partner = Self.supersetPartner(day.exercises, of: index)
-        if let target = partner ?? Self.nextUndone(day.exercises, after: index), let next = day.exercises[safe: target] {
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Button { move(target - index) } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "dumbbell").scaledFont(15, cap: .denseCap).foregroundStyle(Palette.secondary)
-                                .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                            VStack(alignment: .leading, spacing: 1) {
-                                HStack(spacing: 8) {
-                                    // "Next", not the "More" the shared Další key reads in English.
-                                    Text(verbatim: L10n.isEnglish ? "Next" : "Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                                    if let letter = ExerciseOrder.letter(next.superset) { GymTag.superset(letter) }
-                                }
-                                Text(next.name)
-                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
-                                Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
-                                ExerciseNoteLine(note: notes.note(next.name), compact: true).padding(.top, 2)
-                            }
-                            Spacer(minLength: 4)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    // Each its own 44 pt, side by side: a sweaty finger hits the one it means.
-                    HStack(spacing: 0) {
-                        if next.sets.contains(where: { !$0.done }) {
-                            SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
-                        }
-                        SmallInfoButton { technique = next.name }
-                        foldButton("next")
-                    }
-                }
-                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 12)
-                if unfolded.contains("next") {
-                    RestSetsList(exercise: next, last: history.last(next.name, before: date), pounds: lb(next.name)) { typed in
-                        Task { await setWeight(LiftWeight.kgText(typed, machineLb: lb(next.name)), of: next) }
-                    }
-                    .padding(.horizontal, 16).padding(.bottom, 10)
-                }
-            }
-            .cardSurface(cornerRadius: 22)
-        } else if let part = nextAfterPart(day) {
-            nextPartCard(part, day)
-        } else if index > 0 {
-            Button { move(-1) } label: {
-                Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     /// "15 kg × 5–8, 3 série": the first set still to do and the sets left.
     private func nextLoad(_ next: GymExercise) -> String {
         let left: Int = next.workCount - next.doneCount
         let count: String = L10n.plural("%lld sérií", left)
         guard let set = next.sets.first(where: { !$0.done && $0.work }) else { return count }
         return GymLiveActivity.load(set, in: next) + ", " + count
-    }
-
-    /// The arrow that unfolds the sets of Teď or Další.
-    private func foldButton(_ key: String) -> some View {
-        Button {
-            withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
-        } label: {
-            Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                .frame(width: 44, height: 34).tapTarget(width: 44, height: 34)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
     }
 
     /// A weight typed under Další: all its sets still to do take it.
@@ -833,92 +872,47 @@ struct TrainingModeView: View {
 
     // MARK: The rest
 
-    private func rest(_ day: GymDay, _ exercise: GymExercise, until end: Date) -> some View {
-        let set = nextSet(exercise)
-        let last = history.last(exercise.name, before: date)
-        return VStack(alignment: .leading, spacing: 14) {
-            RestRing(end: end, total: restTotal).padding(.top, 24)
-            HStack(spacing: 10) {
-                SecondaryButton(title: "−15 s") { shiftRest(-15) }
-                SecondaryButton(title: "+15 s") { shiftRest(15) }
-                SecondaryButton(title: "Přeskočit") { restEnd = nil }
+    /// The rest ends now (a set began during it).
+    private func endRest() {
+        if let end = restEnd { keepRest(until: end) }
+        restEnd = nil
+    }
+
+    /// A rest that ended: how long it was (never past its end, though it was
+    /// cleared later, e.g. back from the lock screen) under the set before it.
+    private func keepRest(until end: Date) {
+        guard let row = restAfter, let start = restStart else { return }
+        restTaken[row] = max(1, Int(min(Date(), end).timeIntervalSince(start).rounded()))
+        restAfter = nil
+    }
+
+    /// Rows moved (a set deleted, a drop set added or removed): the rests follow their sets.
+    private func moveRests(_ to: (Int) -> Int?) {
+        restTaken = Dictionary(restTaken.compactMap { row, seconds in to(row).map { ($0, seconds) } }, uniquingKeysWith: { a, _ in a })
+        restAfter = restAfter.flatMap(to)
+    }
+
+    /// The rest's ticks and its end, whatever is on screen (the countdown
+    /// shows between the set rows and in the pinned button).
+    private func runRest(_ end: Date) async {
+        // The tones are planned ahead, so they sound with the phone locked too.
+        let planned = GymSignals.planRest(until: end)
+        // Each whole second to the end: the last ones tick (Nastavení → Posilovna).
+        while true {
+            let left = end.timeIntervalSinceNow
+            let second = max(0, left.rounded(.up) - 1)
+            if left > second { try? await Task.sleep(for: .seconds(left - second)) }
+            guard !Task.isCancelled, restEnd == end else {
+                // Skipped or changed: its tones stop (a new end plans its own).
+                if restEnd != end { GymSignals.stopRest(end) }
+                return
             }
-            .padding(.top, 6)
-            TipView(LockScreenRestTip()).tipBackground(Palette.card)
-            // Its own view: each heartbeat redraws the card, not the whole screen.
-            if let restStart { LiveHeartRecovery(live: live, since: restStart) }
-            if let set {
-                VStack(alignment: .leading, spacing: 4) {
-                    // The whole name, wrapped (Petr: "Smith Machine…" told him nothing); the weight under it.
-                    HStack(alignment: .top, spacing: 6) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 8) {
-                                Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
-                                if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter) }
-                            }
-                            Text(nowLine(exercise, set))
-                                .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 6)
-                        HStack(spacing: 0) {
-                            SmallInfoButton { technique = exercise.name }
-                            foldButton("now")
-                        }
-                    }
-                    // A lift with plates: the bar for the set to come, loaded while resting.
-                    let plates = plateTarget(set, in: exercise, shown: restKg(set, in: exercise))
-                    let weight = Text(plannedLine(set, in: exercise)).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
-                    if let plates {
-                        Button { loadingBar = plates } label: { weight }.buttonStyle(.plain)
-                    } else {
-                        weight
-                    }
-                    if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
-                        Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                    if let plates, let text = platesText(exercise, restKg(set, in: exercise)) {
-                        Button { loadingBar = plates } label: {
-                            Text(text).font(Typo.caption).foregroundStyle(Palette.secondary)
-                                .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 6)
-                    }
-                    if let change = adjusted(set, in: exercise) {
-                        AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }.padding(.top, 6)
-                    }
-                    if unfolded.contains("now") { RestSetsList(exercise: exercise, last: last, keep: kept, ahead: typed, pounds: lb(exercise.name)) }
-                }
-                .padding(16)
-                .cardSurface(cornerRadius: 22)
-            }
-            nextExercise(day)
-            let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
-            if !progress.isEmpty {
-                MuscleProgressCard(items: progress, total: (day.exercises.reduce(0) { $0 + $1.doneCount }, day.exercises.reduce(0) { $0 + $1.workCount }))
-            }
+            if second == 0 { break }
+            if GymSignals.counts(Int(second)) { GymSignals.play(.tick, withSound: !planned) }
         }
-        .task(id: end) {
-            // The tones are planned ahead, so they sound with the phone locked too.
-            let planned = GymSignals.planRest(until: end)
-            // Each whole second to the end: the last ones tick (Nastavení → Posilovna).
-            while true {
-                let left = end.timeIntervalSinceNow
-                let second = max(0, left.rounded(.up) - 1)
-                if left > second { try? await Task.sleep(for: .seconds(left - second)) }
-                guard !Task.isCancelled, restEnd == end else {
-                    // Skipped or changed: its tones stop (a new end plans its own).
-                    if restEnd != end { GymSignals.stopRest(end) }
-                    return
-                }
-                if second == 0 { break }
-                if GymSignals.counts(Int(second)) { GymSignals.play(.tick, withSound: !planned) }
-            }
-            GymSignals.play(.end, withSound: !planned)
-            // The rest is over: the screen turns to the set.
-            restEnd = nil
-        }
+        GymSignals.play(.end, withSound: !planned)
+        // The rest is over: the button turns back to Set done.
+        restEnd = nil
     }
 
     /// Every move of a part ticked (by hand or by its timer).
@@ -1276,11 +1270,6 @@ struct TrainingModeView: View {
     static func clock(_ seconds: Int) -> String {
         let h = seconds / 3600, m = seconds / 60 % 60, s = seconds % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
-    }
-
-    private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {
-        let which: String = set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : L10n.f("série %@", set.number)
-        return exercise.name + ", " + which
     }
 
     /// "80 kg × 8".
@@ -1810,12 +1799,6 @@ struct TrainingModeView: View {
         WatchBridge.shared.sendRest(rest)
     }
 
-    private func move(_ by: Int) {
-        guard let count = day?.exercises.count else { return }
-        index = min(max(0, index + by), count - 1)
-        restEnd = nil
-    }
-
     /// Only this rest: the default stays as set.
     private func shiftRest(_ seconds: Int) {
         guard let end = restEnd else { return }
@@ -2185,9 +2168,10 @@ struct TrainingModeView: View {
 
     /// One set more for the current exercise, like its last one. A set goes
     /// away swiped left, the one the user means.
-    private func addSet() async {
-        guard var next = day, next.exercises.indices.contains(index) else { return }
-        next.addSet(at: index)
+    private func addSet(at offset: Int? = nil) async {
+        let at = offset ?? index
+        guard var next = day, next.exercises.indices.contains(at) else { return }
+        next.addSet(at: at)
         day = next
         guard !model.demo else { return }
         saving = true
@@ -2360,6 +2344,7 @@ struct TrainingModeView: View {
         planLetters = Self.moved(planLetters) { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         kept = Set(kept.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
         typed.move { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
+        moveRests { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count }
         if !next.exercises.isEmpty {
             index = min(index, next.exercises.count - 1)
             if !next.exercises[index].sets.contains(where: { !$0.done }) {
@@ -2386,6 +2371,7 @@ struct TrainingModeView: View {
             kept = Set(kept.map { $0 > row ? $0 + 1 : $0 })
             planLetters = Self.moved(planLetters) { $0 > row ? $0 + 1 : $0 }
             typed.move { $0 > row ? $0 + 1 : $0 }
+            moveRests { $0 > row ? $0 + 1 : $0 }
         }
         let old = day
         await saveDay(next)
@@ -2399,6 +2385,7 @@ struct TrainingModeView: View {
         planLetters = Self.moved(planLetters) { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         kept = Set(kept.compactMap { $0 == row ? nil : $0 > row ? $0 - 1 : $0 })
         typed.move { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
+        moveRests { $0 == row ? nil : $0 > row ? $0 - 1 : $0 }
         await saveDay(next)
     }
 
@@ -2493,6 +2480,8 @@ struct TrainingModeView: View {
 
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
+        // A set begun during the rest ends the rest: its length stays between the rows.
+        if restEnd != nil { endRest() }
         let letter = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
         if letter != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg, machineLb: lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? ""))
@@ -2540,6 +2529,7 @@ struct TrainingModeView: View {
         }
         // A rest only before a set still to do on the screen it leads to.
         if next.exercises[safe: index]?.sets.contains(where: { !$0.done }) == true, rest > 0 {
+            restAfter = set.row
             restTotal = rest
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
@@ -2618,23 +2608,6 @@ struct WatchGymHooks: View {
             .onReceive(NotificationCenter.default.publisher(for: .watchRest)) { note in
                 if let rest = note.object as? WatchGym.Rest { received(rest) }
             }
-    }
-}
-
-/// The time on one exercise so far (LiveWorkout.segments), next to its name.
-struct PartClock: View {
-    let live: LiveWorkout
-    let key: String
-
-    var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            Label(TrainingModeView.clock(live.seconds(of: key, at: context.date)), systemImage: "clock")
-                .font(Typo.small.weight(.semibold)).monospacedDigit()
-                .foregroundStyle(Palette.amber)
-                .padding(.horizontal, 10).frame(height: 28)
-                .background(Palette.amber.opacity(0.14), in: Capsule())
-        }
-        .accessibilityLabel(Text("Čas cviku"))
     }
 }
 

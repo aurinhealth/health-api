@@ -5,24 +5,11 @@ import TipKit
 // Tips shown once (TipKit) and the App Store rating after a finished week
 // (Petr's yes on the mockup, 2026-10-28). A closed tip never comes back.
 
-/// Training mode, the first rest: the countdown also lives on the Lock Screen.
-struct LockScreenRestTip: Tip {
-    var title: Text { Text(L10n.tr("Pauza na zamčené obrazovce")) }
-    var message: Text? { Text(L10n.tr("Zamkni telefon: odpočet i další série zůstanou na zamčené obrazovce a v Dynamic Islandu.")) }
-    var image: Image? { Image(systemName: "iphone") }
-}
-
 /// A planned ride or run with steps, the first time: the watch guides it.
 struct WatchWorkoutTip: Tip {
     var title: Text { Text(L10n.tr("Trénink s hodinkami")) }
     var message: Text? { Text(L10n.tr("Aplikace Cvičení tě provede každým úsekem a jeho cílem. Hodinky trénink uloží do Zdraví.")) }
     var image: Image? { Image(systemName: "applewatch") }
-}
-
-/// The coach's empty new chat, the first time: what the ghost button does.
-struct GhostChatTip: Tip {
-    var title: Text { Text(L10n.tr("Dočasný chat")) }
-    var message: Text? { Text(L10n.tr("Kouč si tenhle chat nezapamatuje. Klepni a začni ho.")) }
 }
 
 enum AurinTips {

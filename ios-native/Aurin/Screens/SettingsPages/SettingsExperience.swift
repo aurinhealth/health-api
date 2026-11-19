@@ -92,6 +92,6 @@ struct ExperienceGroup: View {
 /// Posilovna → Trénink na míru: the experience lives in Profil; this page shows the same group.
 struct ExperienceSettingsView: View {
     var body: some View {
-        SettingsPage(title: "Zkušenost") { ExperienceGroup() }
+        SettingsPage(title: "Zkušenost", hero: SettingsHero(systemImage: "chart.bar.fill", color: Palette.green, text: "Tvoje zkušenost v každém sportu.")) { ExperienceGroup() }
     }
 }

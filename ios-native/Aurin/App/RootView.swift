@@ -404,7 +404,8 @@ struct RootView: View {
                 guard !model.immersive, !LiveWorkout.shared.running else { return }
                 Task {
                     // Today loaded a moment ago stays as it is (no sync pill, no redraw).
-                    if model.today != nil || !model.outbox.isEmpty { await model.refreshOnReturn() }
+                    // A Today that failed to load (yesterday's dropped offline) tries again.
+                    if model.today != nil || model.errorMessage != nil || !model.outbox.isEmpty { await model.refreshOnReturn() }
                     // The open tab too, so Health or Food are not a day behind Today.
                     if model.tab != .today { await model.refreshIfStale(model.tab) }
                 }

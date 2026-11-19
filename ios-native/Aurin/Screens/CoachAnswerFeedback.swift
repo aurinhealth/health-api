@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Under the coach's last answer: copy, thumbs up and down, and the time it
+/// Under the coach's last answer: thumbs up and down, copy, and the time it
 /// came (as at Bevel). Older answers have the same in the menu of a long press.
 /// Only the answer's id, the thumb and a reason are stored (src/assistant-chats.js).
 struct AnswerActions: View {
@@ -14,20 +14,21 @@ struct AnswerActions: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            icon(copied ? "checkmark" : "doc.on.doc", tint: copied ? Palette.green : Palette.muted, label: copied ? "Zkopírováno" : "Kopírovat") {
-                Self.copy(text)
-                withAnimation(.easeOut(duration: 0.15)) { copied = true }
-                Task {
-                    try? await Task.sleep(for: .seconds(2))
-                    withAnimation(.easeOut(duration: 0.2)) { copied = false }
-                }
-            }
             if let rate {
                 icon(rating == "up" ? "hand.thumbsup.fill" : "hand.thumbsup", tint: rating == "up" ? Palette.ink : Palette.muted, label: "Dobrá odpověď", on: rating == "up") {
                     rate(rating == "up" ? nil : "up")
                 }
                 icon(rating == "down" ? "hand.thumbsdown.fill" : "hand.thumbsdown", tint: rating == "down" ? Palette.ink : Palette.muted, label: "Špatná odpověď", on: rating == "down") {
                     rate(rating == "down" ? nil : "down")
+                }
+            }
+            // Thumbs first, then copy (concept 09, 1/2).
+            icon(copied ? "checkmark" : "doc.on.doc", tint: copied ? Palette.green : Palette.muted, label: copied ? "Zkopírováno" : "Kopírovat") {
+                Self.copy(text)
+                withAnimation(.easeOut(duration: 0.15)) { copied = true }
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    withAnimation(.easeOut(duration: 0.2)) { copied = false }
                 }
             }
             Spacer(minLength: 8)
