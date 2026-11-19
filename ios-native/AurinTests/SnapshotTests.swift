@@ -416,9 +416,15 @@ final class SnapshotTests: XCTestCase {
     /// a status card with its health line, a message that got no answer and
     /// the week's messages used up.
     func testCoachChatRedesign() throws {
+        // English like the concept and the sample texts below.
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
         let model = AppModel(demo: true)
         try render("coach-chat-opening", window: true) {
-            CoachView().environment(model)
+            CoachView().environment(model).environment(\.locale, L10n.locale)
         }
         let json = #"{"status":"ok","answer":"x","chatId":12,"actions":[{"type":"move","eventId":"planned:9","date":"2026-10-11","reason":"Sunday is free in your plan and Saturday's gym stays where it is.","draftId":456,"sport":"ride","eventSnapshot":{"name":"Long endurance ride","date":"2026-10-10"}},{"type":"plan_around","memory":"knee hurts","part":"knee","label":"knee","sports":["run","ride"],"draftId":457,"reason":""},{"type":"status","status":"sick","reason":"Sore throat and a fever since yesterday.","draftId":458}]}"#
         let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
@@ -436,7 +442,7 @@ final class SnapshotTests: XCTestCase {
         try render("coach-chat-thread", window: true) {
             CoachView(preview: [CoachView.Bubble(mine: true, text: "Why upper body tonight and not legs?"), answer,
                                 CoachView.Bubble(mine: true, text: "And move Saturday's ride to Sunday"), move, failed])
-                .environment(model)
+                .environment(model).environment(\.locale, L10n.locale)
         }
         try render("coach-chat-cards", height: 1500) {
             VStack(spacing: 18) {
@@ -447,7 +453,7 @@ final class SnapshotTests: XCTestCase {
                 CoachSystemLine(text: "You've used this week's messages. New ones arrive on Monday.")
                 CoachUsedUpCard(more: {})
             }
-            .padding(20).environment(model)
+            .padding(20).environment(model).environment(\.locale, L10n.locale)
         }
     }
 
