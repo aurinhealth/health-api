@@ -574,6 +574,14 @@ final class SnapshotTests: XCTestCase {
         try render("sleep-settings", height: 800) { NavigationStack { SleepSettingsView(given: SettingsStore(api: APIClient(), demo: true)) }.environment(AppModel(demo: true)) }
     }
 
+    /// The live gym screen (redesign L): the header with Finish and [Coach, …],
+    /// the set card on two layers, the done and upcoming rows, Set done pinned.
+    func testLiveWorkoutScreen() throws {
+        try render("live-workout", glow: Palette.Glow.gym, height: 844, window: true) {
+            TrainingModeView(date: "2026-10-08").environment(AppModel(demo: true))
+        }
+    }
+
     /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
     func testSetupFocusPages() throws {
         L10n.setLanguage("en")
