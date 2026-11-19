@@ -223,9 +223,10 @@ struct TodayDials: View {
             return Cell(value: minutes, scale: 0...max(540, minutes), number: Self.length(minutes), spokenValue: spoken)
         }
         let n = Double(need), gap = Int((n - minutes).rounded())
-        let note = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), Fmt.duration(need))
-            : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), Fmt.duration(need))
-            : L10n.f("přesně %@", Fmt.duration(need))
+        let needText = Self.length(n)
+        let note = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
+            : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), needText)
+            : L10n.f("přesně %@", needText)
         return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: max(0, n - 30)...(n + 30), number: Self.length(minutes),
                     note: note, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red, spokenValue: spoken)
     }

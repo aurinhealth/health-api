@@ -6,11 +6,13 @@ import SwiftUI
 enum AppRoute: Hashable {
     case readiness
     case sleep
-    /// A value of Zdraví with its own detail (MetricDetails.swift).
+    /// A value of Zdraví with its own detail (HealthValuePage.swift).
     case metric(HealthMetric)
     case weight
     case form
     case vo2max
+    /// Aurin age from the top of Health (HealthHome.swift).
+    case aurinAge
     /// Active energy day by day with the day's activities (Training → Aktivní výdej).
     case activeEnergy
     /// Minutes in the heart-rate zones week by week (Training → Aktivní minuty v zónách).
@@ -79,7 +81,7 @@ enum AppRoute: Hashable {
     /// The tab a deep link (aurin://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .metric, .weight, .cycle: return .health
+        case .readiness, .sleep, .metric, .weight, .cycle, .aurinAge: return .health
         case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
         }
@@ -118,6 +120,7 @@ enum AppRoute: Hashable {
         case "weight": self = .weight
         case "form": self = .form
         case "vo2max": self = .vo2max
+        case "aurin-age": self = .aurinAge
         case "active-energy": self = .activeEnergy
         case "zones": self = .zones
         case "steps": self = .steps
@@ -186,17 +189,14 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case .readiness, .sleep, .metric, .weight:
+        case .readiness, .sleep, .metric, .weight, .vo2max, .aurinAge:
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .vo2max:
-            if let training = model.training { VO2maxDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .activeEnergy:
-            if let training = model.training { ActiveEnergyDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
+        case .activeEnergy: HealthValuePage(value: .activeEnergy)
         case .zones:
             if let training = model.training { ZonesDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
-        case .steps: StepsDetailView()
+        case .steps: HealthValuePage(value: .steps)
         case .strain: StrainDetailView()
         case .strainDay(let date): StrainDetailView(date: date)
         case .recoveryTime: RecoveryTimeView()
@@ -256,10 +256,13 @@ struct HealthRoute: View {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
-                    ReadinessDetailContent(health: health, noWearable: model.noWearable)
+                    ReadinessDetailContent(health: health, summary: model.today?.summary, noWearable: model.noWearable)
                 }
-            case .metric(let metric): MetricDetailView(metric: metric, health: health)
-            case .weight: WeightDetailView(health: health)
+            // The new detail template (redesign H): the value, its siblings, chart and trend.
+            case .metric(let metric): HealthValuePage(value: HealthValue(metric: metric) ?? .restingHR)
+            case .weight: HealthValuePage(value: .weight)
+            case .vo2max: VO2maxPage(health: health)
+            case .aurinAge: AurinAgePage(health: health)
             default: SleepDetailView(health: health)
             }
         } else {

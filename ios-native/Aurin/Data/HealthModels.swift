@@ -20,6 +20,12 @@ struct HealthSnapshot: Decodable, Equatable {
     /// Apple Watch only: wrist temperature in sleep (°C) and how far last
     /// night is from the athlete's own nights (null under 7 of them).
     var wristTemp: WristTemp? = nil
+    /// The newest value's state per metric, keyed as the series metrics
+    /// (S1); a metric without 14 days of baseline has none.
+    var states: [String: HealthState]? = nil
+    /// Aurin's own VO2max and Aurin age (S1); nil until the daily estimate has a row.
+    var vo2max: HealthVO2max? = nil
+    var aurinAge: HealthAurinAge? = nil
 
     struct Part: Decodable, Equatable, Identifiable {
         /// "hrv", "restingHR", "sleep", "respiration", "skinTemp", "wristTemp" or "checkin".

@@ -371,6 +371,20 @@ struct TodaySnapshot: Decodable, Equatable {
             var windDirection: Double? = nil
             /// False at night (the detail's sky turns to night).
             var daylight: Bool? = nil
+            /// The temperature it feels like, °C, and when Apple measured it (ISO 8601).
+            var feelsLike: Double? = nil
+            var asOf: String? = nil
+        }
+
+        /// The best hours outside, from the hour `start` to `end` (local, src/weatherkit.js outdoorWindow).
+        struct Span: Decodable, Equatable {
+            let start: Int
+            let end: Int
+        }
+
+        struct Outdoors: Decodable, Equatable {
+            var ride: Span? = nil
+            var run: Span? = nil
         }
 
         /// One day of the week: its range, its hours (the whole day) and where a ride and a run belong.
@@ -383,6 +397,8 @@ struct TodaySnapshot: Decodable, Equatable {
             let hours: [Hour]?
             let ride: Advice?
             let run: Advice?
+            /// The longest dry daylight stretch of 2+ hours per sport; nil = no time outside.
+            var outdoors: Outdoors? = nil
         }
     }
 

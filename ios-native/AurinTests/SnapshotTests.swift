@@ -57,6 +57,21 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Redesign D2: Today's Food, Day and Activity cards with the label above
+    /// each card, in ink, and the steps through the day as one line.
+    func testTodayCards() throws {
+        let today = DemoData.today
+        try render("today-cards", height: 1300) {
+            VStack(alignment: .leading, spacing: 24) {
+                TodayFoodCard(nutrition: today.nutrition)
+                DayTimeline(today: today)
+                TodayStepsCard(steps: today.steps)
+            }
+            .padding(24)
+            .environment(AppModel(demo: true))
+        }
+    }
+
     /// The tabs at the iPhone Duo's widths (duo-*): closed (466), a third and half
     /// of the open display in landscape (317, 475) and the whole of it (951, two
     /// columns: WideLayout).
@@ -209,14 +224,54 @@ final class SnapshotTests: XCTestCase {
     func testHealthScreens() throws {
         let health = DemoData.health
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
-        try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
+        try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health, summary: DemoData.today.summary).padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30) }
         // The night's timeline didn't load: "Zkusit znovu" in the stages card.
         try render("health-sleep-failed", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }
-        for metric in HealthMetric.allCases {
-            try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
+        // Every value on the new detail template (redesign H), and VO2max (Petr's decision 4).
+        let model = AppModel(demo: true)
+        for value in HealthValue.allCases {
+            try render("health-" + value.rawValue, glow: Palette.Glow.health) {
+                HealthValueContent(value: .constant(value), period: .constant(.days30)).padding(16).padding(.top, 30).environment(model)
+            }
         }
-        try render("health-weight", glow: Palette.Glow.health) { WeightDetailContent(health: health).padding(24).padding(.top, 30) }
+        try render("health-vo2max", glow: Palette.Glow.health) { VO2maxDetailContent(health: health, period: .constant(.months6)).padding(16).padding(.top, 30) }
+        // A new user: no VO2max estimate yet, no values for the template.
+        let empty = AppModel(demo: true)
+        empty.health = try JSONDecoder().decode(HealthSnapshot.self, from: Data(#"{"date": "2026-10-08", "readiness": {"score": null, "zone": null, "flags": [], "parts": [], "hrv": null, "restingHR": null, "sleepMinutes": null, "strainYesterday": null, "history": []}, "sleep": {"night": null, "week": [], "need": 480, "tonight": {"need": 480, "base": 480, "strain": 0, "hrv": 0, "debt": 0, "naps": 0, "bedtime": null, "wake": null}, "debt": null, "regularity": null}}"#.utf8))
+        try render("health-restingHR-empty", glow: Palette.Glow.health) {
+            HealthValueContent(value: .constant(.restingHR), period: .constant(.days30)).padding(16).padding(.top, 30).environment(empty)
+        }
+        let emptyHealth = try XCTUnwrap(empty.health)
+        try render("health-vo2max-empty", glow: Palette.Glow.health) { VO2maxDetailContent(health: emptyHealth, period: .constant(.months6)).padding(16).padding(.top, 30) }
+        XCTAssertEqual(VO2maxPage.position(49.2, in: try XCTUnwrap(health.vo2max?.compared)), L10n.f("v horní čtvrtině mužů ve věku %@ až %@", "30", "39"))
+        XCTAssertEqual(StepsThroughDay.runningTotals([1, 2, 3]), [1, 3, 6])
+        // The Health tab (redesign H2): a new account, no Pro, no watch, the Aurin age page.
+        try render("health-new", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: emptyHealth) }.padding(.top, 50).padding(.bottom, 40).environment(empty) }
+        try render("health-aurinage-states", glow: Palette.Glow.health) {
+            NavigationStack {
+                VStack(spacing: 24) {
+                    AurinAgeHero(health: emptyHealth, pro: false)
+                    AurinAgeHero(health: emptyHealth, pro: true, noWearable: true)
+                    NoDeviceCard(connect: {})
+                }
+                .padding(16)
+            }
+            .environment(model)
+        }
+        try render("health-aurinage", glow: Palette.Glow.health) { AurinAgeDetailContent(health: health, period: .constant(.months3)).padding(16).padding(.top, 30) }
+        let age = try XCTUnwrap(health.aurinAge)
+        let groups = AurinAgeText.groups(["vo2max": -2, "restingHeartRate": -1, "activity": 0, "steps": -1, "strength": 0.5, "sleep": 1, "sleepRegularity": 1])
+        XCTAssertEqual(groups.map(\.key), ["fitness", "strength", "sleep"])
+        XCTAssertEqual(groups[0].years, -2.5, accuracy: 0.001)
+        XCTAssertEqual(groups[2].years, 1.5, accuracy: 0.001)
+        XCTAssertNotNil(AurinAgeText.versusAge(age))
+        // Health monitor's sentence uses the detail's words, with no threshold of its own.
+        XCTAssertFalse(HealthMonitorCard.title(HealthMonitorCard.dials(health)).isEmpty)
+        // A Zdraví layout saved before the redesign is converted, not lost.
+        let old: [PlacedWidget] = [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .hrv, size: .small),
+                                   .init(kind: .steps, size: .medium), .init(kind: .oxygen, size: .small), .init(kind: .weight, size: .medium), .init(kind: .bedtime, size: .medium)]
+        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.journal, .night, .healthMonitor, .steps, .body])
     }
 
     func testWorkoutScreens() throws {
@@ -234,6 +289,18 @@ final class SnapshotTests: XCTestCase {
         var pinned = DemoData.food
         pinned.nutrients = DemoData.pinnedNutrients
         try render("food-nutrients-pinned", glow: Palette.Glow.food) { FoodContent(food: pinned).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        // Redesign J: past the target (red total, calm macros) and a new user without a target.
+        let macros = #"{"carbs":{"eaten":301,"target":287},"protein":{"eaten":137,"target":130},"fat":{"eaten":73,"target":70}}"#
+        let water = #"{"ml":0,"target":2600,"entries":0}"#
+        let over = try JSONDecoder().decode(FoodSnapshot.self, from: Data(#"{"date":"2026-10-05","kcal":2420,"target":2300,"trainingBonus":0,"sentence":null,"macros":\#(macros),"meals":[],"water":\#(water),"targetParts":{"base":2300,"workouts":0,"planned":0}}"#.utf8))
+        try render("food-over", glow: Palette.Glow.food) { FoodHero(food: over, linked: false).padding(24).padding(.top, 30) }
+        let empty = #"{"carbs":{"eaten":0,"target":null},"protein":{"eaten":0,"target":null},"fat":{"eaten":0,"target":null}}"#
+        let newUser = try JSONDecoder().decode(FoodSnapshot.self, from: Data(#"{"date":"2026-10-08","kcal":0,"target":null,"trainingBonus":null,"sentence":null,"macros":\#(empty),"meals":[],"water":\#(water)}"#.utf8))
+        try render("food-no-target", glow: Palette.Glow.food) { FoodContent(food: newUser).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        try render("food-calories", glow: Palette.Glow.food) {
+            CaloriesDetailContent(food: DemoData.food, value: .constant(.calories), history: FoodHistory.demo(today: DemoData.food.date, target: DemoData.food.target ?? 2650))
+                .padding(24).padding(.top, 30).environment(AppModel(demo: true))
+        }
         try render("nutrients", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}) { Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted) }; NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("nutrients-free", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}); NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08", editTarget: { _ in }).padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
         try render("nutrient-detail", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: DemoData.nutrientDetail.name, back: {}); NutrientDetailContent(detail: DemoData.nutrientDetail) }.padding(24).padding(.top, 30) }
@@ -395,7 +462,10 @@ final class SnapshotTests: XCTestCase {
         }
         for (key, value) in table { XCTAssertEqual(specifiers(key), specifiers(value), key) }
         try render("today-en", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
-        try render("health-weight-en", glow: Palette.Glow.health) { WeightDetailContent(health: DemoData.health).padding(24).padding(.top, 30) }
+        try render("health-weight-en", glow: Palette.Glow.health) {
+            HealthValueContent(value: .constant(.weight), period: .constant(.days30)).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+        try render("health-vo2max-en", glow: Palette.Glow.health) { VO2maxDetailContent(health: DemoData.health, period: .constant(.months6)).padding(16).padding(.top, 30).environment(\.locale, L10n.locale) }
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
@@ -796,8 +866,6 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundTwoScreens() throws {
-        let vo2 = try XCTUnwrap(DemoData.training.vo2max)
-        try render("training-vo2max", glow: Palette.Glow.training) { VO2maxContent(vo2: vo2).padding(.top, 50).padding(.bottom, 40) }
         try render("plan-editor", height: 700) { PlanEditorSheet(day: DemoData.gym, catalog: [], save: { _ in }) }
         try render("body-map-legend", height: 360) {
             BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
@@ -861,12 +929,6 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundThreeLogic() {
-        let months = VO2maxContent.months([("2026-08-30", 47), ("2026-09-01", 47.5), ("2026-09-20", 48.5), ("2026-10-02", 48)])
-        XCTAssertEqual(months.map(\.month), ["2026-10-01", "2026-09-01", "2026-08-01"])
-        XCTAssertEqual(months[1].average, 48)
-        XCTAssertEqual(months[1].change, 1)
-        XCTAssertNil(months[2].change)
-        XCTAssertEqual(VO2maxMonths.change(0), "=")
         XCTAssertEqual(StageTotals.note(share: 0.19, wakeups: 3), "19 %")
         XCTAssertEqual(StageTotals.note(share: nil, wakeups: 3), "3×")
         let entry = FoodSnapshot.Entry(id: 1, name: "Jogurt", time: "08:00", meal: "breakfast", kcal: 133, protein: 14, carbs: 6, fat: 5,
@@ -1049,16 +1111,14 @@ final class SnapshotTests: XCTestCase {
         XCTAssertNil(WeatherText.compass(nil))
 
         let model = AppModel(demo: true)
-        let active = try XCTUnwrap(DemoData.training.activeCalories)
         try render("training-zones", glow: Palette.Glow.training) {
             ZonesDetailContent(zones: zones).padding(.horizontal, 24).padding(.bottom, 40)
         }
-        try render("training-active-energy", glow: Palette.Glow.training) {
-            ActiveEnergyContent(active: active, today: DemoData.training.date, calendar: DemoData.calendarByDate)
-                .padding(.horizontal, 24).padding(.bottom, 40).environment(model)
+        try render("training-active-energy", glow: Palette.Glow.health) {
+            HealthValueContent(value: .constant(.activeEnergy), period: .constant(.days30)).padding(16).environment(model)
         }
         try render("weather-details", height: 900) {
-            NavigationStack { WeatherDetails(weather: weather) }.environment(model)
+            NavigationStack { WeatherDetails(weather: weather, clock: ("2026-10-08", 9)) }.environment(model)
         }
     }
 
