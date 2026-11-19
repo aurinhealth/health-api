@@ -1451,8 +1451,17 @@ final class SnapshotTests: XCTestCase {
                 renderer.scale = 2
                 image = renderer.uiImage
             }
-            let data = try XCTUnwrap(image?.pngData(), "\(name) did not render")
-            try data.write(to: outputDirectory.appending(path: "\(name)-\(suffix).png"))
+            // A long screen right after the heavy window renders can miss its image
+            // provider's deadline ("timed out while waiting for phase 6", seen on the
+            // base branch too) and come back empty: draw it once more before failing.
+            var data = image?.pngData()
+            if data == nil, !(window || type.contains("NavigationStack") || type.contains("Sheet")) {
+                let again = ImageRenderer(content: view)
+                again.scale = 2
+                data = again.uiImage?.pngData()
+            }
+            let png = try XCTUnwrap(data, "\(name) did not render")
+            try png.write(to: outputDirectory.appending(path: "\(name)-\(suffix).png"))
         }
     }
 

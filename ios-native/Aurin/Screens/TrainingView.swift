@@ -3,7 +3,6 @@ import SwiftUI
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tabActions) private var actions
-    @State private var addingWorkout = false
     /// A moved or cancelled session with its undo (Tréninky týdne).
     @State private var toast: PlanToast?
     /// The day chosen in the calendar, shown in the pinned bar.
@@ -22,7 +21,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true },
+                        TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
                             .padding(.bottom, 100)
                     }
@@ -34,7 +33,7 @@ struct TrainingView: View {
                                    move: { jumpDay = DayJump(date: ISODay.shift(day, $0)) },
                                    showToday: { jumpDay = DayJump(date: training.date) })
                         Spacer(minLength: 0)
-                        HeaderCapsule(coach: actions.coach, settings: actions.settings)
+                        HeaderCapsule(coach: actions.coach, settings: actions.settings) { LibraryHeaderIcon() }
                     }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
@@ -86,7 +85,6 @@ struct TrainingView: View {
         .task { await model.refreshIfStale(.training) }
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
-        .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
     }
 
     /// Today's Začít trénink while its place in the card is under the tab bar
@@ -104,10 +102,10 @@ struct TrainingView: View {
         ZStack(alignment: .bottom) {
             if let date = floatingStart {
                 NavigationLink(value: AppRoute.trainingMode(date)) {
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: compactBar ? StartButtonSpot.circle : 54)
-                        .background(Palette.green, in: Capsule())
-                        .shadow(color: Palette.green.opacity(0.3), radius: 12, y: 6)
+                        .background(Palette.button, in: Capsule())
+                        .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                 }
                 .buttonStyle(.plain)
                 // In the compact bar's row: between its circles, as wide as the bar (RootView).
@@ -132,7 +130,6 @@ struct TrainingView: View {
 struct TrainingContent: View {
     @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
-    var addWorkout: () -> Void = {}
     /// "Dnes" in the header: the calendar back on today.
     var showToday: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
@@ -149,27 +146,37 @@ struct TrainingContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 // The same top as Dnes (TabHeader); the calendar picks the day, "Dnes" brings it back.
-                // Zapsat trénink ručně is in the tools below and in "+" (Petr, 2026-10-25).
+                // The coach first, then the Library (a book), the account last (redesign T, D-TRENINK-11).
+                // Log a workout is in "+" (Tools = A, Petr 2026-11-14).
                 TabHeader(date: day ?? training.date, followsDay: false,
                           showToday: shownDay == training.date ? nil : showToday,
-                          coach: actions.coach, settings: actions.settings)
+                          coach: actions.coach, settings: actions.settings) {
+                    LibraryHeaderIcon()
+                }
 
                 if wide {
                     // Petr, 2026-11-03: today's workout with its Start at the top on the
-                    // right, seen without scrolling; the week and the strain on the left.
+                    // right, seen without scrolling; the week, the plan and the load on the left.
                     HStack(alignment: .top, spacing: WideLayout.gap) {
-                        VStack(alignment: .leading, spacing: 0) { week }
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
                         VStack(alignment: .leading, spacing: 0) {
-                            sessions(top: 18)
+                            week
+                            coachAndLoad
+                        }
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        VStack(alignment: .leading, spacing: 0) {
+                            todayList(top: 18)
                             // One column of widgets beside the week.
-                            board.environment(\.wideLayout, false).padding(.top, upcomingShown ? 14 : 18)
+                            if shownDay == training.date {
+                                board.environment(\.wideLayout, false).padding(.top, 28)
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                 } else {
                     week
-                    board.padding(.top, 28)
+                    todayList(top: 24)
+                    coachAndLoad
+                    if shownDay == training.date { board.padding(.top, 28) }
                 }
             } else {
                 board
@@ -180,7 +187,8 @@ struct TrainingContent: View {
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 
-    /// The calendar, the strain, the coach and the tools.
+    /// The calendar and the plan under it (redesign T: no strain, no race card,
+    /// no tools row; Strain lives on Today, the race in the plan).
     @ViewBuilder private var week: some View {
         // Until the main sport and goal are set (FocusSheet.swift).
         if training.profileIncomplete == true {
@@ -192,52 +200,66 @@ struct TrainingContent: View {
                              plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
             .padding(.top, 18)
 
-        // Right under the week (Petr, 2026-10-25): every workout left today,
-        // else the next planned day's, with Začít trénink. In a wide window
-        // it heads the right column instead.
-        if !wide { sessions(top: 14) }
+        PlanSummaryCard(training: training)
+            .padding(.top, 14)
+    }
 
-        // Today's opens the same Námaha detail as Dnes, a past day its own;
-        // a day ahead has no detail yet.
+    /// "TODAY" with Week plan on the right, then today's workouts still to do
+    /// with Start workout. On another day the line that today holds the rest.
+    @ViewBuilder private func todayList(top: CGFloat) -> some View {
         if shownDay == training.date {
-            RouteLink(route: .strain) { StrainHero(training: training) }
-                .padding(.top, 26)
-        } else if shownDay < training.date {
-            RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
-                .padding(.top, 26)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Dnes")
+                Spacer(minLength: 8)
+                NavigationLink(value: AppRoute.weekPlan) {
+                    Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, top - 12)
+            // The coach above the workout card (concept a-hlavni/000, D-TRENINK-3).
+            CoachTextCard(screen: "training").padding(.top, 6)
+            if !upcoming.isEmpty {
+                TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                    .padding(.top, 14)
+            }
         } else {
-            StrainHero(training: training, day: shownDay)
-                .padding(.top, 26)
-        }
-        CoachTextCard(screen: "training").padding(.top, 18)
-
-        WeekStrainBars(days: training.days)
-            .padding(.top, 22)
-
-        if let event = training.event {
-            EventCard(event: event)
-                .padding(.top, 28)
-        }
-
-        TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
-                      addWorkout: addWorkout)
-            .padding(.top, 28)
-    }
-
-    /// Today's workouts still to do with Začít trénink. It belongs to today, not to a day looked back at.
-    @ViewBuilder private func sessions(top: CGFloat) -> some View {
-        if upcomingShown {
-            TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                .padding(.top, top)
+            // D-TRENINK-8: the load and the overview are today's, never shown under another day.
+            Button(action: showToday) {
+                HStack {
+                    Text(verbatim: L10n.tr("Zátěž a přehled jsou u dneška")).font(Typo.body).foregroundStyle(Palette.muted)
+                    Spacer(minLength: 8)
+                    Text(verbatim: L10n.tr("Dnes")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, top)
         }
     }
 
-    private var upcomingShown: Bool { shownDay == training.date && !upcoming.isEmpty }
+    /// The coach's card and, today, the two Load dials.
+    @ViewBuilder private var coachAndLoad: some View {
+        if shownDay != training.date {
+            CoachTextCard(screen: "training").padding(.top, 18)
+        } else {
+            LoadSection(training: training).padding(.top, 28)
+        }
+    }
 
     private var board: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !editing { SectionLabel(text: "Přehled") }
+            boardWidgets
+        }
+    }
+
+    private var boardWidgets: some View {
         WidgetBoard(panel: .training,
                     data: WidgetData(panel: .training, today: model.today, health: model.health, training: training, food: model.food, planToast: toast),
-                    editing: $editing)
+                    editing: $editing, editTitle: "Upravit přehled")
     }
 
     private var shownDay: String { day ?? training.date }
@@ -246,6 +268,17 @@ struct TrainingContent: View {
     private var upcoming: [TrainingSnapshot.Session] {
         if let today = training.todaySessions, !today.isEmpty { return today }
         return training.next.map { [$0] } ?? []
+    }
+}
+
+/// The Library in Training's header capsule, between the coach and the
+/// account: a book, the same glyph as the Library tile of "+" (Tools = A).
+struct LibraryHeaderIcon: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        HeaderIcon(systemImage: "books.vertical", label: "Knihovna") { model.open(.library) }
+            .accessibilityIdentifier("open.library")
     }
 }
 
@@ -434,10 +467,19 @@ struct TodaySessions: View {
                         Circle()
                             .fill(index == (current ?? 0) ? Palette.ink : Palette.faint.opacity(0.35))
                             .frame(width: 7, height: 7)
-                            .onTapGesture { withAnimation { current = index } }
                     }
                 }
-                .accessibilityHidden(true)
+                // Only a marker for sight; VoiceOver swipes up or down through the workouts.
+                .accessibilityElement()
+                .accessibilityLabel(L10n.f("Trénink %@ z %@", String((current ?? 0) + 1), String(sessions.count)))
+                .accessibilityAdjustableAction { direction in
+                    let now = current ?? 0
+                    switch direction {
+                    case .increment: withAnimation { current = min(sessions.count - 1, now + 1) }
+                    case .decrement: withAnimation { current = max(0, now - 1) }
+                    @unknown default: break
+                    }
+                }
             }
         }
     }
@@ -509,6 +551,7 @@ final class StartSpot {
 }
 
 struct NextSession: View {
+    @Environment(AppModel.self) private var model: AppModel?
     let session: TrainingSnapshot.Session
     let today: String
     /// Where a tap on the card opens (Start workout keeps its own tap).
@@ -518,22 +561,30 @@ struct NextSession: View {
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
     @Environment(StartSpot.self) private var startSpot: StartSpot?
+    /// A ride's, run's or swim's steps, for its parts (loaded for the card).
+    @State private var blocks: [PlannedWorkout.Block]?
+    /// The gym day, for its parts and their minutes.
+    @State private var gymDay: GymDay?
     /// The floating copy above the tab bar stands in for this card's button.
     private var standIn: Bool { startSpot?.floating == session.date }
 
-    // Its own card, so the gym tools below (today's) don't read as its buttons.
+    private var sport: String { session.sport ?? "other" }
+    private var isGym: Bool { sport == "strength" }
+
+    // Card A of the redesign (T): the sport's wash, the serif title, the numbers,
+    // the parts, Start workout as an ink pill.
     var body: some View {
-        Card {
+        VStack(alignment: .leading, spacing: 16) {
             if let route {
                 RouteLink(route: route) { info }
             } else {
                 info
             }
-            if session.sport == "strength" && session.date == today {
+            if isGym && session.date == today {
                 NavigationLink(value: AppRoute.trainingMode(session.date)) {
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54)
-                        .background(Palette.green, in: Capsule())
+                    Text(verbatim: L10n.tr("Začít trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 // While the floating copy is up, this one is hidden: scrolled to just
@@ -547,43 +598,37 @@ struct NextSession: View {
                     startSpot?.report(session.date, under: under)
                 }
                 .onDisappear { startSpot?.report(session.date, under: false) }
-                .padding(.top, 4)
             }
             if fill { Spacer(minLength: 0) }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [Palette.Sport.color(sport).opacity(0.16), .clear], startPoint: .topLeading, endPoint: .init(x: 0.6, y: 0.45)),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
+        .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
+        .task(id: [session.eventId ?? "", session.date, session.title]) { await loadParts() }
     }
 
     private var info: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Label {
-                    Text(verbatim: when.uppercased(with: Fmt.locale))
-                        .font(.caption.weight(.medium)).tracking(1.9)
-                } icon: {
-                    Image(systemName: "calendar").scaledFont(12, weight: .medium)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.title)
+                        .font(Typo.heading(26, relativeTo: .title2))
+                        .foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
                 }
-                .foregroundStyle(Palette.muted)
-                Spacer(minLength: 8)
-                Text(meta).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                Spacer(minLength: 4)
                 if route != nil {
-                    Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint).padding(.top, 8)
                 }
             }
-            HStack(spacing: 12) {
-                PlanStateIcon(symbol: SportIcon.symbol(session.sport ?? "other"), state: .upcoming, size: 40)
-                Text(session.title)
-                    .font(Typo.heading(24, relativeTo: .title2))
-                    .foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let lines = session.lines, !lines.isEmpty {
-                exerciseList(lines)
-            } else if let detail {
-                Text(detail).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            WorkoutNumberRow(cells: numbers)
+            if !parts.isEmpty { WorkoutPartsRow(parts: parts) }
             if let advice = session.advice {
-                Text(advice).font(Typo.small).foregroundStyle(Palette.green)
+                Text(advice).font(Typo.small).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -591,24 +636,77 @@ struct NextSession: View {
         .contentShape(Rectangle())
     }
 
+    /// Time, the sport's middle numbers, Strain est.
+    private var numbers: [WorkoutNumberRow.Cell] {
+        var cells: [WorkoutNumberRow.Cell] = []
+        if let m = session.minutes { cells.append(.init(label: L10n.tr("Čas"), value: String(m), unit: "min")) }
+        if isGym, let lines = session.lines, !lines.isEmpty {
+            cells.append(.init(label: L10n.tr("Cviky"), value: String(lines.count)))
+            cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + Self.left($1) })))
+        } else if sport == "swim", let blocks, let m = WorkoutCardParts.meters(blocks) {
+            cells.append(.init(label: L10n.tr("Vzdálenost"), value: Fmt.int(m), unit: "m"))
+        } else if let blocks, (session.minutes ?? 0) < 45 {
+            // Carbs per hour stands here from 45 min once the server has it (Carbs B);
+            // a short workout shows its work minutes.
+            let work = WorkoutCardParts.workMinutes(blocks, sport: sport)
+            if work > 0 { cells.append(.init(label: L10n.tr("Práce"), value: String(work), unit: "min")) }
+        }
+        if let strain = strainValue { cells.append(.init(label: L10n.tr("Námaha"), value: Fmt.decimal(strain, digits: 1), unit: L10n.tr("odh."))) }
+        return cells
+    }
+
+    /// Today: where the workout takes the day's strain, as the target band
+    /// counts it (strain doesn't add up). Another day: the workout's own.
+    private var strainValue: Double? {
+        guard let strain = session.strain else { return nil }
+        guard session.date == today, let now = strainNow else { return strain }
+        return Self.dayStrain(now, adding: strain)
+    }
+
+    private var parts: [WorkoutCardPart] {
+        if isGym {
+            guard let day = gymDay else { return [] }
+            let chosen = GymDayParts.resolved(day, stored: UserDefaults.standard.string(forKey: GymDayParts.storageKey) ?? "", date: session.date)
+            let shown = chosen.visible(day).filter { chosen.isOn($0) }
+            let others = shown.filter { $0 != .exercises }.reduce(0) { $0 + chosen.minutes($1, day: day) }
+            return shown.map { part in
+                let minutes = part == .exercises ? max(0, (session.minutes ?? 0) - others) : chosen.minutes(part, day: day)
+                return WorkoutCardPart(name: Self.partName(part), minutes: minutes)
+            }
+            .filter { $0.minutes > 0 }
+        }
+        return blocks.map { WorkoutCardParts.endurance($0, sport: sport) } ?? []
+    }
+
+    static func partName(_ part: GymDayPart) -> String {
+        switch part {
+        case .warmup: return L10n.tr("Rozcvička")
+        case .stretching: return L10n.tr("Protažení")
+        case .exercises: return L10n.tr("Cviky")
+        case .cardioStart, .cardioEnd: return L10n.tr("Kardio")
+        }
+    }
+
+    /// The gym day or the planned steps, once; never in the sample day.
+    private func loadParts() async {
+        // Another workout in this place (the first one done): never its parts.
+        blocks = nil
+        gymDay = nil
+        guard let model, !model.demo else { return }
+        if isGym {
+            guard session.date >= today else { return }
+            gymDay = try? await model.gymDay(date: session.date)
+        } else if let id = session.eventId {
+            blocks = (try? await model.api.plannedWorkout(eventId: id))?.workout.steps
+        }
+    }
+
+    /// "Today at 17:30", "Tomorrow", "Saturday at 8:00".
     private var when: String {
         let day = Fmt.capitalized(Fmt.relativeDay(session.date, today: today))
         // A plan without its own hour comes at midnight ("00:00"): only the day then.
         guard session.time != "00:00", let time = ClockText.format(optional: session.time) else { return day }
-        return session.date == today ? time : day + " " + time
-    }
-
-    private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: ", ")
-    }
-
-    /// Today: where the workout takes the day's strain ("námaha dnes ~13,4"), as
-    /// the target band counts it; strain doesn't add up (8,4 + 8,3 is not 16,7).
-    /// Another day: the workout's own strain.
-    private var strainText: String? {
-        guard let strain = session.strain else { return nil }
-        guard session.date == today, let now = strainNow else { return L10n.f("+%@ námahy", Fmt.decimal(strain)) }
-        return L10n.f("námaha dnes ~%@", Fmt.decimal(Self.dayStrain(now, adding: strain)))
+        return L10n.f("%@ v %@", day, time)
     }
 
     /// Two strains on one day: the loads add up on the saturating 0–21 curve
@@ -616,43 +714,6 @@ struct NextSession: View {
     static func dayStrain(_ a: Double, adding b: Double) -> Double {
         let left = (1 - min(a, 20.9) / 21) * (1 - min(b, 20.9) / 21)
         return ((21 * (1 - left)) * 10).rounded() / 10
-    }
-
-    /// A gym plan as rows (Petr, 2026-10-30): exercises, sets and the main muscles in one
-    /// line, then each exercise with sets × reps, weight; five, the rest in the gym day.
-    private func exerciseList(_ lines: [TrainingSnapshot.Session.Line]) -> some View {
-        // What is still left: sets ticked off in the gym day leave the count.
-        let sets = lines.reduce(0) { $0 + Self.left($1) }
-        let summary = [L10n.plural("%lld cviků", lines.count), L10n.plural("%lld sérií", sets)] + (session.muscles ?? []).prefix(3)
-        return VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: summary.joined(separator: ", ")).font(Typo.small).foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 6)
-            ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { _, line in
-                Rectangle().fill(Palette.hairline).frame(height: 1)
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(verbatim: line.name).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(2)
-                    Spacer(minLength: 8)
-                    Group {
-                        if Self.left(line) == 0 {
-                            Label("Hotovo", systemImage: "checkmark").foregroundColor(Palette.green)
-                        } else if Self.amount(line).isEmpty {
-                            Text(L10n.plural("%lld sérií", Self.left(line))).foregroundColor(Palette.muted)
-                        } else {
-                            Text(verbatim: "\(Self.left(line)) × ").fontWeight(.medium).foregroundColor(Palette.ink)
-                                + Text(verbatim: Self.amount(line)).foregroundColor(Palette.muted)
-                        }
-                    }
-                    .font(Typo.caption).lineLimit(1).layoutPriority(1)
-                }
-                .padding(.vertical, 9)
-            }
-            if lines.count > 5 {
-                Rectangle().fill(Palette.hairline).frame(height: 1)
-                Text(L10n.plural("a %lld dalších", lines.count - 5)).font(Typo.small).foregroundStyle(Palette.muted)
-                    .padding(.vertical, 9)
-            }
-        }
     }
 
     /// "8–10, 16 kg": the heaviest planned set's reps and weight.
@@ -663,14 +724,6 @@ struct NextSession: View {
     /// The exercise's work sets not yet ticked off.
     static func left(_ line: TrainingSnapshot.Session.Line) -> Int { max(0, line.sets - (line.done ?? 0)) }
 
-    private var detail: String? {
-        if !session.exercises.isEmpty {
-            let shown = session.exercises.prefix(3).joined(separator: ", ")
-            let rest = session.exercises.count - 3
-            return rest > 0 ? shown + ", " + L10n.plural("a %lld dalších", rest) : shown
-        }
-        return session.description
-    }
 }
 
 // MARK: - Event

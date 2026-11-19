@@ -374,9 +374,6 @@ struct WorkoutLibrarySection: View {
     @AppStorage("libraryToleranceRun") private var toleranceRun = 10
     @AppStorage("libraryToleranceSwim") private var toleranceSwim = 10
     @State private var minutes: Int? = nil
-    @State private var slider: Double = 60
-    /// While the finger is on the slider (the time above follows it).
-    @State private var dragging = false
     /// The coach's length for today (the search's coachPick), shown on Doporučená.
     @State private var recommended: Int?
     @State private var system: String? = nil
@@ -418,9 +415,6 @@ struct WorkoutLibrarySection: View {
 
     private var range: ClosedRange<Double> { sport == "swim" ? 15...90 : sport == "run" ? 20...150 : 30...300 }
     private var step: Double { sport == "ride" ? 15 : 5 }
-    private var presets: [Int] {
-        (sport == "swim" ? presetsSwim : sport == "run" ? presetsRun : presetsRide).split(separator: ",").compactMap { Int($0) }.sorted()
-    }
     private var tolerance: Binding<Int> { sport == "swim" ? $toleranceSwim : sport == "run" ? $toleranceRun : $toleranceRide }
     /// A swim has no tempo or sweet spot (src/swimming-workouts.js).
     private var systems: [(String, String)] {
@@ -429,15 +423,20 @@ struct WorkoutLibrarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Picker("Kde", selection: $indoor) {
-                Text(sport == "swim" ? "Bazén" : sport == "run" ? "Pás" : "Trenažér").tag(true)
-                Text(sport == "swim" ? "Volná voda" : "Venku").tag(false)
+            // The same card as the gym's "When and how long" (Petr decision 6):
+            // where as a one-tap segment, then the one length control.
+            SectionLabel(text: "Kde a jak dlouho").padding(.top, 16)
+            Card {
+                Picker("Kde", selection: $indoor) {
+                    Text(sport == "swim" ? "Bazén" : sport == "run" ? "Pás" : "Trenažér").tag(true)
+                    Text(sport == "swim" ? "Volná voda" : "Venku").tag(false)
+                }
+                .pickerStyle(.segmented)
+                lengthFilter
             }
-            .pickerStyle(.segmented)
-            .padding(.top, 16)
+            .padding(.top, 10)
 
             coachPick
-            lengthFilter
             SectionLabel(text: "Typ").padding(.top, 20)
             ChipFlow(items: [""] + systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
                      isOn: { ($0.isEmpty && system == nil) || $0 == system }, toggle: { system = $0.isEmpty ? nil : $0 })
@@ -470,7 +469,6 @@ struct WorkoutLibrarySection: View {
                 .opacity(loading ? 0.5 : 1)
             }
         }
-        .onAppear { slider = Double(presets.first ?? (sport == "ride" ? 90 : 45)) }
         .task(id: "\(minutes ?? 0)|\(tolerance.wrappedValue)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
         .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
     }
@@ -576,86 +574,12 @@ struct WorkoutLibrarySection: View {
         if run == proposeRun, proposal?.aiPending == true { proposal?.aiPending = nil }
     }
 
-    /// "Doporučená" or the own length: presets to tap, a slider, and how far
-    /// from it a workout may be (± minutes). The time above follows the finger;
-    /// "+" at the end of the presets saves the own length, holding a preset
-    /// removes it.
+    /// One length control for every sport (LengthControl, Petr decision 6).
     private var lengthFilter: some View {
-        let shown = dragging || minutes != nil ? Int(slider) : recommended
-        let own = minutes.flatMap { presets.contains($0) ? nil : $0 }
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Délka")
-                Spacer()
-                if let shown {
-                    Text(verbatim: Fmt.duration(shown)).font(Typo.number(26)).foregroundStyle(Palette.ink)
-                        .contentTransition(.numericText()).animation(.snappy, value: shown)
-                    Text(verbatim: "± \(tolerance.wrappedValue) min").font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            FlowLayout(spacing: 8) {
-                lengthChip(L10n.tr("Doporučená"), on: minutes == nil && !dragging) { minutes = nil; if let recommended { slider = Double(recommended) } }
-                ForEach(presets, id: \.self) { value in
-                    lengthChip(Fmt.duration(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
-                        .contextMenu {
-                            Button(role: .destructive) { removePreset(value) } label: { Label("Odebrat z předvoleb", systemImage: "trash") }
-                        }
-                }
-                Button { if let own { addPreset(own) } } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                        if let own { Text(verbatim: L10n.f("Uložit %@", Fmt.duration(own))) }
-                    }
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(own == nil ? Palette.faint : Palette.amber)
-                        .padding(.horizontal, 12).frame(minWidth: 32, minHeight: 32)
-                        .background(own == nil ? Color.clear : Palette.amberSoft, in: Capsule())
-                        .overlay { Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
-                }
-                .buttonStyle(.plain)
-                .disabled(own == nil || presets.count >= 8)
-                .accessibilityLabel(own.map { L10n.f("Uložit %@", Fmt.duration($0)) } ?? L10n.tr("Uložit délku jako předvolbu"))
-            }
-            Slider(value: $slider, in: range, step: step, onEditingChanged: { editing in
-                dragging = editing
-                if !editing { minutes = Int(slider) }
-            })
-            .tint(Palette.ink)
-            Menu {
-                ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
-                    Button("± \(t) min") { tolerance.wrappedValue = t }
-                }
-            } label: {
-                Label("± \(tolerance.wrappedValue) min", systemImage: "arrow.left.and.right")
-                    .font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .background(Palette.card, in: Capsule())
-            }
-        }
-        .padding(.top, 20)
-    }
-
-    private func lengthChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(verbatim: title)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(on ? Palette.button : Palette.card, in: Capsule())
-                .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1) }
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private func addPreset(_ value: Int) {
-        let next = Array(Set(presets + [value])).sorted().prefix(8).map(String.init).joined(separator: ",")
-        if sport == "swim" { presetsSwim = next } else if sport == "run" { presetsRun = next } else { presetsRide = next }
-    }
-
-    private func removePreset(_ value: Int) {
-        let next = presets.filter { $0 != value }.map(String.init).joined(separator: ",")
-        if sport == "swim" { presetsSwim = next } else if sport == "run" { presetsRun = next } else { presetsRide = next }
+        LengthControl(minutes: $minutes, recommended: recommended, range: range, step: step,
+                      presets: sport == "swim" ? $presetsSwim : sport == "run" ? $presetsRun : $presetsRide,
+                      tolerance: tolerance, fallback: sport == "ride" ? 90 : 45)
+            .padding(.top, 6)
     }
 
     private func load() async {
@@ -671,7 +595,6 @@ struct WorkoutLibrarySection: View {
             workouts = result.workouts
             if let length = result.coachPick?.durationMinutes {
                 recommended = Int(length)
-                if minutes == nil && !dragging { slider = min(max(Double(length), range.lowerBound), range.upperBound) }
             }
             error = nil
             composed = nil
@@ -1103,5 +1026,119 @@ struct ExerciseSheet: View {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
         }
+    }
+}
+
+/// The one length control of the redesign (Petr decision 6, 2026-11-16): the
+/// Ride library's "Recommended" chip, own presets with "+ Save", a slider in
+/// steps, and for ride, run and swim how far from it a workout may be. The gym
+/// takes it over without the tolerance. The time above follows the finger;
+/// holding a preset removes it.
+struct LengthControl: View {
+    /// nil is the coach's length for today.
+    @Binding var minutes: Int?
+    var recommended: Int?
+    let range: ClosedRange<Double>
+    let step: Double
+    /// The own presets, "60,90,120" (kept per sport on the phone).
+    @Binding var presets: String
+    /// ± minutes; nil hides it (the gym).
+    var tolerance: Binding<Int>? = nil
+    /// The slider's start before the coach's length is known.
+    var fallback: Int = 60
+    @State private var slider: Double = 60
+    @State private var dragging = false
+
+    private var values: [Int] { presets.split(separator: ",").compactMap { Int($0) }.sorted() }
+
+    var body: some View {
+        let shown = dragging || minutes != nil ? Int(slider) : recommended
+        let own = minutes.flatMap { values.contains($0) ? nil : $0 }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Délka")
+                Spacer()
+                if let shown {
+                    Text(verbatim: Fmt.duration(shown)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                        .contentTransition(.numericText()).animation(.snappy, value: shown)
+                    if let tolerance {
+                        Text(verbatim: "± \(tolerance.wrappedValue) min").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+            FlowLayout(spacing: 8) {
+                if recommended != nil || tolerance != nil {
+                    chip(L10n.tr("Doporučená"), on: minutes == nil && !dragging) { minutes = nil; if let recommended { slider = clamp(recommended) } }
+                }
+                ForEach(values, id: \.self) { value in
+                    chip(Fmt.duration(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
+                        .contextMenu {
+                            Button(role: .destructive) { remove(value) } label: { Label("Odebrat z předvoleb", systemImage: "trash") }
+                        }
+                }
+                Button { if let own { add(own) } } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                        if let own { Text(verbatim: L10n.f("Uložit %@", Fmt.duration(own))) }
+                    }
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(own == nil ? Palette.faint : Palette.amber)
+                        .padding(.horizontal, 12).frame(minWidth: 32, minHeight: 32)
+                        .background(own == nil ? Color.clear : Palette.amberSoft, in: Capsule())
+                        .overlay { Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
+                }
+                .buttonStyle(.plain)
+                .disabled(own == nil || values.count >= 8)
+                .accessibilityLabel(own.map { L10n.f("Uložit %@", Fmt.duration($0)) } ?? L10n.tr("Uložit délku jako předvolbu"))
+            }
+            Slider(value: $slider, in: range, step: step, onEditingChanged: { editing in
+                dragging = editing
+                if !editing { minutes = Int(slider) }
+            })
+            .tint(Palette.ink)
+            .accessibilityValue(Fmt.duration(Int(slider)))
+            if let tolerance {
+                Menu {
+                    ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
+                        Button("± \(t) min") { tolerance.wrappedValue = t }
+                    }
+                } label: {
+                    Label("± \(tolerance.wrappedValue) min", systemImage: "arrow.left.and.right")
+                        .font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 12).frame(height: 32)
+                        .background(Palette.card, in: Capsule())
+                }
+            }
+        }
+        .onAppear { slider = clamp(minutes ?? recommended ?? values.first ?? fallback) }
+        .onChange(of: recommended) { _, length in
+            if minutes == nil && !dragging, let length { slider = clamp(length) }
+        }
+        .onChange(of: minutes) { _, value in
+            if !dragging, let value { slider = clamp(value) }
+        }
+    }
+
+    private func clamp(_ value: Int) -> Double { min(max(Double(value), range.lowerBound), range.upperBound) }
+
+    private func chip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(on ? Palette.button : Palette.card, in: Capsule())
+                .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func add(_ value: Int) {
+        presets = Array(Set(values + [value])).sorted().prefix(8).map(String.init).joined(separator: ",")
+    }
+
+    private func remove(_ value: Int) {
+        presets = values.filter { $0 != value }.map(String.init).joined(separator: ",")
     }
 }

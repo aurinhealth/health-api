@@ -172,38 +172,6 @@ struct CoachSubject: Equatable {
     }
 }
 
-/// "Kouč" among the chips of Režim tréninku, the one place where the coach is
-/// not top right (its top right holds Dokončit, and the coach never sits beside
-/// a button): Two lights and the word. Every other screen uses CoachEntry.
-struct CoachPill: View {
-    let subject: CoachSubject
-    var height: CGFloat = 34
-    @Environment(AppModel.self) private var model
-    @State private var open = false
-    @State private var consent = false
-
-    // Also in the demo, which answers from the sample day (CoachView.demoAnswer),
-    // so the sample day and the App Store screenshots show the coach where a real phone does.
-    var body: some View {
-        Button { if model.aiOff && !model.demo { consent = true } else { open = true } } label: {
-            HStack(spacing: 6) {
-                TwoLights(size: 18)
-                Text(verbatim: L10n.tr("Kouč")).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-            }
-            // Never wraps to two lines or shortens with "…" beside other chips.
-            .lineLimit(1).fixedSize()
-            .padding(.leading, 9).padding(.trailing, 12).frame(height: height)
-            .background(Palette.track, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(verbatim: L10n.tr("Kouč")))
-        .accessibilityHint(Text(verbatim: L10n.tr("Zeptej se kouče na tohle")))
-        .accessibilityIdentifier("coach.entry")
-        .sheet(isPresented: $open) { CoachEntry.chat(subject: subject, view: subject.view, date: subject.date) }
-        .sheet(isPresented: $consent) { AIConsentAsk { open = true } }
-    }
-}
-
 /// Režim tréninku: the chat with the coach goes on where it was when the
 /// athlete closes it to log a set and opens it again, for the whole day's
 /// workout (also after the app was closed).
