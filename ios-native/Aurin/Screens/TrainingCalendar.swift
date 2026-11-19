@@ -99,7 +99,7 @@ struct TrainingCalendarCard: View {
 
     /// "Nic v plánu." with Naplánovat týden (the Plán týdne tile at the bottom of Trénink).
     private var planWeek: some View {
-        NavigationLink(value: AppRoute.weekPlan) {
+        WeekPlanLink {
             HStack(spacing: 8) {
                 Text("Nic v plánu.").font(Typo.small).foregroundStyle(Palette.muted)
                 Spacer()
@@ -110,7 +110,6 @@ struct TrainingCalendarCard: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: Strip

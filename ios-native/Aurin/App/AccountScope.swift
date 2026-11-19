@@ -37,7 +37,6 @@ enum AccountCaches {
         CoachPick.forget()
         GymDayCache.clear()
         CoachTextMemory.values = [:]
-        WeekPlanDraftMemory.drafts = [:]
         ThresholdCheckMemory.kept = nil
         GymHistoryCache.clear()
         ActivityDetailMemory.values = [:]
