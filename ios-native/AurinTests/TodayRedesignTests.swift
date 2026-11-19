@@ -84,4 +84,14 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(WeatherDetails.remaining(day, today: day.date, hour: 15)?.run, .init(start: 9, end: 17))
         XCTAssertNil(WeatherDetails.remaining(day, today: "2026-10-09", hour: 8))
     }
+
+    /// Tapwright 2026-11-19: no "−0.0", and a debt past 6 h stretches its strip.
+    func testSignedZeroAndDebtScale() {
+        XCTAssertFalse(Fmt.signed(-0.04, digits: 1).hasPrefix("−"))
+        XCTAssertFalse(Fmt.signed(-0.0, digits: 1).hasPrefix("+"))
+        XCTAssertTrue(Fmt.signed(-0.06, digits: 1).hasPrefix("−"))
+        XCTAssertTrue(Fmt.signed(2).hasPrefix("+"))
+        XCTAssertEqual(DebtStrip.scaleHours(200), 6)
+        XCTAssertEqual(DebtStrip.scaleHours(430), 8)
+    }
 }

@@ -52,7 +52,9 @@ struct WidgetHeader: View {
     var body: some View {
         HStack(spacing: 7) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.secondary).lineLimit(1)
+            // The title gives way last: "Resting heart rate" and "Wrist temperature" were cut beside a note.
+            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.secondary).lineLimit(1).minimumScaleFactor(0.8)
+                .layoutPriority(1)
             if appleHealth { HealthKitTag() }
             Spacer(minLength: 4)
             if let trailing {

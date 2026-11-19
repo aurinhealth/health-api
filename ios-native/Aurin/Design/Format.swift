@@ -42,6 +42,9 @@ enum Fmt {
     /// A signed change with a real minus sign: "+6", "−2".
     static func signed(_ value: Double, digits: Int = 0) -> String {
         let text = digits == 0 ? int(abs(value)) : decimal(abs(value), digits: digits)
+        // A value that rounds to zero has no sign: "0.0", never "−0.0" (Tapwright 2026-11-19).
+        let scale = pow(10, Double(digits))
+        if (abs(value) * scale).rounded() == 0 { return text }
         return (value < 0 ? "−" : "+") + text
     }
 
