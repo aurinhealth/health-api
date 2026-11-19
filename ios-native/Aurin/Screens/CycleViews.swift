@@ -673,7 +673,6 @@ struct CycleSettingsView: View {
     @State private var choosingDate = false
     @State private var choosingLength = false
     @State private var choosingPack = false
-    @State private var askingConsent = false
     @State private var askingTrackingConsent = false
     @State private var trackingAccepted = false
 
@@ -733,11 +732,9 @@ struct CycleSettingsView: View {
                     SettingsToggle(title: "Upravit trénink podle cyklu",
                                    subtitle: "Na dny menstruace s křečemi nebo únavou zlehčí náročný trénink",
                                    isOn: Binding(get: { settings.adaptTraining }, set: { save(["adaptTraining": .bool($0)]) }), disabled: saving)
-                    SettingsDivider()
-                    CoachCycleRow(isOn: settings.shareWithCoach == true, disabled: saving,
-                                  info: { askingConsent = true },
-                                  turn: { on in if on { askingConsent = true } else { save(["shareWithCoach": .bool(false)]) } })
                 }
+                // Whether the coach knows the cycle is a consent: in Soukromí a data.
+                PrivacyLinkRow(subtitle: "Jestli kouč ví o cyklu")
             }
         }
         .sheet(isPresented: $choosingDate) {
@@ -751,9 +748,6 @@ struct CycleSettingsView: View {
             if trackingAccepted { trackingAccepted = false; turn(true) }
         }) {
             CycleTrackingConsentSheet { trackingAccepted = true }
-        }
-        .sheet(isPresented: $askingConsent) {
-            CoachCycleConsentSheet(isOn: settings?.shareWithCoach == true) { save(["shareWithCoach": .bool(true)]) }
         }
         .sheet(isPresented: $choosingLength) {
             LengthChoiceSheet(initial: settings?.cycleLength ?? model.cycle?.state?.length ?? 28) { save(["cycleLength": .number(Double($0))]) }
@@ -1086,34 +1080,6 @@ struct PillReminderView: View {
             try? await model.saveCycleSettings(changes)
             if let today = model.today { await Reminders.reschedule(from: today) }
         }
-    }
-}
-
-/// Settings → Cyklus → "Kouč ví o cyklu": the switch with an "i". Turning it
-/// on (or the "i") opens the consent sheet; turning it off needs no sheet.
-struct CoachCycleRow: View {
-    let isOn: Bool
-    let disabled: Bool
-    let info: () -> Void
-    let turn: (Bool) -> Void
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("Kouč ví o cyklu").font(.body).foregroundStyle(Palette.ink)
-            Button(action: info) {
-                Image(systemName: "info.circle").font(.body).foregroundStyle(Palette.muted)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("Co to znamená"))
-            Spacer(minLength: 8)
-            Toggle("", isOn: Binding(get: { isOn }, set: { turn($0) }))
-                .labelsHidden()
-                .toggleStyle(AurinToggleStyle())
-                .disabled(disabled)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: 50)
     }
 }
 

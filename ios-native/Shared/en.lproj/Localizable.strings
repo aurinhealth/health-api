@@ -4666,3 +4666,20 @@
 "Změny na této stránce se neuložily." = "Your changes on this page aren't saved.";
 "nenastaveno" = "not set";
 "Čas na trénink je strop pro plán. Kolik trénuješ teď, počítá kalorie a první týden plánu." = "Time to train is the ceiling for your plan. Training now sets your calories and the first week of a plan.";
+
+/* Redesign Na2: Privacy & data */
+"Odvolat souhlas se zdravotními daty" = "Withdraw health data consent";
+"Odvolat a smazat" = "Withdraw and delete";
+"Zdravotní data jsou vypnutá" = "Health data is off";
+"Odvolání souhlasu se zdravotními daty potřebuje krátké ověření." = "Withdrawing your health data consent needs a quick check.";
+"Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené, ne odpojené)" = "Account, sign-in, Pro, settings and connected services (paused, not disconnected)";
+"Souhlas kdykoli odvoláš v Nastavení → Soukromí a data, nebo smažeš účet. Předtím si tam můžeš stáhnout všechna svoje data." = "Withdraw your consent any time in Settings → Privacy & data, or delete your account. You can first download all your data there.";
+"Co Aurin smí používat" = "What Aurin may use";
+"Každý souhlas je samostatný a kdykoli ho vypneš. Bez nich zbytek aplikace funguje dál." = "Each one is separate and you can turn it off anytime. Without them, the rest of the app keeps working.";
+"Kouč, fotky jídla, dohledání potravin" = "The coach, food photos, food lookup";
+"Kouč vidí náladu, úzkost, konopí, CBD a léky z deníku" = "The coach sees mood, anxiety, cannabis, CBD and medication from your journal";
+"Kouč vidí, ve které části cyklu jsi" = "The coach sees where in your cycle you are";
+"Z Apple Health do deníku, nikdy do AI" = "From Apple Health into your journal, never to AI";
+"Tvoje data" = "Your data";
+"Citlivé položky a sexuální aktivita" = "Sensitive items and sexual activity";
+"Jestli kouč ví o cyklu" = "Whether the coach knows your cycle";

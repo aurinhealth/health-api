@@ -1,6 +1,7 @@
 import SwiftUI
 
-// MARK: - Pausing health data (Settings → Soukromí a data, AppModel+HealthPause)
+// MARK: - Withdrawing the health data consent (Settings → Soukromí a data, AppModel+HealthPause;
+// the server still calls it a pause)
 
 /// What stops, what is deleted at once and what stays, the download first,
 /// then the pause behind Face ID or the phone's code (src/health-pause.js).
@@ -18,7 +19,7 @@ struct HealthPauseSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Pozastavit zdravotní data").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Odvolat souhlas se zdravotními daty").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Aurin přestane tvoje zdravotní data používat a smaže, co z nich uchovává.")
                     .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -29,7 +30,7 @@ struct HealthPauseSheet: View {
                 section("Hned se smaže")
                 point("Spánek, tep, HRV, váha, jídlo, tréninky, deník a cyklus", mark: .deleted)
                 section("Zůstane")
-                point("Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené)", mark: .kept)
+                point("Účet, přihlášení, Pro, nastavení a připojené služby (pozastavené, ne odpojené)", mark: .kept)
                 point("Pro se dál obnovuje. Pokud chceš, zruš ho v App Store.", mark: .note)
                 Text("Když to znovu zapneš, dáš nový souhlas a Aurin načte historii z Apple Health a Googlu. Co jsi zadal jen v Aurinu, se nevrátí; stažený soubor ti zůstane jako kopie.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
@@ -48,7 +49,7 @@ struct HealthPauseSheet: View {
                 Button { Task { await pause() } } label: {
                     HStack(spacing: 8) {
                         if pausing { ProgressView().tint(Palette.onAccent) }
-                        Text("Pozastavit a smazat")
+                        Text("Odvolat a smazat")
                     }
                     .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
                     .frame(maxWidth: .infinity).frame(height: 50)
@@ -132,7 +133,7 @@ struct HealthPauseSheet: View {
     /// it (as deleting the account, PrivacySettingsView.delete).
     private func pause(ownerConfirmed: Bool = false) async {
         if !ownerConfirmed {
-            guard await PrivacySettingsView.ownerConfirms(L10n.tr("Pozastavit zdravotní data")) else { return }
+            guard await PrivacySettingsView.ownerConfirms(L10n.tr("Odvolat souhlas se zdravotními daty")) else { return }
         }
         pausing = true
         defer { pausing = false }
@@ -141,7 +142,7 @@ struct HealthPauseSheet: View {
             dismiss()
             paused()
         } catch APIError.stepUpRequired(_, let info) {
-            stepUp = StepUpRequest(info: info, reason: L10n.tr("Pozastavení zdravotních dat potřebuje krátké ověření."), destructive: true) { await pause(ownerConfirmed: true) }
+            stepUp = StepUpRequest(info: info, reason: L10n.tr("Odvolání souhlasu se zdravotními daty potřebuje krátké ověření."), destructive: true) { await pause(ownerConfirmed: true) }
         } catch {
             self.error = error.localizedDescription
         }
@@ -166,7 +167,7 @@ struct HealthPausedView: View {
                     .frame(width: 84, height: 84)
                     .cardSurface(cornerRadius: 24)
                     .accessibilityHidden(true)
-                Text("Zdravotní data jsou pozastavená")
+                Text("Zdravotní data jsou vypnutá")
                     .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                     .padding(.top, 22)

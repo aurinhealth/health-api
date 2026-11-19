@@ -567,6 +567,9 @@ final class SnapshotTests: XCTestCase {
         try render("settings-customization", height: 900) { NavigationStack { CustomizationSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-coach-cards", height: 640) { NavigationStack { CoachPlacesSettingsView() }.environment(AppModel(demo: true)) }
         try render("settings-units", height: 760) { NavigationStack { UnitsSettingsView() }.environment(AppModel(demo: true)) }
+        // Redesign Na2: every consent in Privacy & data, Withdraw instead of Pause.
+        try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
         XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
         XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7:30")
         XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
