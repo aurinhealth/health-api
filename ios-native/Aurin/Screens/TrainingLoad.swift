@@ -120,13 +120,17 @@ struct LoadTile: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            // The title names the tile, centred, whole (never "Load balan…").
-            Text(verbatim: kind.title)
-                .font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
-            RangeDial(value: view?.plot, scale: LoadWords.scale, band: view.map(LoadWords.band), size: 112, lineWidth: 9, spoken: spoken) {
+            // The title names the tile in small capitals with the way into its
+            // detail (concept a-hlavni "LOAD BALANCE >"), whole (never "Load balan…").
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(verbatim: kind.title.uppercased(with: Fmt.locale))
+                    .font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+            }
+            RangeDial(value: view?.plot, scale: LoadWords.scale, band: view.map(LoadWords.band), size: 112, lineWidth: 9,
+                      tint: state?.color ?? Palette.green, spoken: spoken) {
                 Text(verbatim: centre).font(Typo.heading(19)).foregroundStyle(view?.plot == nil ? Palette.muted : Palette.ink)
             }
             .frame(maxWidth: .infinity)
@@ -209,6 +213,7 @@ struct LoadDetailContent: View {
             if let view, view.state == "ready" {
                 VStack(spacing: 10) {
                     RangeDial(value: view.plot, scale: LoadWords.scale, band: LoadWords.band(view), ends: ("Lehčí", "Těžší"), size: 220,
+                              tint: LoadWords.state(view.level)?.color ?? Palette.green,
                               spoken: [kind.title, LoadWords.level(view.level), LoadWords.state(view.level)?.words].compactMap { $0 }.joined(separator: ", ")) {
                         Text(verbatim: LoadWords.level(view.level) ?? "–").font(Typo.heading(30)).foregroundStyle(Palette.ink)
                     }
@@ -225,7 +230,7 @@ struct LoadDetailContent: View {
                 Card {
                     Text(verbatim: L10n.tr("Posledních 14 dní")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     LoadChart(view: view)
-                    Text(verbatim: L10n.tr("Šedé pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí."))
+                    Text(verbatim: L10n.tr("Zelené pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí."))
                         .font(Typo.small).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -266,7 +271,7 @@ struct LoadChart: View {
             if let first = list.first?.date, let last = list.last?.date {
                 RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
                               yStart: .value("Obvyklé od", band.lowerBound), yEnd: .value("Obvyklé do", band.upperBound))
-                    .foregroundStyle(Palette.ink.opacity(0.1))
+                    .foregroundStyle(Palette.green.opacity(0.14))
             }
             ForEach(list) { day in
                 LineMark(x: .value("Den", day.date), y: .value("Zátěž", day.plot))

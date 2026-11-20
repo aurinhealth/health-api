@@ -140,6 +140,9 @@ struct TrainingContent: View {
     @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var focusSheet = false
+    @State private var monthSheet = false
+    /// The day the strip goes to: the header's "Dnes" or a day from the month.
+    @State private var monthJump: DayJump?
     @Environment(\.wideLayout) private var wide
 
     var body: some View {
@@ -148,8 +151,10 @@ struct TrainingContent: View {
                 // The same top as Dnes (TabHeader); the calendar picks the day, "Dnes" brings it back.
                 // The coach first, then the Library (a book), the account last (redesign T, D-TRENINK-11).
                 // Log a workout is in "+" (Tools = A, Petr 2026-11-14).
+                // "November ⌄" opens the month (Strain or Workouts), as on Today.
                 TabHeader(date: day ?? training.date, followsDay: false,
                           showToday: shownDay == training.date ? nil : showToday,
+                          month: { monthSheet = true },
                           coach: actions.coach, settings: actions.settings) {
                     LibraryHeaderIcon()
                 }
@@ -185,9 +190,12 @@ struct TrainingContent: View {
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
+        .sheet(isPresented: $monthSheet) {
+            TrainingMonthSheet(today: training.date, selected: shownDay) { pickDay($0); jumpTo($0) }
+        }
     }
 
-    /// The calendar and the plan under it (redesign T: no strain, no race card,
+    /// The week strip and the plan under it (redesign T: no strain, no race card,
     /// no tools row; Strain lives on Today, the race in the plan).
     @ViewBuilder private var week: some View {
         // Until the main sport and goal are set (FocusSheet.swift).
@@ -196,33 +204,43 @@ struct TrainingContent: View {
                 .padding(.top, 18)
         }
 
-        TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
-                             plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
-            .padding(.top, 18)
+        TrainingCalendarCard(today: training.date, onPick: pickDay, jump: monthJump)
+            .onChange(of: jumpDay) { _, jump in monthJump = jump }
+            .padding(.top, 14)
+            .padding(.horizontal, -8)
 
         PlanSummaryCard(training: training)
-            .padding(.top, 14)
+            .padding(.top, 12)
     }
 
-    /// "TODAY" with Week plan on the right, then today's workouts still to do
-    /// with Start workout. On another day the line that today holds the rest.
+    /// "TODAY" (or the chosen day) with Week plan on the right, the day's done
+    /// sessions as rows, today's workouts still to do as cards with Start
+    /// workout, then the coach (concept a-hlavni: one coach card, under the
+    /// workout, D-TRENINK-3). On another day the line that today holds the load.
     @ViewBuilder private func todayList(top: CGFloat) -> some View {
-        if shownDay == training.date {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Dnes")
-                Spacer(minLength: 8)
-                WeekPlanLink {
-                    Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                }
+        let isToday = shownDay == training.date
+        HStack(alignment: .firstTextBaseline) {
+            SectionLabel(text: isToday ? L10n.tr("Dnes") : Fmt.weekdayDayMonth(shownDay))
+            Spacer(minLength: 8)
+            WeekPlanLink {
+                Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
-            .padding(.top, top - 12)
-            // The coach above the workout card (concept a-hlavni/000, D-TRENINK-3).
-            CoachTextCard(screen: "training").padding(.top, 6)
+        }
+        .padding(.top, top - 12)
+        let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
+        if !CalendarDayList.shown(model.calendar[shownDay]?.activities ?? [], hidePlanned: hidden).isEmpty || model.calendar[shownDay]?.merge != nil
+            || (!isToday || upcoming.isEmpty) {
+            CalendarDayList(date: shownDay, today: training.date, day: model.calendar[shownDay], hidePlanned: hidden)
+                .daySlide(date: shownDay)
+                .padding(.top, 2)
+        }
+        if isToday {
             if !upcoming.isEmpty {
                 TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                    .padding(.top, 14)
+                    .padding(.top, 12)
             }
+            CoachTextCard(screen: "training").padding(.top, 14)
         } else {
             // D-TRENINK-8: the load and the overview are today's, never shown under another day.
             Button(action: showToday) {
@@ -263,6 +281,9 @@ struct TrainingContent: View {
 
     private var shownDay: String { day ?? training.date }
 
+    /// A day picked in the month: the strip and the list follow it.
+    private func jumpTo(_ date: String) { monthJump = DayJump(date: date) }
+
     /// Today's workouts still to do, else the next planned one (older answers: only that).
     private var upcoming: [TrainingSnapshot.Session] {
         if let today = training.todaySessions, !today.isEmpty { return today }
@@ -276,7 +297,7 @@ struct LibraryHeaderIcon: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HeaderIcon(systemImage: "books.vertical", label: "Knihovna") { model.open(.library) }
+        HeaderIcon(systemImage: "figure.run.square.stack.fill", label: "Knihovna") { model.open(.library) }
             .accessibilityIdentifier("open.library")
     }
 }
@@ -788,6 +809,37 @@ struct FormWidget: View {
     var size: WidgetSize = .small
 
     var body: some View {
+        if size == .small { dial } else { full }
+    }
+
+    /// The small tile (Training concept a-hlavni): the form on a dial from
+    /// −30 to +30, the usual range as its band, the number in the middle.
+    private var dial: some View {
+        let usual = Self.usual(form.series)
+        return Card {
+            WidgetHeader(title: "Forma", color: Palette.amberBar)
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: zoneColor(form.zone),
+                      spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
+                Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(zoneColor(form.zone))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, -18)
+            Text(verbatim: usual.map { L10n.f("obvykle %@ až %@", Fmt.signed($0.lowerBound), Fmt.signed($0.upperBound)) } ?? form.label)
+                .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityHint("Otevře detail formy a kondice")
+    }
+
+    /// The middle 80 % of the last 90 days' form, rounded; nil with under two weeks.
+    static func usual(_ series: [TrainingSnapshot.FormPoint]) -> ClosedRange<Double>? {
+        let values = series.suffix(90).map { ($0.fitness - $0.fatigue).rounded() }.sorted()
+        guard values.count >= 14 else { return nil }
+        let lo = values[Int(Double(values.count - 1) * 0.1)], hi = values[Int(Double(values.count - 1) * 0.9)]
+        return lo...max(hi, lo + 1)
+    }
+
+    private var full: some View {
         Card {
             WidgetHeader(title: "Forma", color: Palette.amberBar)
             SizedWidgetBody(size: size) {
@@ -877,7 +929,45 @@ struct VO2maxWidget: View {
     var today: String? = nil
     var size: WidgetSize = .small
 
+    /// The FRIEND bands of the athlete's age and sex (Health's VO2max), for the small dial.
+    var bands: FriendBands? = nil
+
     var body: some View {
+        if size == .small { dial } else { full }
+    }
+
+    /// The small tile (Training concept a-hlavni): the estimate on a dial, the
+    /// band of its age group green, the number and its unit in the middle.
+    private var dial: some View {
+        let value = vo2.value
+        let edges = bands.map { [$0.p25 - ($0.p50 - $0.p25), $0.p25, $0.p50, $0.p75, $0.p90, $0.p90 + ($0.p90 - $0.p75)] }
+            ?? [value - 6, value - 3, value + 3, value + 6]
+        let i = max(0, min(edges.count - 2, (edges.firstIndex { $0 > value } ?? edges.count - 1) - 1))
+        return Card {
+            WidgetHeader(title: "VO2max", color: Palette.green, trailing: L10n.tr("odhad"))
+            RangeDial(value: value, scale: edges[0]...edges[edges.count - 1], band: bands == nil ? nil : edges[i]...edges[i + 1],
+                      size: 118, lineWidth: 7, tint: Palette.green,
+                      spoken: "VO2max " + Fmt.decimal(value, digits: 1) + " ml/kg/min") {
+                VStack(spacing: 0) {
+                    Text(verbatim: Fmt.decimal(value, digits: 1)).font(Typo.number(30)).foregroundStyle(Palette.green)
+                    Text(verbatim: "ml/kg/min").font(Typo.tiny).foregroundStyle(Palette.muted)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, -18)
+            Group {
+                if let change = vo2.change, change != 0 {
+                    Text(L10n.f(change > 0 ? "o %@ výš za 4 týdny" : "o %@ níž za 4 týdny", Fmt.decimal(abs(change))))
+                } else {
+                    Text("Stejně jako před 4 týdny")
+                }
+            }
+            .font(Typo.caption).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var full: some View {
         Card {
             WidgetHeader(title: "VO2max", color: Palette.green, trailing: L10n.tr("odhad"))
             SizedWidgetBody(size: size) {

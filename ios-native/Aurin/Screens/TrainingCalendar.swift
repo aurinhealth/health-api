@@ -1,196 +1,79 @@
 import SwiftUI
 
-/// Training's calendar: a strip of days to swipe through (five in full, the
-/// next ones blurred at the edges), each with its weekday, date and the main
-/// sport. Pulled down it opens the whole month with the day's count of
-/// activities, their time or calories. The chosen day's activities are below.
+/// Training's week strip (redesign T, concept trenink-koncept): Monday to
+/// Sunday of the chosen day's week, each day its weekday, the day's sport in
+/// its disc and the date; the chosen day sits in the soft grey pill. A swipe
+/// moves a week; the month opens from the title ("November ⌄").
 struct TrainingCalendarCard: View {
     @Environment(AppModel.self) private var model
     let today: String
-    /// The chosen day, for the pinned bar of Trénink.
+    /// The chosen day, for the list under the strip and the header.
     var onPick: (String) -> Void = { _ in }
-    /// A day chosen in the pinned bar (its arrows and "Dnes").
+    /// A day chosen elsewhere (the header's "Dnes", the month sheet).
     var jump: DayJump? = nil
-    /// Today's workouts still to do that have their own card under the calendar
-    /// (TodaySessions), by title: today's list leaves out those planned rows, the
-    /// rest (done, or planned but not on the card) stays.
-    var plannedTodayBelow: Set<String> = []
     @State private var selected: String?
-    @State private var centered: String?
-    @State private var expanded = false
-    @State private var month: String?
-    /// The strip grows with the letter and the date (the circle stays 44 pt).
-    @ScaledMetric(relativeTo: .caption) private var stripHeight: CGFloat = 108
-    @AppStorage("calendarMode") private var mode = CalendarMode.count.rawValue
-
-    enum CalendarMode: String, CaseIterable, Identifiable {
-        case count, time, kcal, compliance
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .count: return "Počet"
-            case .time: return "Čas"
-            case .kcal: return "Kalorie"
-            case .compliance: return "Splnění"
-            }
-        }
-    }
+    /// The strip's slide while a week changes.
+    @State private var direction = 1
 
     private var day: String { selected ?? today }
-    private var hidePlanned: Set<String> { day == today ? plannedTodayBelow : [] }
-    /// How far the strip (and the pinned bar's arrow) goes ahead.
+    /// How far the strip goes ahead.
     static let daysAhead = 30
-    private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, Self.daysAhead)) }
+    private var week: [String] {
+        let monday = ISODay.shift(day, -ISODay.weekdayIndex(day))
+        return (0..<7).map { ISODay.shift(monday, $0) }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if expanded {
-                MonthGrid(month: month ?? ISODay.monthStart(day), today: today, selected: day,
-                          mode: CalendarMode(rawValue: mode) ?? .count, days: model.calendar,
-                          pick: { pick($0, scroll: false) }, move: { moveMonth($0) })
-                Picker("Zobrazit", selection: $mode) {
-                    ForEach(CalendarMode.allCases) { Text($0.label).tag($0.rawValue) }
+        HStack(spacing: 0) {
+            ForEach(week, id: \.self) { date in
+                Button { pick(date) } label: {
+                    DayCircle(date: date, today: today, selected: date == day, day: model.calendar[date])
                 }
-                .pickerStyle(.segmented)
-                .padding(.top, 14)
-            } else {
-                strip
-            }
-            handle
-            // An empty day shows no row at all, only the strip, unless the week
-            // ahead has nothing planned: then the way to plan it (audit 11.3).
-            if model.calendar[day].map({ !CalendarDayList.shown($0.activities, hidePlanned: hidePlanned).isEmpty }) ?? true {
-                CalendarDayList(date: day, today: today, day: model.calendar[day], hidePlanned: hidePlanned)
-                    .daySlide(date: day)
-                    .padding(.top, 6)
-            } else if day >= today && weekAheadEmpty {
-                planWeek
-                    .daySlide(date: day)
-                    .padding(.top, 6)
+                .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 14)
-        .cardSurface(cornerRadius: 24)
-        .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
-        .simultaneousGesture(
+        .id(week.first)
+        .transition(.asymmetric(insertion: .move(edge: direction > 0 ? .trailing : .leading).combined(with: .opacity),
+                                removal: .move(edge: direction > 0 ? .leading : .trailing).combined(with: .opacity)))
+        .clipped()
+        .contentShape(Rectangle())
+        .gesture(
             DragGesture(minimumDistance: 24).onEnded { value in
-                guard abs(value.translation.height) > abs(value.translation.width) * 1.5 else { return }
-                if value.translation.height > 40 && !expanded { toggle() }
-                if value.translation.height < -40 && expanded { toggle() }
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.5, abs(value.translation.width) > 40 else { return }
+                moveWeek(value.translation.width < 0 ? 1 : -1)
             }
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityAction(named: Text(verbatim: L10n.tr("Další týden"))) { moveWeek(1) }
+        .accessibilityAction(named: Text(verbatim: L10n.tr("Předchozí týden"))) { moveWeek(-1) }
         .onChange(of: day) { _, date in onPick(date) }
         .onChange(of: jump) { _, jump in
             guard let date = jump?.date, date != day else { return }
-            selected = date
-            centered = date
-            if expanded {
-                month = ISODay.monthStart(date)
-                Task { await model.loadCalendar(from: ISODay.monthStart(date), to: ISODay.monthEnd(ISODay.monthStart(date))) }
-            }
+            direction = date > day ? 1 : -1
+            withAnimation(.snappy(duration: 0.3)) { selected = date }
         }
-        .task { await model.loadCalendar(from: stripDays.first ?? today, to: stripDays.last ?? today) }
+        .task(id: week.first) { await model.loadCalendar(from: week.first ?? today, to: week.last ?? today) }
     }
 
-    /// Today and the six days after it are loaded and none has a workout planned.
-    private var weekAheadEmpty: Bool {
-        ISODay.range(today, ISODay.shift(today, 6)).allSatisfy { model.calendar[$0].map { $0.planned == 0 } ?? false }
-    }
+    private func pick(_ date: String) { selected = date }
 
-    /// "Nic v plánu." with Naplánovat týden (the Plán týdne tile at the bottom of Trénink).
-    private var planWeek: some View {
-        WeekPlanLink {
-            HStack(spacing: 8) {
-                Text("Nic v plánu.").font(Typo.small).foregroundStyle(Palette.muted)
-                Spacer()
-                Text("Naplánovat týden").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
-            }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-    }
-
-    // MARK: Strip
-
-    // The strip scrolls only through its scrollPosition, never a ScrollViewProxy:
-    // proxy.scrollTo also moves the page's own scroll view, and on the iPhone Duo
-    // (status bar at the side, PageScroll takes its own width) that left the
-    // page's scroll view 0 pt wide, so Training showed nothing but its Start button.
-    private var strip: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 0) {
-                ForEach(stripDays, id: \.self) { date in
-                    Button { pick(date, scroll: true) } label: {
-                        DayCircle(date: date, today: today, selected: date == day, day: model.calendar[date])
-                    }
-                    .buttonStyle(.plain)
-                    .containerRelativeFrame(.horizontal, count: 6, spacing: 0)
-                    .scrollTransition(.interactive, axis: .horizontal) { content, phase in
-                        content
-                            .blur(radius: phase.isIdentity ? 0 : 2.5)
-                            .opacity(phase.isIdentity ? 1 : 0.45)
-                            .scaleEffect(phase.isIdentity ? 1 : 0.88)
-                    }
-                    .id(date)
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .scrollIndicators(.hidden)
-        .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: $centered, anchor: .center)
-        // Room for the letter, the selected ring and the date; the percent
-        // of the plan shows in the ring's colour and in the day's list.
-        .frame(height: stripHeight)
-        .onAppear { centered = day }
-        .onChange(of: centered) { _, date in
-            // The day in the middle is the chosen one, as in a picker.
-            if let date, date != day { selected = date }
-        }
-    }
-
-    private var handle: some View {
-        Button(action: toggle) {
-            VStack(spacing: 3) {
-                Capsule().fill(Palette.faint.opacity(0.5)).frame(width: 36, height: 4)
-                Text(expanded ? "Méně" : "Celý měsíc").font(.caption2.weight(.medium)).foregroundStyle(Palette.faint)
-            }
-            .frame(maxWidth: .infinity).padding(.vertical, 8)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr(expanded ? "Zavřít měsíc" : "Ukázat celý měsíc"))
-    }
-
-    private func toggle() {
-        if !expanded { month = ISODay.monthStart(day) }
-        withAnimation(.spring(duration: 0.35)) { expanded.toggle() }
-        if expanded, let month { Task { await model.loadCalendar(from: month, to: ISODay.monthEnd(month)) } }
-    }
-
-    private func pick(_ date: String, scroll: Bool) {
-        selected = date
-        if scroll { withAnimation(.easeOut(duration: 0.25)) { centered = date } }
-        else { centered = date }
-    }
-
-    private func moveMonth(_ by: Int) {
-        let next = ISODay.addMonths(month ?? ISODay.monthStart(day), by)
-        month = next
-        Task { await model.loadCalendar(from: next, to: ISODay.monthEnd(next)) }
+    /// The same weekday a week on or back, never past the strip's end.
+    private func moveWeek(_ by: Int) {
+        let next = ISODay.shift(day, 7 * by)
+        guard next <= ISODay.shift(today, Self.daysAhead) || by < 0 else { return }
+        direction = by
+        withAnimation(.snappy(duration: 0.3)) { selected = next }
     }
 }
 
-/// A day set from Trénink's pinned bar; each tap is new, even to the same day.
+/// A day set from Trénink's header ("Dnes") or the month; each tap is new, even to the same day.
 struct DayJump: Equatable {
     let date: String
     let id = UUID()
 }
 
-/// One day of the strip: "P", the main sport in a circle in the plan's colour
-/// (as Tréninky týdne; a done day in the colour of its percent) and "9".
+/// One day of the strip: "Mo", the day's sport in its disc and "9". A second
+/// session still ahead that day sits as a small disc on the first one's edge.
 struct DayCircle: View {
     let date: String
     let today: String
@@ -198,66 +81,64 @@ struct DayCircle: View {
     let day: CalendarDay?
 
     var body: some View {
-        let style = SportStyle(day: day, date: date, today: today)
-        VStack(spacing: 6) {
+        let mark = Look(day: day, date: date, today: today)
+        VStack(spacing: 7) {
             Text(Fmt.weekdayShort(date))
                 .scaledFont(12, weight: date == today ? .bold : .medium, cap: .denseCap)
-                .foregroundStyle(date == today ? Palette.amber : Palette.faint)
-            ZStack {
-                if let state = style.state {
-                    PlanStateIcon(symbol: style.symbol, state: state, size: 44, percent: style.percent)
-                } else {
-                    Circle().fill(style.fill)
-                    Image(systemName: style.symbol).scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                .foregroundStyle(date == today ? Palette.ink : Palette.muted)
+            SportDisc(sport: mark.sport, type: mark.type, state: mark.state, size: 44)
+                .overlay(alignment: .bottomTrailing) {
+                    if let second = mark.second {
+                        SportDisc(sport: second, state: .ahead, size: 17)
+                            .background(Circle().fill(Palette.card).padding(-2))
+                            .offset(x: 4, y: 3)
+                    }
                 }
-            }
-            .frame(width: 44, height: 44)
-            .overlay { Circle().stroke(selected ? Palette.ink : .clear, lineWidth: 2).padding(-4) }
             Text(ISODay.day(date))
-                .font(Typo.number(15))
+                .font(Typo.number(17))
                 .foregroundStyle(selected ? Palette.ink : Palette.muted)
         }
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .background {
+            if selected {
+                RoundedRectangle(cornerRadius: 21, style: .continuous).fill(Palette.ink.opacity(0.07)).padding(.horizontal, 2)
+            }
+        }
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date) + ", " + style.label)
+        .accessibilityLabel(Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date) + ", " + mark.label)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
-/// How a day looks: the main sport in the colour of the plan (PlanState, the
-/// same as Tréninky týdne and the week widget): green kept to it, amber done
-/// differently, rust missed, blue outside the plan, a dashed grey ring still
-/// ahead. A day at rest stays quiet.
-struct SportStyle {
-    let symbol: String
-    /// nil at rest.
-    let state: PlanState?
-    /// The quiet circle of a day at rest.
-    let fill: Color
-    let label: String
-    /// The day's percent of the plan (CalendarDay.compliance) when it is done.
-    let percent: Int?
+extension DayCircle {
+    /// What a day's disc shows: its first session's sport, done (full), still
+    /// ahead (pale) or missed (grey); a rest dot without any session.
+    struct Look: Equatable {
+        var sport = "other"
+        var type: String? = nil
+        var state: SportDisc.State = .rest
+        var second: String? = nil
+        var label: String
 
-    init(day: CalendarDay?, date: String, today: String) {
-        let sport = day?.primary ?? "rest"
-        let planState: PlanState? = sport == "rest" ? nil : PlanState(day: day)
-        state = planState
-        percent = planState == .good || planState == .off ? day?.compliance : nil
-        fill = date <= today ? Palette.track : .clear
-        if let planState {
-            symbol = SportIcon.symbol(sport)
-            label = L10n.tr(Self.name(sport)) + ", " + L10n.tr(planState.title) + (percent.map { ", " + L10n.f("%@ %% plánu", String($0)) } ?? "")
-        } else {
-            symbol = "moon.zzz"
-            label = L10n.tr(day == nil ? "bez dat" : "volno")
+        init(day: CalendarDay?, date: String, today: String) {
+            let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
+            guard let first = list.first(where: { $0.status == "done" }) ?? list.first else {
+                label = L10n.tr(day == nil ? "bez dat" : "volno")
+                return
+            }
+            sport = first.sport
+            type = first.type
+            state = SportDisc.State(status: first.status)
+            second = list.first { $0.id != first.id && $0.status == "planned" }?.sport
+            label = L10n.tr(SportStyle.name(first.sport)) + ", " + L10n.tr(state == .done ? "hotovo" : state == .missed ? "nesplněno" : "v plánu")
         }
     }
+}
 
-    /// The sport colour (Palette.Sport): who it is, never how it went.
-    static func color(_ sport: String) -> Color { Palette.Sport.color(sport) }
-
+/// Sport names for the lines that say a session in words.
+enum SportStyle {
     static func name(_ sport: String) -> String {
         switch sport {
         case "ride": return "kolo"
@@ -267,117 +148,6 @@ struct SportStyle {
         case "walk": return "chůze"
         default: return "aktivita"
         }
-    }
-}
-
-// MARK: - Month
-
-struct MonthGrid: View {
-    let month: String
-    let today: String
-    let selected: String
-    let mode: TrainingCalendarCard.CalendarMode
-    let days: [String: CalendarDay]
-    let pick: (String) -> Void
-    let move: (Int) -> Void
-
-    private var names: [String] {
-        Fmt.weekdaysFromMonday
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 36, height: 36) }
-                    .accessibilityLabel("Předchozí měsíc")
-                Spacer()
-                VStack(spacing: 1) {
-                    Text(ISODay.monthTitle(month)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text(total).font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-                Spacer()
-                Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 36, height: 36) }
-                    .accessibilityLabel("Další měsíc")
-            }
-            .foregroundStyle(Palette.ink)
-            .buttonStyle(.plain)
-            HStack(spacing: 0) {
-                ForEach(names, id: \.self) { Text(verbatim: $0).font(.caption2.weight(.semibold)).foregroundStyle(Palette.faint).frame(maxWidth: .infinity) }
-            }
-            let grid = ISODay.monthGrid(month)
-            ForEach(grid.indices, id: \.self) { row in
-                let week = grid[row]
-                HStack(spacing: 0) {
-                    ForEach(0..<7, id: \.self) { i in
-                        if let date = week[i] {
-                            Button { pick(date) } label: { cell(date) }.buttonStyle(.plain)
-                        } else {
-                            Color.clear.frame(maxWidth: .infinity, minHeight: 62)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 10)
-    }
-
-    private func cell(_ date: String) -> some View {
-        let day = days[date]
-        let style = SportStyle(day: day, date: date, today: today)
-        let isSelected = date == selected
-        return VStack(spacing: 3) {
-            Text(ISODay.day(date))
-                .scaledFont(12, weight: date == today ? .bold : .regular, cap: .denseCap)
-                .foregroundStyle(date == today ? Palette.amber : Palette.muted)
-            ZStack {
-                if let state = style.state {
-                    PlanStateIcon(symbol: style.symbol, state: state, size: 26, percent: style.percent)
-                } else {
-                    Circle().fill(style.fill)
-                    Image(systemName: style.symbol).scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
-                }
-            }
-            .frame(width: 26, height: 26)
-            Text(Self.value(day, mode)).scaledFont(11, weight: .semibold, cap: .denseCap).monospacedDigit()
-                .foregroundStyle(mode == .compliance ? style.percent.map(ComplianceScale.color) ?? Palette.faint : (day?.count ?? 0) > 0 ? Palette.ink : Palette.faint)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, minHeight: 62)
-        .background(isSelected ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.dayMonth(date) + ", " + style.label + ", " + Self.value(day, mode))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    /// The cell's number: activities, their time or kcal ("2", "1:35", "1 250").
-    static func value(_ day: CalendarDay?, _ mode: TrainingCalendarCard.CalendarMode) -> String {
-        guard let day, day.count > 0 else { return " " }
-        switch mode {
-        case .compliance:
-            guard PlanState(day: day) == .good || PlanState(day: day) == .off, let percent = day.compliance else { return " " }
-            return "\(percent)" + Fmt.percentSign
-        case .count: return String(day.count)
-        case .time: return Fmt.hoursMinutes(day.minutes)
-        case .kcal: return Fmt.int(day.kcal)
-        }
-    }
-
-    /// "12 aktivit, 14 h 20 min, 9 800 kcal" for the month.
-    private var total: String {
-        let list = ISODay.range(month, ISODay.monthEnd(month)).compactMap { days[$0] }
-        let count = list.reduce(0) { $0 + $1.count }
-        let minutes = list.reduce(0.0) { $0 + $1.minutes }
-        let kcal = list.reduce(0.0) { $0 + $1.kcal }
-        guard count > 0 else { return L10n.tr("zatím bez aktivit") }
-        let head = L10n.plural("%lld aktivit", count)
-        // Splnění: the month's sessions done to a plan, their mean percent.
-        if mode == .compliance {
-            let values = list.flatMap(\.activities).filter { $0.status == "done" }.compactMap(\.compliance)
-            guard !values.isEmpty else { return head }
-            return head + ", " + L10n.f("%@ %% plánu", String(Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())))
-        }
-        return head + ", " + Fmt.hoursMinutesLong(minutes) + ", " + Fmt.int(kcal) + " kcal"
     }
 }
 
@@ -397,17 +167,9 @@ struct CalendarDayList: View {
     @State private var keepingApart = false
 
     var body: some View {
+        // The day's sessions in one card, a row each (concept trenink-koncept
+        // srow, finished-activity row A); the section title above names the day.
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer()
-                // The day's total only once there is something to add up: with
-                // one activity it repeated the row's own numbers.
-                if let day, day.count > 1 {
-                    Text(Fmt.hoursMinutesLong(day.minutes) + ", " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            .padding(.bottom, 4)
             if let list = day.map({ Self.shown($0.activities, hidePlanned: hidePlanned) }), !list.isEmpty {
                 ForEach(Array(list.enumerated()), id: \.element.id) { index, activity in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -421,7 +183,7 @@ struct CalendarDayList: View {
                 }
             } else {
                 Text(day == nil ? "Načítám…" : date > today ? "Nic v plánu." : "Volno, žádná aktivita.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 8)
+                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
             }
             if let proposal = day?.merge, !model.demo {
                 MergeProposalCard(proposal: proposal, busy: keepingApart, merge: { merging = proposal }) {
@@ -431,6 +193,10 @@ struct CalendarDayList: View {
             }
         }
         .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface(cornerRadius: 22)
+        .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         .sheet(item: $watch) { WatchActivityDetail(activity: $0) }
         .sheet(item: Binding(get: { merging.map { Proposed(proposal: $0) } }, set: { merging = $0?.proposal })) {
             MergeWorkoutsSheet(proposal: $0.proposal)
@@ -453,18 +219,6 @@ struct CalendarDayList: View {
             try await model.api.keepWorkoutsApart(ids: proposal.ids)
             await model.refreshTraining()
         } catch {}
-    }
-
-    /// The day's calories with the user's choices for flagged sessions.
-    private func dayKcal(_ day: CalendarDay) -> Double {
-        day.activities.filter { $0.status == "done" }.reduce(0) { $0 + (model.countedKcal($1) ?? 0) }
-    }
-
-    private var heading: String {
-        if date == today { return L10n.tr("Dnes") }
-        if date == ISODay.shift(today, -1) { return L10n.tr("Včera") }
-        if date == ISODay.shift(today, 1) { return L10n.tr("Zítra") }
-        return Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date)
     }
 
     static func route(_ a: CalendarActivity) -> AppRoute? {
@@ -490,45 +244,74 @@ struct CalendarActivityRow: View {
 
     var body: some View {
         let state = PlanState(activity.session)
+        let done = activity.status == "done"
+        // Concept row A (trenink-koncept srow): the sport's disc with who
+        // recorded it, the name, distance and calories, the time big on the
+        // right with the plan's percent under it.
         HStack(spacing: 12) {
-            // The plan's colours, as a row of Tréninky týdne.
-            PlanStateIcon(symbol: SportIcon.symbol(activity.sport, type: activity.type), state: state, percent: activity.compliance)
-                .accessibilityLabel(L10n.tr(state.title))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(activity.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                // Who recorded it: Aurin, the watch, Intervals.icu (both after a merge).
-                if activity.status == "done", let sources = activity.sources, !sources.isEmpty {
-                    SourceLine(sources: sources)
+            SportDisc(sport: activity.sport, type: activity.type, state: SportDisc.State(status: activity.status), size: 44)
+                .overlay(alignment: .bottomTrailing) {
+                    if done, let logo = activity.sources?.first?.logo {
+                        IntegrationIcon(id: logo, size: 13)
+                            .padding(2)
+                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            .offset(x: 3, y: 3)
+                    }
                 }
-                Text(Self.detail(activity)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                // A session done to a plan: only its percent, the why is in its detail.
-                if activity.status == "done", let percent = activity.compliance {
-                    Text(verbatim: "\(percent)" + Fmt.percentSign).font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
-                        .accessibilityLabel(L10n.f("%@ %% plánu", String(percent)))
-                } else if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {
-                    Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
-                }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(activity.title).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                subtitle(state: state).font(Typo.caption).lineLimit(1)
             }
             Spacer(minLength: 6)
-            if let kcal = model.countedKcal(activity), kcal > 0 {
-                let check = kcalToCheck
-                VStack(alignment: .trailing, spacing: 0) {
-                    HStack(spacing: 4) {
-                        if check {
-                            Image(systemName: "exclamationmark.triangle").scaledFont(11, weight: .semibold, cap: .denseCap)
-                        }
-                        Text(Fmt.int(kcal)).font(Typo.number(17))
-                    }
-                    .foregroundStyle(check ? Palette.amber : Palette.ink)
-                    Text("kcal").scaledFont(11, cap: .denseCap).foregroundStyle(Palette.faint)
+            VStack(alignment: .trailing, spacing: 2) {
+                if let m = activity.minutes, m > 0 { Self.duration(Int(m.rounded())) }
+                if done, let percent = activity.compliance {
+                    Text(verbatim: L10n.f("%@ %% plánu", String(percent)))
+                        .font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
+                } else if done, state == .offPlan {
+                    Text(verbatim: L10n.tr("mimo plán")).font(Typo.caption.weight(.semibold)).foregroundStyle(state.color)
                 }
-                .accessibilityLabel(check ? L10n.f("%@ kcal, k ověření", Fmt.int(kcal)) : Fmt.int(kcal) + " kcal")
             }
             if chevron { Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint) }
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// "8,2 km, 820 kcal k ověření" (the calories amber while they wait for a
+    /// check), "V plánu, 17:30" ahead, "Nesplněno" missed, the reason when done differently.
+    private func subtitle(state: PlanState) -> Text {
+        switch activity.status {
+        case "missed": return Text(verbatim: L10n.tr(PlanState.missed.title)).foregroundStyle(Palette.muted)
+        case "done": break
+        default:
+            let time = activity.time.map { ClockText.format($0) }
+            return Text(verbatim: ([L10n.tr("V plánu")] + [time].compactMap { $0 }).joined(separator: ", ")).foregroundStyle(Palette.muted)
+        }
+        var parts: [String] = []
+        if let km = activity.km, km > 0 { parts.append(Units.distanceText(km)) }
+        if parts.isEmpty { parts.append(Fmt.capitalized(L10n.tr(SportStyle.name(activity.sport)))) }
+        var line = Text(verbatim: parts.joined(separator: ", ")).foregroundStyle(Palette.muted)
+        if let kcal = model.countedKcal(activity), kcal > 0 {
+            line = line + Text(verbatim: ", ").foregroundStyle(Palette.muted)
+            line = line + (kcalToCheck
+                ? Text(verbatim: L10n.f("%@ kcal k ověření", Fmt.int(kcal))).foregroundStyle(Palette.amber)
+                : Text(verbatim: Fmt.int(kcal) + " kcal").foregroundStyle(Palette.muted))
+        }
+        if state == .off, activity.compliance == nil, let reason = activity.adherenceReason, !reason.isEmpty {
+            line = line + Text(verbatim: ", " + reason).foregroundStyle(Palette.amber)
+        }
+        return line
+    }
+
+    /// "42 min", "1 h 32 min" with the numbers in the serif.
+    static func duration(_ minutes: Int) -> Text {
+        let unit = { (s: String) in Text(verbatim: s).font(Typo.caption).foregroundStyle(Palette.muted) }
+        let number = { (n: Int) in Text(verbatim: String(n)).font(Typo.number(24)).foregroundStyle(Palette.ink) }
+        if minutes < 60 { return number(minutes) + unit(" min") }
+        let rest = minutes % 60
+        return rest == 0 ? number(minutes / 60) + unit(" h") : number(minutes / 60) + unit(" h ") + number(rest) + unit(" min")
     }
 
     /// "Kolo, 1 h 30 min, 42,3 km", "V plánu, 45 min" or "Nesplněno, 1 h".
@@ -567,7 +350,7 @@ struct WatchActivityDetail: View {
                             .scaledFont(20, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 48, height: 48)
-                            .background(SportStyle.color(activity.sport), in: Circle())
+                            .background(Palette.Sport.color(activity.sport), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: activity.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                             Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)

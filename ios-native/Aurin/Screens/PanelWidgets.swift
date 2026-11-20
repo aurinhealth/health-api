@@ -546,7 +546,7 @@ struct PanelWidget: View {
                 HRVWidget(hrv: value, restingHR: data.restingHR?.value, size: item.size)
             }
         case .vo2max:
-            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size) }
+            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size, bands: model.health?.vo2max?.compared) }
         case .respiration:
             if let value = data.health?.respiration { RespirationWidget(respiration: value, size: item.size) }
         case .skinTemp:

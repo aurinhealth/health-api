@@ -18,6 +18,10 @@ struct RangeDial<Center: View>: View {
     var ends: (String, String)? = nil
     var size: CGFloat = 232
     var lineWidth: CGFloat = 12
+    /// In colour (Training concept, a-hlavni): the usual range a soft green
+    /// arc and the value a filled dot in this colour (the state's: green in
+    /// the range, amber or rust outside it) with a halo. nil keeps the grey dial.
+    var tint: Color? = nil
     /// What VoiceOver says for the whole dial ("Load balance, as usual").
     var spoken: String? = nil
     @ViewBuilder var center: Center
@@ -36,7 +40,7 @@ struct RangeDial<Center: View>: View {
             arc(0, Self.sweep).stroke(Palette.track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             if let band {
                 arc(part(band.lowerBound), part(band.upperBound))
-                    .stroke(Palette.ink.opacity(0.22), style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+                    .stroke(tint == nil ? Palette.ink.opacity(0.22) : Palette.green.opacity(0.6), style: StrokeStyle(lineWidth: lineWidth, lineCap: tint == nil ? .butt : .round))
             }
             if fill, let value {
                 arc(0, part(value)).stroke(Palette.ink, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -44,10 +48,19 @@ struct RangeDial<Center: View>: View {
             if let value {
                 let angle = Angle.degrees(135 + 360 * part(value))
                 let radius = (size - lineWidth) / 2
-                Circle().fill(Palette.background)
-                    .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2.5))
-                    .frame(width: lineWidth + 1, height: lineWidth + 1)
-                    .offset(x: radius * cos(angle.radians), y: radius * sin(angle.radians))
+                Group {
+                    if let tint {
+                        Circle().fill(tint)
+                            .overlay(Circle().strokeBorder(Palette.background, lineWidth: 2))
+                            .frame(width: lineWidth + 3, height: lineWidth + 3)
+                            .background(Circle().fill(tint.opacity(0.25)).frame(width: lineWidth + 11, height: lineWidth + 11))
+                    } else {
+                        Circle().fill(Palette.background)
+                            .overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2.5))
+                            .frame(width: lineWidth + 1, height: lineWidth + 1)
+                    }
+                }
+                .offset(x: radius * cos(angle.radians), y: radius * sin(angle.radians))
             }
             // Inside the arc whatever the text size: two lines at most, shrinking before it spills.
             center
