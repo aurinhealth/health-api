@@ -66,10 +66,15 @@ struct AddFoodSheet: View {
         NavigationStack(path: $path) {
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline) {
+                    HStack(alignment: .center) {
                         Text("Co přidáme?").font(Typo.heading(31, relativeTo: .title)).foregroundStyle(Palette.ink)
                         Spacer()
-                        Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+                        // A cross top right, as every sheet closes (JK 1).
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.muted)
+                                .frame(width: 44, height: 44)
+                        }
+                        .accessibilityLabel(L10n.tr("Zavřít"))
                     }
                     if pick == nil { MealMenu(selection: $meal).padding(.top, 6) }
 

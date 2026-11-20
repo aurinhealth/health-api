@@ -434,9 +434,9 @@ const foodTarget = `<div class="dm pad">
 // the finder with "Vybrat fotku" and "Zadat kód", the found card with NutritionCells, DayLeftLine (what is left of the sample day's 2,650 kcal
 // and 150 g protein after this food), the PortionWheel turned to 1½ servings, "Přidat do oběda" and "Přidat a skenovat další" under it.
 const foodAdd = `<div class="dm pad fa">
-<div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
+<div class="row sp"><span class="sent h">What are we adding?</span><span class="cb">${ic('x')}</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
-<div class="srch">${ic('search')}<span class="mut">Search foods</span></div>
+<div class="srch">${ic('search')}<span class="mut">Search food</span></div>
 <div class="tiles4">${[['barcode', 'Scan'], ['camera', 'Photo'], ['label', 'Label'], ['pencil', 'Manual']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
 <div class="fch"><span class="on">Recent</span><span>Frequent</span><span>Recipes</span></div>
 ${[['Plain Greek yogurt', 'Hollandia, 140 g', 205], ['Banana', '120 g', 105], ['Oat flakes', 'Emco, 60 g', 225], ['Chicken breast', '150 g', 165], ['Basmati rice', '80 g', 280]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="row"><span class="num">${v}<small>kcal</small></span><span class="fplus">${ic('plus')}</span></span></div>`).join('')}

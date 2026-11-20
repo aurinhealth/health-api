@@ -86,7 +86,7 @@
 "Co máš doma" = "What you have at home";
 "Co piješ?" = "What are you drinking?";
 "Co procvičíš" = "What you'll work";
-"Co přidáme?" = "What are you adding?";
+"Co přidáme?" = "What are we adding?";
 "Co se stalo" = "What happened";
 "Co by ti v aplikaci pomohlo?" = "What would help you in the app?";
 "Co sníst před večerním tréninkem?" = "What should I eat before an evening workout?";
@@ -177,7 +177,7 @@
 "Hlavně" = "Primary";
 "Hledat" = "Search";
 "Hledat cvik nebo stroj" = "Search exercises or machines";
-"Hledat potravinu" = "Search foods";
+"Hledat potravinu" = "Search food";
 "Hledám %@…" = "Looking up %@…";
 "Hledám…" = "Searching…";
 "Hluboký" = "Deep";
@@ -4490,9 +4490,7 @@
 "co tělo spálí v klidu" = "what your body uses at rest";
 "kroky a běžný den" = "steps and a normal day";
 "Tréninky se počítají ze %@ %% toho, co spálí. Klidový výdej se odhaduje z tvé váhy, výšky a věku." = "Workouts count at %@%% of what they burn. Resting energy is estimated from your weight, height and age.";
-"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the target, a dashed ring is a day without food logged.";
 "Tento měsíc zatím bez zapsaného jídla." = "No food logged this month yet.";
-"Průměr %@ na zapsaný den." = "Average %@ on logged days.";
 "bez zapsaného jídla" = "no food logged";
 "Snězeno: %@" = "Eaten on %@";
 /* Week plan (redesign W) */
@@ -4763,3 +4761,8 @@
 "Jídelníček" = "Food Log";
 "Adaptivní plány tréninku" = "Adaptive Training Plans";
 "%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";
+"Průměr %@ za celé dny." = "Average %@ on full days.";
+"Dny se splněným cílem bílkovin: %lld z %lld." = "Protein target met on %lld of %lld days.";
+"Dny se splněným cílem sacharidů: %lld z %lld." = "Carbs target met on %lld of %lld days.";
+"Dny se splněným cílem tuků: %lld z %lld." = "Fat target met on %lld of %lld days.";
+"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem kalorií, šedý je den bez cíle, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the calorie target, grey is a day without a target, a dashed ring is a day without food logged.";

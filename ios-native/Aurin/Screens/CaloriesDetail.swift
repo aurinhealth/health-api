@@ -78,6 +78,15 @@ enum FoodValue: String, CaseIterable {
 
     var unit: String { self == .calories ? "kcal" : "g" }
 
+    /// The month's sentence for a macro: days its target was met of the days with one.
+    var metFormat: String {
+        switch self {
+        case .calories, .protein: return "Dny se splněným cílem bílkovin: %lld z %lld."
+        case .carbs: return "Dny se splněným cílem sacharidů: %lld z %lld."
+        case .fat: return "Dny se splněným cílem tuků: %lld z %lld."
+        }
+    }
+
     var color: Color {
         switch self {
         case .calories: return Palette.ink
@@ -459,7 +468,7 @@ struct FoodMonthSheet: View {
                             FoodDayRing(day: days[day], value: value, future: day > today)
                         }
                     }
-                    Text(verbatim: L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla."))
+                    Text(verbatim: L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem kalorií, šedý je den bez cíle, čárkovaný je den bez zapsaného jídla."))
                         .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
@@ -492,7 +501,10 @@ struct FoodMonthSheet: View {
         history = try? await model.api.foodHistory(days: 90)
     }
 
-    /// The month in one sentence: the average over logged days, the days at or under and over.
+    /// The month in one sentence (concept a-jidlo/001): the average over the
+    /// finished logged days, then calories at the target and over, or a
+    /// macro's target met on how many days; days without a kept target only
+    /// count in the average.
     private var summary: String? {
         let list = ISODay.range(month, min(ISODay.monthEnd(month), today)).compactMap { days[$0] }.filter(\.logged)
         guard history != nil else { return nil }
@@ -503,9 +515,15 @@ struct FoodMonthSheet: View {
         let eaten = done.compactMap { value.eaten($0) }
         let mean = eaten.reduce(0, +) / Double(max(eaten.count, 1))
         let count = TargetDays.count(done, value: value)
-        return L10n.f("Průměr %@ na zapsaný den.", Fmt.int(mean) + " " + value.unit) + " "
-            + L10n.plural("%lld dní v cíli nebo pod ním", count.at + count.below) + ", "
-            + L10n.plural("%lld nad ním", count.over) + "."
+        let average = L10n.f("Průměr %@ za celé dny.", Fmt.int(mean) + " " + value.unit)
+        guard count.total > 0 else { return average }
+        if value != .calories {
+            // Over is no failure for a macro: met is anything not well below.
+            return average + " " + L10n.f(value.metFormat, Int64(count.at + count.over), Int64(count.total))
+        }
+        var text = average + " " + L10n.plural("%lld dní v cíli", count.at) + ", " + L10n.plural("%lld nad ním", count.over)
+        if count.below > 0 { text += ", " + L10n.plural("%lld výrazně pod ním", count.below) }
+        return text + "."
     }
 
     private func spoken(_ day: String) -> String? {
@@ -519,8 +537,10 @@ struct FoodMonthSheet: View {
     }
 }
 
-/// One day's ring under its number: eaten out of the target, red over it,
-/// dashed without a log, nothing for days ahead.
+/// One day's ring under its number: eaten out of the target, red over the
+/// calorie target (more protein, carbs or fat is no failure), a full grey ring
+/// on a logged day without a kept target, dashed without a log, nothing for
+/// days ahead.
 struct FoodDayRing: View {
     let day: FoodHistory.Day?
     let value: FoodValue
@@ -532,11 +552,15 @@ struct FoodDayRing: View {
                 Color.clear
             } else if let day, day.logged, let eaten = value.eaten(day) {
                 let target = value.target(day) ?? 0
-                let over = target > 0 && FoodHero.over(eaten: eaten, target: target) >= 1
+                let over = value == .calories && target > 0 && FoodHero.over(eaten: eaten, target: target) >= 1
                 Circle().stroke(Palette.track, lineWidth: 3)
-                Circle().trim(from: 0, to: target > 0 ? min(eaten / target, 1) : 1)
-                    .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
+                if target > 0 {
+                    Circle().trim(from: 0, to: min(eaten / target, 1))
+                        .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                } else {
+                    Circle().stroke(Palette.muted, lineWidth: 3)
+                }
             } else {
                 Circle().stroke(Palette.faint, style: StrokeStyle(lineWidth: 1.2, dash: [2, 3]))
             }
