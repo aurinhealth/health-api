@@ -430,10 +430,7 @@ struct TrainingModeView: View {
         }
         .sheet(isPresented: $editing) {
             if let day {
-                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
-                                go: { edited, id in Task { await saveEdited(edited, focus: id) } },
-                                // After the sheet is gone: the workout mode closes with it.
-                                discard: { Task { try? await Task.sleep(for: .milliseconds(450)); await discard() } }) { edited in Task { await saveEdited(edited) } }
+                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
@@ -2216,12 +2213,10 @@ struct TrainingModeView: View {
     /// exercise with a set left. A rest under way goes on (looking at the
     /// plan or changing it is no reason to cut it short), unless nothing is
     /// left to do after it.
-    private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
+    private func saveEdited(_ edited: GymDay) async {
         day = edited
         if !edited.exercises.contains(where: { $0.sets.contains { !$0.done } }) { restEnd = nil }
         startAtFirstOpen()
-        // "Přejít na cvik": that one, whatever is left before it.
-        if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
         // Saved before the muscles load: a set ticked while they load is saved
         // after this sheet, never under it.
         guard !model.demo else { return await loadMuscles(edited) }

@@ -793,7 +793,7 @@ struct GymBuilderView: View {
     /// training.
     private func add(_ ex: GymCatalogExercise) {
         guard var p = proposal, !p.exercises.contains(where: { $0.name == ex.name }) else { return }
-        let sets = max(1, min(PlanEditorSheet.count(ex.sets) ?? 3, 6))
+        let sets = max(1, min(EditExercisesSheet.count(ex.sets) ?? 3, 6))
         let rows: [[JSONValue]] = (1...sets).map { n in
             ["WORK", ex.name, String(n), "", ex.reps?.string ?? "10", "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) }
         }
