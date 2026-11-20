@@ -69,6 +69,12 @@ struct TodayView: View {
         guard let needsAI = await SetupProOffer.due(model) else { return }
         // Today is seen first, then the offer slides up.
         try? await Task.sleep(for: .milliseconds(900))
+        // Left Today meanwhile: the offer waits for the next time, not lost.
+        guard !Task.isCancelled else {
+            SetupProOffer.pending = true
+            UserDefaults.standard.removeObject(forKey: SetupProOffer.shownKey)
+            return
+        }
         proNeedsAI = needsAI
         proOffer = true
     }

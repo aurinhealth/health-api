@@ -27,11 +27,12 @@ extension AppModel {
         }
     }
 
-    func finishSetup() async {
+    /// loaded: Today was loaded under the setup's last animation (SetupBuildToday).
+    func finishSetup(loaded: Bool = false) async {
         UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
         needsSetup = false
         if resumingHealth { healthResumed() }
-        await refresh()
+        if !loaded || today == nil { await refresh() }
         await refreshFood()
         await refreshHealth()
     }
@@ -340,6 +341,7 @@ extension AppModel {
         PasskeyOfferLater.forget()
         FirstDays.forget()
         FinishSetup.forget()
+        SetupProOffer.pending = false
         offline = false
         demo = false
         phase = .signedOut

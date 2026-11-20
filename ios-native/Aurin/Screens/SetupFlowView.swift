@@ -147,7 +147,8 @@ struct SetupFlowView: View {
         .overlay {
             if building {
                 SetupBuildToday(chips: buildChips, sports: focus.sports.kinds) {
-                    await model.finishSetup()
+                    // Its own task: closing the setup ends this view and would cancel the loads.
+                    Task { [model] in await model.finishSetup(loaded: true) }
                 }
                 .transition(.opacity)
             }

@@ -4,7 +4,7 @@ import SwiftUI
 /// answers go into Today. "Čtu tvůj profil" gathers them, "Nastavuji denní
 /// cíle" pours them into the day's dials, "Skládám tvůj Today" sends the
 /// sports up to the week, then Today. Meanwhile Today loads, so the first
-/// screen has its numbers. Reduce Motion: the three lines only, no flying.
+/// screen has its numbers. Reduce Motion: nothing flies or grows, it fades.
 struct SetupBuildToday: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
