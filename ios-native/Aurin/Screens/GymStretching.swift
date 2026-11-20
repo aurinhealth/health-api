@@ -9,7 +9,7 @@ extension GymStretching.Item {
         /// "2 × 30 s na stranu", "45 s", "3 min"; a cardio without a limit "Bez limitu".
         var duration: String {
             if seconds <= 0 { return L10n.tr("Bez limitu") }
-            let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
+            let time = seconds >= 60 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
             let each = sides ? L10n.f("%@ na stranu", time) : time
             return (rounds > 1 ? "\(rounds) × " : "") + each
         }
@@ -292,6 +292,15 @@ struct StretchTimerView: View {
     /// The live workout's warm-up or stretching (concept 08): the photos, the
     /// hold and its time, the sides, how to do it. Next stretch is under the screen.
     private func inline(_ hold: GymStretching.Hold) -> some View {
+        VStack(spacing: 12) {
+            holdCard(hold)
+            if !hold.item.steps.isEmpty { steps(hold.item.steps) }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// The photos, Hold with the side and its clock, the side bars.
+    private func holdCard(_ hold: GymStretching.Hold) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if !hold.item.photoURLs.isEmpty {
                 ExercisePhotos(urls: hold.item.photoURLs, labeled: false)
@@ -308,9 +317,15 @@ struct StretchTimerView: View {
             }
             .padding(.horizontal, 18).padding(.top, 16)
             sideBars(hold).padding(.horizontal, 18).padding(.top, 12)
-            if !hold.item.steps.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(hold.item.steps.enumerated()), id: \.offset) { i, step in
+        }
+        .padding(.bottom, 16)
+        .cardSurface(cornerRadius: 22)
+    }
+
+    /// The numbered steps, a card under the hold.
+    private func steps(_ steps: [String]) -> some View {
+        VStack(spacing: 0) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(verbatim: "\(i + 1)").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                                 .frame(width: 24, height: 24).background(Palette.ink.opacity(0.08), in: Circle())
@@ -321,13 +336,8 @@ struct StretchTimerView: View {
                         .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 4)
-                .background(Palette.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .padding(.horizontal, 12).padding(.top, 14)
-            }
-        }
-        .padding(.bottom, 14)
-        .accessibilityElement(children: .contain)
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .cardSurface(cornerRadius: 22)
     }
 
     /// "Left side", or the move's own time without sides.
@@ -544,7 +554,7 @@ struct GymPreferences: Decodable, Equatable {
 
         /// "30 s", "20 s na stranu", "5 min".
         var duration: String {
-            let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
+            let time = seconds >= 60 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
             return sides == true ? L10n.f("%@ na stranu", time) : time
         }
     }

@@ -111,6 +111,7 @@ struct LiveRoutineEditor: View {
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 }
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.insetGrouped)
@@ -141,7 +142,7 @@ struct LiveRoutineEditor: View {
         Button(action: action) {
             Text(verbatim: L10n.tr(title)).font(.subheadline.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .lineLimit(2).minimumScaleFactor(0.8).multilineTextAlignment(.center)
+                .lineLimit(1).minimumScaleFactor(0.7).multilineTextAlignment(.center)
                 .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .background(on ? Palette.ink : Palette.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))

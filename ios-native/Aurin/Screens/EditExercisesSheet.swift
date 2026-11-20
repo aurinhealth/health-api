@@ -37,15 +37,17 @@ struct EditExercisesSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // The title as a header: a row clipped its first letter.
                 Section {
+                } header: {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(picking == nil ? "Upravit cviky" : "Udělat supersérii").font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                         Text(picking == nil ? "Táhni za úchyt a změníš pořadí. Mínus cvik odebere."
                              : "Vyber cviky, které jdou spolu. Přesunou se k sobě. Cvik, který jsi začal nebo už je v páru, vybrat nejde.")
                             .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 4))
+                    .textCase(nil)
+                    .padding(.horizontal, -12)
                 }
                 if !doneIndices.isEmpty {
                     Section {
@@ -78,6 +80,8 @@ struct EditExercisesSheet: View {
             }
             .listStyle(.insetGrouped)
             .listRowSpacing(8)
+            .scrollContentBackground(.hidden)
+            .background { ScreenBackground(glow: Palette.Glow.gym) }
             .environment(\.editMode, .constant(picking == nil ? .active : .inactive))
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let picking {
@@ -164,7 +168,7 @@ struct EditExercisesSheet: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Palette.card)
                 .overlay {
                     if letter != nil {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.indigo.opacity(0.7), lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.indigo.opacity(0.7), lineWidth: 1.5)
                     }
                 }
         )

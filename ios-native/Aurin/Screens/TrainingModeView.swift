@@ -1235,7 +1235,7 @@ struct TrainingModeView: View {
         }
         return Group {
             if LivePartDraft.isFree(routine) {
-                FreeTimeRunner(kind: part.kind, key: part.rawValue)
+                FreeTimeRunner(kind: part.kind, key: part.rawValue).cardSurface(cornerRadius: 22)
             } else if part.kind == .cardio, let item = routine.items.first {
                 let focused = live.focused
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
@@ -1244,13 +1244,14 @@ struct TrainingModeView: View {
                                                                started: { waiting = false }, zoneLows: zoneLows,
                                                                target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
                                                                command: cardioCommand))
+                    .cardSurface(cornerRadius: 22)
             } else {
+                // Its own cards: the hold, then the steps.
                 StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close,
                                  skip: Set(routine.items.map(\.id).filter { StretchingCard.done(stretchesDone, date: date).contains(part.kind.key + $0) }),
                                  onHold: { partMove = $0 }, nextTap: partNext)
             }
         }
-        .cardSurface(cornerRadius: 22)
         // Another set of moves after Edit: the runner starts over with them.
         .id(part.rawValue + routine.items.map(\.id).joined(separator: ","))
         .padding(.top, 14)

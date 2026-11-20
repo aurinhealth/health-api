@@ -756,7 +756,7 @@ final class SnapshotTests: XCTestCase {
     /// The top of a finished gym workout (concept 08, Summary).
     func testWorkoutDoneSummary() throws {
         try render("workout-done", glow: Palette.Glow.gym, height: 900) {
-            ScrollView {
+            VStack {
                 WorkoutDoneSummary(title: "Lower body strength", when: "Today, 17:30 to 18:25", sources: ["Aurin", "Apple Watch"],
                                    doneSets: 28, plannedSets: 28,
                                    strain: .init(workout: 8.8, dayFrom: 8.2, dayTo: 12.8, target: (low: 11, high: 14)),
@@ -798,7 +798,6 @@ final class SnapshotTests: XCTestCase {
                                               "Stay there and breathe. No bouncing."])
         try render("stretch-live", glow: Palette.Glow.gym, height: 520) {
             StretchTimerView(stretching: GymStretching(minutes: 2, items: [item]), kind: .stretching, onItemDone: { _ in }, onClose: {})
-                .cardSurface(cornerRadius: 22)
                 .padding(20)
         }
     }
@@ -1024,7 +1023,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundTwoScreens() throws {
-        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 1, save: { _ in }) }
+        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _ in }) }
         try render("body-map-legend", height: 360) {
             BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
         }
