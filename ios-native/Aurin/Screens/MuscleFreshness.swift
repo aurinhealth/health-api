@@ -98,6 +98,8 @@ extension MuscleFatigue {
     var freshnessColors: [String: Color] {
         var colors: [String: Color] = [:]
         for m in muscles ?? [] { colors[m.id] = Freshness.of(readyDate: m.readyDate, rested: m.state == "rested", on: date).color }
+        // The shins have no fatigue of their own: they go with the calves.
+        colors["shins"] = colors["calves"] ?? Freshness.fresh.color
         return colors
     }
 

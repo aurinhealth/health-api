@@ -834,7 +834,7 @@ struct FormWidget: View {
     private var dial: some View {
         let usual = Self.usual(form.series)
         return Card {
-            WidgetHeader(title: "Forma", color: Palette.amberBar)
+            DialTileTitle(title: "Forma")
             RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: zoneColor(form.zone),
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(zoneColor(form.zone))
@@ -961,7 +961,7 @@ struct VO2maxWidget: View {
             ?? [value - 6, value - 3, value + 3, value + 6]
         let i = max(0, min(edges.count - 2, (edges.firstIndex { $0 > value } ?? edges.count - 1) - 1))
         return Card {
-            WidgetHeader(title: "VO2max", color: Palette.green, trailing: L10n.tr("odhad"))
+            DialTileTitle(title: "VO2max, odhad")
             RangeDial(value: value, scale: edges[0]...edges[edges.count - 1], band: bands == nil ? nil : edges[i]...edges[i + 1],
                       size: 118, lineWidth: 7, tint: Palette.green,
                       spoken: "VO2max " + Fmt.decimal(value, digits: 1) + " ml/kg/min") {
@@ -1288,5 +1288,20 @@ struct ZoneBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(parts.map { L10n.tr($0.0) + " " + Fmt.int($0.1 / total * 100) + Fmt.percentSign }.joined(separator: ", "))
+    }
+}
+
+/// A dial tile's name in small capitals with the chevron, as Load balance and
+/// Muscle freshness (Training concept a-hlavni).
+struct DialTileTitle: View {
+    let title: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(verbatim: L10n.tr(title).uppercased(with: Fmt.locale))
+                .font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted).lineLimit(1)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+        }
     }
 }

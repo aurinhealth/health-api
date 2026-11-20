@@ -371,9 +371,10 @@ struct MusclesView: View {
             HStack(spacing: 6) {
                 Circle().fill(state.color).frame(width: 8, height: 8)
                 Text(verbatim: state.title).font(Typo.small).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 Text(verbatim: String(count)).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink).monospacedDigit()
             }
-            .padding(.horizontal, 11).frame(height: 32)
+            .padding(.horizontal, 9).frame(height: 32)
             .background(Palette.ink.opacity(on ? 0.1 : 0.05), in: Capsule())
             .overlay { if on { Capsule().stroke(Palette.ink.opacity(0.5), lineWidth: 1) } }
             .contentShape(Capsule())
@@ -492,7 +493,6 @@ struct MuscleDetailView: View {
             }
         }
         .task { await load() }
-        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
     }
 
     private func load() async {
@@ -501,27 +501,9 @@ struct MuscleDetailView: View {
         do { detail = try await model.api.muscleDetail(id: id) } catch { self.error = error.localizedDescription }
     }
 
-    @ViewBuilder private var header: some View {
-        if let figure = MuscleModelStore.shared.figure {
-            // The 3D figure close on this muscle, turned to the side it is on.
-            Muscle3DView(figure: figure, colors: [id: freshness.color], selected: id, focus: id, yaw: MuscleFigure3D.facing(id))
-                .frame(height: 220).frame(maxWidth: .infinity)
-                .background(Palette.card)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .accessibilityHidden(true)
-                .padding(.top, 20)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                if muscle != nil {
-                    Text(verbatim: freshnessText).font(Typo.small).foregroundStyle(freshness.textColor)
-                }
-            }
-            .padding(.top, 18)
-        } else {
-            flatHeader
-        }
-    }
+    /// The flat figure front and back with this muscle in its colour, as on
+    /// Svaly (the 3D close-up stayed blank on some phones, 602).
+    private var header: some View { flatHeader }
 
     private var flatHeader: some View {
         HStack(spacing: 14) {
