@@ -10,9 +10,12 @@ extension ReadinessText {
     /// One key from the server (src/day-verdict.js NUMBERS_LINE_KEYS).
     static func numbersLine(_ key: String?) -> String? {
         switch key {
-        case "hard": return L10n.tr("Tvoje čísla zvládnou tvrdý trénink")
-        case "steady": return L10n.tr("Tvoje čísla jsou pro den s mírou")
-        case "easy": return L10n.tr("Tvoje čísla ukazují na lehký den")
+        // Descriptive only (improvement pass 2026-11-20): "support a hard
+        // workout" read as advice and said the opposite of the coach's card
+        // after a finished workout.
+        case "hard": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí nebo lepší")
+        case "steady": return L10n.tr("Některá tvoje čísla jsou pod obvyklým rozmezím")
+        case "easy": return L10n.tr("Tvoje čísla jsou pod obvyklým rozmezím")
         case "signs": return L10n.tr("Teplota nebo dech jsou nad tvým obvyklým rozmezím")
         case "usual": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí")
         case "paused": return L10n.tr("Trénink je dnes pozastavený")

@@ -20,7 +20,7 @@ final class TodayRedesignTests: XCTestCase {
             XCTAssertFalse(line?.lowercased().hasPrefix("go ") ?? true, key)
             XCTAssertFalse(line?.contains("Good day") ?? true, key)
         }
-        XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers support a hard workout")
+        XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers are in your usual range or better")
         XCTAssertNil(ReadinessText.numbersLine(nil))
         XCTAssertNil(ReadinessText.numbersLine("legs"))
     }

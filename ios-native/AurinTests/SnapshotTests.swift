@@ -115,7 +115,7 @@ final class SnapshotTests: XCTestCase {
         let thursday = Calendar.current.date(from: parts) ?? Date()
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
-        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "za 2 dny")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "čtvrtek")
         parts.hour = 14
         XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
