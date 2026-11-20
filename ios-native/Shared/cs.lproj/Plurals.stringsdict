@@ -1533,5 +1533,25 @@
 			<string>%lld volných míst</string>
 		</dict>
 	</dict>
+	<key>Z minulé noci a tvých předchozích %lld nocí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Z minulé noci a tvých předchozích %lld nocí</string>
+			<key>many</key>
+			<string>Z minulé noci a tvých předchozích %lld nocí</string>
+			<key>one</key>
+			<string>Z minulé noci a %lld noci před ní</string>
+			<key>other</key>
+			<string>Z minulé noci a tvých předchozích %lld nocí</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

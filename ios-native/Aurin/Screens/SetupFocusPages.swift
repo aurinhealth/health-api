@@ -48,23 +48,6 @@ struct SetupFocus: Equatable {
     }
 }
 
-/// "Jaké sporty děláš?": the sports in one step, ticked, with "Hlavní" on
-/// one or more (SportsPicker); swimming asks whether 100 m go without a stop.
-struct SetupSportPage: View {
-    @Binding var focus: SetupFocus
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SetupPageTitle(title: "Jaké sporty děláš?",
-                           subtitle: "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle.")
-            SportsPicker(choice: $focus.sports)
-            if focus.sports.swims {
-                SwimLevelGroup(swims100: $focus.swims100).padding(.top, 6)
-            }
-        }
-    }
-}
-
 /// "Uplaveš 100 m bez zastavení?" under the sports, when swimming is one of them.
 struct SwimLevelGroup: View {
     @Binding var swims100: Bool?
@@ -119,55 +102,6 @@ struct SetupGoalPage: View {
             }
         }
         .sensoryFeedback(.selection, trigger: focus.goal)
-    }
-}
-
-/// "Kdy můžeš trénovat?": the bars of "Kdy mám čas" (AvailabilityBarRow, up
-/// to 8 h), prefilled with what the server would plan with. "Kde posiluješ?"
-/// opens the gym places for whoever chose the gym.
-struct SetupTimePage: View {
-    @Binding var minutes: [Int]
-    let loading: Bool
-    let lifts: Bool
-    let onEquipment: () -> Void
-    private let monday = WeekPlanView.monday()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SetupPageTitle(title: "Kdy můžeš trénovat?",
-                           subtitle: "Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně.")
-            VStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { i in
-                    if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    AvailabilityBarRow(day: Fmt.weekdayShort(ISODay.shift(monday, i)), minutes: $minutes[i])
-                }
-                AvailabilityAxis().padding(.bottom, 10)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 4)
-            .cardSurface(cornerRadius: 22)
-            .disabled(loading)
-            .opacity(loading ? 0.5 : 1)
-            .overlay { if loading { ProgressView() } }
-            .sensoryFeedback(.selection, trigger: minutes)
-            if lifts {
-                Button(action: onEquipment) {
-                    HStack(spacing: 12) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Kde posiluješ?").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                            Text("Vybavení: posilovna, doma nebo obojí").font(Typo.caption).foregroundStyle(Palette.muted)
-                        }
-                        Spacer(minLength: 8)
-                        Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 13)
-                    .cardSurface(cornerRadius: 18)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
-            }
-        }
     }
 }
 

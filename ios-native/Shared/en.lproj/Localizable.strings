@@ -4707,3 +4707,31 @@
 "Nejdřív zapni sledování cyklu" = "Turn on cycle tracking first";
 "Nejdřív ukáže, co se smaže a co zůstane." = "First shows what is deleted and what stays.";
 "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane." = "Withdraws your consent and deletes your health data. Your account and Pro stay. We show you what happens first.";
+
+/* Part O: Finish setting up on Today, sports on About you */
+"Dokonči nastavení" = "Finish setting up";
+"Nastav svůj cíl" = "Set your goal";
+"Kondice, závod nebo hubnutí" = "Get fitter, a race or lose weight";
+"Vyber dny na trénink" = "Pick your training days";
+"Dny a hodiny týdně" = "Days and hours a week";
+"Vyber, kde posiluješ" = "Choose where you lift";
+"Posilovna, doma nebo obojí" = "Gym, home or both";
+"Zapni oznámení" = "Turn on notifications";
+"Kouč, když je potřeba změnit plán, a kdy jít spát" = "The coach when your plan needs a change, and when to go to bed";
+"Připravenost v %@ a kouč, když se mění plán" = "Readiness at %@, and the coach when your plan changes";
+"Připravenost v %@ a dnes večer připomínka nasadit hodinky" = "Readiness at %@, and tonight a reminder to wear your watch";
+"Tvoje sporty" = "Your sports";
+"Kouč skládá týden kolem tvých hlavních sportů." = "The coach builds your week around your main sports.";
+"Skrýt kartu" = "Hide card";
+"Nastavení dokončeno" = "Setup finished";
+"Z těchhle údajů Aurin počítá kalorie, námahu a zotavení." = "Aurin works out calories, strain and recovery from these.";
+"Nalezeno %@" = "%@ found";
+"Hledám tvoje noci…" = "Looking for your nights…";
+"Spánek a tep" = "Sleep and heart rate";
+"Spočítám hned" = "Ready to score";
+"Aurin se učí, co je u tebe obvyklé" = "Aurin is learning what's usual for you";
+"Den %@ ze 14." = "Day %@ of 14.";
+"Připravenost se ukáže, až bude mít Aurin dva týdny tvého spánku." = "Readiness shows up once Aurin has two weeks of your sleep.";
+"Tvoje první Připravenost. Klepni a uvidíš, jak funguje." = "Your first Readiness. Tap to see how it works.";
+"Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." = "Wear your watch or ring tonight, your number comes tomorrow morning.";
+"Nos dnes v noci hodinky nebo prsten" = "Wear your watch or ring tonight";

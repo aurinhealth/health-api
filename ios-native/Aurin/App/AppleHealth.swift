@@ -132,6 +132,12 @@ final class AppleHealth {
     private(set) var syncing = false
     private(set) var lastSync: Date?
     var message: String?
+    /// What the history import sent (part O, About you's "N nocí" row): the
+    /// nights, and whether Readiness can be there today (history).
+    private(set) var nightsFound: Int?
+    private(set) var readyToScore = false
+    /// The history (not the last days) is being read and sent.
+    private(set) var importingHistory = false
 
     @ObservationIgnored private let reader = HealthReader()
     @ObservationIgnored private var observers: [HKObserverQuery] = []
@@ -231,6 +237,8 @@ final class AppleHealth {
     func disconnect() {
         enabled = false
         generation += 1
+        nightsFound = nil
+        readyToScore = false
         UserDefaults.standard.set(false, forKey: Self.enabledKey)
         UserDefaults.standard.removeObject(forKey: Self.resumeKey)
         stopObservers()
@@ -473,6 +481,20 @@ final class AppleHealth {
         if running != nil, runningSince < left { abandon() }
     }
 
+    /// The nights the history brought, and whether Readiness can be worked out
+    /// today as the server does (src/app-today.js, recovery-model.js): last
+    /// night measured and HRV or resting heart rate on 15 of the last 30 days.
+    private static func history(_ uploads: [AppleHealthUpload], at now: Date) -> (Int, Bool) {
+        let records = uploads.flatMap(\.records)
+        let iso = ISO8601DateFormatter(), morning = Calendar.current.startOfDay(for: now)
+        let nights = records.filter { $0.type == "sleep" && $0.nap != true }
+        let lastNight = nights.contains { ($0.end.flatMap(iso.date(from:)) ?? .distantPast) >= morning }
+        let from = AppModel.localDate(Calendar.current.date(byAdding: .day, value: -30, to: morning) ?? morning)
+        let days = Set(records.filter { ["daily-heart-rate-variability", "daily-resting-heart-rate"].contains($0.type) }
+            .compactMap(\.date).filter { $0 >= from })
+        return (nights.count, lastNight && days.count >= 15)
+    }
+
     private func perform(api: APIClient, force: Bool) async -> SyncOutcome {
         let round = generation
         // A type added in an update (muscle mass) is asked for once, in the app;
@@ -488,9 +510,12 @@ final class AppleHealth {
             return since > 30 ? nil : since
         }
         let sexHistory = JournalSwitch.wantsSexHistory
+        importingHistory = days == nil
+        defer { importingHistory = false }
         do {
             await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
+            let history = days == nil && categories.contains(.sleep) ? Self.history(uploads, at: started) : nil
             // The same days read again with nothing new (most HealthKit wakes and
             // refreshes): nothing goes out. The radio stays off and the server
             // reads and writes no rows. Sent anyway every few hours, and always
@@ -515,6 +540,7 @@ final class AppleHealth {
                 meaningful = meaningful || (answer.meaningful ?? new)
             }
             guard round == generation else { return SyncOutcome(ok: false, changed: changed, meaningful: meaningful) }
+            if let history { (nightsFound, readyToScore) = history }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
             UserDefaults.standard.set(uploadPrint, forKey: Self.sentPrintKey)
@@ -813,9 +839,12 @@ final class HealthReader: @unchecked Sendable {
         if !exerciseRecords.isEmpty {
             windows["exercise"] = .init(from: stamp(workoutStart), to: stamp(now.addingTimeInterval(3600)))
         }
-        let first = nightRecords + exerciseRecords
+        // Readiness needs the nights, HRV and resting heart rate (src/readiness.js):
+        // they go in the first request, so on the first import the number can be
+        // there when Today opens (part O: a real Readiness on day 1). Both are
+        // one value a day, a few hundred records at most.
+        let first = nightRecords + exerciseRecords + (await restingRecords) + (await hrvRecords)
         var rest = await stepRecords + energyRecords
-        rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
         rest += await bodyRecords
         rest += await journalRecords + sexRecords

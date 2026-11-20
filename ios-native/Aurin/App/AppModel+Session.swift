@@ -339,6 +339,7 @@ extension AppModel {
         passkeyOffer = false
         PasskeyOfferLater.forget()
         FirstDays.forget()
+        FinishSetup.forget()
         offline = false
         demo = false
         phase = .signedOut
