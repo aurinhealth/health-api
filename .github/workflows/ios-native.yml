@@ -18,6 +18,11 @@ name: iOS native app
 #   Watch app on the sample day in English and Czech (the watch is dark only),
 #   preview/: the App Store preview videos in English and Czech (app-preview-en.mp4,
 #   app-preview-cs.mp4), and duo/: the sample day on the iPhone Duo simulator.
+#   The simulator screenshots, the preview videos and the Duo and watch shots are
+#   made on main and by hand only (Actions → iOS native app → Run workflow, any
+#   branch): on a pull request they took about 46 of the run's 105 minutes and
+#   check nothing. Pull requests still get the tests, their whole-screen
+#   snapshots and the smoke test.
 
 on:
   workflow_dispatch:
@@ -224,6 +229,7 @@ jobs:
       # The real app on the simulator with sample data, as the phone shows it.
       # The app follows the phone's language, so the English simulator is told Czech.
       - name: Screenshot the running app
+        if: github.event_name != 'pull_request'
         run: |
           udid=${{ steps.sim.outputs.udid }}
           xcrun simctl boot "$udid" || true
@@ -241,6 +247,7 @@ jobs:
       # The website shows the real app (src/site-pages.js): English, light mode, sample
       # data and a clean status bar.
       - name: Screenshot the app for the website
+        if: github.event_name != 'pull_request'
         run: |
           udid=${{ steps.sim.outputs.udid }}
           mkdir -p "$GITHUB_WORKSPACE/screens/site"
@@ -294,6 +301,7 @@ jobs:
       # src/design-system.js). The app's own Vzhled setting (-appearance) turns it dark.
       # Not a release check: a missing dark shot never fails the run.
       - name: Screenshot the app for the website in dark mode
+        if: github.event_name != 'pull_request'
         continue-on-error: true
         env:
           TEST_RUNNER_SMOKE_DIR: ${{ github.workspace }}/screens/smoke-dark
@@ -320,6 +328,7 @@ jobs:
       # Aurin's complications (DemoFace) and a race day (a duathlon, -race). The watch is dark only. Not a release
       # check: a missing watch simulator or shot never fails the run.
       - name: Screenshot the Apple Watch
+        if: github.event_name != 'pull_request'
         continue-on-error: true
         # Usually 5 minutes. A stuck simulator call must not hold the whole run
         # past its time limit (a cancelled run keeps no log); the log names each shot.
@@ -373,6 +382,7 @@ jobs:
       # it marks cut into one 15–30 s video per language (scripts/app-preview.mjs).
       # Never fails the run: the videos are for the store page, not the release.
       - name: Record the App Store preview
+        if: github.event_name != 'pull_request'
         continue-on-error: true
         env:
           TEST_RUNNER_PREVIEW_DIR: ${{ github.workspace }}/screens/preview
@@ -410,6 +420,7 @@ jobs:
       # limit before Build for iPhone, so no upload. Booting and nine screens
       # take 4 to 12 minutes (a slow runner needs 2 min to boot and 4 to install).
       - name: Screenshot the app on iPhone Duo
+        if: github.event_name != 'pull_request'
         continue-on-error: true
         # Each simctl call below has its own limit too, so a stuck one is named
         # in the log and the rest still runs.
