@@ -1,9 +1,10 @@
 // The morning check-in on Today: how the athlete feels, one tap (svěží,
-// normál, unavený, nemocný). Sensors miss sore legs, a coming cold or a bad
-// week at work. The check-in can only lower the readiness the body's signals
-// give (recovery-model.js applyCheckin): a "fresh" tap never turns a red
-// morning green, "tired" caps it at yellow and "sick" makes it red. Today, the
-// ride and run coach and the gym read the same stored answer.
+// normál, unavený, nemocný). Sensors miss sore legs or a bad week at work.
+// The answer NEVER changes the readiness (Petr 2026-10-14; redesign QA-2 and
+// T-HAB-1, 2026-11-16): "tired" is one advice signal of the day
+// (morning-advice.js adviceSignals) and the coach's fact of the day
+// (coach-assistant.js today.feeling). Only Sick from the Journal acts on the
+// readiness (readinessCheckin below).
 import { L } from "./lang.js";
 
 export const FEELINGS = ["fresh", "normal", "tired", "sick"];
@@ -19,9 +20,8 @@ export async function getCheckin(db, date) {
 }
 
 // The question left Today on 2026-10-14 (Petr: a sleepy 6 am for work is not
-// a tired body, so it must not lower the readiness). Readiness, the coaches
-// and the gym no longer read the stored answers; the table and the endpoint
-// stay for builds that still ask.
+// a tired body, so it must not lower the readiness) and comes back with the
+// redesign as advice only (feelingOf).
 // Nemoc ticked in Deník takes its place (audit wave 2, 9.1): ticked today, or
 // yesterday without a ✕ today, the day counts as a sick morning did, so
 // Today, the ride and run coach and the gym say rest. One read of at most two
@@ -46,8 +46,12 @@ export async function saveCheckin(db, date, feeling) {
   return feeling;
 }
 
-// The coach's 0–100 manual readiness (cycling-coach-v2.js caps the zone below
-// 67 at yellow and below 34 at red), so "normal" leaves the body's zone alone.
-export function manualReadinessFor(feeling) {
-  return { fresh: 85, normal: 70, tired: 50, sick: 15 }[feeling] ?? null;
+// The day's stored answer for the advice and the coach, or null. A missing
+// table is no answer (one read, no table created on a read).
+export async function feelingOf(db, date) {
+  if (!db || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return null;
+  try {
+    const row = await db.prepare("SELECT feeling FROM morning_checkins WHERE user_id=? AND date=?").bind(db.userId, date).first();
+    return ["fresh", "normal", "tired"].includes(row?.feeling) ? row.feeling : null;
+  } catch (error) { if (/no such table/i.test(String(error?.message || error))) return null; throw error; }
 }

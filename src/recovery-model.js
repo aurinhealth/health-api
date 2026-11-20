@@ -420,16 +420,15 @@ export function recoveryReadiness(input) {
   return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional, provisionalDays, learningDays };
 }
 
-// The morning check-in (morning-checkin.js) on top of the body's readiness: it
-// only lowers it. "Tired" caps the zone at yellow and the score at 60, "sick"
-// makes it red with at most 25; without the body's number the answer alone
-// gives the zone.
+// Sick ticked in the Journal (morning-checkin.js readinessCheckin) on top of
+// the body's readiness: it makes the day red with at most 25; without the
+// body's number it alone gives the zone. The morning question's answer
+// (fresh, normal, tired) never changes the readiness (Petr 2026-10-14, again
+// for the redesign 2026-11-16, QA-2/T-HAB-1): it is only an advice signal
+// (morning-advice.js) and the coach's fact of the day.
 export function applyCheckin(readiness, feeling) {
-  const cap = { tired: { zone: "yellow", score: 60 }, sick: { zone: "red", score: 25 } }[feeling];
-  if (!cap) return { ...readiness, checkin: feeling || null };
-  const zones = ["red", "yellow", "green"];
-  const zone = readiness.zone ? zones[Math.min(zones.indexOf(readiness.zone), zones.indexOf(cap.zone))] : cap.zone;
-  return { ...readiness, zone, score: readiness.score == null ? null : Math.min(readiness.score, cap.score), flags: [...(readiness.flags || []), "checkin_" + feeling], checkin: feeling };
+  if (feeling !== "sick") return { ...readiness, checkin: null };
+  return { ...readiness, zone: "red", score: readiness.score == null ? null : Math.min(readiness.score, 25), flags: [...(readiness.flags || []), "checkin_sick"], checkin: "sick" };
 }
 
 // Cardiovascular load from time in Google Health's heart-rate zones, weighted

@@ -51,6 +51,9 @@ export function adviceSignals({ date, sleepMinutes = null, context = {} } = {}) 
   if (num(c.lowDays) >= 2) out.push({ id: "low_days", text: L(`připravenost nižší už ${num(c.lowDays) + 1} ${plural(num(c.lowDays) + 1, "den", "dny", "dní")}`, `readiness low for ${num(c.lowDays) + 1} days`) });
   if (num(c.tsb) != null && num(c.tsb) <= LOW_FORM) out.push({ id: "low_form", text: L("nízká forma", "low form") });
   if (c.alcohol) out.push({ id: "alcohol", text: L("včera alkohol", "alcohol last night") });
+  // "Tired" from the morning question (morning-checkin.js feelingOf): one
+  // reason to hold back, never a change of the readiness (AI-6).
+  if (c.feeling === "tired") out.push({ id: "tired", text: L("ráno se cítíš unavený", "you feel tired this morning") });
   return out;
 }
 

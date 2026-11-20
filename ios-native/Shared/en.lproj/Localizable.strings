@@ -2609,6 +2609,8 @@
 "jen zítra" = "tomorrow only";
 "Vstávání" = "Wake up";
 "Změní čas vstávání" = "Changes the wake-up time";
+"Dnes jdu spát" = "Tonight I go to bed at";
+"Změní čas, kdy jdeš spát" = "Changes the bedtime";
 "Zítra vstávám" = "Tomorrow I wake at";
 "Jen zítra" = "Tomorrow only";
 "Každý víkend" = "Every weekend";
@@ -4630,6 +4632,23 @@
 "Pocitově %@" = "Feels like %@";
 "Týden se teď nepodařilo načíst." = "Couldn't load the week right now.";
 "Načítám týden…" = "Loading the week…";
+"Přidat akce" = "Add actions";
+"Karta je plná" = "Card is full";
+"Odeber akci, aby šla přidat jiná." = "Remove an action to add another.";
+"Všechno je na kartě." = "Everything is on the card.";
+"Odebere akci z karty." = "Removes the action from the card.";
+"Odebráno: %@ %@" = "Removed: %1$@, %2$@";
+"Síla krvácení" = "Flow";
+"Středně silné" = "Medium";
+"Snížit váhu" = "Decrease weight";
+"Zvýšit váhu" = "Increase weight";
+"Kouč má na kartě pevné místo." = "The coach keeps its place on the card.";
+"Jiný nápoj" = "Other drink";
+"Jak náročné to bylo" = "How hard was it";
+"1 Velmi lehké" = "1 Very easy";
+"10 Maximum" = "10 Max effort";
+"Doba trvání" = "Duration";
+"Poslední záznam %@, %@" = "Last entry %@, %@";
 
 /* Redesign Na1: Settings hub, Customization, page tops */
 "Karty kouče" = "Coach cards";

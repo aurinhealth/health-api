@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // How hard a set is meant to be, or was, as one letter (column 14 of a gym
 // plan, "[Intenzita X]" in a history note). The letters follow GymRat's,
 // the same in every language: W warm-up, T technique, E easy, M moderate,
@@ -8,6 +9,22 @@ export const INTENSITIES = ['W', 'T', 'E', 'M', 'H', 'F', 'PR', 'D'];
 // RPE the letter stands for in progression and muscle fatigue (null: not a
 // work set). PR and D count as near the limit.
 const RPE = { W: null, T: 5, E: 6, M: 7.5, H: 9, F: 10, PR: 9, D: 10 };
+
+// The effort letters with their anchors in reps left before failure (RIR =
+// 10 − RPE, Zourdos 2016), from the one RPE table above, so the live mode's
+// effort sheet says what each letter means (strength coach S2, HAB-7,
+// 2026-11-16). E is the easiest letter, so it reads "or more".
+export function effortScale() {
+  return ['E', 'M', 'H', 'F'].map(letter => {
+    const rpe = RPE[letter], rir = 10 - rpe, low = Math.floor(rir), high = Math.ceil(rir);
+    const left = letter === 'E' ? { min: low, max: null } : { min: low, max: high };
+    const label = left.max == null ? L(`${left.min} a více opakování v rezervě`, `${left.min}+ reps left`)
+      : left.max === 0 ? L('žádné opakování v rezervě', 'none left')
+        : left.min === left.max ? L(`asi ${left.min} opakování v rezervě`, `about ${left.min} left`)
+          : L(`${left.min}–${left.max} opakování v rezervě`, `${left.min}–${left.max} left`);
+    return { letter, rpe, repsLeft: left, label };
+  });
+}
 
 export function intensityOf(value) {
   const v = String(value ?? '').trim().toUpperCase();

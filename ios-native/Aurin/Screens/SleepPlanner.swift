@@ -22,6 +22,7 @@ struct SleepPlanner: View {
     @State private var sleep = 0
     @State private var dragging = false
     @State private var editingWake = false
+    @State private var editingBed = false
 
     private var need: Int { tonight.need }
     /// Asleep per minute in bed, from the server's plan (time to fall asleep and wake-ups).
@@ -39,8 +40,7 @@ struct SleepPlanner: View {
                           onWake: { wake = $0; dragging = true },
                           onBed: { newBed in
                               dragging = true
-                              let asleep = Double(SleepPlanner.wrap(wake - newBed)) * efficiency
-                              sleep = min(720, max(300, Int((asleep / 5).rounded()) * 5))
+                              sleep = SleepPlanner.asleep(from: newBed, to: wake, efficiency: efficiency)
                           },
                           onEnd: commit)
                     .frame(maxWidth: 300)
@@ -48,7 +48,11 @@ struct SleepPlanner: View {
                     .opacity(saving ? 0.6 : 1)
 
                 HStack(spacing: 10) {
-                    tile(title: "Do postele", symbol: "moon.fill", color: Palette.indigo, time: bed, note: nil)
+                    Button { editingBed = true } label: {
+                        tile(title: "Do postele", symbol: "moon.fill", color: Palette.indigo, time: bed, note: nil, chevron: true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Změní čas, kdy jdeš spát")
                     Button { editingWake = true } label: {
                         tile(title: "Vstávání", symbol: "sun.max.fill", color: Palette.amber, time: wake,
                              note: tonight.wakeOnce == true ? L10n.tr("jen zítra") : nil, chevron: true)
@@ -95,6 +99,12 @@ struct SleepPlanner: View {
             WakeSheet(wake: wake, sleep: sleep, efficiency: efficiency, weekend: weekendMorning) { minutes, every in
                 wake = minutes
                 if every { onEveryDay(minutes, weekendMorning) } else { onChoose(tonight.chosen, minutes) }
+            }
+        }
+        .sheet(isPresented: $editingBed) {
+            BedSheet(bed: bed, wake: wake, efficiency: efficiency) { newBed in
+                sleep = SleepPlanner.asleep(from: newBed, to: wake, efficiency: efficiency)
+                commit()
             }
         }
     }
@@ -201,6 +211,12 @@ struct SleepPlanner: View {
     }
 
     static func wrap(_ minutes: Int) -> Int { ((minutes % 1440) + 1440) % 1440 }
+
+    /// Minutes asleep between a bedtime and the wake time, 5 to 12 hours in 5-minute steps.
+    static func asleep(from bed: Int, to wake: Int, efficiency: Double) -> Int {
+        let asleep = Double(wrap(wake - bed)) * efficiency
+        return min(720, max(300, Int((asleep / 5).rounded()) * 5))
+    }
 }
 
 /// A 24-hour dial (midnight at the top) with the night as an arc from the
@@ -334,6 +350,51 @@ struct WakeSheet: View {
         .presentationDetents([.height(440)])
         .glassSheetBackground()
         .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: wake)) }
+    }
+
+    private var minutes: Int {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+        return (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    }
+}
+
+/// Tonight's bedtime on a wheel; the wake time stays, so the sleep under it
+/// follows the wheel (5 to 12 hours, as on the dial).
+struct BedSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let bed: Int
+    let wake: Int
+    let efficiency: Double
+    let done: (Int) -> Void
+
+    @State private var time = Date()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Button("Zrušit") { dismiss() }.foregroundStyle(Palette.muted)
+                Spacer()
+                Text("Dnes jdu spát").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Spacer()
+                Button("Hotovo") { done(minutes); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.indigo)
+            }
+            DatePicker("Dnes jdu spát", selection: $time, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .environment(\.locale, Fmt.locale)
+                .frame(maxWidth: .infinity)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Spánek").font(Typo.small).foregroundStyle(Palette.muted)
+                Text(SleepPlanner.short(SleepPlanner.asleep(from: minutes, to: wake, efficiency: efficiency)))
+                    .font(Typo.number(36)).foregroundStyle(Palette.indigo)
+                    .contentTransition(.numericText())
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .presentationDetents([.height(400)])
+        .glassSheetBackground()
+        .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: bed)) }
     }
 
     private var minutes: Int {

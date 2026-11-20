@@ -5,6 +5,7 @@ import { timeZone } from "./user-time.js";
 import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weatherkit.js";
 import { triathlonSplit } from "./triathlon-split.js";
 import { planSports } from "./training-plans.js";
+import { pausedSports } from "./athlete-state.js";
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
@@ -344,5 +345,11 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // The race: the athlete's main event, or the race of a running plan (an open-water race, an aquabike).
   const planRace = plan?.plan?.raceDate ? Math.round((Date.parse(plan.plan.raceDate + 'T12:00:00Z') - Date.parse(start + 'T12:00:00Z')) / 86400000) : null;
   targets = { ...targets, items: withOpenWater(targets.items, { start, openWater: focus?.cannotSwim100m ? 'off' : openWater, daysToRace: focus?.event?.daysLeft ?? planRace, weather }) };
+  // A sport paused for a pain ("Plan around your knee?") rests while the memory holds.
+  const paused = pausedSports(state).map(s => s === 'gym' ? ['gym', 'strength'] : [s]).flat();
+  if (paused.length && targets.items.some(x => paused.includes(x.sport))) {
+    targets = { ...targets, items: targets.items.filter(x => !paused.includes(x.sport)) };
+    warnings.push({ text: L('Kvůli bolesti teď vynecháváš: ', 'Resting for the pain: ') + pausedSports(state).map(s => L({ ride: 'kolo', run: 'běh', swim: 'plavání', gym: 'posilovna' }[s], s)).join(', ') + '.' });
+  }
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, ...(split ? { split } : {}), mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }

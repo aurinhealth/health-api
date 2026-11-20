@@ -144,6 +144,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Zdroje:**
   - Impellizzeri FM et al. Int J Sports Physiol Perform 2020;15:907–913.
   - Impellizzeri FM et al. Sports Med 2021;51:581–592: poměr akutní a chronické zátěže (ACWR) nemá vlastní prediktivní hodnotu, proto ho nepoužíváme k předpovědi rizika ani k řízení dávky. Aplikace a kouč ho ukazují jen slovy jako popis týdne: „Posledních 7 dní vs. obvyklých 28“ výrazně pod (< 0,7), pod (0,7–0,9), obvyklá (0,9–1,15), nad (1,15–1,5), výrazně nad (> 1,5); číslo poměru, „sweet spot“ ani riziko se neukazují (`src/workload-ratio.js`, Today audit D4). Hranice jsou naše popisné, ne výsledek studie.
+  - **Load balance a Muscle load na Tréninku** (redesign S2, `loadBalance` a `muscleLoad` v `src/workload-ratio.js`): stejný popis posledních 7 dní proti obvyklým 28, slovy a s obvyklým pásmem 0,9–1,15 a 14denní řadou pro ciferník a graf; poměr slouží jen k vykreslení, jako text se nikdy neukazuje. Do 21 dní historie stav učení. Muscle load bere jen pracovní série posilovny (session RPE × minuty, `strengthLoad` v 2.3a), kardio ani vytrvalost se nepočítají; bez posilovny je prázdný, ne 0. Žádná řeč o riziku zranění.
   - Plews 2012 a Javaloyes 2019 (viz 2.1) pro spouštěč z HRV.
   - Bell L et al. Sports Med Open 2023;9:87 (Delphi konsenzus k deloadu) a Front Sports Act Living 2022;4:1073223 (deload obvykle 5–7 dní každé 4–6 týdny).
 - **Limity:** pravidla 125 % a „tři týdny“ jsou trenérská praxe, ne výsledek kontrolované studie. Pro vytrvalostní cyklus 3:1 jsme kontrolovanou studii nenašli. Spouštěč z HRV je individuální a podložený.
@@ -207,6 +208,16 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Zdroj:** délka běhu: Frandsen JSB et al. Br J Sports Med 2025;59:1203, doi:10.1136/bjsports-2024-109380 (riziko zranění rostlo u běhu delšího než 1,1× nejdelší za 30 dní; týdenní +10 % souvislost neukázal). Zóny: Allen a Coggan (viz Zóny a FTP). Intervaly VO2max: Buchheit M, Laursen PB. Sports Med 2013;43:313–338; Helgerud J et al. 2007 (4×4 min s 3 min pauzou).
 - **Limity:** 60 % v zóně, poloviční pauza u VO2max, ±0,75 obtížnosti a pravidla běžeckého základu jsou naše kalibrace. 60 % a poloviční pauzu splní celá knihovna kromě jednoho MTB tréninku; 70 % a pauza 1:1 by odmítly i over-undery, Helgerudovo 4×4 a běžecké 5×3 min se 2 min klusu. Dva tvrdé dny po sobě hlídá praxe hard/easy, ne studie.
 - **Co tvrdit:** trénink sestavený koučem podle pravidel trenérů, s kontrolou délky běhu podle studie. Nikdy „vědecky podložené“.
+
+### 2.13 Obvyklé pásmo a stav v grafech Zdraví, porovnání VO2max
+
+- **Pásmo u každého bodu** (`src/health-series.js`, `GET /app/api/health/series`): průměr ± 1 SD ze 60 dní před bodem (`personalBaseline`, aspoň 14 dní), u HRV a klidového tepu přesně to pásmo, se kterým počítá index regenerace (`recoveryReadiness`, 2.1). Dech má spodní hranici SD 0,3 jako příznak zvýšeného dechu. Nad 90 dní týdenní průměry.
+- **Stav** podle vzdálenosti od průměru v SD, stejně jako skóre regenerace (1 SD na horší straně = 60, 2 SD = 40) a příznaky dechu a teploty (2 SD): do 1 SD „within“, do 2 SD „slightly“, dál „far“. Žádný nový práh. Texty jen „above/below your usual range“, nikdy nemoc.
+- **Změna za 90 dní:** průměr posledních 7 dní proti 7 dnům o 90 dní dřív (jako změna váhy za 30 dní).
+- **Bez pásma:** připravenost, Form, Fitness a Fatigue (metoda pro obvyklé rozmezí neexistuje, SCI-4/5).
+- **VO2max:** jen vlastní odhad Aurinu (`own-vo2max.js`), žádná hodnota z hodinek. Porovnání se skupinou podle pohlaví a věku z registru FRIEND: laboratorní testy na běhátku s měřeným VO2max, 10., 25., 50., 75. a 90. percentil (Kaminsky LA, Arena R, Myers J. Mayo Clin Proc 2015;90:1515–1523, doi:10.1016/j.mayocp.2015.07.026, ověřeno v PMC4919021). Mimo 20–79 let nebo bez pohlaví se porovnání neukazuje. Stejná tabulka je výchozí norma pro věk podle kondice a Aurin age: přímka přes mediány skupin (muži 35,57 v 50 letech a o 0,474 méně za rok, ženy 26,03 a 0,373), stejně jako u HUNT. Norskou normu HUNT 3 (Loe 2013) si uživatel může zvolit (`fitnessNorm` v profilu, Petr 2026-11-16). Server počítá každý den obě a obrazovky berou zvolenou. Novější aktualizace FRIEND je o 1,5–4,6 ml/kg/min níž; používáme rok 2015 podle schváleného konceptu (Petr 2026-11-16).
+- **Změna VO2max za 3 měsíce:** poslední hodnota proti průměru 7 dní o 90 dní dřív. Řádek „Data from“ jsou zdroje tréninků a klidového tepu, ze kterých se odhad počítal (`details.sources`, od 2026-11-16).
+- **Potřeba spánku po řádcích** (`sleepNeedParts` v `src/app-health.js`): jen čísla ze `sleepNeedFor` (2.2): základ nebo vlastní cíl, zátěž dne, nízká HRV, dluh (nejvýš 30 min), zdřímnutí a co uřízly meze 7–9 h (6–10 h s vlastním cílem).
 
 ## Co zbývá
 

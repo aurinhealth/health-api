@@ -8,6 +8,7 @@ import { packMessagesLeft, packPurchases } from './coach-packs.js';
 import { coachAllowance } from "./coach-allowance.js";
 import { foodPhotoTrial } from "./food-photo-trial.js";
 import { inFreeWeek } from "./ai-limit-share.js";
+import { proBanner, closeProBanner } from "./pro-banner.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -144,7 +145,16 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const packsOnSale=status.checkoutAvailable&&!await inFreeWeek(env).catch(()=>false);
     // The month's free photos of food, only where they apply: the paywall on, no Pro (food-photo-trial.js).
     const photoTrial=status.mode==='paid'&&status.plan!=='ai'?await foodPhotoTrial(env).catch(()=>null):null;
-    return Response.json({...status,packsOnSale,coachAllowance:await coachAllowance(env).catch(()=>null),photoTrial,appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+    // The Pro banner on Today (pro-banner.js): shown or not, and which offer.
+    const banner=session.signedIn?await proBanner(env,status).catch(error=>{console.error('Pro banner read failed',error.message);return null;}):null;
+    return Response.json({...status,packsOnSale,coachAllowance:await coachAllowance(env).catch(()=>null),photoTrial,proBanner:banner,appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+  }
+  // ✕ on the Pro banner: it comes back in 7 days, after the third close in 30 (pro-banner.js).
+  if(url.pathname==='/app/api/pro-banner/close'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    await closeProBanner(env.DB);
+    return Response.json({status:'ok',proBanner:await proBanner(env,await subscriptionStatus(env))},{headers:{'Cache-Control':'no-store'}});
   }
   // Extra coach messages: how many are left and the purchases, for "Your purchases" (coach-packs.js).
   if(url.pathname==='/app/api/coach-packs'&&request.method==='GET'){

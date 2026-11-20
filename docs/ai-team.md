@@ -132,6 +132,27 @@ for design; roles that mostly read and summarise run on Sonnet 5.5. The owner ap
 - Prices per million tokens, input / output: Fable 5.2 $8 / $40, Opus 5.5 $4 / $20, Sonnet 5.5
   $2 / $10, Haiku 5.5 $0.10 / $0.50. A whole thread runs on Fable only when the owner asks for it.
 
+## Checks before a pull request
+- **Run it:** before a pull request the thread follows `.claude/skills/verify/SKILL.md` (tests, then
+  the change itself locally or on staging) and writes `Ověřeno:` into the pull request. A cloud
+  project with two repositories may not load the skill on its own, so the PM names it in the brief.
+- **A change never edits its own check:** a pull request that changes the coach's prompts
+  (aurin-prompts) does not change the coach eval's situations or expected answers
+  (`src/coach-eval.js`, `scripts/coach-eval.mjs`) and the other way round. The eval runs from main,
+  so a new or changed situation goes in its own pull request, merged first.
+- **Checklist from past problems:** the reviewer reads the diff and checks only the lines whose
+  trigger it matches. A new problem that happened twice gets a line; a line nobody needs goes.
+
+| Trigger in the diff | Check |
+|---|---|
+| Server change a TestFlight build will use | TestFlight talks to production: it works only after "vydej", so the notes say so |
+| New or renamed field in an API answer, or a model the app decodes | An app version already in users' hands still works without it (optional, default) |
+| `migrations/` or a shard schema | Only adds; runs on staging and on every user database; old rows without the column still read |
+| `Localizable.strings` | No other open thread changes it; every new UI text in English and Czech |
+| AI prompts, AI limits, paywall or prices | Coach eval 3 rounds on staging; `monetization-analyst` check written in the pull request |
+| Sync or reads of many rows | D1 rows read and written per action, `performance-cost` result in the pull request |
+| Text sent to an AI model in `src/` | It lives in aurin-prompts, never in health-api (`.claude/rules/ai-prompts.md`) |
+
 ## Independent review before "mergni"
 Every pull request gets one review by a sub agent that did not build it, before the owner is asked
 for "mergni". A hotfix the owner lets a thread merge on green CI gets it before that merge.
