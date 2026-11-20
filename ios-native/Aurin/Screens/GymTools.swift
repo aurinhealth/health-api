@@ -612,7 +612,10 @@ struct GymBuilderView: View {
                 }
                 .buttonStyle(.plain)
                 // Start workout: it opens with 3, 2, 1 and starts (concept 08).
-                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = isoDay })
+                .simultaneousGesture(TapGesture().onEnded {
+                    // Only today's workout starts by itself; another day opens to look first.
+                    if isoDay == AppModel.localDate(Date()) { TrainingModeView.startOnOpen = isoDay }
+                })
                 .padding(.top, 12)
             } else {
                 SectionLabel(text: "Upravit vlastními slovy").padding(.top, 26)

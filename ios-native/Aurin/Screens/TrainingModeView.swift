@@ -225,7 +225,7 @@ struct TrainingModeView: View {
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .overlay {
-            if countingDown, let day { countdown(day).padding(.horizontal, -20).padding(.top, -12) }
+            if countingDown, let day { countdown(day) }
         }
     }
 
@@ -233,10 +233,10 @@ struct TrainingModeView: View {
         let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
         let part: GymDayPart? = showsParts(day, parts) ? parts.before(day).first { !partDone($0, day) } : nil
         let title: String = part.map { L10n.tr($0.kind.title) } ?? L10n.tr("Posilovna")
-        let first: String? = part.map { parts.routine($0, day: day)?.items.first?.name } ?? day.exercises.first?.name
+        let first: String? = part.map { parts.routine($0, day: day)?.items.first?.name } ?? current(day)?.name
         return StartCountdown(title: title, first: first, live: live,
-                              onStart: { countingDown = false; beginFromCountdown(day) },
-                              onCancel: { countingDown = false; dismiss() })
+                              onStart: { guard countingDown else { return }; countingDown = false; beginFromCountdown(day) },
+                              onCancel: { guard countingDown else { return }; countingDown = false; dismiss() })
     }
 
     /// The countdown ran out or was tapped: as Začít trénink.
@@ -1897,6 +1897,11 @@ struct TrainingModeView: View {
     // MARK: Server
 
     private func load() async {
+        // Asked once, from GymSessionView or Start workout: never again on a later opening.
+        let resumeAsked = Self.resumeOnOpen == date
+        Self.resumeOnOpen = nil
+        let startAsked = Self.startOnOpen == date
+        Self.startOnOpen = nil
         if model.demo {
             day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized()
             // The sample day has sets done: under way, as a real one opened again (below), without a recording.
@@ -1907,11 +1912,6 @@ struct TrainingModeView: View {
         }
         loading = true
         defer { loading = false }
-        // Asked once, from GymSessionView: never again on a later opening.
-        let resumeAsked = Self.resumeOnOpen == date
-        Self.resumeOnOpen = nil
-        let startAsked = Self.startOnOpen == date
-        Self.startOnOpen = nil
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
             watchTook = false
@@ -1939,7 +1939,7 @@ struct TrainingModeView: View {
             if reopened, resumeAsked {
                 await resume()
             }
-            if startAsked, !finishedSession, !started, let day, !day.exercises.isEmpty { countingDown = true }
+            if startAsked, !finishedSession, !started, let day, current(day) != nil { countingDown = true }
             // The muscles of Celkem dnes now, not only from the exercise screen:
             // back in a rest (the bar, the edge swipe) that screen isn't shown.
             if let day { await loadMuscles(day) }
@@ -2137,6 +2137,7 @@ struct TrainingModeView: View {
     /// in Apple Health) and the lock screen's Live Activity start now.
     private func start() async {
         startTapped = true
+        countingDown = false
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         syncActivity()

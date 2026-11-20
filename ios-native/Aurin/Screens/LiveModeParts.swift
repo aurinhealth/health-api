@@ -496,6 +496,7 @@ struct StartCountdown: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onStart)
         .accessibilityAction(named: Text("Začít hned"), onStart)
+        .accessibilityAddTraits(.isModal)
         .task {
             while left > 0 {
                 try? await Task.sleep(for: .seconds(1))
