@@ -268,8 +268,9 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         }
         // The day's strength event (the app's copy in Intervals.icu) goes along, or it would stay behind as missed.
         const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all().catch(error=>{console.error('Strength events not read',error.message);return {};})).results||[];
-        for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await movePlannedEvent(env,{eventId:row.external_id,date:to}).catch(error=>console.error('Strength event not moved',error.message));}
-        return Response.json({status:'ok',date:to,message:L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
+        let stayed=false;
+        for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await movePlannedEvent(env,{eventId:row.external_id,date:to}).catch(error=>{stayed=true;console.error('Strength event not moved',error.message);});}
+        return Response.json({status:'ok',date:to,message:stayed?L('Gym je přesunutý, ale v kalendáři Intervals.icu zůstal na původním dni.', 'The gym session has been moved, but it stayed on the old day in the Intervals.icu calendar.'):L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
       }
       // The day's strength events (Intervals.icu and the app's own copy).
       const deleteStrengthEvents=async()=>{
