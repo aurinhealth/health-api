@@ -9,22 +9,28 @@ struct EditExercisesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var day: GymDay
     let catalog: [GymCatalogExercise]
-    /// The exercise under way ("Now").
-    var current: Int? = nil
+    /// The exercise under way ("Now"), by name: its place changes as the list is edited.
+    let currentName: String?
     let save: (GymDay) -> Void
+    /// The day as it came: Cancel shows once something changed.
+    private let original: GymDay
     @State private var adding = false
     /// Make superset: the exercises picked so far (by id); nil while editing.
     @State private var picking: Set<String>?
 
     init(day: GymDay, catalog: [GymCatalogExercise], current: Int? = nil, save: @escaping (GymDay) -> Void) {
         _day = State(initialValue: day)
+        original = day
         self.catalog = catalog
-        self.current = current
+        currentName = current.flatMap { day.exercises[safe: $0]?.name }
         self.save = save
     }
 
     private var doneIndices: [Int] { day.exercises.indices.filter { !Self.left(day.exercises[$0]) } }
     private var leftIndices: [Int] { day.exercises.indices.filter { Self.left(day.exercises[$0]) } }
+    /// Rows by the exercise, so a removed or moved one animates as itself.
+    private struct Row: Identifiable { let index: Int; let id: String }
+    private func rows(_ indices: [Int]) -> [Row] { indices.map { Row(index: $0, id: day.exercises[$0].name) } }
 
     static func left(_ exercise: GymExercise) -> Bool { exercise.sets.contains { !$0.done } }
 
@@ -43,14 +49,14 @@ struct EditExercisesSheet: View {
                 }
                 if !doneIndices.isEmpty {
                     Section {
-                        ForEach(doneIndices, id: \.self) { i in doneRow(day.exercises[i]) }
+                        ForEach(rows(doneIndices)) { row in doneRow(day.exercises[row.index]) }
                     } header: {
                         SectionLabel(text: "Hotové")
                     }
                     .opacity(picking == nil ? 1 : 0.45)
                 }
                 Section {
-                    ForEach(leftIndices, id: \.self) { i in leftRow(i) }
+                    ForEach(rows(leftIndices)) { row in leftRow(row.index) }
                         .onDelete(perform: deleteAction)
                         .onMove(perform: moveAction)
                 } header: {
@@ -61,7 +67,9 @@ struct EditExercisesSheet: View {
                         HStack(spacing: 10) {
                             footerButton("Přidat cvik") { adding = true }.disabled(catalog.isEmpty)
                             footerButton("Udělat supersérii") { withAnimation(.snappy) { picking = [] } }
-                                .disabled(leftIndices.filter(pickable).count < 2)
+                                // Also to take a superset apart (Unpair is there).
+                                .disabled(leftIndices.filter(pickable).count < 2
+                                          && !leftIndices.contains { ExerciseOrder.letter(day.exercises[$0].superset) != nil })
                         }
                     }
                     .listRowBackground(Color.clear)
@@ -87,6 +95,9 @@ struct EditExercisesSheet: View {
                 if picking != nil {
                     ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { withAnimation(.snappy) { picking = nil } } }
                 } else {
+                    if day.values != original.values {
+                        ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button { save(day); dismiss() } label: { Text("Hotovo").fontWeight(.semibold).foregroundStyle(Palette.green) }
                     }
@@ -133,12 +144,12 @@ struct EditExercisesSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: exercise.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
                 Text(verbatim: detail(exercise)).font(Typo.caption).foregroundStyle(Palette.muted)
-                if let letter, letter != previousLetter(i) {
+                if let letter, letter != previousLetter(i) || !Self.left(day.exercises[i - 1]) {
                     supersetTag(letter, index: i).padding(.top, 4)
                 }
             }
             Spacer(minLength: 6)
-            if i == current {
+            if exercise.name == currentName {
                 Text("Teď").font(.footnote.weight(.semibold)).foregroundStyle(Palette.amber)
             }
         }
@@ -195,7 +206,8 @@ struct EditExercisesSheet: View {
     /// Not started, not under way, in no superset yet.
     private func pickable(_ i: Int) -> Bool {
         let exercise = day.exercises[i]
-        return exercise.doneCount == 0 && i != current && ExerciseOrder.letter(exercise.superset) == nil
+        // Warm-up sets count as begun too.
+        return !exercise.sets.contains(where: \.done) && exercise.name != currentName && ExerciseOrder.letter(exercise.superset) == nil
     }
 
     private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {
