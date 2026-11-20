@@ -201,6 +201,13 @@ enum PlanSessionActions {
         session.status == "planned" && (session.eventId != nil || session.kind == "gym")
     }
 
+    /// A ride, run or swim of the calendar missed on a past day: it can still
+    /// move to a day ahead or be cancelled (a missed gym session has
+    /// "Změnit trénink", GymPlanActionsSheet).
+    static func missed(_ session: WeekSession) -> Bool {
+        session.status == "missed" && session.eventId != nil && session.sport != "strength"
+    }
+
     /// time: nil keeps the time of day (a gym plan saved in the app has none),
     /// "" leaves the day without one, "HH:MM" sets it. Returns the server's note.
     @MainActor
