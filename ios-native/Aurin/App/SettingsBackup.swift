@@ -15,7 +15,7 @@ enum SettingsBackup {
         GymDayParts.storageKey,
         "libraryIndoor", "libraryPresetsRide", "libraryPresetsRun", "libraryToleranceRide", "libraryToleranceRun",
         "writeIntervals", "writeWahoo", "weekPlan.mode", "calendarMode", "favoriteActivityTypes",
-        "plusMenu.items", "plusMenu.layout", PlusItem.storageKey, QuickAction.storageKey,
+        "plusMenu.layout", PlusItem.storageKey, QuickAction.storageKey,
         "foodListOrder", DrinkPrefs.favoritesKey, DrinkFigureKind.storageKey, DrinkFigureKind.animateKey,
         JournalSwitch.key, DeviceLocation.followKey, StoredIcons.key,
         "appleHealth.export"

@@ -27,6 +27,7 @@ struct SettingsView: View {
             }
         }
         .tint(Palette.ink)
+        .environment(\.settingsTitles, true)
         .task {
             if store == nil {
                 let s = SettingsStore(api: model.api, demo: model.demo)
@@ -50,10 +51,9 @@ struct SettingsMenu: View {
     var signOut: () -> Void = {}
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var close
-    @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
-        SettingsPage(title: "Nastavení", spacedTitle: true) {
+        SettingsPage(title: "Nastavení") {
             if model.demo {
                 Text("Prohlížíš ukázková data. Změny se neukládají.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
@@ -103,8 +103,8 @@ struct SettingsMenu: View {
                         .accessibilityValue(SourcesSettingsView.needsLook(store) ? L10n.tr("Potřebuje tvou pozornost") : "")
                 }
                 SettingsDivider()
-                NavigationLink { CalendarSettingsView(onChange: { calendarStatus = CalendarSettingsView.status }) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber, disc: true), title: "Kalendář", value: calendarStatus)
+                NavigationLink { CalendarSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber, disc: true), title: "Kalendář")
                 }
                 SettingsDivider()
                 NavigationLink { PrivacySettingsView() } label: {

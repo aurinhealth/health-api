@@ -68,7 +68,7 @@ struct SettingsIcon: View {
             SettingsDisc(systemImage: systemImage, color: color, size: 34)
                 .overlay(alignment: .topTrailing) {
                     if alert {
-                        Circle().fill(Palette.rust).frame(width: 9, height: 9)
+                        Circle().fill(Palette.amber).frame(width: 9, height: 9)
                             .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
                             .offset(x: 2, y: -2)
                     }
@@ -279,9 +279,10 @@ struct SettingsPage<Content: View>: View {
     var trail = true
     /// The icon and the sentence on top (Settings pages only).
     var hero: SettingsHero? = nil
-    /// The title in small spaced capitals (the Settings concept): on by
-    /// default for Settings pages, which are the ones with a hero.
+    /// The title in small spaced capitals (the Settings concept): on for
+    /// every page pushed inside Settings (settingsTitles), or when asked.
     var spacedTitle: Bool? = nil
+    @Environment(\.settingsTitles) private var settingsTitles
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -298,7 +299,7 @@ struct SettingsPage<Content: View>: View {
         .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if spacedTitle ?? (hero != nil) {
+            if spacedTitle ?? settingsTitles {
                 ToolbarItem(placement: .principal) {
                     Text(L10n.tr(title).uppercased(with: L10n.locale))
                         .font(.footnote.weight(.semibold)).tracking(2.4).foregroundStyle(Palette.ink)
@@ -453,4 +454,9 @@ struct OptionListPage: View {
             }
         }
     }
+}
+
+/// Settings' navigation sets it, so its pages carry the spaced capital title.
+extension EnvironmentValues {
+    @Entry var settingsTitles = false
 }

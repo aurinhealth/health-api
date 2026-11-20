@@ -156,7 +156,8 @@ struct SourcesSettingsView: View {
             .buttonStyle(.plain)
             if actions.working == provider.id {
                 Text(L10n.tr("připojuji…")).font(Typo.caption).foregroundStyle(Palette.muted)
-            } else if issue != nil && !store.demo {
+            } else if issue != nil && provider.problemText != nil && !store.demo {
+                // Fix reconnects, so only for an access problem; old data alone shows its line.
                 Button { start(provider.id) } label: {
                     Text(L10n.tr("Opravit")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
                         .frame(minHeight: 44).contentShape(Rectangle())

@@ -347,7 +347,7 @@ struct WakeSheet: View {
                 Spacer()
                 Text("Zítra vstávám").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
-                Button("Hotovo") { done(minutes, every); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.indigo)
+                Button("Hotovo") { done(minutes, every); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.green)
             }
             DatePicker("Zítra vstávám", selection: $time, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
@@ -362,7 +362,7 @@ struct WakeSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("Do postele").font(Typo.small).foregroundStyle(Palette.muted)
                 Text(ClockText.format(minutes: SleepPlanner.wrap(minutes - Int((Double(sleep) / efficiency / 5).rounded()) * 5)))
-                    .font(Typo.number(36)).foregroundStyle(Palette.indigo)
+                    .font(Typo.number(36)).foregroundStyle(Palette.green)
                     .contentTransition(.numericText())
             }
             Spacer(minLength: 0)
@@ -397,7 +397,7 @@ struct BedSheet: View {
                 Spacer()
                 Text("Dnes jdu spát").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
-                Button("Hotovo") { done(minutes); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.indigo)
+                Button("Hotovo") { done(minutes); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.green)
             }
             DatePicker("Dnes jdu spát", selection: $time, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
@@ -407,7 +407,7 @@ struct BedSheet: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text("Spánek").font(Typo.small).foregroundStyle(Palette.muted)
                 Text(SleepPlanner.short(SleepPlanner.asleep(from: minutes, to: wake, efficiency: efficiency)))
-                    .font(Typo.number(36)).foregroundStyle(Palette.indigo)
+                    .font(Typo.number(36)).foregroundStyle(Palette.green)
                     .contentTransition(.numericText())
             }
             Spacer(minLength: 0)

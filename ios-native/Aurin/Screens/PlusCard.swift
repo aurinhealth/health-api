@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 /// logs it, and the same place then says what was added, with Undo.
 struct PlusCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var textSize
     var close: () -> Void
     var openCoach: () -> Void
     /// The user's actions in order, without the coach (PlusItem.storageKey);
@@ -243,7 +244,7 @@ struct PlusCard: View {
                 }
             }
             Text(L10n.tr(item.title)).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                .multilineTextAlignment(.center).lineLimit(1).minimumScaleFactor(0.7)
+                .multilineTextAlignment(.center).lineLimit(textSize.isAccessibilitySize ? 2 : 1).minimumScaleFactor(0.7)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)

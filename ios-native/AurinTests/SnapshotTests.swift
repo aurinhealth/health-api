@@ -1339,6 +1339,18 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 11), "12 payments from Nov 2026")
     }
 
+    /// 602 point 71: the axis counts back from the next payment, so payment 1
+    /// with the next due Nov 21, 2026 starts in Oct 2026, not a year earlier.
+    func testPaymentDotsFirstMonthFromNextPayment() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let next = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 21)))
+        let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 30)))
+        let payments = ProStore.Payments(number: 1, total: 12, next: next, ends: ends)
+        let first = PaymentDots.firstMonth(payments, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 10))
+    }
+
     func testFreeWeekDates() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
