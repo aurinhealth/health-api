@@ -15,6 +15,10 @@ test("a read is tried again after a database blip, a write only when it never ra
   assert.equal(transientD1Error(overloaded(), { read: false }), true);
   assert.equal(transientD1Error(reset(), { read: false }), false);
   assert.equal(transientD1Error(new Error("Network connection lost."), { read: false }), false);
+  // The whole account refused for a moment (prod 2026-11-19, coach-push and water-push): it never ran.
+  const accountBusy = new Error("D1_ERROR: Your account is generating too much load on D1 DBs. Please back off and try again later.");
+  assert.equal(transientD1Error(accountBusy), true);
+  assert.equal(transientD1Error(accountBusy, { read: false }), true);
 
   let calls = 0;
   assert.equal(await withD1Retry(async () => { if (++calls < 3) throw overloaded(); return "ok"; }, noSleep), "ok");
