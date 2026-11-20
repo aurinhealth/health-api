@@ -1300,41 +1300,38 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(parts[0].drinks.map(\.id), [11, 12])
     }
 
-    /// The offer in night violet: the opening at moments of its animation,
-    /// the offer with its phones, all plans and the free week.
+    /// The offer (part Pro): the demo with the coach first, then the offer with
+    /// the plans, with and without the free week, and with the AI note of the setup.
     func testPaywallTour() throws {
-        for time in [0.5, 2.0, 3.6, 5.0, 8.0] {
+        for time in [0.5, 4.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
-        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
-        try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
-        // The end of the first setup (point 7): no way back, "Teď ne" under the button.
-        try render("paywall-setup-end", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true) }
-        // The same with the AI features left off in the setup (1.0.1 point 2): the note and "Povolit AI a začít týden zdarma",
-        // at the safe-area height of a 6.1" iPhone (852 − 59 − 34), so the image shows the page fits.
-        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true), notNow: true, allowAI: {}) }
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        // The end of the first setup with the AI features left off: the note and "Povolit AI a začít týden zdarma",
+        // at the safe-area height of a 6.1" iPhone (852 − 59 − 34).
+        try render("paywall-setup-end-ai", height: 759) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true), allowAI: {}) }
         // "View more plans" (variant 8c): where the year can be paid monthly (CZ) and where it can't (US).
         let czech = ProOffer.plans(yearly: "1 490 Kč", monthly: "199 Kč", perMonth: "124 Kč",
                                    commitment: ProStore.Commitment(monthly: "149 Kč", total: "1 788 Kč"), trial: true)
         try render("paywall-all-plans", height: 900, window: true) {
             AllProPlans(offers: czech, selected: .constant(.yearMonthly), buying: false, start: {}, redeem: {}, restore: {})
-                .background(Night.bottom)
+                .background(Palette.background)
         }
         try render("paywall-all-plans-monthly", height: 900, window: true) {
             AllProPlans(offers: czech, selected: .constant(.monthly), buying: false, start: {}, redeem: {}, restore: {})
-                .background(Night.bottom)
+                .background(Palette.background)
         }
         try render("paywall-all-plans-large-text", height: 1400, typeSize: .accessibility3, window: true) {
             AllProPlans(offers: czech, selected: .constant(.yearMonthly), buying: false, start: {}, redeem: {}, restore: {})
-                .background(Night.bottom)
+                .background(Palette.background)
         }
         L10n.setLanguage("en")
         defer { L10n.setLanguage("cs"); UserDefaults.standard.removeObject(forKey: "AppleLanguages") }
         let american = ProOffer.plans(yearly: "$59.99", monthly: "$6.99", perMonth: "$5.00", commitment: nil, trial: true)
         try render("paywall-all-plans-us-en", height: 900, window: true) {
             AllProPlans(offers: american, selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
-                .background(Night.bottom).environment(\.locale, L10n.locale)
+                .background(Palette.background).environment(\.locale, L10n.locale)
         }
     }
 

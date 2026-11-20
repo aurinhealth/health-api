@@ -351,7 +351,7 @@ private struct DrinkFigureClassic: View {
 
 /// Whether the figure is on screen in its scroll view (iOS 18); on iOS 17 it
 /// counts as on screen and the tab and app checks still stop it.
-private struct ScreenVisibility: ViewModifier {
+struct ScreenVisibility: ViewModifier {
     @Binding var onScreen: Bool
 
     func body(content: Content) -> some View {

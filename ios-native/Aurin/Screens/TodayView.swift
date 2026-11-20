@@ -58,7 +58,7 @@ struct TodayView: View {
         // Decision B (part O): once, when Today is ready after the setup's animation.
         .task(id: model.today != nil && !model.needsSetup) { await offerPro() }
         .fullScreenCover(isPresented: $proOffer) {
-            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
+            PaywallView(close: { proOffer = false },
                         allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
         }
     }
