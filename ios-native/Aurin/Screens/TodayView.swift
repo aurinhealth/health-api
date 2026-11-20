@@ -486,6 +486,8 @@ struct WeekStrip: View {
         }
         // The readiness dots of the months in sight, once each (a month a call).
         .task(id: months) {
+            // Food has no readiness dots (concept Jídlo, rule T1).
+            guard !ahead else { return }
             let oldest = ISODay.shift(today, -90)
             for month in months { await model.loadDays(from: max(month, oldest), to: ISODay.monthEnd(month)) }
         }
@@ -513,6 +515,7 @@ struct WeekStrip: View {
 
     /// The day's readiness zone: the week Today holds, then the days loaded.
     private func zone(_ day: String) -> String? {
+        if ahead { return nil }
         if let week = model.today?.week, let item = week.first(where: { $0.date == day }) { return item.zone }
         return model.dayValues[day]?.readiness?.zone
     }
