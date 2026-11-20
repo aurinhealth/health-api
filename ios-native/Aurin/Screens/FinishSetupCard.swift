@@ -39,6 +39,7 @@ struct FinishSetupCard: View {
     let today: TodaySnapshot
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(FinishSetup.sinceKey) private var since: Double = 0
     @AppStorage(FinishSetup.goalKey) private var goal = false
     @AppStorage(FinishSetup.timeKey) private var time = false
@@ -109,6 +110,10 @@ struct FinishSetupCard: View {
             }
             .sensoryFeedback(.success, trigger: allDone) { _, done in done }
             .task { await load() }
+            // Back from iOS settings: allowed there, the row is done.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && !notifications { Task { await recheckNotifications() } }
+            }
             .onChange(of: allDone) { _, done in if done { Task { await finish() } } }
             .sheet(isPresented: $editingGoal) { goalSheet }
             .sheet(isPresented: $editingTime) {
@@ -179,7 +184,17 @@ struct FinishSetupCard: View {
         profile = p
         focus = SetupFocus(profile: p)
         lifts = focus.sports.kinds.contains("strength")
-        if !focus.goal.isEmpty { goal = true }
+        // Also a goal saved in Nastavení → Cíle in its own words (goalType),
+        // as that page shows it chosen (device test of build 602).
+        if !focus.goal.isEmpty || !(p["goalType"]?.string ?? "").isEmpty { goal = true }
+    }
+
+    private func recheckNotifications() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        guard [.authorized, .provisional, .ephemeral].contains(status) else { return }
+        await PushRegistration.refresh(api: model.api)
+        if let today = model.today { await Reminders.reschedule(from: today) }
+        notifications = true
     }
 
     /// iOS asks once; whatever the answer, the row is done (Nastavení → Oznámení changes it later).
@@ -188,7 +203,6 @@ struct FinishSetupCard: View {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         if status == .denied, let url = URL(string: UIApplication.openNotificationSettingsURLString) {
             await UIApplication.shared.open(url)
-            notifications = true
             return
         }
         _ = await Reminders.requestPermission()

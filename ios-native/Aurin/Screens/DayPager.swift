@@ -175,7 +175,9 @@ private struct DaySwipe: ViewModifier {
         .onChange(of: [before ?? "", after ?? ""]) { _, _ in home(proxy) }
         .scrollDisabled(!enabled || model.dayLocked)
         .onScrollPhaseChange { _, phase in
-            if phase == .interacting { swiping = true }
+            // A finger, or a scroll of VoiceOver or the keyboard (animating);
+            // home() and land() move the pages without an animation.
+            if phase == .interacting || phase == .animating { swiping = true }
             guard phase == .idle else { return }
             if swiping {
                 swiping = false
