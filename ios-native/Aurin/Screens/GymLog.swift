@@ -449,11 +449,19 @@ struct GymSetTableRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(set.warmup ? "R" : set.drop ? "↳" : set.number)
-                .font(Typo.number(18))
-                .foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
-                .frame(width: 22, alignment: .leading)
-                .accessibilityLabel(set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number))
+            // By sides the number stands once, on the left side's row, as in the live
+            // workout (it read 1, 1, 2, 2, Tapwright build 602).
+            HStack(spacing: 4) {
+                Text(set.warmup ? "R" : set.drop ? "↳" : set.side == "P" ? "" : set.number)
+                    .font(Typo.number(18))
+                    .foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
+                if let side = set.side {
+                    Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side))
+                }
+            }
+            .frame(width: set.side == nil ? 22 : 36, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number))
             field($kg, placeholder: LiftWeight.shown(set.plannedKg) ?? "—", width: 84, keyboard: .decimalPad)
             field($reps, placeholder: GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? "—", width: 70, keyboard: .numberPad)
             Spacer(minLength: 4)

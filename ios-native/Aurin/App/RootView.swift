@@ -124,6 +124,7 @@ struct RootView: View {
                     ForEach(Self.tabs.filter { tabsShown && ($0 == model.tab || visited.contains($0)) }, id: \.self) { tab in
                         let open = tab == model.tab
                         tabScreen(tab)
+                            .environment(\.tabShown, open)
                             .opacity(open ? 1 : 0)
                             .allowsHitTesting(open)
                             .accessibilityHidden(!open)

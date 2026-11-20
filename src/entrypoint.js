@@ -105,7 +105,8 @@ import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
-import { withRecoveryTime } from "./recovery-time.js";
+import { withRecoveryTime, todayRecovery } from "./recovery-time.js";
+import { saveDayDecision, readDayDecision, intensityCap } from "./day-decision.js";
 import { readGymPlan, ensureGymPlans, saveGymPlan } from "./gym-plan-store.js";
 import { trimGymPlan } from "./gym-trim.js";
 import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRecovery } from "./recovery-plan.js";
@@ -810,21 +811,23 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   const read = path => app.fetch(new Request('https://internal' + path, { headers: internalAuth }), env, ctx).then(r => r.ok ? r.json() : {}).catch(() => ({}));
   const internal = path => handleDashboardApi(new Request('https://internal' + path), env, ctx, new URL('https://internal' + path)).then(r => r.ok ? r.json() : {}).catch(() => ({}));
   const from = shiftDate(date, -30), to = shiftDate(date, 1);
-  const [health, fitness, sleep, profile, checkin, daily, gym] = await Promise.all([
+  const [health, fitness, sleep, profile, checkin, daily, gym, doses] = await Promise.all([
     (fresh ? googleDashboard(env.DB, date) : googleHealthFor(env, ctx, date)).catch(() => ({})),
     (fresh ? internal('/app/api/fitness?days=90') : cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90'))).catch(() => ({})),
     read('/health/sleep?start=' + from + '&end=' + to).then(d => Object.keys(d).length ? intervalsSleep(env,ctx,d,from, to) : d).catch(() => ({})),
     dashboardProfile(env).catch(() => null),
     readinessCheckin(env.DB, date).catch(() => null),
     plan ? read('/analysis/daily?date=' + date) : null,
-    plan ? trainingGymPlans(env, date, date).catch(() => ({})) : null
+    plan ? trainingGymPlans(env, date, date).catch(() => ({})) : null,
+    // The push's advice holds a hard day back for the recovery time, as Today does (day-decision.js).
+    plan && date === localToday() ? loadTrainingDoses(env.DB).catch(() => null) : null
   ]);
   if (date === localToday() && profile) ctx.waitUntil(lockReadiness(env.DB, { date, health, fitness, sleep, profile }).catch(() => false));
-  const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null });
+  const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null, training: doses ? todayRecovery(doses, { today: date, gym }) : null });
   if (!plan) return today.readiness;
   const planned = todayWorkouts(today.plan);
-  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
-  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning };
+  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read, ...(doses ? { doses } : {}) }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
+  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning, ...(today.day?.recovering ? { recovering: true, hardFrom: today.day.hardFrom } : {}) };
 }
 
 // What the morning push's advice weighs beside the score (morning-advice.js):
@@ -1301,11 +1304,12 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   const readiness=dayReadiness({date,fitness,health:{...health,sleep:sessions},profile,checkin});
   // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
   // Sick, injured or on a break holds the text back on Trénink too (screen-texts.js holdBack).
-  const state=await getAthleteState(env.DB).catch(()=>null);
+  // Training's coach keeps to the day's decision Today made (day-decision.js).
+  const [state,day]=await Promise.all([getAthleteState(env.DB).catch(()=>null),screen==='training'?readDayDecision(env.DB,env.USER_ID,date).catch(()=>null):null]);
   // The cycle only as the coach may know it: null unless "Kouč ví o cyklu" is on (cycle-model.js cycleForCoach).
   const coachCycle=profile?.cycle?cycleForCoach({...profile.cycle,date}):null;
   if(screen==='today')return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null,coachCycle};
-  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle};
+  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{}),athleteState:state?.status||null,coachCycle,...(day?{day}:{})};
 }
 // performance: the runs' and rides' trends, curves and laps (Intervals.icu
 // sport settings, power and pace curves, up to six activities' laps). Only the
@@ -1316,7 +1320,7 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
 // (and a swim for a swimmer), the week's targets, what was done and declined,
 // ranked (coach-pick.js rankOptions). A part that failed marks it degraded, so
 // it is not kept (api-cache.js) and the next request reads again.
-async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null){
+async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null,call=null){
   let degraded=athleteRead===undefined;const soft=fallback=>()=>{degraded=true;return fallback;};
   const athlete=athleteRead??null;
   // Everything that does not need the coach's inputs starts with them: the
@@ -1342,7 +1346,7 @@ async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null){
   const noSauna=saunaSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile}))||!!risks.alcohol||!!risks.injury||!!risks.sick;
   // Tonight's bedtime as Today shows it, for the late card (only from 17:00 to 4:00: hour).
   const bedtime=hour!=null?(()=>{try{return buildToday({date,hour,daily:inputs.daily,health:inputs.health,fitness:inputs.fitness,sleep:{sessions:inputs.health?.sleep||[]},profile:eff,checkin:inputs.checkin}).tonight?.bedtime||null;}catch{return null;}})():null;
-  const day=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna,paused:pausedSports(athlete)});
+  const day=rankOptions({ride,run,swim,mainSport:eff.mainSport||'general',mains,allowed,sports:recent.sports,today:recent.today,declines:state.declines,less,planned,done:recent.done,athleteStatus:athlete?.status||'active',noSauna,paused:pausedSports(athlete),...(call||{})});
   return {day,planned,less,chosen:state.chosen,gym,forecast:place.forecast??null,bedtime,today:recent.today,done:recent.done,...(degraded?{degraded:true}:{})};
 }
 // A short fingerprint of a text for a cache key (FNV-1a).
@@ -1570,9 +1574,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // evening (Today's bedtime is only built from 17:00 to 4:00).
       // The cache's data version is read with it, and the day's stored workouts
       // alongside the ranking: one database trip each instead of three in a row.
-      const [athlete]=await Promise.all([getAthleteState(env.DB).catch(()=>undefined),cacheVersion(env.DB)]);
+      // The day's decision as Today made it (day-decision.js): the options keep to its cap.
+      const [athlete,,decision]=await Promise.all([getAthleteState(env.DB).catch(()=>undefined),cacheVersion(env.DB),readDayDecision(env.DB,env.USER_ID,date).catch(()=>null)]);
+      const call=decision?{cap:intensityCap(decision),tiredLegs:Boolean(decision.legsTired)}:null;
       const clock=localNow().slice(11,16),hour=Number(clock.slice(0,2)),late=hour>=17||hour<4;
-      const baseLoading=cached(env,ctx,'pick-base:'+date+':'+(late?'late:':'')+textHash(JSON.stringify(athlete??null)),()=>pickBase(env,ctx,internalAuth,date,athlete,late?hour:null));
+      const baseLoading=cached(env,ctx,'pick-base:'+date+':'+(late?'late:':'')+textHash(JSON.stringify([athlete??null,call])),()=>pickBase(env,ctx,internalAuth,date,athlete,late?hour:null,call));
       const signing=baseLoading.then(b=>pickSignature(b.day));signing.catch(()=>{});
       const detailsLoading=storedDetails(env.DB,env.USER_ID,date,signing).catch(()=>null);
       const base=await baseLoading;
@@ -3047,9 +3053,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow,journal:journaling}).catch(()=>({tomorrow:[],context:null}))])
         .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:usedMemories(state)}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
-      const body=withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training,morning?.athleteState);
+      const body=buildToday({date,hour:date===localToday()?localHour():null,training:todayRecovery(training,{today:date,gym}),daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning});
       keepUsualWake(env,ctx,date,profile,body.tonight);
+      // The day's decision (day-decision.js) for the parts that load on their own: Activity of the day, the coach on Training.
+      // Saved before the answer: the app asks for Activity of the day right after Today.
+      if(body.day)await saveDayDecision(env.DB,env.USER_ID,body.day).catch(error=>console.error('Day decision save failed',error.message));
       // Today's row of the food history (nutrition-days.js), after the answer.
       if(isToday&&body.nutrition?.target!=null)ctx.waitUntil(saveNutritionDay(env.DB,nutritionDayOfToday(date,body.nutrition),date).catch(error=>console.error('Nutrition day save failed',error.message)));
       return Response.json(body,{headers:{'Cache-Control':'no-store'}});
@@ -3672,7 +3681,8 @@ async function pickDetails(env,ctx,ranked,date,gymPlan,{ai=true,aiBudgetMs=null}
   await Promise.all(ranked.options.map(async o=>{
     try{
       if(o.kind==='ride'||o.kind==='run'||o.kind==='swim'&&o.action==='library'){
-        const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:ai&&o.best===true&&o.kind!=='swim',...(aiBudgetMs?{aiBudgetMs}:{})}),w=g?.status==='ok'?g.workout:null;
+        // A day the decision keeps below hard (day-decision.js) gets an endurance workout, as the option's title says.
+        const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:ai&&o.best===true&&o.kind!=='swim',...(ranked.cap&&ranked.cap!=='hard'?{focus:'endurance'}:{}),...(aiBudgetMs?{aiBudgetMs}:{})}),w=g?.status==='ok'?g.workout:null;
         if(!w)return;
         let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
         const steps=athleteSteps(structure,o.kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,o.kind,thresholds);
