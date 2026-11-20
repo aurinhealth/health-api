@@ -43,6 +43,14 @@ struct ProPage: View {
     var manage: () -> Void = {}
 
     var body: some View {
+        if state.loaded, !state.unlocked {
+            ManageFreePage(error: error, goPro: goPro)
+        } else {
+            nightPage
+        }
+    }
+
+    private var nightPage: some View {
         ScrollView {
             VStack(spacing: 14) {
                 header
@@ -481,5 +489,109 @@ struct CoachPacksView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// Manage Subscription without Pro (the Pro concept, layout Q+ Petr chose on
+/// 14 Nov 2026) in the app's own look: one screen, what Aurin Free has as a
+/// grid, then the gold card with what Pro adds. Only its first row, "Upgrade
+/// to Aurin Pro", opens the offer (Petr: the whole card caused miss-taps).
+/// The promo code and restore stay in the ⋯ menu (SubscriptionView).
+struct ManageFreePage: View {
+    var error: String?
+    var goPro: () -> Void = {}
+
+    /// The icon in the asset catalog (ProIcon-…) and the name.
+    static let free: [(String, String)] = [
+        ("readiness", "Připravenost"), ("sleep", "Spánek"), ("fitness", "Kondice"), ("health", "Zdraví"),
+        ("workouts", "Tréninky"), ("foodlog", "Zápis jídla"), ("journal", "Deník"), ("cycle", "Cyklus")
+    ]
+    static let pro: [(String, String)] = [
+        ("intelligence", "Aurin Intelligence"), ("plans", "Adaptivní tréninkové plány"), ("nutrition", "Chytrý zápis jídla"),
+        ("insights", "Kouč u tvých čísel"), ("age", "Aurin age"), ("gym", "Tréninky pro tvoji posilovnu")
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                freeCard
+                proCard
+                Link(destination: L10n.legalURL("terms")) {
+                    Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted)
+                        .frame(minHeight: 44)
+                }
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            }
+            .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 40)
+        }
+        .background { Palette.settingsBackground.ignoresSafeArea() }
+    }
+
+    private var freeCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: "Aurin Free").font(.headline).foregroundStyle(Palette.ink)
+            Text("Používáš verzi zdarma.").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 2)
+            Divider().overlay(Palette.hairline).padding(.top, 12).padding(.bottom, 4)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8, alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 0) {
+                ForEach(Self.free, id: \.0) { icon, name in
+                    HStack(spacing: 8) {
+                        ProIcon(name: icon, size: 32)
+                        Text(verbatim: L10n.tr(name)).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .lineLimit(2).minimumScaleFactor(0.85)
+                    }
+                    .frame(minHeight: 40)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface(cornerRadius: 20)
+    }
+
+    private var proCard: some View {
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button(action: goPro) {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill").scaledFont(13, weight: .semibold)
+                    Text("Přejít na Aurin Pro").font(Typo.bodyStrong)
+                    Spacer()
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold)
+                }
+                .foregroundStyle(Palette.proGold)
+                .frame(minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            ForEach(Self.pro, id: \.0) { icon, name in
+                Divider().overlay(Palette.hairline)
+                HStack(spacing: 12) {
+                    ProIcon(name: icon, size: 38).padding(.leading, -4)
+                    Text(verbatim: L10n.tr(name)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 46)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(L10n.tr(name) + ", " + L10n.tr("v Aurin Pro"))
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 4)
+        .background(Palette.card, in: shape)
+        .overlay(shape.strokeBorder(Palette.proGold, lineWidth: 1.5))
+    }
+}
+
+/// A feature's drawn glass icon from the Pro concept (ProIcon-… in the asset
+/// catalog, light and dark); decoration, so VoiceOver reads only the name.
+struct ProIcon: View {
+    let name: String
+    var size: CGFloat = 32
+
+    var body: some View {
+        Image("ProIcon-" + name).resizable().scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }

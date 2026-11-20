@@ -1,0 +1,8 @@
+{
+  "images": [
+    { "idiom": "universal", "filename": "readiness-light@3x.png", "scale": "3x" },
+    { "idiom": "universal", "filename": "readiness-dark@3x.png", "scale": "3x",
+      "appearances": [ { "appearance": "luminosity", "value": "dark" } ] }
+  ],
+  "info": { "author": "xcode", "version": 1 }
+}
