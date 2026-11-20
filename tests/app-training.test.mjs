@@ -369,3 +369,11 @@ test("a walk the watch found counts toward neither number of the week (602: 10 o
   assert.equal(t.done, base.done);
   assert.equal(t.planned, base.planned);
 });
+
+test("a planned walk that was done, and a hike, still count toward the week", () => {
+  const plan = { id: "planned:77", type: "Walk", name: "Walk", start: DATE + "T08:00:00", durationHours: 0.5 };
+  const walk = { id: "gw:2", type: "Walk", name: "Walk", durationHours: 0.5 };
+  const hike = { id: "gw:3", type: "Hike", name: "Hike", durationHours: 3 };
+  const week = completed => buildTraining({ ...input, days: days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [plan], completed, matched: completed.length ? [{ planned: plan, actualId: "gw:2" }] : [] } } } : d) }).thisWeek;
+  assert.equal(week([walk, hike]).done - week([]).done, 2);
+});
