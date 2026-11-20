@@ -753,6 +753,21 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The top of a finished gym workout (concept 08, Summary).
+    func testWorkoutDoneSummary() throws {
+        try render("workout-done", glow: Palette.Glow.gym, height: 900) {
+            ScrollView {
+                WorkoutDoneSummary(title: "Lower body strength", when: "Today, 17:30 to 18:25", sources: ["Aurin", "Apple Watch"],
+                                   doneSets: 28, plannedSets: 28,
+                                   strain: .init(workout: 8.8, dayFrom: 8.2, dayTo: 12.8, target: (low: 11, high: 14)),
+                                   records: [.init(name: "Back squat", value: "102.5", unit: "kg × 6", was: "100 kg")],
+                                   minutes: 55, volume: (value: "19,620", unit: "kg"), volumeChange: "+600 kg",
+                                   exercises: 9, avgHr: 122, kcal: 410)
+                    .padding(.horizontal, 20)
+            }
+        }
+    }
+
     /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
     func testEffortSheet() throws {
         try render("effort-sheet", height: 700) {

@@ -4753,3 +4753,8 @@
 "%@ bpm" = "%@ bpm";
 "Klepnutím kamkoli začneš hned" = "Tap anywhere to start now";
 "Začít hned" = "Start now";
+"Detaily tréninku" = "Workout details";
+"Zátěž tréninku" = "Workout strain";
+"Zátěž dne %@ až %@" = "Day strain %1$@ to %2$@";
+"%@, předtím %@" = "%1$@, was %2$@";
+"Trvání" = "Duration";
