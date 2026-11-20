@@ -24,6 +24,22 @@ struct TrainingSnapshot: Decodable, Equatable {
     /// The same from the gym's work sets only; nil without a gym session (a
     /// swimmer's empty dial) and from an older server.
     var muscleLoad: LoadView? = nil
+    /// The coach's conclusion above the load cards and, below the usual load,
+    /// one easy session to add (src/load-advice.js); nil without enough history.
+    var loadAdvice: LoadAdvice? = nil
+
+    struct LoadAdvice: Decodable, Equatable {
+        let level: String
+        let text: String
+        var action: Action? = nil
+
+        struct Action: Decodable, Equatable {
+            let kind: String
+            let sport: String
+            let date: String
+            let minutes: Int?
+        }
+    }
     let zones: Zones?
     let vo2max: VO2max?
     let activeCalories: ActiveCalories?

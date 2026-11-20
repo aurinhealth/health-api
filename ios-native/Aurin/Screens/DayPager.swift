@@ -198,7 +198,14 @@ private struct DaySwipe: ViewModifier {
             withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
             withAnimation(.snappy(duration: 0.3)) { slide = 0 }
         }
-        .task(id: date) { await preload() }
+        // The days beside a moment after this one: read with the first
+        // frame they doubled the work of opening a tab (Food froze for about
+        // half a second, device test of build 602).
+        .task(id: date) {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            await preload()
+        }
     }
 
     /// A day beside: as saved, cut to this day's height.
