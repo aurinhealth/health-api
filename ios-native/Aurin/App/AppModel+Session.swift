@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Foundation
+import SwiftUI
 import UserNotifications
 
 // Signing in and out: the profile setup, the account this phone keeps things
