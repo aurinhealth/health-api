@@ -74,12 +74,8 @@ private struct DaySwipe: ViewModifier {
     var enabled: Bool
     let neighbour: (DayPage) -> AnyView?
 
-    /// The page in sight: 0 the day before, 1 this day, 2 the day after. Nil
-    /// until the pager appears, so setting it to 1 there is a real change that
-    /// scrolls: with three pages (Food, which goes two weeks ahead) the initial
-    /// anchor alone left the pager on the day before on iOS 27, its content
-    /// out of reach of taps and VoiceOver (redesign 602 test, 2026-11-20, V3/V4).
-    @State private var position: Int?
+    /// The page in sight: 0 the day before, 1 this day, 2 the day after.
+    @State private var position: Int? = 1
     /// This day's height: the days beside are cut to it, so a longer one does
     /// not leave an empty end under this one.
     @State private var height: CGFloat?
@@ -160,16 +156,10 @@ private struct DaySwipe: ViewModifier {
         // VoiceOver (Tapwright pass 2026-11-19, points 1, 3 and 11).
         .defaultScrollAnchor(initialAnchor, for: .initialOffset)
         .scrollPosition(id: $position)
-        .onAppear { centre() }
-        // Once more after the first layout, when the pages have their width:
-        // the binding can read 1 while the pager still shows the day before,
-        // so it goes through nil to make the 1 a change that scrolls.
-        .task {
-            try? await Task.sleep(for: .milliseconds(50))
-            guard coming == nil, !Task.isCancelled else { return }
-            position = nil
-            await Task.yield()
-            centre()
+        .onAppear {
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { position = 1 }
         }
         .scrollDisabled(!enabled || model.dayLocked)
         .onScrollPhaseChange { _, phase in
@@ -188,12 +178,6 @@ private struct DaySwipe: ViewModifier {
             withAnimation(.snappy(duration: 0.3)) { slide = 0 }
         }
         .task(id: date) { await preload() }
-    }
-
-    private func centre() {
-        var instant = Transaction()
-        instant.disablesAnimations = true
-        withTransaction(instant) { position = 1 }
     }
 
     /// A day beside: as saved, cut to this day's height.
