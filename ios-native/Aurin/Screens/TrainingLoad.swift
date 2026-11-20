@@ -73,7 +73,8 @@ enum LoadWords {
         case "usual": return .within
         case "below": return .off(above: false)
         case "above": return .off(above: true)
-        case "wellBelow": return .far(above: false)
+        // A much lighter week is no alarm: amber like "lighter", never red.
+        case "wellBelow": return .off(above: false)
         case "wellAbove": return .far(above: true)
         default: return nil
         }
