@@ -543,6 +543,14 @@ final class SnapshotTests: XCTestCase {
         try render("finish-setup-en", height: 520) {
             FinishSetupCard(today: DemoData.today, lifts: true).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
         }
+        // Part Pro: Manage Subscription without Pro, and the banner on Today.
+        try render("manage-free-en", height: 900, window: true) {
+            NavigationStack { ManageFreePage().navigationTitle(L10n.tr("Správa předplatného")).navigationBarTitleDisplayMode(.inline) }
+                .environment(\.locale, L10n.locale)
+        }
+        try render("pro-banner-en", height: 160) {
+            ProBanner(banner: .init(show: true, offer: "trial")).padding(16).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }

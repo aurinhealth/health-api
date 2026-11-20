@@ -144,9 +144,9 @@ struct SubscriptionView: View {
     var body: some View {
         ProPage(state: Self.state(status, store), error: error,
                 morePacks: { morePacks = true }, goPro: { Paywall.present(model) }, manage: { manage = true })
-            .navigationTitle(L10n.tr("Aurin Pro"))
+            .navigationTitle(loading ? "" : L10n.tr(free ? "Správa předplatného" : "Aurin Pro"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(free || loading ? nil : .dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -176,6 +176,15 @@ struct SubscriptionView: View {
                 Button("OK", role: .cancel) {}
             } message: { Text(notice ?? "") }
     }
+
+    /// No Pro and not the pilot: Manage Subscription in the app's own look (ManageFreePage).
+    private var free: Bool {
+        let state = Self.state(status, store)
+        return state.loaded && !state.unlocked
+    }
+
+    /// Before the server answers (ProPage shows only a spinner then).
+    private var loading: Bool { status == nil && error == nil }
 
     /// What the page shows, from the server's status and the App Store.
     static func state(_ status: SubscriptionStatus?, _ store: ProStore) -> ProPageState {
@@ -218,13 +227,13 @@ struct SubscriptionView: View {
 enum Paywall {
     private static let tag = 0x10AD
 
-    static func present(_ model: AppModel) {
+    static func present(_ model: AppModel, closed: (() -> Void)? = nil) {
         guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
         var top = root
         while let next = top.presentedViewController { top = next }
         guard top.view.tag != tag else { return }
         let host = UIHostingController(rootView: AnyView(EmptyView()))
-        host.rootView = AnyView(PaywallView(close: { [weak host] in host?.dismiss(animated: true) }).environment(model))
+        host.rootView = AnyView(PaywallView(close: { [weak host] in host?.dismiss(animated: true) { closed?() } }).environment(model))
         host.view.tag = tag
         host.modalPresentationStyle = .fullScreen
         top.present(host, animated: true)
