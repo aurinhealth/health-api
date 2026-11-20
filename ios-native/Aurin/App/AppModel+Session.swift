@@ -8,11 +8,13 @@ extension AppModel {
     /// Whether the profile setup (GET /app/api/onboarding) still waits; asked
     /// once per sign-in, remembered after it is done.
     func checkSetup() async {
+        defer { setupChecked = true }
         guard !demo, phase == .signedIn else { return }
         // An account set up before the health-data consent still has to give it.
         let state = try? await api.healthConsentState()
         // Paused on the server (here or on another device): the paused screen instead.
         if let state { notePaused(state.paused) }
+        if let state { Self.healthConsentGiven = !state.needed && !state.paused }
         if healthPaused { needsSetup = resumingHealth; return }
         let consent = state?.needed ?? false
         if UserDefaults.standard.bool(forKey: Self.setupDoneKey) {
@@ -35,6 +37,24 @@ extension AppModel {
     }
 
     nonisolated static let setupDoneKey = "setupDone"
+    nonisolated static let healthConsentKey = "healthConsentGiven"
+
+    /// Whether this account gave the consent to health data, as the server last
+    /// said (checkSetup, recheckConsent, the setup's consent page). Until the
+    /// server said so nothing is read from Apple Health and sent
+    /// (AppleHealth.run, GDPR art. 9(2)(a)).
+    nonisolated static var healthConsentGiven: Bool {
+        get { UserDefaults.standard.bool(forKey: healthConsentKey) }
+        set { UserDefaults.standard.set(newValue, forKey: healthConsentKey) }
+    }
+
+    /// The consent not known yet (the first check had no signal): asked again
+    /// before a sync, so Apple Health does not stay off for the whole session.
+    func recheckConsent() async {
+        guard !demo, phase == .signedIn, !Self.healthConsentGiven,
+              let state = try? await api.healthConsentState() else { return }
+        Self.healthConsentGiven = !state.needed && !state.paused
+    }
     nonisolated static let accountInitialKey = "accountInitial"
 
     /// The account's name and e-mail for Profil, and the first letter of the
@@ -305,8 +325,10 @@ extension AppModel {
         // The next sign-in sends the push token again for its own account.
         PushRegistration.forget()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
+        UserDefaults.standard.removeObject(forKey: Self.healthConsentKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
+        setupChecked = false
         // The next sign-in asks the server whether its health data is paused.
         resumingHealth = false
         healthPaused = false
