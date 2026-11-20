@@ -305,7 +305,10 @@ struct EmailLoginSheet: View {
                         // The keyboard's own key sends: iOS's address suggestion over
                         // the keyboard can cover "Poslat kód" (device test, build 598).
                         .submitLabel(.send)
-                        .onSubmit { if email.contains("@") && !busy { Task { await send() } } }
+                        .onSubmit {
+                            // Not an address yet: the keyboard stays for it.
+                            if email.contains("@") && !busy { Task { await send() } } else { focused = .email }
+                        }
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 PrimaryButton(title: busy ? "Moment…" : sent ? "Přihlásit" : "Poslat kód", systemImage: sent ? "checkmark" : "envelope", busy: busy) {

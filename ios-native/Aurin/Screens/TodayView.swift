@@ -63,18 +63,21 @@ struct TodayView: View {
         }
     }
 
+    /// The answer came under the animation, so the offer follows Today in
+    /// under a second. No answer (a weak signal): it waits for the next Today.
     private func offerPro() async {
         guard SetupProOffer.pending, model.today != nil, !model.needsSetup else { return }
-        SetupProOffer.pending = false
-        guard let needsAI = await SetupProOffer.due(model) else { return }
-        // Today is seen first, then the offer slides up.
-        try? await Task.sleep(for: .milliseconds(900))
-        // Left Today meanwhile: the offer waits for the next time, not lost.
-        guard !Task.isCancelled else {
-            SetupProOffer.pending = true
-            UserDefaults.standard.removeObject(forKey: SetupProOffer.shownKey)
+        var answer = SetupProOffer.answer
+        if answer == nil { answer = await SetupProOffer.ask(model) }
+        guard let known = answer else { return }
+        guard let needsAI = known else {
+            SetupProOffer.pending = false
             return
         }
+        // Today is seen first, then the offer slides up; not when Today was left meanwhile.
+        try? await Task.sleep(for: .milliseconds(700))
+        guard !Task.isCancelled, model.tab == .today else { return }
+        SetupProOffer.markShown()
         proNeedsAI = needsAI
         proOffer = true
     }

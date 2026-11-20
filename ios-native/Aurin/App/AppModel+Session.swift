@@ -30,7 +30,11 @@ extension AppModel {
     /// loaded: Today was loaded under the setup's last animation (SetupBuildToday).
     func finishSetup(loaded: Bool = false) async {
         UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
-        needsSetup = false
+        // After the setup's animation its card has landed where Today's is:
+        // Today comes without the cover sliding away.
+        var cut = Transaction()
+        cut.disablesAnimations = loaded
+        withTransaction(cut) { needsSetup = false }
         if resumingHealth { healthResumed() }
         if !loaded || today == nil { await refresh() }
         await refreshFood()

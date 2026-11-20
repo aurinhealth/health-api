@@ -78,7 +78,7 @@ struct SetupFlowView: View {
                         // No way back to a consent already given.
                         if index > 0 && pages[index - 1] != .consent {
                             CircleButton(systemImage: "chevron.left", label: "Zpět") { turn(by: -1) }
-                                .disabled(turning || saving)
+                                .disabled(turning || saving || building)
                         }
                     }
                     // How far along: shown once the page count is known (whether the
@@ -110,6 +110,7 @@ struct SetupFlowView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
                 if page == .consent && ready && !agree {
@@ -132,6 +133,8 @@ struct SetupFlowView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+            // Under the animation the page is gone for VoiceOver too.
+            .accessibilityHidden(building)
         }
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
@@ -150,6 +153,7 @@ struct SetupFlowView: View {
                     // Its own task: closing the setup ends this view and would cancel the loads.
                     Task { [model] in await model.finishSetup(loaded: true) }
                 }
+                .ignoresSafeArea(.keyboard)
                 .transition(.opacity)
             }
         }
@@ -804,6 +808,8 @@ struct SetupFlowView: View {
         FinishSetup.start()
         FirstDays.start()
         SetupProOffer.pending = true
+        // A field typed by hand still has the keyboard: it goes before the animation.
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         withAnimation(.easeInOut(duration: 0.3)) { building = true }
     }
 
@@ -856,21 +862,32 @@ enum SetupProOffer {
     /// (point 40, still to come) to keep away that day: never two offers at once.
     static var shownAt: Date? { UserDefaults.standard.object(forKey: shownKey) as? Date }
 
-    /// One GET /app/api/subscription after the last page, waited for at most
-    /// 3 s so a weak signal never holds the way to Today. Nil when it is not
-    /// shown, else whether the AI features are still off; a value marks it shown.
-    static func due(_ model: AppModel) async -> Bool? {
-        guard !model.demo, shownAt == nil else { return nil }
+    /// The answer, fetched under the setup's animation (SetupBuildToday):
+    /// nil not known yet, .some(nil) not offered, .some(x) offered and whether
+    /// the AI features are still off.
+    static var answer: Bool?? = nil
+
+    static func prefetch(_ model: AppModel) async { answer = await ask(model) }
+
+    /// One GET /app/api/subscription, waited for at most 6 s: nil when no
+    /// answer came in time (asked again on the next Today, never lost).
+    static func ask(_ model: AppModel) async -> Bool?? {
+        guard !model.demo, shownAt == nil else { return .some(nil) }
         let api = model.api
-        let due = await withTaskGroup(of: Bool?.self) { group in
-            group.addTask { await check(api) }
-            group.addTask { try? await Task.sleep(for: .seconds(3)); return nil }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        return await withTaskGroup(of: Bool??.self) { group in
+            group.addTask { .some(await check(api)) }
+            group.addTask { try? await Task.sleep(for: .seconds(6)); return nil }
+            defer { group.cancelAll() }
+            if let first = await group.next() { return first }
+            return nil
         }
-        if due != nil { UserDefaults.standard.set(Date(), forKey: shownKey) }
-        return due
+    }
+
+    /// It is on screen: once per phone.
+    static func markShown() {
+        UserDefaults.standard.set(Date(), forKey: shownKey)
+        pending = false
+        answer = nil
     }
 
     private static func check(_ api: APIClient) async -> Bool? {
