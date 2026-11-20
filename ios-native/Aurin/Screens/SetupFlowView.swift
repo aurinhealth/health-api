@@ -368,16 +368,16 @@ struct SetupFlowView: View {
     @ViewBuilder
     private var aboutPage: some View {
         title("O tobě")
-        SettingsGroup {
-            if let source = prefillSource {
-                HStack(spacing: 10) {
-                    IntegrationIcon(id: source, size: 24)
-                    Text(source == "apple" ? "Z Apple Health jsme vzali:" : "Z Google Health jsme vzali:")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                SettingsDivider()
+        // Where the values came from: a quiet line over the card (screen 01-about6).
+        if let source = prefillSource {
+            HStack(spacing: 8) {
+                IntegrationIcon(id: source, size: 18)
+                Text(source == "apple" ? "Z Apple Health jsme vzali:" : "Z Google Health jsme vzali:")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
             }
+            .padding(.horizontal, 4)
+        }
+        SettingsGroup {
             HStack(spacing: 12) {
                 Text("Pohlaví").font(.body).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
@@ -399,10 +399,11 @@ struct SetupFlowView: View {
             SettingsField(title: "Váha", text: $weightText, unit: Units.weightUnit, keyboard: .decimalPad)
             if let hint = weightHint { fieldHint(hint) }
         }
-        Text("Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón.")
+        Text("Z těchhle údajů Aurin počítá kalorie, námahu a zotavení.")
             .font(Typo.small).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
+        nightsRow
         // The sports, on the same page (concept v38): ticked or not, Hlavní
         // on the ones trained for most. None ticked is general fitness.
         Text("Tvoje sporty").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -415,6 +416,38 @@ struct SetupFlowView: View {
         SportsPicker(choice: $focus.sports)
         if focus.sports.swims {
             SwimLevelGroup(swims100: $focus.swims100)
+        }
+    }
+
+    /// What Apple Health's history brought (part O): the nights found and,
+    /// with last night and 14 before it, that Readiness is there on Today.
+    @ViewBuilder
+    private var nightsRow: some View {
+        if health.enabled, health.nightsFound != nil || health.syncing {
+            SettingsGroup {
+                HStack(spacing: 12) {
+                    Image(systemName: "moon.zzz.fill").scaledFont(18, weight: .semibold).foregroundStyle(Palette.indigo)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let nights = health.nightsFound {
+                            Text(L10n.f("Nalezeno %@", L10n.plural("%lld nocí", nights))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        } else {
+                            Text("Hledám tvoje noci…").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        }
+                        Text("Spánek a tep").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 8)
+                    if let nights = health.nightsFound, nights >= 15, health.lastNightFound {
+                        Pill(text: L10n.tr("Spočítám hned"), foreground: Palette.green, background: Palette.greenSoft)
+                    } else if health.nightsFound == nil {
+                        ProgressView()
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .frame(minHeight: 50)
+                .accessibilityElement(children: .combine)
+            }
+            .padding(.top, 6)
         }
     }
 

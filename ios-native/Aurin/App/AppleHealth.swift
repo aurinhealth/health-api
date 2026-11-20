@@ -132,6 +132,10 @@ final class AppleHealth {
     private(set) var syncing = false
     private(set) var lastSync: Date?
     var message: String?
+    /// What the first import read (the history): the nights for About you's
+    /// "N nocí" row (part O), and whether last night is one of them.
+    private(set) var nightsFound: Int?
+    private(set) var lastNightFound = false
 
     @ObservationIgnored private let reader = HealthReader()
     @ObservationIgnored private var observers: [HKObserverQuery] = []
@@ -491,6 +495,12 @@ final class AppleHealth {
         do {
             await reader.hide(hidden, in: categories)
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
+            if days == nil {
+                let nights = uploads.flatMap(\.records).filter { $0.type == "sleep" && $0.nap != true }
+                let morning = Calendar.current.startOfDay(for: started), iso = ISO8601DateFormatter()
+                nightsFound = nights.count
+                lastNightFound = nights.contains { ($0.end.flatMap(iso.date(from:)) ?? .distantPast) >= morning }
+            }
             // The same days read again with nothing new (most HealthKit wakes and
             // refreshes): nothing goes out. The radio stays off and the server
             // reads and writes no rows. Sent anyway every few hours, and always

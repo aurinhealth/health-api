@@ -246,7 +246,7 @@ struct ReadinessDetailContent: View {
                 .padding(.top, 12)
             } else if let days = r.learningDays {
                 // Without a number, why (audit 14.4): the same as the Health card.
-                ReadinessLearning(days: days, date: health.date, title: Typo.heading(30, relativeTo: .title))
+                ReadinessLearning(days: days, title: Typo.heading(30, relativeTo: .title))
             } else if noWearable {
                 NoDeviceCard(connect: actions.settings).padding(.top, 12)
             } else {
