@@ -92,6 +92,10 @@ struct AurinOrb: View {
     var mood: Mood
     var size: CGFloat = 250
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.tabShown) private var tabShown
+    @Environment(\.dayPage) private var drawnAsNeighbour
+    @State private var onScreen = true
     @Environment(\.colorScheme) private var scheme
 
     private var tint: Color {
@@ -104,7 +108,9 @@ struct AurinOrb: View {
 
     var body: some View {
         let still = reduceMotion || LowPower.shared.on
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { timeline in
+        // Not on a hidden tab, a day drawn beside or scrolled away (as TwoLights).
+        let paused = still || scenePhase != .active || !tabShown || drawnAsNeighbour != nil || !onScreen
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { timeline in
             let t = still ? 0.8 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000)
             Canvas { context, canvas in
                 let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
@@ -138,6 +144,7 @@ struct AurinOrb: View {
             }
         }
         .frame(width: size, height: size)
+        .modifier(ScreenVisibility(onScreen: $onScreen))
         .accessibilityHidden(true)
     }
 
