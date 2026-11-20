@@ -31,10 +31,8 @@ struct SetupFlowView: View {
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
-    /// The free week shown at the end (SetupProOffer).
-    @State private var proOffer = false
-    /// The account left the AI features off: the free week allows them with its button.
-    @State private var proNeedsAI = false
+    /// The setup is done: Today is put together from the answers (SetupBuildToday).
+    @State private var building = false
     // Data sources
     @State private var appleWorking = false
     @State private var appleRead = false
@@ -80,7 +78,7 @@ struct SetupFlowView: View {
                         // No way back to a consent already given.
                         if index > 0 && pages[index - 1] != .consent {
                             CircleButton(systemImage: "chevron.left", label: "Zpět") { turn(by: -1) }
-                                .disabled(turning || saving)
+                                .disabled(turning || saving || building)
                         }
                     }
                     // How far along: shown once the page count is known (whether the
@@ -112,6 +110,7 @@ struct SetupFlowView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
+                .scrollDismissesKeyboard(.interactively)
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
                 if page == .consent && ready && !agree {
@@ -128,12 +127,14 @@ struct SetupFlowView: View {
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .disabled(!ready || appleWorking || turning)
                 } else {
-                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
+                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || building) { Task { await next() } }
+                        .disabled(saving || appleWorking || building || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
                 }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
+            // Under the animation the page is gone for VoiceOver too.
+            .accessibilityHidden(building)
         }
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
@@ -145,10 +146,16 @@ struct SetupFlowView: View {
             }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
-        // The free week, once, after the last page (SetupProOffer); Today when it closes.
-        .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
-            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
-                        allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
+        // Animation A (concept v38): the answers go into Today, then Today.
+        .overlay {
+            if building {
+                SetupBuildToday(chips: buildChips, sports: focus.sports.kinds) {
+                    // Its own task: closing the setup ends this view and would cancel the loads.
+                    Task { [model] in await model.finishSetup(loaded: true) }
+                }
+                .ignoresSafeArea(.keyboard)
+                .transition(.opacity)
+            }
         }
         .interactiveDismissDisabled()
     }
@@ -793,21 +800,23 @@ struct SetupFlowView: View {
 
     /// The end of the setup. iOS asks about notifications only from their row
     /// on Today's "Dokonči nastavení" (FinishSetupCard), which then follows
-    /// with "První dny" (FirstDaysCard), after the free week once when the
-    /// account can still have it (SetupProOffer).
+    /// with "První dny" (FirstDaysCard). The free week comes once on Today,
+    /// when it has loaded (SetupProOffer, part O decision B).
     private func done() async {
-        saving = true
-        defer { saving = false }
         // A phone where notifications were allowed before sends its token now.
         await PushRegistration.refresh(api: model.api)
         FinishSetup.start()
         FirstDays.start()
-        if let needsAI = await SetupProOffer.due(model) {
-            proNeedsAI = needsAI
-            proOffer = true
-        } else {
-            await model.finishSetup()
-        }
+        SetupProOffer.pending = true
+        // A field typed by hand still has the keyboard: it goes before the animation.
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        withAnimation(.easeInOut(duration: 0.3)) { building = true }
+    }
+
+    /// What "O tobě" said, as it flies into Today: sex, year, height, weight.
+    private var buildChips: [String] {
+        [sex == "female" ? L10n.tr("Žena") : L10n.tr("Muž"), birthYear,
+         heightText + " " + Units.lengthUnit, weightText + " " + Units.weightUnit]
     }
 }
 
@@ -841,26 +850,44 @@ struct SetupSteps: View {
 @MainActor
 enum SetupProOffer {
     static let shownKey = "aurin.setupProOfferShown"
+    private static let pendingKey = "aurin.setupProOfferPending"
+
+    /// The setup ended: Today offers the free week once it has loaded (TodayView).
+    static var pending: Bool {
+        get { UserDefaults.standard.bool(forKey: pendingKey) }
+        set { UserDefaults.standard.set(newValue, forKey: pendingKey) }
+    }
 
     /// When it was shown on this phone, for the Today coach card's Pro line
     /// (point 40, still to come) to keep away that day: never two offers at once.
     static var shownAt: Date? { UserDefaults.standard.object(forKey: shownKey) as? Date }
 
-    /// One GET /app/api/subscription after the last page, waited for at most
-    /// 3 s so a weak signal never holds the way to Today. Nil when it is not
-    /// shown, else whether the AI features are still off; a value marks it shown.
-    static func due(_ model: AppModel) async -> Bool? {
-        guard !model.demo, shownAt == nil else { return nil }
+    /// The answer, fetched under the setup's animation (SetupBuildToday):
+    /// nil not known yet, .some(nil) not offered, .some(x) offered and whether
+    /// the AI features are still off.
+    static var answer: Bool?? = nil
+
+    static func prefetch(_ model: AppModel) async { answer = await ask(model) }
+
+    /// One GET /app/api/subscription, waited for at most 6 s: nil when no
+    /// answer came in time (asked again on the next Today, never lost).
+    static func ask(_ model: AppModel) async -> Bool?? {
+        guard !model.demo, shownAt == nil else { return .some(nil) }
         let api = model.api
-        let due = await withTaskGroup(of: Bool?.self) { group in
-            group.addTask { await check(api) }
-            group.addTask { try? await Task.sleep(for: .seconds(3)); return nil }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first
+        return await withTaskGroup(of: Bool??.self) { group in
+            group.addTask { .some(await check(api)) }
+            group.addTask { try? await Task.sleep(for: .seconds(6)); return nil }
+            defer { group.cancelAll() }
+            if let first = await group.next() { return first }
+            return nil
         }
-        if due != nil { UserDefaults.standard.set(Date(), forKey: shownKey) }
-        return due
+    }
+
+    /// It is on screen: once per phone.
+    static func markShown() {
+        UserDefaults.standard.set(Date(), forKey: shownKey)
+        pending = false
+        answer = nil
     }
 
     private static func check(_ api: APIClient) async -> Bool? {
