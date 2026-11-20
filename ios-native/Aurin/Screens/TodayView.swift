@@ -182,13 +182,13 @@ struct TodayContent: View {
 
         // Right after the setup, what it left for Today (concept v38): the
         // goal, the training days, where one lifts and the notifications.
-        if selectedDate == nil && !model.demo && finishingSetup > 0 {
+        if selectedDate == nil && !model.demo && FinishSetup.showing(finishingSetup) {
             FinishSetupCard(today: today).padding(.top, 20)
         }
 
         // The morning question, for now right under the readiness (concept
         // point 3). Its answer never changes the number.
-        if selectedDate == nil && !model.demo && finishingSetup == 0 {
+        if selectedDate == nil && !model.demo && !FinishSetup.showing(finishingSetup) {
             TodayMorningQuestion(date: today.date, feeling: today.checkin)
                 // A new day is a new question, also past midnight in a running app.
                 .id(today.date)

@@ -155,7 +155,7 @@ struct SetupFlowView: View {
     private var buttonTitle: String {
         if saving { return "Ukládám…" }
         if appleWorking { return "Moment…" }
-        return page == .about ? "Hotovo" : "Pokračovat"
+        return "Pokračovat"
     }
 
     @ViewBuilder
@@ -407,7 +407,7 @@ struct SetupFlowView: View {
         Text("Tvoje sporty").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             .accessibilityAddTraits(.isHeader)
             .padding(.top, 10).padding(.horizontal, 4)
-        Text("Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle.")
+        Text("Kouč skládá týden kolem tvých hlavních sportů.")
             .font(Typo.small).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)

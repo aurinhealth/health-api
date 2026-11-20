@@ -53,7 +53,7 @@ struct FirstDaysCard: View {
 
     /// Within two weeks of the setup and not everything done yet.
     private var showing: Bool {
-        guard since > 0, finishing == 0 else { return false }
+        guard since > 0, !FinishSetup.showing(finishing) else { return false }
         let age = Date().timeIntervalSince1970 - since
         return age < Double(FirstDays.days) * 86_400 && doneCount < steps.count
     }

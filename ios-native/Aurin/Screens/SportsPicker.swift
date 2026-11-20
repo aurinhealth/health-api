@@ -125,7 +125,9 @@ struct SportsPicker: View {
                 .padding(.horizontal, 12).frame(height: 32)
                 .background { Capsule().fill(main ? Palette.green : .clear) }
                 .overlay { Capsule().stroke(main ? .clear : Palette.hairline, lineWidth: 1.5) }
-                .contentShape(Capsule())
+                // 44 pt to tap (HIG), the pill itself stays 32.
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
