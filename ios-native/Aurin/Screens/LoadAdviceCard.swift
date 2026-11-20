@@ -21,11 +21,12 @@ struct LoadAdviceCard: View {
             Text(verbatim: advice.text)
                 .font(Typo.coach(21)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            if let action = advice.action, !model.demo {
+            // Kept after the reload: the new advice has no action once the session is planned.
+            if state == .added {
+                Label(L10n.tr("Přidáno do plánu"), systemImage: "checkmark")
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+            } else if let action = advice.action, !model.demo {
                 switch state {
-                case .added:
-                    Label(L10n.tr("Přidáno do plánu"), systemImage: "checkmark")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.green)
                 case .failed(let message):
                     Text(verbatim: message).font(Typo.small).foregroundStyle(Palette.rust)
                     addButton(action)
@@ -59,6 +60,9 @@ struct LoadAdviceCard: View {
             try await model.api.addEasySession(sport: action.sport, date: action.date)
             state = .added
             await model.refreshTraining()
+        } catch APIError.message(let message) {
+            // The server's own words ("Choose a day in the next two weeks.").
+            state = .failed(message)
         } catch {
             state = .failed(L10n.tr("Nepodařilo se uložit."))
         }

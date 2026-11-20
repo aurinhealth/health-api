@@ -200,8 +200,12 @@ extension APIClient {
     /// "Add to plan" under the coach's load sentence (src/load-advice.js):
     /// one easy endurance session of the sport on the day, written now.
     func addEasySession(sport: String, date: String) async throws {
-        let _: JSONValue = try await send("/app/api/training/add-easy", method: "POST",
+        let r: JSONValue = try await send("/app/api/workouts/add-easy", method: "POST",
                                           body: ["sport": JSONValue.string(sport), "date": .string(date)])
+        // Saving to the calendar can fail with 200 and its reason (scheduleWorkoutInIntervals).
+        if case .object(let o) = r, o["status"]?.string == "error" {
+            throw APIError.message(o["message"]?.string ?? L10n.tr("Nepodařilo se uložit."))
+        }
     }
 
     func scheduleWorkout(id: String, date: String, indoor: Bool, time: String? = nil) async throws -> String? {

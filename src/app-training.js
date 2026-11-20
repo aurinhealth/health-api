@@ -228,7 +228,8 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null }) {
+// athleteStatus: training-status.js status (sick, injured, on_break hold the load advice's session).
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null, athleteStatus = "active" }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -403,6 +404,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // The coach's conclusion above the load cards and, below the usual, one
     // easy session on the next free day (load-advice.js, decision 6).
     loadAdvice: workload.historyDays > 0 ? loadAdvice({ level: workload.acwr.level, date, sport: easySport(profile?.mainSport, sessions),
+      hold: (athleteStatus && athleteStatus !== "active") || ["taper", "race"].includes(eventPlan(athleteFocus(profile, date).event || planRace, date)?.phase),
       planned: new Set([...days.filter(d => d.date > date && ((d.daily?.training?.planned || []).length || (gym[d.date]?.exercises || []).length)).map(d => d.date)]) }) : null,
     ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad, gymSince) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
