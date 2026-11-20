@@ -101,6 +101,26 @@ struct TodayContent: View {
     /// does not move the card (and close its sheet) while it is in use.
     @State private var setupCardPlace: Bool?
     private var setupCardAfterCoach: Bool { setupCardPlace ?? (today.readiness.score != nil) }
+    @AppStorage(FinishSetup.goalKey) private var setupGoalSet = false
+    @AppStorage(FirstDays.sinceKey) private var setupSince: Double = 0
+    @AppStorage(FirstDays.firstScoreKey) private var firstScoreDay = ""
+
+    /// Part O (zadani/O.md 2 and 4): the coach's fixed first words for a new
+    /// athlete, today only: without a number yet while the goal is not set,
+    /// and on the day the first number comes. Otherwise nil (the usual text).
+    private var firstWords: (String, String)? {
+        guard selectedDate == nil, !model.demo, setupSince > 0,
+              Date().timeIntervalSince1970 - setupSince < Double(FirstDays.days) * 86_400 else { return nil }
+        if today.readiness.score == nil, !model.noWearable, FinishSetup.showing(finishingSetup), !setupGoalSet {
+            return (L10n.tr("Na začátek číslo nepotřebuješ."), L10n.tr("Nastav si cíl a kouč ti naplánuje první týden."))
+        }
+        if today.readiness.score != nil, firstScoreDay == today.date,
+           today.date != AppModel.localDate(Date(timeIntervalSince1970: setupSince)) {
+            return (L10n.tr("Tvoje první Připravenost je tady."),
+                    L10n.tr("Porovnává minulou noc s tvým obvyklým a během prvního měsíce se zpřesní."))
+        }
+        return nil
+    }
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -251,7 +271,11 @@ struct TodayContent: View {
             // and its one action, today's workout with Start (or the activity of
             // the day), the plan's line and Regenerace
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
-            if coachShown {
+            if coachShown, let words = firstWords {
+                CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
+                              tip: AnyView(TodayCoachAction(today: today)))
+                    .padding(.top, 12)
+            } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
                               tip: AnyView(TodayCoachAction(today: today)))
                     .padding(.top, 12)
