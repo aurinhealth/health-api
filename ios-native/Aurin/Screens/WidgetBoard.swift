@@ -15,6 +15,8 @@ struct WidgetBoard: View {
     /// The button under the widgets that starts editing; nil when the panel
     /// puts its own somewhere else.
     var editTitle: String?
+    /// Health draws its edit pill under the swiped day (it was cut in half inside it).
+    var editButtonBelow = false
     @AppStorage private var stored: String
     @State private var dragging: WidgetKind?
     @State private var gallery = false
@@ -26,8 +28,9 @@ struct WidgetBoard: View {
     /// Set on a day drawn beside during a swipe (DayPager): it loads nothing.
     @Environment(\.dayPage) private var dayPage
 
-    init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety") {
+    init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety", editButtonBelow: Bool = false) {
         self.panel = panel
+        self.editButtonBelow = editButtonBelow
         self.data = data
         self._editing = editing
         self.editTitle = editTitle
@@ -67,7 +70,7 @@ struct WidgetBoard: View {
                     }
                 }
             }
-            if !editing, let title = editTitle {
+            if !editing, !editButtonBelow, let title = editTitle {
                 WidgetEditButton(title: title, action: startEditing)
                 .padding(.top, shown.isEmpty ? 0 : 28)
             }

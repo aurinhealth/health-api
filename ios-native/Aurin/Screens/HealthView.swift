@@ -86,15 +86,16 @@ struct HealthContent: View {
     let health: HealthSnapshot
     @Environment(\.tabActions) private var actions
     @State private var editing = false
+    @State private var showMonth = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The same top as Dnes (TabHeader) and its week, which stay put
-            // while the day below is swiped; a day drawn beside has none.
+            // The top of the concept: "November ⌄" (the month calendar) and the
+            // capsule, without the week strip (point 45); it stays put while
+            // the day below is swiped, and a day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) {
-                    TabHeader(date: model.headerDay(health.date), coach: actions.coach, settings: actions.settings)
-                    WeekStrip(date: model.headerDay(health.date)).padding(.top, 14)
+                    TabHeader(date: model.headerDay(health.date), month: { showMonth = true }, coach: actions.coach, settings: actions.settings)
                     // Stale or broken sources, as on Today (DATA-4: freshness and
                     // connection states stay).
                     if model.selectedDate == nil && !model.demo {
@@ -109,8 +110,15 @@ struct HealthContent: View {
                 .padding(.horizontal, 24)
                 .padding(.top, editing ? 16 : 0)
                 .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
+            // "Edit overview" as on Food, under the day rather than inside the
+            // swiped page, which cut it in half (point 56).
+            if page == nil && !editing {
+                WidgetEditButton(title: "Upravit přehled") { withAnimation(.easeInOut(duration: 0.25)) { editing = true } }
+                    .padding(.top, 28)
+            }
         }
         .task { if model.cycle == nil { await model.loadCycle() } }
+        .sheet(isPresented: $showMonth) { MonthCalendarSheet(date: health.date) }
     }
 
     /// The day under the week: what a swipe moves.
@@ -133,7 +141,7 @@ struct HealthContent: View {
 
             WidgetBoard(panel: .health,
                         data: WidgetData(panel: .health, today: page.map(\.today) ?? model.today, health: health, training: model.training, food: page.map(\.food) ?? model.food),
-                        editing: $editing)
+                        editing: $editing, editTitle: "Upravit přehled", editButtonBelow: true)
                 .padding(.top, editing ? 0 : 30)
 
             // Cycle tracking, only for today and for those who track it, under
