@@ -38,13 +38,20 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // mains: the main sports as those kinds (several allowed), else mainSport's.
 // noSauna: a reason the sauna is no option today (saunaSigns, or alcohol,
 // Nemoc or an injury in the journal, journal-store.js saunaRisks).
-export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false, paused = [] }) {
+// cap: the day's decision (day-decision.js intensityCap): "hard", "steady"
+// (nothing hard), "easy" or "rest"; null before Today has made one. A
+// steady day turns a hard ride, run or swim into an endurance one, an easy or
+// rest day ranks as a red morning. tiredLegs: legs not rested (Trénink → Svaly).
+export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false, paused = [], cap = null, tiredLegs = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   // Nemoc ticked in Deník (cycling-coach-v2.js sickDay): rest, as with the status.
   if ([ride, run].some(c => c?.recommendation?.decisionRule === "journal_sick")) return pausedOptions("sick", noSauna, true);
-  const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
+  const own = ride?.readiness?.status || run?.readiness?.status || "yellow";
+  const status = cap === "rest" || (cap === "easy" && own !== "green") ? "red" : (cap === "steady" || cap === "easy") && own === "green" ? "yellow" : own;
+  // The words say the day's call when it is below the readiness's own.
+  const capped = status !== own ? cap : null;
   const names = KIND_NAMES();
-  const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
+  const lowerTired = tiredLegs || (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
   const asOption = k => k === "strength" ? "gym" : k;
   const practised = new Set([...sports, ...(Array.isArray(allowed) ? allowed : [])]), trainedToday = today.some(k => k !== "walk");
   const main = Array.isArray(mains) && mains.length ? mains.map(asOption) : MAIN[mainSport] || [];
@@ -53,7 +60,7 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   if (!main.length && !["ride", "run", "swim", "strength"].some(k => practised.has(k))) { practised.add("run"); practised.add("strength"); }
   const session = coach => coach?.recommendation?.session || {};
   const endurance = (sport, coach) => {
-    const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
+    const s = session(coach), kind = cap && cap !== "hard" && isHardKind(s.kind) ? "endurance" : s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
     const title = (sport === "run" ? L("Běh", "Run") : sport === "swim" ? L("Plavání", "Swim") : L("Kolo", "Ride")) + ": " + (names[kind] || kind);
     return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(", zóna 2", ", zone 2") : sport === "swim" ? L(", plynule", ", steady") : L(", lehce", ", easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
   };
@@ -113,10 +120,10 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
   const rest = options.find(o => o.kind === "rest");
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min, večer procházka 30 min", "15 min, an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
-  best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
+  best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done, capped });
   // Why the sauna is missing where it would be offered, without naming a cause.
   if (noSauna && best.kind === "rest" && (status === "red" || trainedToday)) best.reason += " " + L("Sauna je taky zátěž, dnes ne.", "Sauna adds load, so not today.");
-  return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+  return { status, score: ride?.readiness?.score ?? null, lowerTired, ...(cap ? { cap } : {}), options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" || o.kind === "swim" && swim ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
 }
 
 // How late it is against tonight's bedtime (Today's tonight.bedtime, "HH:MM"),
@@ -184,7 +191,10 @@ export function doneSentence(done = []) {
   return verb + (m > 0 ? ", " + length : "") + (s.tss > 0 ? ", " + Math.round(s.tss) + " TSS" : "") + ".";
 }
 
-function reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done }) {
+function reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done, capped = null }) {
+  if (!trainedToday && capped) return capped === "rest" ? L("Dnes je den na odpočinek.", "Today is a rest day.")
+    : capped === "easy" ? L("Dnes je lehký den, tak jen v klidu.", "Today is an easy day, so keep it light.")
+    : L("Dnes je den s mírou, tak v klidném tempu.", "Today is a steady day, so keep the pace easy.");
   if (trainedToday) return doneSentence(done) + " " + (best.kind === "sauna" ? L("Doporučuju saunu 3 × 12 minut na regeneraci.", "I recommend the sauna, 3 × 12 minutes, to recover.") : best.kind === "rest" ? L("Doporučuju 15 minut protažení a večer lehkou procházku.", "I recommend 15 minutes of stretching and a light walk in the evening.") : L("Další trénink dnes jen lehce.", "Any more training today only easy."));
   const why = (ride?.readiness?.reasons || []).filter(r => !/chybí HRV|no HRV|noc se ještě nenahrála|night hasn't synced/i.test(r))[0];
   if (status === "red") return [sentence(why) || L("Připravenost je dnes nízká.", "Readiness is low today."), L("Dnes radši odpočívej.", "Rest today instead.")].join(" ");

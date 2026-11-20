@@ -158,6 +158,10 @@ function trainingFacts(d) {
     // The recovery model's readiness of today, as the day review gets it
     // (coach-review.js dayReadiness), added to the screen data by the route.
     readiness: d.readiness?.zone || d.readiness?.score != null ? { score: num(d.readiness.score), zone: d.readiness.zone || null, parts: partsForAI(d.readiness.parts, Boolean(d.coachCycle)), flags: Array.isArray(d.readiness.flags) ? d.readiness.flags : [], checkin: d.readiness.checkin || null } : null,
+    // The day's decision as Today made it (day-decision.js, added by the route):
+    // the AI may soften it, never raise it, so Training never says "rest day"
+    // under Today's hard one or the other way round.
+    ...(verdictText(d.day?.key) ? { dayVerdict: verdictText(d.day.key), ...(d.day.done ? { trainedToday: true } : {}) } : {}),
     ...trendsOf(d)
   };
   const basis = [
@@ -180,7 +184,7 @@ function trainingFacts(d) {
     fallback: form?.text ? { text: form.text, advice: null } : null,
     ready: week.planned != null || form != null,
     // A new readiness zone (a morning check-in, last night's sleep) asks for a new text too.
-    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || "", step(num(form?.form), 5), facts.readiness?.zone || "", step(facts.readiness?.score, 5), facts.athleteState || ""].join(":")
+    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || "", step(num(form?.form), 5), facts.readiness?.zone || "", step(facts.readiness?.score, 5), facts.athleteState || "", ...(facts.dayVerdict ? [facts.dayVerdict + (facts.trainedToday ? "✓" : "")] : [])].join(":")
   };
 }
 
@@ -496,7 +500,9 @@ const PUSHES = /drž(?:et)? se plánu|podle plánu|dodrž|interval|vo2|práh|swe
 const KEEPS_PLAN = /drž(?:et)? se plánu|podle plánu|dodrž|stick to (?:the|your) plan|as planned/i;
 // Not on a yellow day, nor when the day's verdict is anything but a hard day (two reasons turn green into yellow).
 export const pushesForTest = (f, s) => pushes(f, s);
-const pushes = (f, s) => holdBack(f) ? PUSHES.test(s)
+// An easy, rest or no-intensity day (day-decision.js) holds back like a red one.
+const LIGHT_DAYS = () => ["easy", "rest", "no_intensity", "legs"].map(verdictText);
+const pushes = (f, s) => holdBack(f) || LIGHT_DAYS().includes(f?.dayVerdict) ? PUSHES.test(s)
   : ((f?.readinessZone || f?.readiness?.zone) === "yellow" || (f?.dayVerdict && f.dayVerdict !== verdictText("hard"))) && KEEPS_PLAN.test(s);
 
 function parseBasis(json) {

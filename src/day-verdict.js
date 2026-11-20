@@ -76,11 +76,13 @@ export function dayVerdict({ score = null, zone = null, flags = [], missing = []
 // above the usual range. usual: green without last night. paused: a rest day.
 export const NUMBERS_LINE_KEYS = ["hard", "steady", "easy", "signs", "usual", "paused"];
 
-export function numbersLine({ zone = null, flags = [], missing = [], rest = false } = {}) {
+// hold: the day's decision (day-decision.js) is not a hard day, or the
+// training is done: a green morning then only says the usual range.
+export function numbersLine({ zone = null, flags = [], missing = [], rest = false, hold = false } = {}) {
   if (!zone) return null;
   if (rest) return "paused";
   if ((flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))) return "signs";
-  if (zone === "green") return (missing || []).includes("sleep") ? "usual" : "hard";
+  if (zone === "green") return hold || (missing || []).includes("sleep") ? "usual" : "hard";
   return zone === "yellow" ? "steady" : zone === "red" ? "easy" : null;
 }
 

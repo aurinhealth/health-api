@@ -20,6 +20,7 @@ import { saunaSigns } from "./coach-pick.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { isHardSession } from "./session-intensity.js";
 import { heatAdvice, indoorText } from "./heat-advice.js";
+import { dayDecision, recoveringText } from "./day-decision.js";
 
 const STEP_GOAL = 10000;
 
@@ -189,6 +190,23 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   return { ...(summary || { text: null }), headline, recommendation };
 }
 
+// The coach card's headline is the day's decision (day-decision.js), so it
+// never reads "A day to recover" under "hard" or the other way round: done
+// training is "Time to recover", a green morning the recovery time holds back
+// says so and when hard training is fine again. On a hard day the coach's own
+// low-day advice (coach-engine.js: short sleep or low form alone) gives way
+// to the decision, which weighed the same morning.
+const LOW_HEADLINES = () => [L("Den na odpočinek", "A day to recover"), L("Dnes s větší rezervou", "Take it easier today")];
+export function decisionSummary(summary, decision, hasPlan = false) {
+  if (!decision || !summary) return summary;
+  if (decision.done && decision.key !== "rest") return { ...summary, headline: L("Teď regenerace", "Time to recover") };
+  if (decision.recovering) return { ...summary, headline: verdictText("steady"), recommendation: recoveringText(decision) };
+  if (decision.key === "hard" && LOW_HEADLINES().includes(summary.headline)) return { ...summary, headline: verdictText("hard"),
+    recommendation: hasPlan ? L("Dnešní plán sedí: při rozcvičení ověř, že se cítíš dobře.", "Today's plan fits: check during the warm-up that you feel good.")
+      : L("Nic tě dnes nebrzdí: vyber si trénink nejvýš v obvyklém objemu.", "Nothing holds you back today: pick a session up to your usual volume.") };
+  return { ...summary, headline: verdictText(decision.key) || summary.headline };
+}
+
 // The sessions still to do today in Today's plan, as the morning push names them.
 export function todayWorkouts(plan) {
   return (plan || []).filter(i => i && i.kind === "workout" && i.status === "planned" && i.title).map(i => ({ title: i.title, sport: i.sport }));
@@ -222,7 +240,10 @@ export function latestNightSource(nights, date) {
   return (last && nights.get(last).source) || null;
 }
 
-export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], dataSources = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
+// training: recovery-time.js todayRecovery (the last week's sets and
+// activities), only for today: Recovery and the day's decision
+// (day-decision.js) come from it. now: ms, for tests.
+export function buildToday({ date, hour = null, morning = null, training: trained = null, now = Date.now(), daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], dataSources = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -387,20 +408,35 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   // Only for today: an earlier day has nothing left to decide.
   const message = hour != null && readiness.score != null ? readinessMessage({ score: readiness.score, zone: readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], checkin, athleteState: morning?.athleteState || null,
     sleep: night ? { minutes: num(night.durationMin) } : null, planned: todayWorkouts(planItems), tomorrow: morning?.tomorrow || [], context: morning?.context || null, date }) : null;
-  const verdict = message?.verdict || null;
+  const readinessVerdict = message?.verdict || null;
+  // Regenerace (recovery-time.js) from the last days' training and last night,
+  // for an active athlete only (Today audit 15), and the muscles of Trénink → Svaly.
+  const active = !morning?.athleteState || morning.athleteState === "active";
+  const rt = trained && hour != null && active ? trained.time({ sleep: night ? { minutes: num(night.durationMin), need } : null,
+    hrv: hrv ? { value: round(hrv.value), low: round(hrv.low), high: round(hrv.high) } : null,
+    restingHR: restingHR ? { value: round(restingHR.value), high: round(restingHR.high, 1) } : null }) : null;
+  const muscles = trained && hour != null ? trained.muscles : [];
+  // The one decision of the day (day-decision.js): every part below says what it says.
+  const tomorrowOpen = recovery?.tomorrow ? daySessions(shift(date, 1), date, recovery.tomorrow, gymByDate[shift(date, 1)] || null).sessions.filter(s => s.status === "planned") : [];
+  const decision = hour != null ? dayDecision({ date, verdict: readinessVerdict, zone: readiness.zone, recoveryTime: rt, muscles,
+    open: todayWorkouts(planItems), tomorrow: tomorrowOpen.map(s => ({ title: s.title, sport: s.sport })), trained: done.length > 0 && !open.length, gym: trained?.gymMuscles || {}, now }) : null;
+  const verdict = decision?.key || readinessVerdict;
   // A sick check-in, signs of illness or a paused athlete: rest, also on a morning without a score.
   const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
     || Boolean(morning?.athleteState && morning.athleteState !== "active");
-  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict);
+  const summary = decisionSummary(readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morning ? message?.changed || null : null, verdict), decision, hasPlan);
   // A yellow morning that keeps it steady: under a hard ride, run or swim
   // still ahead, how to do it (wave 4, 28.2). Nothing is blocked; the
   // hero's verdict is the warning, this line says how.
-  const steadyOf = item => verdict !== "steady" || readiness.zone !== "yellow" || item.kind !== "workout" || item.done || item.status !== "planned" || item.eased
+  // A green morning the recovery time holds back is a steady day too (day-decision.js).
+  const steadyOf = item => verdict !== "steady" || item.kind !== "workout" || item.done || item.status !== "planned" || item.eased
     || !["ride", "run", "swim"].includes(item.sport) || !isHardSession(item.session?.title || item.title, item.sport) ? null
     : item.sport === "run" ? L("Den s mírou: běž v klidném tempu a intenzitu si nech na jiný den.", "Steady day: run it easy and save the intensity for another day.")
     : item.sport === "swim" ? L("Den s mírou: plav v klidném tempu a intenzitu si nech na jiný den.", "Steady day: swim it easy and save the intensity for another day.")
     : L("Den s mírou: jeď v klidném tempu a intenzitu si nech na jiný den.", "Steady day: ride it easy and save the intensity for another day.");
-  const withSteady = item => steadyOf(item) ? { ...item, steady: steadyOf(item) } : item;
+  // A session on muscles not rested yet: "Hamstrings still recovering, lighter version?" (day-decision.js).
+  const lighterOf = item => item.kind === "workout" && !item.done && item.status === "planned" ? decision?.sessions.find(s => !s.fits && s.title === item.title && s.sport === (item.session?.sport ?? item.sport))?.lighter || null : null;
+  const withSteady = item => ({ ...item, ...(steadyOf(item) ? { steady: steadyOf(item) } : {}), ...(lighterOf(item) ? { lighter: lighterOf(item) } : {}) });
   // Done first in the order of the day, then what is still open, then bedtime
   // with the planned wake time (Den draws the night ahead dashed to it).
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done).map(withSteady),
@@ -426,7 +462,8 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       verdict,
       // The redesign's line under the number (AI-2): what the numbers say, a
       // key of day-verdict.js NUMBERS_LINE_KEYS, never advice; null with the verdict.
-      numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest" }) : null,
+      // Never "support a hard workout" when the day's decision says otherwise or the training is done.
+      numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest", hold: Boolean(decision && (decision.key !== "hard" || decision.done)) }) : null,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
       pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length,
@@ -483,8 +520,10 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       note: eased ? L("Dnes jen lehce, náročný trénink počká na lepší den.", "Easy today; the hard session can wait for a better day.") : null
     } : null,
     recovery: recoveryCard,
-    // Regenerace (recovery-time.js): /app/api/today fills it in for today.
-    recoveryTime: null,
+    // Regenerace (recovery-time.js), only for today.
+    recoveryTime: rt,
+    // The day's decision (day-decision.js), only for today: Training, Food and Health read it from here too.
+    day: decision,
     // source: the device of the latest night up to today (source_family, e.g.
     // apple-health): the bedtime reminder asks for a charged watch only when
     // Apple Watch measures sleep (Reminders.swift).
