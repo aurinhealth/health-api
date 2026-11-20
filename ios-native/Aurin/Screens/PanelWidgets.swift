@@ -648,7 +648,7 @@ struct PanelWidget: View {
         case .healthMonitor:
             if let h = data.health { HealthMonitorCard(health: h).allowsHitTesting(linked) }
         case .night:
-            if let h = data.health { SleepNightCard(sleep: h.sleep).allowsHitTesting(linked) }
+            if let h = data.health { SleepNightCard(sleep: h.sleep, date: h.date).allowsHitTesting(linked) }
         case .body:
             if let h = data.health { BodyCard(health: h).allowsHitTesting(linked) }
         case .cycle:

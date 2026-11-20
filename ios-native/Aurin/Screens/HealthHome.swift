@@ -110,15 +110,18 @@ struct AurinOrb: View {
         let still = reduceMotion || LowPower.shared.on
         TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { timeline in
             let t = still ? 0.8 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000)
+            // Drawn on a canvas larger than the orb's frame, so the halo
+            // fades out instead of ending in a square (critic 2026-11-21).
             Canvas { context, canvas in
                 let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
-                let radius = min(canvas.width, canvas.height) * 0.36
+                let radius = size * (mood == .collecting ? 0.36 : 0.41)
                 if mood == .collecting {
                     drawPearl(&context, center: center, radius: radius, t: t)
                 } else {
                     drawLit(&context, center: center, radius: radius, t: t)
                 }
             }
+            .frame(width: size * 1.6, height: size * 1.6)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -130,9 +133,12 @@ struct AurinOrb: View {
         let shape = Self.blob(center: center, radius: radius, t: t * 0.35)
         // Around it: a warm halo at night, a soft shadow on paper.
         var halo = context
-        halo.addFilter(.blur(radius: radius * 0.25))
-        halo.fill(Self.blob(center: center, radius: radius * 1.08, t: t * 0.35),
-                  with: .color(dark ? Self.rim.opacity(0.16) : Color.black.opacity(0.18)))
+        halo.addFilter(.blur(radius: radius * 0.3))
+        halo.fill(Self.blob(center: center, radius: radius * 1.15, t: t * 0.35),
+                  with: .color(dark ? Self.rim.opacity(0.22) : Color.black.opacity(0.16)))
+        var warm = context
+        warm.addFilter(.blur(radius: radius * 0.12))
+        warm.stroke(Self.blob(center: center, radius: radius * 1.02, t: t * 0.35), with: .color(Self.rim.opacity(dark ? 0.35 : 0.45)), lineWidth: radius * 0.08)
         // The body, near black, a touch lighter towards the top.
         context.fill(shape, with: .radialGradient(
             Gradient(colors: [Color(white: 0.03), Color(white: 0.05), Color(white: 0.09)]),
@@ -141,8 +147,8 @@ struct AurinOrb: View {
         var inside = context
         inside.clip(to: shape)
         inside.addFilter(.blur(radius: radius * 0.12))
-        inside.fill(Path(ellipseIn: CGRect(x: center.x - radius * 0.95, y: center.y + radius * 0.62, width: radius * 1.9, height: radius * 0.85)),
-                    with: .color(glow.opacity(0.85)))
+        inside.fill(Path(ellipseIn: CGRect(x: center.x - radius * 0.8, y: center.y + radius * 0.78, width: radius * 1.6, height: radius * 0.7)),
+                    with: .color(glow.opacity(0.8)))
         // The rim: a blurred gold glow and a thin bright line on it.
         var rimGlow = context
         rimGlow.addFilter(.blur(radius: 5))
@@ -174,7 +180,7 @@ struct AurinOrb: View {
         let circle = Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
         var shadow = context
         shadow.addFilter(.blur(radius: radius * 0.18))
-        shadow.fill(circle.offsetBy(dx: 0, dy: radius * 0.06), with: .color(Color.black.opacity(dark ? 0.5 : 0.12)))
+        shadow.fill(circle.offsetBy(dx: 0, dy: radius * 0.06), with: .color(Color.black.opacity(dark ? 0.5 : 0.2)))
         context.fill(circle, with: .radialGradient(
             Gradient(colors: dark ? [Color(white: 0.10), Color(white: 0.06)] : [Color(white: 0.99), Color(white: 0.90)]),
             center: CGPoint(x: center.x - radius * 0.3, y: center.y - radius * 0.35), startRadius: 0, endRadius: radius * 1.5))
@@ -229,15 +235,15 @@ struct AurinAgeHero: View {
                     Text(verbatim: Fmt.decimal(age.value, digits: 1)).font(Typo.number(76)).foregroundStyle(Color(white: 0.96))
                         .lineLimit(1).minimumScaleFactor(0.6)
                     Text(verbatim: L10n.tr("Odhad Aurin age").uppercased(with: Fmt.locale))
-                        .font(.caption2.weight(.medium)).tracking(2).foregroundStyle(Color(white: 0.72))
+                        .font(.caption2.weight(.medium)).tracking(1.4).foregroundStyle(Color(white: 0.72))
                         .lineLimit(1).minimumScaleFactor(0.7)
                     if let words {
                         Text(verbatim: words).font(Typo.body).foregroundStyle(AurinOrb.wordsColor(older: older))
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                 }
-                .padding(.horizontal, 64)
-                .offset(y: -6)
+                .padding(.horizontal, 74)
+                .offset(y: -12)
             }
             Text(verbatim: updated(age)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
@@ -316,8 +322,11 @@ struct AurinAgeTrendCard: View {
                 HStack {
                     SectionLabel(text: "Posledních 12 týdnů")
                     Spacer()
-                    if !short, let change = AurinAgeText.change(age) {
+                    if !short {
                         let diff = (points.last?.value ?? 0) - (points.first?.value ?? 0)
+                        let size = Fmt.decimal(abs(diff), digits: 1)
+                        // "1.3 years lower" as in the concept; the start date is on the axis.
+                        let change = abs(diff) < 0.05 ? L10n.tr("beze změny") : L10n.f(diff < 0 ? "o %@ roku níž" : "o %@ roku výš", size)
                         // Grey when nothing changed; orange only for older (point 44).
                         let colour = abs(diff) < 0.05 ? Palette.muted : diff < 0 ? Palette.Status.good : Palette.amber
                         Pill(text: change, foreground: colour, background: colour.opacity(0.14))
@@ -428,7 +437,7 @@ struct AurinAgeShapes: View {
         case "sleep":
             // "avg 5 h 42 min": the week's nights, as the sleep row of the concept.
             guard let nights = health?.sleep.week.map(\.value), !nights.isEmpty else { return nil }
-            return L10n.f("průměr %@", Fmt.duration(Int(nights.reduce(0, +) / Double(nights.count))))
+            return L10n.f("průměr %@ za týden", Fmt.duration(Int(nights.reduce(0, +) / Double(nights.count))))
         default: return nil
         }
     }
@@ -523,10 +532,8 @@ struct HealthMonitorCard: View {
             // test of build 602, point 51). The band is at least 3 points wide
             // and only below it counts.
             let band = Self.oxygenBand(low: o.low, high: o.high)
-            var state = st("oxygen")
-            switch state { case .off(above: true)?, .far(above: true)?: state = .within; default: break }
-            if let band, o.value >= band.lowerBound, state != nil { state = .within }
-            out.append(Dial(id: .oxygen, label: "Kyslík", value: o.value, text: Fmt.int(o.value), unit: "%", low: band?.lowerBound, high: band?.upperBound, state: state))
+            out.append(Dial(id: .oxygen, label: "Kyslík", value: o.value, text: Fmt.int(o.value), unit: "%", low: band?.lowerBound, high: band?.upperBound,
+                            state: Self.oxygenState(st("oxygen"), value: o.value, band: band)))
         }
         if let r = h.respiration {
             out.append(Dial(id: .respiration, label: "Dech", value: r.value, text: Fmt.decimal(r.value, digits: 1), unit: L10n.tr("za min"),
@@ -536,11 +543,35 @@ struct HealthMonitorCard: View {
             let elevated = h.skinTemp?.elevated == true
             // "0.1 °C warmer" in words, no sign (concept 1, point 52).
             let change = Units.temperatureChange(d)
-            let unit = abs(change) < 0.05 ? Units.temperatureUnit : Units.temperatureUnit + " " + L10n.tr(change > 0 ? "tepleji" : "chladněji")
-            out.append(Dial(id: .temperature, label: "Teplota kůže", value: d, text: Fmt.decimal(abs(change), digits: 1), unit: unit,
+            // The direction under the dial, the dial keeps the unit (Czech did not fit).
+            let label = abs(change) < 0.05 ? "Teplota kůže" : change > 0 ? "Kůže tepleji" : "Kůže chladněji"
+            out.append(Dial(id: .temperature, label: label, value: d, text: Fmt.decimal(abs(change), digits: 1), unit: Units.temperatureUnit,
                             low: -0.5, high: 0.5, state: elevated ? .off(above: true) : abs(d) <= 0.5 ? .within : .off(above: d > 0)))
         }
         return out
+    }
+
+    /// Where the dot is drawn: on the side the state names, so the dial and
+    /// the card's sentence never disagree (critic 2026-11-21).
+    static func drawn(_ d: Dial) -> Double {
+        guard let low = d.low, let high = d.high, high > low, let state = d.state else { return d.value }
+        let step = (high - low) * 0.25
+        switch state {
+        case .within: return min(high, max(low, d.value))
+        case .off(let above), .far(let above): return above ? max(d.value, high + step) : min(d.value, low - step)
+        }
+    }
+
+    /// Oxygen's state for the card and its detail alike: never above, and
+    /// within anywhere inside the widened band.
+    static func oxygenState(_ state: MetricState?, value: Double, band: ClosedRange<Double>?) -> MetricState? {
+        guard let state else { return nil }
+        switch state {
+        case .off(above: true), .far(above: true): return .within
+        default: break
+        }
+        if let band, value >= band.lowerBound { return .within }
+        return state
     }
 
     /// The usual oxygen range drawn at least 3 points wide, never above 100 %.
@@ -572,7 +603,7 @@ struct HealthMonitorCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 // All five in one row (concept 1, point 49); a grid only at the
                 // accessibility text sizes, where five no longer fit.
-                if typeSize.isAccessibilitySize {
+                if typeSize >= .xxxLarge {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], spacing: 12) { ForEach(dials) { dialLink($0) } }
                 } else {
                     HStack(alignment: .top, spacing: 2) { ForEach(dials) { dialLink($0) } }
@@ -607,9 +638,10 @@ struct HealthMonitorCard: View {
     private func dialLink(_ d: Dial) -> some View {
         NavigationLink(value: d.id == .temperature ? AppRoute.metric(.temperature) : AppRoute.metric(HealthMetric(rawValue: d.id.rawValue) ?? .hrv)) {
             VStack(spacing: 4) {
-                MiniDial(value: d.value, low: d.low, high: d.high, off: d.state != nil && d.state != .within) {
+                MiniDial(value: Self.drawn(d), low: d.low, high: d.high, off: d.state != nil && d.state != .within) {
                     VStack(spacing: 0) {
-                        Text(verbatim: d.text).font(Typo.number(16)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(verbatim: d.text).font(Typo.number(16))
+                            .foregroundStyle(d.state == nil ? Palette.ink : d.state == .within ? Palette.Status.good : Palette.amber).lineLimit(1).minimumScaleFactor(0.6)
                         Text(verbatim: d.unit).font(.caption2).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.6)
                     }
                 }
@@ -674,6 +706,8 @@ struct MiniDial<Center: View>: View {
 /// week's nights as dots against the need and tonight's plan in one row.
 struct SleepNightCard: View {
     let sleep: HealthSnapshot.Sleep
+    /// The day Health shows: its week is drawn, with this night circled.
+    var date: String? = nil
 
     private static func minutes(_ clock: String?) -> Double? {
         guard let clock, clock.count >= 4 else { return nil }
@@ -735,7 +769,7 @@ struct SleepNightCard: View {
                     .stroke(Palette.track, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 if let from, let to, to > from {
                     Path { p in p.addArc(center: c, radius: r, startAngle: angle(from), endAngle: angle(to), clockwise: false) }
-                        .stroke(LinearGradient(colors: [Palette.amberBar, Palette.Status.good], startPoint: .leading, endPoint: .trailing),
+                        .stroke(LinearGradient(colors: [Palette.amber, Palette.Status.good], startPoint: .leading, endPoint: .trailing),
                                 style: StrokeStyle(lineWidth: 8, lineCap: .round))
                         .shadow(color: Palette.Status.good.opacity(0.35), radius: 6)
                 }
@@ -750,9 +784,9 @@ struct SleepNightCard: View {
                     let a = angle(from).radians, b = angle(to).radians
                     let out = r + 18
                     Text(verbatim: ClockText.format(start)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                        .position(x: c.x + cos(a) * out - 6, y: c.y + sin(a) * out)
+                        .position(x: c.x + cos(a) * out - 6, y: max(8, c.y + sin(a) * out))
                     Text(verbatim: ClockText.format(end)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                        .position(x: c.x + cos(b) * out + 6, y: c.y + sin(b) * out)
+                        .position(x: c.x + cos(b) * out + 6, y: max(8, c.y + sin(b) * out))
                 }
                 Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 2)
                 Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 2)
@@ -772,9 +806,9 @@ struct SleepNightCard: View {
 
     private var week: some View {
         let need = Double(sleep.need)
+        let last = date ?? sleep.week.last?.date ?? AppModel.localDate(Date())
         // This week Monday to Sunday (concept 1, point 54): the last night is
         // circled, nights still to come stay empty.
-        let last = sleep.week.last?.date ?? AppModel.localDate(Date())
         let monday = ISODay.shift(last, -ISODay.weekdayIndex(last))
         let days = (0..<7).map { ISODay.shift(monday, $0) }
         let byDay = Dictionary(sleep.week.map { ($0.date, $0.value) }, uniquingKeysWith: { _, b in b })
@@ -802,14 +836,18 @@ struct SleepNightCard: View {
                         }
                     }
                 }
-                Text(verbatim: L10n.f("%@ ze %@ nocí s plnou potřebou", String(reached), String(max(count, 1)))).font(Typo.caption).foregroundStyle(Palette.muted)
+                if count > 0 {
+                    Text(verbatim: L10n.f("%@ ze %@ nocí s plnou potřebou", String(reached), String(count))).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
             }
             .accessibilityElement(children: .combine)
         }
 
         private func dot(_ day: String) -> some View {
-            let colour = nights[day].map { $0 >= need ? Palette.Status.good : Palette.faint } ?? Palette.track
+            // Full need green, a shorter night grey, no night an empty ring.
+            let colour = nights[day].map { $0 >= need ? Palette.Status.good : Palette.muted } ?? .clear
             return Circle().fill(colour).frame(width: 8, height: 8)
+                .overlay { if nights[day] == nil { Circle().stroke(Palette.faint, lineWidth: 1) } }
                 .overlay { if day == last { Circle().stroke(Palette.ink, lineWidth: 1.2).frame(width: 14, height: 14) } }
                 .frame(width: 14, height: 14)
         }

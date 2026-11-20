@@ -96,6 +96,11 @@ struct HealthContent: View {
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) {
                     TabHeader(date: model.headerDay(health.date), month: { showMonth = true }, coach: actions.coach, settings: actions.settings)
+                    // Without the week strip, another day than today is named under the month.
+                    if let day = model.selectedDate {
+                        Text(verbatim: Fmt.weekdayShort(day) + " " + Fmt.dayMonth(day)).font(Typo.caption).foregroundStyle(Palette.muted)
+                            .padding(.top, 4)
+                    }
                     // Stale or broken sources, as on Today (DATA-4: freshness and
                     // connection states stay).
                     if model.selectedDate == nil && !model.demo {

@@ -4764,8 +4764,9 @@
 "Adaptivní plány tréninku" = "Adaptive Training Plans";
 "%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";
 "Tep v klidu" = "Resting HR";
-"tepleji" = "warmer";
-"chladněji" = "cooler";
+"Kůže tepleji" = "Skin warmer";
+"Kůže chladněji" = "Skin cooler";
+"průměr %@ za týden" = "avg %@ this week";
 "Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is last night. Green arc is your usual 30-day range.";
 "roku mladší" = "years younger";
 "roku starší" = "years older";
@@ -4776,3 +4777,5 @@
 "asi %@ min" = "about %@ min";
 "nižší připravenost další ráno" = "lower readiness the next morning";
 "vyšší připravenost další ráno" = "higher readiness the next morning";
+"o %@ roku níž" = "%@ years lower";
+"o %@ roku výš" = "%@ years higher";

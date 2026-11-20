@@ -132,9 +132,11 @@ struct JournalHealthCard: View {
 
     var body: some View {
         Group {
+            // Nothing until the first answer, so the card doesn't jump from
+            // "Log today" to "Yesterday is waiting".
             if let card = data?.card {
                 waiting(card)
-            } else {
+            } else if data != nil {
                 logToday
             }
         }
