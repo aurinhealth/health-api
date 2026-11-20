@@ -746,6 +746,13 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
+    func testEffortSheet() throws {
+        try render("effort-sheet", height: 700) {
+            IntensitySheet(title: "Série 2", selected: "M") { _ in }
+        }
+    }
+
     /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
     func testSetupFocusPages() throws {
         L10n.setLanguage("en")
@@ -878,9 +885,9 @@ final class SnapshotTests: XCTestCase {
 
     func testPlanEditing() {
         var day = DemoData.gym
-        day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         day.moveExercise(from: 0, to: 3)
+        XCTAssertEqual(day.exercises.map(\.name), ["Tlak na lavici", "Přítahy", "Dřep", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
+        day.moveExercise(from: 2, to: 0)
         XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 

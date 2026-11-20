@@ -65,6 +65,44 @@ final class LiveWorkout: NSObject {
     private(set) var paused: TimeInterval = 0
     /// Where the clock counts from: the start moved by the pause.
     var clockStart: Date? { start.map { $0.addingTimeInterval(paused) } }
+    /// Pause workout (concept 08): since when the workout stands. The clock,
+    /// the exercise's time and the HealthKit session wait for Resume workout.
+    private(set) var pausedAt: Date?
+    /// Those pauses, written into a workout saved without a session.
+    @ObservationIgnored private var pauses: [DateInterval] = []
+    @ObservationIgnored private var keyBeforePause: String?
+    /// A workout the watch records is paused on the watch.
+    var canPause: Bool { running && !onWatch }
+    /// The segment while paused: no exercise gets that time.
+    static let pauseKey = "pause"
+
+    /// Seconds on the clock, standing still while paused.
+    func elapsed(at now: Date = Date()) -> TimeInterval {
+        clockStart.map { max(0, (pausedAt ?? now).timeIntervalSince($0)) } ?? 0
+    }
+
+    func pause() {
+        guard canPause, pausedAt == nil else { return }
+        pausedAt = Date()
+        keyBeforePause = focused?.key
+        focus(Self.pauseKey)
+        if #available(iOS 26.0, *) { (session as? HKWorkoutSession)?.pause() }
+        Task { await IdleWorkout.plan(after: nil) }
+        keep()
+    }
+
+    func resumeFromPause() {
+        guard let since = pausedAt else { return }
+        let now = Date()
+        pausedAt = nil
+        paused += now.timeIntervalSince(since)
+        pauses.append(DateInterval(start: since, end: now))
+        if #available(iOS 26.0, *) { (session as? HKWorkoutSession)?.resume() }
+        if let key = keyBeforePause { focus(key) }
+        keyBeforePause = nil
+        keep()
+        worked()
+    }
 
     @ObservationIgnored private let store = HKHealthStore()
     @ObservationIgnored private var weightKg: Double = 80
@@ -111,7 +149,7 @@ final class LiveWorkout: NSObject {
         // What the app kept every 15 s: the start, calories, heart rate.
         let saved = Checkpoint.load().flatMap { Date().timeIntervalSince($0.start) < 4 * 3600 ? $0 : nil }
         if #available(iOS 26.0, *), await recoverSession(weightKg: weightKg) {
-            if let saved { restore(saved, kcal: false) }
+            if let saved { restore(saved, kcal: false); restorePauses(saved) }
             return
         }
         // A start from hours ago is a workout left unfinished: it starts now.
@@ -128,7 +166,18 @@ final class LiveWorkout: NSObject {
             carried = (DateInterval(start: saved.at, duration: 0), samples)
         }
         await begin(since: recent, weightKg: weightKg)
-        if let saved { restore(saved, kcal: false); paused = saved.paused }
+        if let saved { restore(saved, kcal: false); paused = saved.paused; restorePauses(saved) }
+    }
+
+    /// The pauses before iOS closed the app. One still open ends now: the
+    /// recovered session runs again (recoverSession), so the workout goes on.
+    private func restorePauses(_ saved: Checkpoint) {
+        paused = saved.paused
+        pauses = (saved.pauses ?? []).compactMap { $0.count == 2 && $0[1] >= $0[0] ? DateInterval(start: Date(timeIntervalSince1970: $0[0]), end: Date(timeIntervalSince1970: $0[1])) : nil }
+        guard let since = saved.pausedAt else { return }
+        let now = max(Date(), since)
+        paused += now.timeIntervalSince(since)
+        pauses.append(DateInterval(start: since, end: now))
     }
 
     /// The workout as it stood, kept on the phone while it runs, so a workout
@@ -143,6 +192,9 @@ final class LiveWorkout: NSObject {
         var maxHr: Double?
         var trail: [[Double]]
         var beats: [[Double]]
+        /// Pause workout: the one open and those done (start, end as 1970 seconds).
+        var pausedAt: Date? = nil
+        var pauses: [[Double]]? = nil
 
         static let key = "liveWorkout.checkpoint"
         static func load() -> Checkpoint? {
@@ -155,7 +207,8 @@ final class LiveWorkout: NSObject {
         guard let start else { return }
         let point = Checkpoint(start: start, at: Date(), paused: paused, kcal: kcal ?? 0, hrSum: hrSum, hrCount: hrCount, maxHr: maxHeartRate,
                                trail: trail.suffix(600).map { [$0.date.timeIntervalSince1970, $0.bpm] },
-                               beats: sensorBeats.map { [$0.0.timeIntervalSince1970, $0.1] })
+                               beats: sensorBeats.map { [$0.0.timeIntervalSince1970, $0.1] },
+                               pausedAt: pausedAt, pauses: pauses.map { [$0.start.timeIntervalSince1970, $0.end.timeIntervalSince1970] })
         if let data = try? JSONEncoder().encode(point) { UserDefaults.standard.set(data, forKey: Checkpoint.key) }
     }
 
@@ -208,6 +261,7 @@ final class LiveWorkout: NSObject {
         trail = []
         segments = []
         paused = carried?.pause.duration ?? 0
+        pausedAt = nil; pauses = []
         let unit = HKUnit.count().unitDivided(by: .minute())
         let beats = (carried?.samples ?? []).filter { $0.quantityType == HKQuantityType(.heartRate) }.sorted { $0.startDate < $1.startDate }
         for sample in beats { note(sample.quantity.doubleValue(for: unit), at: sample.startDate) }
@@ -335,6 +389,7 @@ final class LiveWorkout: NSObject {
     @discardableResult
     func finish(at end: Date = Date()) async -> Bool {
         guard let begun = start else { return false }
+        resumeFromPause()
         Task { await IdleWorkout.plan(after: nil) }
         poll?.cancel(); poll = nil
         stopSensor()
@@ -415,7 +470,7 @@ final class LiveWorkout: NSObject {
         stopSensor()
         sensorBeats = []
         // Stopped without Dokončit: nothing goes to Apple Health.
-        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running {
+        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running || session.state == .paused {
             (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
             session.end()
         }
@@ -428,6 +483,7 @@ final class LiveWorkout: NSObject {
         start = nil
         segments = []
         paused = 0
+        pausedAt = nil; pauses = []; keyBeforePause = nil
         carried = nil
         Checkpoint.clear()
         watchHeard = nil
@@ -470,6 +526,8 @@ final class LiveWorkout: NSObject {
 
     /// Training mode turned to `key` (a part or an exercise).
     func focus(_ key: String) {
+        // Paused: the time stays with the pause; the screen's key comes back with Resume.
+        if pausedAt != nil, key != Self.pauseKey { keyBeforePause = key; return }
         guard running, segments.last?.key != key else { return }
         segments.append(Segment(key: key, start: Date(), kcal: kcal ?? 0))
     }
@@ -527,7 +585,7 @@ final class LiveWorkout: NSObject {
     /// A set ticked or a change made in Training mode, or "Keep going": the
     /// question waits another 10 min. The watch asks itself when it records.
     func worked() {
-        guard running, idleEnd == nil else { return }
+        guard running, idleEnd == nil, pausedAt == nil else { return }
         lastWork = Date()
         let plan = onWatch || !openParts.isEmpty ? nil : lastWork
         Task { await IdleWorkout.plan(after: plan) }
@@ -552,7 +610,7 @@ final class LiveWorkout: NSObject {
 
     /// Every 15 s while the workout runs: 30 min without a set and no answer ends it.
     private func checkIdle() {
-        guard running, !onWatch, idleEnd == nil, openParts.isEmpty, let last = lastWork ?? start else { return }
+        guard running, !onWatch, idleEnd == nil, pausedAt == nil, openParts.isEmpty, let last = lastWork ?? start else { return }
         if Date().timeIntervalSince(last) >= IdleWorkout.endAfter {
             idleEnd = last
             openFromWatch = AppModel.localDate(last)
@@ -581,7 +639,7 @@ final class LiveWorkout: NSObject {
         }
         if !liveKcal {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
-            kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
+            kcal = 4.0 * weightKg * elapsed() / 3600
         }
         if sensor.liveBpm == nil {
             let latest = await latestHeartRate(since: Date().addingTimeInterval(-120))
@@ -680,6 +738,13 @@ final class LiveWorkout: NSObject {
         await add(beatSamples(), to: builder)
         // The estimate already covers the time before a pause.
         await addCarried(to: builder, kcal: false)
+        if !pauses.isEmpty {
+            let events = pauses.flatMap { [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: $0.start, duration: 0), metadata: nil),
+                                           HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: $0.end, duration: 0), metadata: nil)] }
+            _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                builder.addWorkoutEvents(events) { ok, _ in continuation.resume(returning: ok) }
+            }
+        }
         builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Aurin"]) { _, _ in }
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
