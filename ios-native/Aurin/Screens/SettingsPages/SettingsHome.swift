@@ -217,16 +217,12 @@ struct SettingsSectionTiles: View {
 }
 
 /// Deník: on or off (the Zdraví card, the morning sheet and the coach's view
-/// of it), the morning questions, what it follows, and whether the coach sees
-/// the sensitive items (with their own consent, GDPR art. 9).
+/// of it), the morning questions and what it follows. Its consents (the
+/// sensitive items for the coach, sexual activity) are in Soukromí a data.
 struct JournalSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var enabled = JournalSwitch.isOn
     @State private var askMorning = true
-    @State private var shareSensitive = false
-    @State private var askingConsent = false
-    @State private var appleSex = JournalSwitch.tracksSex
-    @State private var askingSexConsent = false
     @State private var failure: String?
     @State private var tracked: Int?
     @State private var tracking = false
@@ -254,34 +250,12 @@ struct JournalSettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                SettingsGroup(title: "Apple Health", footer: "Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde.") {
-                    SettingsToggle(title: "Sexuální aktivita", isOn: Binding(get: { appleSex }, set: { on in
-                        if on { askingSexConsent = true; return }
-                        // Off stops reading at once; the server deletes what it has.
-                        appleSex = false
-                        JournalSwitch.remember(appleSex: false)
-                        Task { await setAppleSex(false) }
-                    }))
-                }
-                SettingsGroup(title: "AI kouč", footer: "Náladu, úzkost, konopí, CBD a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
-                    SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
-                        if on { askingConsent = true; return }
-                        shareSensitive = false
-                        Task { if !(await save(["shareSensitive": .bool(false)])) { await load() } }
-                    }))
-                }
+                // The consents (sensitive items for the coach, sexual activity from Apple Health) live in Soukromí a data.
+                PrivacyLinkRow(subtitle: "Citlivé položky a sexuální aktivita")
             }
             if let failure { Text(failure).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
-        .sheet(isPresented: $askingConsent) {
-            JournalSensitiveConsentSheet {
-                Task { if await save(["shareSensitive": .bool(true)]) { shareSensitive = true } }
-            }
-        }
-        .sheet(isPresented: $askingSexConsent) {
-            AppleSexConsentSheet { Task { await setAppleSex(true) } }
-        }
         .task { await load() }
     }
 
@@ -293,8 +267,6 @@ struct JournalSettingsView: View {
         guard let catalog = try? await model.api.journalCatalog() else { return }
         enabled = catalog.enabled ?? true
         askMorning = catalog.askMorning ?? true
-        shareSensitive = catalog.shareSensitive ?? false
-        appleSex = catalog.appleSex ?? false
         tracked = catalog.pinned.count
         JournalSwitch.remember(catalog.enabled)
     }
@@ -311,20 +283,6 @@ struct JournalSettingsView: View {
             failure = error.localizedDescription
             return false
         }
-    }
-
-    /// The phone reads and sends sexual activity only once the server holds
-    /// the consent (it decides what it keeps, src/apple-health.js). Turned
-    /// on, the last 90 days are read again; turned off and not saved, the
-    /// switch shows what the server still has.
-    private func setAppleSex(_ on: Bool) async {
-        guard await save(["appleSex": .bool(on)]) else {
-            if !on { await load() }
-            return
-        }
-        appleSex = on
-        JournalSwitch.remember(appleSex: on)
-        if on, !model.demo { await AppleHealth.shared.readSexHistory(api: model.api) }
     }
 }
 

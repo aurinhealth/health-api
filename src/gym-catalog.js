@@ -376,7 +376,14 @@ export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=
   const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
   return ranked.slice(0,8).map(a=>{
     const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||catalogueStartLoad(a.name,start,history)||{kg:null,source:'no-reference'};
-    return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
+    // The weight is only suggested, never carried over 1:1 from another
+    // exercise (strength coach S1, 2026-11-16): "suggested" with a reference in
+    // the history, "start-light" with only the catalogue's start load or none.
+    // A main lift swapped in gets one warm-up set first, at 65 % for 5 as the
+    // generator ramps a later main lift (strength-generator.js warmupRows).
+    const kg=estimate.kg??null,known=kg!=null&&!['catalogue-default','no-reference'].includes(estimate.source);
+    return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup),
+      weight:known?'suggested':'start-light',...(def.warmup&&kg>0?{warmupSet:{kg:resolveLoad(a.name,Math.max(2,kg*0.65)),reps:5}}:{})};
   });
 }
 

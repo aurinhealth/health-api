@@ -203,7 +203,7 @@ struct SetupFlowView: View {
         ("Co", "Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku."),
         ("Odkud", "Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
-        ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
+        ("Odvolání", "Souhlas kdykoli odvoláš v Nastavení → Soukromí a data, nebo smažeš účet. Předtím si tam můžeš stáhnout všechna svoje data.")
     ]
 
     @ViewBuilder

@@ -15,7 +15,7 @@ const round = (v, d = 2) => v == null ? undefined : Math.round(v * 10 ** d) / 10
 const out = [], problems = [];
 for (const line of readFileSync(new URL("./staples.txt", import.meta.url), "utf8").split("\n")) {
   if (!line.trim() || line.startsWith("#")) continue;
-  const [cs, en, pattern, portion = "", pcs = "", pen = "", ml = ""] = line.split("|").map(s => s.trim());
+  const [cs, en, pattern, portion = "", pcs = "", pen = "", ml = "", local = ""] = line.split("|").map(s => s.trim());
   const wanted = pattern.toLowerCase();
   const food = foods.find(f => f.description.toLowerCase() === wanted) || foods.find(f => f.description.toLowerCase().startsWith(wanted));
   if (!food) { problems.push(`no USDA food: ${cs} (${pattern})`); continue; }
@@ -42,6 +42,13 @@ for (const line of readFileSync(new URL("./staples.txt", import.meta.url), "utf8
   Object.assign(r, { e: per100(amount("208")) ?? 0, p: per100(amount("203")) ?? 0, c: per100(amount("205")) ?? 0, f: per100(amount("204")) ?? 0 });
   const su = per100(amount("269")), fi = per100(amount("291")), sa = sodium == null ? undefined : round(sodium * density * 2.5 / 1000, 1);
   if (su != null) r.su = su; if (fi != null) r.fi = fi; if (sa != null) r.sa = sa;
+  // Values of the food as sold here where the USDA one differs ("sa=0.1": Czech tvaroh is
+  // unsalted, US cottage cheese is not) or lacks them.
+  for (const pair of local.split(/\s+/).filter(Boolean)) {
+    const [key, value] = pair.split("=");
+    if (!["e", "p", "c", "f", "su", "fi", "sa"].includes(key) || !Number.isFinite(Number(value))) { problems.push(`bad value "${pair}": ${cs}`); continue; }
+    r[key] = Number(value);
+  }
   if (size) r.s = [Math.round(size), pcs, pen];
   out.push(r);
 }

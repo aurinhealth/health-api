@@ -8,12 +8,14 @@ struct ActivityTypeSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     /// The activity's id in the calendar (its external id on the server).
-    let activityId: String
+    var activityId = ""
     /// Its type now (Intervals.icu's name, e.g. "Run"), when known.
-    let current: String?
+    var current: String? = nil
     /// "google-wearables" or "apple-health": the change stays in the app.
-    let source: String?
+    var source: String? = nil
     var onSaved: () -> Void = {}
+    /// "+" → Log workout → More: only picks the type, nothing is saved here.
+    var pick: ((ActivityTypeOption) -> Void)? = nil
     @State private var types: [ActivityTypeOption] = []
     @State private var chosen: String?
     @State private var query = ""
@@ -132,6 +134,11 @@ struct ActivityTypeSheet: View {
     }
 
     private func save() async {
+        if let pick {
+            if let option = types.first(where: { $0.type == chosen }) { pick(option) }
+            dismiss()
+            return
+        }
         guard let chosen, !model.demo else { dismiss(); return }
         saving = true
         error = nil

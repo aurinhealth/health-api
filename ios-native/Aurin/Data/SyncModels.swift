@@ -159,7 +159,7 @@ enum SyncApp {
 struct ActivityToSync: Equatable {
     /// gym:<date> or manual:<id>; the same key updates instead of a second copy.
     let key: String
-    /// gym, run or ride.
+    /// gym, run, ride, swim or other.
     let sport: String
     let name: String
     let date: String
@@ -167,12 +167,15 @@ struct ActivityToSync: Equatable {
     let minutes: Int
     var notes: String = ""
     var rpe: Int? = nil
+    /// The Intervals.icu type picked under Log workout → More (Yoga, Hike…).
+    var type: String? = nil
 
     var body: JSONObject {
         var body: JSONObject = ["key": .string(key), "sport": .string(sport), "name": .string(name), "date": .string(date),
                                 "minutes": .number(Double(minutes)), "notes": .string(notes)]
         if let start { body["start"] = .string(ISO8601DateFormatter().string(from: start)) }
         if let rpe { body["rpe"] = .number(Double(rpe)) }
+        if let type { body["type"] = .string(type) }
         return body
     }
 }

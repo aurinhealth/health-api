@@ -75,9 +75,11 @@ export async function syncedPlans(env,today=localToday()){
   return {active,gym};
 }
 // Days with an activity of the plan's sports (`of`: a plan or a sport), from (inclusive) to (exclusive).
+// The families that store workouts named first, so the read seeks
+// idx_health_datapoints_user_1 by start_time instead of reading every workout ever.
 export async function planSportDates(env,of,from,to){
   const sports=planDoneSports(of);
-  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
   return [...new Set(rows.map(activityFromRow).filter(a=>a&&sports.includes(a.kind)&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
 // Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.

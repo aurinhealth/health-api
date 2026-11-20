@@ -142,8 +142,8 @@ function terrainLine(structure, { sport, environment, system }) {
   return sport === "run" ? L("Najdi úsek na " + minLabel(longest) + " souvislého běhu bez přechodů a zastavení.", "Find a stretch for " + minLabel(longest) + " of continuous running without crossings or stops.") : L("Najdi silnici nebo stoupání na " + minLabel(longest) + " nerušené jízdy – bez semaforů a křižovatek.", "Find a road or climb for " + minLabel(longest) + " of uninterrupted riding – no traffic lights or junctions.");
 }
 
-function fueling(minutes, system) {
-  const rate = carbsPerHour(minutes, system);
+function fueling(minutes, system, experience = null) {
+  const rate = carbsPerHour(minutes, system, "ride", experience);
   if (minutes <= 75) return rate ? [L("Před jízdou lehké sacharidové jídlo; během jízdy cca " + rate + " g sacharidů/h (gel, banán nebo iontový nápoj).", "A light carb meal before the ride; about " + rate + " g of carbs/h during it (a gel, a banana or a sports drink)."), L("Pití 500–750 ml/h, po jízdě bílkoviny a sacharidy.", "Drink 500–750 ml/h; protein and carbs after the ride.")] : [L("Stačí voda nebo iontový nápoj; při jízdě nalačno drž opravdu nízkou intenzitu.", "Water or a sports drink is enough; if you ride fasted, keep the intensity truly low."), L("Pití 500–750 ml/h.", "Drink 500–750 ml/h.")];
   if (minutes <= 150) return [L("Cca " + rate + " g sacharidů/h (gel, tyčinka, iontový nápoj) – začni v první půlhodině.", "About " + rate + " g of carbs/h (gel, bar, sports drink) – start within the first half hour."), L("Pití 500–750 ml/h, v teple víc a se solí.", "Drink 500–750 ml/h, more and with salt in the heat.")];
   return [L("Cca " + rate + " g sacharidů/h (kombinace glukózy a fruktózy), jez pravidelně každých 20–30 min.", "About " + rate + " g of carbs/h (a glucose and fructose mix); eat regularly every 20–30 min."), L("Pití 600–900 ml/h se sodíkem 500–1000 mg/l.", "Drink 600–900 ml/h with 500–1000 mg/l of sodium."), L("Nech si jídlo i na konec jízdy – kvalita je vložená mezi aerobní bloky.", "Save food for the end of the ride too – the quality work sits between aerobic blocks.")];
@@ -176,6 +176,10 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
       zone: zones && !s.free ? zoneForPercent(zones, (low + high) / 2)?.name || null : null
     };
     if (run) Object.assign(out, { paceSlow: s.free ? null : formatPace(pace(low)), paceFast: s.free ? null : formatPace(pace(high)) });
+    // A run without the athlete's threshold pace gets no invented paces
+    // (T-BEH-1): the step's effort in words from the run zones instead, as the
+    // app's RPE and zone words; the length stays as planned.
+    if (run && !thresholdPace && !s.free) out.effort = runEffort((low + high) / 2);
     const hr = !s.free && !(run ? thresholdPace : ftp) ? heartRateFor((low + high) / 2, ranges, hrZones) : null;
     if (hr) Object.assign(out, hr);
     return out;
@@ -183,6 +187,13 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
   // What each step is for, as in the Intervals.icu text (warmup, interval, recovery, active, cooldown).
   const kinds = stepIntensities(structure, sport);
   return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => ({ ...row(s), intensity: kinds[i][j] })) } : { repeats: 1, steps: [{ ...row(block), intensity: kinds[i] }] });
+}
+
+// The run zones above in words: Z1–Z2 easy, Z3 steady, Z4 threshold, Z5–Z6
+// intervals, Z7 repetition (Daniels' names, running coach BEH-6).
+export function runEffort(percent) {
+  const z = RUN_ZONE_RANGE;
+  return percent <= z.Z2[1] ? "easy" : percent <= z.Z3[1] ? "steady" : percent <= z.Z4[1] ? "threshold" : percent <= z.Z6[1] ? "intervals" : "repetition";
 }
 
 // Swim steps: metres (or minutes in open water), pace per 100 m from the
@@ -265,11 +276,13 @@ function hrReference(model, lthr) {
   return lthr ? L("Z2 z LTHR ", "Z2 from LTHR ") + lthr : "Z2";
 }
 
-export function explainWorkout(workout, { coach = {}, environment = "indoor", thresholds = {}, planned = null, sport = workout.sport || "ride" } = {}) {
+// experience: the athlete's level in the sport (beginner, regular,
+// experienced), for the fuel cap; the coach's own when not given.
+export function explainWorkout(workout, { coach = {}, environment = "indoor", thresholds = {}, planned = null, sport = workout.sport || "ride", experience = coach?.experience ?? null } = {}) {
   let structure = [];
   try { structure = JSON.parse(workout.structure_json || "[]"); } catch {}
   const system = workout.primary_system, minutes = n(workout.duration_minutes, 0);
-  if (sport === "run") return explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes });
+  if (sport === "run") return explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes, experience });
   if (sport === "swim") return explainSwim(workout, structure, { coach, environment, thresholds, planned, system, minutes });
   const { ftp, estimated } = rideFtpFor(thresholds, environment);
   const why = [...(coach.rationale || []), ...readinessLines(coach)];
@@ -292,7 +305,8 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
     title: SYSTEM_LABELS()[system] || system,
     why, how,
     environment: [terrainLine(structure, { sport: "ride", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
-    fueling: [...fueling(minutes, system), ...(minutes > 75 && carbsPerHour(minutes, system) ? [fuelTotals(minutes, carbsPerHour(minutes, system), .65)] : [])],
+    fueling: [...fueling(minutes, system, experience), ...(minutes > 75 && carbsPerHour(minutes, system, "ride", experience) ? [fuelTotals(minutes, carbsPerHour(minutes, system, "ride", experience), .65)] : [])],
+    fuel: fuelPlan(minutes, system, "ride", experience),
     ftp: ftp || null, ftpSource: thresholds.source || null,
     steps: stepRows(structure, { ftp, environment, zones: thresholds.powerZones, hrZones: thresholds.hrZones }),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ftp, environment: "indoor", zones: thresholds.powerZones, hrZones: thresholds.hrZones }) } : null
@@ -315,7 +329,7 @@ function progressLine(p, workout, labels) {
   return L("Tvoje úroveň v typu " + (labels[p.system] || p.system) + " je " + f(p.capabilityLevel) + "; dnes cílím na obtížnost " + f(p.targetDifficulty) + " a tento trénink má " + f(workout.difficulty) + ".", "Your " + (labels[p.system] || p.system) + " level is " + f(p.capabilityLevel) + "; today I'm targeting difficulty " + f(p.targetDifficulty) + " and this workout is " + f(workout.difficulty) + ".");
 }
 
-function explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes }) {
+function explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes, experience = null }) {
   const pace = thresholds.runThresholdPace || null;
   const why = [...(coach.rationale || []), ...readinessLines(coach)];
   const p = coach.recommendation?.progression;
@@ -334,7 +348,8 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
     title: RUN_LABELS()[system] || system,
     why, how,
     environment: [terrainLine(structure, { sport: "run", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
-    fueling: [...runFueling(minutes, system), ...(minutes > 90 && carbsPerHour(minutes, system, "run") ? [fuelTotals(minutes, carbsPerHour(minutes, system, "run"), .6)] : [])],
+    fueling: [...runFueling(minutes, system), ...(minutes > 90 && carbsPerHour(minutes, system, "run", experience) ? [fuelTotals(minutes, carbsPerHour(minutes, system, "run", experience), .6)] : [])],
+    fuel: fuelPlan(minutes, system, "run", experience),
     ftp: null, thresholdPace: pace, thresholdPaceFormatted: formatPace(pace), paceSource: thresholds.runPaceSource || null,
     steps: stepRows(structure, opts),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ...opts, environment: "indoor" }) } : null
@@ -368,11 +383,36 @@ const CARBS = {
     sprint:       [0,   0,   30,  40,   50]
   }
 };
-export function carbsPerHour(minutes, system, sport = "ride") {
+// Petr's option B (2026-11-15, built safely as T-NUT-1, 2026-11-16): the
+// athlete's experience in the sport (Profile → Experience, onboarding.js
+// experienceBySport) caps the table, never raises it: min(table, 60 / 75 / 90
+// for beginner / regular / experienced). Without a known level the table
+// alone, as before. The run keeps its own table.
+export const CARB_CAPS = { beginner: 60, regular: 75, experienced: 90 };
+export function carbsPerHour(minutes, system, sport = "ride", experience = null) {
   if (sport === "swim") return null;
   const m = n(minutes, 0), table = CARBS[sport === "run" ? "run" : "ride"];
   const row = table[system] || table.endurance, i = [45, 75, 120, 180].findIndex(limit => m <= limit);
-  return row[i < 0 ? 4 : i] || null;
+  const rate = row[i < 0 ? 4 : i] || null;
+  return rate && CARB_CAPS[experience] ? Math.min(rate, CARB_CAPS[experience]) : rate;
+}
+
+// The fuel line of a ride or run as the app shows it ("Carbs 60 g/h"), the
+// same number as the text, the calendars and the coach: perHour, and upTo 120
+// only on a ride over 3 h of an experienced rider, with the line to practise
+// it first (Petr's option B; gut training, Jeukendrup 2014). Null when water
+// is enough.
+export const LONG_RIDE_MINUTES = 180;
+export const LONG_RIDE_TOP = 120;
+export function fuelPlan(minutes, system, sport = "ride", experience = null) {
+  const perHour = carbsPerHour(minutes, system, sport, experience);
+  if (!perHour) return null;
+  const top = sport === "ride" && experience === "experienced" && n(minutes, 0) > LONG_RIDE_MINUTES;
+  return {
+    perHour,
+    ...(top ? { upTo: LONG_RIDE_TOP, practise: L("Nejdřív to vyzkoušej v tréninku.", "Practise it in training first.") } : {}),
+    note: L("Orientačně, uprav podle toho, na co jsi zvyklý. Zkoušej to v tréninku, ne v den závodu.", "A guide, adjust it to what you are used to. Try it in training, not on race day.")
+  };
 }
 
 const FOCUS_LABELS = () => ({ recovery: L("Regenerace", "Recovery"), endurance: L("Vytrvalost", "Endurance"), tempo: "Tempo", sweet_spot: "Sweet spot", threshold: L("Práh", "Threshold"), vo2max: "VO2max", anaerobic: L("Anaerobní kapacita", "Anaerobic capacity"), sprint: L("Sprinty", "Sprints") });

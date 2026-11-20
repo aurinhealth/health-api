@@ -38,7 +38,7 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // mains: the main sports as those kinds (several allowed), else mainSport's.
 // noSauna: a reason the sauna is no option today (saunaSigns, or alcohol,
 // Nemoc or an injury in the journal, journal-store.js saunaRisks).
-export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false }) {
+export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false, paused = [] }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   // Nemoc ticked in Deník (cycling-coach-v2.js sickDay): rest, as with the status.
   if ([ride, run].some(c => c?.recommendation?.decisionRule === "journal_sick")) return pausedOptions("sick", noSauna, true);
@@ -65,6 +65,8 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", mai
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] }
   ];
+  // A sport paused for a pain ("Plan around your knee?", athlete-state.js pausedSports) is not offered.
+  for (const kind of paused) { const i = options.findIndex(o => o.kind === kind); if (i >= 0) options.splice(i, 1); }
   const base = {
     green: { ride: 80, run: 80, gym: 70, swim: 45, sauna: 30, rest: 10 },
     yellow: { ride: 70, run: 65, gym: 60, swim: 55, sauna: 45, rest: 40 },

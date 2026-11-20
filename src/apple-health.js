@@ -375,6 +375,33 @@ export function meaningfulChange(written, today) {
   });
 }
 
+// The rows the upsert would change: new ones, and those with a value it
+// compares (its WHERE) not as stored. One read per type, side by side (one or
+// two trips, d1-batch.js); when a read fails, every row is sent as before.
+const COMPARED = ["sample_time", "start_time", "end_time", "value_numeric", "value_unit"];
+async function changedRows(db, userId, rows) {
+  const byType = new Map();
+  for (const row of rows) { if (!byType.has(row.data_type)) byType.set(row.data_type, []); byType.get(row.data_type).push(row.external_id); }
+  try {
+    const stored = new Map();
+    await Promise.all([...byType].map(async ([type, ids]) => {
+      const found = await db.prepare(`SELECT external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints
+        WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND external_id IN (SELECT value FROM json_each(?))`).bind(userId, type, JSON.stringify(ids)).all();
+      for (const r of found.results || []) stored.set(type + "\u0000" + r.external_id, r);
+    }));
+    // A key sent twice: the later record is compared with the earlier one, as the upserts would run.
+    return rows.filter(row => {
+      const key = row.data_type + "\u0000" + row.external_id, was = stored.get(key), json = healthPointJson(row.payload);
+      const write = !was || COMPARED.some(k => (was[k] ?? null) !== (row[k] ?? null)) || was.payload_json !== json;
+      stored.set(key, { ...row, payload_json: json });
+      return write;
+    });
+  } catch (error) {
+    console.error("Apple Health: stored rows not read", error?.message || error);
+    return rows;
+  }
+}
+
 // Deletes the sexual activity stored from Apple Health (consent withdrawn).
 export const deleteSexualActivity = (db, userId) =>
   db.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ?`).bind(userId, SEXUAL_ACTIVITY);
@@ -386,7 +413,12 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // server stored it (not what the app says); otherwise it is not kept and
   // what came before goes.
   const keepSex = await appleSexConsent(db, userId);
-  const rows = input.map(r => appleRow(r, now)).filter(row => row && (keepSex || row.data_type !== SEXUAL_ACTIVITY));
+  const sent = input.map(r => appleRow(r, now)).filter(row => row && (keepSex || row.data_type !== SEXUAL_ACTIVITY));
+  // The iPhone sends the last days again on every sync (some 1 300 records),
+  // and each upsert is a write on the account's database even when it changes
+  // nothing (2026-11-16: 8 s a sync, 1 312 statements in batches). The stored
+  // rows are read first and only what the upsert would change is sent.
+  const rows = await changedRows(db, userId, sent);
   const statements = rows.map(row => upsert(db, userId, row));
   if (!keepSex) statements.push(deleteSexualActivity(db, userId));
   // Rows really written: the upsert leaves a row that did not change alone.
@@ -417,7 +449,7 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
     const w = body.windows?.[type], to = instant(w?.to, now);
     const from = instant(w?.from, now) || (Date.parse(String(w?.from || "")) < now - PAST_MS ? floor : null);
     if (!from || !to || to <= from) continue;
-    const keep = rows.filter(r => r.data_type === type).map(r => r.external_id);
+    const keep = sent.filter(r => r.data_type === type).map(r => r.external_id);
     // None of the type sent: HealthKit answers a type the user denied (or Health
     // still restoring from iCloud) with nothing, not an error, so the window
     // says nothing about what was deleted on the phone.
@@ -467,15 +499,15 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // Food and drinks other apps logged (apple-food.js), with their own window.
   const food = body.food && typeof body.food === "object" ? await saveAppleFood(db, userId, body.food) : { saved: 0, removed: 0 };
   const categories = (Array.isArray(body.categories) ? body.categories : []).map(String).filter(c => /^[a-z]{2,20}$/.test(c)).slice(0, 12);
-  const saved = rows.length + food.saved;
+  const saved = sent.length + food.saved;
   removed += food.removed;
   // Nothing new (the usual sync that sends the same hours again): the cached
   // screens and the coach's texts stay valid (entrypoint.js).
   changed += removed + replaced + Number(food.changed || 0);
-  await writeStatus(db, userId, "ok", { saved, skipped: input.length - rows.length, removed, replaced, categories });
+  await writeStatus(db, userId, "ok", { saved, skipped: input.length - sent.length, removed, replaced, categories });
   const meaningful = Boolean(deleted.length || unlisted) || meaningfulChange(written, today);
   return {
-    status: "ok", saved, changed, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}),
+    status: "ok", saved, changed, skipped: input.length - sent.length, removed, replaced, ...(body.food ? { food: food.saved } : {}),
     meaningful, foodChanged: Number(food.changed || 0) > 0, workouts: [...written, ...deleted].some(r => r.data_type === "exercise")
   };
 }

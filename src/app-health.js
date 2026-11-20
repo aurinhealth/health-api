@@ -8,6 +8,7 @@ import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { localDate } from "./user-time.js";
+import { latestState } from "./health-series.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -85,6 +86,19 @@ function usualStages(nights, night, date) {
   if (same.length < USUAL_NIGHTS) return null;
   const range = key => { const r = middleHalf(same.map(n => n[key])); return { low: Math.round(r.low), high: Math.round(r.high) }; };
   return { deep: range("deep"), rem: range("rem"), nights: same.length };
+}
+
+// Tonight's sleep need line by line, from sleepNeedFor only (SCI-1): the base
+// (8 h, 7.5 h from 65; or the user's own goal), the day's load (0–30 min), low
+// HRV (+15), the week's debt (at most +30) and naps (−), and what the limits
+// cut off (7–9 h, or 6–10 h with an own goal), so the lines add up to the need.
+export function sleepNeedParts(n, { age, goal } = {}) {
+  if (!n || n.need == null) return [];
+  const base = sleepNeedMinutes({ age, goal });
+  const parts = [{ key: goal != null ? "goal" : "base", minutes: base }, { key: "load", minutes: n.base - base }, { key: "hrv", minutes: n.hrv }, { key: "debt", minutes: n.debt }, { key: "naps", minutes: -n.naps }];
+  const sum = parts.reduce((t, p) => t + p.minutes, 0);
+  if (n.need !== sum) parts.push({ key: "limit", minutes: n.need - sum });
+  return parts.filter((p, i) => i === 0 || p.minutes);
 }
 
 export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
@@ -193,9 +207,16 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   }
   const lean = [...leanByDay].sort((a, b) => a[0].localeCompare(b[0])).map(([d, value]) => ({ date: d, value }));
 
+  // within / slightly / far from the usual band for the newest value, as the
+  // detail charts judge each point (health-series.js), so every screen agrees.
+  const state = metric => latestState(readiness.rows, date, metric);
+  const states = Object.fromEntries(["hrv", "restingHR", "respiration", "oxygen", "walkingHR", "hrRecovery"].map(k => [k, state(k)]).filter(([, v]) => v));
+
   return {
     status: "ok",
     date,
+    // Keyed as the series metrics; a metric without 14 days of baseline has no state.
+    states,
     readiness: {
       score: readiness.score,
       zone: readiness.zone,
@@ -235,7 +256,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       // Last 14 nights: the index of each, its average and the usual range.
       index: indexNights.length >= 2 ? { nights: indexNights, average: Math.round(mean(indexNights.map(p => p.value))), low: indexUsual?.low ?? null, high: indexUsual?.high ?? null } : null,
       need: needToday.need,
-      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
+      tonight: { need: tonight.need, parts: sleepNeedParts(tonight, { age, goal: sleepSet.goal }), base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
         // The planned night (Spánek): its evening, the sleep it plans (the need or
         // the user's own length), the time in bed and the user's choices.
         date: sleepDay, sleep: choice.need, inBed: plan ? plan.inBed : null, chosen: choice.chosen, wakeOnce: choice.wakeOnce,

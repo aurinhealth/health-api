@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { readSyncPrefs, EXTERNAL_PREFIX } from './sync-destinations.js';
 import { syncWahooWorkout, readWahooTokens } from './wahoo.js';
@@ -75,6 +76,8 @@ export async function syncIntervalsWorkout(env,id,fetchImpl=fetch,{force=false}=
       // Keep a provider event id through date/environment edits.
       // Joined pairs (planned-links.js) and the race mark stay in the app.
       const {id:ignoredId,after:ignoredAfter,next:ignoredNext,race:ignoredRace,...providerEvent}=event;void ignoredId;void ignoredAfter;void ignoredNext;void ignoredRace;
+      // A type only Aurin knows (Basketball from Log workout → More) goes as a Workout with its name.
+      if(providerEvent.type)providerEvent.type=intervalsTypeOf(providerEvent.type);
       const put=remoteId=>fetchImpl(remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
       let r=await put(remoteId);
       // Deleted in Intervals.icu (404): sent again by hand, it is made anew.
