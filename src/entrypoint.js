@@ -4001,6 +4001,18 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!validDate(date)||date<localToday())return Response.json({status:'error',message:L('Vyber dnešní nebo budoucí datum.', 'Choose today or a future date.')},{status:400});
       return Response.json(await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(body.workoutId||''),date,confirm:body.confirm===true,environment:body.environment,startTime:typeof body.startTime==='string'?body.startTime:null}),{headers:{'Cache-Control':'no-store'}});
     }
+    // "Add to plan" under the coach's load sentence on Training (load-advice.js,
+    // decision 6): one easy endurance session of the sport on the day the
+    // advice named, generated as the library does and written only now, after the tap.
+    if(url.pathname==='/app/api/training/add-easy'&&request.method==='POST'){
+      const body=await request.json().catch(()=>({})),date=String(body.date||''),sport=['ride','run','swim'].includes(body.sport)?body.sport:null;
+      if(!sport||!validDate(date)||date<=localToday()||date>shiftDate(localToday(),14))return Response.json({status:'error',message:L('Vyber den v příštích dvou týdnech.', 'Choose a day in the next two weeks.')},{status:400});
+      const u=new URL('https://internal/app/api/workouts/generate');
+      const g=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:'auto',focus:'endurance',ai:false})}),env,ctx,u,{signedIn:true}).then(r=>r.json()).catch(()=>null);
+      const w=g?.status==='ok'?g.workout:null;
+      if(!w?.id)return Response.json({status:'error',message:g?.message||L('Trénink se nepodařilo připravit.', 'The workout could not be prepared.')},{status:409});
+      return Response.json({...await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(w.id),date,confirm:true,environment:w.environment||'outdoor'}),title:w.name||null},{headers:{'Cache-Control':'no-store'}});
+    }
   }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   return null;
 }

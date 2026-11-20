@@ -35,6 +35,10 @@ struct TodaySnapshot: Decodable, Equatable {
     /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
     /// nil when nothing is left to recover from, on another day or from an older server.
     var recoveryTime: RecoveryTime? = nil
+    /// The one decision of the day (src/day-decision.js): the key every tab
+    /// says, whether the training is done, and tomorrow's sessions against the
+    /// muscles. Only for today; nil from an older server.
+    var day: DayDecision? = nil
     /// The week strip above Dnes: Monday to Sunday of the day's week, each
     /// day up to it with its readiness zone (src/app-today.js readinessWeek).
     var week: [WeekDay]? = nil
@@ -280,6 +284,9 @@ struct TodaySnapshot: Decodable, Equatable {
         /// A hard ride, run or swim still ahead on a yellow morning: how to do
         /// it ("Steady day: ride it easy …", src/app-today.js steadyOf).
         var steady: String? = nil
+        /// A session on muscles not rested yet: "Hamstrings still recovering,
+        /// lighter version?" (src/day-decision.js lighterText).
+        var lighter: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String

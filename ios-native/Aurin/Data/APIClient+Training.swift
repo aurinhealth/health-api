@@ -197,6 +197,13 @@ extension APIClient {
         return r.bricks
     }
 
+    /// "Add to plan" under the coach's load sentence (src/load-advice.js):
+    /// one easy endurance session of the sport on the day, written now.
+    func addEasySession(sport: String, date: String) async throws {
+        let _: JSONValue = try await send("/app/api/training/add-easy", method: "POST",
+                                          body: ["sport": JSONValue.string(sport), "date": .string(date)])
+    }
+
     func scheduleWorkout(id: String, date: String, indoor: Bool, time: String? = nil) async throws -> String? {
         var body: JSONObject = ["workoutId": .string(id), "date": .string(date), "confirm": .bool(true),
                                 "environment": .string(indoor ? "indoor" : "outdoor")]

@@ -514,6 +514,8 @@
 "Přidat %@ %@" = "Add %2$@ of %1$@";
 "Přidat běh do týdenního plánu" = "Add a run to the week plan";
 "Přidat kolo do týdenního plánu" = "Add a ride to the week plan";
+"Přidat do plánu" = "Add to plan";
+"Přidáno do plánu" = "Added to plan";
 "Přidat posilovnu do týdenního plánu" = "Add gym to the week plan";
 "Přidat cvik" = "Add exercise";
 "Přidat jídlo" = "Add food";

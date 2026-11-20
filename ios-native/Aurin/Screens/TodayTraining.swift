@@ -72,8 +72,30 @@ struct TodayTrainingRow: View {
                 .padding(.leading, 48)
                 .accessibilityElement(children: .combine)
             }
+            // Muscles not rested yet (src/day-decision.js): a tap asks the
+            // coach for a lighter version of this session.
+            if let lighter = item.lighter {
+                Button { askLighter = true } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "figure.cooldown").scaledFont(11, weight: .semibold).foregroundStyle(Palette.amber)
+                        Text(verbatim: lighter).font(Typo.small).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Image(systemName: "chevron.right").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
+                    }
+                    .frame(minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 48)
+                .accessibilityIdentifier("today-training.lighter")
+                .sheet(isPresented: $askLighter) {
+                    CoachEntry.chat(subject: item.session.map(CoachSubject.planned), view: "today", date: nil)
+                }
+            }
         }
     }
+
+    @State private var askLighter = false
 
     private var row: some View {
         HStack(spacing: 12) {
