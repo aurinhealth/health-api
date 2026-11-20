@@ -88,7 +88,8 @@ struct PortionWheel: View {
             // draws it (02-jidlo, food detail): number, fraction, unit.
             WheelColumns(columns: [
                 .init(rows: (0...current.most).map(String.init), width: 90, selection: wholeChoice),
-                .init(rows: Self.parts.map(\.label), width: 56, selection: partChoice),
+                // Grams take whole numbers only: no fraction of a gram.
+                .init(rows: current.kind == .base && !product.perPortion ? ["–"] : Self.parts.map(\.label), width: 56, selection: partChoice),
                 .init(rows: units.map(\.name), width: nil, selection: unitChoice),
             ])
             .frame(height: 160)
@@ -263,11 +264,12 @@ struct WheelColumns: UIViewRepresentable {
             label.minimumScaleFactor = 0.7
             label.textAlignment = widths[component] == nil ? .left : .center
             label.text = rows[component][row]
+            label.accessibilityLabel = label.text == "–" ? L10n.tr("žádný zlomek") : nil
             return label
         }
 
         func pickerView(_ pickerView: UIPickerView, accessibilityLabelForComponent component: Int) -> String? {
-            L10n.tr("Množství")
+            L10n.tr(["Celé", "Zlomek", "Jednotka"][min(component, 2)])
         }
 
         func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {

@@ -468,7 +468,9 @@ struct FoodMonthSheet: View {
                             FoodDayRing(day: days[day], value: value, future: day > today)
                         }
                     }
-                    Text(verbatim: L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem kalorií, šedý je den bez cíle, čárkovaný je den bez zapsaného jídla."))
+                    Text(verbatim: [L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle."),
+                                    value == .calories ? L10n.tr("Červený je nad cílem.") : nil,
+                                    L10n.tr("Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla.")].compactMap { $0 }.joined(separator: " "))
                         .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
@@ -521,9 +523,17 @@ struct FoodMonthSheet: View {
             // Over is no failure for a macro: met is anything not well below.
             return average + " " + L10n.f(value.metFormat, Int64(count.at + count.over), Int64(count.total))
         }
-        var text = average + " " + L10n.plural("%lld dní v cíli", count.at) + ", " + L10n.plural("%lld nad ním", count.over)
-        if count.below > 0 { text += ", " + L10n.plural("%lld výrazně pod ním", count.below) }
-        return text + "."
+        // No "0 … 0": parts with a count only; without a day at the target the parts name the target themselves.
+        var parts: [String] = []
+        if count.at > 0 {
+            parts.append(L10n.plural("%lld dní v cíli", count.at))
+            if count.over > 0 { parts.append(L10n.plural("%lld nad ním", count.over)) }
+            if count.below > 0 { parts.append(L10n.plural("%lld výrazně pod ním", count.below)) }
+        } else {
+            if count.over > 0 { parts.append(L10n.plural("%lld dní nad cílem", count.over)) }
+            if count.below > 0 { parts.append(L10n.plural("%lld dní výrazně pod cílem", count.below)) }
+        }
+        return average + " " + parts.joined(separator: ", ") + "."
     }
 
     private func spoken(_ day: String) -> String? {
@@ -532,14 +542,18 @@ struct FoodMonthSheet: View {
         let target = value.target(d)
         var text = Fmt.int(eaten) + " " + value.unit
         if let target, target > 0 { text += ", " + L10n.f("z %@", Fmt.int(target) + " " + value.unit) }
-        if let target, FoodHero.over(eaten: eaten, target: target) >= 1 { text += ", " + L10n.tr("nad cílem") }
+        if let target, target > 0 {
+            if value == .calories, FoodHero.over(eaten: eaten, target: target) >= 1 { text += ", " + L10n.tr("nad cílem") }
+        } else {
+            text += ", " + L10n.tr("bez cíle")
+        }
         return text
     }
 }
 
 /// One day's ring under its number: eaten out of the target, red over the
-/// calorie target (more protein, carbs or fat is no failure), a full grey ring
-/// on a logged day without a kept target, dashed without a log, nothing for
+/// calorie target (more protein, carbs or fat is no failure), a thin ring on
+/// a logged day without a kept target, dashed without a log, nothing for
 /// days ahead.
 struct FoodDayRing: View {
     let day: FoodHistory.Day?
@@ -553,13 +567,14 @@ struct FoodDayRing: View {
             } else if let day, day.logged, let eaten = value.eaten(day) {
                 let target = value.target(day) ?? 0
                 let over = value == .calories && target > 0 && FoodHero.over(eaten: eaten, target: target) >= 1
-                Circle().stroke(Palette.track, lineWidth: 3)
                 if target > 0 {
+                    Circle().stroke(Palette.track, lineWidth: 3)
                     Circle().trim(from: 0, to: min(eaten / target, 1))
                         .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 } else {
-                    Circle().stroke(Palette.muted, lineWidth: 3)
+                    // No target: a thin ring, told apart by its shape, not only its colour.
+                    Circle().stroke(Palette.faint, lineWidth: 1.5)
                 }
             } else {
                 Circle().stroke(Palette.faint, style: StrokeStyle(lineWidth: 1.2, dash: [2, 3]))
