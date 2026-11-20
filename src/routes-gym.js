@@ -14,7 +14,7 @@ import { EXERCISE_STATIONS, stationSections, stationExercises } from "./gym-equi
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, withHistoryOf, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
 import { assertTrainingAllowed, getAthleteState, usedMemories, brokenStations } from "./athlete-state.js";
-import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
+import { isStrengthEvent, deletePlannedEvent, movePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE, historyFamily } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
@@ -266,6 +266,9 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
           const why={target:L('Gym se nepodařilo přesunout: ten den už má vlastní gym plán.', 'The gym session couldn\'t be moved: that day already has its own gym plan.'),logged:L('Gym se nepodařilo přesunout: v tréninku už jsou zapsané série.', 'The gym session couldn\'t be moved: the workout already has logged sets.'),missing:L('Gym se nepodařilo přesunout: plán toho dne už neexistuje.', 'The gym session couldn\'t be moved: that day\'s plan no longer exists.')};
           return Response.json({message:why[moved.reason]||L('Gym se nepodařilo přesunout.', 'The gym session couldn\'t be moved.')},{status:409});
         }
+        // The day's strength event (the app's copy in Intervals.icu) goes along, or it would stay behind as missed.
+        const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all().catch(error=>{console.error('Strength events not read',error.message);return {};})).results||[];
+        for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await movePlannedEvent(env,{eventId:row.external_id,date:to}).catch(error=>console.error('Strength event not moved',error.message));}
         return Response.json({status:'ok',date:to,message:L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
       }
       // The day's strength events (Intervals.icu and the app's own copy).
