@@ -1,17 +1,14 @@
 import StoreKit
 import SwiftUI
 
-// The offer of Aurin Pro in night violet, as Petr approved it on 29 Oct 2026
-// (mockups/paywall/P-cely-paywall-mobil.png and N3): a short opening (night,
-// the mark rising as the sun, the readiness ring filling, the coach's good
-// morning), then the offer with the app's screens to swipe and the two
-// 12-month plans, "View more plans" with all three, and the free week as a
-// calendar with the screens to try sliding by. Night violet belongs to the way
-// to Pro only (the welcome, the offer, Settings → Aurin Pro); the daily app
-// keeps its own colours. The phones show the app's dark screens with the
-// sample day. Prices come from the App Store (ProStore), in the buyer's currency.
+// The offer of Aurin Pro in the app's own look (the Pro concept, Petr
+// 13-15 Nov 2026; night violet went with it): "Train with a coach that knows
+// you" over one phone with the app's demo, the coach first, and Continue that
+// skips it any time; then the same headline over what Pro brings, scrolling by
+// itself, two plans, the button and what Apple asks for under it. Prices come
+// from the App Store (ProStore), in the buyer's currency.
 
-/// The colours of the way to Pro: night violet with lavender.
+/// Night violet: Settings → Aurin Pro with Pro or in the pilot, until it moves to the app's look too.
 enum Night {
     static let top = Color(red: 0.165, green: 0.153, blue: 0.290)
     static let bottom = Color(red: 0.086, green: 0.078, blue: 0.137)
@@ -144,14 +141,11 @@ struct PaywallView: View {
     /// A fixed moment instead of the clock (the snapshot tests).
     var frozenTime: Double? = nil
     let store: ProStore
-    /// Opened on the free week at the end of the setup (SetupProOffer): no way
-    /// back to the plans, and "Teď ne" across the whole width under the button.
-    let notNow: Bool
-    /// The account has not allowed the AI features yet (the setup's free week):
-    /// the free week says the coach needs them and its button allows them too.
+    /// Opened once at the end of the setup (SetupProOffer) with the AI features
+    /// still off: the note says the coach needs them and the button allows them too.
     let allowAI: (() async throws -> Void)?
     @State private var demo = AppModel(demo: true)
-    /// 0 the opening, 1 the offer, 2 the free week.
+    /// 0 the demo in the phone, 1 the offer.
     @State private var step: Int
     @State private var plan: ProOffer.Kind = .yearMonthly
     @State private var allPlans = false
@@ -161,12 +155,11 @@ struct PaywallView: View {
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared, notNow: Bool = false,
+    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared,
          allowAI: (() async throws -> Void)? = nil) {
         self.close = close
         self.frozenTime = frozenTime
         self.store = store
-        self.notNow = notNow
         self.allowAI = allowAI
         _step = State(initialValue: step)
     }
@@ -180,27 +173,31 @@ struct PaywallView: View {
 
     var body: some View {
         ZStack {
-            Night.background
-            clock { time in NightSky(time: time) }.ignoresSafeArea().allowsHitTesting(false)
-            switch step {
-            case 0:
-                clock { time in PaywallIntro(time: time) }
-                    .contentShape(Rectangle())
-                    .onTapGesture { go(1) }
-                    .transition(.opacity)
-            case 1:
-                offer.transition(.opacity)
-            default:
-                freeWeek.transition(.move(edge: .trailing).combined(with: .opacity))
+            ScreenBackground(glow: Palette.Glow.today)
+            VStack(spacing: 0) {
+                topBar
+                Text("Trénuj s koučem, který tě zná")
+                    .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 4)
+                    .accessibilityAddTraits(.isHeader)
+                if step == 0 {
+                    demoPhone.transition(.opacity)
+                    button(L10n.tr("Pokračovat")) { go(1) }
+                        .padding(.horizontal, 16).padding(.bottom, 10)
+                } else {
+                    ProFeatureList(frozen: frozenTime != nil)
+                        .frame(maxHeight: .infinity)
+                        .transition(.opacity)
+                    offer.transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
         }
-        .environment(\.colorScheme, .dark)
         .environment(demo)
         .sheet(isPresented: $allPlans) {
-            AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; next() },
+            AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; buy() },
                         redeem: { allPlans = false; redeemCode = true }, restore: restore)
                 .presentationDetents([.large])
-                .presentationBackground(Night.bottom)
+                .presentationBackground(Palette.background)
         }
         // Apple's own sheet for an offer code; what it redeems comes through Transaction.updates (ProStore).
         .offerCodeRedemption(isPresented: $redeemCode) { result in
@@ -214,170 +211,133 @@ struct PaywallView: View {
             Button("OK", role: .cancel) { close() }
         } message: { Text(thanks ?? "") }
         .task {
+            // Reduce Motion: no demo, the offer at once (D-PRO-6).
+            if reduceMotion, frozenTime == nil { step = 1 }
             await store.load()
             if store.commitment == nil, plan == .yearMonthly { plan = .yearOnce }
         }
-        .task(id: step) {
-            // The opening moves on to the offer by itself.
-            guard step == 0, frozenTime == nil else { return }
-            if reduceMotion { go(1); return }
-            try? await Task.sleep(for: .seconds(PaywallIntro.length))
-            if step == 0 { go(1) }
+    }
+
+    // MARK: - The demo
+
+    /// The coach first (Petr 2026-11-14: the demo always starts there), then a
+    /// plan, the food and Training, one after another in one phone. Continue
+    /// skips it any time (D-PRO-6).
+    private var demoPhone: some View {
+        clock { time in
+            let screens: [ProScreen] = [.coach, .plan, .food, .training]
+            let index = Int(time / 3.2) % screens.count
+            GeometryReader { geo in
+                PhoneMockup(height: max(200, geo.size.height - 24)) {
+                    ProScreenPage(screen: screens[index], scroll: frozenTime == nil ? min(1, (time.truncatingRemainder(dividingBy: 3.2)) / 3.2) : 0)
+                }
+                .id(index)
+                .transition(.opacity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .animation(.easeInOut(duration: 0.5), value: index)
         }
+        .padding(.top, 18).padding(.bottom, 14)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr("Ukázka rozhovoru s koučem"))
     }
 
     // MARK: - The offer
 
     private var offer: some View {
-        VStack(spacing: 0) {
-            topBar(back: false)
-            HStack(spacing: 10) {
-                AurinMark(size: 34, glow: true)
-                AurinProTitle(size: 34)
-            }
-            .padding(.top, 2)
-            carouselClock { time in ScreenCarousel(time: time) }
-                .frame(maxHeight: .infinity)
-            if withTrial {
-                Text(verbatim: L10n.tr(chosen.kind == .monthly ? "VYZKOUŠEJ 7 DNÍ ZDARMA" : "12MĚSÍČNÍ TARIF, VYZKOUŠEJ 7 DNÍ ZDARMA"))
-                    .scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                    .padding(.bottom, 8)
-            }
-            HStack(spacing: 10) {
+        VStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 ForEach(ProOffer.main(store)) { o in
-                    OfferCard(offer: o, selected: chosen.kind == o.kind) { plan = o.kind }
+                    OfferPlanCard(offer: o, selected: chosen.kind == o.kind) { plan = o.kind }
                 }
             }
-            .padding(.horizontal, 20)
-            bottom(more: true)
-        }
-    }
-
-    // MARK: - The free week
-
-    private var freeWeek: some View {
-        VStack(spacing: 0) {
-            topBar(back: !notNow)
-            Text("Tvůj týden zdarma").font(Typo.heading(36, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
-                .multilineTextAlignment(.center)
-            Text(verbatim: L10n.f("Celé Aurin Pro zdarma do %@", Self.dayMonth(Self.firstPayment(from: today))))
-                .font(Typo.sentence(16)).foregroundStyle(Night.muted).padding(.top, 4)
-            WeekCalendar(today: today).padding(.horizontal, 20).padding(.top, 20)
-            // With the AI note the belt's heading gives way, so the price line still fits on a 6.1" phone.
-            if allowAI == nil {
-                Text("VYZKOUŠEJ TENTO TÝDEN").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                    .padding(.top, 22).padding(.bottom, 10)
+            .fixedSize(horizontal: false, vertical: true)
+            if allowAI != nil { aiNote }
+            button(cta, busy: store.purchasing) { buy() }
+                .disabled(store.purchasing || !chosen.priced)
+            Button { allPlans = true } label: {
+                Text("Zobrazit všechny tarify").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(minHeight: 36)
             }
-            // Smaller phones beside the AI note, so the whole page fits a 6.1" phone's safe area (759 pt).
-            clock { time in ScreenBelt(time: time, phoneHeight: allowAI == nil ? 199 : 120) }
-                .padding(.top, allowAI == nil ? 0 : 16)
-                .frame(maxHeight: .infinity, alignment: .top)
-            if allowAI != nil { aiNote.padding(.horizontal, 20).padding(.bottom, 10) }
-            Text(verbatim: L10n.f("Od %@ %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial)
-                 + (chosen.kind == .yearMonthly ? ", " + L10n.tr("12 měsíců") : ""))
-                .font(Typo.small).foregroundStyle(Night.muted).padding(.bottom, 12)
-            bottom(more: false)
+            .buttonStyle(.plain)
+            finePrint
         }
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
     }
 
     /// What allowing the AI features sends where, in the words of the setup's AI
     /// point (AI_CONSENT_VERSION in src/consent.js), shortened.
     private var aiNote: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Night.amber)
+            Text("Aurin Pro potřebuje AI").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
             Text("Kouč, jídlo z fotky a hodnocení pošlou potřebné údaje, včetně zdravotních a fotek, které pošleš, společnosti OpenAI v USA, a to i každý den kvůli shrnutí kouče a v noci kvůli jeho paměti. Vypneš to kdykoli v Nastavení → Soukromí a data.")
-                .font(.caption).foregroundStyle(Night.muted).fixedSize(horizontal: false, vertical: true)
+                .font(.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(Night.amber.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Night.amber.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .cardSurface(cornerRadius: 14)
         .accessibilityElement(children: .combine)
     }
 
-    private var today: Date {
-        frozenTime == nil ? Date() : Self.sampleDay
-    }
-
-    /// Thursday 29 Oct 2026 at noon: the snapshot tests' free week, like the mockup.
-    static let sampleDay = Calendar(identifier: .gregorian).date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 12)) ?? Date()
-
-    // MARK: - Parts
-
-    private func topBar(back: Bool) -> some View {
-        HStack {
-            if back {
-                roundButton("chevron.left", label: L10n.tr("Zpět")) { go(1) }
-            }
-            Spacer()
-            roundButton("xmark", label: L10n.tr("Zavřít"), action: close)
-        }
-        .padding(.horizontal, 20).padding(.top, 8)
-    }
-
-    private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
-                .frame(width: 36, height: 36).background(Night.card, in: Circle())
-        }
-        .accessibilityLabel(label)
-    }
-
-    private func bottom(more: Bool) -> some View {
-        VStack(spacing: 8) {
-            Button(action: next) {
-                ZStack {
-                    Text(verbatim: cta).font(Typo.bodyStrong).foregroundStyle(Night.violet).opacity(store.purchasing ? 0 : 1)
-                    if store.purchasing { ProgressView().tint(Night.violet) }
-                }
-                .frame(maxWidth: .infinity).frame(height: 54).background(Night.lavender, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(store.purchasing || !chosen.priced)
-            if notNow && !more {
-                Button(action: close) {
-                    Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Night.ink)
-                        .frame(maxWidth: .infinity).frame(height: 54)
-                        .overlay { Capsule().stroke(Night.ink.opacity(0.25), lineWidth: 1) }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(store.purchasing)
-            }
-            if more {
-                if withTrial {
-                    Text(verbatim: L10n.f("Zdarma do %@, pak %@", Self.dayMonth(Self.firstPayment(from: today)), chosen.afterTrial))
-                        .font(Typo.small).foregroundStyle(Night.muted)
-                }
-                Button { allPlans = true } label: {
-                    Text("Zobrazit další tarify").font(Typo.bodyStrong).foregroundStyle(Night.lavender)
-                }
-                .buttonStyle(.plain)
-            }
-            finePrint
-        }
-        .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 10)
-    }
-
+    /// What Apple asks for by the button (3.1.2, Schedule 2 3.8(b)): the price, the
+    /// renewal and how cancelling works, Terms, Privacy and Restore (D-PRO-1).
     private var finePrint: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 16) {
+            HStack(spacing: 18) {
                 Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
                 Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
             }
+            .frame(minHeight: 32)
         }
-        .font(.caption2).foregroundStyle(Night.faint)
+        .font(.caption2).foregroundStyle(Palette.muted)
     }
 
     private var cta: String {
-        if step == 2, allowAI != nil { return L10n.tr("Povolit AI a začít týden zdarma") }
-        return L10n.tr(withTrial ? "Začít 7denní zkoušku zdarma" : "Předplatit")
+        if allowAI != nil, withTrial { return L10n.tr("Povolit AI a začít týden zdarma") }
+        return L10n.tr(withTrial ? "Vyzkoušet 7 dní zdarma" : "Získej Aurin Pro")
     }
 
-    private func next() {
-        if step == 1, withTrial { go(2) } else { buy() }
+    // MARK: - Parts
+
+    /// ✕ on the left takes you back where you came from; ⋯ has the promo code and restore (Petr, D-PRO-2).
+    private var topBar: some View {
+        HStack {
+            roundButton("xmark", label: L10n.tr("Zavřít"), action: close)
+            Spacer()
+            Menu {
+                Button("Uplatnit promo kód") { redeemCode = true }
+                Button("Obnovit nákup", action: restore)
+            } label: {
+                Image(systemName: "ellipsis").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                    .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                    .frame(width: 44, height: 44).contentShape(Circle())
+            }
+            .accessibilityLabel(L10n.tr("Další možnosti"))
+        }
+        .padding(.horizontal, 12).padding(.top, 4)
+    }
+
+    private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                .frame(width: 44, height: 44).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// The ink button across the width, as Continue and the purchase.
+    private func button(_ title: String, busy: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            ZStack {
+                Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.background).opacity(busy ? 0 : 1)
+                if busy { ProgressView().tint(Palette.background) }
+            }
+            .frame(maxWidth: .infinity).frame(minHeight: 54).background(Palette.ink, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     private func go(_ next: Int) {
@@ -412,30 +372,16 @@ struct PaywallView: View {
         Task { notice = await store.restore() }
     }
 
-    /// Seconds since the step opened, frame by frame; still with Reduce Motion.
+    /// Seconds since the step opened, frame by frame (a few times a second is enough
+    /// for the phone); still with Reduce Motion or in the tests.
     @ViewBuilder
     private func clock<V: View>(@ViewBuilder _ content: @escaping (Double) -> V) -> some View {
         if let frozenTime {
             content(frozenTime)
         } else if reduceMotion {
-            content(PaywallIntro.length)
+            content(0)
         } else {
             TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in content(context.date.timeIntervalSince(started)) }
-        }
-    }
-
-    /// The carousel's clock: like `clock`, but frame by frame at the screen's rate,
-    /// and with Reduce Motion it still ticks twice a second, so the phones move on
-    /// as a fade without any sliding.
-    @ViewBuilder
-    private func carouselClock<V: View>(@ViewBuilder _ content: @escaping (Double) -> V) -> some View {
-        if let frozenTime {
-            content(frozenTime)
-        } else if reduceMotion {
-            TimelineView(.periodic(from: .now, by: 0.5)) { context in content(context.date.timeIntervalSince(started)) }
-        } else {
-            // At the screen's own rate, so the sliding phones stay smooth.
-            TimelineView(.animation) { context in content(context.date.timeIntervalSince(started)) }
         }
     }
 
@@ -454,109 +400,6 @@ struct PaywallView: View {
     /// "čtvrtka" is too hard to inflect; the short weekday and date: "čt 5. 11." / "Thu 5 Nov".
     static func weekday(_ date: Date) -> String {
         date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(L10n.locale))
-    }
-}
-
-// MARK: - The opening
-
-/// Night with stars, the mark rising as the sun with its reflection, the
-/// readiness ring filling to 78 with the numbers behind it, then the coach's
-/// good morning typed out. A function of time, so the tests can stop it anywhere.
-struct PaywallIntro: View {
-    let time: Double
-    static let length = 9.0
-
-    private static let line = L10n.tr("Dobré ráno. Spal jsi 7:12 a HRV je nahoře. Dnes klidně naplno.")
-
-    var body: some View {
-        let rise = PaywallIntro.ease((time - 0.6) / 2.4)
-        let ring = PaywallIntro.ease((time - 2.6) / 2.0)
-        let chips = PaywallIntro.ease((time - 3.6) / 1.0)
-        let typed = Int(max(0, (time - 5.2) * 22))
-        VStack(spacing: 18) {
-            Spacer()
-            ZStack {
-                Circle().trim(from: 0, to: 0.78 * ring)
-                    .stroke(Night.mint, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 250, height: 250)
-                    .shadow(color: Night.mint.opacity(0.5), radius: 10)
-                AurinMark(size: 190, glow: true)
-                    .offset(y: 90 * (1 - rise))
-                    .opacity(rise)
-                chip("64", L10n.tr("HRV ↑")).offset(x: -95, y: -120)
-                chip("7:12", L10n.tr("spánek")).offset(x: 105, y: -78)
-                chip("48", L10n.tr("klidový tep")).offset(x: -100, y: 92)
-                chip("8.4", L10n.tr("zátěž")).offset(x: 100, y: 130)
-            }
-            .opacity(1)
-            .environment(\.chipShown, chips)
-            VStack(spacing: 4) {
-                Text(verbatim: "\(Int((78 * ring).rounded()))").font(Typo.number(64)).foregroundStyle(Night.ink)
-                Text("PŘIPRAVENOST").scaledFont(12, weight: .semibold).tracking(1.4).foregroundStyle(Night.mint)
-            }
-            .opacity(ring > 0 ? 1 : 0)
-            Text(verbatim: String(Self.line.prefix(typed)))
-                .font(Typo.sentence(20)).foregroundStyle(Night.ink)
-                .multilineTextAlignment(.center).frame(height: 60, alignment: .top)
-                .padding(.horizontal, 36)
-            Spacer()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.line)
-        .accessibilityHint(L10n.tr("Klepnutím přejdeš na nabídku."))
-        .accessibilityAddTraits(.isButton)
-    }
-
-    static func ease(_ x: Double) -> Double {
-        let x = min(1, max(0, x))
-        return x < 0.5 ? 4 * x * x * x : 1 - pow(-2 * x + 2, 3) / 2
-    }
-
-    private func chip(_ value: String, _ label: String) -> some View {
-        ChipView(value: value, label: label)
-    }
-}
-
-private struct ChipShownKey: EnvironmentKey { static let defaultValue: Double = 1 }
-private extension EnvironmentValues {
-    var chipShown: Double {
-        get { self[ChipShownKey.self] }
-        set { self[ChipShownKey.self] = newValue }
-    }
-}
-
-private struct ChipView: View {
-    let value: String
-    let label: String
-    @Environment(\.chipShown) private var shown
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(verbatim: value).font(Typo.number(20)).foregroundStyle(Night.ink)
-            Text(verbatim: label).font(.caption).foregroundStyle(Night.muted)
-        }
-        .padding(.horizontal, 12).padding(.vertical, 6)
-        .background(Night.card, in: Capsule())
-        .overlay(Capsule().stroke(Night.line))
-        .opacity(shown).scaleEffect(0.9 + 0.1 * shown)
-    }
-}
-
-/// Slow stars over the whole offer, dimmed to half.
-struct NightSky: View {
-    let time: Double
-
-    var body: some View {
-        Canvas { context, size in
-            var seed: UInt64 = 11
-            func next() -> Double { seed = seed &* 6364136223846793005 &+ 1442695040888963407; return Double(seed >> 33) / Double(1 << 31) }
-            for _ in 0..<70 {
-                let x = next() * size.width, y = next() * size.height * 0.75, phase = next() * 6, r = 0.4 + next() * 0.8
-                let alpha = 0.08 + 0.22 * abs(sin(time * 0.6 + phase))
-                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r * 2, height: r * 2)), with: .color(Night.ink.opacity(alpha)))
-            }
-        }
     }
 }
 
@@ -589,40 +432,6 @@ enum ProScreen: CaseIterable {
         case .plan, .training: return Palette.Glow.training
         case .food: return Palette.Glow.food
         case .readiness, .sleep: return Palette.Glow.health
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .coach: return L10n.tr("Kouč jen pro tebe")
-        case .plan: return L10n.tr("Plány na závody a cíle")
-        case .training: return L10n.tr("Tréninky postavené na dnešek")
-        case .food: return L10n.tr("Jídlo, které kouč dopočítá")
-        case .readiness: return L10n.tr("Víš, kdy přidat")
-        case .sleep: return L10n.tr("Spánek, který chystá zítřek")
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .coach: return L10n.tr("Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo.")
-        case .plan: return L10n.tr("Podle tvé regenerace a pokroku.")
-        case .training: return L10n.tr("Podle tvého času a unavených svalů.")
-        case .food: return L10n.tr("Vyfoť talíř a hodnoty se doplní.")
-        case .readiness: return L10n.tr("HRV, spánek a zátěž v jednom čísle.")
-        case .sleep: return L10n.tr("Kolik spánku potřebuješ po dnešní zátěži.")
-        }
-    }
-
-    /// The short name under a phone in the free week's belt.
-    var label: String {
-        switch self {
-        case .coach: return L10n.tr("Kouč")
-        case .plan: return L10n.tr("Plán")
-        case .training: return L10n.tr("Tréninky")
-        case .food: return L10n.tr("Jídelní kouč")
-        case .readiness: return L10n.tr("Regenerace")
-        case .sleep: return L10n.tr("Spánek")
         }
     }
 }
@@ -678,239 +487,150 @@ struct ProPlanSample: View {
     }
 }
 
-/// The offer's phones as a short video (Petr, 7 Nov 2026): a belt with the
-/// front phone large and its neighbours dimmed beside it. The front screen
-/// scrolls down, then the belt slides on to the next phone, every 2.5 s. The
-/// phones follow a finger and settle on the nearest one; the carousel counts on
-/// from there. With Reduce Motion nothing moves by itself: the phones change as
-/// a fade, and only a finger moves the belt.
-struct ScreenCarousel: View {
-    let time: Double
-    static let screens: [ProScreen] = ProScreen.allCases
-    static let interval = 2.5
-    /// The end of each interval, when the belt slides on.
-    static let slide = 0.6
+// MARK: - What Pro brings
+
+/// The offer's list (Petr's texts, 13 Nov 2026, and the approved icons): what
+/// Pro adds, then "also included" and what Aurin has for everyone, so it shows
+/// how much comes with it. It scrolls by itself in a loop (like Bevel's); a
+/// finger takes over and it stays where it is left. Reduce Motion: a plain list.
+struct ProFeatureList: View {
+    /// The snapshot test: still, from the top.
+    var frozen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The phone in front at `shownAt`; the carousel counts on from it.
-    @State private var start = 0
-    @State private var shownAt: Double = 0
-    /// How far from `start` the belt was when the finger let go, in phones; it settles from there.
-    @State private var settleFrom: Double = 0
-    @State private var drag: Drag?
-    @GestureState private var touching = false
+    @State private var manual = false
+    @State private var started = Date()
+    @State private var height: CGFloat = 0
 
-    /// A finger on the belt: where the belt was when it came down, and how far it has moved.
-    private struct Drag {
-        var base: Double
-        var held: Int
-        var scroll: Double
-        var at: Double
-        var spacing: CGFloat
-        var width: CGFloat = 0
-        var predicted: CGFloat = 0
+    struct Row: Hashable {
+        let icon: String
+        let title: String
+        let line: String
     }
 
-    private struct Belt {
-        /// In phones, fractional while the belt slides.
-        var position: Double
-        /// The phone whose screen scrolls, and how far.
-        var held: Int
-        var scroll: Double
-    }
+    static let pro = [
+        Row(icon: "intelligence", title: "Aurin Intelligence", line: "Seznam se s koučem, který zná tvoje data."),
+        Row(icon: "plans", title: "Adaptivní plány tréninku", line: "Řiď se plánem postaveným kolem tvých cílů."),
+        Row(icon: "nutrition", title: "Chytrý zápis jídla", line: "Zapiš jídlo z jedné fotky."),
+        Row(icon: "age", title: "Aurin Age", line: "Zjisti svůj kondiční věk."),
+        Row(icon: "insights", title: "Kouč u tvých čísel", line: "Odpovědi přímo u tvých čísel."),
+        Row(icon: "gym", title: "Tréninky pro tvoji posilovnu", line: "Přesně pro to, co tvoje posilovna má.")
+    ]
+    /// Free for everyone; the food row says only what Free has (D-PRO-4).
+    static let free = [
+        Row(icon: "readiness", title: "Znej svoji připravenost", line: "Každé ráno víš, jak moc přidat."),
+        Row(icon: "sleep", title: "Rozuměj svému spánku", line: "Odhal, co ovlivňuje tvoje noci."),
+        Row(icon: "fitness", title: "Pokročilé metriky kondice", line: "Měř svůj pokrok týden po týdnu."),
+        Row(icon: "health", title: "Health monitor", line: "Sleduj signály svého těla."),
+        Row(icon: "workouts", title: "Tréninky s průvodcem", line: "Každý trénink krok za krokem."),
+        Row(icon: "foodlog", title: "Sleduj svoji výživu", line: "Zapisuj jídlo a plň svoje cíle."),
+        Row(icon: "journal", title: "Buduj lepší návyky", line: "Zjisti, co opravdu pomáhá tvé regeneraci."),
+        Row(icon: "cycle", title: "Přehled cyklu", line: "Zmapuj každou fázi a její vzorce.")
+    ]
 
-    private static var count: Int { screens.count }
-    private static func wrap(_ i: Int) -> Int { (i % count + count) % count }
-    /// From the belt's position to phone `i`, the short way round.
-    private static func distance(_ i: Int, _ position: Double) -> Double {
-        let n = Double(count)
-        var d = (Double(i) - position).truncatingRemainder(dividingBy: n)
-        if d < -n / 2 { d += n } else if d >= n / 2 { d -= n }
-        return d
-    }
-
-    private var belt: Belt {
-        if touching, let drag {
-            // The scrolled screen goes back to its top as the finger takes the belt.
-            let back = drag.scroll * (1 - PaywallIntro.ease((time - drag.at) / Self.slide))
-            return Belt(position: drag.base - Double(drag.width / drag.spacing), held: drag.held, scroll: reduceMotion ? 0 : back)
-        }
-        let elapsed = max(0, time - shownAt)
-        let step = Int(elapsed / Self.interval)
-        if reduceMotion { return Belt(position: Double(start + step), held: start + step, scroll: 0) }
-        let phase = elapsed - Double(step) * Self.interval
-        let hold = Self.interval - Self.slide
-        let advance = PaywallIntro.ease((phase - hold) / Self.slide)
-        let settle = settleFrom * (1 - PaywallIntro.ease(elapsed / Self.slide))
-        // Down while the phone is in front, back up as it slides away.
-        let scroll = phase < hold ? PaywallIntro.ease(phase / hold) : 1 - advance
-        return Belt(position: Double(start + step) + advance + settle, held: start + step, scroll: scroll)
-    }
+    /// Points a second.
+    private static let speed = 22.0
 
     var body: some View {
-        let belt = self.belt
-        let index = Self.wrap(Int(belt.position.rounded()))
-        let screen = Self.screens[index]
-        VStack(spacing: 10) {
-            GeometryReader { geo in
-                let height = max(160, geo.size.height)
-                let spacing = height * 0.48
-                Group {
-                    if reduceMotion, !touching { fade(index, height: height, spacing: spacing) } else { phones(belt, height: height, spacing: spacing) }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // The phones themselves take no touches (PhoneMockup), so the swipe needs its own area.
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 10)
-                    .updating($touching) { _, touching, _ in touching = true }
-                    .onChanged { value in
-                        if drag == nil {
-                            let now = self.belt
-                            drag = Drag(base: now.position, held: now.held, scroll: now.scroll, at: time, spacing: spacing)
+        Group {
+            if manual || reduceMotion || frozen {
+                ScrollView { list.padding(.vertical, 12) }
+                    .scrollIndicators(.hidden)
+            } else {
+                GeometryReader { _ in
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let shift = height > 0 ? CGFloat(context.date.timeIntervalSince(started) * Self.speed).truncatingRemainder(dividingBy: height) : 0
+                        VStack(spacing: 0) {
+                            list.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                            list.accessibilityHidden(true)
                         }
-                        drag?.width = value.translation.width
-                        drag?.predicted = value.predictedEndTranslation.width
-                    })
-            }
-            .padding(.top, 10)
-            .onChange(of: touching) { _, touching in if !touching { release() } }
-            VStack(spacing: 3) {
-                Text(verbatim: screen.title).font(Typo.sentence(19)).foregroundStyle(Night.ink)
-                Text(verbatim: screen.subtitle).font(Typo.small).foregroundStyle(Night.muted)
-            }
-            .multilineTextAlignment(.center).padding(.horizontal, 24)
-            .accessibilityElement(children: .combine)
-            HStack(spacing: 6) {
-                ForEach(Self.screens.indices, id: \.self) { i in
-                    Capsule().fill(i == index ? Night.lavender : Night.line).frame(width: i == index ? 18 : 6, height: 6)
+                        .offset(y: 12 - shift)
+                    }
                 }
-            }
-            .padding(.bottom, 12)
-            .accessibilityHidden(true)
-        }
-    }
-
-    /// Every phone on the belt, placed by its distance from the front.
-    private func phones(_ belt: Belt, height: CGFloat, spacing: CGFloat) -> some View {
-        ZStack {
-            ForEach(Self.screens.indices, id: \.self) { i in
-                let d = Self.distance(i, belt.position)
-                let near = min(abs(d), 1)
-                PhoneMockup(height: height) {
-                    ProScreenPage(screen: Self.screens[i], scroll: Self.wrap(belt.held) == i ? belt.scroll : 0)
-                }
-                .scaleEffect(1 - 0.22 * near)
-                .opacity(abs(d) <= 1 ? 1 - 0.65 * near : 0.35 * max(0, 2 - abs(d)))
-                .offset(x: CGFloat(d) * spacing)
-                .zIndex(-abs(d))
+                .clipped()
+                .contentShape(Rectangle())
+                // A finger takes over: the same list, still, to scroll by hand.
+                .gesture(DragGesture(minimumDistance: 4).onChanged { _ in manual = true })
+                .onTapGesture { manual = true }
             }
         }
+        .mask {
+            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
+                                   .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+        }
+        .accessibilityElement(children: .contain)
     }
 
-    /// With Reduce Motion: the front phone fades into the next, its neighbours change with it.
-    private func fade(_ index: Int, height: CGFloat, spacing: CGFloat) -> some View {
-        ZStack {
-            ForEach([-1, 1], id: \.self) { side in
-                PhoneMockup(height: height * 0.78) { Self.screens[Self.wrap(index + side)].content }
-                    .opacity(0.35)
-                    .offset(x: CGFloat(side) * spacing)
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Self.pro, id: \.self) { row($0) }
+            Text("také v ceně").font(.subheadline).foregroundStyle(Palette.muted)
+                .frame(maxWidth: .infinity).padding(.vertical, 10)
+            ForEach(Self.free, id: \.self) { row($0) }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func row(_ row: Row) -> some View {
+        HStack(spacing: 14) {
+            ProIcon(name: row.icon, size: 46)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: L10n.tr(row.title)).font(.headline).foregroundStyle(Palette.ink)
+                Text(verbatim: L10n.tr(row.line)).font(.subheadline).foregroundStyle(Palette.muted)
             }
-            PhoneMockup(height: height) { Self.screens[index].content }
-                .id(index)
-                .transition(.opacity)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
-        .animation(.easeInOut(duration: 0.5), value: index)
-    }
-
-    /// The finger let go: the belt settles on the nearest phone, or on the next
-    /// one after a flick, and the carousel counts on from there.
-    private func release() {
-        guard let drag else { return }
-        self.drag = nil
-        let position = drag.base - Double(drag.width / drag.spacing)
-        var target = position.rounded()
-        if target == drag.base.rounded(), abs(drag.predicted) > drag.spacing * 0.3 {
-            target += drag.predicted < 0 ? 1 : -1
-        }
-        start = Self.wrap(Int(target))
-        settleFrom = reduceMotion ? 0 : position - target
-        shownAt = time
-    }
-}
-
-/// The free week's belt: small phones of the app sliding by, round and round.
-struct ScreenBelt: View {
-    let time: Double
-    var phoneHeight: CGFloat = 199
-    /// What Pro adds; readiness and sleep are in Aurin for everyone.
-    static let screens: [ProScreen] = AllProPlans.included
-    /// PhoneMockup's width at that height (a 7 pt bezel around the 390 × 844 screen), so
-    /// the label under a phone has its width and the belt's loop is as long as the phones.
-    private var width: CGFloat { (phoneHeight - 14) / 844 * 390 + 14 }
-
-    var body: some View {
-        let step = width + 14
-        let span = step * CGFloat(Self.screens.count)
-        let shift = (CGFloat(time) * 36).truncatingRemainder(dividingBy: span)
-        HStack(alignment: .top, spacing: 14) {
-            // Three rounds, so even the small phones fill the screen while one round slides out.
-            ForEach(0..<(Self.screens.count * 3), id: \.self) { i in
-                let screen = Self.screens[i % Self.screens.count]
-                VStack(spacing: 6) {
-                    PhoneMockup(height: phoneHeight) { screen.content }
-                    Text(verbatim: screen.label).font(.caption2).foregroundStyle(Night.muted)
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                }
-                .frame(width: width)
-            }
-        }
-        .offset(x: -shift)
-        // minWidth 0: the frame takes the screen's width, not the whole belt's (twelve phones),
-        // which otherwise widened the free week past the screen.
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-        .clipped()
-        .drawingGroup()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.screens.map(\.label).joined(separator: ", "))
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 }
 
 // MARK: - The plans
 
-/// A plan on the offer: "7 DAYS FREE" above, the price large, the selection mark.
-struct OfferCard: View {
+/// A plan on the offer: the name, the price a month or a year, and the total or
+/// the price a month under it; the chosen one outlined (D-PRO-3: the year paid
+/// monthly says it is a year).
+struct OfferPlanCard: View {
     let offer: ProOffer
     let selected: Bool
     let choose: () -> Void
 
+    private var name: String {
+        switch offer.kind {
+        case .yearMonthly: return L10n.tr("Ročně, placeno měsíčně")
+        case .yearOnce: return L10n.tr("Ročně")
+        case .monthly: return L10n.tr("Měsíčně")
+        }
+    }
+
+    private var lines: (String, String?) {
+        switch offer.kind {
+        case .yearMonthly: return (L10n.f("%@ měsíčně", offer.price), offer.total.map { L10n.f("%@ celkem", $0) })
+        case .yearOnce: return (L10n.f("%@ ročně", offer.price), offer.perMonth.map { L10n.f("%@ měsíčně", $0) })
+        case .monthly: return (L10n.f("%@ měsíčně", offer.price), offer.note)
+        }
+    }
+
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
         Button(action: choose) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(verbatim: offer.cardTitle).font(.subheadline.weight(.medium))
-                    Spacer()
-                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .scaledFont(20, cap: .denseCap)
-                        .foregroundStyle(selected ? Night.violet : Night.faint)
-                }
-                (Text(verbatim: offer.price).font(Typo.number(30)) + Text(verbatim: offer.unit).font(.caption))
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text(verbatim: offer.note).font(.caption2).opacity(0.7).lineLimit(1).minimumScaleFactor(0.8)
+            VStack(spacing: 3) {
+                Text(verbatim: name).font(.subheadline.weight(.semibold))
+                Text(verbatim: lines.0).font(.headline)
+                if let second = lines.1 { Text(verbatim: second).font(.caption).foregroundStyle(Palette.muted) }
             }
-            .foregroundStyle(selected ? Night.violet : Night.ink)
-            .padding(14).padding(.top, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? Night.lavender : Night.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? .clear : Night.line))
-            .overlay(alignment: .topLeading) {
-                if offer.trial {
-                    Text("7 DNÍ ZDARMA").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
-                        .padding(.horizontal, 8).padding(.vertical, 3)
-                        .background(Night.mint, in: Capsule())
-                        .offset(x: 10, y: -9)
-                }
-            }
+            .foregroundStyle(Palette.ink)
+            .multilineTextAlignment(.center)
+            .lineLimit(2).minimumScaleFactor(0.8)
+            .padding(.horizontal, 8).padding(.vertical, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Palette.card, in: shape)
+            .overlay(shape.strokeBorder(selected ? Palette.ink : Palette.hairline, lineWidth: selected ? 1.5 : 1))
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -930,9 +650,6 @@ struct AllProPlans: View {
     let restore: () -> Void
     @Environment(\.dismiss) private var dismiss
 
-    /// What Pro includes: the offer's first four screens, in the same words.
-    static let included: [ProScreen] = [.coach, .plan, .training, .food]
-
     /// The chosen plan; the yearly one while the year paid monthly is chosen where it isn't sold (the US, before the offer resets it).
     private var chosen: ProOffer? { offers.first { $0.kind == selected } ?? offers.first { $0.kind == .yearOnce } }
     /// The two cards: the 12-month plans where the year can be paid monthly, else yearly and monthly.
@@ -946,15 +663,15 @@ struct AllProPlans: View {
                 HStack {
                     Spacer()
                     Button { dismiss() } label: {
-                        Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Night.ink)
-                            .frame(width: 36, height: 36).background(Night.card, in: Circle())
+                        Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
+                            .frame(width: 36, height: 36).background(Palette.card, in: Circle())
                             .frame(width: 44, height: 44).contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Zavřít"))
                 }
                 .padding(.top, 16)
-                Text("Všechny tarify").font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Night.ink)
+                Text("Všechny tarify").font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                 includedList.padding(.top, 18)
                 HStack(alignment: .top, spacing: 10) {
@@ -969,8 +686,8 @@ struct AllProPlans: View {
                 }
                 Button(action: start) {
                     Text(verbatim: L10n.tr(chosen?.trial == true ? "Začít 7denní zkoušku zdarma" : "Předplatit"))
-                        .font(Typo.bodyStrong).foregroundStyle(Night.violet)
-                        .frame(maxWidth: .infinity).frame(minHeight: 54).background(Night.lavender, in: Capsule())
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.background)
+                        .frame(maxWidth: .infinity).frame(minHeight: 54).background(Palette.ink, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(buying)
@@ -979,10 +696,10 @@ struct AllProPlans: View {
                     Button(action: redeem) { Text("Uplatnit promo kód") }
                     Button(action: restore) { Text("Obnovit nákup") }
                 }
-                .font(Typo.bodyStrong).foregroundStyle(Night.lavender).buttonStyle(.plain)
+                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).buttonStyle(.plain)
                 .padding(.top, 14)
                 if let chosen {
-                    Text(verbatim: chosen.terms(trialDays: chosen.trial)).font(.caption2).foregroundStyle(Night.faint)
+                    Text(verbatim: chosen.terms(trialDays: chosen.trial)).font(.caption2).foregroundStyle(Palette.muted)
                         .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 12)
                 }
@@ -990,34 +707,31 @@ struct AllProPlans: View {
                     Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
                     Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 }
-                .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)
+                .font(.caption2).foregroundStyle(Palette.muted).padding(.top, 3).padding(.bottom, 16)
             }
             .padding(.horizontal, 20)
         }
         .scrollBounceBehavior(.basedOnSize)
         // Half-width cards: the price stays whole up to the size the app's screens stop at.
         .dynamicTypeSize(...DynamicTypeSize.screenCap)
-        .environment(\.colorScheme, .dark)
     }
 
-    /// "V PRO JE" and four rows with a sparkle: title and one line each.
+    /// "V PRO JE" and the offer's Pro rows, with their icons.
     private var includedList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("V PRO JE").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Night.faint)
-                .padding(.bottom, 8)
-            ForEach(Self.included, id: \.self) { screen in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: "sparkle").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Night.lilac)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: screen.title).font(.subheadline.weight(.medium)).foregroundStyle(Night.ink)
-                        Text(verbatim: screen.subtitle).font(.caption).foregroundStyle(Night.muted)
+            Text("V PRO JE").scaledFont(11, weight: .semibold).tracking(1.2).foregroundStyle(Palette.muted)
+                .padding(.bottom, 4)
+            ForEach(ProFeatureList.pro, id: \.self) { row in
+                HStack(spacing: 12) {
+                    ProIcon(name: row.icon, size: 34)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(verbatim: L10n.tr(row.title)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.tr(row.line)).font(.caption).foregroundStyle(Palette.muted)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }
-                .padding(.vertical, 9)
-                .overlay(alignment: .top) { Rectangle().fill(Night.line).frame(height: 1) }
+                .padding(.vertical, 6)
                 .accessibilityElement(children: .combine)
             }
         }
@@ -1030,15 +744,15 @@ struct AllProPlans: View {
         return Button { selected = o.kind } label: {
             HStack(spacing: 8) {
                 (Text(verbatim: o.title).font(.subheadline.weight(.medium))
-                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Night.violet.opacity(0.75) : Night.muted))
+                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Palette.muted : Palette.muted))
                 Spacer(minLength: 4)
                 (Text(verbatim: o.price).font(Typo.number(18)) + Text(verbatim: o.unit).font(.caption2))
                     .lineLimit(1).fixedSize()
             }
-            .foregroundStyle(on ? Night.violet : Night.ink)
+            .foregroundStyle(on ? Palette.background : Palette.ink)
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(on ? Night.lavender : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? .clear : Night.line))
+            .background(on ? Palette.ink : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? .clear : Palette.hairline))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -1079,7 +793,7 @@ struct PlanCard: View {
                     Spacer(minLength: 4)
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .scaledFont(18, cap: .denseCap)
-                        .foregroundStyle(selected ? Night.violet : Night.faint)
+                        .foregroundStyle(selected ? Palette.background : Palette.muted)
                 }
                 (Text(verbatim: offer.price).font(Typo.number(24)) + Text(verbatim: offer.unit).font(.caption))
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -1090,18 +804,18 @@ struct PlanCard: View {
                 }
                 .font(.caption).opacity(0.85).padding(.top, 4)
             }
-            .foregroundStyle(selected ? Night.violet : Night.ink)
+            .foregroundStyle(selected ? Palette.background : Palette.ink)
             // Room under the SAVE pill on the card's top edge, also with large text.
             .padding(.horizontal, 12).padding(.top, 22).padding(.bottom, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(selected ? Night.lavender : Night.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Night.line))
+            .background(selected ? Palette.ink : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Palette.hairline))
             .overlay(alignment: .topLeading) {
                 if let save = offer.save {
-                    Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Night.bottom)
+                    Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.background)
                         .lineLimit(1).fixedSize()
                         .padding(.horizontal, 9).padding(.vertical, 3)
-                        .background(Night.mint, in: Capsule())
+                        .background(Palette.green, in: Capsule())
                         .offset(x: 12, y: -9)
                         .accessibilityLabel(L10n.f("Ušetříš %d %% proti měsíčnímu tarifu", save))
                 }
@@ -1110,56 +824,5 @@ struct PlanCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-// MARK: - The free week's calendar
-
-/// Today and the next six days: today free, a bell on day 5 (the reminder),
-/// a line under them running to the first payment on day 8.
-struct WeekCalendar: View {
-    let today: Date
-    var calendar: Calendar = .current
-
-    var body: some View {
-        let days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: today)) }
-        VStack(spacing: 12) {
-            HStack(spacing: 0) {
-                ForEach(days.indices, id: \.self) { i in
-                    VStack(spacing: 6) {
-                        Text(verbatim: i == 0 ? L10n.tr("DNES") : days[i].formatted(.dateTime.weekday(.abbreviated).locale(L10n.locale)).uppercased())
-                            .scaledFont(11, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(i == 0 ? Night.mint : Night.faint)
-                        ZStack {
-                            Circle().fill(i == 0 ? Night.mint : Night.card)
-                            if i == 4 {
-                                Circle().stroke(Night.amber, lineWidth: 1.5)
-                                Image(systemName: "bell.fill").scaledFont(13, cap: .denseCap).foregroundStyle(Night.amber)
-                            } else {
-                                Text(verbatim: "\(calendar.component(.day, from: days[i]))").font(.subheadline.weight(.medium))
-                                    .foregroundStyle(i == 0 ? Night.bottom : Night.ink)
-                            }
-                        }
-                        .frame(width: 36, height: 36)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-            }
-            Capsule().fill(LinearGradient(colors: [Night.mint, Night.lavender, Night.amber], startPoint: .leading, endPoint: .trailing))
-                .frame(height: 4).padding(.horizontal, 6)
-            HStack {
-                Text("Zdarma").foregroundStyle(Night.mint)
-                Spacer()
-                Text("Připomínka").foregroundStyle(Night.amber)
-                Spacer()
-                Text(verbatim: PaywallView.dayMonth(PaywallView.firstPayment(from: today, calendar: calendar))).foregroundStyle(Night.lavender)
-            }
-            .font(.caption.weight(.medium)).padding(.horizontal, 6)
-        }
-        .padding(16)
-        .background(Night.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Night.line))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Dnes zdarma, připomínka za 4 dny, první platba %@.", PaywallView.dayMonth(PaywallView.firstPayment(from: today, calendar: calendar))))
     }
 }
