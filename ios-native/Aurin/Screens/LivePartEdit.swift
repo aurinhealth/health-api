@@ -388,7 +388,7 @@ struct LiveCardioEditor: View {
                     .padding(16)
                     .cardSurface(cornerRadius: 22)
                     .padding(.top, 10)
-                SectionLabel(text: "Cíl").padding(.top, 14)
+                SectionLabel(text: "Cílová zóna").padding(.top, 14)
                 HStack(spacing: 8) {
                     targetTile(L10n.f("Zóna %@", "2"), 2)
                     targetTile(L10n.f("Zóna %@", "3"), 3)

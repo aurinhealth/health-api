@@ -157,6 +157,8 @@ struct CardioTimerView: View {
     @State private var stopped: GymCardioLog.Entry?
     /// The countdown's end tones planned on the sound's clock (GymSignals.planRest).
     @State private var planned = false
+    /// The workout's pauses while the time counted down: the end moves on by them.
+    @State private var shift: TimeInterval = 0
 
     struct Inline {
         /// When it started (back from the bar over the tab bar), else now.
@@ -178,7 +180,7 @@ struct CardioTimerView: View {
 
     private var isStart: Bool { item.id == "cardio-start" }
     private var total: Int { (minutes + added) * 60 }
-    private var end: Date? { started.map { $0.addingTimeInterval(TimeInterval(total)) } }
+    private var end: Date? { started.map { $0.addingTimeInterval(TimeInterval(total) + shift) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -193,10 +195,13 @@ struct CardioTimerView: View {
                     .accessibilityLabel(L10n.tr("Zavřít"))
                 }
             }
+            // Running in the live workout, the header names it: the card only.
+            if !(inline != nil && started != nil && stopped == nil) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: L10n.tr("Kardio") + ", " + L10n.tr(isStart ? "Začátek" : "Konec"))
                     .font(.caption.weight(.semibold)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.amber)
                 Text(verbatim: item.name).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+            }
             }
             if let stopped {
                 Spacer()
@@ -252,8 +257,16 @@ struct CardioTimerView: View {
         .padding(inline == nil ? 20 : started != nil && stopped == nil ? 0 : 16)
         .background { if inline == nil { Palette.background.ignoresSafeArea() } }
         .task { await load() }
-        .task(id: started) { await watch() }
+        // Again when Edit cardio gives it a time.
+        .task(id: "\(started?.timeIntervalSince1970 ?? 0) \(minutes)") { await watch() }
         .onChange(of: inline?.command) { _, command in if let command { run(command) } }
+        // Edit cardio changed its time: the clock follows (no limit counts up).
+        .onChange(of: item.seconds) { _, seconds in
+            if let end { GymSignals.stopRest(end) }
+            minutes = max(0, seconds / 60)
+            added = 0
+            planEnd()
+        }
         .onAppear {
             ScreenAwake.hold("cardio", watchMaySleep: false)
             LiveWorkout.shared.partOpen("cardio", true)
@@ -350,7 +363,20 @@ struct CardioTimerView: View {
     private func watch() async {
         guard started != nil else { return }
         var last = -1
+        var pausedFrom: Date?
         while !Task.isCancelled, stopped == nil, minutes > 0, let end {
+            // The workout paused: the countdown waits, its end moves on by the pause.
+            if let paused = LiveWorkout.shared.pausedAt {
+                if pausedFrom == nil { pausedFrom = paused; GymSignals.stopRest(end) }
+                try? await Task.sleep(for: .milliseconds(250))
+                continue
+            }
+            if let from = pausedFrom {
+                pausedFrom = nil
+                shift += Date().timeIntervalSince(from)
+                planEnd()
+                continue
+            }
             let now = Date(), remaining = left(at: now)
             if remaining != last {
                 if GymSignals.counts(remaining) { GymSignals.play(.tick, withSound: !planned) }
@@ -415,12 +441,10 @@ struct CardioLiveCard: View {
         return zoneLows.lastIndex { bpm >= $0 } ?? 0
     }
 
-    /// The target zone's bpm (zone 2 → index 1).
-    private var targetRange: (lo: Double, hi: Double)? {
+    /// The target zone's bpm (zone 2 → index 1): from its low up to the next zone's low.
+    private var targetRange: (lo: Double, next: Double)? {
         guard let target, zoneLows.indices.contains(target - 1) else { return nil }
-        let lo = zoneLows[target - 1]
-        let hi = zoneLows[safe: target].map { $0 - 1 } ?? 250
-        return (lo, hi)
+        return (zoneLows[target - 1], zoneLows[safe: target] ?? 251)
     }
 
     var body: some View {
@@ -444,7 +468,7 @@ struct CardioLiveCard: View {
                 zoneBar(zone)
             }
             if let range = targetRange {
-                Text(verbatim: L10n.f("Cíl %@ až %@ bpm", Fmt.int(range.lo), Fmt.int(range.hi)))
+                Text(verbatim: L10n.f("Cíl %@ až %@ bpm", Fmt.int(range.lo), Fmt.int(range.next - 1)))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 4)
@@ -457,7 +481,7 @@ struct CardioLiveCard: View {
                 if let range = targetRange {
                     VStack(alignment: .trailing, spacing: 2) {
                         SectionLabel(text: "V zóně zatím")
-                        Text(verbatim: TrainingModeView.clock(live.seconds(from: range.lo, to: range.hi, since: since, at: now)))
+                        Text(verbatim: TrainingModeView.clock(live.seconds(from: range.lo, to: range.next - 0.001, since: since, at: now)))
                             .font(Typo.heading(40)).monospacedDigit().foregroundStyle(Palette.ink)
                     }
                 }

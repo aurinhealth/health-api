@@ -265,7 +265,7 @@ struct TrainingModeView: View {
             if countingDown, let day { countdown(day) }
         }
         // Another part came on (the watch, a tap in the list): its Edit isn't open.
-        .onChange(of: activePart) { _, _ in editingPart = nil; partMove = nil }
+        .onChange(of: activePart) { _, _ in editingPart = nil }
     }
 
     private func countdown(_ day: GymDay) -> StartCountdown {
@@ -547,8 +547,10 @@ struct TrainingModeView: View {
         if let part = activePart {
             // The cardio by its machine ("Exercise bike"), as concept 08.
             if part.isCardio { return GymCardio.name(GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).type) }
-            // The move on screen ("Hip flexor stretch"), the part under it.
-            if !waiting, let partMove { return partMove }
+            // The move on screen ("Hip flexor stretch"), the part under it; Free time has none.
+            if !waiting, let partMove, !LivePartDraft.isFree(GymDayParts.resolved(day, stored: dayParts, date: date).routine(part, day: day)) {
+                return partMove
+            }
             return L10n.tr(part.kind.title)
         }
         return current(day)?.name ?? title(day)
@@ -1130,6 +1132,8 @@ struct TrainingModeView: View {
     /// else it waits for its Start (it came on after the one before).
     private func go(_ step: Step?, auto: Bool) {
         restEnd = nil
+        // The new part's runner names its first move when it appears.
+        partMove = nil
         waiting = !auto && step != nil
         switch step {
         case .part(let part)?:
