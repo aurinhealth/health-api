@@ -734,7 +734,6 @@ final class SnapshotTests: XCTestCase {
     func testNewScreens() throws {
         // "+" (redesign N): the card over Today, its edit, and the sheets it opens.
         UserDefaults.standard.removeObject(forKey: PlusItem.storageKey)
-        UserDefaults.standard.removeObject(forKey: PlusItem.legacyKey)
         try render("plus-card", height: 560, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}).padding(16) }.environment(AppModel(demo: true)) }
         try render("plus-card-edit", height: 760, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}, editing: true).padding(16) }.environment(AppModel(demo: true)) }
         try render("plus-log-workout", height: 1000, window: true) { ManualWorkoutSheet().environment(AppModel(demo: true)) }

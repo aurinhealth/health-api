@@ -47,19 +47,26 @@ struct SleepPlanner: View {
                     .frame(maxWidth: .infinity)
                     .opacity(saving ? 0.6 : 1)
 
+                Text(usual == nil ? "Táhni měsícem nebo sluncem a změníš noc."
+                     : "Táhni měsícem nebo sluncem a změníš noc. Malá tečka je tvoje obvyklá večerka.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+
                 HStack(spacing: 10) {
                     Button { editingBed = true } label: {
-                        tile(title: "Do postele", symbol: "moon.fill", color: Palette.indigo, time: bed, note: nil, chevron: true)
+                        tile(title: "Do postele", time: bed, note: usual.map { L10n.f("obvykle %@", ClockText.format($0)) })
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Změní čas, kdy jdeš spát")
                     Button { editingWake = true } label: {
-                        tile(title: "Vstávání", symbol: "sun.max.fill", color: Palette.amber, time: wake,
-                             note: tonight.wakeOnce == true ? L10n.tr("jen zítra") : nil, chevron: true)
+                        tile(title: "Vstávání", time: wake, note: wakeNote, chevron: true)
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Změní čas vstávání")
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             if !levels.isEmpty {
@@ -82,10 +89,9 @@ struct SleepPlanner: View {
                             HStack {
                                 Text(r.title).font(.body).foregroundStyle(Palette.ink)
                                 Spacer(minLength: 8)
-                                Text(r.value).font(.body.weight(.medium)).monospacedDigit()
-                                    .foregroundStyle(r.tone)
+                                Text(r.value).font(Typo.number(24)).foregroundStyle(Palette.ink)
                             }
-                            .padding(.horizontal, 16).frame(minHeight: 46)
+                            .padding(.horizontal, 16).frame(minHeight: 52)
                             .accessibilityElement(children: .combine)
                         }
                     }
@@ -109,6 +115,13 @@ struct SleepPlanner: View {
         }
     }
 
+    /// "tomorrow only", or the alarm it comes from.
+    private var wakeNote: String? {
+        if tonight.wakeOnce == true { return L10n.tr("jen zítra") }
+        guard tonight.wakeSet == true else { return nil }
+        return L10n.tr(weekendMorning ? "budík, o víkendu" : "budík, každý pracovní den")
+    }
+
     private func load() {
         wake = tonight.wake.flatMap(Reminders.minutes) ?? 7 * 60
         sleep = tonight.sleep ?? need
@@ -127,12 +140,10 @@ struct SleepPlanner: View {
 
     struct Level { let title: String; let minutes: Int }
 
-    /// The whole need, the need without the debt (when there is debt) and at
-    /// least 7 hours (when the need is longer).
+    /// The whole need (the default) and at least 7 hours (when the need is longer).
     private var levels: [Level] {
         var list = [Level(title: tonight.debt > 0 ? L10n.tr("Dospat") : L10n.tr("Celou potřebu"), minutes: need)]
-        if tonight.debt > 0, need - tonight.debt > 420 { list.append(Level(title: L10n.tr("Normálně"), minutes: need - tonight.debt)) }
-        if need > 420 { list.append(Level(title: L10n.tr("Aspoň"), minutes: 420)) }
+        if need > 420 { list.append(Level(title: L10n.f("Aspoň %@", SleepPlanner.short(420)), minutes: 420)) }
         return list.count > 1 ? list : []
     }
 
@@ -142,13 +153,13 @@ struct SleepPlanner: View {
             sleep = level.minutes
             commit()
         } label: {
-            VStack(spacing: 3) {
-                Text(level.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(level.title).font(.body).foregroundStyle(Palette.ink)
                 Text(SleepPlanner.short(level.minutes)).font(Typo.caption).monospacedDigit().foregroundStyle(Palette.muted)
             }
-            .frame(maxWidth: .infinity).padding(.vertical, 10)
-            .background(on ? Palette.lilac : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5) }
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 12)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(on ? Palette.green : Palette.hairline, lineWidth: on ? 1.5 : 1) }
         }
         .buttonStyle(.plain)
         .disabled(saving)
@@ -157,42 +168,43 @@ struct SleepPlanner: View {
 
     // MARK: Proč
 
-    struct Reason { let title: String; let value: String; let tone: Color }
+    struct Reason { let title: String; let value: String }
 
-    /// The goal and what tonight adds or takes; the last row closes the sum when
-    /// the need stops at its limits (7–9 h by age, 6–10 h with an own goal).
+    /// The goal and what tonight adds or takes, in words and without a sign; the
+    /// last row closes the sum when the need stops at its limits (7–9 h by age,
+    /// 6–10 h with an own goal).
     private var reasons: [Reason] {
-        var list = [Reason(title: tonight.goalSet == true ? L10n.tr("Tvůj cíl") : L10n.tr("Cíl podle věku"), value: SleepPlanner.short(tonight.base), tone: Palette.ink)]
-        func add(_ title: String, _ minutes: Int) {
+        var list = [Reason(title: tonight.goalSet == true ? L10n.tr("Tvůj cíl") : L10n.tr("Cíl podle věku"), value: SleepPlanner.short(tonight.base))]
+        func add(_ adds: String, _ takes: String, _ minutes: Int) {
             guard minutes != 0 else { return }
-            list.append(Reason(title: L10n.tr(title), value: (minutes > 0 ? "+" : "−") + L10n.f("%@ min", String(abs(minutes))),
-                               tone: minutes > 0 ? Palette.indigo : Palette.green))
+            list.append(Reason(title: L10n.tr(minutes > 0 ? adds : takes), value: SleepPlanner.short(abs(minutes))))
         }
-        add("Dnešní zátěž", tonight.strain)
-        add("Nízká HRV", tonight.hrv)
-        add("Spánkový dluh", tonight.debt)
-        add("Odpolední šlofík", -tonight.naps)
+        add("Dnešní trénink přidává", "Dnešní trénink ubírá", tonight.strain)
+        add("Nízká HRV přidává", "Nízká HRV ubírá", tonight.hrv)
+        add("Dospání přidává", "Dospání ubírá", tonight.debt)
+        add("Dnešní šlofík přidává", "Dnešní šlofík ubírá", -tonight.naps)
         let rest = need - (tonight.base + tonight.strain + tonight.hrv + tonight.debt - tonight.naps)
-        add(rest < 0 ? "Horní hranice" : "Dolní hranice", rest)
+        add("Dolní hranice přidává", "Horní hranice ubírá", rest)
         return list.count > 1 ? list : []
     }
 
     // MARK: Parts
 
-    private func tile(title: String, symbol: String, color: Color, time: Int, note: String?, chevron: Bool = false) -> some View {
+    /// Equal height side by side: a caps label, the time and its "usually …" line.
+    private func tile(title: String, time: Int, note: String?, chevron: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).scaledFont(12, weight: .semibold).foregroundStyle(color)
-                Text(L10n.tr(title)).font(Typo.small).foregroundStyle(Palette.muted)
+                Text(L10n.tr(title)).font(.caption2.weight(.medium)).tracking(1.4).textCase(.uppercase).foregroundStyle(Palette.muted)
                 Spacer(minLength: 0)
                 if chevron { Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint) }
             }
             Text(ClockText.format(minutes: time)).font(Typo.number(36)).foregroundStyle(Palette.ink)
                 .contentTransition(.numericText())
             if let note { Text(note).font(Typo.caption).foregroundStyle(Palette.muted) }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 22)
         .accessibilityElement(children: .combine)
     }
@@ -239,12 +251,10 @@ struct SleepDial: View {
             let c = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
             ZStack {
                 Circle().stroke(Palette.track, lineWidth: ring).frame(width: r * 2, height: r * 2).position(c)
-                Circle()
-                    .trim(from: 0, to: CGFloat(SleepPlanner.wrap(wake - bed)) / 1440)
-                    .stroke(LinearGradient(colors: [Palette.indigo.opacity(0.75), Palette.indigo], startPoint: .topLeading, endPoint: .bottomTrailing),
-                            style: StrokeStyle(lineWidth: ring, lineCap: .round))
-                    .rotationEffect(.degrees(Double(bed) / 1440 * 360 - 90))
-                    .frame(width: r * 2, height: r * 2).position(c)
+                // The night from amber at the bedtime to green at the wake time, with a soft glow under it.
+                nightArc.blur(radius: 7).opacity(0.5).frame(width: r * 2, height: r * 2).position(c)
+                    .accessibilityHidden(true)
+                nightArc.frame(width: r * 2, height: r * 2).position(c)
                 ForEach(Array(stride(from: 0, to: 24, by: 3)), id: \.self) { h in
                     Text("\(h)").font(.caption2).foregroundStyle(Palette.faint)
                         .position(point(h * 60, r - ring / 2 - 14, c))
@@ -254,19 +264,30 @@ struct SleepDial: View {
                         .accessibilityHidden(true)
                 }
                 VStack(spacing: 2) {
-                    Text(Fmt.hoursMinutes(Double(sleep))).font(Typo.number(42)).foregroundStyle(Palette.ink)
+                    Text(SleepPlanner.short(sleep)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                         .contentTransition(.numericText())
                         .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep)))
-                    Text("spánek").font(Typo.small).foregroundStyle(Palette.muted)
+                    Text("spánku").font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 .position(c)
                 .accessibilityElement(children: .combine)
-                handle(symbol: "moon.fill", color: Palette.indigo, at: bed, r: r, c: c, label: "Do postele", change: onBed)
+                handle(symbol: "moon.fill", color: Palette.ink, at: bed, r: r, c: c, label: "Do postele", change: onBed)
                 handle(symbol: "sun.max.fill", color: Palette.amber, at: wake, r: r, c: c, label: "Vstávání", change: onWake)
             }
             .coordinateSpace(name: "dial")
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+
+    private var nightArc: some View {
+        let part = CGFloat(SleepPlanner.wrap(wake - bed)) / 1440
+        return Circle()
+            .trim(from: 0, to: part)
+            .stroke(AngularGradient(colors: [Palette.amberBar, Palette.green], center: .center,
+                                    startAngle: .zero, endAngle: .degrees(Double(part) * 360)),
+                    style: StrokeStyle(lineWidth: ring, lineCap: .round))
+            .rotationEffect(.degrees(Double(bed) / 1440 * 360 - 90))
     }
 
     private func handle(symbol: String, color: Color, at minutes: Int, r: CGFloat, c: CGPoint, label: String, change: @escaping (Int) -> Void) -> some View {

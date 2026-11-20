@@ -1,5 +1,77 @@
 import SwiftUI
 
+// MARK: - Sign-in and security: the e-mail, Face ID and the other devices
+
+/// Účet → Přihlášení a zabezpečení: the account's e-mail (copy it, change it),
+/// Face ID and signing out the other devices.
+struct SignInSecurityView: View {
+    let store: SettingsStore
+    @Environment(AppModel.self) private var model
+    @State private var copied = false
+    @State private var confirmOthers = false
+    @State private var signingOutOthers = false
+    @State private var othersMessage: String?
+    @AppStorage(AvatarStore.emailKey) private var email = ""
+
+    var body: some View {
+        SettingsPage(title: "Přihlášení a zabezpečení", hero: SettingsHero(systemImage: "key.fill", color: Palette.blue, text: "Přihlašuješ se přes Face ID, nebo kódem poslaným na e-mail.")) {
+            if !email.isEmpty {
+                SettingsGroup(title: "E-mail") {
+                    Button {
+                        UIPasteboard.general.string = email
+                        copied = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(verbatim: email).font(.body).foregroundStyle(Palette.ink).lineLimit(1).truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc").scaledFont(13).foregroundStyle(Palette.faint)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 50)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.f("E-mail %@, zkopírovat", email))
+                    // The owner's address comes from the server's settings (OWNER_EMAIL).
+                    if !model.demo && !store.owner {
+                        SettingsDivider()
+                        NavigationLink { EmailChangeView() } label: { SettingsRow(title: "Změnit e-mail") }
+                            .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            if !model.demo {
+                SettingsGroup(title: "Přihlášení") {
+                    NavigationLink { PasskeysSettingsView() } label: { SettingsRow(title: "Face ID") }
+                        .buttonStyle(.plain)
+                    SettingsDivider()
+                    Button { confirmOthers = true } label: { SettingsRow(title: signingOutOthers ? "Odhlašuji…" : "Odhlásit ostatní zařízení", chevron: false) }
+                        .buttonStyle(.plain)
+                        .disabled(signingOutOthers)
+                }
+                if let othersMessage { Text(othersMessage).font(Typo.small).foregroundStyle(Palette.muted).padding(.horizontal, 4) }
+            }
+        }
+        .confirmationDialog("Odhlásit ostatní zařízení?", isPresented: $confirmOthers, titleVisibility: .visible) {
+            Button("Odhlásit", role: .destructive) { Task { await signOutOthers() } }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            Text("Tenhle iPhone zůstane přihlášený.")
+        }
+    }
+
+    private func signOutOthers() async {
+        signingOutOthers = true
+        defer { signingOutOthers = false }
+        do {
+            try await model.api.signOutOtherDevices()
+            othersMessage = L10n.tr("Ostatní zařízení jsou odhlášená.")
+        } catch {
+            othersMessage = APIClient.readable(error).localizedDescription
+        }
+    }
+}
+
 // MARK: - Sign-in: Face ID passkeys and the other devices
 
 /// Účet → Face ID: the account's passkeys, where they came from and when they

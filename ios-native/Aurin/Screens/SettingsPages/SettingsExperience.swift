@@ -11,7 +11,7 @@ struct SportExperience: Decodable, Equatable {
     let autoLevel: String
 }
 
-/// The group in Profil, under the personal details: Kolo, Běh, Plavání, Posilovna
+/// The group of Účet → Zkušenost (and Posilovna): Kolo, Běh, Plavání, Posilovna
 /// (the order of the workout library).
 struct ExperienceGroup: View {
     @Environment(AppModel.self) private var model
@@ -89,7 +89,7 @@ struct ExperienceGroup: View {
     }
 }
 
-/// Posilovna → Trénink na míru: the experience lives in Profil; this page shows the same group.
+/// Účet → Zkušenost, and Posilovna → Trénink na míru: the same page.
 struct ExperienceSettingsView: View {
     var body: some View {
         SettingsPage(title: "Zkušenost", hero: SettingsHero(systemImage: "chart.bar.fill", color: Palette.green, text: "Tvoje zkušenost v každém sportu.")) { ExperienceGroup() }

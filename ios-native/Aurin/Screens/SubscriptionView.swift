@@ -84,6 +84,7 @@ enum ProContents {
             "Podle tvé regenerace a pokroku",
             "Podle času, který každý den máš"
         ]),
+        Group(title: "Aurin Age", items: []),
         Group(title: "Vitamíny a minerály", items: []),
         Group(title: "Vlastní makra a cíle živin", items: [])
     ]
@@ -98,19 +99,26 @@ struct ProSettingsRow: View {
 
     var body: some View {
         NavigationLink { SubscriptionView() } label: {
-            HStack(spacing: 12) {
-                AurinMark(size: 22, gold: hasPro, glow: true)
-                AurinProTitle(size: 21, gold: hasPro)
-                Spacer()
-                if extra > 0 {
-                    Text(verbatim: L10n.f("%lld navíc", extra)).font(.subheadline).foregroundStyle(Palette.indigo)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    AurinMark(size: 22, gold: hasPro, glow: true)
+                    AurinProTitle(size: 21, gold: hasPro)
+                    Spacer()
+                    if extra > 0 {
+                        Text(verbatim: L10n.f("%lld navíc", extra)).font(.subheadline).foregroundStyle(Palette.indigo)
+                    }
+                    if hasPro {
+                        Text("Aktivní").font(.subheadline).foregroundStyle(AurinMark.goldTop)
+                    }
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
-                if hasPro {
-                    Text("Aktivní").font(.subheadline).foregroundStyle(AurinMark.goldTop)
+                .frame(minHeight: 52)
+                // The 12 payments in the card, as on the Pro page (602 point 59).
+                if hasPro, let payments = ProStore.shared.payments {
+                    ProHubTimeline(payments: payments).padding(.bottom, 14)
                 }
-                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
-            .padding(.horizontal, 18).frame(minHeight: 52)
+            .padding(.horizontal, 18)
             .background(
                 RadialGradient(colors: [(hasPro ? AurinMark.goldTop : AurinMark.amber).opacity(0.18), .clear],
                                center: .leading, startRadius: 0, endRadius: 180),

@@ -558,20 +558,17 @@ struct GymPreferencesGroup: View {
             SettingsDivider()
             routineLink(.warmup)
             SettingsDivider()
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Kardio").font(.body).foregroundStyle(Palette.ink)
-                Picker("Kardio", selection: $cardio) {
-                    ForEach(Self.cardioModes, id: \.0) { mode in Text(LocalizedStringKey(mode.1)).tag(mode.0) }
-                }
-                .pickerStyle(.segmented)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            SettingsPicker(title: "Kardio", selection: $cardio, options: Self.cardioModes)
             SettingsDivider()
             // Open with Ne too: cardio added during a workout starts with it.
             SettingsPicker(title: "Druh kardia", selection: $cardioType, options: cardioOptions)
             SettingsDivider()
             routineLink(.stretching)
+            SettingsDivider()
+            NavigationLink { GymExerciseTasteView() } label: {
+                SettingsRow(title: "Cviky", subtitle: "Které tě baví a které ne")
+            }
+            .buttonStyle(.plain)
         }
         .disabled(prefs == nil && !model.demo)
     }
@@ -603,9 +600,12 @@ struct GymPreferencesGroup: View {
                     SettingsDivider()
                 }
                 Button { addingTime = true } label: {
-                    Text("Přidat čas").font(.body).foregroundStyle(Palette.amber)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16).frame(minHeight: 50)
+                    HStack {
+                        Text("Přidat čas").font(.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Image(systemName: "plus").scaledFont(15, weight: .medium).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.leading, 16).padding(.trailing, 20).frame(minHeight: 50)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

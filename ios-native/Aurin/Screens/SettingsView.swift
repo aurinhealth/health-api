@@ -53,7 +53,7 @@ struct SettingsMenu: View {
     @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
-        SettingsPage(title: "Nastavení") {
+        SettingsPage(title: "Nastavení", spacedTitle: true) {
             if model.demo {
                 Text("Prohlížíš ukázková data. Změny se neukládají.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
@@ -98,16 +98,9 @@ struct SettingsMenu: View {
 
             SettingsGroup(title: "Data") {
                 NavigationLink { SourcesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.green, disc: true), title: "Zdroje dat")
-                        // A source to connect again: a dot on the icon's disc.
-                        .overlay(alignment: .topLeading) {
-                            if !store.problems.isEmpty {
-                                Circle().fill(Palette.rust).frame(width: 9, height: 9)
-                                    .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
-                                    .offset(x: 44, y: 9)
-                                    .accessibilityLabel("Připojit znovu")
-                            }
-                        }
+                    // Something to look at in a source: the dot on the icon's disc (602 point 62).
+                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.green, disc: true, alert: SourcesSettingsView.needsLook(store)), title: "Zdroje dat")
+                        .accessibilityValue(SourcesSettingsView.needsLook(store) ? L10n.tr("Potřebuje tvou pozornost") : "")
                 }
                 SettingsDivider()
                 NavigationLink { CalendarSettingsView(onChange: { calendarStatus = CalendarSettingsView.status }) } label: {
