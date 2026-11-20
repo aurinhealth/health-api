@@ -280,7 +280,10 @@ struct SleepDetailContent: View {
     private var links: some View {
         Card(padding: 0) {
             VStack(spacing: 0) {
-                if let night = shownDetail?.night, let hr = night.hr, hr.count > 3 {
+                // Only a night whose heart rate covers most of it: a few minutes
+                // drew one spike at the left edge (device comparison point 57).
+                if let night = shownDetail?.night, let hr = night.hr, hr.count > 3,
+                   (hr.last?.m ?? 0) - (hr.first?.m ?? 0) >= 0.5 * SleepHeartRate.end(night) {
                     NavigationLink { SleepHeartRateView(health: health, night: night) } label: {
                         linkRow("Tep ve spánku", note: L10n.f("průměr %@ bpm", Fmt.int(night.stats?.avgHr)))
                     }
