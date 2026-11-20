@@ -123,7 +123,8 @@ struct GymPartView: View {
                 } else if run.begun {
                     // The countdown of the part's first hold starts with the part's Start.
                     let holds = GymHold.all(routine)
-                    if holds.indices.contains(run.hold) {
+                    // A move without a time (Free time) waits for its Next.
+                    if holds.indices.contains(run.hold), holds[run.hold].item.seconds > 0 {
                         run.holdEnd = date.addingTimeInterval(TimeInterval(max(1, holds[run.hold].item.seconds)))
                     }
                 }
@@ -302,7 +303,7 @@ struct GymPartView: View {
         }
         WKInterfaceDevice.current().play(.directionUp)
         now = Date()
-        run.holdEnd = now.addingTimeInterval(TimeInterval(max(1, holds[run.hold].item.seconds)))
+        run.holdEnd = holds[run.hold].item.seconds > 0 ? now.addingTimeInterval(TimeInterval(holds[run.hold].item.seconds)) : nil
     }
 
     /// The part over: the moves done go to Training mode on the iPhone (also when skipped part-way).

@@ -776,7 +776,7 @@ final class SnapshotTests: XCTestCase {
                      GymStretching.Item(id: "calf", name: "Calf stretch", seconds: 30, sides: true)]
         let draft = LivePartDraft(part: .stretching, mode: .workout, routine: nil, name: nil, items: items,
                                   cardio: GymDayParts.Choice(type: "exercise_bike", minutes: 10))
-        try render("edit-stretching", glow: Palette.Glow.gym, height: 760) {
+        try render("edit-stretching", glow: Palette.Glow.gym, height: 760, window: true) {
             LiveRoutineEditor(draft: .constant(draft), day: DemoData.gym, date: "2026-11-20", done: ["ham", "quad"])
                 .environment(AppModel(demo: true))
         }
@@ -784,7 +784,7 @@ final class SnapshotTests: XCTestCase {
 
     /// Edit cardio: the machine and the time (concept 08).
     func testEditCardio() throws {
-        try render("edit-cardio", glow: Palette.Glow.gym, height: 560) {
+        try render("edit-cardio", glow: Palette.Glow.gym, height: 560, window: true) {
             LiveCardioEditor(choice: .constant(GymDayParts.Choice(type: "exercise_bike", minutes: 10)))
                 .padding(.horizontal, 20)
                 .environment(AppModel(demo: true))

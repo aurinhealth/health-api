@@ -526,6 +526,16 @@ final class LiveWorkout: NSObject {
         segments = segments.map { $0.key == key ? Segment(key: newKey, start: $0.start, kcal: $0.kcal) : $0 }
     }
 
+    /// Calories burned while `key` was in front, every time added up (as seconds(of:)).
+    func kcal(of key: String) -> Double {
+        var sum = 0.0
+        for (i, segment) in segments.enumerated() where segment.key == key {
+            let end = segments.indices.contains(i + 1) ? segments[i + 1].kcal : (kcal ?? segment.kcal)
+            sum += max(0, end - segment.kcal)
+        }
+        return sum
+    }
+
     /// Seconds spent on `key` so far, every time it was in front added up.
     func seconds(of key: String, at now: Date = Date()) -> Int {
         var sum = 0.0

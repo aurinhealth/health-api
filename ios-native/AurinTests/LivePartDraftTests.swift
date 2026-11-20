@@ -30,6 +30,14 @@ final class LivePartDraftTests: XCTestCase {
         XCTAssertNil(draft(.warmup, .workout).applied(to: parts).routines?["warmup"]?.routine)
     }
 
+    func testAPartWithNoMovesCannotBeSaved() {
+        var empty = draft(.stretching, .workout)
+        empty.items = []
+        XCTAssertFalse(empty.canSave)
+        XCTAssertTrue(draft(.stretching, .free).canSave)
+        XCTAssertTrue(draft(.cardioStart, .workout).canSave)
+    }
+
     func testCardioChangesOnlyItsMachineAndTime() {
         let next = draft(.cardioEnd, .workout).applied(to: parts)
         XCTAssertEqual(next.choice(.cardioEnd), GymDayParts.Choice(type: "rowing_ergometer", minutes: 15))

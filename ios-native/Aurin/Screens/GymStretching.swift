@@ -251,6 +251,8 @@ struct StretchTimerView: View {
     var onItemDone: (String) -> Void
     /// Inside Režim tréninku (not a screen of its own): after the last hold it goes on with this.
     var onClose: (() -> Void)? = nil
+    /// Moves ticked already (their ids): opened again, it starts at the first one left.
+    var skip: Set<String> = []
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
     @State private var left = Self.moveSeconds
@@ -353,9 +355,12 @@ struct StretchTimerView: View {
     }
 
     private func run() async {
+        if index == 0, !skip.isEmpty, let first = holds.firstIndex(where: { !skip.contains($0.item.id) }) { index = first }
         while !finished, !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !paused, !finished else { continue }
+            // A move without a time (Free time): no countdown, it waits for Další.
+            if !moving, hold?.item.seconds == 0 { continue }
             if left > 1 {
                 left -= 1
                 // The last seconds of a move tick; getting ready stays quiet.

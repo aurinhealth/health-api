@@ -23,6 +23,9 @@ struct LivePartDraft: Equatable {
 
     static func isFree(_ routine: GymStretching?) -> Bool { routine?.items.first?.id == freeId }
 
+    /// Something to do: a part with no moves left in it could never be done.
+    var canSave: Bool { part.isCardio || mode == .free || !items.isEmpty }
+
     /// The part as it is now.
     static func start(_ part: GymDayPart, parts: GymDayParts, day: GymDay) -> LivePartDraft {
         let chosen = parts.routines?[part.rawValue]
@@ -43,7 +46,8 @@ struct LivePartDraft: Equatable {
         switch mode {
         case .free:
             let item = GymStretching.Item(id: Self.freeId, name: L10n.tr("Volný čas"), seconds: 0, sides: false)
-            routines[part.rawValue] = GymDayParts.Routine(routine: Self.freeId, length: nil, moves: GymStretching(minutes: 0, items: [item]))
+            routines[part.rawValue] = GymDayParts.Routine(routine: Self.freeId, length: nil,
+                                                          moves: GymStretching(minutes: 0, items: [item], name: L10n.tr("Volný čas")))
         case .workout, .mine:
             let seconds = items.reduce(0) { $0 + ($1.seconds + 5) * ($1.sides ? 2 : 1) * max(1, $1.rounds) }
             let moves = GymStretching(minutes: max(1, Int((Double(seconds) / 60).rounded())), items: items, name: mode == .mine ? name : nil)
@@ -67,6 +71,8 @@ struct LiveRoutineEditor: View {
     private var now: String? { leftItems.first?.id }
     @Environment(AppModel.self) private var model
     @State private var mine: [GymPreferences.MyRoutine] = []
+    /// The own ones loaded: saving one before would replace them all.
+    @State private var loadedMine = false
     @State private var library: GymRoutineMoves?
     @State private var writing = false
     @State private var loading = false
@@ -101,7 +107,7 @@ struct LiveRoutineEditor: View {
                 Section {
                     textButton(warmup ? "Přidat vlastní pohyb" : "Přidat vlastní protažení") { writing = true }
                     textButton(saved ? "Uloženo" : warmup ? "Uložit jako moji rozcvičku" : "Uložit jako moje protažení") { Task { await saveAsMine() } }
-                        .disabled(saved || draft.items.isEmpty || model.demo)
+                        .disabled(saved || draft.items.isEmpty || model.demo || !loadedMine)
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 }
                 .listRowBackground(Color.clear)
@@ -182,6 +188,10 @@ struct LiveRoutineEditor: View {
                 .frame(minHeight: 44)
                 .accessibilityElement(children: .combine)
                 .accessibilityValue(Text("Hotovo"))
+            }
+            if draft.items.isEmpty {
+                Text(warmup ? "Přidej aspoň jeden pohyb, nebo zvol Volný čas." : "Přidej aspoň jedno protažení, nebo zvol Volný čas.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
             ForEach(leftItems) { item in
                 HStack(spacing: 8) {
@@ -268,7 +278,10 @@ struct LiveRoutineEditor: View {
         guard !model.demo else { return }
         async let prefs = try? model.api.gymPreferences()
         async let moves = try? model.api.gymRoutineMoves()
-        mine = await prefs?.routines(kind) ?? []
+        if let loaded = await prefs {
+            mine = loaded.routines(kind)
+            loadedMine = true
+        }
         library = await moves
     }
 
@@ -278,7 +291,12 @@ struct LiveRoutineEditor: View {
         guard mode != draft.mode else { return }
         if mode == .mine {
             draft.mode = .mine
-            if let first = mine.first { await pick(first) }
+            if let first = mine.first {
+                await pick(first)
+            } else if draft.items.isEmpty {
+                // Nothing saved yet (from Free time): the plan's moves to start one from.
+                merge((warmup ? day.warmup : day.stretching)?.items ?? [])
+            }
             return
         }
         draft.mode = .workout
@@ -422,22 +440,11 @@ struct FreeTimeRunner: View {
             }
             .padding(16)
         }
-        .cardSurface(cornerRadius: 22)
         .accessibilityElement(children: .combine)
-        .overlay(alignment: .bottom) {
-            Text(kind == .warmup ? "Rozcvič se po svém. Až budeš hotový, ťukni na Hotovo." : "Protáhni se po svém. Až budeš hotový, ťukni na Hotovo.")
-                .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .alignmentGuide(.bottom) { $0[.top] - 14 }
-        }
-        .padding(.bottom, 56)
     }
 
-    /// The calories since this part came on.
-    private var kcal: Double {
-        guard let focused = live.focused, focused.key == key else { return 0 }
-        return max(0, (live.kcal ?? focused.kcal) - focused.kcal)
-    }
+    /// The calories while this part was on, as its time.
+    private var kcal: Double { live.kcal(of: key) }
 
     private func clock(_ seconds: Int) -> String {
         let m = seconds / 60, s = seconds % 60
