@@ -245,10 +245,14 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     const d = shift(start, i), training = d <= date ? withHeartRateLoad(byDate.get(d)?.training || {}, google, profile, d) : byDate.get(d)?.training || {};
     const { sessions: daySessionList, planned, completed, gymPlan, gymLogged, pTss, cTss } = daySessions(d, date, training, gym[d]);
     const gymOnly = gymPlan ? 1 : 0;
+    // A walk the watch found on its own is no workout of the week: the strip
+    // shows it only on an empty day, so it counts toward neither number (602:
+    // "10 of 12 planned workouts done" beside five workouts).
+    const workouts = completed.filter(a => sportOf(a) !== "walk").length;
     // Sessions of the week: the planned ones, and on past days whatever was
     // done on top of the plan.
-    plannedCount += d <= date ? Math.max(planned.length + gymOnly, completed.length + gymLogged) : planned.length + gymOnly;
-    if (d <= date) { doneCount += completed.length + gymLogged; doneTss += cTss; }
+    plannedCount += d <= date ? Math.max(planned.length + gymOnly, workouts + gymLogged) : planned.length + gymOnly;
+    if (d <= date) { doneCount += workouts + gymLogged; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
     sessions.push(...daySessionList);
     if (d === date) openToday = new Set(daySessionList.filter(s => s.status === "planned" && s.eventId).map(s => s.eventId));

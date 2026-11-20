@@ -360,3 +360,12 @@ test("a strength plan paired with today's gym session leaves today's cards, also
   const out = buildTraining({ ...input, days: today, gym });
   assert.deepEqual(out.todaySessions, []);
 });
+
+test("a walk the watch found counts toward neither number of the week (602: 10 of 12 beside five workouts)", () => {
+  const walk = { id: "gw:1", type: "Walk", name: "Walk", durationHours: 0.5, tss: 5 };
+  const base = buildTraining(input).thisWeek;
+  const withWalk = days.map(d => d.date === DATE ? { ...d, daily: { training: { ...(d.daily?.training || {}), completed: [...(d.daily?.training?.completed || []), walk] } } } : d);
+  const t = buildTraining({ ...input, days: withWalk }).thisWeek;
+  assert.equal(t.done, base.done);
+  assert.equal(t.planned, base.planned);
+});
