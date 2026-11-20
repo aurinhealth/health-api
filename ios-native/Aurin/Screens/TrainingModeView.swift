@@ -1349,17 +1349,20 @@ struct TrainingModeView: View {
     /// The finished workout (concept 08, Summary): the top, the rating, what
     /// didn't send, and the way back into it or to throw it away. Close is pinned.
     private func doneSummary(_ day: GymDay) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            WorkoutDoneSummary(title: title(day), when: doneWhen(day), sources: doneSources, doneSets: day.exercises.reduce(0) { $0 + $1.doneCount },
-                               plannedSets: day.exercises.reduce(0) { $0 + $1.workCount }, strain: doneStrain,
-                               records: newRecords(day).map(doneRecord), minutes: totals?.minutes ?? day.loggedMinutes,
-                               volume: GymSessionMath.volumeText(GymSessionMath.volume(day.exercises)),
-                               volumeChange: volumeChange(day, GymSessionMath.volume(day.exercises)),
-                               volumeBetter: GymSessionMath.volume(day.exercises) >= lastVolume(day),
-                               exercises: day.exercises.filter { $0.doneCount > 0 }.count, avgHr: totals?.avgHr, kcal: totals?.kcal)
+        let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let planned: Int = day.exercises.reduce(0) { $0 + $1.workCount }
+        let volume: Double = GymSessionMath.volume(day.exercises)
+        let lifted: Int = day.exercises.filter { $0.doneCount > 0 }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            WorkoutDoneSummary(title: title(day), when: doneWhen(day), sources: doneSources, doneSets: sets, plannedSets: planned,
+                               strain: doneStrain(day), records: newRecords(day).map(doneRecord), minutes: totals?.minutes ?? day.loggedMinutes,
+                               volume: GymSessionMath.volumeText(volume), volumeChange: volumeChange(day, volume),
+                               volumeBetter: volume >= lastVolume(day), exercises: lifted, avgHr: totals?.avgHr, kcal: totals?.kcal)
             WorkoutRatingCard(date: date, exercises: day.exerciseNames,
                               liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
                 .padding(.top, 10)
+            // A swap made today (often on the watch): only today, or from now on.
+            swapsCard
             // Only what failed to send: the rest is quiet (Close's line says it goes on).
             if shownSendRows.contains(where: { $0.status == .error }) { sendCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -1401,11 +1404,19 @@ struct TrainingModeView: View {
         return out
     }
 
-    /// What this workout added to today's strain, once the server has it (today only).
-    private var doneStrain: WorkoutDoneSummary.Strain? {
+    /// What this workout added to today's strain, once the server has it (today
+    /// only): the done gym workout of Today that began within 20 min of this one.
+    private func doneStrain(_ day: GymDay) -> WorkoutDoneSummary.Strain? {
         guard date == AppModel.localDate(Date()), let today = model.today, let score = today.strain.score,
-              let added = today.plan.last(where: { $0.kind == "workout" && $0.done && $0.sport == "strength" })?.strain, added > 0
-        else { return nil }
+              let start = day.startedAt else { return nil }
+        let startMinute = Calendar.current.component(.hour, from: start) * 60 + Calendar.current.component(.minute, from: start)
+        let item = today.plan.first { item in
+            guard item.kind == "workout", item.done, item.sport == "strength", let time = item.time ?? item.session?.time else { return false }
+            let parts = time.split(separator: ":").compactMap { Int($0) }
+            guard parts.count >= 2 else { return false }
+            return abs(parts[0] * 60 + parts[1] - startMinute) <= 20
+        }
+        guard let added = item?.strain, added > 0 else { return nil }
         let target = today.strain.target.map { (low: $0.low, high: $0.high) }
         return WorkoutDoneSummary.Strain(workout: added, dayFrom: max(0, score - added), dayTo: score, target: target)
     }
@@ -1413,17 +1424,22 @@ struct TrainingModeView: View {
     private func doneRecord(_ record: NewRecord) -> WorkoutDoneSummary.Record {
         let pounds = lb(record.name)
         let unit = LiftWeight.unit(machineLb: pounds)
-        let value = record.lift.kg.map { GymCoach.shown($0, machineLb: pounds) } ?? ""
+        // The record before as a whole lift ("100 kg × 2"): records go by the estimated max, not the weight alone.
+        let was = GymSessionMath.lift(record.old, machineLb: pounds)
+        let name = ExerciseCatalog.shownName(record.name)
+        guard let kg = record.lift.kg, kg > 0 else {
+            // Bodyweight: the reps are the record.
+            return WorkoutDoneSummary.Record(name: name, value: GymSessionMath.lift(record.lift) ?? "", unit: "", was: was)
+        }
         let reps = record.lift.reps.map { " × " + Fmt.int($0) } ?? ""
-        let was = record.old.kg.map { GymCoach.shown($0, machineLb: pounds) + " " + unit }
-        return WorkoutDoneSummary.Record(name: ExerciseCatalog.shownName(record.name), value: value, unit: unit + reps, was: was)
+        return WorkoutDoneSummary.Record(name: name, value: GymCoach.shown(kg, machineLb: pounds), unit: unit + reps, was: was)
     }
 
     /// The coach about this finished workout.
     private func doneSubject(_ day: GymDay) -> CoachSubject {
         let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
         return CoachSubject(kind: .activity, title: title(day),
-                            line: [doneWhen(day), L10n.f("%@ sérií", String(sets))].compactMap { $0 }.joined(separator: ", "),
+                            line: [doneWhen(day), L10n.plural("%lld sérií", sets)].compactMap { $0 }.joined(separator: ", "),
                             date: date, sport: "gym", view: "workouts", symbol: "dumbbell", color: Palette.Sport.gym,
                             questions: ["Jak se mi tahle posilovna povedla?", "Kolik mám dát příště?", "Co mám dát zítra?"])
     }
@@ -2335,6 +2351,8 @@ struct TrainingModeView: View {
             async let shared = model.shareGym(day, date: date, start: start, minutes: minutes, appleSaved: appleSaved)
             await model.refreshTraining()
             await model.loadMuscles()
+            // Today's strain with this workout in it, for the summary's strain card.
+            await model.reloadToday()
             sendRows = await shared
         }
     }
