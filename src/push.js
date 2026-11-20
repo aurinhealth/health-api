@@ -13,6 +13,7 @@ import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
 import { reasonsSentence } from "./morning-advice.js";
 import { dayVerdict, verdictText, signsAdvice } from "./day-verdict.js";
+import { recoveringText } from "./day-decision.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -178,9 +179,13 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
 // short night, the days before, the journal, an injury and tomorrow: two
 // reasons to hold back turn green into yellow (yellow stays yellow, the ring
 // keeps Today's colour), and the body starts with them ("3 gym days in a row and a short night.").
+// recovering, hardFrom: the day's decision (day-decision.js) holds a hard day
+// back for the recovery time, so the push says what Today says.
 export function readinessMessage(input) {
   const { score, sleep = null, hrv = null, restingHR = null } = input;
-  const v = dayVerdict(input) || { key: null, level: input.zone, shown: input.zone, sessions: [], signals: [] };
+  const raw = dayVerdict(input) || { key: null, level: input.zone, shown: input.zone, sessions: [], signals: [] };
+  const held = Boolean(input.recovering && raw.key === "hard");
+  const v = held ? { ...raw, key: "steady" } : raw;
   const { level, rest, signs, noSleep, signals, injury, legs, saveFor, weighed } = v;
   const names = v.sessions.map(s => s.title).join(", ");
   const sport = v.sessions.length === 1 ? v.sessions[0].sport : null;
@@ -191,6 +196,7 @@ export function readinessMessage(input) {
   if (noSleep) body = L("Otevři Aurin, ať se noc nahraje; skóre se může změnit.", "Open Aurin to sync last night; the score may change.");
   else if (rest) body = names ? L(`${names} dnes vynech a dej tělu klid.`, `Skip today's ${names} and let your body recover.`) : L("Dej tělu klid.", "Let your body recover today.");
   else if (signs) body = signsAdvice();
+  else if (held) body = recoveringText({ recovering: true, hardFrom: input.hardFrom || null });
   else if (saveFor) body = L(`Zítra: ${saveFor.title}. Dnes lehce v Z2, ať na něj máš síly.`, `Tomorrow: ${saveFor.title}. Easy Z2 today so you're fresh for it.`);
   else if (level === "green" && (signals.length === 1 || injury)) body = names ? L(`Dnešní plán: ${names}. Odtrénuj ho podle plánu, nic navíc.`, `Today's plan: ${names}. Train as planned, nothing extra.`) : L("Nic naplánováno. Klidně trénuj, jen bez maxim.", "Nothing planned. Train if you like, just no all-out efforts.");
   else if (level === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");

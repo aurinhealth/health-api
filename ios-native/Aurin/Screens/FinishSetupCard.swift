@@ -39,6 +39,7 @@ struct FinishSetupCard: View {
     let today: TodaySnapshot
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(FinishSetup.sinceKey) private var since: Double = 0
     @AppStorage(FinishSetup.goalKey) private var goal = false
     @AppStorage(FinishSetup.timeKey) private var time = false
@@ -109,6 +110,10 @@ struct FinishSetupCard: View {
             }
             .sensoryFeedback(.success, trigger: allDone) { _, done in done }
             .task { await load() }
+            // Back from iOS settings: allowed there, the row is done.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active && !notifications { Task { await recheckNotifications() } }
+            }
             .onChange(of: allDone) { _, done in if done { Task { await finish() } } }
             .sheet(isPresented: $editingGoal) { goalSheet }
             .sheet(isPresented: $editingTime) {
@@ -169,19 +174,37 @@ struct FinishSetupCard: View {
     /// The profile first: with Gym ticked the card has four rows, never done at three.
     private func load() async {
         if !model.demo, let p = try? await model.api.profile() { use(p) }
+        // Done when they are allowed, not when iOS was asked once: turned off
+        // earlier, the row stays open (device test of build 602).
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        notifications = status != .notDetermined
+        notifications = [.authorized, .provisional, .ephemeral].contains(status)
     }
 
     private func use(_ p: JSONObject) {
         profile = p
         focus = SetupFocus(profile: p)
         lifts = focus.sports.kinds.contains("strength")
-        if !focus.goal.isEmpty { goal = true }
+        // Also a goal saved in Nastavení → Cíle in its own words (goalType),
+        // as that page shows it chosen (device test of build 602).
+        if !focus.goal.isEmpty || !(p["goalType"]?.string ?? "").isEmpty { goal = true }
+    }
+
+    private func recheckNotifications() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        guard [.authorized, .provisional, .ephemeral].contains(status) else { return }
+        await PushRegistration.refresh(api: model.api)
+        if let today = model.today { await Reminders.reschedule(from: today) }
+        notifications = true
     }
 
     /// iOS asks once; whatever the answer, the row is done (Nastavení → Oznámení changes it later).
     private func allowNotifications() async {
+        // Turned off before: iOS asks no more, so its settings for the app open.
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if status == .denied, let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+            await UIApplication.shared.open(url)
+            return
+        }
         _ = await Reminders.requestPermission()
         await PushRegistration.refresh(api: model.api)
         // Tonight's reminders are planned now, not on the next refresh.

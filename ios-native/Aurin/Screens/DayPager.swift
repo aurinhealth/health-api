@@ -89,6 +89,9 @@ private struct DaySwipe: ViewModifier {
     /// The pager's own width: the page that paging moves (on the closed iPhone
     /// Duo containerRelativeFrame came out wider, see PageScroll).
     @State private var width: CGFloat?
+    /// A finger moved the pages: only then does a page at rest beside this
+    /// one open its day.
+    @State private var swiping = false
 
     private var shown: String { model.selectedDate ?? AppModel.localDate(Date()) }
     /// The day the screen should show: the one swiped to, else the one picked.
@@ -125,6 +128,11 @@ private struct DaySwipe: ViewModifier {
 
     @available(iOS 18, *)
     private func paged(_ content: Content) -> some View {
+        ScrollViewReader { proxy in pager(content, proxy) }
+    }
+
+    @available(iOS 18, *)
+    private func pager(_ content: Content, _ proxy: ScrollViewProxy) -> some View {
         ScrollView(.horizontal) {
             HStack(alignment: .top, spacing: 0) {
                 if let before { side(before).id(0) }
@@ -156,14 +164,27 @@ private struct DaySwipe: ViewModifier {
         // VoiceOver (Tapwright pass 2026-11-19, points 1, 3 and 11).
         .defaultScrollAnchor(initialAnchor, for: .initialOffset)
         .scrollPosition(id: $position)
-        .onAppear {
-            var instant = Transaction()
-            instant.disablesAnimations = true
-            withTransaction(instant) { position = 1 }
-        }
+        .onAppear { home(proxy) }
+        // Laid out again (the first Today after the setup, a turned phone):
+        // the offset kept from before can rest on the day before, a page
+        // that cannot be tapped or read by VoiceOver (device test of build
+        // 602, 2026-11-20: Today dead after the setup until a relaunch).
+        .onChange(of: width) { _, _ in home(proxy) }
+        // A day beside came or went (the day after on Food, midnight): the
+        // pages moved under the offset.
+        .onChange(of: [before ?? "", after ?? ""]) { _, _ in home(proxy) }
         .scrollDisabled(!enabled || model.dayLocked)
         .onScrollPhaseChange { _, phase in
-            if phase == .idle { land() }
+            // A finger, or a scroll of VoiceOver or the keyboard (animating);
+            // home() and land() move the pages without an animation.
+            if phase == .interacting || phase == .animating { swiping = true }
+            guard phase == .idle else { return }
+            if swiping {
+                swiping = false
+                land()
+            } else if position != 1 {
+                home(proxy)
+            }
         }
         // Another day picked: the swipe's page has done its part (the day
         // picked is what the screen waits for now). Picked in the week, the
@@ -177,7 +198,14 @@ private struct DaySwipe: ViewModifier {
             withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
             withAnimation(.snappy(duration: 0.3)) { slide = 0 }
         }
-        .task(id: date) { await preload() }
+        // The days beside a moment after this one: read with the first
+        // frame they doubled the work of opening a tab (Food froze for about
+        // half a second, device test of build 602).
+        .task(id: date) {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            await preload()
+        }
     }
 
     /// A day beside: as saved, cut to this day's height.
@@ -220,6 +248,19 @@ private struct DaySwipe: ViewModifier {
                 .accessibilityHidden(true)
         } else {
             DayPlaceholder()
+        }
+    }
+
+    /// Back on this day's page, without a slide. A position set to the value
+    /// it already has moves nothing, so the pager is scrolled there.
+    private func home(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) {
+                proxy.scrollTo(1, anchor: .center)
+                position = 1
+            }
         }
     }
 

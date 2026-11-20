@@ -14,6 +14,10 @@ struct RangeDial<Center: View>: View {
     var band: ClosedRange<Double>? = nil
     /// Fill the arc in ink from the start to the value (a running total).
     var fill = false
+    /// Today's dials (concept D): the usual range in the good colour and the
+    /// dot filled with the value's state. nil keeps the ink band and ring dot.
+    var bandColor: Color? = nil
+    var dotColor: Color? = nil
     /// The words at the arc's two ends ("0", "21"; "Easier", "Harder").
     var ends: (String, String)? = nil
     var size: CGFloat = 232
@@ -43,7 +47,7 @@ struct RangeDial<Center: View>: View {
             arc(0, Self.sweep).stroke(Palette.track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             if let band {
                 arc(part(band.lowerBound), part(band.upperBound))
-                    .stroke(bandTint ?? (tint == nil ? Palette.ink.opacity(0.22) : Palette.green.opacity(0.6)), style: StrokeStyle(lineWidth: lineWidth, lineCap: tint == nil ? .butt : .round))
+                    .stroke(bandColor ?? bandTint ?? (tint == nil ? Palette.ink.opacity(0.22) : Palette.green.opacity(0.6)), style: StrokeStyle(lineWidth: lineWidth, lineCap: tint == nil && bandColor == nil ? .butt : .round))
             }
             if fill, let value {
                 arc(0, part(value)).stroke(Palette.ink, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -52,7 +56,12 @@ struct RangeDial<Center: View>: View {
                 let angle = Angle.degrees(135 + 360 * part(value))
                 let radius = (size - lineWidth) / 2
                 Group {
-                    if let tint {
+                    if let dotColor {
+                        // A filled dot with a rim of the card, so it stands off the band.
+                        Circle().fill(dotColor)
+                            .overlay(Circle().strokeBorder(Palette.card, lineWidth: 2))
+                            .frame(width: lineWidth + 4, height: lineWidth + 4)
+                    } else if let tint {
                         Circle().fill(tint)
                             .overlay(Circle().strokeBorder(Palette.background, lineWidth: 2))
                             .frame(width: lineWidth + 3, height: lineWidth + 3)

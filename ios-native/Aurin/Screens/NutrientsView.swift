@@ -350,7 +350,8 @@ struct NutrientDetailContent: View {
             }
             if let editTarget, detail.target != nil {
                 Button(action: editTarget) {
-                    SettingsRow(title: "Denní cíl", value: NutrientTargetSheet.value(detail))
+                    // A limit (sugars, salt) is never called a target: the opposite of the aim (D-JIDLO-4).
+                    SettingsRow(title: detail.limit ? "Denní limit" : "Denní cíl", value: NutrientTargetSheet.value(detail))
                         .cardSurface(cornerRadius: 22)
                 }
                 .buttonStyle(.plain)
@@ -501,7 +502,7 @@ struct NutrientTargetSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text(L10n.f("Cíl: %@", detail.name)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(L10n.f(detail.limit ? "Denní limit: %@" : "Cíl: %@", detail.name)).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                 }

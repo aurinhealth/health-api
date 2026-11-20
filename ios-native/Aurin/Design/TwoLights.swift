@@ -6,6 +6,17 @@ import SwiftUI
 /// writes) draws the lights together faster; thinking (the answer is on its
 /// way) turns them faster. Reduce Motion: nothing moves, only the halo slowly
 /// brightens and dims. Low Power Mode: it stands still.
+private struct TabShownKey: EnvironmentKey { static let defaultValue = true }
+
+extension EnvironmentValues {
+    /// False on a tab kept built behind the open one (RootView): its
+    /// animations stand still.
+    var tabShown: Bool {
+        get { self[TabShownKey.self] }
+        set { self[TabShownKey.self] = newValue }
+    }
+}
+
 struct TwoLights: View {
     enum Mode { case idle, typing, thinking }
 
@@ -14,6 +25,17 @@ struct TwoLights: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.tabShown) private var tabShown
+    @Environment(\.dayPage) private var drawnAsNeighbour
+    @State private var onScreen = true
+
+    /// Moves only where it can be seen: the app open, its tab the open one, not
+    /// on a day drawn beside (DayPager) and in sight in its scroll view. Each
+    /// frame redraws a blur and the glass around it; about five of them ran on
+    /// hidden tabs too (device test of build 602: 4 to 9 fps at launch).
+    private var paused: Bool {
+        scenePhase != .active || !tabShown || drawnAsNeighbour != nil || !onScreen
+    }
 
     /// The halo reaches past the lights: the canvas is larger than the symbol,
     /// so the blur never ends in a straight edge, and lays out at `size`.
@@ -25,7 +47,7 @@ struct TwoLights: View {
                 Canvas { context, canvas in draw(&context, canvas, time: 0, still: true) }
             } else {
                 // A slow brightness change needs few frames; the symbol is small.
-                TimelineView(.animation(minimumInterval: reduceMotion ? 1 / 10 : 1 / 24, paused: scenePhase != .active)) { timeline in
+                TimelineView(.animation(minimumInterval: reduceMotion ? 1 / 10 : 1 / 24, paused: paused)) { timeline in
                     Canvas { context, canvas in
                         draw(&context, canvas, time: timeline.date.timeIntervalSinceReferenceDate, still: false)
                     }
@@ -33,6 +55,7 @@ struct TwoLights: View {
             }
         }
         .frame(width: size * Self.bleed, height: size * Self.bleed)
+        .modifier(ScreenVisibility(onScreen: $onScreen))
         .padding(-size * (Self.bleed - 1) / 2)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

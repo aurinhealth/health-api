@@ -76,19 +76,21 @@ export function dayVerdict({ score = null, zone = null, flags = [], missing = []
 // above the usual range. usual: green without last night. paused: a rest day.
 export const NUMBERS_LINE_KEYS = ["hard", "steady", "easy", "signs", "usual", "paused"];
 
-export function numbersLine({ zone = null, flags = [], missing = [], rest = false } = {}) {
+// hold: the day's decision (day-decision.js) is not a hard day, or the
+// training is done: a green morning then only says the usual range.
+export function numbersLine({ zone = null, flags = [], missing = [], rest = false, hold = false } = {}) {
   if (!zone) return null;
   if (rest) return "paused";
   if ((flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))) return "signs";
-  if (zone === "green") return (missing || []).includes("sleep") ? "usual" : "hard";
+  if (zone === "green") return hold || (missing || []).includes("sleep") ? "usual" : "hard";
   return zone === "yellow" ? "steady" : zone === "red" ? "easy" : null;
 }
 
 export function numbersLineText(key) {
   return {
-    hard: L("Tvoje čísla zvládnou tvrdý trénink", "Your numbers support a hard workout"),
-    steady: L("Tvoje čísla jsou pro den s mírou", "Your numbers support a steady day"),
-    easy: L("Tvoje čísla ukazují na lehký den", "Your numbers suggest an easy day"),
+    hard: L("Tvoje čísla jsou v obvyklém rozmezí nebo lepší", "Your numbers are in your usual range or better"),
+    steady: L("Některá tvoje čísla jsou pod obvyklým rozmezím", "Some of your numbers are below your usual range"),
+    easy: L("Tvoje čísla jsou pod obvyklým rozmezím", "Your numbers are below your usual range"),
     signs: L("Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím", "Your temperature or breathing in sleep is above your usual range"),
     usual: L("Tvoje čísla jsou v obvyklém rozmezí", "Your numbers are within your usual range"),
     paused: L("Trénink je dnes pozastavený", "Training is paused today")

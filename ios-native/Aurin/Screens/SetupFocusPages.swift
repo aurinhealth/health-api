@@ -18,7 +18,7 @@ struct SetupFocus: Equatable {
     init(profile: JSONObject = [:]) {
         sports = SportsChoice(profile: profile)
         let text = profile["sportGoal"]?.string ?? ""
-        goal = FocusChoice.goalTexts.first { $0.value == text }?.key ?? ""
+        goal = FocusChoice.goalTexts.first { $0.value == text.trimmingCharacters(in: .whitespaces).lowercased() }?.key ?? ""
         if case .bool(let can)? = profile["swims100"] { swims100 = can }
         eventName = profile["eventName"]?.string ?? ""
         eventDate = profile["eventDate"]?.string.flatMap(Self.date)

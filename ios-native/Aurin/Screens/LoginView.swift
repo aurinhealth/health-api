@@ -6,6 +6,10 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var page = 0
+    /// When the last page turn began: a second tap during the slide does
+    /// not skip a page (device test of build 602: a double tap on "Get
+    /// started" skipped the Readiness page).
+    @State private var turnedAt = Date.distantPast
     @State private var emailLogin = false
     @State private var appleNonce = ""
     @Environment(\.colorScheme) private var colorScheme
@@ -62,6 +66,8 @@ struct LoginView: View {
                         WelcomeProgress(count: Self.signIn + 1, index: page)
                             .padding(.horizontal, 6)
                         PrimaryButton(title: L10n.tr(page == 0 ? "Pojďme na to" : "Pokračovat")) {
+                            guard Date().timeIntervalSince(turnedAt) > 0.5 else { return }
+                            turnedAt = Date()
                             withAnimation { page += 1 }
                         }
                     }
@@ -301,6 +307,8 @@ struct EmailLoginSheet: View {
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .focused($focused, equals: .email)
+                        // VoiceOver read only the placeholder (device test of build 602).
+                        .accessibilityLabel(Text("E-mail"))
                         .onAppear { focused = .email }
                         // The keyboard's own key sends: iOS's address suggestion over
                         // the keyboard can cover "Poslat kód" (device test, build 598).

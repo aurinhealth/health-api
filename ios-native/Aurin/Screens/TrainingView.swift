@@ -108,6 +108,8 @@ struct TrainingView: View {
                         .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = date })
                 // In the compact bar's row: between its circles, as wide as the bar (RootView).
                 .padding(.horizontal, compactBar ? StartButtonSpot.circle + StartButtonSpot.gap : 28)
                 .frame(maxWidth: compactBar && wide ? WideLayout.tabBarWidth : .infinity)
@@ -276,7 +278,9 @@ struct TrainingContent: View {
         if shownDay != training.date {
             CoachTextCard(screen: "training").padding(.top, 18)
         } else {
-            LoadSection(training: training).padding(.top, 28)
+            // The coach's conclusion over the load (src/load-advice.js, decision 6).
+            if let advice = training.loadAdvice { LoadAdviceCard(advice: advice).padding(.top, 28) }
+            LoadSection(training: training).padding(.top, training.loadAdvice == nil ? 28 : 14)
         }
     }
 
@@ -475,13 +479,13 @@ struct TodaySessions: View {
 
     var body: some View {
         if sessions.count == 1, let session = sessions.first {
-            NextSession(session: session, today: today, route: route(session), strainNow: strainNow)
+            NextSession(session: session, today: today, route: route(session), planned: match(session), strainNow: strainNow)
         } else {
             VStack(spacing: 12) {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: 24) {
                         ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
-                            NextSession(session: session, today: today, route: route(session), strainNow: strainNow, fill: true)
+                            NextSession(session: session, today: today, route: route(session), planned: match(session), strainNow: strainNow, fill: true)
                                 .frame(maxHeight: .infinity)
                                 .containerRelativeFrame(.horizontal)
                                 .id(index)
@@ -518,13 +522,17 @@ struct TodaySessions: View {
         }
     }
 
-    /// The gym plan opens the gym day, a planned ride or run its detail.
-    private func route(_ s: TrainingSnapshot.Session) -> AppRoute? {
-        let match = week.first { w in
+    /// The week's entry of this session.
+    private func match(_ s: TrainingSnapshot.Session) -> WeekSession? {
+        week.first { w in
             if let id = s.eventId { return w.eventId == id }
             return s.sport == "strength" && w.kind == "gym" && w.date == s.date
         }
-        if let match { return WeekSessionsList.destination(match) }
+    }
+
+    /// The gym plan opens the gym day, a planned ride or run its detail.
+    private func route(_ s: TrainingSnapshot.Session) -> AppRoute? {
+        if let match = match(s) { return WeekSessionsList.destination(match) }
         return s.sport == "strength" ? .gym(s.date) : nil
     }
 }
@@ -590,6 +598,8 @@ struct NextSession: View {
     let today: String
     /// Where a tap on the card opens (Start workout keeps its own tap).
     var route: AppRoute? = nil
+    /// The week's entry of it, for the coach about it.
+    var planned: WeekSession? = nil
     /// Today's strain so far (TodaySessions).
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
@@ -601,6 +611,13 @@ struct NextSession: View {
     @State private var gymDay: GymDay?
     /// The floating copy above the tab bar stands in for this card's button.
     private var standIn: Bool { startSpot?.floating == session.date }
+    @State private var askLighter = false
+
+    /// Muscles not rested yet for it (the day's decision, src/day-decision.js).
+    private var lighter: String? {
+        model?.today?.day?.lighter(title: session.title, date: session.date)
+            ?? planned.flatMap { model?.today?.day?.lighter(title: $0.title, date: session.date) }
+    }
 
     private var sport: String { session.sport ?? "other" }
     private var isGym: Bool { sport == "strength" }
@@ -614,6 +631,22 @@ struct NextSession: View {
             } else {
                 info
             }
+            // As on Today (TodayTrainingRow): with Aurin Pro the coach makes it
+            // lighter; without it the session's detail opens, where it can be changed.
+            if let lighter {
+                Group {
+                    if !ProStore.shared.entitled, let route {
+                        NavigationLink(value: route) { lighterLine(lighter) }.buttonStyle(.plain)
+                    } else {
+                        Button { askLighter = true } label: { lighterLine(lighter) }.buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, -8)
+                .accessibilityIdentifier("training.lighter")
+                .sheet(isPresented: $askLighter) {
+                    CoachEntry.chat(subject: planned.map(CoachSubject.planned), view: "training", date: nil)
+                }
+            }
             if isGym && session.date == today {
                 NavigationLink(value: AppRoute.trainingMode(session.date)) {
                     Text(verbatim: L10n.tr("Začít trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
@@ -621,6 +654,8 @@ struct NextSession: View {
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = session.date })
                 // While the floating copy is up, this one is hidden: scrolled to just
                 // behind the bar it would otherwise peek out under the floating one.
                 .opacity(standIn ? 0 : 1)
@@ -642,6 +677,18 @@ struct NextSession: View {
         .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
         .task(id: [session.eventId ?? "", session.date, session.title]) { await loadParts() }
+    }
+
+    private func lighterLine(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "figure.cooldown").scaledFont(11, weight: .semibold).foregroundStyle(Palette.amber)
+            Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
+        }
+        .frame(minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var info: some View {
