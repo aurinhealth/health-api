@@ -18,7 +18,10 @@ struct SetupFocus: Equatable {
     init(profile: JSONObject = [:]) {
         sports = SportsChoice(profile: profile)
         let text = profile["sportGoal"]?.string ?? ""
-        goal = FocusChoice.goalTexts.first { $0.value == text }?.key ?? ""
+        // The choice saved in Nastavení → Cíle (goalType) also when the goal
+        // has its own words there (device test of build 602).
+        let type = profile["goalType"]?.string.flatMap { FocusChoice.goalTexts[$0] != nil ? $0 : nil }
+        goal = type ?? FocusChoice.goalTexts.first { $0.value == text.trimmingCharacters(in: .whitespaces).lowercased() }?.key ?? ""
         if case .bool(let can)? = profile["swims100"] { swims100 = can }
         eventName = profile["eventName"]?.string ?? ""
         eventDate = profile["eventDate"]?.string.flatMap(Self.date)

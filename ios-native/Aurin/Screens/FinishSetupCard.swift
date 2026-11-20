@@ -169,8 +169,10 @@ struct FinishSetupCard: View {
     /// The profile first: with Gym ticked the card has four rows, never done at three.
     private func load() async {
         if !model.demo, let p = try? await model.api.profile() { use(p) }
+        // Done when they are allowed, not when iOS was asked once: turned off
+        // earlier, the row stays open (device test of build 602).
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        notifications = status != .notDetermined
+        notifications = [.authorized, .provisional, .ephemeral].contains(status)
     }
 
     private func use(_ p: JSONObject) {
@@ -182,6 +184,13 @@ struct FinishSetupCard: View {
 
     /// iOS asks once; whatever the answer, the row is done (Nastavení → Oznámení changes it later).
     private func allowNotifications() async {
+        // Turned off before: iOS asks no more, so its settings for the app open.
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if status == .denied, let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+            await UIApplication.shared.open(url)
+            notifications = true
+            return
+        }
         _ = await Reminders.requestPermission()
         await PushRegistration.refresh(api: model.api)
         // Tonight's reminders are planned now, not on the next refresh.

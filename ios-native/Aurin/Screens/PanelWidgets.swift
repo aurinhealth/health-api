@@ -383,7 +383,7 @@ struct WidgetData {
     }
 
     /// The panel leaves out a widget without data (but shows it while editing).
-    func hasData(_ kind: WidgetKind) -> Bool {
+    @MainActor func hasData(_ kind: WidgetKind) -> Bool {
         switch kind {
         case .restingHR: return restingHR != nil
         case .hrv: return hrv != nil
@@ -417,11 +417,20 @@ struct WidgetData {
         case .weight: return weight != nil || panel == .health
         case .bodyFat: return health?.weight?.bodyFat != nil
         // No watch or ring: one card says what is missing instead (D-ZDRAVI-1).
-        case .healthMonitor: return today?.readiness.noWearable != true && (health.map { !HealthMonitorCard.dials($0).isEmpty } ?? false)
-        case .night: return health != nil && today?.readiness.noWearable != true
+        case .healthMonitor: return today?.readiness.withoutWearable != true && (health.map { !HealthMonitorCard.dials($0).isEmpty } ?? false)
+        case .night: return health != nil && today?.readiness.withoutWearable != true
         // Always, with Add entry (Zdraví always had the weight card).
         case .body: return health != nil
         }
+    }
+}
+
+extension WidgetData {
+    /// Shown empty ("Zatím bez dat") until its first numbers: Health monitor
+    /// with a watch or ring that has not measured yet. A new account saw no
+    /// monitor and no card saying what is missing (device test of build 602).
+    @MainActor func waitsForData(_ kind: WidgetKind) -> Bool {
+        panel == .health && kind == .healthMonitor && health != nil && today?.readiness.withoutWearable != true
     }
 }
 
