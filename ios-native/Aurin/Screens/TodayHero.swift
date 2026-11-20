@@ -206,7 +206,7 @@ struct TodayDials: View {
 
     /// "6 h 54" (the length rule, as "2 h 05" elsewhere); a whole hour is
     /// "7 h", as in the concept's "6 min short of 7 h".
-    static func length(_ minutes: Double?) -> String {
+    nonisolated static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
         let m = Int(minutes.rounded())
         // No-break spaces: "6 h 54" never splits inside the dial.

@@ -329,7 +329,7 @@ struct ReadinessDetailContent: View {
                 CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
             }
         }
-        .task { if !model.demo { await model.loadDays(from: ISODay.shift(health.date, -90), to: health.date) } }
+        .task { await model.loadQuarter(ending: health.date) }
     }
 
     /// The mornings from /app/api/days (90 days), the snapshot's 14 days where those are missing.

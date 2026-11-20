@@ -438,7 +438,7 @@ struct WeekStrip: View {
     /// (ISODay.range stops at 400 days, so never more than that.)
     /// Whole weeks, Monday to Sunday, so that a swipe turns one week.
     private var days: [String] {
-        let first = max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -392))
+        let first = max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -386))
         return ISODay.range(Self.monday(first), ISODay.shift(Self.monday(lastDay), 6))
     }
 

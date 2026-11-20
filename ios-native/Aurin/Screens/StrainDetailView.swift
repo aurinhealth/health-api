@@ -74,14 +74,14 @@ struct StrainDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SiblingCells(cells: cells, selected: cell) { cell = $0 }.padding(.top, 16)
+            SiblingCells(cells: cells, selected: cell) { cell = $0; period = .days30 }.padding(.top, 16)
             if cell == "strain" {
                 strainPage
             } else if let form = training?.form {
                 formPage(form, fitness: cell == "fitness")
             }
         }
-        .task { await model.loadDays(from: ISODay.shift(today.date, -90), to: today.date) }
+        .task { await model.loadQuarter(ending: today.date) }
         .task(id: lastDone?.id) { await loadZones() }
     }
 
@@ -347,10 +347,15 @@ struct StrainDial: View {
         .padding(.bottom, 12)
         .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: [L10n.tr("Námaha") + " " + Fmt.decimal(score) + " " + L10n.f("z %@", "21"),
-                                            planned > 0.05 ? L10n.f("%@ v plánu navíc", Fmt.decimal(planned)) : nil,
-                                            target.map { L10n.f("cíl %@ až %@", Fmt.int($0.low), Fmt.int($0.high)) },
-                                            landing?.0].compactMap { $0 }.joined(separator: ", ")))
+        .accessibilityLabel(Text(verbatim: spoken))
+    }
+
+    private var spoken: String {
+        var parts: [String] = [L10n.tr("Námaha") + " " + Fmt.decimal(score) + " " + L10n.f("z %@", "21")]
+        if planned > 0.05 { parts.append(L10n.f("%@ v plánu navíc", Fmt.decimal(planned))) }
+        if let target { parts.append(L10n.f("cíl %@ až %@", Fmt.int(target.low), Fmt.int(target.high))) }
+        if let landing { parts.append(landing.0) }
+        return parts.joined(separator: ", ")
     }
 
     /// "lands in target" in green, above it in amber, below it in grey.
