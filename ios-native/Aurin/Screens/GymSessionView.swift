@@ -211,9 +211,8 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
-                // Dokončit by mistake today: back to the workout where it stopped.
-                if !model.demo, date == AppModel.localDate(Date()), let day, day.finishedAt != nil,
-                   day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                // Only a paused workout goes on; a finished one never offers Resume (device test 602).
+                if !model.demo, date == AppModel.localDate(Date()), LiveWorkout.shared.running, LiveWorkout.shared.pausedAt != nil {
                     Button {
                         TrainingModeView.resumeOnOpen = date
                         model.push(.trainingMode(date))
@@ -450,11 +449,12 @@ struct GymSessionView: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// Start workout (today) or Resume workout (sets ticked), pinned.
+    /// Start workout (today) or Resume workout (the live workout still running), pinned.
     @ViewBuilder
     private func startPill(_ day: GymDay) -> some View {
         if date == AppModel.localDate(Date()) {
-            let resume = Self.started(day)
+            // Resume only while the live workout runs (paused or not), never after it is finished.
+            let resume = LiveWorkout.shared.running
             NavigationLink(value: AppRoute.trainingMode(date)) {
                 Text(verbatim: L10n.tr(resume ? "Pokračovat v tréninku" : "Začít trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 52)
