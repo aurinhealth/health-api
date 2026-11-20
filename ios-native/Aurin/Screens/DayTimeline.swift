@@ -64,7 +64,9 @@ struct DayTimeline: View {
                 }
             }
         case .nap(let nap):
-            RouteLink(route: .sleep) {
+            // Not a link: the Sleep page is last night's and says nothing of
+            // a nap (device comparison of build 602, point 50).
+            Group {
                 DaySpanRow(color: Palette.ink, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -115,6 +117,7 @@ struct DayTimeline: View {
     }
 
     private func sleepContent(_ sleep: TodaySnapshot.Sleep) -> some View {
+        HStack(alignment: .center, spacing: 8) {
         VStack(alignment: .leading, spacing: 3) {
             Text("Spánek").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             Text(sleep.minutes.map { Fmt.hoursMinutesLong($0) } ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
@@ -124,6 +127,9 @@ struct DayTimeline: View {
                 if let rhr = today.restingHR?.value { DayChip(label: L10n.tr("Tep"), value: Fmt.int(rhr), unit: "bpm") }
             }
             .padding(.top, 4)
+        }
+            Spacer(minLength: 8)
+            RowChevron()
         }
     }
 
@@ -153,6 +159,7 @@ struct DayTimeline: View {
     @ViewBuilder
     private func workoutContent(_ item: TodaySnapshot.PlanItem) -> some View {
         if item.done {
+            HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
                 let stats = DayTimelineRows.stats(item.session)
@@ -175,6 +182,11 @@ struct DayTimeline: View {
                     Label("k ověření", systemImage: "exclamationmark.triangle")
                         .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber)
                 }
+            }
+                Spacer(minLength: 8)
+                // Concept: a done workout shows it opens, as Bedtime does
+                // (device comparison of build 602, point 24).
+                RowChevron()
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
@@ -249,7 +261,12 @@ struct DayTimeline: View {
         HStack(alignment: .center, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.ink : Palette.secondary).lineLimit(2)
-                if let detail = item.detail {
+                if item.kind == "bedtime", let time = item.time, let end = item.end {
+                    // Concept: when to go to bed and when the alarm rings, not
+                    // the sleep need (device comparison of build 602, point 31).
+                    Text(L10n.f("V posteli do %@, budík v %@", ClockText.format(time), ClockText.format(end)))
+                        .font(Typo.caption).foregroundStyle(Palette.faint)
+                } else if let detail = item.detail {
                     Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             }
@@ -257,8 +274,7 @@ struct DayTimeline: View {
             if item.kind == "pill" {
                 PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
             } else if item.kind == "bedtime" {
-                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-                    .accessibilityHidden(true)
+                RowChevron()
             } else if item.done {
                 Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                     .accessibilityLabel("Hotovo")
@@ -381,7 +397,10 @@ enum DayTimelineRows {
         let workouts = done.filter { $0.kind == "workout" }
         if let lastWorkout = workouts.last, let score = today.strain.score, score > 0,
            let index = rows.lastIndex(where: { $0.id == lastWorkout.id }) {
-            let added = workouts.compactMap(\.strain).reduce(0, +)
+            // The training part of the day's score, as the Strain detail splits it;
+            // the workouts' own strains do not add up (11.7 here against 10.3
+            // there, device comparison of build 602).
+            let added = today.strain.training ?? workouts.compactMap(\.strain).reduce(0, +)
             let end = minutes(lastWorkout.time).map { $0 + (lastWorkout.session?.minutes ?? 0) }
             rows.insert(.strain(end, score, added > 0 ? min(added, score) : nil), at: index + 1)
         }
@@ -429,7 +448,7 @@ enum DayTimelineRows {
         let unit: String
     }
 
-    /// Vzdálenost, Výkon and Délka of a done workout, as many as it has; the
+    /// Vzdálenost, Výkon and Čas of a done workout, as many as it has; the
     /// calories make up the third when one is missing.
     static func stats(_ session: WeekSession?) -> [Stat] {
         guard let session else { return [] }
@@ -438,7 +457,8 @@ enum DayTimelineRows {
             out.append(Stat(label: "Vzdálenost", value: Fmt.decimal(Units.distance(km)), unit: Units.distanceUnit))
         }
         if let watts = session.watts, watts > 0 { out.append(Stat(label: "Výkon", value: Fmt.int(watts), unit: "W")) }
-        if let minutes = session.minutes, minutes > 0 { out.append(Stat(label: "Délka", value: Fmt.hoursMinutes(Double(minutes)), unit: "h")) }
+        // "1 h 16 min" under "Čas", as the workout's detail and the Strain page write it.
+        if let minutes = session.minutes, minutes > 0 { out.append(Stat(label: "Čas", value: Fmt.hoursMinutesLong(Double(minutes)), unit: "")) }
         if out.count < 3, let kcal = session.countedKcal, kcal > 0 { out.append(Stat(label: "Energie", value: Fmt.int(kcal), unit: "kcal")) }
         return out
     }
@@ -518,6 +538,14 @@ private struct DayPointRow<Content: View>: View {
         .frame(minHeight: 44)
         .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
+    }
+}
+
+/// The ">" of a Day row that opens a page.
+private struct RowChevron: View {
+    var body: some View {
+        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+            .accessibilityHidden(true)
     }
 }
 

@@ -204,12 +204,14 @@ struct TodayDials: View {
 
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
-    /// "6 h 54" (the length rule, as "2 h 05" elsewhere).
+    /// "6 h 54" (the length rule, as "2 h 05" elsewhere); a whole hour is
+    /// "7 h", as in the concept's "6 min short of 7 h".
     static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
         let m = Int(minutes.rounded())
         // No-break spaces: "6 h 54" never splits inside the dial.
-        return m < 60 ? "\(m)\u{00A0}min" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
+        if m < 60 { return "\(m)\u{00A0}min" }
+        return m % 60 == 0 ? "\(m / 60)\u{00A0}h" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
     }
 
     /// The night against its need: "6 min short of 7 h", amber below the need,

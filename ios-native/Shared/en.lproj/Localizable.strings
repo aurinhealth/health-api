@@ -4060,7 +4060,7 @@
 "teplejší než obvykle" = "warmer than usual";
 "chladnější než obvykle" = "cooler than usual";
 "Obvykle" = "Usual";
-"v obvyklém rozmezí" = "within your usual range";
+"v obvyklém rozmezí" = "in your usual range";
 "nad obvyklým rozmezím" = "above your usual range";
 "pod obvyklým rozmezím" = "below your usual range";
 "nad obvyklým" = "above usual";
@@ -4850,3 +4850,5 @@
 "Ukázka aplikace" = "App preview";
 "Povolit AI a předplatit" = "Allow AI and subscribe";
 "Aurin Pro je aktivní. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data." = "Aurin Pro is active. AI could not be turned on; turn it on in Settings → Privacy & data.";
+
+"V posteli do %@, budík v %@" = "In bed by %1$@, alarm at %2$@";

@@ -196,7 +196,7 @@ struct WeatherDetails: View {
             if !hours.isEmpty {
                 Card(padding: 14) {
                     Text("Po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil)
+                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil, nowTemp: weather.now?.temp)
                 }
             }
 
@@ -425,6 +425,9 @@ struct WeatherHourStrip: View {
     let hours: [TodaySnapshot.Weather.Hour]
     /// The first hour is the one running now ("Teď").
     var nowFirst = false
+    /// "Teď" with the temperature at the top of the sheet, not the hour's
+    /// forecast (8° above and 9° here, device comparison of build 602).
+    var nowTemp: Double? = nil
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -438,7 +441,7 @@ struct WeatherHourStrip: View {
                             .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now ? Palette.blue : newDay ? Palette.ink : Palette.faint)
                         Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
-                        Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Text(verbatim: WeatherText.degrees(now ? (nowTemp ?? h.temp) : h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                         Text(verbatim: (h.rainProb ?? 0) >= 10 ? WeatherText.percent(h.rainProb) : " ")
                             .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.blue)
                     }

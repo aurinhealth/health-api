@@ -174,7 +174,7 @@ final class SnapshotTests: XCTestCase {
             XCTFail("the strain follows the workout")
         }
         XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
-        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
+        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Čas", "Energie"])
     }
 
     /// A nap sits among what was done in the order of the day.
