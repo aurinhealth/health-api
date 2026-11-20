@@ -29,4 +29,17 @@ final class GymSupersetTogetherTests: XCTestCase {
         d.moveExercise(from: 0, to: 2)
         XCTAssertEqual(d.exercises.map(\.name), ["Curl", "Pushdown", "Squat"])
     }
+
+    /// Make superset (live workout): the picked ones go next to the first of them, one letter, as many sets.
+    func testMakeSupersetMovesThePickedTogether() {
+        var d = day([row("Squat", "1", superset: "A"), row("Lunge", "1", superset: "A"),
+                     row("Calf raise", "1"), row("Leg press", "1"), row("Leg curl", "1"), row("Leg curl", "2")])
+        d.makeSuperset([d.exercises[2].id, d.exercises[4].id])
+        XCTAssertEqual(d.exercises.map(\.name), ["Squat", "Lunge", "Calf raise", "Leg curl", "Leg press"])
+        XCTAssertEqual(ExerciseOrder.letter(d.exercises[2].superset), "B")
+        XCTAssertEqual(ExerciseOrder.letter(d.exercises[3].superset), "B")
+        XCTAssertNil(ExerciseOrder.letter(d.exercises[4].superset))
+        // A round each: Calf raise gets Leg curl's second set.
+        XCTAssertEqual(d.exercises[2].workCount, 2)
+    }
 }

@@ -108,6 +108,8 @@ struct TrainingView: View {
                         .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = date })
                 // In the compact bar's row: between its circles, as wide as the bar (RootView).
                 .padding(.horizontal, compactBar ? StartButtonSpot.circle + StartButtonSpot.gap : 28)
                 .frame(maxWidth: compactBar && wide ? WideLayout.tabBarWidth : .infinity)
@@ -586,6 +588,8 @@ struct NextSession: View {
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = session.date })
                 // While the floating copy is up, this one is hidden: scrolled to just
                 // behind the bar it would otherwise peek out under the floating one.
                 .opacity(standIn ? 0 : 1)

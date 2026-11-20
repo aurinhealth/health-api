@@ -754,6 +754,71 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Start workout's 3, 2, 1 over the first part (concept 08).
+    func testStartCountdown() throws {
+        try render("start-countdown", glow: Palette.Glow.gym, height: 844, window: true) {
+            StartCountdown(title: "Rozcvička", first: "Hip circles", live: LiveWorkout.shared, onStart: {}, onCancel: {})
+        }
+    }
+
+    /// The top of a finished gym workout (concept 08, Summary).
+    func testWorkoutDoneSummary() throws {
+        try render("workout-done", glow: Palette.Glow.gym, height: 900) {
+            VStack {
+                WorkoutDoneSummary(title: "Lower body strength", when: "Today, 17:30 to 18:25", sources: ["Aurin", "Apple Watch"],
+                                   doneSets: 28, plannedSets: 28,
+                                   strain: .init(workout: 8.8, dayFrom: 8.2, dayTo: 12.8, target: (low: 11, high: 14)),
+                                   records: [.init(name: "Back squat", value: "102.5", unit: "kg × 6", was: "100 kg")],
+                                   minutes: 55, volume: (value: "19,620", unit: "kg"), volumeChange: "+600 kg",
+                                   exercises: 9, avgHr: 122, kcal: 410)
+                    .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    /// Edit stretching in the live workout: the done moves ticked, the rest to remove or drag (concept 08).
+    func testEditStretching() throws {
+        let items = [GymStretching.Item(id: "ham", name: "Hamstring stretch", seconds: 60, sides: false),
+                     GymStretching.Item(id: "quad", name: "Quad stretch", seconds: 60, sides: false),
+                     GymStretching.Item(id: "hip", name: "Hip flexor stretch", seconds: 60, sides: true),
+                     GymStretching.Item(id: "calf", name: "Calf stretch", seconds: 30, sides: true)]
+        let draft = LivePartDraft(part: .stretching, mode: .workout, routine: nil, name: nil, items: items,
+                                  cardio: GymDayParts.Choice(type: "exercise_bike", minutes: 10))
+        try render("edit-stretching", glow: Palette.Glow.gym, height: 760, window: true) {
+            LiveRoutineEditor(draft: .constant(draft), day: DemoData.gym, date: "2026-11-20", done: ["ham", "quad"])
+                .environment(AppModel(demo: true))
+        }
+    }
+
+    /// The cardio running: heart rate, its zone against the target, time left (concept 08).
+    func testCardioLiveCard() throws {
+        try render("cardio-live", glow: Palette.Glow.gym, height: 460) {
+            CardioLiveCard(seconds: 378, countsDown: true, since: Date(), zoneLows: [95, 114, 123, 140, 158], target: 3, now: Date(), shownRate: 132)
+                .cardSurface(cornerRadius: 22)
+                .padding(20)
+        }
+    }
+
+    /// A stretch in the live workout: the hold, its side and time, how to do it (concept 08).
+    func testStretchInline() throws {
+        let item = GymStretching.Item(id: "hip", name: "Hip flexor stretch", seconds: 30, sides: true,
+                                      steps: ["Kneel on your left knee with the right foot in front.", "Push your hips forward and keep your chest tall.",
+                                              "Stay there and breathe. No bouncing."])
+        try render("stretch-live", glow: Palette.Glow.gym, height: 520) {
+            StretchTimerView(stretching: GymStretching(minutes: 2, items: [item]), kind: .stretching, onItemDone: { _ in }, onClose: {})
+                .padding(20)
+        }
+    }
+
+    /// Edit cardio: the machine and the time (concept 08).
+    func testEditCardio() throws {
+        try render("edit-cardio", glow: Palette.Glow.gym, height: 560, window: true) {
+            LiveCardioEditor(choice: .constant(GymDayParts.Choice(type: "exercise_bike", minutes: 10)))
+                .padding(.horizontal, 20)
+                .environment(AppModel(demo: true))
+        }
+    }
+
     /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
     func testEffortSheet() throws {
         try render("effort-sheet", height: 700) {
@@ -966,7 +1031,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundTwoScreens() throws {
-        try render("plan-editor", height: 700) { PlanEditorSheet(day: DemoData.gym, catalog: [], save: { _ in }) }
+        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _ in }) }
         try render("body-map-legend", height: 360) {
             BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
         }

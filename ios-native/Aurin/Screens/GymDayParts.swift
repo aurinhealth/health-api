@@ -326,7 +326,7 @@ struct GymCardioSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Hotovo") { onDone(GymDayParts.Choice(type: type, minutes: minutes)); dismiss() }
+                    Button("Hotovo") { onDone(GymDayParts.Choice(type: type, minutes: minutes, target: choice.target)); dismiss() }
                 }
             }
         }

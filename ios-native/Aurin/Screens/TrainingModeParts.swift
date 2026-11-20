@@ -470,34 +470,6 @@ struct HeartRateWatch: View {
     }
 }
 
-/// Minutes in each heart rate zone, as bars.
-struct ZoneMinutesCard: View {
-    let minutes: [Double]
-    static let colors: [Color] = [Palette.blue, Palette.green, Palette.amber, Palette.rust, Color(light: 0xC0392B, dark: 0xFF6B6B)]
-
-    var body: some View {
-        let top = max(1, minutes.max() ?? 1)
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Tepové zóny").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            ForEach(Array(minutes.enumerated()), id: \.offset) { i, value in
-                HStack(spacing: 10) {
-                    Text("Z\(i + 1)").font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 24, alignment: .leading)
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Palette.track)
-                            Capsule().fill(Self.colors[min(i, Self.colors.count - 1)]).frame(width: max(value > 0 ? 6 : 0, geo.size.width * value / top))
-                        }
-                    }
-                    .frame(height: 8)
-                    Text(L10n.f("%@ min", Fmt.int(value))).font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 50, alignment: .trailing)
-                }
-            }
-        }
-        .padding(16)
-        .cardSurface(cornerRadius: 22)
-    }
-}
-
 /// The small "i" beside an exercise in the rest: how it is done. A 30 pt
 /// circle in its own 44 × 44 pt to tap (laid out 44 wide, 30 high, so its row
 /// stays as tall as before), so two side by side don't share a finger.

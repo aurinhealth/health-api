@@ -289,7 +289,7 @@ struct WorkoutEditorSheet: View {
             }
             .sheet(isPresented: $adding) {
                 ExercisePicker(catalog: catalog, used: Set(exercises.map(\.name))) { ex in
-                    let sets = max(1, min(PlanEditorSheet.count(ex.sets) ?? 3, 10))
+                    let sets = max(1, min(EditExercisesSheet.count(ex.sets) ?? 3, 10))
                     exercises.append(TemplateExercise(name: ex.name, sets: sets, reps: WorkoutTemplate.cleanReps(ex.reps?.string ?? "10")))
                 }
             }
