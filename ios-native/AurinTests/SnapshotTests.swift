@@ -882,9 +882,9 @@ final class SnapshotTests: XCTestCase {
 
     func testPlanEditing() {
         var day = DemoData.gym
-        day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         day.moveExercise(from: 0, to: 3)
+        XCTAssertEqual(day.exercises.map(\.name), ["Tlak na lavici", "Přítahy", "Dřep", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
+        day.moveExercise(from: 2, to: 0)
         XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 
