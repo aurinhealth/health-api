@@ -1425,7 +1425,7 @@
 "lehká" = "light";
 "maximální" = "all out";
 "Z čeho je" = "What it's made of";
-"Pohyb během dne" = "Movement through the day";
+"Pohyb během dne" = "Movement during the day";
 "Kondice a únava" = "Fitness and fatigue";
 "pohyb" = "movement";
 "kroků" = "steps";
@@ -4852,3 +4852,20 @@
 "Aurin Pro je aktivní. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data." = "Aurin Pro is active. AI could not be turned on; turn it on in Settings → Privacy & data.";
 
 "V posteli do %@, budík v %@" = "In bed by %1$@, alarm at %2$@";
+"Námaha dnes, zatím" = "Strain today, so far";
+"Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The grey band is your usual range, the dashed line the period's average. Today is only part of the day so far.";
+"Tepové zóny, %@" = "Heart rate zones, %@";
+"Co určilo cíl dne" = "What set the day's target";
+"Co určuje dnešní cíl" = "What sets today's target";
+"Kondice je tvoje tréninková zátěž za posledních 6 týdnů. Každý bod je jeden den." = "Fitness is your training load over the last 6 weeks. Each point is one day.";
+"Únava je tvoje tréninková zátěž za poslední týden. Každý bod je jeden den." = "Fatigue is your training load over the last week. Each point is one day.";
+"Námaha je zátěž celého dne na stupnici 0 až 21: tréninky z jejich délky a intenzity a pohyb během dne. Cíl dne určuje připravenost, spánkový dluh a plán. Je to odhad, ne měření tvého těla." = "Strain is the whole day's load on a scale of 0 to 21: workouts from their length and intensity, and movement during the day. Readiness, sleep debt and the plan set the day's target. It is an estimate, not a measurement of your body.";
+"%@ v plánu navíc" = "%@ more planned";
+"skončí nad cílem" = "lands above target";
+"skončí v cíli" = "lands in target";
+"v cíli" = "in target";
+"skončí pod cílem" = "lands below target";
+"pod cílem" = "below target";
+"cíl námahy" = "target";
+"nad cílem dne" = "above target";
+"naplánováno" = "planned";

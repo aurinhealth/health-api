@@ -181,25 +181,25 @@ const gauge = (size, start) => {
 };
 const strainScreen = `<div class="app glow-training">${STATUS}
 <div class="nav c"><span class="cb">${ic('chev', 'flip')}</span><span class="pill grn">${ic('spark')}Coach</span></div>
-<div class="sl">Today’s training</div>
-<div class="sent title">Strain</div>
-<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
-<div class="center"><span class="pill amb"${at('1700')}>moderate</span></div>
-<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
-<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>+5.0</b> in plan</div></div>
-<div class="sl pad2">Today’s target</div>
-<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51 min</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
+<div class="sl center">Strain</div>
+<div class="center mut s">Strain today, so far</div>
+<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">5.0 more planned</span></div><div class="gl"><span>0</span><span>21</span></div></div>
+<div class="center"><span class="mut s"${at('1700')}>lands in target</span></div>
 <div class="sl pad2">What it’s made of</div>
-<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
+<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
+<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>5.0</b> planned</div></div>
+<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 8.2 km</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement during the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
+<div class="sl pad2">What sets today’s target</div>
+<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
 </div>`;
 
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
 <div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num" data-n="0,5.1,400,900,1;5.1,8.4,1700,900,1;8.4,13.4,3000,900,1">13.4</span></div>
-<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div>
-<div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
-<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM, in plan</span></div><span class="num faint">+5.0</span></div>
+<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 8.2 km</span></div><span class="num">5.1</span></div>
+<div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement during the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
+<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM, planned</span></div><span class="num faint">+5.0</span></div>
 <p class="note"${at('4000')}>Lands inside today’s target.</p>
 </div>`;
 
