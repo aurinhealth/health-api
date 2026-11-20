@@ -139,8 +139,9 @@ struct SetupFlowView: View {
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) {
             if page == .about {
-                await readAppleProfile()
+                // The saved sports first (one quick request), so a tick is never made over them unseen.
                 await loadFocus()
+                await readAppleProfile()
             }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
@@ -551,7 +552,9 @@ struct SetupFlowView: View {
         do {
             let base: JSONObject
             if let focusProfile { base = focusProfile } else { base = try await model.api.profile() }
-            let next = focus.applied(to: base)
+            var next = focus.applied(to: base)
+            // None ticked is general fitness: the sports saved before go too.
+            if focus.sports.kinds.isEmpty { next = focus.sports.applied(to: next) }
             try await model.api.saveProfile(next)
             try await FocusSheet.saveSwimLevel(model.api, sports: focus.sports, swims100: focus.swims100)
             focusProfile = next

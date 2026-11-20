@@ -140,10 +140,16 @@ struct FinishSetupCard: View {
             }
             .background { ScreenBackground(glow: Palette.Glow.today) }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { editingGoal = false } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Zavřít") {
+                        // What was not saved goes.
+                        focus = SetupFocus(profile: profile ?? [:])
+                        editingGoal = false
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Uložit") { Task { await saveGoal() } }
-                        .disabled(focus.goal.isEmpty || savingGoal || profile == nil)
+                        .disabled(focus.goal.isEmpty || savingGoal)
                 }
             }
         }
@@ -160,10 +166,14 @@ struct FinishSetupCard: View {
     }
 
     /// Whether iOS was asked already, Gym is one of the sports and a goal was set (a start on the web).
+    /// The profile first: with Gym ticked the card has four rows, never done at three.
     private func load() async {
+        if !model.demo, let p = try? await model.api.profile() { use(p) }
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
         notifications = status != .notDetermined
-        guard !model.demo, let p = try? await model.api.profile() else { return }
+    }
+
+    private func use(_ p: JSONObject) {
         profile = p
         focus = SetupFocus(profile: p)
         lifts = focus.sports.kinds.contains("strength")
@@ -174,16 +184,20 @@ struct FinishSetupCard: View {
     private func allowNotifications() async {
         _ = await Reminders.requestPermission()
         await PushRegistration.refresh(api: model.api)
+        // Tonight's reminders are planned now, not on the next refresh.
+        if let today = model.today { await Reminders.reschedule(from: today) }
         notifications = true
     }
 
     /// The goal into the profile, as the setup's goal page saved it.
     private func saveGoal() async {
-        guard let profile else { return }
         savingGoal = true
         defer { savingGoal = false }
         do {
-            let next = focus.applied(to: profile)
+            // Not loaded on Today (offline then): now.
+            let base: JSONObject
+            if let profile { base = profile } else { base = try await model.api.profile() }
+            let next = focus.applied(to: base)
             try await model.api.saveProfile(next)
             self.profile = next
             goalError = nil
@@ -211,7 +225,7 @@ struct FinishSetupCard: View {
                 .scaledFont(24, weight: .regular)
                 .foregroundStyle(done ? Palette.green : Palette.faint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Typo.bodyStrong).foregroundStyle(done ? Palette.muted : Palette.ink)
+                Text(verbatim: L10n.tr(title)).font(Typo.bodyStrong).foregroundStyle(done ? Palette.muted : Palette.ink)
                     .strikethrough(done, color: Palette.muted)
                 Text(verbatim: translated ? note : L10n.tr(note)).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
