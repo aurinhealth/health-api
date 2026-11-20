@@ -224,7 +224,8 @@ enum PlanSessionActions {
     @MainActor
     static func moveBack(_ model: AppModel, session: WeekSession, from date: String) async throws {
         if let eventId = session.eventId {
-            let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: session.time ?? "")
+            let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: session.time ?? "",
+                                                                          back: session.status == "missed")
         } else {
             try await model.api.moveGym(from: date, to: session.date)
         }
