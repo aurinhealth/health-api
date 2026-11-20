@@ -105,20 +105,6 @@ struct ProOffer: Identifiable, Equatable {
         return store.commitment != nil ? Array(plans.prefix(2)) : plans
     }
 
-    /// The short name on the offer's cards.
-    var cardTitle: String {
-        switch kind {
-        case .yearMonthly: return L10n.tr("Placeno měsíčně")
-        case .yearOnce: return L10n.tr("Placeno najednou")
-        case .monthly: return L10n.tr("Měsíčně")
-        }
-    }
-
-    /// What the first payment is after the free week: "5,99 € měsíčně", "59,99 € ročně".
-    var afterTrial: String {
-        kind == .yearOnce ? L10n.f("%@ ročně", price) : L10n.f("%@ měsíčně", price)
-    }
-
     /// What Apple asks for by the button (guideline 3.1.2): the price, the
     /// period, what is charged when, that it renews and how cancelling works.
     func terms(trialDays: Bool) -> String {
@@ -178,21 +164,23 @@ struct PaywallView: View {
                 topBar
                 Text("Trénuj s koučem, který tě zná")
                     .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 4)
+                    .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 14)
                     .accessibilityAddTraits(.isHeader)
-                if step == 0 {
+                if step == 0, !reduceMotion || frozenTime != nil {
                     demoPhone.transition(.opacity)
                     button(L10n.tr("Pokračovat")) { go(1) }
                         .padding(.horizontal, 16).padding(.bottom, 10)
                 } else {
                     ProFeatureList(frozen: frozenTime != nil)
-                        .frame(maxHeight: .infinity)
+                        .frame(minHeight: 120, maxHeight: .infinity)
                         .transition(.opacity)
                     offer.transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
         .environment(demo)
+        // Opened from UIKit too (Paywall.present), so the app's cap is set here: the button always fits.
+        .dynamicTypeSize(...DynamicTypeSize.screenCap)
         .sheet(isPresented: $allPlans) {
             AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; buy() },
                         redeem: { allPlans = false; redeemCode = true }, restore: restore)
@@ -239,7 +227,7 @@ struct PaywallView: View {
         }
         .padding(.top, 18).padding(.bottom, 14)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr("Ukázka rozhovoru s koučem"))
+        .accessibilityLabel(L10n.tr("Ukázka aplikace"))
     }
 
     // MARK: - The offer
@@ -255,10 +243,6 @@ struct PaywallView: View {
             if allowAI != nil { aiNote }
             button(cta, busy: store.purchasing) { buy() }
                 .disabled(store.purchasing || !chosen.priced)
-            Button { allPlans = true } label: {
-                Text("Zobrazit všechny tarify").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(minHeight: 36)
-            }
-            .buttonStyle(.plain)
             finePrint
         }
         .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
@@ -281,20 +265,30 @@ struct PaywallView: View {
     /// What Apple asks for by the button (3.1.2, Schedule 2 3.8(b)): the price, the
     /// renewal and how cancelling works, Terms, Privacy and Restore (D-PRO-1).
     private var finePrint: some View {
-        VStack(spacing: 4) {
-            Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 18) {
-                Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
-                Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
+        VStack(spacing: 0) {
+            Text(verbatim: chosen.terms(trialDays: withTrial)).font(.caption2).foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            // Not at the end of the setup: the sheet's button would allow the AI without saying so.
+            if allowAI == nil {
+            Button { allPlans = true } label: {
+                Text("Zobrazit všechny tarify").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
-            .frame(minHeight: 32)
+            .buttonStyle(.plain)
+            }
+            HStack(spacing: 18) {
+                Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline().frame(minHeight: 44) }
+                Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline().frame(minHeight: 44) }
+                Button(action: restore) { Text("Obnovit").underline().frame(minHeight: 44) }.buttonStyle(.plain)
+            }
+            .font(.caption2).foregroundStyle(Palette.muted)
+            .padding(.top, -8)
         }
-        .font(.caption2).foregroundStyle(Palette.muted)
     }
 
     private var cta: String {
-        if allowAI != nil, withTrial { return L10n.tr("Povolit AI a začít týden zdarma") }
+        // At the end of the setup the purchase also allows the AI features, so the button says so whatever the plan.
+        if allowAI != nil { return L10n.tr(withTrial ? "Povolit AI a začít týden zdarma" : "Povolit AI a předplatit") }
         return L10n.tr(withTrial ? "Vyzkoušet 7 dní zdarma" : "Získej Aurin Pro")
     }
 
@@ -353,7 +347,8 @@ struct PaywallView: View {
                 case .purchased(let trial):
                     // The button said so; should it fail, the thanks says where to turn AI on.
                     if let allowAI, (try? await allowAI()) == nil {
-                        thanks = L10n.tr("Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data.")
+                        thanks = L10n.tr(trial ? "Týden zdarma začal. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data."
+                                         : "Aurin Pro je aktivní. AI se nepodařilo zapnout, zapneš ji v Nastavení → Soukromí a data.")
                     } else {
                         thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
                     }
@@ -409,9 +404,7 @@ struct PaywallView: View {
 /// what Pro adds (the coach, then the race plan), then the day it works from
 /// (approved mockup pro-nabidka-obrazovky, 3 Nov 2026).
 enum ProScreen: CaseIterable {
-    case coach, plan, training, food, readiness, sleep
-
-    var content: some View { ProScreenPage(screen: self) }
+    case coach, plan, training, food
 
     /// The screen's page without its background, as tall as it is in the app.
     @ViewBuilder
@@ -421,8 +414,6 @@ enum ProScreen: CaseIterable {
         case .plan: ProPlanSample().padding(.horizontal, 24).padding(.top, 70)
         case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
         case .food: FoodContent(food: DemoData.food).padding(.top, 54)
-        case .readiness: ReadinessDetailContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
-        case .sleep: SleepDetailContent(health: DemoData.health, detail: DemoData.night).padding(.horizontal, 24).padding(.top, 70)
         }
     }
 
@@ -431,7 +422,6 @@ enum ProScreen: CaseIterable {
         case .coach: return Palette.Glow.today
         case .plan, .training: return Palette.Glow.training
         case .food: return Palette.Glow.food
-        case .readiness, .sleep: return Palette.Glow.health
         }
     }
 }
@@ -497,9 +487,12 @@ struct ProFeatureList: View {
     /// The snapshot test: still, from the top.
     var frozen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     @State private var manual = false
     @State private var started = Date()
     @State private var height: CGFloat = 0
+    /// Where the loop was when a finger took over, as a share of the list.
+    @State private var pausedAt: CGFloat = 0
 
     struct Row: Hashable {
         let icon: String
@@ -532,9 +525,13 @@ struct ProFeatureList: View {
 
     var body: some View {
         Group {
-            if manual || reduceMotion || frozen {
-                ScrollView { list.padding(.vertical, 12) }
-                    .scrollIndicators(.hidden)
+            if manual || reduceMotion || voiceOver || frozen {
+                ScrollViewReader { proxy in
+                    ScrollView { list.padding(.vertical, 12) }
+                        .scrollIndicators(.hidden)
+                        // The hand starts where the loop was, not at the top.
+                        .onAppear { if pausedAt > 0 { proxy.scrollTo(Self.rowAt(pausedAt), anchor: .top) } }
+                }
             } else {
                 GeometryReader { _ in
                     TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
@@ -549,8 +546,8 @@ struct ProFeatureList: View {
                 .clipped()
                 .contentShape(Rectangle())
                 // A finger takes over: the same list, still, to scroll by hand.
-                .gesture(DragGesture(minimumDistance: 4).onChanged { _ in manual = true })
-                .onTapGesture { manual = true }
+                .gesture(DragGesture(minimumDistance: 4).onChanged { _ in takeOver() })
+                .onTapGesture { takeOver() }
             }
         }
         .mask {
@@ -561,19 +558,34 @@ struct ProFeatureList: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func takeOver() {
+        guard !manual else { return }
+        if height > 0 { pausedAt = CGFloat(Date().timeIntervalSince(started) * Self.speed).truncatingRemainder(dividingBy: height) / height }
+        manual = true
+    }
+
+    /// The row about `share` of the way down the list (rows are near the same height).
+    static func rowAt(_ share: CGFloat) -> String {
+        let rows = pro + free
+        return rows[min(rows.count - 1, max(0, Int(share * CGFloat(rows.count + 1))))].title
+    }
+
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Self.pro, id: \.self) { row($0) }
             Text("také v ceně").font(.subheadline).foregroundStyle(Palette.muted)
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
+                .accessibilityAddTraits(.isHeader)
             ForEach(Self.free, id: \.self) { row($0) }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 24)
+        // The loop's seam: room before the Pro rows come round again.
+        .padding(.bottom, 40)
     }
 
     private func row(_ row: Row) -> some View {
-        HStack(spacing: 14) {
-            ProIcon(name: row.icon, size: 46)
+        HStack(spacing: 20) {
+            ProIcon(name: row.icon, size: 50)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: L10n.tr(row.title)).font(.headline).foregroundStyle(Palette.ink)
                 Text(verbatim: L10n.tr(row.line)).font(.subheadline).foregroundStyle(Palette.muted)
@@ -581,8 +593,9 @@ struct ProFeatureList: View {
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
+        .id(row.title)
     }
 }
 
@@ -599,7 +612,7 @@ struct OfferPlanCard: View {
     private var name: String {
         switch offer.kind {
         case .yearMonthly: return L10n.tr("Ročně, placeno měsíčně")
-        case .yearOnce: return L10n.tr("Ročně")
+        case .yearOnce: return L10n.tr("Na rok")
         case .monthly: return L10n.tr("Měsíčně")
         }
     }
@@ -613,7 +626,7 @@ struct OfferPlanCard: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 22, style: .continuous)
         Button(action: choose) {
             VStack(spacing: 3) {
                 Text(verbatim: name).font(.subheadline.weight(.semibold))
@@ -744,15 +757,15 @@ struct AllProPlans: View {
         return Button { selected = o.kind } label: {
             HStack(spacing: 8) {
                 (Text(verbatim: o.title).font(.subheadline.weight(.medium))
-                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(on ? Palette.muted : Palette.muted))
+                 + Text(verbatim: ", " + L10n.tr("zrušíš kterýkoli měsíc")).font(.subheadline).foregroundStyle(Palette.muted))
                 Spacer(minLength: 4)
                 (Text(verbatim: o.price).font(Typo.number(18)) + Text(verbatim: o.unit).font(.caption2))
                     .lineLimit(1).fixedSize()
             }
-            .foregroundStyle(on ? Palette.background : Palette.ink)
+            .foregroundStyle(Palette.ink)
             .padding(.horizontal, 14).padding(.vertical, 11)
-            .background(on ? Palette.ink : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? .clear : Palette.hairline))
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(on ? Palette.ink : Palette.hairline, lineWidth: on ? 1.5 : 1))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -793,7 +806,7 @@ struct PlanCard: View {
                     Spacer(minLength: 4)
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .scaledFont(18, cap: .denseCap)
-                        .foregroundStyle(selected ? Palette.background : Palette.muted)
+                        .foregroundStyle(selected ? Palette.ink : Palette.muted)
                 }
                 (Text(verbatim: offer.price).font(Typo.number(24)) + Text(verbatim: offer.unit).font(.caption))
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -804,12 +817,12 @@ struct PlanCard: View {
                 }
                 .font(.caption).opacity(0.85).padding(.top, 4)
             }
-            .foregroundStyle(selected ? Palette.background : Palette.ink)
+            .foregroundStyle(Palette.ink)
             // Room under the SAVE pill on the card's top edge, also with large text.
             .padding(.horizontal, 12).padding(.top, 22).padding(.bottom, 12)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(selected ? Palette.ink : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? .clear : Palette.hairline))
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(selected ? Palette.ink : Palette.hairline, lineWidth: selected ? 1.5 : 1))
             .overlay(alignment: .topLeading) {
                 if let save = offer.save {
                     Text(verbatim: L10n.f("UŠETŘÍŠ %d %%", save)).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.background)
