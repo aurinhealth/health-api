@@ -136,6 +136,9 @@ struct TrainingModeView: View {
     @State private var editingPart: LivePartDraft?
     /// −1, Done or +1 under a running cardio, passed to it.
     @State private var cardioCommand: CardioCommand?
+    /// The warm-up's or stretching's move on screen (the header's title) and Next stretch's taps.
+    @State private var partMove: String?
+    @State private var partNext: UUID?
     /// Where the heart rate came from ("Apple Watch"), kept for the summary after the recording ends.
     @State private var heartFrom: String?
     @Environment(\.scenePhase) private var scenePhase
@@ -193,6 +196,9 @@ struct TrainingModeView: View {
                                 .padding(.top, 8).padding(.bottom, 6)
                         } else if part.isCardio, !waiting {
                             cardioControls(parts.choice(part))
+                        } else if !free, !waiting {
+                            PrimaryButton(title: L10n.tr(part.kind == .stretching ? "Další protažení" : "Další pohyb")) { partNext = UUID() }
+                                .padding(.top, 8).padding(.bottom, 6)
                         } else if free, !waiting {
                             // Free time: stopped by hand, and the workout goes on.
                             PrimaryButton(title: L10n.tr("Hotovo")) {
@@ -259,7 +265,7 @@ struct TrainingModeView: View {
             if countingDown, let day { countdown(day) }
         }
         // Another part came on (the watch, a tap in the list): its Edit isn't open.
-        .onChange(of: activePart) { _, _ in editingPart = nil }
+        .onChange(of: activePart) { _, _ in editingPart = nil; partMove = nil }
     }
 
     private func countdown(_ day: GymDay) -> StartCountdown {
@@ -510,6 +516,9 @@ struct TrainingModeView: View {
             Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                 .lineLimit(2).minimumScaleFactor(0.6)
             HStack(spacing: 8) {
+                if let part = activePart, headTitle(day) != L10n.tr(part.kind.title) {
+                    Text(verbatim: L10n.tr(part.kind.title)).font(Typo.small).foregroundStyle(Palette.secondary)
+                }
                 if live.running, let key = headKey(day) { HeadClock(live: live, key: key) }
                 if activePart == nil, let letter = ExerciseOrder.letter(current(day)?.superset) {
                     Text(verbatim: L10n.f("Supersérie %@", letter)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.indigo)
@@ -538,6 +547,8 @@ struct TrainingModeView: View {
         if let part = activePart {
             // The cardio by its machine ("Exercise bike"), as concept 08.
             if part.isCardio { return GymCardio.name(GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).type) }
+            // The move on screen ("Hip flexor stretch"), the part under it.
+            if !waiting, let partMove { return partMove }
             return L10n.tr(part.kind.title)
         }
         return current(day)?.name ?? title(day)
@@ -1234,7 +1245,8 @@ struct TrainingModeView: View {
                                                                command: cardioCommand))
             } else {
                 StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close,
-                                 skip: Set(routine.items.map(\.id).filter { StretchingCard.done(stretchesDone, date: date).contains(part.kind.key + $0) }))
+                                 skip: Set(routine.items.map(\.id).filter { StretchingCard.done(stretchesDone, date: date).contains(part.kind.key + $0) }),
+                                 onHold: { partMove = $0 }, nextTap: partNext)
             }
         }
         .cardSurface(cornerRadius: 22)

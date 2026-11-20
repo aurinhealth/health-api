@@ -791,6 +791,18 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// A stretch in the live workout: the hold, its side and time, how to do it (concept 08).
+    func testStretchInline() throws {
+        let item = GymStretching.Item(id: "hip", name: "Hip flexor stretch", seconds: 30, sides: true,
+                                      steps: ["Kneel on your left knee with the right foot in front.", "Push your hips forward and keep your chest tall.",
+                                              "Stay there and breathe. No bouncing."])
+        try render("stretch-live", glow: Palette.Glow.gym, height: 520) {
+            StretchTimerView(stretching: GymStretching(minutes: 2, items: [item]), kind: .stretching, onItemDone: { _ in }, onClose: {})
+                .cardSurface(cornerRadius: 22)
+                .padding(20)
+        }
+    }
+
     /// Edit cardio: the machine and the time (concept 08).
     func testEditCardio() throws {
         try render("edit-cardio", glow: Palette.Glow.gym, height: 560, window: true) {

@@ -253,6 +253,10 @@ struct StretchTimerView: View {
     var onClose: (() -> Void)? = nil
     /// Moves ticked already (their ids): opened again, it starts at the first one left.
     var skip: Set<String> = []
+    /// In the live workout: the move on screen, for the header's title.
+    var onHold: (String) -> Void = { _ in }
+    /// Next stretch, pinned under the live workout (a new value each tap).
+    var nextTap: UUID? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
     @State private var left = Self.moveSeconds
@@ -266,6 +270,102 @@ struct StretchTimerView: View {
     private var hold: GymStretching.Hold? { holds.indices.contains(index) ? holds[index] : nil }
 
     var body: some View {
+        if onClose != nil, !finished, let hold {
+            inline(hold)
+                .task { await run() }
+                .onAppear {
+                    onHold(hold.item.name)
+                    ScreenAwake.hold("stretching", watchMaySleep: false)
+                    LiveWorkout.shared.partOpen("stretching", true)
+                }
+                .onChange(of: index) { _, _ in if let hold = self.hold { onHold(hold.item.name) } }
+                .onChange(of: nextTap) { _, _ in next() }
+                .onDisappear {
+                    ScreenAwake.release("stretching")
+                    LiveWorkout.shared.partOpen("stretching", false)
+                }
+        } else {
+            screen
+        }
+    }
+
+    /// The live workout's warm-up or stretching (concept 08): the photos, the
+    /// hold and its time, the sides, how to do it. Next stretch is under the screen.
+    private func inline(_ hold: GymStretching.Hold) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if !hold.item.photoURLs.isEmpty {
+                ExercisePhotos(urls: hold.item.photoURLs, labeled: false)
+            }
+            HStack(alignment: .lastTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SectionLabel(text: moving ? "Připrav se" : kind == .stretching ? "Drž" : "Cvič")
+                    Text(verbatim: sideTitle(hold)).font(.title2.weight(.semibold)).foregroundStyle(Palette.ink)
+                }
+                Spacer()
+                Text(verbatim: hold.item.seconds == 0 && !moving ? "–" : Self.clock(left))
+                    .font(Typo.heading(64, relativeTo: .largeTitle)).monospacedDigit()
+                    .foregroundStyle(!moving && GymSignals.counts(left) ? Palette.amber : Palette.ink)
+            }
+            .padding(.horizontal, 18).padding(.top, 16)
+            sideBars(hold).padding(.horizontal, 18).padding(.top, 12)
+            if !hold.item.steps.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(hold.item.steps.enumerated()), id: \.offset) { i, step in
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(verbatim: "\(i + 1)").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                                .frame(width: 24, height: 24).background(Palette.ink.opacity(0.08), in: Circle())
+                            Text(verbatim: step).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 10)
+                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 4)
+                .background(Palette.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 12).padding(.top, 14)
+            }
+        }
+        .padding(.bottom, 14)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// "Left side", or the move's own time without sides.
+    private func sideTitle(_ hold: GymStretching.Hold) -> String {
+        guard let side = hold.side else { return hold.item.rounds > 1 ? L10n.f("Série %@", "\(hold.round)/\(hold.item.rounds)") : hold.item.duration }
+        return side == L10n.tr("levá") ? L10n.tr("Levá strana") : L10n.tr("Pravá strana")
+    }
+
+    /// Left, then right: the side on hold fills as its time runs.
+    @ViewBuilder
+    private func sideBars(_ hold: GymStretching.Hold) -> some View {
+        if hold.side != nil {
+            let left = hold.side == L10n.tr("levá")
+            HStack(spacing: 8) {
+                bar(on: left, fill: left ? progress(hold) : 1, title: L10n.tr("Levá"), note: nil)
+                bar(on: !left, fill: left ? 0 : progress(hold), title: L10n.tr("Pravá"), note: left ? L10n.tr("na řadě") : nil)
+            }
+        }
+    }
+
+    private func bar(on: Bool, fill: CGFloat, title: String, note: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Capsule().fill(kind.color).frame(width: geo.size.width * max(0, min(1, fill)))
+                }
+            }
+            .frame(height: 5)
+            Text(verbatim: note.map { title + " " + $0 } ?? title).font(Typo.caption).foregroundStyle(on ? Palette.ink : Palette.muted)
+        }
+        .accessibilityHidden(true)
+    }
+
+    static func clock(_ seconds: Int) -> String { String(format: "%d:%02d", seconds / 60, seconds % 60) }
+
+    /// The screen of its own (Gym day → Spustit), as before.
+    private var screen: some View {
         VStack(spacing: 18) {
             HStack(spacing: 10) {
                 Text(verbatim: "\(min(index + 1, holds.count))/\(holds.count)").font(Typo.caption).foregroundStyle(Palette.muted)
@@ -358,7 +458,7 @@ struct StretchTimerView: View {
         if index == 0, !skip.isEmpty, let first = holds.firstIndex(where: { !skip.contains($0.item.id) }) { index = first }
         while !finished, !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
-            guard !paused, !finished else { continue }
+            guard !paused, !finished, LiveWorkout.shared.pausedAt == nil else { continue }
             // A move without a time (Free time): no countdown, it waits for Další.
             if !moving, hold?.item.seconds == 0 { continue }
             if left > 1 {
