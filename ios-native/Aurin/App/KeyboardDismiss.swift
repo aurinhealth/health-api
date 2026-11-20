@@ -41,15 +41,19 @@ enum KeyboardDismiss {
     static let numberPads: Set<UIKeyboardType> = [.numberPad, .decimalPad, .phonePad, .asciiCapableNumberPad]
 
     private static func addHideButton(to field: UIResponder) {
+        // SwiftUI can bring its own, empty strip (its keyboard toolbar's
+        // host): Done went missing on the setup's height and weight (device
+        // test of build 602). The app has no keyboard toolbar of its own, so
+        // the strip is replaced.
         if let text = field as? UITextField {
-            if text.inputAccessoryView == nil, numberPads.contains(text.keyboardType) {
+            if !(text.inputAccessoryView is HideBar), numberPads.contains(text.keyboardType) {
                 text.inputAccessoryView = HideBar(done: true)
                 text.reloadInputViews()
             }
         } else if let text = field as? UITextView, text.isEditable {
             // Several lines: return is a new line, whatever the root's Done label says.
             text.returnKeyType = .default
-            if text.inputAccessoryView == nil { text.inputAccessoryView = HideBar(done: false) }
+            if !(text.inputAccessoryView is HideBar) { text.inputAccessoryView = HideBar(done: false) }
             text.reloadInputViews()
         }
         if let view = field as? UIView, let window = view.window { dragHides(in: window) }

@@ -87,7 +87,7 @@ struct WidgetBoard: View {
 
     /// While editing every widget, outside it only those with data.
     private var shown: [PlacedWidget] {
-        editing ? items : items.filter { data.hasData($0.kind) }
+        editing ? items : items.filter { data.hasData($0.kind) || data.waitsForData($0.kind) }
     }
 
     /// The panel's name, and "+" and "Hotovo", which stay at the top of the
@@ -274,6 +274,9 @@ struct EditableWidget: View {
 
     var body: some View {
         WidgetPreview(item: item, data: data)
+            // The minus stands above the card, not over its title (device
+            // test of build 602: "OOD", "AY", "CTIVITY").
+            .padding(.top, 12)
             .overlay(alignment: .topLeading) {
                 Button(action: remove) {
                     Image(systemName: "minus")
@@ -285,7 +288,7 @@ struct EditableWidget: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .offset(x: -16, y: -16)
+                .offset(x: -16, y: -20)
                 .accessibilityLabel(L10n.f("Odebrat %@", L10n.tr(item.kind.title)))
             }
             .modifier(Wiggle(amplitude: item.size == .small ? 1.4 : 0.6, seed: item.kind.rawValue.count))

@@ -217,11 +217,9 @@ struct WeatherDetails: View {
             }
             .buttonStyle(.plain)
 
+            // No "Updated 9:41" (Petr 2026-11-20: no other weather sheet has
+            // it); Apple's mark and its legal link are what WeatherKit asks for.
             if AppleWeather.credited(weather) {
-                if let updated = Self.updated(weather.now?.asOf) {
-                    Text(verbatim: L10n.f("Aktualizováno %@.", updated)).font(Typo.caption).foregroundStyle(Palette.muted)
-                        .padding(.horizontal, 4)
-                }
                 HStack {
                     AppleWeatherMark(size: 13)
                     Spacer()
@@ -375,16 +373,6 @@ struct WeatherDetails: View {
         guard let day, day.date == today, let outdoors = day.outdoors else { return nil }
         let keep = { (span: TodaySnapshot.Weather.Span?) in span.flatMap { $0.end > hour ? $0 : nil } }
         return .init(ride: keep(outdoors.ride), run: keep(outdoors.run))
-    }
-
-    /// Apple's "asOf" as the phone's time of day ("yesterday" not shown: the
-    /// detail is refreshed with Today).
-    static func updated(_ iso: String?) -> String? {
-        guard let iso else { return nil }
-        let plain = ISO8601DateFormatter(), fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = plain.date(from: iso) ?? fractional.date(from: iso) else { return nil }
-        return ClockText.format(date)
     }
 
     private func legend(_ color: Color, _ text: String) -> some View {

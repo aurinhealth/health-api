@@ -15,7 +15,7 @@ struct DayTimeline: View {
 
     var body: some View {
         // Redesign D: "DAY" above the card as Food and Activity have it, the
-        // day drawn in ink; colour only for the readiness and a missed workout.
+        // day drawn in ink; colour for the readiness and the workouts' sports.
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Den").padding(.leading, 4)
             Card { timeline }
@@ -133,9 +133,11 @@ struct DayTimeline: View {
     private func workoutRow(_ item: TodaySnapshot.PlanItem, first: Bool, last: Bool) -> some View {
         let start = DayTimelineRows.minutes(item.time ?? item.session?.time)
         let length = item.session?.minutes
-        // A missed workout is drawn solid in rust, not dashed as one still to come.
+        // The workout's dot and line in its sport's colour (Petr 2026-11-20:
+        // the Day had no colours), as on Training. A missed one is solid grey,
+        // not dashed as one still to come; "Nesplněno" beside it says why.
         let future = !item.done && item.status != "missed"
-        let color = item.status == "missed" ? Palette.rust : Palette.ink
+        let color = item.status == "missed" ? Palette.muted : Palette.Sport.color(item.sport ?? "other")
         let content = workoutContent(item)
         Group {
             if let start, let length, length > 0 {
@@ -460,7 +462,8 @@ private struct DayDot: View {
 
     var body: some View {
         Circle()
-            .strokeBorder(future ? Palette.muted : color, style: future ? StrokeStyle(lineWidth: 2, dash: [2.6, 2.4]) : StrokeStyle(lineWidth: 2.5))
+            // Still to come: dashed, a workout pale in its sport's colour.
+            .strokeBorder(future ? (color == Palette.ink ? Palette.muted : color.opacity(0.7)) : color, style: future ? StrokeStyle(lineWidth: 2, dash: [2.6, 2.4]) : StrokeStyle(lineWidth: 2.5))
             .background { Circle().fill(Palette.card) }
             .frame(width: Rail.dot, height: Rail.dot)
     }
