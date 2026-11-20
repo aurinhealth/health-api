@@ -20,7 +20,7 @@
 // when HRV is below the usual range, two when the resting heart rate is above
 // it. Easy training is fine after a third of the session's time (at most 12 h).
 import { L } from "./lang.js";
-import { fatigueDoses, muscleState, sourceTitle, MUSCLES } from "./muscle-fatigue.js";
+import { fatigueDoses, muscleState, sourceTitle, MUSCLES, muscleFatigue, setMuscles } from "./muscle-fatigue.js";
 import { activityKind } from "./fitness-insights.js";
 import { localDate } from "./user-time.js";
 import { sessionRecoveryHours, activityRecoveryHours, intensityOf, MAX_HOURS } from "./recovery-hours.js";
@@ -113,4 +113,19 @@ export function recoveryTime({ sets = [], activities = [], now, sleep = null, hr
 export function withRecoveryTime(today, training, status, now = Date.now()) {
   if (training && (!status || status === "active")) today.recoveryTime = recoveryTime({ ...training, now, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR });
   return today;
+}
+
+// What Today's decision of the day (day-decision.js, through app-today.js
+// buildToday) needs from the training, for today only: the recovery time for
+// the night Today shows, the muscles of Trénink → Svaly and the main muscles
+// of each day's gym plan ({date: [ids]}). doses: muscle-fatigue.js loadTrainingDoses.
+export function todayRecovery(doses, { now = Date.now(), today, gym = {} } = {}) {
+  if (!doses) return null;
+  const gymMuscles = {};
+  for (const [date, plan] of Object.entries(gym || {})) {
+    const ids = new Set();
+    for (const e of Array.isArray(plan?.exercises) ? plan.exercises : []) for (const [muscle, share] of Object.entries(setMuscles(e?.exercise || e?.name || e))) if (share >= 1) ids.add(muscle);
+    gymMuscles[date] = [...ids];
+  }
+  return { time: signs => recoveryTime({ ...doses, now, ...signs }), muscles: muscleFatigue({ ...doses, now, today }).muscles, gymMuscles };
 }

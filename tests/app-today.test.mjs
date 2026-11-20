@@ -148,7 +148,7 @@ test("Today stays usable without data", () => {
 test("The server answers GET /app/api/today with buildToday", () => {
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /url\.pathname==='\/app\/api\/today'&&request\.method==='GET'/);
-  assert.match(src, /buildToday\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,health,fitness,sleep,fluids,weight,coaches,profile/);
+  assert.match(src, /buildToday\(\{date,hour:date===localToday\(\)\?localHour\(\):null,training:todayRecovery\(training,\{today:date,gym\}\),daily,health,fitness,sleep,fluids,weight,coaches,profile/);
 });
 
 test("Steps through the day: today's hours and the usual climb of the earlier days", () => {
