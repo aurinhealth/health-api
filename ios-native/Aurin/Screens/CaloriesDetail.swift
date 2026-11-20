@@ -497,10 +497,12 @@ struct FoodMonthSheet: View {
         let list = ISODay.range(month, min(ISODay.monthEnd(month), today)).compactMap { days[$0] }.filter(\.logged)
         guard history != nil else { return nil }
         guard !list.isEmpty else { return L10n.tr("Tento měsíc zatím bez zapsaného jídla.") }
-        let eaten = list.compactMap { value.eaten($0) }
+        // Today is still being eaten: the average and the counts are of finished days.
+        let done = list.filter { $0.date < today }
+        guard !done.isEmpty else { return L10n.tr("Tento měsíc zatím bez zapsaného jídla.") }
+        let eaten = done.compactMap { value.eaten($0) }
         let mean = eaten.reduce(0, +) / Double(max(eaten.count, 1))
-        // Today is still being eaten: not yet at, under or over its target.
-        let count = TargetDays.count(list.filter { $0.date < today }, value: value)
+        let count = TargetDays.count(done, value: value)
         return L10n.f("Průměr %@ na zapsaný den.", Fmt.int(mean) + " " + value.unit) + " "
             + L10n.plural("%lld dní v cíli nebo pod ním", count.at + count.below) + ", "
             + L10n.plural("%lld nad ním", count.over) + "."

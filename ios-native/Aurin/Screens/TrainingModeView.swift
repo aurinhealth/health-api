@@ -111,6 +111,8 @@ struct TrainingModeView: View {
     @State private var restTaken: [Int: Int] = [:]
     /// "…" → Workout settings: the rests and the sound and vibration.
     @State private var workoutSettings = false
+    /// Workout settings, Keep the screen on: off lets the phone sleep as usual.
+    @AppStorage("gym.keepScreenOn") private var keepScreenOn = true
     /// The one-time line under the first table: what the letter is for (D-ZIVY-3).
     @AppStorage("gym.effortHintSeen") private var effortHintSeen = false
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
@@ -163,8 +165,17 @@ struct TrainingModeView: View {
                                 .frame(maxWidth: .infinity).padding(.top, 8)
                         }
                         .padding(.bottom, 24)
+                        .opacity(paused ? 0.42 : 1)
+                        .disabled(paused)
                     }
                     .scrollIndicators(.hidden)
+                    // Paused in a part too: Resume under it (its own buttons stay dimmed).
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if paused {
+                            PrimaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { live.resumeFromPause(); syncActivity() }
+                                .padding(.top, 8).padding(.bottom, 6)
+                        }
+                    }
                 } else if !finishedSession, let exercise = current(day) {
                     // The workout's time, heart rate, calories and volume stay over the list.
                     if live.running {
@@ -184,6 +195,10 @@ struct TrainingModeView: View {
                                 }
                             }
                             .padding(.bottom, 24)
+                            // Paused: the workout waits under Resume workout (concept 08).
+                            .opacity(paused ? 0.42 : 1)
+                            .disabled(paused)
+                            .animation(.easeInOut(duration: 0.2), value: paused)
                         }
                         .scrollIndicators(.hidden)
                         // The exercise under way goes under the panel when it changes.
@@ -232,7 +247,8 @@ struct TrainingModeView: View {
             dismiss()
         }
         .onAppear {
-            ScreenAwake.hold("training"); model.immersive = true
+            if keepScreenOn { ScreenAwake.hold("training") }
+            model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }
             // The paired sensor connects already when the workout opens, so the
             // heart shows it before Začít trénink.
@@ -311,18 +327,7 @@ struct TrainingModeView: View {
                 Task { await pickIntensity(ref.id, letter) }
             }
         }
-        .sheet(isPresented: $workoutSettings) {
-            NavigationStack {
-                SettingsPage(title: "Nastavení tréninku") {
-                    GymRestGroup()
-                    GymSignalsGroup()
-                }
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { workoutSettings = false } }
-                }
-            }
-            .presentationDetents([.large])
-        }
+        .sheet(isPresented: $workoutSettings) { workoutSettingsSheet }
         .sheet(isPresented: $sensors) {
             NavigationStack { HeartRateSensorView() }
                 .presentationDetents([.medium, .large])
@@ -451,8 +456,37 @@ struct TrainingModeView: View {
 
     /// "…": the whole workout's actions in a small menu under the button. The
     /// exercise's history is a tab on its card, the sound in Workout settings.
+    /// "…" → Workout settings: rests, sound and vibration, the gym's equipment, the screen.
+    private var workoutSettingsSheet: some View {
+        NavigationStack {
+            SettingsPage(title: "Nastavení tréninku") {
+                GymRestGroup()
+                GymSignalsGroup()
+                SettingsGroup(title: "Posilovna") {
+                    NavigationLink { EquipmentView() } label: { SettingsRow(title: "Vybavení posilovny") }
+                        .buttonStyle(.plain)
+                }
+                SettingsGroup(title: "Obrazovka") {
+                    SettingsToggle(title: "Nechat obrazovku zapnutou", isOn: $keepScreenOn)
+                        // Here, not on the screen's long chain (its type-check time).
+                        .onChange(of: keepScreenOn) { _, on in if on { ScreenAwake.hold("training") } else { ScreenAwake.release("training") } }
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { workoutSettings = false } }
+            }
+        }
+        .presentationDetents([.large])
+    
+    }
+
+    private var paused: Bool { live.pausedAt != nil }
+
     @ViewBuilder
     private func menuItems(_ day: GymDay, _ exercise: GymExercise) -> some View {
+        if live.canPause, !paused {
+            Button { live.pause(); syncActivity() } label: { Label("Pozastavit trénink", systemImage: "pause.fill") }
+        }
         if nextSet(exercise) != nil {
             Button { swapping = exercise.name } label: { Label("Vyměnit tento cvik", systemImage: "arrow.up.arrow.down") }
         }
@@ -650,6 +684,8 @@ struct TrainingModeView: View {
                         .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+            } else if paused {
+                PrimaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { live.resumeFromPause(); syncActivity() }
             } else if waiting {
                 EmptyView()
             } else if let end = restEnd {
@@ -1811,7 +1847,8 @@ struct TrainingModeView: View {
 
     /// The lock screen and Dynamic Island follow the exercise on screen (GymLiveActivity).
     private func syncActivity(quiet: Bool = false) {
-        GymLiveActivity.sync(day: finishedSession || !started ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
+        // Paused: the lock screen's clock would run on; it comes back with Resume.
+        GymLiveActivity.sync(day: finishedSession || !started || paused ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
     }
 
     /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.

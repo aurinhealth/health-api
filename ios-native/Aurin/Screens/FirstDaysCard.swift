@@ -7,6 +7,8 @@ enum FirstDays {
     static let sinceKey = "firstDays.since"
     static let mealKey = "firstDays.meal"
     static let coachKey = "firstDays.coach"
+    /// The day Today first showed a Readiness after the setup (ReadinessHero).
+    static let firstScoreKey = "firstDays.firstScore"
     /// How long the card may show: readiness needs 14 nights of its own.
     static let days = 14
 
@@ -16,6 +18,7 @@ enum FirstDays {
         defaults.set(Date().timeIntervalSince1970, forKey: sinceKey)
         defaults.removeObject(forKey: mealKey)
         defaults.removeObject(forKey: coachKey)
+        defaults.removeObject(forKey: firstScoreKey)
     }
 
     /// A meal logged (APIClient.logFood) or a question to the coach (APIClient.askCoach).
@@ -25,7 +28,7 @@ enum FirstDays {
 
     /// Signed out: the next account starts from its own setup.
     static func forget() {
-        for key in [sinceKey, mealKey, coachKey] { UserDefaults.standard.removeObject(forKey: key) }
+        for key in [sinceKey, mealKey, coachKey, firstScoreKey] { UserDefaults.standard.removeObject(forKey: key) }
     }
 }
 
@@ -39,6 +42,8 @@ struct FirstDaysCard: View {
     @AppStorage(FirstDays.sinceKey) private var since: Double = 0
     @AppStorage(FirstDays.mealKey) private var meal = false
     @AppStorage(FirstDays.coachKey) private var coach = false
+    /// "Dokonči nastavení" comes first (FinishSetupCard): one setup card at a time.
+    @AppStorage(FinishSetup.sinceKey) private var finishing: Double = 0
 
     /// Readiness has a number, or it has started learning the normal (a measured night).
     private var night: Bool { today.readiness.score != nil || (today.readiness.learningDays ?? 0) > 0 }
@@ -51,7 +56,7 @@ struct FirstDaysCard: View {
 
     /// Within two weeks of the setup and not everything done yet.
     private var showing: Bool {
-        guard since > 0 else { return false }
+        guard since > 0, !FinishSetup.showing(finishing) else { return false }
         let age = Date().timeIntervalSince1970 - since
         return age < Double(FirstDays.days) * 86_400 && doneCount < steps.count
     }
@@ -67,7 +72,7 @@ struct FirstDaysCard: View {
                 VStack(spacing: 0) {
                     if !history {
                         RouteLink(route: .readiness) {
-                            row("Nos dnes v noci hodinky", "Ráno uvidíš připravenost.", done: night)
+                            row("Nos dnes v noci hodinky nebo prsten", "Ráno uvidíš připravenost.", done: night)
                         }
                         Divider().overlay(Palette.hairline)
                     }
@@ -82,7 +87,8 @@ struct FirstDaysCard: View {
                     .buttonStyle(PressableCardStyle())
                 }
                 if !history {
-                    Text("S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí.")
+                    // No promise of numbers tomorrow (part O): two weeks of nights first.
+                    Text("Připravenost se ukáže, až bude mít Aurin dva týdny tvého spánku.")
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }

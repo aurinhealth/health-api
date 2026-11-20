@@ -1,5 +1,6 @@
 import AuthenticationServices
 import Foundation
+import SwiftUI
 import UserNotifications
 
 // Signing in and out: the profile setup, the account this phone keeps things
@@ -27,11 +28,16 @@ extension AppModel {
         }
     }
 
-    func finishSetup() async {
+    /// loaded: Today was loaded under the setup's last animation (SetupBuildToday).
+    func finishSetup(loaded: Bool = false) async {
         UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
-        needsSetup = false
+        // After the setup's animation its card has landed where Today's is:
+        // Today comes without the cover sliding away.
+        var cut = Transaction()
+        cut.disablesAnimations = loaded
+        withTransaction(cut) { needsSetup = false }
         if resumingHealth { healthResumed() }
-        await refresh()
+        if !loaded || today == nil { await refresh() }
         await refreshFood()
         await refreshHealth()
     }
@@ -339,6 +345,8 @@ extension AppModel {
         passkeyOffer = false
         PasskeyOfferLater.forget()
         FirstDays.forget()
+        FinishSetup.forget()
+        SetupProOffer.pending = false
         offline = false
         demo = false
         phase = .signedOut

@@ -6,6 +6,10 @@ struct TodayView: View {
     var openCoach: () -> Void = {}
     /// Sdílet: the day, a workout or the day's food as an image.
     @State private var sharing = false
+    /// The free week once after the setup (SetupProOffer), when Today has loaded.
+    @State private var proOffer = false
+    /// The AI features are off: the free week's button allows them.
+    @State private var proNeedsAI = false
 
     var body: some View {
         NavigationStack(path: model.path(.today)) {
@@ -51,6 +55,31 @@ struct TodayView: View {
         .sheet(isPresented: $sharing) {
             if let today = model.today { ShareSheet(source: .today(today)) }
         }
+        // Decision B (part O): once, when Today is ready after the setup's animation.
+        .task(id: model.today != nil && !model.needsSetup) { await offerPro() }
+        .fullScreenCover(isPresented: $proOffer) {
+            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
+                        allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
+        }
+    }
+
+    /// The answer came under the animation, so the offer follows Today in
+    /// under a second. No answer (a weak signal): it waits for the next Today.
+    private func offerPro() async {
+        guard SetupProOffer.pending, model.today != nil, !model.needsSetup else { return }
+        var answer = SetupProOffer.answer
+        if answer == nil { answer = await SetupProOffer.ask(model) }
+        guard let known = answer else { return }
+        guard let needsAI = known else {
+            SetupProOffer.pending = false
+            return
+        }
+        // Today is seen first, then the offer slides up; not when Today was left meanwhile.
+        try? await Task.sleep(for: .milliseconds(700))
+        guard !Task.isCancelled, model.tab == .today else { return }
+        SetupProOffer.markShown()
+        proNeedsAI = needsAI
+        proOffer = true
     }
 }
 
@@ -69,6 +98,32 @@ struct TodayContent: View {
     @State private var showMonth = false
     /// Nastavení → Kouč na obrazovkách: the coach's card on Dnes.
     @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
+    /// "Dokonči nastavení" is still open (FinishSetupCard): it takes the morning question's place.
+    @AppStorage(FinishSetup.sinceKey) private var finishingSetup: Double = 0
+    /// Where "Dokonči nastavení" sits, fixed once shown: a number arriving later
+    /// does not move the card (and close its sheet) while it is in use.
+    @State private var setupCardPlace: Bool?
+    private var setupCardAfterCoach: Bool { setupCardPlace ?? (today.readiness.score != nil) }
+    @AppStorage(FinishSetup.goalKey) private var setupGoalSet = false
+    @AppStorage(FirstDays.sinceKey) private var setupSince: Double = 0
+    @AppStorage(FirstDays.firstScoreKey) private var firstScoreDay = ""
+
+    /// Part O (zadani/O.md 2 and 4): the coach's fixed first words for a new
+    /// athlete, today only: without a number yet while the goal is not set,
+    /// and on the day the first number comes. Otherwise nil (the usual text).
+    private var firstWords: (String, String)? {
+        guard selectedDate == nil, !model.demo, setupSince > 0,
+              Date().timeIntervalSince1970 - setupSince < Double(FirstDays.days) * 86_400 else { return nil }
+        if today.readiness.score == nil, !model.noWearable, FinishSetup.showing(finishingSetup), !setupGoalSet {
+            return (L10n.tr("Na začátek číslo nepotřebuješ."), L10n.tr("Nastav si cíl a kouč ti naplánuje první týden."))
+        }
+        if today.readiness.score != nil, firstScoreDay == today.date,
+           today.date != AppModel.localDate(Date(timeIntervalSince1970: setupSince)) {
+            return (L10n.tr("Tvoje první Připravenost je tady."),
+                    L10n.tr("Porovnává minulou noc s tvým obvyklým a během prvního měsíce se zpřesní."))
+        }
+        return nil
+    }
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -178,9 +233,17 @@ struct TodayContent: View {
             .accessibilityHint(Text(verbatim: L10n.tr("Otevře Nastavení, kde připojíš hodinky nebo prsten")))
         }
 
+        // Right after the setup, what it left for Today (concept v38): the
+        // goal, the training days, where one lifts and the notifications.
+        // With a number already (the watch's history), the coach comes first.
+        if selectedDate == nil && !model.demo && FinishSetup.showing(finishingSetup) && !setupCardAfterCoach {
+            FinishSetupCard(today: today).padding(.top, 20)
+                .onAppear { setupCardPlace = setupCardPlace ?? false }
+        }
+
         // The morning question, for now right under the readiness (concept
         // point 3). Its answer never changes the number.
-        if selectedDate == nil && !model.demo {
+        if selectedDate == nil && !model.demo && !FinishSetup.showing(finishingSetup) {
             TodayMorningQuestion(date: today.date, feeling: today.checkin)
                 // A new day is a new question, also past midnight in a running app.
                 .id(today.date)
@@ -211,7 +274,11 @@ struct TodayContent: View {
             // and its one action, today's workout with Start (or the activity of
             // the day), the plan's line and Regenerace
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
-            if coachShown {
+            if coachShown, let words = firstWords {
+                CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
+                              tip: AnyView(TodayCoachAction(today: today)))
+                    .padding(.top, 12)
+            } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
                               tip: AnyView(TodayCoachAction(today: today)))
                     .padding(.top, 12)
@@ -221,6 +288,12 @@ struct TodayContent: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .cardSurface(cornerRadius: 22)
                     .padding(.top, 12)
+            }
+
+            // Day 1 with a number (screen 02-todayh): what the setup left, after the coach.
+            if !model.demo && FinishSetup.showing(finishingSetup) && setupCardAfterCoach {
+                FinishSetupCard(today: today).padding(.top, 12)
+                    .onAppear { setupCardPlace = setupCardPlace ?? true }
             }
 
             if today.trainingPlan?.paused == true {
@@ -751,6 +824,16 @@ struct ReadinessHero: View {
     var isToday = true
     /// No watch or ring (audit 14.2): say where readiness comes from instead of waiting for a night.
     var noWearable = false
+    /// The setup on this phone (FirstDays) and the day the first number showed:
+    /// a new athlete's first Readiness says where it comes from (part O).
+    @AppStorage(FirstDays.sinceKey) private var setupSince: Double = 0
+    @AppStorage(FirstDays.firstScoreKey) private var firstScoreDay = ""
+
+    /// Today, within two weeks of the setup.
+    private var newAthlete: Bool {
+        isToday && setupSince > 0 && Date().timeIntervalSince1970 - setupSince < Double(FirstDays.days) * 86_400
+    }
+    private var setupDay: String { AppModel.localDate(Date(timeIntervalSince1970: setupSince)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -782,8 +865,17 @@ struct ReadinessHero: View {
                     Text(provisionalLine)
                         .font(Typo.small).foregroundStyle(Palette.muted)
                 }
+                if newAthlete, date == setupDay, let nights = readiness.pastNights, nights > 0 {
+                    // The watch's history made it on day 1 (screen 02-todayh).
+                    Text(L10n.plural("Z minulé noci a tvých předchozích %lld nocí", nights))
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                } else if newAthlete, firstScoreDay == date {
+                    // Learnt from scratch: the day the number first comes.
+                    Text("Tvoje první Připravenost. Klepni a uvidíš, jak funguje.")
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
             } else if let days = readiness.learningDays {
-                ReadinessLearning(days: days, date: date)
+                ReadinessLearning(days: days)
             } else if noWearable {
                 NoWearableText()
             } else if readiness.flags?.contains("no_night") == true && (!isToday || Calendar.current.component(.hour, from: Date()) >= 12) {
@@ -792,7 +884,7 @@ struct ReadinessHero: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
-                Text("Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
@@ -806,6 +898,10 @@ struct ReadinessHero: View {
             }
         }
         .accessibilityElement(children: .combine)
+        // Also when the number comes in while Today is open.
+        .onChange(of: readiness.score, initial: true) { _, score in
+            if newAthlete, score != nil, firstScoreDay.isEmpty { firstScoreDay = date }
+        }
     }
 
     /// Why the number may still move: a new data source without 14 days of its own.
@@ -837,18 +933,17 @@ struct NoWearableText: View {
 
 /// A new athlete's first two weeks (Petr, 2026-11-01): instead of "Zatím bez
 /// čísla", readiness says it is learning their usual range, with a segment for each
-/// of the 14 days it needs, how many it has and about when the score comes.
+/// of the 14 days it needs and how many it has.
 /// Also on the Health screen's readiness card.
 struct ReadinessLearning: View {
     let days: Int
-    let date: String
     var title: Font = Typo.heading(34, relativeTo: .largeTitle)
 
     private var shown: Int { min(14, max(1, days)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Učím se tvoje obvyklé hodnoty")
+            Text("Aurin se učí, co je u tebe obvyklé")
                 .font(title)
                 .foregroundStyle(Palette.ink)
                 .padding(.top, 8)
@@ -861,19 +956,12 @@ struct ReadinessLearning: View {
             }
             .padding(.top, 16)
             .accessibilityHidden(true)
-            HStack {
-                Text(L10n.f("Den %@ ze 14", String(shown)))
-                    .foregroundStyle(Palette.secondary)
-                Spacer(minLength: 8)
-                if !date.isEmpty {
-                    Text(L10n.f("Číslo zhruba od %@", Fmt.dayMonth(ISODay.shift(date, max(1, 15 - shown)))))
-                        .foregroundStyle(Palette.muted)
-                }
-            }
-            .font(Typo.small)
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-            .padding(.top, 8)
+            // Part O (screen 03-todayn): the day, then why there is no number yet.
+            (Text(L10n.f("Den %@ ze 14.", String(shown))).fontWeight(.semibold).foregroundStyle(Palette.ink)
+             + Text(" ") + Text(L10n.tr("Připravenost se ukáže, až bude mít Aurin dva týdny tvého spánku.")).foregroundStyle(Palette.secondary))
+                .font(Typo.small)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
         }
     }
 }

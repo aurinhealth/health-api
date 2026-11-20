@@ -66,8 +66,8 @@ struct LiveStatsPanel: View {
     }
 
     static func clock(_ live: LiveWorkout, at now: Date) -> String {
-        guard let start = live.clockStart else { return "0:00" }
-        return TrainingModeView.clock(max(0, Int(now.timeIntervalSince(start))))
+        guard live.clockStart != nil else { return "0:00" }
+        return TrainingModeView.clock(Int(live.elapsed(at: now)))
     }
 
     private var divider: some View { Rectangle().fill(Palette.hairline).frame(width: 1).padding(.vertical, 10) }
@@ -438,10 +438,14 @@ struct HeadClock: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            Text(verbatim: TrainingModeView.clock(live.seconds(of: key, at: context.date)))
-                .font(Typo.small.weight(.medium)).monospacedDigit().foregroundStyle(Palette.secondary)
+            let time = TrainingModeView.clock(live.seconds(of: key, at: context.date))
+            // Paused (concept 08): the time stands, in amber.
+            Text(verbatim: live.pausedAt == nil ? time : L10n.f("Pozastaveno na %@", time))
+                .font(Typo.small.weight(.medium)).monospacedDigit()
+                .foregroundStyle(live.pausedAt == nil ? Palette.secondary : Palette.amber)
         }
         .accessibilityLabel(Text("Čas"))
-        .accessibilityValue(TrainingModeView.clock(live.seconds(of: key)))
+        .accessibilityValue(live.pausedAt == nil ? TrainingModeView.clock(live.seconds(of: key))
+                            : L10n.f("Pozastaveno na %@", TrainingModeView.clock(live.seconds(of: key))))
     }
 }

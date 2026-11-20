@@ -208,7 +208,35 @@ struct GymDay: Decodable, Equatable {
     mutating func write(_ exercises: [[[JSONValue]]], _ rest: [[JSONValue]]) {
         var head = Array(values.prefix(Self.firstSetRow))
         while head.count < Self.firstSetRow { head.append([]) }
-        values = head + exercises.flatMap { $0 } + rest
+        values = head + Self.supersetsTogether(exercises).flatMap { $0 } + rest
+    }
+
+    /// A superset always goes together: whatever was moved, swapped or added
+    /// between its exercises goes after them (Petr 2026-11-20).
+    mutating func keepSupersetsTogether() {
+        let (list, rest) = blocks
+        guard Self.supersetsTogether(list) != list else { return }
+        write(list, rest)
+    }
+
+    /// The later exercises of a superset right after its first one, the rest in order.
+    static func supersetsTogether(_ list: [[[JSONValue]]]) -> [[[JSONValue]]] {
+        func letter(_ block: [[JSONValue]]) -> String? {
+            let text = (block.first { $0.count > 12 }?[12].string ?? "").trimmingCharacters(in: .whitespaces).uppercased()
+            return text.isEmpty ? nil : text
+        }
+        var out: [[[JSONValue]]] = []
+        var placed = Set<Int>()
+        for i in list.indices where !placed.contains(i) {
+            out.append(list[i])
+            placed.insert(i)
+            guard let group = letter(list[i]) else { continue }
+            for j in list.indices where j > i && !placed.contains(j) && letter(list[j]) == group {
+                out.append(list[j])
+                placed.insert(j)
+            }
+        }
+        return out
     }
 
     /// Moves an exercise with all its sets, as List.onMove reports it.

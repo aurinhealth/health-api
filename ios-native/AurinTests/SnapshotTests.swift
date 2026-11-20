@@ -531,6 +531,18 @@ final class SnapshotTests: XCTestCase {
             HealthValueContent(value: .constant(.weight), period: .constant(.days30)).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
         }
         try render("health-vo2max-en", glow: Palette.Glow.health) { VO2maxDetailContent(health: DemoData.health, period: .constant(.months6)).padding(16).padding(.top, 30).environment(\.locale, L10n.locale) }
+        // Part O, animation A: the answers on their way into the dials.
+        try render("setup-build-en", height: 844) {
+            SetupBuildToday(chips: ["Male", "1991", "182 cm", "78.5 kg"], sports: ["ride", "run", "strength"], still: true)
+                .environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+        // Part O: what the setup leaves for Today, with Gym ticked and the goal set.
+        FinishSetup.start()
+        defer { FinishSetup.forget() }
+        UserDefaults.standard.set(true, forKey: FinishSetup.goalKey)
+        try render("finish-setup-en", height: 520) {
+            FinishSetupCard(today: DemoData.today, lifts: true).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
@@ -734,6 +746,13 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
+    func testEffortSheet() throws {
+        try render("effort-sheet", height: 700) {
+            IntensitySheet(title: "Série 2", selected: "M") { _ in }
+        }
+    }
+
     /// The first-run setup's sport, goal and time pages, in English as the site and App Store show the app.
     func testSetupFocusPages() throws {
         L10n.setLanguage("en")
@@ -767,18 +786,9 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(SportsChoice(profile: choice.applied(to: [:])), choice)
         focus.sports = choice
         focus.swims100 = true
-        try render("setup-sport-en", height: 844) { SetupSportPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
-        try render("setup-sport-swim-en", height: 844) {
-            SetupSportPage(focus: .constant(SetupFocus(profile: ["sports": .array([.string("ride"), .string("swim"), .string("strength")]), "mainSports": .array([.string("ride")]), "swims100": .bool(true)])))
-                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
-        }
         try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
         // The steps over the pages (point 6): the goal is page 4 of 6.
         try render("setup-steps-en", height: 80) { SetupSteps(done: 4, total: 6).padding(24) }
-        try render("setup-time-en", height: 844) {
-            SetupTimePage(minutes: .constant([60, 0, 75, 0, 45, 270, 120]), loading: false, lifts: true) {}
-                .padding(24).padding(.top, 40).environment(\.locale, L10n.locale)
-        }
         XCTAssertEqual(AvailabilityBarRow.maxMinutes, 480)
         XCTAssertEqual(WeekSessionDraft.lengths("ride", including: 60).last, 480)
         XCTAssertEqual(WeekSessionDraft.lengths("run", including: 60).last, 360)
@@ -875,9 +885,9 @@ final class SnapshotTests: XCTestCase {
 
     func testPlanEditing() {
         var day = DemoData.gym
-        day.moveExercise(from: 2, to: 0)
-        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy", "Dřep", "Tlak na lavici", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         day.moveExercise(from: 0, to: 3)
+        XCTAssertEqual(day.exercises.map(\.name), ["Tlak na lavici", "Přítahy", "Dřep", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
+        day.moveExercise(from: 2, to: 0)
         XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy", "Tlaky s jednoručkami nad hlavu", "Pallof press"])
         XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
 

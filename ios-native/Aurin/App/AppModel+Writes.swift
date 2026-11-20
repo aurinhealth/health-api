@@ -268,6 +268,13 @@ extension AppModel {
     /// A day's gym sheet: the one waiting to be sent, the server's, or the
     /// last one seen on the phone when there is no signal.
     func gymDay(date: String) async throws -> GymDay {
+        var day = try await gymSheet(date: date)
+        // A superset split by an earlier change shows together (saved so with the next change).
+        day.keepSupersetsTogether()
+        return day
+    }
+
+    private func gymSheet(date: String) async throws -> GymDay {
         if let day = writes.waitingGym(date: date) { return day }
         do {
             let day = try await api.gym(date: date)
