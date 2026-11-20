@@ -14,12 +14,15 @@ struct TrainingView: View {
     /// Scrolled down: the tab bar is two circles and the floating button sits between them.
     @Environment(\.compactTabBar) private var compactBar
     @Environment(\.wideLayout) private var wide
+    /// This week's calendar asked for once: until then the page waits, so the
+    /// strip and today's list never arrive late and push the cards down (602).
+    @State private var weekLoaded: String?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
             ZStack {
                 ScreenBackground(glow: Palette.Glow.training)
-                if let training = model.training {
+                if let training = model.training, model.calendar[training.date] != nil || weekLoaded == training.date || model.demo {
                     PageScroll {
                         TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
@@ -83,6 +86,12 @@ struct TrainingView: View {
             if let commit = current.settle(undo: false) { Task { await commit() } }
         }
         .task { await model.refreshIfStale(.training) }
+        .task(id: model.training?.date) {
+            guard let date = model.training?.date, weekLoaded != date else { return }
+            let monday = ISODay.shift(date, -ISODay.weekdayIndex(date))
+            await model.loadCalendar(from: monday, to: ISODay.shift(monday, 6))
+            weekLoaded = date
+        }
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
     }
@@ -230,15 +239,23 @@ struct TrainingContent: View {
         .padding(.top, top - 12)
         let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
         if !CalendarDayList.shown(model.calendar[shownDay]?.activities ?? [], hidePlanned: hidden).isEmpty || model.calendar[shownDay]?.merge != nil
-            || (!isToday || upcoming.isEmpty) {
+            || (!isToday || !upcoming.contains { $0.date == training.date }) {
             CalendarDayList(date: shownDay, today: training.date, day: model.calendar[shownDay], hidePlanned: hidden)
                 .daySlide(date: shownDay)
                 .padding(.top, 2)
         }
         if isToday {
-            if !upcoming.isEmpty {
-                TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+            let todays = upcoming.filter { $0.date == training.date }
+            if !todays.isEmpty {
+                TodaySessions(sessions: todays, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
                     .padding(.top, 12)
+            } else if let next = upcoming.first {
+                // Nothing left today: the next planned day under its own name,
+                // never under "Today" (602: tomorrow's Push read as today's).
+                SectionLabel(text: L10n.f("Další trénink %@", Fmt.relativeDay(next.date, today: training.date)))
+                    .padding(.top, 18)
+                TodaySessions(sessions: [next], today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                    .padding(.top, 10)
             }
             CoachTextCard(screen: "training").padding(.top, 14)
         } else {
