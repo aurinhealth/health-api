@@ -782,6 +782,15 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The cardio running: heart rate, its zone against the target, time left (concept 08).
+    func testCardioLiveCard() throws {
+        try render("cardio-live", glow: Palette.Glow.gym, height: 460) {
+            CardioLiveCard(seconds: 378, countsDown: true, since: Date(), zoneLows: [95, 114, 123, 140, 158], target: 3, now: Date(), shownRate: 132)
+                .cardSurface(cornerRadius: 22)
+                .padding(20)
+        }
+    }
+
     /// Edit cardio: the machine and the time (concept 08).
     func testEditCardio() throws {
         try render("edit-cardio", glow: Palette.Glow.gym, height: 560, window: true) {

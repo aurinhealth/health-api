@@ -169,6 +169,11 @@ struct CardioTimerView: View {
         var close: () -> Void
         /// Its time started: the cardio no longer waits for its start.
         var started: () -> Void = {}
+        /// The heart rate zones' lower bounds (zone 1 first) and the zone to hold (concept 08).
+        var zoneLows: [Double] = []
+        var target: Int? = nil
+        /// −1, Done, +1 pinned under the screen (TrainingModeView) come in here.
+        var command: CardioCommand? = nil
     }
 
     private var isStart: Bool { item.id == "cardio-start" }
@@ -203,6 +208,11 @@ struct CardioTimerView: View {
                 .frame(maxWidth: .infinity)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
+            } else if let started, let inline {
+                TimelineView(.periodic(from: started, by: 1)) { context in
+                    CardioLiveCard(seconds: minutes > 0 ? left(at: context.date) : max(0, Int(context.date.timeIntervalSince(started))),
+                                   countsDown: minutes > 0, since: started, zoneLows: inline.zoneLows, target: inline.target, now: context.date)
+                }
             } else if let started {
                 Spacer()
                 TimelineView(.periodic(from: started, by: 1)) { context in
@@ -239,10 +249,11 @@ struct CardioTimerView: View {
                 SecondaryButton(title: inline == nil ? "Přeskočit" : "Přeskočit sekci") { onDone(); leave() }
             }
         }
-        .padding(inline == nil ? 20 : 16)
+        .padding(inline == nil ? 20 : started != nil && stopped == nil ? 0 : 16)
         .background { if inline == nil { Palette.background.ignoresSafeArea() } }
         .task { await load() }
         .task(id: started) { await watch() }
+        .onChange(of: inline?.command) { _, command in if let command { run(command) } }
         .onAppear {
             ScreenAwake.hold("cardio", watchMaySleep: false)
             LiveWorkout.shared.partOpen("cardio", true)
@@ -307,6 +318,22 @@ struct CardioTimerView: View {
         planEnd()
     }
 
+    /// −1, Done or +1 from under the screen.
+    private func run(_ command: CardioCommand) {
+        switch command.kind {
+        case .done:
+            if started == nil { onDone(); leave() } else { stop(at: Date()) }
+        case .minus, .plus:
+            guard started != nil, minutes > 0, let end else { return }
+            let step = command.kind == .plus ? 1 : -1
+            // Never under a minute left.
+            if step < 0, end.timeIntervalSinceNow < 120 { return }
+            GymSignals.stopRest(end)
+            added += step
+            planEnd()
+        }
+    }
+
     private func extend() {
         if let end { GymSignals.stopRest(end) }
         added += 5
@@ -357,5 +384,100 @@ struct CardioTimerView: View {
 
     private func leave() {
         if let inline { inline.close() } else { dismiss() }
+    }
+}
+
+/// −1, Done or +1 tapped under the live cardio; a new id each tap.
+struct CardioCommand: Equatable {
+    enum Kind: Equatable { case minus, done, plus }
+    let kind: Kind
+    var id = UUID()
+}
+
+/// The cardio running in the live workout (concept 08): the heart rate big,
+/// its zone on a bar of five with the target, the time left (or run) and the
+/// time in the target zone so far.
+struct CardioLiveCard: View {
+    let seconds: Int
+    let countsDown: Bool
+    let since: Date
+    let zoneLows: [Double]
+    let target: Int?
+    let now: Date
+    var live: LiveWorkout = .shared
+    /// Screen renders in the tests: a heart rate without a recording.
+    var shownRate: Double? = nil
+
+    private var bpm: Double? { shownRate ?? live.heartRate }
+
+    private var zone: Int? {
+        guard let bpm, !zoneLows.isEmpty else { return nil }
+        return zoneLows.lastIndex { bpm >= $0 } ?? 0
+    }
+
+    /// The target zone's bpm (zone 2 → index 1).
+    private var targetRange: (lo: Double, hi: Double)? {
+        guard let target, zoneLows.indices.contains(target - 1) else { return nil }
+        let lo = zoneLows[target - 1]
+        let hi = zoneLows[safe: target].map { $0 - 1 } ?? 250
+        return (lo, hi)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(text: "Tep")
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                Text(verbatim: bpm.map { Fmt.int($0) } ?? "–")
+                    .font(Typo.heading(96, relativeTo: .largeTitle)).monospacedDigit().foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                Text(verbatim: "bpm").font(Typo.small).foregroundStyle(Palette.muted)
+            }
+            if let zone {
+                HStack(spacing: 10) {
+                    Text(verbatim: L10n.f("Zóna %@", String(zone + 1))).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                    if let target {
+                        let on = zone + 1 == target
+                        Text(on ? "V cílové zóně" : zone + 1 < target ? "Pod cílovou zónou" : "Nad cílovou zónou")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(on ? Palette.green : Palette.amber)
+                    }
+                }
+                zoneBar(zone)
+            }
+            if let range = targetRange {
+                Text(verbatim: L10n.f("Cíl %@ až %@ bpm", Fmt.int(range.lo), Fmt.int(range.hi)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 4)
+            HStack(alignment: .lastTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SectionLabel(text: countsDown ? "Zbývá" : "Čas")
+                    Text(verbatim: TrainingModeView.clock(seconds)).font(Typo.heading(40)).monospacedDigit().foregroundStyle(Palette.ink)
+                }
+                Spacer()
+                if let range = targetRange {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        SectionLabel(text: "V zóně zatím")
+                        Text(verbatim: TrainingModeView.clock(live.seconds(from: range.lo, to: range.hi, since: since, at: now)))
+                            .font(Typo.heading(40)).monospacedDigit().foregroundStyle(Palette.ink)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func zoneBar(_ zone: Int) -> some View {
+        HStack(spacing: 6) {
+            ForEach(zoneLows.indices, id: \.self) { i in
+                VStack(spacing: 4) {
+                    Image(systemName: "arrowtriangle.down.fill").scaledFont(9).foregroundStyle(Palette.ink)
+                        .opacity(i == zone ? 1 : 0)
+                    Capsule().fill(Palette.Zone.color(i).opacity(i == zone ? 1 : 0.3)).frame(height: 8)
+                    Text(verbatim: "\(i + 1)").font(Typo.caption).foregroundStyle(i == zone ? Palette.ink : Palette.faint)
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }

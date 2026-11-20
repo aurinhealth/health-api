@@ -526,6 +526,17 @@ final class LiveWorkout: NSObject {
         segments = segments.map { $0.key == key ? Segment(key: newKey, start: $0.start, kcal: $0.kcal) : $0 }
     }
 
+    /// Seconds of heart rate from `lo` to `hi` bpm since `since` (each reading
+    /// counts until the next, at most a minute).
+    func seconds(from lo: Double, to hi: Double, since: Date, at now: Date = Date()) -> Int {
+        var sum = 0.0
+        for (i, point) in trail.enumerated() where point.date >= since && point.bpm >= lo && point.bpm <= hi {
+            let next = i + 1 < trail.count ? trail[i + 1].date : now
+            sum += min(60, max(0, next.timeIntervalSince(point.date)))
+        }
+        return Int(sum)
+    }
+
     /// Calories burned while `key` was in front, every time added up (as seconds(of:)).
     func kcal(of key: String) -> Double {
         var sum = 0.0

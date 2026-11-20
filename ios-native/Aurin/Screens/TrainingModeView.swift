@@ -134,6 +134,8 @@ struct TrainingModeView: View {
     @State private var countingDown = false
     /// Edit warm-up, cardio or stretching open in place of the part (concept 08), until Done.
     @State private var editingPart: LivePartDraft?
+    /// −1, Done or +1 under a running cardio, passed to it.
+    @State private var cardioCommand: CardioCommand?
     /// Where the heart rate came from ("Apple Watch"), kept for the summary after the recording ends.
     @State private var heartFrom: String?
     @Environment(\.scenePhase) private var scenePhase
@@ -162,9 +164,7 @@ struct TrainingModeView: View {
                     ZStack(alignment: .top) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            if live.running, !free {
-                                LiveStatsPanel(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 12)
-                            }
+                            // The part's own card shows its time and heart rate (concept 08): no panel over it.
                             if waiting, part.kind != .cardio {
                                 readyCard(.part(part), day, parts)
                             } else {
@@ -191,6 +191,8 @@ struct TrainingModeView: View {
                         if paused {
                             PrimaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { live.resumeFromPause(); syncActivity() }
                                 .padding(.top, 8).padding(.bottom, 6)
+                        } else if part.isCardio, !waiting {
+                            cardioControls(parts.choice(part))
                         } else if free, !waiting {
                             // Free time: stopped by hand, and the workout goes on.
                             PrimaryButton(title: L10n.tr("Hotovo")) {
@@ -533,7 +535,11 @@ struct TrainingModeView: View {
 
     /// The exercise under way, or the warm-up, cardio or stretching on screen.
     private func headTitle(_ day: GymDay) -> String {
-        if let part = activePart { return L10n.tr(part.kind.title) }
+        if let part = activePart {
+            // The cardio by its machine ("Exercise bike"), as concept 08.
+            if part.isCardio { return GymCardio.name(GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).type) }
+            return L10n.tr(part.kind.title)
+        }
         return current(day)?.name ?? title(day)
     }
 
@@ -1142,6 +1148,26 @@ struct TrainingModeView: View {
         }
     }
 
+    /// −1 min, Done, +1 min under the running cardio (concept 08); a cardio without a limit has only Done.
+    private func cardioControls(_ choice: GymDayParts.Choice) -> some View {
+        HStack(spacing: 12) {
+            if choice.minutes > 0 { cardioStep("−1", label: "Ubrat minutu", .minus) }
+            PrimaryButton(title: L10n.tr("Hotovo")) { cardioCommand = CardioCommand(kind: .done) }
+            if choice.minutes > 0 { cardioStep("+1", label: "Přidat minutu", .plus) }
+        }
+        .padding(.top, 8).padding(.bottom, 6)
+    }
+
+    private func cardioStep(_ title: String, label: String, _ kind: CardioCommand.Kind) -> some View {
+        Button { cardioCommand = CardioCommand(kind: kind) } label: {
+            Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .frame(width: 56, height: 56)
+                .chromeGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(L10n.tr(label)))
+    }
+
     static func editTitle(_ part: GymDayPart) -> String {
         switch part.kind {
         case .warmup: return "Upravit rozcvičku"
@@ -1203,7 +1229,9 @@ struct TrainingModeView: View {
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
                                 inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
                                                                autoStart: partAutoStart, next: stepName(then, day), close: close,
-                                                               started: { waiting = false }))
+                                                               started: { waiting = false }, zoneLows: zoneLows,
+                                                               target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
+                                                               command: cardioCommand))
             } else {
                 StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close,
                                  skip: Set(routine.items.map(\.id).filter { StretchingCard.done(stretchesDone, date: date).contains(part.kind.key + $0) }))

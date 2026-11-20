@@ -388,6 +388,14 @@ struct LiveCardioEditor: View {
                     .padding(16)
                     .cardSurface(cornerRadius: 22)
                     .padding(.top, 10)
+                SectionLabel(text: "Cíl").padding(.top, 14)
+                HStack(spacing: 8) {
+                    targetTile(L10n.f("Zóna %@", "2"), 2)
+                    targetTile(L10n.f("Zóna %@", "3"), 3)
+                    targetTile(L10n.tr("Bez cíle"), nil)
+                }
+                Text(choice.target == nil ? "Bez cíle se počítá čas a ukazuje tep, bez zóny, kterou držet." : "Karta ukáže, jestli jsi v zóně, a kolik času v ní zatím máš.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.bottom, 24)
         }
@@ -396,6 +404,20 @@ struct LiveCardioEditor: View {
             guard !model.demo, let prefs = try? await model.api.gymPreferences() else { return }
             options = prefs.cardioOptions ?? []
         }
+    }
+
+    private func targetTile(_ title: String, _ zone: Int?) -> some View {
+        let on = choice.target == zone
+        return Button { choice.target = zone } label: {
+            Text(verbatim: title).font(.subheadline.weight(.medium))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(on ? Palette.ink : Palette.ink.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// The place's machines (all of them until they load), the chosen one kept.
