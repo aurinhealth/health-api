@@ -103,7 +103,7 @@ struct TrainingMonthSheet: View {
             guard !strains.isEmpty else { return L10n.tr("Tento měsíc zatím bez námahy.") }
             return L10n.f("Průměrná námaha %@ z 21.", Fmt.decimal(strains.reduce(0, +) / Double(strains.count), digits: 1))
         case .workouts:
-            let done = daysSoFar.compactMap { model.calendar[$0] }.flatMap(\.activities).filter { $0.status == "done" }
+            let done = daysSoFar.compactMap { model.calendar[$0] }.flatMap(\.activities).filter { $0.status == "done" && $0.sport != "walk" }
             guard !done.isEmpty else { return L10n.tr("Tento měsíc zatím bez tréninku.") }
             let minutes = done.reduce(0.0) { $0 + ($1.minutes ?? 0) }
             return L10n.plural("%lld tréninků", done.count) + ", " + L10n.f("celkem %@.", Fmt.hoursMinutesLong(minutes))
@@ -113,7 +113,7 @@ struct TrainingMonthSheet: View {
     private var legend: String {
         switch value {
         case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený.")
-        case .workouts: return L10n.tr("Barva je sport. Šedá je teprve v plánu, vybledlá nesplněná, tečka je den volna.")
+        case .workouts: return L10n.tr("Barva je sport. Bledá je teprve v plánu, šedá nesplněná, tečka je den volna.")
         }
     }
 
@@ -161,16 +161,17 @@ struct WorkoutDayMark: View {
     var future = false
 
     var body: some View {
-        let list = Array((day?.activities ?? []).prefix(2))
+        let all = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
+        let list = Array((all.filter { $0.sport != "walk" }.isEmpty ? all : all.filter { $0.sport != "walk" }).prefix(2))
         HStack(spacing: 1) {
             if list.isEmpty {
                 if day != nil, !future { Circle().fill(Palette.faint.opacity(0.6)).frame(width: 4, height: 4) }
             } else {
                 ForEach(list) { a in
                     Image(systemName: SportDisc.symbol(a.sport, type: a.type))
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(a.status == "done" ? Palette.Sport.color(a.sport) : Palette.muted)
-                        .opacity(a.status == "missed" ? 0.4 : 1)
+                        .scaledFont(14, weight: .medium, cap: .denseCap)
+                        .foregroundStyle(a.status == "missed" ? Palette.muted : Palette.Sport.color(a.sport))
+                        .opacity(a.status == "planned" ? 0.62 : a.status == "missed" ? 0.55 : 1)
                 }
             }
         }

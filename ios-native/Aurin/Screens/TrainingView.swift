@@ -14,15 +14,12 @@ struct TrainingView: View {
     /// Scrolled down: the tab bar is two circles and the floating button sits between them.
     @Environment(\.compactTabBar) private var compactBar
     @Environment(\.wideLayout) private var wide
-    /// This week's calendar asked for once: until then the page waits, so the
-    /// strip and today's list never arrive late and push the cards down (602).
-    @State private var weekLoaded: String?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
             ZStack {
                 ScreenBackground(glow: Palette.Glow.training)
-                if let training = model.training, model.calendar[training.date] != nil || weekLoaded == training.date || model.demo {
+                if let training = model.training {
                     PageScroll {
                         TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
@@ -86,12 +83,6 @@ struct TrainingView: View {
             if let commit = current.settle(undo: false) { Task { await commit() } }
         }
         .task { await model.refreshIfStale(.training) }
-        .task(id: model.training?.date) {
-            guard let date = model.training?.date, weekLoaded != date else { return }
-            let monday = ISODay.shift(date, -ISODay.weekdayIndex(date))
-            await model.loadCalendar(from: monday, to: ISODay.shift(monday, 6))
-            weekLoaded = date
-        }
         // Every planned session of the week done: the App Store rating (AurinTips.swift).
         .reviewAfterFinishedWeek(model.training?.sessions, demo: model.demo)
     }
@@ -238,7 +229,11 @@ struct TrainingContent: View {
         }
         .padding(.top, top - 12)
         let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
-        if !CalendarDayList.shown(model.calendar[shownDay]?.activities ?? [], hidePlanned: hidden).isEmpty || model.calendar[shownDay]?.merge != nil
+        // Until the day's calendar is here, a row's height stands in for its
+        // list, so the cards below don't jump down when it comes (602).
+        if model.calendar[shownDay] == nil && !model.demo {
+            Color.clear.frame(height: 72).padding(.top, 2).accessibilityHidden(true)
+        } else if !CalendarDayList.shown(model.calendar[shownDay]?.activities ?? [], hidePlanned: hidden).isEmpty || model.calendar[shownDay]?.merge != nil
             || (!isToday || !upcoming.contains { $0.date == training.date }) {
             CalendarDayList(date: shownDay, today: training.date, day: model.calendar[shownDay], hidePlanned: hidden)
                 .daySlide(date: shownDay)
@@ -249,7 +244,7 @@ struct TrainingContent: View {
             if !todays.isEmpty {
                 TodaySessions(sessions: todays, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
                     .padding(.top, 12)
-            } else if let next = upcoming.first {
+            } else if let next = upcoming.first, next.date != training.date {
                 // Nothing left today: the next planned day under its own name,
                 // never under "Today" (602: tomorrow's Push read as today's).
                 SectionLabel(text: L10n.f("Další trénink %@", Fmt.relativeDay(next.date, today: training.date)))
@@ -257,7 +252,9 @@ struct TrainingContent: View {
                 TodaySessions(sessions: [next], today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
                     .padding(.top, 10)
             }
-            CoachTextCard(screen: "training").padding(.top, 14)
+            // Without the coach's own word (no AI, the sample day) the plan's
+            // reason for the workout stands in, so the card is always there.
+            CoachTextCard(screen: "training", fallbackText: upcoming.first?.advice).padding(.top, 14)
         } else {
             // D-TRENINK-8: the load and the overview are today's, never shown under another day.
             Button(action: showToday) {
@@ -664,10 +661,7 @@ struct NextSession: View {
             }
             WorkoutNumberRow(cells: numbers)
             if !parts.isEmpty { WorkoutPartsRow(parts: parts) }
-            if let advice = session.advice {
-                Text(advice).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // Why this workout is the coach's card under it (D-TRENINK-3), not a paragraph here.
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -835,9 +829,11 @@ struct FormWidget: View {
         let usual = Self.usual(form.series)
         return Card {
             DialTileTitle(title: "Forma")
-            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: zoneColor(form.zone),
+            // Green inside the usual range, amber outside it, the range itself neutral (concept).
+            let color = usual.map { $0.contains(form.form.rounded()) } == false ? Palette.amber : Palette.green
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color, bandTint: Palette.ink.opacity(0.3),
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
-                Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(zoneColor(form.zone))
+                Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
             }
             .frame(maxWidth: .infinity)
             .padding(.bottom, -18)
@@ -962,7 +958,8 @@ struct VO2maxWidget: View {
         let i = max(0, min(edges.count - 2, (edges.firstIndex { $0 > value } ?? edges.count - 1) - 1))
         return Card {
             DialTileTitle(title: "VO2max, odhad")
-            RangeDial(value: value, scale: edges[0]...edges[edges.count - 1], band: bands == nil ? nil : edges[i]...edges[i + 1],
+            // Without the age group's bands the dot would always sit in the middle and say nothing.
+            RangeDial(value: bands == nil ? nil : value, scale: edges[0]...edges[edges.count - 1], band: bands == nil ? nil : edges[i]...edges[i + 1],
                       size: 118, lineWidth: 7, tint: Palette.green,
                       spoken: "VO2max " + Fmt.decimal(value, digits: 1) + " ml/kg/min") {
                 VStack(spacing: 0) {

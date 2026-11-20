@@ -85,6 +85,14 @@ enum LoadWords {
         return words.prefix(1).uppercased(with: Fmt.locale) + words.dropFirst()
     }
 
+    /// The tile's scale with the usual range in the middle, so "as usual"
+    /// stands at the top of the arc (concept a-hlavni).
+    static func scale(around view: TrainingSnapshot.LoadView) -> ClosedRange<Double> {
+        let usual = band(view), middle = (usual.lowerBound + usual.upperBound) / 2
+        let half = max(scale.upperBound - middle, middle - scale.lowerBound) * 0.7
+        return (middle - half)...(middle + half)
+    }
+
     static func band(_ view: TrainingSnapshot.LoadView) -> ClosedRange<Double> {
         min(view.band.low, view.band.high)...max(view.band.low, view.band.high)
     }
@@ -123,13 +131,14 @@ struct LoadTile: View {
             // The title names the tile in small capitals with the way into its
             // detail (concept a-hlavni "LOAD BALANCE >"), whole (never "Load balan…").
             HStack(alignment: .firstTextBaseline, spacing: 4) {
+                // Two lines kept for both tiles, so their dials stand level.
                 Text(verbatim: kind.title.uppercased(with: Fmt.locale))
                     .font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2, reservesSpace: true)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
             }
-            RangeDial(value: view?.plot, scale: LoadWords.scale, band: view.map(LoadWords.band), size: 112, lineWidth: 9,
+            RangeDial(value: view?.plot, scale: view.map(LoadWords.scale(around:)) ?? LoadWords.scale, band: view.map(LoadWords.band), size: 112, lineWidth: 7,
                       tint: state?.color ?? Palette.green, spoken: spoken) {
                 Text(verbatim: centre).font(Typo.heading(19)).foregroundStyle(view?.plot == nil ? Palette.muted : Palette.ink)
             }

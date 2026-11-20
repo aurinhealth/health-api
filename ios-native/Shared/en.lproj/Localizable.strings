@@ -4764,7 +4764,7 @@
 "%@ kcal k ověření" = "%@ kcal to check";
 "Tento měsíc zatím bez tréninku." = "No workouts yet this month.";
 "celkem %@." = "%@ in total.";
-"Barva je sport. Šedá je teprve v plánu, vybledlá nesplněná, tečka je den volna." = "The colour is the sport. Grey is still ahead, faded grey was missed, a dot is a rest day.";
+"Barva je sport. Bledá je teprve v plánu, šedá nesplněná, tečka je den volna." = "The colour is the sport. Pale is still ahead, grey was missed, a dot is a rest day.";
 "Zelené pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí." = "The green band is your usual load. Days above it were harder, days below it easier.";
 "Čerstvé" = "Fresh";
 "Zotavuje se" = "Recovering";

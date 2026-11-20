@@ -48,14 +48,14 @@ enum Freshness: Int, CaseIterable, Hashable {
 struct FreshnessGroup: Identifiable, Hashable {
     let id: String
     let label: String
-    /// The muscles of /app/api/muscles in it; the first opens the detail.
+    /// The muscles of /app/api/muscles in it.
     let members: [String]
+    /// The most tired of them: a tap on the row opens it.
+    let open: String
     let lower: Bool
     let readyDate: String?
     let rested: Bool
-    /// "včera", "pondělí": the latest day a set or a run tired it (the last 3 days).
-    let lastDay: String?
-    /// Its body part's last training day, for the days before that.
+    /// Its body part's last training day; nil without one in 4 weeks.
     let lastDate: String?
 
     func state(on day: String) -> Freshness { Freshness.of(readyDate: readyDate, rested: rested, on: day) }
@@ -77,18 +77,23 @@ struct FreshnessGroup: Identifiable, Hashable {
 }
 
 extension MuscleFatigue {
-    /// The eleven groups in the concept's order, lower body first.
+    /// The eleven groups, the most tired first, then in the concept's order
+    /// (concept muscles(): tired, recovering, fresh).
     var freshnessGroups: [FreshnessGroup] {
-        FreshnessGroup.layout.compactMap { row in
+        let list: [FreshnessGroup] = FreshnessGroup.layout.compactMap { row in
             let found = row.members.compactMap { muscle($0) }
             guard !found.isEmpty else { return nil }
-            let tired = found.filter { $0.state != "rested" }
+            let tired = found.filter { $0.state != "rested" && ($0.readyDate ?? "") > date }
             let latest = tired.compactMap(\.readyDate).max()
-            let lastDay = found.compactMap { $0.from?.first?.day }.first
+            let open = tired.max { ($0.readyDate ?? "") < ($1.readyDate ?? "") }?.id ?? found[0].id
             let part = groups?.first { $0.id == row.part }
-            return FreshnessGroup(id: row.id, label: L10n.tr(row.label), members: row.members, lower: row.lower,
-                                  readyDate: latest, rested: tired.isEmpty, lastDay: lastDay.map { L10n.tr($0) }, lastDate: part?.lastDate)
+            return FreshnessGroup(id: row.id, label: L10n.tr(row.label), members: row.members, open: open, lower: row.lower,
+                                  readyDate: latest, rested: tired.isEmpty, lastDate: part?.lastDate)
         }
+        return list.enumerated().sorted { a, b in
+            let sa = a.element.state(on: date), sb = b.element.state(on: date)
+            return sa != sb ? sa.rawValue > sb.rawValue : a.offset < b.offset
+        }.map(\.element)
     }
 
     /// How many groups are in each state today.
@@ -107,7 +112,7 @@ extension MuscleFatigue {
     /// that waits longer leads; all fresh, one line.
     var freshnessHeadline: (title: String, note: String?) {
         let all = freshnessGroups
-        func ready(_ lower: Bool) -> String? { all.filter { $0.lower == lower && !$0.rested }.compactMap(\.readyDate).max() }
+        func ready(_ lower: Bool) -> String? { all.filter { $0.lower == lower && !$0.rested }.compactMap(\.readyDate).filter { $0 > date }.max() }
         func when(_ day: String?) -> String { day.map { Fmt.relativeDay($0, today: date) } ?? L10n.tr("dnes") }
         let legs = ready(true), upper = ready(false)
         guard legs != nil || upper != nil else { return (L10n.tr("Všechny svaly čerstvé"), nil) }
@@ -130,13 +135,13 @@ struct MuscleFreshnessCard: View {
                 Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
             }
             HStack(alignment: .center, spacing: 14) {
-                MuscleFigurePair(colors: data.freshnessColors, spacing: 2).frame(height: 120)
+                MuscleFigurePair(colors: data.freshnessColors, spacing: 2).frame(height: 138)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(verbatim: data.freshnessHeadline.title).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                         .lineLimit(2).minimumScaleFactor(0.8).fixedSize(horizontal: false, vertical: true)
                     ForEach(Freshness.allCases, id: \.self) { state in
                         HStack(spacing: 7) {
-                            RoundedRectangle(cornerRadius: 2).fill(state.color).frame(width: 9, height: 9)
+                            Circle().fill(state.color).frame(width: 8, height: 8)
                             Text(verbatim: state.title).font(Typo.small).foregroundStyle(Palette.secondary)
                             Spacer(minLength: 4)
                             Text(verbatim: String(data.freshnessCount(state))).font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink).monospacedDigit()
@@ -146,7 +151,7 @@ struct MuscleFreshnessCard: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr("Čerstvost svalů"))
+        .accessibilityLabel(L10n.tr("Čerstvost svalů, odhad"))
         .accessibilityValue(([data.freshnessHeadline.title] + Freshness.allCases.map { $0.title + " " + String(data.freshnessCount($0)) }).joined(separator: ", "))
     }
 }
@@ -163,15 +168,13 @@ struct FreshnessRow: View {
             Circle().fill(now.color).frame(width: 9, height: 9)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: group.label).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                if let last {
-                    Text(verbatim: last).font(Typo.caption).foregroundStyle(Palette.muted)
-                }
+                Text(verbatim: last).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 5) {
                 HStack(spacing: 3) {
                     ForEach(0..<3, id: \.self) { i in
-                        Capsule().fill(group.state(on: ISODay.shift(today, i)).color).frame(width: 34, height: 9)
+                        RoundedRectangle(cornerRadius: 4, style: .continuous).fill(group.state(on: ISODay.shift(today, i)).color).frame(width: 34, height: 12)
                     }
                 }
                 Text(verbatim: when).font(Typo.caption.weight(.medium)).foregroundStyle(now.textColor)
@@ -181,7 +184,7 @@ struct FreshnessRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(group.label)
-        .accessibilityValue([now.title, when, last].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue([now.title, when, last].joined(separator: ", "))
     }
 
     /// "Fresh now", "Fresh tomorrow", "Fresh on Saturday".
@@ -190,10 +193,9 @@ struct FreshnessRow: View {
         return L10n.f("Čerstvé %@", Fmt.relativeDay(ready, today: today))
     }
 
-    /// "Last trained yesterday", "Last trained Nov 10".
-    private var last: String? {
-        if let day = group.lastDay { return L10n.f("Naposledy %@", day) }
-        if let date = group.lastDate { return L10n.f("Naposledy %@", Fmt.relativeDay(date, today: today)) }
-        return nil
+    /// "Last trained yesterday", "Last trained Nov 10", or that it has not been in 4 weeks.
+    private var last: String {
+        guard let date = group.lastDate else { return L10n.tr("4 týdny bez tréninku") }
+        return L10n.f("Naposledy %@", Fmt.relativeDay(date, today: today))
     }
 }

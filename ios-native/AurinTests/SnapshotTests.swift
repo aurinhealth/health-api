@@ -1144,7 +1144,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Freshness.of(readyDate: "2026-11-20", rested: false, on: "2026-11-20"), .fresh)
         XCTAssertEqual(Freshness.of(readyDate: "2026-11-25", rested: true, on: "2026-11-20"), .fresh)
         let muscles = DemoData.muscles
-        XCTAssertEqual(muscles.freshnessGroups.first?.id, "lower_back")
+        XCTAssertEqual(muscles.freshnessGroups.first.map { $0.state(on: muscles.date) }, .tired)
         XCTAssertEqual(Freshness.allCases.map { muscles.freshnessCount($0) }.reduce(0, +), muscles.freshnessGroups.count)
         try render("muscles-widgets", glow: Palette.Glow.training, height: 1500) {
             VStack(spacing: 12) {

@@ -298,18 +298,29 @@ struct MusclesView: View {
     @ViewBuilder private func content(_ data: MuscleFatigue) -> some View {
         let headline = data.freshnessHeadline
         let groups = data.freshnessGroups
-        Text("Čerstvost svalů, odhad").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 22)
-        Text(verbatim: headline.title).font(Typo.heading(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-            .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
-        if let note = headline.note {
-            Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary).padding(.top, 6)
+        VStack(spacing: 6) {
+            Text("Čerstvost svalů, odhad").font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: headline.title).font(Typo.heading(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = headline.note {
+                Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary)
+            }
         }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 22)
 
         Card {
             MuscleFigurePair(colors: data.freshnessColors, spacing: 22) { id in model.push(.muscle(id)) }
                 .frame(height: 300).frame(maxWidth: .infinity)
-            HStack(spacing: 8) {
-                ForEach(Freshness.allCases, id: \.self) { state in pill(state, count: data.freshnessCount(state)) }
+            // In one row while the names fit, else one under another (large text, Czech).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(Freshness.allCases, id: \.self) { state in pill(state, count: data.freshnessCount(state)).fixedSize() }
+                }
+                VStack(spacing: 6) {
+                    ForEach(Freshness.allCases, id: \.self) { state in pill(state, count: data.freshnessCount(state)) }
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 6)
@@ -353,7 +364,7 @@ struct MusclesView: View {
             .padding(.vertical, 10)
             ForEach(groups.filter { filter == nil || $0.state(on: data.date) == filter }) { group in
                 Rectangle().fill(Palette.hairline).frame(height: 1)
-                Button { model.push(.muscle(group.members[0])) } label: { FreshnessRow(group: group, today: data.date) }
+                Button { model.push(.muscle(group.open)) } label: { FreshnessRow(group: group, today: data.date) }
                     .buttonStyle(.plain)
             }
         }
@@ -365,18 +376,19 @@ struct MusclesView: View {
     }
 
     /// "Fresh 6": shows only that state's groups; a second tap shows all.
+    /// 44 pt to tap, the chosen one filled in ink (concept .mfil).
     private func pill(_ state: Freshness, count: Int) -> some View {
         let on = filter == state
         return Button { withAnimation(.snappy(duration: 0.2)) { filter = on ? nil : state } } label: {
             HStack(spacing: 6) {
                 Circle().fill(state.color).frame(width: 8, height: 8)
-                Text(verbatim: state.title).font(Typo.small).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                Text(verbatim: String(count)).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink).monospacedDigit()
+                Text(verbatim: state.title).font(Typo.caption).lineLimit(1)
+                Text(verbatim: String(count)).font(Typo.caption.weight(.semibold)).monospacedDigit()
             }
-            .padding(.horizontal, 9).frame(height: 32)
-            .background(Palette.ink.opacity(on ? 0.1 : 0.05), in: Capsule())
-            .overlay { if on { Capsule().stroke(Palette.ink.opacity(0.5), lineWidth: 1) } }
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .padding(.horizontal, 9).frame(minHeight: 44)
+            .frame(maxWidth: .infinity)
+            .background(on ? Palette.button : Palette.ink.opacity(0.05), in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -534,7 +546,7 @@ struct MuscleDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 // The area starts at the scale's bottom, not at 0 kg, so it
                 // stays inside the card (build 602: it ran down past the card).
-                let lo = s.points.map(\.kg).min()! * 0.95, hi = s.points.map(\.kg).max()! * 1.05
+                let lo = s.points.map(\.kg).min()! * 0.95, hi = max(s.points.map(\.kg).max()! * 1.05, lo + 1)
                 Chart(s.points) { p in
                     AreaMark(x: .value("Týden", p.week), yStart: .value("kg", lo), yEnd: .value("kg", p.kg))
                         .foregroundStyle(Palette.green.opacity(0.12))
@@ -612,7 +624,7 @@ struct MuscleDetailView: View {
         }
     }
 
-    private var weekdays: [String] { L10n.isEnglish ? ["M", "T", "W", "T", "F", "S", "S"] : ["P", "Ú", "S", "Č", "P", "S", "N"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     private func cell(_ date: String, trained: Set<String>) -> some View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)

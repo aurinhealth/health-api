@@ -124,14 +124,15 @@ extension DayCircle {
 
         init(day: CalendarDay?, date: String, today: String) {
             let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
-            guard let first = list.first(where: { $0.status == "done" }) ?? list.first else {
+            let done = list.filter { $0.status == "done" }
+            guard let first = done.first(where: { $0.sport != "walk" }) ?? done.first ?? list.first else {
                 label = L10n.tr(day == nil ? "bez dat" : "volno")
                 return
             }
             sport = first.sport
             type = first.type
             state = SportDisc.State(status: first.status)
-            second = list.first { $0.id != first.id && $0.status == "planned" }?.sport
+            second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport
             label = L10n.tr(SportStyle.name(first.sport)) + ", " + L10n.tr(state == .done ? "hotovo" : state == .missed ? "nesplněno" : "v plánu")
         }
     }

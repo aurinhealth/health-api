@@ -224,7 +224,7 @@ struct CoachVisual: View {
             case "recovery":
                 if let h = model.health, let hrv = h.hrv { HRVWideWidget(hrv: hrv, restingHR: h.restingHR?.value) } else if model.health == nil { loading }
             case "form":
-                if let f = model.training?.form { FormWidget(form: f) } else if model.training == nil { loading }
+                if let f = model.training?.form { FormWidget(form: f, size: .medium) } else if model.training == nil { loading }
             case "nutrition":
                 if let t = model.today { FoodWidget(nutrition: t.nutrition, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true) } else { loading }
             case "week":
