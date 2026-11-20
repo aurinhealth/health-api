@@ -412,20 +412,20 @@ struct DataAgePill: View {
     }
 }
 
-/// The days on Dnes, Zdraví and Jídlo (Petr, 2026-11-11, as Bevel): seven at
-/// a time with the shown day in the middle (today at the right end), one strip from four months back to
-/// today (on Jídlo two weeks ahead) that a finger slides through freely. A
-/// swipe of the day below moves it by one day, never a whole week. A dot in
+/// The days on Dnes, Zdraví and Jídlo: the calendar week, Monday to Sunday,
+/// as in the concepts (rule T1, device comparison of build 602 point 7), one
+/// week a swipe from four months back to this week (on Jídlo two weeks
+/// ahead). A swipe of the day below moves the shown day by one day. A dot in
 /// the readiness colour under each day (/app/api/days, the shown week from
-/// Today first), today in a filled circle, the shown day in a ring in its
-/// colour. A tap opens that day; later days are faint and do nothing.
+/// Today first), today's letter bold, the shown day in the grey pill. A tap
+/// opens that day; later days are faint and do nothing.
 struct WeekStrip: View {
     @Environment(AppModel.self) private var model
     /// The day on screen (the demo's sample day).
     let date: String
     /// Food: the days of the next two weeks can be picked too.
     var ahead = false
-    /// The day in the strip's middle, as it scrolls.
+    /// The Monday of the week in sight, as it scrolls.
     @State private var centered: String?
     /// The strip grows with the letter and the date.
     @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 76
@@ -436,9 +436,13 @@ struct WeekStrip: View {
     private var shown: String { model.demo ? date : (model.selectedDate ?? today) }
     /// Four months back, further when an older day is on screen.
     /// (ISODay.range stops at 400 days, so never more than that.)
+    /// Whole weeks, Monday to Sunday, so that a swipe turns one week.
     private var days: [String] {
-        ISODay.range(max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -399)), lastDay)
+        let first = max(min(ISODay.shift(today, -120), ISODay.shift(shown, -14)), ISODay.shift(lastDay, -392))
+        return ISODay.range(Self.monday(first), ISODay.shift(Self.monday(lastDay), 6))
     }
+
+    static func monday(_ day: String) -> String { ISODay.shift(day, -ISODay.weekdayIndex(day)) }
 
     var body: some View {
         Group {
@@ -472,11 +476,14 @@ struct WeekStrip: View {
             .scrollTargetLayout()
         }
         .scrollIndicators(.hidden)
-        .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: $centered, anchor: .center)
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $centered, anchor: .leading)
         .frame(height: height)
-        .onAppear { centered = shown }
-        .onChange(of: shown) { _, day in withAnimation(.easeOut(duration: 0.25)) { centered = day } }
+        .onAppear { centered = Self.monday(shown) }
+        .onChange(of: shown) { _, day in
+            let week = Self.monday(day)
+            if week != centered { withAnimation(.easeOut(duration: 0.25)) { centered = week } }
+        }
         // The readiness dots of the months in sight, once each (a month a call).
         .task(id: months) {
             let oldest = ISODay.shift(today, -90)
@@ -486,7 +493,7 @@ struct WeekStrip: View {
 
     /// The months of the seven days in sight that the server still has (90 days back).
     private var months: [String] {
-        let middle = centered ?? shown
+        let middle = ISODay.shift(centered ?? Self.monday(shown), 3)
         let oldest = ISODay.monthStart(ISODay.shift(today, -90))
         let list = [ISODay.shift(middle, -3), ISODay.shift(middle, 3)].map(ISODay.monthStart).filter { $0 >= oldest && $0 <= today }
         return Array(Set(list)).sorted()
@@ -511,23 +518,18 @@ struct WeekStrip: View {
     }
 
     /// The day picked sits in a grey pill with its letter and its dot, as the
-    /// week on Training (redesign D, rule T1); today alone keeps a thin ring.
+    /// week on Training (redesign D, rule T1); today's letter is bold.
     /// The dot is the day's readiness, in the colours of the month calendar.
     private func cell(_ day: String) -> some View {
         let isToday = day == today, selected = day == shown, future = day > lastDay
         let color = ReadinessText.pill(zone(day))?.1
         return VStack(spacing: 5) {
-            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(selected ? .semibold : .medium))
-                .foregroundStyle(selected ? Palette.ink : Palette.muted)
-            ZStack {
-                if isToday && !selected {
-                    Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
-                }
-                Text(verbatim: Fmt.dayNumber(day))
-                    .scaledFont(15, weight: .semibold, cap: .denseCap)
-                    .foregroundStyle(future ? Palette.faint : Palette.ink)
-            }
-            .frame(width: 34, height: 34)
+            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(isToday ? .bold : selected ? .semibold : .medium))
+                .foregroundStyle(selected || isToday ? Palette.ink : Palette.muted)
+            Text(verbatim: Fmt.dayNumber(day))
+                .scaledFont(15, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(future ? Palette.faint : Palette.ink)
+                .frame(width: 34, height: 34)
             Circle().fill(color ?? .clear).frame(width: 5, height: 5)
         }
         .padding(.vertical, 6)
