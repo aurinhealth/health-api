@@ -41,6 +41,8 @@ struct DetailScreen<Content: View>: View {
     var glow: Color = Palette.Glow.health
     /// Shown in the pinned bar once the page is scrolled.
     var title: String? = nil
+    /// The title always on top, as the planned gym detail's "GYM".
+    var pinTitle = false
     /// The coach top right asks about this (CoachEntry); nil asks about the day.
     var coach: CoachSubject? = nil
     /// Every subpage has the coach top right (PRAVIDLO-KOUC-VPRAVO-NAHORE);
@@ -64,7 +66,7 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: title, coach: showsCoach ? CoachEntry(subject: coach, view: Self.coachView(glow), companion: info) : nil) { dismiss() }
+        .floatingBack(title: title, pinTitle: pinTitle, coach: showsCoach ? CoachEntry(subject: coach, view: Self.coachView(glow), companion: info) : nil) { dismiss() }
         .navBarVisibility(.hidden)
     }
 

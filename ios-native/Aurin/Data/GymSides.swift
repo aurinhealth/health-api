@@ -14,6 +14,9 @@ enum GymSides {
 
     static func color(_ side: String) -> Color { side == "L" ? Palette.blue : Palette.amber }
 
+    /// "L" or "P" as stored, shown "L"/"R" in English.
+    static func letter(_ side: String) -> String { side == "P" ? L10n.tr("P") : side }
+
     /// The last pair of the exercise with both sides done, when they differ:
     /// "Pravá strana dala o 2 opakování míň. Levou dělej jen tolik co pravou…"
     static func note(_ exercise: GymExercise) -> String? {
@@ -91,7 +94,7 @@ struct GymSidesView: View {
 
     private func bar(_ side: String, _ share: Double) -> some View {
         HStack(spacing: 8) {
-            Text(verbatim: side).font(Typo.caption.weight(.semibold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
+            Text(verbatim: GymSides.letter(side)).font(Typo.caption.weight(.semibold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Palette.track)

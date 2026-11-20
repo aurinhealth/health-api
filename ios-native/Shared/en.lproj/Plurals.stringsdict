@@ -1245,5 +1245,37 @@
 			<string>From last night and your past %lld nights</string>
 		</dict>
 	</dict>
+	<key>%lld pohybů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld move</string>
+			<key>other</key>
+			<string>%lld moves</string>
+		</dict>
+	</dict>
+	<key>%lld protažení</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld stretch</string>
+			<key>other</key>
+			<string>%lld stretches</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

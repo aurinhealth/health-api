@@ -277,7 +277,7 @@ final class SnapshotTests: XCTestCase {
     func testWorkoutScreens() throws {
         let gymDay = DemoData.gym
         try render("gym", glow: Palette.Glow.training) {
-            VStack(spacing: 12) { ForEach(gymDay.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+            VStack(spacing: 12) { ForEach(gymDay.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true) } }
                 .padding(24).padding(.top, 30)
         }
         let sessions = DemoData.training.sessions ?? []
@@ -569,7 +569,7 @@ final class SnapshotTests: XCTestCase {
         try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale).environment(AppModel(demo: true)) }
         try render("site-food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
         try render("site-gym", glow: Palette.Glow.training) {
-            VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+            VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true) } }
                 .padding(24).padding(.top, 30).environment(\.locale, L10n.locale)
         }
     }
@@ -615,9 +615,20 @@ final class SnapshotTests: XCTestCase {
             GymHistory.Session(date: ISODay.shift(historyDay, -21), sets: [GymHistory.Lift(kg: 25, reps: 12, target: nil, rpe: nil), GymHistory.Lift(kg: 25, reps: 8, target: nil, rpe: nil)])
         ])
         try render("gym-history", height: 1250) { ExerciseHistorySheet(name: "Rear delt pec deck", exercise: pecDeck) }
-        try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
+        // The planned gym detail as concept K04/017: hero, coach sentence, parts, folded cards, figure, pinned Start.
+        var plan = DemoData.gym
+        for set in plan.exercises.flatMap(\.sets) where set.done { plan.undo(row: set.row) }
+        let names = plan.exercises.map(\.name)
+        let worked: [String: [String: Double]] = [names[0]: ["quads": 1, "hips": 0.6, "hamstrings": 0.3], names[1]: ["chest": 1, "triceps": 0.5, "front_delts": 0.5],
+                                                   names[2]: ["upper_back": 1, "lats": 0.8, "biceps": 0.5], names[3]: ["side_delts": 1, "front_delts": 0.8, "triceps": 0.4]]
+        try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
+            NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
+        }
+        try render("gym-planned-card-open", height: 420) {
+            ExerciseCard(exercise: plan.exercises[1], started: false, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true).padding(20)
+        }
         let why = "Cíl podle tvého sportu – síla a svaly: těžší hlavní cviky. Na tvoje přání šetřím nohy a trénink soustředím na horní část těla; cviky vybírám podle čerstvosti a nedávné svalové zátěže. Cviky se liší od plánu na čt 29. 10. Časový plán: přibližně 74 z 75 minut včetně rozcvičení, pauz, nastavování strojů a rezervy."
-        try render("gym-why", height: 360) { GymWhyCard(reasons: GymWhy.reasons(why)).padding(20) }
+        try render("gym-why", height: 600) { GymWhySheet(reasons: GymWhy.reasons(why)) }
         try render("gym-stretch-info", height: 700) {
             StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
                                          steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))

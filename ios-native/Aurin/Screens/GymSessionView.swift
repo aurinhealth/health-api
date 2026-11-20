@@ -37,6 +37,30 @@ struct GymSessionView: View {
     /// The set whose letter is being chosen (IntensitySheet), as in Režim tréninku.
     @State private var intensityFor: SetRef?
     @State private var history: GymHistory = .empty
+    /// The planned detail's sheets: Why this workout, Reorder (Edit exercises), Add exercise.
+    @State private var whyOpen = false
+    @State private var reordering = false
+    @State private var adding = false
+    @State private var catalog: [GymCatalogExercise] = []
+
+    init(date: String, session: WeekSession? = nil) {
+        self.date = date
+        self.session = session
+    }
+
+    /// Tests: the screen with this day and its muscles, nothing loaded.
+    init(date: String, preview: GymDay, muscles: [String: [String: Double]] = [:]) {
+        self.date = date
+        _day = State(initialValue: preview)
+        _muscles = State(initialValue: muscles)
+        _loading = State(initialValue: false)
+        previewing = true
+    }
+
+    private var previewing = false
+
+    /// A plan to do (not done, not cancelled away): the concept's planned detail.
+    private var planned: Bool { !showsDone && day?.exercises.isEmpty == false }
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { session.map(model.liveSession) ?? model.doneStrengthSession(on: date) }
@@ -87,10 +111,29 @@ struct GymSessionView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: day?.planName ?? "Posilovna") {
+        DetailScreen(glow: Palette.Glow.training, title: planned ? L10n.tr("Posilovna").uppercased(with: Fmt.locale) : day?.planName ?? "Posilovna",
+                     pinTitle: planned) {
             content
         }
-        .task { await load() }
+        // Start workout pinned at the bottom as an ink pill (concept K04/017).
+        .overlay(alignment: .bottom) {
+            if planned, let day, !model.demo || previewing { startPill(day) }
+        }
+        .task { if !previewing { await load() } }
+        .sheet(isPresented: $whyOpen) { GymWhySheet(reasons: GymWhy.reasons(day?.note)) }
+        .sheet(isPresented: $reordering) {
+            if let day {
+                EditExercisesSheet(day: day, catalog: catalog, current: nil) { edited in
+                    self.day = edited
+                    Task { await save() }
+                }
+            }
+        }
+        .sheet(isPresented: $adding) {
+            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in
+                Task { await add(name) }
+            }
+        }
         .sheet(item: $intensityFor) { ref in
             let set: GymSet? = day?.exercises.flatMap(\.sets).first(where: { $0.row == ref.id })
             IntensitySheet(title: set.map { $0.drop ? L10n.tr("Dropset") : $0.warmup ? L10n.tr("Rozcvička") : L10n.f("Série %@", $0.number) } ?? "",
@@ -120,43 +163,47 @@ struct GymSessionView: View {
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr("Posilovna") + ", " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
-                Spacer()
-                // Move or cancel the day's session (GymPlanActions.swift).
-                if !model.demo && !showsDone && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
-                    Button { changing = true } label: {
-                        Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                    }
-                    .accessibilityLabel("Změnit trénink")
-                }
-                // Done: the gym session was another sport (Crossfit, HIIT…).
-                if !model.demo && showsDone, let typeTarget, let editTarget {
-                    Menu {
-                        Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
-                        if !editTarget.app {
-                            Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+            // The planned workout has its own hero (concept K04/017); the label and
+            // ⋯ stay for a done one and for a day without a plan.
+            if !planned {
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel(text: L10n.tr("Posilovna") + ", " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
+                    Spacer()
+                    // Move or cancel the day's session (GymPlanActions.swift).
+                    if !model.demo && !showsDone && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
+                        Button { changing = true } label: {
+                            Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                         }
-                        // Paired with the day's gym plan or a plan: apart again, the activity stays.
-                        if doneSession?.unpairTarget != nil {
-                            Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                        .accessibilityLabel("Změnit trénink")
+                    }
+                    // Done: the gym session was another sport (Crossfit, HIIT…).
+                    if !model.demo && showsDone, let typeTarget, let editTarget {
+                        Menu {
+                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                            if !editTarget.app {
+                                Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+                            }
+                            // Paired with the day's gym plan or a plan: apart again, the activity stays.
+                            if doneSession?.unpairTarget != nil {
+                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                            }
+                            Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
+                        } label: {
+                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                                .frame(width: 36, height: 32).contentShape(Rectangle())
                         }
-                        Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
-                    } label: {
-                        Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                            .frame(width: 36, height: 32).contentShape(Rectangle())
+                        .accessibilityLabel("Další volby")
+                        .sheet(isPresented: $changingType) {
+                            ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
+                        }
+                        .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
+                                         kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
+                                         deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+                        .activityUnpairing(session: doneSession, asking: $unpairing) { dismiss() }
                     }
-                    .accessibilityLabel("Další volby")
-                    .sheet(isPresented: $changingType) {
-                        ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
-                    }
-                    .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
-                                     kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
-                                     deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
-                    .activityUnpairing(session: doneSession, asking: $unpairing) { dismiss() }
                 }
+                .padding(.top, 24)
             }
-            .padding(.top, 24)
             if loading && day == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else if showsDone {
@@ -199,56 +246,7 @@ struct GymSessionView: View {
                     }
                 }
             } else if let day, !day.exercises.isEmpty {
-                Text(day.planName ?? "Silový trénink").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
-                progress(day)
-                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
-                let before = parts.before(day).reduce(0) { $0 + parts.minutes($1, day: day) }
-                let after = parts.after(day).reduce(0) { $0 + parts.minutes($1, day: day) }
-                if let planned = day.plannedMinutes, before + after > 0 {
-                    GymTimeCard(minutes: planned, warmup: before, stretching: after)
-                        .padding(.top, 14)
-                }
-                if !muscles.isEmpty {
-                    Card {
-                        WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
-                        BodyMap(load: load, height: 220)
-                    }
-                    .padding(.top, 16)
-                }
-                // The note as short reasons (GymWhyCard.swift), not a paragraph.
-                let reasons = GymWhy.reasons(day.note)
-                if !reasons.isEmpty {
-                    GymWhyCard(reasons: reasons).padding(.top, 16)
-                }
-                GymPartsCard(day: day, date: date).padding(.top, 18)
-                NavigationLink(value: AppRoute.trainingMode(date)) {
-                    // Green as in Režim tréninku: the one button that starts recording.
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 16)
-                ForEach(parts.before(day)) { part in
-                    if let routine = parts.routine(part, day: day) {
-                        StretchingCard(stretching: routine, date: date, kind: part.kind).padding(.top, 16)
-                    }
-                }
-                exerciseCards(day)
-                    .padding(.top, 20)
-                ForEach(parts.after(day)) { part in
-                    if let routine = parts.routine(part, day: day) {
-                        StretchingCard(stretching: routine, date: date, kind: part.kind).padding(.top, 16)
-                    }
-                }
-                PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
-                    Task { await finish() }
-                }
-                .disabled(finishing)
-                .padding(.top, 24)
-                // The day's workout without weights: kept in Moje tréninky or sent to a friend.
-                let kept = WorkoutTemplate.from(day, minutes: nil)
-                SaveWorkoutButton(template: kept).padding(.top, 10)
-                ShareWorkoutButton(template: kept, date: date, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
+                plannedDetail(day)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
@@ -284,19 +282,233 @@ struct GymSessionView: View {
         }
     }
 
+    // MARK: The planned workout (concept K04/017)
+
+    @ViewBuilder
+    private func plannedDetail(_ day: GymDay) -> some View {
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        let started = Self.started(day)
+        ScrollViewReader { proxy in
+            VStack(alignment: .leading, spacing: 0) {
+                hero(day, parts)
+                    .padding(.top, 8)
+                if let line = GymWhy.coachLine(GymWhy.reasons(day.note)) {
+                    Button { whyOpen = true } label: {
+                        HStack(alignment: .center, spacing: 10) {
+                            Text(verbatim: line).font(Typo.body).foregroundStyle(Palette.ink)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+                                .accessibilityHidden(true)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(L10n.tr("Proč tenhle trénink"))
+                    .padding(.top, 16)
+                }
+                GymPartsCard(day: day, date: date) { withAnimation(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
+                    .padding(.top, 22)
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel(text: "Cviky")
+                    Spacer()
+                    if !model.demo || previewing {
+                        Button(LocalizedStringKey("Upravit pořadí")) { Task { await loadCatalog(); reordering = true } }
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                            .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 26)
+                .id(Self.exercisesID)
+                exerciseCards(day, started: started)
+                    .padding(.top, 8)
+                if !model.demo || previewing {
+                    Button { Task { await loadCatalog(); adding = true } } label: {
+                        Text(verbatim: "+ " + L10n.tr("Přidat cvik")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            .frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                }
+                if !muscles.isEmpty { worked.padding(.top, 22) }
+                // Sets ticked here before the live workout: they can still be finished here.
+                if started {
+                    PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
+                        Task { await finish() }
+                    }
+                    .disabled(finishing)
+                    .padding(.top, 24)
+                }
+                // The day's workout without weights: kept in Moje tréninky or sent to a friend.
+                let kept = WorkoutTemplate.from(day, minutes: nil)
+                SaveWorkoutButton(template: kept).padding(.top, 24)
+                ShareWorkoutButton(template: kept, date: date, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
+                // Move or cancel the day's session (GymPlanActions.swift).
+                if !model.demo {
+                    Button { changing = true } label: {
+                        Text("Změnit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
+                }
+                // Room for the pinned Start workout.
+                Color.clear.frame(height: 40)
+            }
+        }
+    }
+
+    private static let exercisesID = "gym-exercises"
+
+    /// A set ticked: the workout is under way.
+    static func started(_ day: GymDay) -> Bool { day.exercises.contains { $0.sets.contains(where: \.done) } }
+
+    /// The sport's disc, the name in serif, "Today at 17:30, 45 min, about 4.2 strain".
+    private func hero(_ day: GymDay, _ parts: GymDayParts) -> some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "figure.strengthtraining.traditional")
+                .font(.system(size: 28, weight: .medium)).foregroundStyle(Palette.background)
+                .frame(width: 60, height: 60)
+                .background(Palette.Sport.color("strength"), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(day.planName ?? L10n.tr("Silový trénink")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: heroLine(day, parts)).font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func heroLine(_ day: GymDay, _ parts: GymDayParts) -> String {
+        let today = AppModel.localDate(Date())
+        var words: [String] = []
+        let when = Fmt.capitalized(Fmt.relativeDay(date, today: today))
+        let plan = planEntry
+        // A plan without its own hour comes at midnight ("00:00"): only the day then.
+        if let time = plan.time, time != "00:00", let clock = ClockText.format(optional: time) {
+            words.append(L10n.f("%@ v %@", when, clock))
+        } else {
+            words.append(when)
+        }
+        let extra = (parts.before(day) + parts.after(day)).reduce(0) { $0 + parts.minutes($1, day: day) }
+        if let minutes = day.plannedMinutes { words.append("\(minutes + extra) min") }
+        if let strain = plan.strain { words.append(L10n.f("asi %@ námahy", Fmt.decimal(strain, digits: 1))) }
+        return words.joined(separator: ", ")
+    }
+
+    /// The day's gym session in Training: its hour and its strain estimate.
+    private var planEntry: (time: String?, strain: Double?) {
+        let training = model.training
+        let cards = (training?.todaySessions ?? []) + [training?.next].compactMap { $0 }
+        let card = cards.first { $0.date == date && $0.sport == "strength" }
+        let week = training?.sessions?.first { $0.date == date && $0.sport == "strength" && $0.status != "done" }
+        return (card?.time ?? week?.time, card?.strain)
+    }
+
+    /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
+    private var worked: some View {
+        let primary = Self.names(load.filter { $0.value >= BodyMap.primary })
+        let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary })
+        return VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Co procvičíš")
+            VStack(alignment: .leading, spacing: 12) {
+                BodyMap(load: load, height: 200)
+                if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
+                if !secondary.isEmpty { muscleTags("Pomocně", secondary, filled: false) }
+            }
+            .padding(18)
+            .cardSurface(cornerRadius: 20)
+        }
+    }
+
+    /// The muscles' names, each once, in the figure's order.
+    static func names(_ load: [String: Double]) -> [String] {
+        var seen = Set<String>()
+        return load.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+            .map { BodyFigure.label($0.key) }
+            .filter { seen.insert($0).inserted }
+    }
+
+    private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Circle().fill(filled ? Palette.rust : Palette.rust.opacity(0.45)).frame(width: 7, height: 7)
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            FlowLayout(spacing: 6) {
+                ForEach(names, id: \.self) { name in
+                    Text(verbatim: name).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).frame(height: 28)
+                        .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
+                        .overlay { if !filled { Capsule().stroke(Palette.rust.opacity(0.4), lineWidth: 1) } }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Start workout (today) or Resume workout (sets ticked), pinned.
+    @ViewBuilder
+    private func startPill(_ day: GymDay) -> some View {
+        if date == AppModel.localDate(Date()) {
+            let resume = Self.started(day)
+            NavigationLink(value: AppRoute.trainingMode(date)) {
+                Text(verbatim: L10n.tr(resume ? "Pokračovat v tréninku" : "Začít trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Palette.button, in: Capsule())
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
+            }
+            .buttonStyle(.plain)
+            // Start workout opens with 3, 2, 1 and starts (concept 08); a started one goes on.
+            .simultaneousGesture(TapGesture().onEnded {
+                if resume { TrainingModeView.resumeOnOpen = date } else { TrainingModeView.startOnOpen = date }
+            })
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func loadCatalog() async {
+        guard catalog.isEmpty, !model.demo else { return }
+        catalog = (try? await model.api.gymExercises()) ?? []
+    }
+
+    /// An exercise added from the library: its sets as the coach suggests.
+    private func add(_ name: String) async {
+        guard var next = day else { return }
+        let suggestion = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
+        next.appendExercise(name, suggestion: suggestion, sides: GymSides.oneSided(name))
+        day = next
+        await save()
+        if !model.demo, let names = day?.exercises.map(\.name) {
+            muscles = (try? await model.api.gymMuscles(names: names)) ?? muscles
+        }
+    }
+
     /// The exercises in order, a superset's together under its mark.
-    private func exerciseCards(_ day: GymDay) -> some View {
+    private func exerciseCards(_ day: GymDay, started: Bool) -> some View {
         let all = day.exercises
         let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
         let groups: [String?] = list.map { $0.exercise.superset }
         return VStack(spacing: 12) {
             ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
-                if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+                let items = Array(list[run])
+                if let letter = ExerciseOrder.letter(groups[run.lowerBound]), items.count == 2 {
+                    // A pair clasped as in the live workout: violet edges, "Superset A" on the seam.
+                    LiveSupersetClasp(letter: letter) {
+                        card(day, items[0].exercise, started: started)
+                    } second: {
+                        card(day, items[1].exercise, started: started)
+                    }
+                } else if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
                     SupersetGroup(letter: letter, spacing: 12) {
-                        ForEach(list[run], id: \.key) { (item: KeyedExercise) in card(day, item.exercise) }
+                        ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
                     }
                 } else {
-                    ForEach(list[run], id: \.key) { (item: KeyedExercise) in card(day, item.exercise) }
+                    ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
                 }
             }
         }
@@ -314,7 +526,7 @@ struct GymSessionView: View {
         }
     }
 
-    private func card(_ day: GymDay, _ exercise: GymExercise) -> some View {
+    private func card(_ day: GymDay, _ exercise: GymExercise, started: Bool) -> some View {
         // The exercise's place in the plan (the cards may be regrouped by superset).
         let offset: Int? = day.exercises.firstIndex { $0.id == exercise.id }
         let add: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await addSet(at: at) } } }
@@ -322,24 +534,14 @@ struct GymSessionView: View {
         return ExerciseCard(exercise: exercise,
                             failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
                             last: history.last(exercise.name, before: date),
+                            started: started,
                             onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
                             onUndo: { set in Task { await undo(set) } },
                             onIntensity: { set in intensityFor = SetRef(id: set.row) },
                             onTechnique: { technique = exercise.name },
                             onAlternatives: { alternativesFor = exercise.name },
                             onAddSet: add,
-                            onRemoveSet: remove,
-                            onRemoveExercise: offset.map { (at: Int) -> () -> Void in { Task { await removeExercise(at: at) } } })
-    }
-
-    private func progress(_ day: GymDay) -> some View {
-        let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
-        return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.plural("%lld/%lld sérií, %lld cviků", done, total, day.exercises.count))
-                .font(Typo.small).foregroundStyle(Palette.muted)
-            ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
-        }
-        .padding(.top, 10)
+                            onRemoveSet: remove)
     }
 
     private func load() async {
@@ -401,12 +603,6 @@ struct GymSessionView: View {
         await save()
     }
 
-    /// The exercise out of the plan; its sets done stay recorded.
-    private func removeExercise(at offset: Int) async {
-        day?.removeExercise(at: offset)
-        await save()
-    }
-
     /// Everything ticked is saved already; the last save goes out, the week
     /// shows the session done, then the rating.
     private func finish() async {
@@ -448,6 +644,9 @@ struct ExerciseCard: View {
     var failure: Set<Int> = []
     /// The exercise last time (GymHistory), for Minule.
     var last: GymHistory.Session? = nil
+    /// The workout is under way (a set ticked): the set at hand is marked and
+    /// ticks; before that the sets are the plan to look at (concept K04/017).
+    var started = true
     var onSet: (GymSet, String, String, String) -> Void
     var onUndo: (GymSet) -> Void
     /// The letter tapped: how hard the set was (IntensitySheet).
@@ -456,7 +655,8 @@ struct ExerciseCard: View {
     var onAlternatives: () -> Void
     var onAddSet: (() -> Void)? = nil
     var onRemoveSet: ((GymSet) -> Void)? = nil
-    var onRemoveExercise: (() -> Void)? = nil
+    /// Cards start folded (Petr 2026-11-16); the sets unfold under the name.
+    @State var open = false
     @State private var kg = ""
     @State private var reps = ""
 
@@ -464,55 +664,84 @@ struct ExerciseCard: View {
     /// (strength-generator.js TEST_SET_NOTE).
     static func isTestSet(_ note: String) -> Bool { note.hasPrefix("zkušební série") || note.hasPrefix("test set") }
 
+    /// "4 × 6–8, 62.5 kg" or "3 × 45 s, body weight": the work sets, their
+    /// reps and the first one's weight.
+    static func summary(_ exercise: GymExercise) -> String {
+        let work = exercise.sets.filter(\.work)
+        guard let first = work.first else { return L10n.plural("%lld sérií", exercise.sets.count) }
+        let reps = Fmt.range(first.plannedReps ?? first.reps ?? "")
+        let count = reps.isEmpty ? L10n.plural("%lld sérií", work.count) : "\(work.count) × " + reps
+        let pounds = LiftUnits.pounds(exercise.name)
+        let weight = LiftWeight.shown(first.plannedKg ?? first.kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) }
+        return count + ", " + (weight ?? L10n.tr("vlastní váha"))
+    }
+
     var body: some View {
-        Card {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
-                    Text(L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                    if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
-                    // No weight to start from (an exercise the app doesn't know): the test set's advice.
-                    if let first = exercise.sets.first(where: { !$0.warmup }), !first.done, let note = first.note, Self.isTestSet(note) {
-                        Text(Fmt.capitalized(note)).font(Typo.caption).foregroundStyle(Palette.amber)
-                            .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 4) {
+                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(exercise.name).font(Typo.bodyStrong.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(2)
+                        Text(verbatim: started ? L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount) : Self.summary(exercise))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
-                }
-                Spacer()
-                ExerciseInfoButton(name: exercise.name, action: onTechnique)
-                Menu {
-                    Button { onTechnique() } label: { Label("Technika", systemImage: "figure.strengthtraining.traditional") }
-                    Button { onAlternatives() } label: { Label("Nahradit cvik", systemImage: "arrow.triangle.swap") }
-                    if let onRemoveExercise, exercise.sets.contains(where: { !$0.done }) {
-                        Button(role: .destructive, action: onRemoveExercise) { Label("Odebrat cvik", systemImage: "trash") }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
-                }
-                .foregroundStyle(Palette.ink)
-                .accessibilityLabel("Možnosti cviku")
-            }
-            // The same rows as Režim tréninku (GymSetRow): one way to log a set.
-            VStack(spacing: 2) {
-                GymSetTableHeader()
-                // By place in the exercise: rows renumbered elsewhere keep what is typed.
-                ForEach(Array(exercise.sets.enumerated()), id: \.offset) { _, set in
-                    // Swiped left: just this set goes away.
-                    row(set, current: exercise.sets.first { !$0.done })
-                        .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
-                }
-            }
-            .padding(.horizontal, -10)
-            if let onAddSet {
-                Button(action: onAddSet) {
-                    Label("Přidat sérii", systemImage: "plus").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 12).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
-                        .tapTarget(width: 44, height: 30)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 4)
+                .accessibilityHint(L10n.tr(open ? "Sbalí cvik" : "Otevře cvik"))
+                round("arrow.up.arrow.down", label: "Nahradit cvik", action: onAlternatives)
+                round("info", label: "Technika", action: onTechnique)
+                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                    Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(Palette.faint)
+                        .frame(width: 28, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
+            }
+            .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 4)
+            if open {
+                VStack(alignment: .leading, spacing: 6) {
+                    if !failure.isEmpty { GymTag.failure }
+                    // No weight to start from (an exercise the app doesn't know): the test set's advice.
+                    if let first = exercise.sets.first(where: { !$0.warmup }), !first.done, let note = first.note, Self.isTestSet(note) {
+                        Text(Fmt.capitalized(note)).font(Typo.caption).foregroundStyle(Palette.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // The same rows as Režim tréninku (GymSetRow): one way to log a set.
+                    VStack(spacing: 2) {
+                        GymSetTableHeader()
+                        // By place in the exercise: rows renumbered elsewhere keep what is typed.
+                        ForEach(Array(exercise.sets.enumerated()), id: \.offset) { _, set in
+                            // Swiped left: just this set goes away.
+                            row(set, current: started ? exercise.sets.first { !$0.done } : nil)
+                                .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
+                        }
+                    }
+                    .padding(.horizontal, -4)
+                    if let onAddSet {
+                        Button(action: onAddSet) {
+                            Text(verbatim: "+ " + L10n.tr("Přidat sérii")).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+                                .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.bottom, 6)
+                .transition(.opacity)
             }
         }
+        .cardSurface(cornerRadius: 16)
+    }
+
+    private func round(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage).font(.footnote.weight(.semibold)).foregroundStyle(Palette.secondary)
+                .frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(label))
     }
 
     private func row(_ s: GymSet, current: GymSet?) -> GymSetRow {

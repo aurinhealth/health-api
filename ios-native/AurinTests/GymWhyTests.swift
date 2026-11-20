@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aurin
 
-/// The gym plan's note as short reasons (GymWhyCard.swift): the generator's sentences
+/// The gym plan's note as short reasons (GymWhyCard.swift, the sheet behind the coach sentence): the generator's sentences
 /// get a title, the time plan and the sentence about other sports go, the rest stays.
 final class GymWhyTests: XCTestCase {
     func testEnglishNoteBecomesThreeReasons() {
@@ -21,6 +21,15 @@ final class GymWhyTests: XCTestCase {
         XCTAssertTrue(reasons[2].detail.hasSuffix("čt 29. 10"))
         XCTAssertNil(reasons[3].title)
         XCTAssertEqual(reasons[3].detail, "Ráno byl běh, dřep jen středně")
+    }
+
+    /// The coach sentence under the title: the legs first, then what is new, the goal left for the sheet.
+    func testCoachLineIsTwoSentencesLegsFirst() {
+        let note = "Goal from your sport – strength and muscle: heavier main lifts. As you asked, I'm sparing your legs and focusing on the upper body; exercises are chosen by freshness. The exercises differ from the plan for Thu 29 Oct."
+        let line = GymWhy.coachLine(GymWhy.reasons(note))
+        XCTAssertEqual(line?.hasPrefix("As you asked, I'm sparing your legs and focusing on the upper body. "), true)
+        XCTAssertEqual(line?.hasSuffix("Thu 29 Oct."), true)
+        XCTAssertNil(GymWhy.coachLine([]))
     }
 
     func testNoNoteNoReasons() {

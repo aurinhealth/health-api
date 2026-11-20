@@ -332,7 +332,8 @@ struct GymSetRow: View {
                     .foregroundStyle(drop ? GymIntensity.color("D") : state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
                     .frame(width: side == nil ? labelWidth : labelWidth - 10, alignment: .leading)
                 if let side {
-                    Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
+                    // Stored as "L"/"P"; shown as the language's letter, neutral (no colour without a meaning).
+                    Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted).frame(width: 12)
                 }
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)

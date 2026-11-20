@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Why the gym plan is what it is (Petr, 2026-10-30): the generator's note
 /// (src/strength-generator.js rationale) as short rows instead of a paragraph.
-/// The time plan is in GymTimeCard above and the sentence about other sports is
-/// the same every time, so both go; any sentence not known here stays as it is.
+/// The time plan and the sentence about other sports are the same every time,
+/// so both go; any sentence not known here stays as it is.
 enum GymWhy {
     struct Reason: Equatable, Identifiable {
         let symbol: String
@@ -11,6 +11,34 @@ enum GymWhy {
         let title: String?
         let detail: String
         var id: String { (title ?? "") + detail }
+    }
+
+    /// The coach's one or two sentences under the title (max 2 on a card):
+    /// what spares the legs or what is up next first, the goal last.
+    static func coachLine(_ reasons: [Reason]) -> String? {
+        func rank(_ r: Reason) -> Int {
+            switch r.title {
+            case L10n.tr("Šetřím nohy"): return 0
+            case nil: return r.detail.hasPrefix(L10n.tr("Na řadě")) ? 1 : 9
+            case L10n.tr("Odlehčený týden"), L10n.tr("Bolest"), L10n.tr("První trénink"): return 2
+            case L10n.tr("Nové cviky"), L10n.tr("Nová varianta"): return 3
+            case L10n.tr("Cíl"): return 5
+            default: return 4
+            }
+        }
+        let picked = reasons.enumerated().filter { rank($0.element) < 9 }
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.prefix(2).map(\.element)
+        guard !picked.isEmpty else { return nil }
+        return picked.map { r -> String in
+            // A title with a fragment ("New exercises", "Different from Thu 19 Nov") reads as one sentence.
+            let sentence: String
+            if let title = r.title, [L10n.tr("Cíl"), L10n.tr("Nové cviky"), L10n.tr("Nová varianta"), L10n.tr("Výskoky")].contains(title) {
+                sentence = title + ": " + r.detail.prefix(1).lowercased() + r.detail.dropFirst()
+            } else {
+                sentence = r.detail
+            }
+            return sentence.hasSuffix(".") ? sentence : sentence + "."
+        }.joined(separator: " ")
     }
 
     static func reasons(_ note: String?) -> [Reason] {
@@ -82,32 +110,46 @@ enum GymWhy {
     }
 }
 
-/// The reasons in a card, as "Co procvičíš" above it.
-struct GymWhyCard: View {
+/// Why this workout (concept K04/017, Petr 2026-11-16: no card on the page,
+/// one coach sentence under the title opens this sheet): the reasons as rows,
+/// the kind on the left, no icons.
+struct GymWhySheet: View {
     let reasons: [GymWhy.Reason]
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        Card {
-            WidgetHeader(title: "Proč tenhle trénink", color: Palette.amberBar)
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(reasons.enumerated()), id: \.element.id) { index, reason in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    HStack(alignment: .center, spacing: 12) {
-                        Image(systemName: reason.symbol).scaledFont(15, weight: .medium).foregroundStyle(Palette.amber)
-                            .frame(width: 34, height: 34).background(Palette.amberSoft, in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let title = reason.title {
-                                Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(reasons.enumerated()), id: \.element.id) { index, reason in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                            VStack(alignment: .leading, spacing: 2) {
+                                if let title = reason.title {
+                                    Text(verbatim: title).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                                }
+                                Text(verbatim: reason.detail).font(Typo.body).foregroundStyle(Palette.ink)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
-                            Text(verbatim: reason.detail).font(Typo.small)
-                                .foregroundStyle(reason.title == nil ? Palette.secondary : Palette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 12)
                         }
-                        Spacer(minLength: 0)
                     }
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, 18)
+                    .cardSurface(cornerRadius: 20)
+                    Text("Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit.")
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(20)
+            }
+            .background(Palette.background)
+            .navigationTitle(L10n.tr("Proč tenhle trénink"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } }
             }
         }
+        .presentationDetents([.medium, .large])
     }
 }
