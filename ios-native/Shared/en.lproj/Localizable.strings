@@ -4820,3 +4820,5 @@
 "Jídelníček" = "Food Log";
 "Adaptivní plány tréninku" = "Adaptive Training Plans";
 "%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";
+"Na testovacím serveru Aurin do Apple Health nezapisuje." = "On the test server Aurin doesn't write to Apple Health.";
+"Na testovacím serveru Aurin do Apple Health nezapisuje, aby nepřepsal hodnoty z ostrého serveru." = "On the test server Aurin doesn't write to Apple Health, so it can't replace the live server's values.";
