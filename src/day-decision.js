@@ -21,7 +21,8 @@ const SPORT_MUSCLES = { run: ["hamstrings", "quads", "calves", "glutes"], ride: 
 // muscle-fatigue.js sits in an import cycle with strength-generator.js.
 export function sessionMuscles(session, gymMuscles = null) {
   if (!session) return [];
-  if (session.sport === "strength") return Array.isArray(gymMuscles) ? gymMuscles : [];
+  // A gym session without its exercises (from Intervals.icu): the legs when its name says so.
+  if (session.sport === "strength") return Array.isArray(gymMuscles) && gymMuscles.length ? gymMuscles : /\b(legs?|lower)\b|nohy|dolní/i.test(String(session.title || "")) ? LEGS : [];
   return SPORT_MUSCLES[session.sport] || [];
 }
 
@@ -38,10 +39,13 @@ export function lighterText(labels) {
 }
 
 // A planned session against the muscles: a gym session or a hard ride, run or
-// swim on muscles that are not rested by that day asks for a lighter version.
-// An easy aerobic session on tired legs is fine.
+// swim on muscles that are not rested by that day asks for a lighter version,
+// and so does a long one (90 min and more: a long run loads the hamstrings
+// most). A short easy aerobic session on tired legs is fine. session: {title,
+// sport, minutes, tss, type} as the plan has it, so the load counts too.
+const LONG_MINUTES = 90;
 function judged(session, day, muscles, gymDay) {
-  const loads = session.sport === "strength" || isHardSession(session.title, session.sport);
+  const loads = session.sport === "strength" || isHardSession(session, session.sport) || Number(session.minutes) >= LONG_MINUTES;
   const tired = loads ? tiredOn(muscles, sessionMuscles(session, gymDay), day) : [];
   return {
     date: day, title: session.title, sport: session.sport,
@@ -56,18 +60,22 @@ function judged(session, day, muscles, gymDay) {
 // open, tomorrow: [{title, sport}] still planned today and planned tomorrow;
 // trained: today's training is done and nothing is left; gym: the muscles of
 // each day's gym plan by date ({date: [ids]}).
+// Without a readiness number (no watch yet, a new account) the key is null:
+// the muscles are still judged.
 export function dayDecision({ date, verdict = null, zone = null, recoveryTime = null, muscles = [], open = [], tomorrow = [], trained = false, gym = {}, now = Date.now() } = {}) {
-  if (!verdict) return null;
-  // Hard training waits for the recovery time: a green morning two days after
-  // a long ride is still a steady day (the readiness alone said "hard").
-  const waiting = Boolean(recoveryTime?.readyAt && Date.parse(recoveryTime.readyAt) > now);
+  if (!date) return null;
+  // Hard training waits for the recovery time when it runs past today: a
+  // green morning two days after a long ride is still a steady day (the
+  // readiness alone said "hard"). Ready later today (after an evening Z2
+  // ride) is no reason: the session can be in the afternoon.
+  const waiting = Boolean(recoveryTime?.readyAt && Date.parse(recoveryTime.readyAt) > now && recoveryTime.readyDate && recoveryTime.readyDate > date);
   const recovering = verdict === "hard" && waiting;
   const key = recovering ? "steady" : verdict;
   const next = d => new Date(Date.parse(d + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
   return {
     date,
     // A key of day-verdict.js VERDICT_KEYS: what to do today.
-    key,
+    key: key || null,
     // The readiness said hard and only the recovery time holds it back.
     recovering,
     // When hard training is fine again by the recovery time: null when it is
@@ -89,14 +97,14 @@ export function recoveringText(decision) {
   if (!decision?.recovering) return null;
   const day = decision.hardFrom ? new Date(decision.hardFrom + "T12:00:00Z").getUTCDay() : null;
   const name = day == null ? null : L(["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][day], ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]);
-  return name ? L(`Svaly se ještě zotavují z posledních tréninků: dnes s mírou, tvrdý trénink zase ${name}.`, `Your body is still recovering from recent training: keep today steady, hard training again from ${name}.`)
-    : L("Svaly se ještě zotavují z posledních tréninků: dnes s mírou.", "Your body is still recovering from recent training: keep today steady.");
+  return name ? L(`Tělo se ještě zotavuje z posledních tréninků: dnes s mírou, tvrdý trénink zase ${name}.`, `Your body is still recovering from recent training: keep today steady, hard training again from ${name}.`)
+    : L("Tělo se ještě zotavuje z posledních tréninků: dnes s mírou.", "Your body is still recovering from recent training: keep today steady.");
 }
 
 // The cap the day puts on Activity of the day (coach-pick.js rankOptions):
 // "hard", "steady" (nothing hard), "easy" or "rest".
 export function intensityCap(decision) {
-  if (!decision) return null;
+  if (!decision?.key) return null;
   if (decision.key === "rest") return "rest";
   if (decision.done) return "rest";
   return decision.key === "hard" ? "hard" : decision.key === "easy" ? "easy" : "steady";
@@ -105,10 +113,15 @@ export function intensityCap(decision) {
 // Kept per day: one row, written only when it changed.
 export async function saveDayDecision(db, userId, decision, now = new Date()) {
   if (!db || userId == null || !decision?.date) return false;
-  await db.prepare(TABLE).run();
   const json = JSON.stringify(decision);
-  await db.prepare("INSERT INTO day_decisions (user_id, date, decision_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET decision_json=excluded.decision_json, updated_at=excluded.updated_at WHERE day_decisions.decision_json != excluded.decision_json")
+  const upsert = () => db.prepare("INSERT INTO day_decisions (user_id, date, decision_json, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET decision_json=excluded.decision_json, updated_at=excluded.updated_at WHERE day_decisions.decision_json != excluded.decision_json")
     .bind(userId, decision.date, json, now.toISOString()).run();
+  // The table only when it is missing: no extra statement on every Today.
+  await upsert().catch(async error => {
+    if (!/no such table/i.test(String(error?.message))) throw error;
+    await db.prepare(TABLE).run();
+    await upsert();
+  });
   return true;
 }
 

@@ -88,9 +88,9 @@ export function numbersLine({ zone = null, flags = [], missing = [], rest = fals
 
 export function numbersLineText(key) {
   return {
-    hard: L("Tvoje čísla zvládnou tvrdý trénink", "Your numbers support a hard workout"),
-    steady: L("Tvoje čísla jsou pro den s mírou", "Your numbers support a steady day"),
-    easy: L("Tvoje čísla ukazují na lehký den", "Your numbers suggest an easy day"),
+    hard: L("Tvoje čísla jsou v obvyklém rozmezí nebo lepší", "Your numbers are in your usual range or better"),
+    steady: L("Některá tvoje čísla jsou pod obvyklým rozmezím", "Some of your numbers are below your usual range"),
+    easy: L("Tvoje čísla jsou pod obvyklým rozmezím", "Your numbers are below your usual range"),
     signs: L("Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím", "Your temperature or breathing in sleep is above your usual range"),
     usual: L("Tvoje čísla jsou v obvyklém rozmezí", "Your numbers are within your usual range"),
     paused: L("Trénink je dnes pozastavený", "Training is paused today")

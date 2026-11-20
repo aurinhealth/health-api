@@ -826,7 +826,7 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null, training: doses ? todayRecovery(doses, { today: date, gym }) : null });
   if (!plan) return today.readiness;
   const planned = todayWorkouts(today.plan);
-  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
+  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read, ...(doses ? { doses } : {}) }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
   return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning, ...(today.day?.recovering ? { recovering: true, hardFrom: today.day.hardFrom } : {}) };
 }
 
@@ -3057,7 +3057,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning});
       keepUsualWake(env,ctx,date,profile,body.tonight);
       // The day's decision (day-decision.js) for the parts that load on their own: Activity of the day, the coach on Training.
-      if(body.day)ctx.waitUntil(saveDayDecision(env.DB,env.USER_ID,body.day).catch(error=>console.error('Day decision save failed',error.message)));
+      // Saved before the answer: the app asks for Activity of the day right after Today.
+      if(body.day)await saveDayDecision(env.DB,env.USER_ID,body.day).catch(error=>console.error('Day decision save failed',error.message));
       // Today's row of the food history (nutrition-days.js), after the answer.
       if(isToday&&body.nutrition?.target!=null)ctx.waitUntil(saveNutritionDay(env.DB,nutritionDayOfToday(date,body.nutrition),date).catch(error=>console.error('Nutrition day save failed',error.message)));
       return Response.json(body,{headers:{'Cache-Control':'no-store'}});

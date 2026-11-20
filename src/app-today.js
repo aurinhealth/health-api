@@ -418,8 +418,9 @@ export function buildToday({ date, hour = null, morning = null, training: traine
   const muscles = trained && hour != null ? trained.muscles : [];
   // The one decision of the day (day-decision.js): every part below says what it says.
   const tomorrowOpen = recovery?.tomorrow ? daySessions(shift(date, 1), date, recovery.tomorrow, gymByDate[shift(date, 1)] || null).sessions.filter(s => s.status === "planned") : [];
-  const decision = hour != null ? dayDecision({ date, verdict: readinessVerdict, zone: readiness.zone, recoveryTime: rt, muscles,
-    open: todayWorkouts(planItems), tomorrow: tomorrowOpen.map(s => ({ title: s.title, sport: s.sport })), trained: done.length > 0 && !open.length, gym: trained?.gymMuscles || {}, now }) : null;
+  const decision = hour != null && (readinessVerdict || muscles.length) ? dayDecision({ date, verdict: readinessVerdict, zone: readiness.zone, recoveryTime: rt, muscles,
+    open: planItems.filter(i => i.kind === "workout" && i.status === "planned" && i.title).map(i => ({ ...(i.session || {}), title: i.title, sport: i.session?.sport ?? i.sport })),
+    tomorrow: tomorrowOpen, trained: done.length > 0 && !open.length, gym: trained?.gymMuscles || {}, now }) : null;
   const verdict = decision?.key || readinessVerdict;
   // A sick check-in, signs of illness or a paused athlete: rest, also on a morning without a score.
   const recover = (checkin === "sick" || (readiness.flags || []).some(f => f === "checkin_sick" || /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f)))
@@ -459,10 +460,11 @@ export function buildToday({ date, hour = null, morning = null, training: traine
       learningDays: readiness.learningDays ?? null,
       // What to do today, a key of day-verdict.js VERDICT_KEYS (the app says it under the number); null on an earlier day.
       // Kept for older builds and the morning push.
-      verdict,
+      // Once the day's training is done the watch and older builds say an easy rest of the day, not "hard".
+      verdict: decision?.done && verdict && verdict !== "rest" ? "easy" : verdict,
       // The redesign's line under the number (AI-2): what the numbers say, a
       // key of day-verdict.js NUMBERS_LINE_KEYS, never advice; null with the verdict.
-      // Never "support a hard workout" when the day's decision says otherwise or the training is done.
+      // Never the "hard" line when the day's decision says otherwise or the training is done.
       numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest", hold: Boolean(decision && (decision.key !== "hard" || decision.done)) }) : null,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).

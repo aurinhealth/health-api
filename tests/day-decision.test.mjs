@@ -29,7 +29,13 @@ test("a green morning the recovery time holds back is a steady day, and says whe
   const yellow = dayDecision({ date: DATE, verdict: "steady", zone: "yellow", recoveryTime: { readyAt: "2026-10-10T06:00:00Z", readyDate: "2026-10-10" }, now });
   assert.equal(yellow.hardFrom, null);
   assert.equal(yellow.waitsGreener, true);
-  assert.equal(dayDecision({ date: DATE, verdict: null }), null);
+  // Ready later today (an evening Z2 ride): the session can be in the afternoon.
+  assert.equal(dayDecision({ date: DATE, verdict: "hard", zone: "green", recoveryTime: { readyAt: "2026-10-08T13:00:00Z", readyDate: DATE }, now }).key, "hard");
+  // No readiness number: no key, the muscles still count.
+  const unscored = dayDecision({ date: DATE, verdict: null, muscles: [tired("hamstrings", "2026-10-10")], open: [{ title: "Legs", sport: "strength" }] });
+  assert.equal(unscored.key, null);
+  assert.equal(unscored.sessions[0].fits, false);
+  assert.equal(intensityCap(unscored), null);
 }));
 
 test("legs planned on hamstrings that are not rested ask for a lighter version", () => withLang("en", () => {
@@ -40,6 +46,8 @@ test("legs planned on hamstrings that are not rested ask for a lighter version",
   assert.equal(d.sessions[0].lighter, "Hamstrings still recovering, lighter version?");
   // An easy ride on tired legs is fine.
   assert.equal(d.sessions[1].fits, true);
+  // A long easy run is load on the hamstrings all the same.
+  assert.equal(dayDecision({ date: DATE, verdict: "hard", zone: "green", muscles: [tired("hamstrings", "2026-10-10")], open: [{ title: "Long run", sport: "run", minutes: 120 }], now }).sessions[0].fits, false);
   assert.equal(d.tomorrow[0].date, "2026-10-09");
   assert.equal(d.tomorrow[0].fits, false);
   assert.deepEqual(d.tomorrow[0].muscles, ["hamstrings"]);
@@ -86,6 +94,8 @@ const wellness = Array.from({ length: 40 }, (_, i) => ({ id: day(i - 39), hrv: i
 const sessions = Array.from({ length: 20 }, (_, i) => ({ date: day(i - 19), startTime: day(i - 20) + "T21:30:00Z", endTime: day(i - 19) + "T05:30:00Z", durationMin: 470, timeInBedMin: 480 }));
 const bigRide = { kind: "ride", type: "Ride", source: "intervals", name: "Long ride", tss: 420, icu_intensity: 75, minutes: 300, end: now - 20 * 3600000 };
 
+const base = () => ({ date: DATE, hour: 9, now, health: { wellness }, sleep: { sessions }, coaches: { morningSummary: { headline: "How to start today", text: "Sleep 7 h 50 min.", recommendation: "Stick to the plan." } } });
+
 test("Today: the line under the number, the verdict, the coach card and Recovery agree", () => withTimeZone("UTC", () => withLang("en", () => {
   const base = { date: DATE, hour: 9, now, health: { wellness }, sleep: { sessions }, coaches: { morningSummary: { headline: "How to start today", text: "Sleep 7 h 50 min.", recommendation: "Stick to the plan." } } };
   const fresh = buildToday({ ...base, training: todayRecovery({ sets: [], history: [], activities: [], today: DATE }, { now, today: DATE }) });
@@ -109,4 +119,25 @@ test("the morning push holds a hard day back for the recovery time as Today does
   assert.equal(held.verdict, "steady");
   assert.ok(held.alert.title.endsWith(verdictText("steady")));
   assert.match(held.alert.body, /hard training again from Sat/);
+}));
+
+test("the low-day headlines the coach card replaces are the coach engine's own", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../src/coach-engine.js", import.meta.url), "utf8");
+  for (const text of ["L('Den na odpočinek','A day to recover')", "L('Dnes s větší rezervou','Take it easier today')"]) assert.ok(src.includes(text), text);
+});
+
+test("after the day's training the verdict the watch shows is no hard day", () => withTimeZone("UTC", () => withLang("en", () => {
+  const done = { ...base(), daily: { training: { planned: [], matched: [], completed: [{ id: 1, name: "Ride", type: "Ride", start: DATE + "T06:00:00", durationHours: 1, tss: 50, source: "intervals" }] } }, hour: 20 };
+  const t = buildToday({ ...done, training: todayRecovery({ sets: [], history: [], activities: [], today: DATE }, { now, today: DATE }) });
+  assert.equal(t.day.done, true, JSON.stringify(t.plan));
+  assert.notEqual(t.readiness.verdict, "hard");
+  assert.notEqual(t.readiness.numbersLine, "hard");
+  assert.equal(t.summary.headline, "Time to recover");
+})));
+
+test("Activity of the day gives the reason of the option it picked on a capped day", () => withLang("en", () => {
+  const coach = kind => ({ readiness: { status: "green", score: 80 }, recommendation: { session: { kind, durationMinutes: 60 } }, load: {} });
+  const gym = rankOptions({ ride: coach("endurance"), run: coach("endurance"), mainSport: "strength", sports: ["strength"], cap: "steady", tiredLegs: true });
+  assert.equal(gym.options[0].kind, "gym");
+  assert.equal(gym.options[0].reason, "Your legs are still recovering, so upper body today.");
 }));

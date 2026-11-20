@@ -39,7 +39,7 @@ for (const [name, activities] of [["a fresh morning", []], ["a morning after a l
     // The decision: the line under the number, the coach card (Today, Health's
     // readiness detail reads the same summary) and the coach on Training.
     const key = today.day.key;
-    assert.equal(today.readiness.verdict, key);
+    assert.equal(today.readiness.verdict, today.day.done && key !== "rest" ? "easy" : key);
     assert.equal(today.summary.headline, verdictText(key));
     assert.equal(today.readiness.numbersLine === "hard", key === "hard" && !today.day.done);
     assert.equal(screenFacts("training", { ...train, day: today.day }).facts.dayVerdict, verdictText(key));

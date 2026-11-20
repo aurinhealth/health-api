@@ -40,8 +40,9 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // Nemoc or an injury in the journal, journal-store.js saunaRisks).
 // cap: the day's decision (day-decision.js intensityCap): "hard", "steady"
 // (nothing hard), "easy" or "rest"; null before Today has made one. A
-// steady day turns a hard ride, run or swim into an endurance one, an easy or
-// rest day ranks as a red morning. tiredLegs: legs not rested (Trénink → Svaly).
+// steady or easy day turns a hard ride, run or swim into an endurance one and
+// ranks a green morning as a yellow one; a rest day, or an easy one on a
+// yellow or red morning, ranks as a red morning. tiredLegs: legs not rested (Trénink → Svaly).
 export function rankOptions({ ride, run, swim = null, mainSport = "general", mains = null, allowed = null, sports = [], today = [], declines = [], less = [], planned = [], done = [], athleteStatus = "active", noSauna = false, paused = [], cap = null, tiredLegs = false }) {
   if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus, noSauna);
   // Nemoc ticked in Deník (cycling-coach-v2.js sickDay): rest, as with the status.
@@ -192,9 +193,12 @@ export function doneSentence(done = []) {
 }
 
 function reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done, capped = null }) {
-  if (!trainedToday && capped) return capped === "rest" ? L("Dnes je den na odpočinek.", "Today is a rest day.")
-    : capped === "easy" ? L("Dnes je lehký den, tak jen v klidu.", "Today is an easy day, so keep it light.")
-    : L("Dnes je den s mírou, tak v klidném tempu.", "Today is a steady day, so keep the pace easy.");
+  // The day's call (day-decision.js), in the words of the option it picked.
+  if (!trainedToday && capped) {
+    if (best.kind === "gym") return lowerTired ? L("Nohy se ještě zotavují, dnes horní polovina.", "Your legs are still recovering, so upper body today.") : L("Dnes je den s mírou, posilovna jen ve střední zátěži.", "Today is a steady day, so a moderate gym session.");
+    if (best.kind === "rest" || best.kind === "sauna") return capped === "rest" ? L("Dnes je den na odpočinek: procházka a protažení.", "Today is a rest day: a walk and stretching.") : L("Dnes je lehký den: procházka a protažení stačí.", "Today is an easy day: a walk and stretching are enough.");
+    return capped === "rest" || capped === "easy" ? L("Dnes je lehký den, tak jen v klidném tempu.", "Today is an easy day, so keep the pace easy.") : L("Dnes je den s mírou, tak v klidném tempu.", "Today is a steady day, so keep the pace easy.");
+  }
   if (trainedToday) return doneSentence(done) + " " + (best.kind === "sauna" ? L("Doporučuju saunu 3 × 12 minut na regeneraci.", "I recommend the sauna, 3 × 12 minutes, to recover.") : best.kind === "rest" ? L("Doporučuju 15 minut protažení a večer lehkou procházku.", "I recommend 15 minutes of stretching and a light walk in the evening.") : L("Další trénink dnes jen lehce.", "Any more training today only easy."));
   const why = (ride?.readiness?.reasons || []).filter(r => !/chybí HRV|no HRV|noc se ještě nenahrála|night hasn't synced/i.test(r))[0];
   if (status === "red") return [sentence(why) || L("Připravenost je dnes nízká.", "Readiness is low today."), L("Dnes radši odpočívej.", "Rest today instead.")].join(" ");
