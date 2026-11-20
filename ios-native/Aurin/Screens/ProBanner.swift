@@ -13,14 +13,22 @@ struct ProBanner: View {
     @State private var banner: SubscriptionStatus.ProBanner?
     private let store = ProStore.shared
 
-    /// banner: shown as given (the snapshot test).
+    /// The snapshot test: shown as given, whatever this simulator's setup day.
+    private let fixed: Bool
+
     init(banner: SubscriptionStatus.ProBanner? = nil) {
         _banner = State(initialValue: banner)
+        fixed = banner != nil
     }
 
-    /// The setup finished today (local day): the banner starts tomorrow.
-    private var setupDay: Bool {
-        setupSince > 0 && AppModel.localDate(Date(timeIntervalSince1970: setupSince)) == AppModel.localDate(Date())
+    /// The setup finished today, or its own offer came today (local day): one
+    /// offer a day, the banner starts tomorrow; and not while that offer waits.
+    private var offeredToday: Bool {
+        guard !fixed else { return false }
+        let today = AppModel.localDate(Date())
+        let setup = setupSince > 0 && AppModel.localDate(Date(timeIntervalSince1970: setupSince)) == today
+        let offer = SetupProOffer.shownAt.map { AppModel.localDate($0) == today } ?? false
+        return setup || offer || SetupProOffer.pending
     }
 
     /// The free week only when the server and the App Store both say it is still there (App Review 3.1.2).
@@ -29,14 +37,15 @@ struct ProBanner: View {
     var body: some View {
         // A VStack, not a Group: its task runs while the banner is still hidden.
         VStack(spacing: 0) {
-            if banner?.show == true, !setupDay, !SetupProOffer.pending {
-                HStack(spacing: 12) {
+            // Bought on this phone (anywhere, before the server hears of it): gone at once.
+            if banner?.show == true, !offeredToday, !store.entitled {
+                HStack(alignment: .top, spacing: 8) {
                     Button { Paywall.present(model) { Task { await load() } } } label: {
                         HStack(spacing: 12) {
-                            AurinMark(size: 30, gold: true, glow: true)
+                            AurinMark(size: 30, gold: true)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(trial ? "Vyzkoušej Aurin Pro 7 dní zdarma" : "Získej Aurin Pro")
-                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                                 Text("Kouč, Aurin age, tréninkové plány a další")
                                     .font(Typo.caption).foregroundStyle(Palette.muted)
                             }
@@ -52,24 +61,25 @@ struct ProBanner: View {
                     // Always an ✕, never a countdown; the offer stays in Settings.
                     Button { Task { await close() } } label: {
                         Image(systemName: "xmark").scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
+                            .frame(width: 28, height: 28)
                             .tapTarget(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Skrýt nabídku Aurin Pro"))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 12)
+                .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 12)
                 .cardSurface(cornerRadius: 18)
                 .padding(.top, 14)
                 .transition(.opacity)
             }
         }
-        .task { if banner == nil { await load() } }
+        .task { if !fixed { await load() } }
     }
 
     private func load() async {
         guard !model.demo, let status = try? await model.api.subscription() else { return }
         await store.load()
-        banner = status.proBanner
+        withAnimation(.easeInOut(duration: 0.25)) { banner = status.proBanner }
     }
 
     private func close() async {

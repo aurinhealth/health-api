@@ -45,6 +45,10 @@ struct ProPage: View {
     var body: some View {
         if state.loaded, !state.unlocked {
             ManageFreePage(error: error, goPro: goPro)
+        } else if !state.loaded, error == nil {
+            // Neither page before the server answers: no violet flash for a free account.
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { Palette.settingsBackground.ignoresSafeArea() }
         } else {
             nightPage
         }
@@ -498,17 +502,18 @@ struct CoachPacksView: View {
 /// to Aurin Pro", opens the offer (Petr: the whole card caused miss-taps).
 /// The promo code and restore stay in the ⋯ menu (SubscriptionView).
 struct ManageFreePage: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     var error: String?
     var goPro: () -> Void = {}
 
     /// The icon in the asset catalog (ProIcon-…) and the name.
     static let free: [(String, String)] = [
         ("readiness", "Připravenost"), ("sleep", "Spánek"), ("fitness", "Kondice"), ("health", "Zdraví"),
-        ("workouts", "Tréninky"), ("foodlog", "Zápis jídla"), ("journal", "Deník"), ("cycle", "Cyklus")
+        ("workouts", "Tréninky"), ("foodlog", "Jídelníček"), ("journal", "Deník"), ("cycle", "Cyklus")
     ]
     static let pro: [(String, String)] = [
-        ("intelligence", "Aurin Intelligence"), ("plans", "Adaptivní tréninkové plány"), ("nutrition", "Chytrý zápis jídla"),
-        ("insights", "Kouč u tvých čísel"), ("age", "Aurin age"), ("gym", "Tréninky pro tvoji posilovnu")
+        ("intelligence", "Aurin Intelligence"), ("plans", "Adaptivní plány tréninku"), ("nutrition", "Chytrý zápis jídla"),
+        ("insights", "Kouč u tvých čísel"), ("age", "Aurin Age"), ("gym", "Tréninky pro tvoji posilovnu")
     ]
 
     var body: some View {
@@ -517,7 +522,7 @@ struct ManageFreePage: View {
                 freeCard
                 proCard
                 Link(destination: L10n.legalURL("terms")) {
-                    Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text("Podmínky a ceny").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(minHeight: 44)
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -530,9 +535,11 @@ struct ManageFreePage: View {
     private var freeCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(verbatim: "Aurin Free").font(.headline).foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
             Text("Používáš verzi zdarma.").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 2)
             Divider().overlay(Palette.hairline).padding(.top, 12).padding(.bottom, 4)
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8, alignment: .leading), GridItem(.flexible(), alignment: .leading)], spacing: 0) {
+            // One column at the accessibility sizes, where Czech names no longer fit two.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .leading), count: typeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
                 ForEach(Self.free, id: \.0) { icon, name in
                     HStack(spacing: 8) {
                         ProIcon(name: icon, size: 32)
@@ -554,10 +561,10 @@ struct ManageFreePage: View {
         return VStack(alignment: .leading, spacing: 0) {
             Button(action: goPro) {
                 HStack(spacing: 8) {
-                    Image(systemName: "lock.fill").scaledFont(13, weight: .semibold)
-                    Text("Přejít na Aurin Pro").font(Typo.bodyStrong)
+                    Image(systemName: "lock.fill").scaledFont(13, weight: .semibold).accessibilityHidden(true)
+                    Text("Přejít na Aurin Pro").font(.headline)
                     Spacer()
-                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).accessibilityHidden(true)
                 }
                 .foregroundStyle(Palette.proGold)
                 .frame(minHeight: 52)
@@ -568,7 +575,7 @@ struct ManageFreePage: View {
                 Divider().overlay(Palette.hairline)
                 HStack(spacing: 12) {
                     ProIcon(name: icon, size: 38).padding(.leading, -4)
-                    Text(verbatim: L10n.tr(name)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.tr(name)).font(.callout.weight(.semibold)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
                 }

@@ -144,9 +144,9 @@ struct SubscriptionView: View {
     var body: some View {
         ProPage(state: Self.state(status, store), error: error,
                 morePacks: { morePacks = true }, goPro: { Paywall.present(model) }, manage: { manage = true })
-            .navigationTitle(L10n.tr(free ? "Správa předplatného" : "Aurin Pro"))
+            .navigationTitle(loading ? "" : L10n.tr(free ? "Správa předplatného" : "Aurin Pro"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(free ? nil : .dark, for: .navigationBar)
+            .toolbarColorScheme(free || loading ? nil : .dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -182,6 +182,9 @@ struct SubscriptionView: View {
         let state = Self.state(status, store)
         return state.loaded && !state.unlocked
     }
+
+    /// Before the server answers (ProPage shows only a spinner then).
+    private var loading: Bool { status == nil && error == nil }
 
     /// What the page shows, from the server's status and the App Store.
     static func state(_ status: SubscriptionStatus?, _ store: ProStore) -> ProPageState {
