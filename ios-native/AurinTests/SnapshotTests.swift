@@ -746,6 +746,13 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Start workout's 3, 2, 1 over the first part (concept 08).
+    func testStartCountdown() throws {
+        try render("start-countdown", glow: Palette.Glow.gym, height: 844, window: true) {
+            StartCountdown(title: "Rozcvička", first: "Hip circles", live: LiveWorkout.shared, onStart: {}, onCancel: {})
+        }
+    }
+
     /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
     func testEffortSheet() throws {
         try render("effort-sheet", height: 700) {

@@ -611,6 +611,8 @@ struct GymBuilderView: View {
                         .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = isoDay })
                 .padding(.top, 12)
             } else {
                 SectionLabel(text: "Upravit vlastními slovy").padding(.top, 26)

@@ -91,6 +91,8 @@ struct TodayTrainingRow: View {
                         .tapTarget(width: 44, height: 36)
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded { TrainingModeView.startOnOpen = AppModel.localDate(Date()) })
                 .accessibilityIdentifier("today-training.start")
             } else if item.session.flatMap(WeekSessionsList.destination) != nil {
                 Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)

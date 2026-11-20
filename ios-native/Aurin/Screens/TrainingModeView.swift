@@ -11,6 +11,9 @@ import UIKit
 struct TrainingModeView: View {
     /// The day whose finished workout goes on as it opens (GymSessionView).
     static var resumeOnOpen: String?
+    /// The day whose Start workout was tapped (the training card, the
+    /// detail): it opens with 3, 2, 1 and starts, no second Start (concept 08).
+    static var startOnOpen: String?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let date: String
@@ -127,6 +130,8 @@ struct TrainingModeView: View {
     /// The part or the exercises on hand came on after the one before and wait
     /// for their own Start ("Na řadě"); only Začít trénink or a tap starts one at once.
     @State private var waiting = false
+    /// Start workout: the 3, 2, 1 over the screen (StartCountdown).
+    @State private var countingDown = false
     /// Each part's and exercise's time, calories and heart rate, for the summary.
     @State private var partStats: [String: LiveWorkout.PartStats] = [:]
     @Environment(\.scenePhase) private var scenePhase
@@ -219,6 +224,24 @@ struct TrainingModeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
+        .overlay {
+            if countingDown, let day { countdown(day).padding(.horizontal, -20).padding(.top, -12) }
+        }
+    }
+
+    private func countdown(_ day: GymDay) -> StartCountdown {
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        let part: GymDayPart? = showsParts(day, parts) ? parts.before(day).first { !partDone($0, day) } : nil
+        let title: String = part.map { L10n.tr($0.kind.title) } ?? L10n.tr("Posilovna")
+        let first: String? = part.map { parts.routine($0, day: day)?.items.first?.name } ?? day.exercises.first?.name
+        return StartCountdown(title: title, first: first, live: live,
+                              onStart: { countingDown = false; beginFromCountdown(day) },
+                              onCancel: { countingDown = false; dismiss() })
+    }
+
+    /// The countdown ran out or was tapped: as Začít trénink.
+    private func beginFromCountdown(_ day: GymDay) {
+        if showsParts(day, GymDayParts.resolved(day, stored: dayParts, date: date)) { startWhole(day) } else { Task { await start() } }
     }
 
     var body: some View {
@@ -1887,6 +1910,8 @@ struct TrainingModeView: View {
         // Asked once, from GymSessionView: never again on a later opening.
         let resumeAsked = Self.resumeOnOpen == date
         Self.resumeOnOpen = nil
+        let startAsked = Self.startOnOpen == date
+        Self.startOnOpen = nil
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
             watchTook = false
@@ -1914,6 +1939,7 @@ struct TrainingModeView: View {
             if reopened, resumeAsked {
                 await resume()
             }
+            if startAsked, !finishedSession, !started, let day, !day.exercises.isEmpty { countingDown = true }
             // The muscles of Celkem dnes now, not only from the exercise screen:
             // back in a rest (the bar, the edge swipe) that screen isn't shown.
             if let day { await loadMuscles(day) }

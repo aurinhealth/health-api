@@ -449,3 +449,60 @@ struct HeadClock: View {
                             : L10n.f("Pozastaveno na %@", TrainingModeView.clock(live.seconds(of: key))))
     }
 }
+
+/// Start workout (concept 08): 3, 2, 1 over the first part or exercise, then
+/// it starts; a tap anywhere starts it now, Cancel goes back.
+struct StartCountdown: View {
+    /// "Warm-up", or the workout when it starts with an exercise.
+    let title: String
+    /// The first move or exercise.
+    let first: String?
+    let live: LiveWorkout
+    let onStart: () -> Void
+    let onCancel: () -> Void
+    @State private var left = 3
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            VStack(spacing: 10) {
+                Text(verbatim: L10n.f("%@ začne za", title)).font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                Text(verbatim: "\(left)").font(Typo.heading(120, relativeTo: .largeTitle)).monospacedDigit()
+                    .foregroundStyle(Palette.ink).contentTransition(.numericText(countsDown: true))
+                if let first {
+                    Text(verbatim: first).font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                        .multilineTextAlignment(.center)
+                }
+                if let bpm = live.heartRate {
+                    HStack(spacing: 6) {
+                        Circle().fill(Palette.green).frame(width: 7, height: 7).accessibilityHidden(true)
+                        Text(verbatim: live.heartSource.map { L10n.f("%@ bpm z %@", Fmt.int(bpm), $0) } ?? L10n.f("%@ bpm", Fmt.int(bpm)))
+                            .font(Typo.small).foregroundStyle(Palette.secondary)
+                    }
+                    .padding(.top, 6)
+                }
+                Text("Klepnutím kamkoli začneš hned").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 24)
+            }
+            .padding(.horizontal, 24)
+        }
+        .overlay(alignment: .topLeading) {
+            Button(action: onCancel) {
+                Text("Zrušit").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 4)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onStart)
+        .accessibilityAction(named: Text("Začít hned"), onStart)
+        .task {
+            while left > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                if left == 1 { onStart(); return }
+                withAnimation(.snappy) { left -= 1 }
+            }
+        }
+    }
+}
