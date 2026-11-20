@@ -39,6 +39,8 @@ struct FirstDaysCard: View {
     @AppStorage(FirstDays.sinceKey) private var since: Double = 0
     @AppStorage(FirstDays.mealKey) private var meal = false
     @AppStorage(FirstDays.coachKey) private var coach = false
+    /// "Dokonči nastavení" comes first (FinishSetupCard): one setup card at a time.
+    @AppStorage(FinishSetup.sinceKey) private var finishing: Double = 0
 
     /// Readiness has a number, or it has started learning the normal (a measured night).
     private var night: Bool { today.readiness.score != nil || (today.readiness.learningDays ?? 0) > 0 }
@@ -51,7 +53,7 @@ struct FirstDaysCard: View {
 
     /// Within two weeks of the setup and not everything done yet.
     private var showing: Bool {
-        guard since > 0 else { return false }
+        guard since > 0, finishing == 0 else { return false }
         let age = Date().timeIntervalSince1970 - since
         return age < Double(FirstDays.days) * 86_400 && doneCount < steps.count
     }

@@ -69,6 +69,8 @@ struct TodayContent: View {
     @State private var showMonth = false
     /// Nastavení → Kouč na obrazovkách: the coach's card on Dnes.
     @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
+    /// "Dokonči nastavení" is still open (FinishSetupCard): it takes the morning question's place.
+    @AppStorage(FinishSetup.sinceKey) private var finishingSetup: Double = 0
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -178,9 +180,15 @@ struct TodayContent: View {
             .accessibilityHint(Text(verbatim: L10n.tr("Otevře Nastavení, kde připojíš hodinky nebo prsten")))
         }
 
+        // Right after the setup, what it left for Today (concept v38): the
+        // goal, the training days, where one lifts and the notifications.
+        if selectedDate == nil && !model.demo && finishingSetup > 0 {
+            FinishSetupCard(today: today).padding(.top, 20)
+        }
+
         // The morning question, for now right under the readiness (concept
         // point 3). Its answer never changes the number.
-        if selectedDate == nil && !model.demo {
+        if selectedDate == nil && !model.demo && finishingSetup == 0 {
             TodayMorningQuestion(date: today.date, feeling: today.checkin)
                 // A new day is a new question, also past midnight in a running app.
                 .id(today.date)

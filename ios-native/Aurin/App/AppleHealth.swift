@@ -813,9 +813,12 @@ final class HealthReader: @unchecked Sendable {
         if !exerciseRecords.isEmpty {
             windows["exercise"] = .init(from: stamp(workoutStart), to: stamp(now.addingTimeInterval(3600)))
         }
-        let first = nightRecords + exerciseRecords
+        // Readiness needs the nights, HRV and resting heart rate (src/readiness.js):
+        // they go in the first request, so on the first import the number can be
+        // there when Today opens (part O: a real Readiness on day 1). Both are
+        // one value a day, a few hundred records at most.
+        let first = nightRecords + exerciseRecords + (await restingRecords) + (await hrvRecords)
         var rest = await stepRecords + energyRecords
-        rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
         rest += await bodyRecords
         rest += await journalRecords + sexRecords

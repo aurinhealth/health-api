@@ -1,16 +1,15 @@
 import SwiftUI
-import UserNotifications
 
 /// After the first sign-in: the consent to health data with the separate one to
 /// the AI features ("Tvoje data o zdraví"), where the data comes from ("Připoj
 /// svoje data": Apple Health first, then WHOOP, the Ultrahuman Ring, Google
 /// Health and Intervals.icu; Wahoo in Settings), who you are ("O tobě": sex,
 /// year of birth, height and weight, filled in from Apple Health or the
-/// server's suggestions), the main sport, the goal and the time for training on
-/// each day (SetupFocusPages, each can be skipped) and what the notifications
-/// bring, before iOS asks once. Everything else (the day, sleep, food) lives in
-/// Settings. An account set up earlier that still owes the consent sees only
-/// the consent page.
+/// server's suggestions) and the sports. The goal, the training days, where
+/// one lifts and the notifications wait on Today in "Dokonči nastavení"
+/// (FinishSetupCard, onboarding concept v38, part O). Everything else (the day,
+/// sleep, food) lives in Settings. An account set up earlier that still owes
+/// the consent sees only the consent page.
 struct SetupFlowView: View {
     @Environment(AppModel.self) private var model
     @State private var index = 0
@@ -32,8 +31,6 @@ struct SetupFlowView: View {
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
-    /// iOS has not asked about notifications yet: the page about them comes last.
-    @State private var askNotifications = false
     /// The free week shown at the end (SetupProOffer).
     @State private var proOffer = false
     /// The account left the AI features off: the free week allows them with its button.
@@ -51,29 +48,23 @@ struct SetupFlowView: View {
     @State private var suggested: [String: String] = [:]
     /// The weight as prefilled; unchanged it is not saved again as today's.
     @State private var prefilledWeight: String?
-    // Sport, goal and time (SetupFocusPages): what was chosen against what the
-    // server had, the saved profile they go into and the usual week.
+    // The sports on "O tobě" (SportsPicker): what was chosen against what the
+    // server had, and the saved profile they go into.
     @State private var focus = SetupFocus()
     @State private var focusSaved = SetupFocus()
     @State private var focusProfile: JSONObject?
     @State private var focusLoaded = false
-    @State private var weekPrefs: JSONValue?
-    @State private var minutes = Array(repeating: -1, count: 7)
-    @State private var minutesSaved = Array(repeating: -1, count: 7)
-    @State private var equipment = false
     /// A page is turning: a second tap on "Pokračovat" meanwhile goes nowhere
     /// (a double tap skipped "Připoj svoje data", Tapwright 2026-11-19).
     @State private var turning = false
 
-    private enum Page: Equatable { case consent, sources, about, sport, goal, time, notifications }
+    private enum Page: Equatable { case consent, sources, about }
 
     private var pages: [Page] {
         if consentOnly { return [.consent] }
-        return (consentFirst ? [.consent] : []) + [.sources, .about, .sport, .goal, .time] + (askNotifications ? [.notifications] : [])
+        return (consentFirst ? [.consent] : []) + [.sources, .about]
     }
 
-    /// The pages that can be skipped: the sport, the goal and the time.
-    private var skippable: Bool { [Page.sport, .goal, .time].contains(page) }
     private var page: Page { pages[min(index, pages.count - 1)] }
     private var health: AppleHealth { AppleHealth.shared }
 
@@ -86,31 +77,27 @@ struct SetupFlowView: View {
                     // steps between them stay put from page to page.
                     ZStack {
                         CircleButton(systemImage: "chevron.left", label: "Zpět").hidden()
-                        // No way back to a consent already given, or from the notifications
-                        // to a profile already saved.
-                        if index > 0 && pages[index - 1] != .consent && page != .notifications {
+                        // No way back to a consent already given.
+                        if index > 0 && pages[index - 1] != .consent {
                             CircleButton(systemImage: "chevron.left", label: "Zpět") { turn(by: -1) }
                                 .disabled(turning || saving)
                         }
                     }
-                    // How far along: shown once the page count is known (whether iOS asked
-                    // about notifications already), so it never jumps; not for the consent alone.
+                    // How far along: shown once the page count is known (whether the
+                    // consent is owed), so it never jumps; not for the consent alone.
                     if ready && pages.count > 1 {
                         SetupSteps(done: index + 1, total: pages.count)
                     } else {
                         Spacer()
                     }
                     ZStack(alignment: .trailing) {
-                        ForEach(["Přeskočit", "Odhlásit", "Zrušit"], id: \.self) { Text(L10n.tr($0)).font(Typo.bodyStrong).hidden() }
+                        ForEach(["Odhlásit", "Zrušit"], id: \.self) { Text(L10n.tr($0)).font(Typo.bodyStrong).hidden() }
                         // Without the consent the app cannot be used: the way out is signing out,
                         // or back to the paused screen when health data was paused (HealthPausedView).
                         if page == .consent && model.resumingHealth {
                             Button("Zrušit") { model.resumingHealth = false; model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         } else if page == .consent {
                             Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                        } else if skippable {
-                            Button("Přeskočit") { Task { await skip() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                                .disabled(saving)
                         }
                     }
                 }
@@ -125,7 +112,6 @@ struct SetupFlowView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
-                .sheet(isPresented: $equipment) { NavigationStack { EquipmentView() } }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
                 if page == .consent && ready && !agree {
@@ -143,14 +129,7 @@ struct SetupFlowView: View {
                         .disabled(!ready || appleWorking || turning)
                 } else {
                     PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
-                                  || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
-                }
-                if page == .notifications {
-                    Button("Později") { Task { await later() } }
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving || proOffer || turning)
+                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
                 }
             }
             .padding(.horizontal, 24)
@@ -159,8 +138,10 @@ struct SetupFlowView: View {
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) {
-            if page == .about { await readAppleProfile() }
-            if skippable { await loadFocus() }
+            if page == .about {
+                await readAppleProfile()
+                await loadFocus()
+            }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         // The free week, once, after the last page (SetupProOffer); Today when it closes.
@@ -174,11 +155,7 @@ struct SetupFlowView: View {
     private var buttonTitle: String {
         if saving { return "Ukládám…" }
         if appleWorking { return "Moment…" }
-        switch page {
-        case .time: return askNotifications ? "Pokračovat" : "Hotovo"
-        case .notifications: return "Zapnout"
-        default: return "Pokračovat"
-        }
+        return page == .about ? "Hotovo" : "Pokračovat"
     }
 
     @ViewBuilder
@@ -187,10 +164,6 @@ struct SetupFlowView: View {
         case .consent: consentPage
         case .sources: sourcesPage
         case .about: aboutPage
-        case .sport: SetupSportPage(focus: $focus)
-        case .goal: SetupGoalPage(focus: $focus)
-        case .time: SetupTimePage(minutes: $minutes, loading: !focusLoaded, lifts: focus.sports.kinds.contains("strength")) { equipment = true }
-        case .notifications: notificationsPage
         }
     }
 
@@ -363,12 +336,6 @@ struct SetupFlowView: View {
     }
 
     /// Google and Intervals.icu, also before /app/api/connections answers.
-    /// A watch or ring that measures readiness: an Apple Watch paired with
-    /// this iPhone, or a connected service that reads one (audit 14.6).
-    private var wearable: Bool {
-        WatchBridge.shared.watchState.paired || ["google", "ultrahuman", "whoop"].contains { provider($0)?.connected == true }
-    }
-
     private func provider(_ id: String) -> ConnectionsResponse.Provider? {
         if let known = providers.first(where: { $0.id == id }) { return known }
         let names = ["google": "Google Health", "intervals": "Intervals.icu"]
@@ -435,6 +402,19 @@ struct SetupFlowView: View {
             .font(Typo.small).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
+        // The sports, on the same page (concept v38): ticked or not, Hlavní
+        // on the ones trained for most. None ticked is general fitness.
+        Text("Tvoje sporty").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            .accessibilityAddTraits(.isHeader)
+            .padding(.top, 10).padding(.horizontal, 4)
+        Text("Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle.")
+            .font(Typo.small).foregroundStyle(Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+        SportsPicker(choice: $focus.sports)
+        if focus.sports.swims {
+            SwimLevelGroup(swims100: $focus.swims100)
+        }
     }
 
     /// "Narození": the year on a wheel (no keyboard, so no year that cannot be),
@@ -523,58 +503,11 @@ struct SetupFlowView: View {
             step()
         case .about:
             guard await saveProfile() else { return }
-            // Back from the sport and "O tobě" saved again: the focus goes into the new profile.
+            // The sports go into the profile "O tobě" just saved.
             focusProfile = nil
-            step()
-        case .sport:
-            step()
-        case .goal:
             guard await saveFocus() else { return }
-            step()
-        case .time:
-            guard await saveTime() else { return }
-            await afterTime()
-        case .notifications:
-            await done(notifications: true)
+            await done()
         }
-    }
-
-    /// "Přeskočit": the page's answer goes back to what the server has and
-    /// nothing of it is saved (the sport chosen before a skipped goal still is).
-    private func skip() async {
-        guard !turning else { return }
-        turning = true
-        defer { settle() }
-        error = nil
-        switch page {
-        case .sport:
-            focus.sports = focusSaved.sports
-            focus.swims100 = focusSaved.swims100
-            step()
-        case .goal:
-            focus.goal = focusSaved.goal
-            focus.eventName = focusSaved.eventName
-            focus.eventDate = focusSaved.eventDate
-            guard await saveFocus() else { return }
-            step()
-        case .time:
-            minutes = minutesSaved
-            await afterTime()
-        default: break
-        }
-    }
-
-    /// After the time: the notifications page, or the end when iOS asked already.
-    private func afterTime() async {
-        if askNotifications { step() } else { await done(notifications: false) }
-    }
-
-    /// "Později" on the notifications page, one tap like "Zapnout".
-    private func later() async {
-        guard !turning else { return }
-        turning = true
-        defer { settle() }
-        await done(notifications: false)
     }
 
     /// The next page, never past the last one.
@@ -598,30 +531,18 @@ struct SetupFlowView: View {
         }
     }
 
-    /// The saved profile and the usual week, once, when the sport page opens
-    /// (after "O tobě" saved the profile, so the week has its automatic time).
+    /// The sports saved earlier (a start on the web), once, when "O tobě" opens.
     private func loadFocus() async {
         guard !focusLoaded else { return }
         defer { focusLoaded = true }
-        guard !model.demo else { return }
-        let api = model.api
-        async let profile = try? api.profile()
-        async let week = try? api.weekPlan(start: nil)
-        if let p = await profile {
-            focusProfile = p
-            // Only what was not chosen already (back from the goal) is filled in.
-            let saved = SetupFocus(profile: p)
-            if focus == SetupFocus() { focus = saved }
-            focusSaved = saved
-        }
-        if let r = await week {
-            weekPrefs = r.prefs
-            minutes = WeekPlanPrefs.minutes(r.prefs)
-            minutesSaved = minutes
-        }
+        guard !model.demo, let p = try? await model.api.profile() else { return }
+        // Only what was not chosen already is filled in.
+        let saved = SetupFocus(profile: p)
+        if focus == SetupFocus() { focus = saved }
+        focusSaved = saved
     }
 
-    /// The main sport and the goal into the profile, as Zaměření saves them;
+    /// The sports into the profile, as Zaměření saves them;
     /// nothing when they are as the server has them.
     private func saveFocus() async -> Bool {
         guard !model.demo, focus != focusSaved else { return true }
@@ -635,27 +556,6 @@ struct SetupFlowView: View {
             try await FocusSheet.saveSwimLevel(model.api, sports: focus.sports, swims100: focus.swims100)
             focusProfile = next
             focusSaved = focus
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
-    }
-
-    /// The time on each day into the usual week, as Zaměření and Kdy mám čas
-    /// save it; left as it came, the week keeps its automatic time.
-    private func saveTime() async -> Bool {
-        guard !model.demo, minutes != minutesSaved else { return true }
-        saving = true
-        defer { saving = false }
-        do {
-            let prefs: JSONValue?
-            if let weekPrefs { prefs = weekPrefs } else { prefs = try await model.api.weekPlan(start: nil).prefs }
-            let days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }
-            let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))
-            let r = try await model.api.saveWeekPlan(start: nil, prefs: body)
-            weekPrefs = r.prefs
-            minutesSaved = minutes
             return true
         } catch {
             self.error = error.localizedDescription
@@ -696,7 +596,6 @@ struct SetupFlowView: View {
             if let v = p["height"]?.number { heightText = Self.lengthText(v) }
             apply(s)
         }
-        askNotifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
         if let list = await connections { providers = list.providers }
         ready = true
         guard !consentOnly else { return }
@@ -856,18 +755,16 @@ struct SetupFlowView: View {
         }
     }
 
-    /// The end of the setup. The morning readiness, the coach's messages and the
-    /// reminders are on by default, but iOS delivers none of them until it is
-    /// allowed, and it asks only once: so only after "Zapnout" on the page that
-    /// shows what they bring ("Později" leaves the question for Nastavení →
-    /// Oznámení). The push token follows the answer. Today then starts with
-    /// the "První dny" card (FirstDaysCard), after the free week once when
-    /// the account can still have it (SetupProOffer).
-    private func done(notifications: Bool) async {
+    /// The end of the setup. iOS asks about notifications only from their row
+    /// on Today's "Dokonči nastavení" (FinishSetupCard), which then follows
+    /// with "První dny" (FirstDaysCard), after the free week once when the
+    /// account can still have it (SetupProOffer).
+    private func done() async {
         saving = true
         defer { saving = false }
-        if notifications { _ = await Reminders.requestPermission() }
+        // A phone where notifications were allowed before sends its token now.
         await PushRegistration.refresh(api: model.api)
+        FinishSetup.start()
         FirstDays.start()
         if let needsAI = await SetupProOffer.due(model) {
             proNeedsAI = needsAI
@@ -875,32 +772,6 @@ struct SetupFlowView: View {
         } else {
             await model.finishSetup()
         }
-    }
-
-    // MARK: - Oznámení
-
-    @ViewBuilder
-    private var notificationsPage: some View {
-        Text("Ozveme se, když na tom záleží")
-            .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 24)
-        // Without a watch or ring the morning readiness never comes (audit 14.6): the coach and bedtime lead.
-        Text(wearable ? "Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán." : "Kouč, když je potřeba změnit plán, a kdy jít spát.")
-            .font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        VStack(spacing: 10) {
-            if wearable {
-                NotificationPreview(title: L10n.tr("Připravenost 78, dobrý den na tvrdý trénink"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
-                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
-            } else {
-                NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("Včera byl těžký trénink. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
-            }
-            NotificationPreview(title: L10n.tr("Za 30 minut do postele"),
-                                text: L10n.f("Na budík v %@ potřebuješ jít spát do %@.", ClockText.format("7:15"), ClockText.format("22:40")), time: "22:10")
-        }
-        .padding(.top, 14)
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -961,35 +832,6 @@ enum SetupProOffer {
         let store = ProStore.shared
         await store.load()
         return store.trialEligible && !store.entitled ? status.aiConsent != true : nil
-    }
-}
-
-/// One of the sample notifications on the setup's last page, drawn like the
-/// banner iOS shows: the app's mark, the title, the time and the text.
-private struct NotificationPreview: View {
-    let title: String
-    let text: String
-    /// "7:02", shown in the phone's 12/24-hour format.
-    let time: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 11) {
-            AurinMark(size: 26)
-                .frame(width: 38, height: 38)
-                .background(Palette.cardLift, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Spacer(minLength: 8)
-                    Text(verbatim: ClockText.format(time)).font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-                Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(Palette.card.opacity(0.92), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
     }
 }
 

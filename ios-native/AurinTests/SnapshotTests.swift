@@ -531,6 +531,13 @@ final class SnapshotTests: XCTestCase {
             HealthValueContent(value: .constant(.weight), period: .constant(.days30)).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
         }
         try render("health-vo2max-en", glow: Palette.Glow.health) { VO2maxDetailContent(health: DemoData.health, period: .constant(.months6)).padding(16).padding(.top, 30).environment(\.locale, L10n.locale) }
+        // Part O: what the setup leaves for Today, with Gym ticked and the goal set.
+        FinishSetup.start()
+        UserDefaults.standard.set(true, forKey: FinishSetup.goalKey)
+        try render("finish-setup-en", height: 520) {
+            FinishSetupCard(today: DemoData.today, lifts: true).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+        FinishSetup.forget()
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
