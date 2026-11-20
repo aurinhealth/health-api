@@ -6,6 +6,10 @@ struct TodayView: View {
     var openCoach: () -> Void = {}
     /// Sdílet: the day, a workout or the day's food as an image.
     @State private var sharing = false
+    /// The free week once after the setup (SetupProOffer), when Today has loaded.
+    @State private var proOffer = false
+    /// The AI features are off: the free week's button allows them.
+    @State private var proNeedsAI = false
 
     var body: some View {
         NavigationStack(path: model.path(.today)) {
@@ -51,6 +55,22 @@ struct TodayView: View {
         .sheet(isPresented: $sharing) {
             if let today = model.today { ShareSheet(source: .today(today)) }
         }
+        // Decision B (part O): once, when Today is ready after the setup's animation.
+        .task(id: model.today != nil && !model.needsSetup) { await offerPro() }
+        .fullScreenCover(isPresented: $proOffer) {
+            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
+                        allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
+        }
+    }
+
+    private func offerPro() async {
+        guard SetupProOffer.pending, model.today != nil, !model.needsSetup else { return }
+        SetupProOffer.pending = false
+        guard let needsAI = await SetupProOffer.due(model) else { return }
+        // Today is seen first, then the offer slides up.
+        try? await Task.sleep(for: .milliseconds(900))
+        proNeedsAI = needsAI
+        proOffer = true
     }
 }
 

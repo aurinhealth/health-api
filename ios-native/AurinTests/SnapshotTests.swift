@@ -531,6 +531,11 @@ final class SnapshotTests: XCTestCase {
             HealthValueContent(value: .constant(.weight), period: .constant(.days30)).padding(16).padding(.top, 30).environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
         }
         try render("health-vo2max-en", glow: Palette.Glow.health) { VO2maxDetailContent(health: DemoData.health, period: .constant(.months6)).padding(16).padding(.top, 30).environment(\.locale, L10n.locale) }
+        // Part O, animation A: the answers on their way into the dials.
+        try render("setup-build-en", height: 844) {
+            SetupBuildToday(chips: ["Male", "1991", "182 cm", "78.5 kg"], sports: ["ride", "run", "strength"], still: true)
+                .environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
         // Part O: what the setup leaves for Today, with Gym ticked and the goal set.
         FinishSetup.start()
         defer { FinishSetup.forget() }

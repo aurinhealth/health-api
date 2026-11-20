@@ -31,10 +31,8 @@ struct SetupFlowView: View {
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
-    /// The free week shown at the end (SetupProOffer).
-    @State private var proOffer = false
-    /// The account left the AI features off: the free week allows them with its button.
-    @State private var proNeedsAI = false
+    /// The setup is done: Today is put together from the answers (SetupBuildToday).
+    @State private var building = false
     // Data sources
     @State private var appleWorking = false
     @State private var appleRead = false
@@ -128,8 +126,8 @@ struct SetupFlowView: View {
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .disabled(!ready || appleWorking || turning)
                 } else {
-                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
+                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || building) { Task { await next() } }
+                        .disabled(saving || appleWorking || building || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
                 }
             }
             .padding(.horizontal, 24)
@@ -145,10 +143,14 @@ struct SetupFlowView: View {
             }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
-        // The free week, once, after the last page (SetupProOffer); Today when it closes.
-        .fullScreenCover(isPresented: $proOffer, onDismiss: { Task { await model.finishSetup() } }) {
-            PaywallView(close: { proOffer = false }, step: 2, notNow: true,
-                        allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
+        // Animation A (concept v38): the answers go into Today, then Today.
+        .overlay {
+            if building {
+                SetupBuildToday(chips: buildChips, sports: focus.sports.kinds) {
+                    await model.finishSetup()
+                }
+                .transition(.opacity)
+            }
         }
         .interactiveDismissDisabled()
     }
@@ -793,21 +795,21 @@ struct SetupFlowView: View {
 
     /// The end of the setup. iOS asks about notifications only from their row
     /// on Today's "Dokonči nastavení" (FinishSetupCard), which then follows
-    /// with "První dny" (FirstDaysCard), after the free week once when the
-    /// account can still have it (SetupProOffer).
+    /// with "První dny" (FirstDaysCard). The free week comes once on Today,
+    /// when it has loaded (SetupProOffer, part O decision B).
     private func done() async {
-        saving = true
-        defer { saving = false }
         // A phone where notifications were allowed before sends its token now.
         await PushRegistration.refresh(api: model.api)
         FinishSetup.start()
         FirstDays.start()
-        if let needsAI = await SetupProOffer.due(model) {
-            proNeedsAI = needsAI
-            proOffer = true
-        } else {
-            await model.finishSetup()
-        }
+        SetupProOffer.pending = true
+        withAnimation(.easeInOut(duration: 0.3)) { building = true }
+    }
+
+    /// What "O tobě" said, as it flies into Today: sex, year, height, weight.
+    private var buildChips: [String] {
+        [sex == "female" ? L10n.tr("Žena") : L10n.tr("Muž"), birthYear,
+         heightText + " " + Units.lengthUnit, weightText + " " + Units.weightUnit]
     }
 }
 
@@ -841,6 +843,13 @@ struct SetupSteps: View {
 @MainActor
 enum SetupProOffer {
     static let shownKey = "aurin.setupProOfferShown"
+    private static let pendingKey = "aurin.setupProOfferPending"
+
+    /// The setup ended: Today offers the free week once it has loaded (TodayView).
+    static var pending: Bool {
+        get { UserDefaults.standard.bool(forKey: pendingKey) }
+        set { UserDefaults.standard.set(newValue, forKey: pendingKey) }
+    }
 
     /// When it was shown on this phone, for the Today coach card's Pro line
     /// (point 40, still to come) to keep away that day: never two offers at once.
