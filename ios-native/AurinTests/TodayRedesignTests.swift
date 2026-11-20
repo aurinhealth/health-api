@@ -70,6 +70,13 @@ final class TodayRedesignTests: XCTestCase {
     }
 
     /// Weather sheet: the best hours outside and feels like.
+    func testWeatherTimeOnlyWhenStale() {
+        let now = ISO8601DateFormatter().date(from: "2026-11-20T12:00:00Z")!
+        XCTAssertNil(WeatherDetails.staleSince("2026-11-20T10:30:00Z", now: now))
+        XCTAssertNotNil(WeatherDetails.staleSince("2026-11-20T08:30:00Z", now: now))
+        XCTAssertNil(WeatherDetails.staleSince(nil, now: now))
+    }
+
     func testWeatherOutdoors() throws {
         let weather = try XCTUnwrap(DemoData.today.weather)
         XCTAssertEqual(weather.week?.first?.outdoors?.ride, .init(start: 11, end: 15))

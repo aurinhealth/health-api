@@ -457,8 +457,8 @@ enum DayTimelineRows {
             out.append(Stat(label: "Vzdálenost", value: Fmt.decimal(Units.distance(km)), unit: Units.distanceUnit))
         }
         if let watts = session.watts, watts > 0 { out.append(Stat(label: "Výkon", value: Fmt.int(watts), unit: "W")) }
-        // "1 h 16 min" under "Čas", as the workout's detail and the Strain page write it.
-        if let minutes = session.minutes, minutes > 0 { out.append(Stat(label: "Čas", value: Fmt.hoursMinutesLong(Double(minutes)), unit: "")) }
+        // "1 h 16" under "Čas", the length rule (D-ZDRAVI-12) as the dials write it.
+        if let minutes = session.minutes, minutes > 0 { out.append(Stat(label: "Čas", value: TodayDials.length(Double(minutes)), unit: "")) }
         if out.count < 3, let kcal = session.countedKcal, kcal > 0 { out.append(Stat(label: "Energie", value: Fmt.int(kcal), unit: "kcal")) }
         return out
     }
