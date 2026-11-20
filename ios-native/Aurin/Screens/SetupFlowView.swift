@@ -423,7 +423,7 @@ struct SetupFlowView: View {
     /// with last night and 14 before it, that Readiness is there on Today.
     @ViewBuilder
     private var nightsRow: some View {
-        if health.enabled, health.nightsFound != nil || health.syncing {
+        if health.enabled, health.nightsFound != nil || health.importingHistory {
             SettingsGroup {
                 HStack(spacing: 12) {
                     Image(systemName: "moon.zzz.fill").scaledFont(18, weight: .semibold).foregroundStyle(Palette.indigo)
@@ -437,7 +437,7 @@ struct SetupFlowView: View {
                         Text("Spánek a tep").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer(minLength: 8)
-                    if let nights = health.nightsFound, nights >= 15, health.lastNightFound {
+                    if health.nightsFound != nil, health.readyToScore {
                         Pill(text: L10n.tr("Spočítám hned"), foreground: Palette.green, background: Palette.greenSoft)
                     } else if health.nightsFound == nil {
                         ProgressView()

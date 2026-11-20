@@ -71,6 +71,10 @@ struct TodayContent: View {
     @AppStorage(CoachTextPlaces.shownKey("today")) private var coachShown = true
     /// "Dokonči nastavení" is still open (FinishSetupCard): it takes the morning question's place.
     @AppStorage(FinishSetup.sinceKey) private var finishingSetup: Double = 0
+    /// Where "Dokonči nastavení" sits, fixed once shown: a number arriving later
+    /// does not move the card (and close its sheet) while it is in use.
+    @State private var setupCardPlace: Bool?
+    private var setupCardAfterCoach: Bool { setupCardPlace ?? (today.readiness.score != nil) }
     /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
     @Environment(\.dayPage) private var page
     private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
@@ -183,8 +187,9 @@ struct TodayContent: View {
         // Right after the setup, what it left for Today (concept v38): the
         // goal, the training days, where one lifts and the notifications.
         // With a number already (the watch's history), the coach comes first.
-        if selectedDate == nil && !model.demo && FinishSetup.showing(finishingSetup) && today.readiness.score == nil {
+        if selectedDate == nil && !model.demo && FinishSetup.showing(finishingSetup) && !setupCardAfterCoach {
             FinishSetupCard(today: today).padding(.top, 20)
+                .onAppear { setupCardPlace = setupCardPlace ?? false }
         }
 
         // The morning question, for now right under the readiness (concept
@@ -233,8 +238,9 @@ struct TodayContent: View {
             }
 
             // Day 1 with a number (screen 02-todayh): what the setup left, after the coach.
-            if !model.demo && FinishSetup.showing(finishingSetup) && today.readiness.score != nil {
+            if !model.demo && FinishSetup.showing(finishingSetup) && setupCardAfterCoach {
                 FinishSetupCard(today: today).padding(.top, 12)
+                    .onAppear { setupCardPlace = setupCardPlace ?? true }
             }
 
             if today.trainingPlan?.paused == true {
@@ -839,8 +845,9 @@ struct ReadinessHero: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .onAppear {
-            if newAthlete, readiness.score != nil, firstScoreDay.isEmpty { firstScoreDay = date }
+        // Also when the number comes in while Today is open.
+        .onChange(of: readiness.score, initial: true) { _, score in
+            if newAthlete, score != nil, firstScoreDay.isEmpty { firstScoreDay = date }
         }
     }
 
