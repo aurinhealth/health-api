@@ -158,6 +158,34 @@ struct RangeBand: View {
     }
 }
 
+/// What readiness is, from the "i" top right.
+struct ReadinessInfo: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text(verbatim: L10n.tr("Připravenost")).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
+                }
+                HowMeasuredCard(text: "Připravenost porovnává tvou poslední noc, HRV, klidový tep, dech a teplotu s tvými obvyklými dny, na stupnici 0 až 100. Ranní odpověď ji nemění. Je to odhad, ne měření tvého těla.")
+                Text(verbatim: L10n.tr("Nejde o lékařské hodnocení."))
+                    .font(Typo.body).foregroundStyle(Palette.muted)
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Palette.background)
+    }
+}
+
 enum ReadinessText {
     static func label(_ key: String) -> String {
         switch key {
@@ -234,16 +262,30 @@ struct ReadinessDetailContent: View {
     var checkin: String?? = nil
     @Environment(\.tabActions) private var actions
 
+    @Environment(AppModel.self) private var model
+    @State private var period: ChartPeriod = .days30
+
     var body: some View {
         let r = health.readiness
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Připravenost").padding(.top, 24)
+            // Concept 4 (Připravenost): the dial 0 to 100, no label over it
+            // (the title says it, D.md decision 4), no range numbers (SCI-4).
             if let score = r.score {
-                HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(String(score)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                    if let pill = ReadinessText.pill(r.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
+                let zone = ReadinessText.pill(r.zone)
+                RangeDial(value: Double(score), scale: 0...100, fill: true, bandColor: nil, dotColor: zone?.1,
+                          ends: ("0", "100"), size: 210, spoken: L10n.tr("Připravenost") + " " + String(score) + (zone.map { ", " + $0.0 } ?? "")) {
+                    VStack(spacing: 2) {
+                        Text(String(score)).font(Typo.number(72)).foregroundStyle(Palette.ink)
+                        if let zone { Text(verbatim: zone.0).font(Typo.caption.weight(.medium)).foregroundStyle(zone.1) }
+                    }
                 }
-                .padding(.top, 12)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 20)
+                if let line = ReadinessText.numbersLine(model.today?.readiness.numbersLine) {
+                    Text(verbatim: line + ".").font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                        .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                        .padding(.top, 12)
+                }
             } else if let days = r.learningDays {
                 // Without a number, why (audit 14.4): the same as the Health card.
                 ReadinessLearning(days: days, title: Typo.heading(30, relativeTo: .title))
@@ -255,49 +297,55 @@ struct ReadinessDetailContent: View {
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
 
-            // The coach card stays (redesign H); Ask Coach is its last row,
-            // the coach itself is top right.
-            if let summary, let lead = summary.headline ?? summary.text {
-                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
-            }
-
             if let checkin {
                 MorningCheckinCard(feeling: checkin, keepAnswered: true, top: 24)
             }
 
-            if !r.parts.isEmpty {
+            // The morning answer is not a part of the number (T-HAB-1).
+            let parts = r.parts.filter { $0.key != "checkin" }
+            if !parts.isEmpty {
                 // Not "What shapes it": that is Aurin age's (D-ZDRAVI-22).
-                SectionLabel(text: "Minulá noc proti tvému obvyklému").padding(.top, 32)
-                VStack(spacing: 0) {
-                    ForEach(r.parts) { part in
+                SectionLabel(text: "Minulá noc proti tvému obvyklému").padding(.top, 30)
+                Card {
+                    ForEach(Array(parts.enumerated()), id: \.element.id) { i, part in
+                        if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                         if let route = Self.route(part.key) {
                             RouteLink(route: route) { partRow(part).contentShape(Rectangle()) }
                         } else {
                             partRow(part)
                         }
-                        Rectangle().fill(Palette.hairline).frame(height: 1)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, 10)
             }
 
-            if r.history.count > 1 {
-                HStack {
-                    SectionLabel(text: "Posledních 14 dní")
-                    Spacer()
-                    Text(L10n.f("průměr %@", Fmt.int(r.history.map(\.value).reduce(0, +) / Double(r.history.count)))).font(Typo.caption).foregroundStyle(Palette.faint)
+            let points = historyPoints
+            if points.count > 1 {
+                Card {
+                    DetailChart(points: points, today: points.last?.date ?? health.date, period: $period,
+                                note: "Každý bod je jedno ráno. Čárkovaně průměr období.", periods: [.days30, .months3])
                 }
-                .padding(.top, 32)
-                BarChart(values: r.history.map(\.value),
-                         styles: r.history.map { BarStyle(fill: $0.value >= 67 ? Palette.green.opacity(0.7) : $0.value >= 34 ? Palette.amberBar.opacity(0.8) : Palette.rust.opacity(0.8)) },
-                         hi: 100,
-                         labels: r.history.map { Fmt.weekdayShort($0.date) },
-                         highlighted: r.history.count - 1,
-                         height: 110,
-                         scale: Self.readinessBands)
-                    .padding(.top, 14)
+                .padding(.top, 24)
+            }
+
+            // The coach card at the bottom (concept 4); Ask Coach is its last
+            // row, the coach itself is top right.
+            if let summary, let lead = summary.headline ?? summary.text {
+                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
             }
         }
+        .task { if !model.demo { await model.loadDays(from: ISODay.shift(health.date, -90), to: health.date) } }
+    }
+
+    /// The mornings from /app/api/days (90 days), the snapshot's 14 days where those are missing.
+    private var historyPoints: [ChartPoint] {
+        var values: [String: Double] = [:]
+        for point in health.readiness.history { values[point.date] = point.value }
+        for (date, day) in model.dayValues where date <= health.date {
+            if let score = day.readiness?.score { values[date] = Double(score) }
+        }
+        if let score = health.readiness.score { values[health.date] = Double(score) }
+        return values.keys.sorted().map { ChartPoint(date: $0, value: values[$0] ?? 0) }
     }
 
     /// The detail a part of the number opens (the check-in has none).
@@ -312,41 +360,28 @@ struct ReadinessDetailContent: View {
         }
     }
 
-    /// A readiness zone's colour and its range under the last 14 days.
-    /// The bands' edges as hairlines, each band's name in its colour at its middle.
-    static var readinessBands: [ScaleTick] {
-        [34, 67].map { ScaleTick(value: $0, text: "") } + [
-            ScaleTick(value: 83.5, text: L10n.tr("vysoká"), color: Palette.green, line: false),
-            ScaleTick(value: 50.5, text: L10n.tr("střední"), color: Palette.amber, line: false),
-            ScaleTick(value: 17, text: L10n.tr("nízká"), color: Palette.rust, line: false),
-        ]
-    }
-
+    /// Concept 4: the name and the value on the left, the bar with the usual
+    /// range in the middle, where the value is in words on the right. No
+    /// points (concept note: a state in words instead of signed points).
     private func partRow(_ part: HealthSnapshot.Part) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
-                Spacer()
-                Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(ReadinessText.label(part.key)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(value(part.key)).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             }
+            .frame(minWidth: 96, alignment: .leading)
             if part.low != nil, part.high != nil, part.value != nil {
                 // The word and the bar, no range numbers on readiness (SCI-4).
-                HStack(alignment: .firstTextBaseline) {
-                    Spacer()
-                    Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
-                }
-                RangeBand(part: part).padding(.top, 8)
+                RangeBand(part: part).frame(maxWidth: 90)
+                Spacer(minLength: 4)
+                Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
+                    .multilineTextAlignment(.trailing)
+            } else {
+                Spacer(minLength: 4)
             }
-            HStack {
-                Spacer()
-                Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
-                    .foregroundStyle(ReadinessText.color(part))
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(Palette.ink.opacity(0.06), in: Capsule())
-            }
-            .padding(.top, 6)
         }
-        .padding(.vertical, 13)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 
     private func value(_ key: String) -> String {
