@@ -1,0 +1,4 @@
+#!/bin/sh
+# Server checks for what this branch changed, before it reaches CI (scripts/check-fast.mjs).
+# Turn on once per clone: git config core.hooksPath .githooks
+exec node scripts/check-fast.mjs

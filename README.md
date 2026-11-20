@@ -11,8 +11,11 @@ Potřebuješ Node 22.
 ```sh
 npm test              # testy
 npm run check         # kontrola syntaxe
+npm run check:fast    # před pushem: syntaxe, lint a testy jen pro to, co větev změnila (pár sekund)
 npm run dev           # wrangler dev; tajné hodnoty (i OWNER_EMAIL) patří do .dev.vars
 ```
+
+Aby `check:fast` běžel sám před každým pushem: `git config core.hooksPath .githooks`. CI na pull requestu i na `main` dál pouští všechno.
 
 Na produkci se nasazuje jen přes GitHub Actions po pushi do `main`. Aplikaci pro iPhone sestavuje GitHub Actions, postup je v `ios-native/README.md`.
 
