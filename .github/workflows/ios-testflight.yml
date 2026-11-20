@@ -41,6 +41,8 @@ on:
       - ".github/workflows/ios-testflight.yml"
   # A change to this pipeline is tried on its pull request, upload included,
   # once the owner approves it (testflight-pr).
+  # A build of another branch (the redesign, 2026-11-20) goes the same way: a
+  # pull request into that branch that touches this file.
   pull_request:
     paths:
       - ".github/workflows/ios-testflight.yml"
