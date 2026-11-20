@@ -11,6 +11,7 @@ import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
 import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
 import { workloadMetrics, loadBalance, muscleLoad } from "./workload-ratio.js";
+import { loadAdvice, easySport } from "./load-advice.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -227,7 +228,8 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null }) {
+// athleteStatus: training-status.js status (sick, injured, on_break hold the load advice's session).
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null, athleteStatus = "active" }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -399,6 +401,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // null without any load; Muscle load only from the gym's work sets
     // (`gymSets`), absent for an older caller that does not read them.
     loadBalance: loadBalance(intervals, date),
+    // The coach's conclusion above the load cards and, below the usual, one
+    // easy session on the next free day (load-advice.js, decision 6).
+    loadAdvice: workload.historyDays > 0 ? loadAdvice({ level: workload.acwr.level, date, sport: easySport(profile?.mainSport, sessions),
+      hold: (athleteStatus && athleteStatus !== "active") || ["taper", "race"].includes(eventPlan(athleteFocus(profile, date).event || planRace, date)?.phase),
+      planned: new Set([...days.filter(d => d.date > date && ((d.daily?.training?.planned || []).length || (gym[d.date]?.exercises || []).length)).map(d => d.date)]) }) : null,
     ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad, gymSince) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
