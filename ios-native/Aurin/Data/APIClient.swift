@@ -409,8 +409,10 @@ final class APIClient: @unchecked Sendable {
 
     /// Another day and the time of day: time "" leaves the day without one,
     /// "HH:MM" sets it, nil keeps it. The answer may carry a note about other changes.
-    func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
+    /// back: the undo of a missed session's move, to its past day.
+    func reschedulePlanned(eventId: String, to date: String, time: String?, back: Bool = false) async throws -> PlannedChange {
         var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
+        if back { body["back"] = .bool(true) }
         if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
         let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body, repeatable: true)
         return change

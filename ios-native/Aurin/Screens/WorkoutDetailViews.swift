@@ -33,12 +33,16 @@ struct WeekSessionsList: View {
                     .buttonStyle(.plain)
                     .disabled(Self.destination(session) == nil)
                     let upcoming = PlanSessionActions.upcoming(session)
+                    let missed = PlanSessionActions.missed(session)
                     let changeable = GymPlanActions.changeable(session) && !upcoming
                     let candidates = pairCandidates(session)
                     let joinable = PlanLinks.candidates(for: session, in: sessions)
                     let paired = PlanLinks.pair(of: session, in: sessions) != nil
-                    if (upcoming || changeable || !candidates.isEmpty || session.unpairTarget != nil) && !model.demo {
+                    if (upcoming || missed || changeable || !candidates.isEmpty || session.unpairTarget != nil) && !model.demo {
                         Menu {
+                            if missed {
+                                Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
+                            }
                             if upcoming {
                                 Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
                                 if paired {
@@ -74,7 +78,7 @@ struct WeekSessionsList: View {
                                 }
                             }
                             // A session ahead, or a missed one, leaves the list in one step.
-                            if upcoming || (changeable && session.status == "missed") {
+                            if upcoming || missed || (changeable && session.status == "missed") {
                                 Button(role: .destructive) { cancelling = session } label: { Label("Zrušit trénink", systemImage: "xmark") }
                             }
                         } label: {

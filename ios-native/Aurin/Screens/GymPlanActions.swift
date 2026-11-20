@@ -38,7 +38,7 @@ struct GymPlanActionsSheet: View {
 
     /// The gym screen knows only the day: the event comes from the week's list.
     private var event: String? {
-        eventId ?? model.training?.sessions?.first(where: { $0.date == date && GymPlanActions.changeable($0) })?.eventId
+        eventId ?? model.training?.sessions?.first(where: { $0.date == date && GymPlanActions.changeable($0) && $0.eventId != nil })?.eventId
     }
 
     private var target: String { AppModel.localDate(moveDate) }
