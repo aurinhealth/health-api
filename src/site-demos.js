@@ -156,9 +156,9 @@ const HIST = [65, 69, 60, 82, 67, 71, 62, 53, 75, 80, 63, 54, 77, 78];
 const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
 <div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>in your usual range</span></div>
-<div class="sl">What makes up today’s score</div>
-${[['Sleep', '7:12', 'usual range 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'usual range 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'usual range 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
-    .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
+<div class="sl">Last night vs your usual</div>
+${[['Sleep', '7 h 12', 'below your usual range', 'rust', 12], ['Resting heart rate', '48 bpm', 'below your usual range', 'green', 20], ['HRV', '64 ms', 'above your usual range', 'green', 83]]
+    .map(([k, v, dir, c, x], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}</div>`).join('')}
 </div>`;
 
 const journal = `<div class="dm pad">
@@ -323,11 +323,9 @@ ${setRow('3', '77.5 × 8', '80', '6–8', '<i class="ip dash">H</i>', 'next')}
 // One thing at a time (the review's V3): beside the phone, only the line the step talks about, larger than on
 // the screen. Readiness: HRV's line from ReadinessDetail; Training mode: the set at hand from GymSetRow.
 const readyOne = `<div class="dm pad one">
-<div class="row sp base"><b>HRV</b><span class="s grn">better than usual</span></div>
+<div class="row sp base"><b>HRV</b><span class="s grn">above your usual range</span></div>
 <div class="row base one-v"><span class="num big"${n(55, 64, 300, 900, 'i')}>64</span><span class="mut">ms</span></div>
-<div class="mut">usual range 55–61 ms</div>
 ${range(83, 'green', 600)}
-<div class="one-pt grn"${at('1300')}>+9 readiness points</div>
 </div>`;
 const tmOne = `<div class="dm pad one tm">
 <div class="row sp base"><b>Squat</b><span class="mut">Set 2 of 4</span></div>

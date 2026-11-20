@@ -220,11 +220,6 @@ enum ReadinessText {
         part.points < 0 ? Palette.rust : Palette.green
     }
 
-    /// "−8 bodů připravenosti".
-    static func points(_ points: Int) -> String {
-        L10n.plural("%@ bodů připravenosti", Fmt.signed(Double(points)), abs(points))
-    }
-
     /// The label by the readiness number only describes the body (Today audit
     /// D1, FDA 2026: "usual range", never "normal"); its colour stays the zone's.
     /// What to do today is the verdict's line (`verdict`).

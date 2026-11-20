@@ -566,7 +566,7 @@ final class SnapshotTests: XCTestCase {
         // Whole screens for the website's scenes, longer than the simulator's screenshots.
         let health = DemoData.health
         try render("site-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
-        try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
+        try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale).environment(AppModel(demo: true)) }
         try render("site-food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
         try render("site-gym", glow: Palette.Glow.training) {
             VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
