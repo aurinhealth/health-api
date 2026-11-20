@@ -768,6 +768,29 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Edit stretching in the live workout: the done moves ticked, the rest to remove or drag (concept 08).
+    func testEditStretching() throws {
+        let items = [GymStretching.Item(id: "ham", name: "Hamstring stretch", seconds: 60, sides: false),
+                     GymStretching.Item(id: "quad", name: "Quad stretch", seconds: 60, sides: false),
+                     GymStretching.Item(id: "hip", name: "Hip flexor stretch", seconds: 60, sides: true),
+                     GymStretching.Item(id: "calf", name: "Calf stretch", seconds: 30, sides: true)]
+        let draft = LivePartDraft(part: .stretching, mode: .workout, routine: nil, name: nil, items: items,
+                                  cardio: GymDayParts.Choice(type: "exercise_bike", minutes: 10))
+        try render("edit-stretching", glow: Palette.Glow.gym, height: 760) {
+            LiveRoutineEditor(draft: .constant(draft), day: DemoData.gym, date: "2026-11-20", done: ["ham", "quad"])
+                .environment(AppModel(demo: true))
+        }
+    }
+
+    /// Edit cardio: the machine and the time (concept 08).
+    func testEditCardio() throws {
+        try render("edit-cardio", glow: Palette.Glow.gym, height: 560) {
+            LiveCardioEditor(choice: .constant(GymDayParts.Choice(type: "exercise_bike", minutes: 10)))
+                .padding(.horizontal, 20)
+                .environment(AppModel(demo: true))
+        }
+    }
+
     /// The effort sheet of a set: how hard first, then the kind of set (concept 08).
     func testEffortSheet() throws {
         try render("effort-sheet", height: 700) {
