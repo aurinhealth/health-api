@@ -277,9 +277,11 @@ struct CaloriesDetailContent: View {
 
     // MARK: History
 
+    /// The finished logged days: today is still being eaten, so it stays out of
+    /// the chart, the days against the target and the trend (the dial shows it).
     private func points(_ history: FoodHistory) -> [ChartPoint] {
         history.list.compactMap { day in
-            guard day.logged, let eaten = value.eaten(day) else { return nil }
+            guard day.logged, day.date < history.today, let eaten = value.eaten(day) else { return nil }
             return ChartPoint(date: day.date, value: eaten)
         }
     }
@@ -292,14 +294,15 @@ struct CaloriesDetailContent: View {
                         note: "Každá tečka je jeden zapsaný den. Mezera je den bez zápisu.")
         }
 
-        let count = TargetDays.count(Array(history.list.suffix(FoodHistory.days(for: period))), value: value)
+        let count = TargetDays.count(history.list.suffix(FoodHistory.days(for: period)).filter { $0.date < history.today }, value: value)
         if count.total > 0 {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: L10n.f("Proti cíli, %@", L10n.plural("%lld zapsaných dní", count.total)))
                 Card {
-                    targetRow("Nad cílem", count.over, of: count.total)
+                    // At target first, the one in green (concept 087).
+                    targetRow("V cíli", count.at, of: count.total, color: Palette.green)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
-                    targetRow("V cíli", count.at, of: count.total)
+                    targetRow("Nad cílem", count.over, of: count.total)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                     targetRow("Výrazně pod cílem", count.below, of: count.total)
                 }
@@ -319,12 +322,12 @@ struct CaloriesDetailContent: View {
         }
     }
 
-    private func targetRow(_ title: String, _ days: Int, of total: Int) -> some View {
+    private func targetRow(_ title: String, _ days: Int, of total: Int, color: Color = Palette.ink) -> some View {
         let share = Double(days) / Double(max(total, 1))
         return HStack(spacing: 12) {
             Text(verbatim: L10n.tr(title)).font(Typo.body).foregroundStyle(Palette.ink).frame(maxWidth: .infinity, alignment: .leading)
             Text(verbatim: L10n.plural("%lld dní", days)).font(Typo.caption).foregroundStyle(Palette.muted)
-            ProgressLine(fraction: share, color: Palette.ink, height: 4).frame(width: 64)
+            ProgressLine(fraction: share, color: color, height: 4).frame(width: 64)
             Text(verbatim: Fmt.int(share * 100) + Fmt.percentSign).font(Typo.number(20)).foregroundStyle(Palette.ink)
                 .frame(minWidth: 44, alignment: .trailing)
         }
@@ -496,7 +499,8 @@ struct FoodMonthSheet: View {
         guard !list.isEmpty else { return L10n.tr("Tento měsíc zatím bez zapsaného jídla.") }
         let eaten = list.compactMap { value.eaten($0) }
         let mean = eaten.reduce(0, +) / Double(max(eaten.count, 1))
-        let count = TargetDays.count(list, value: value)
+        // Today is still being eaten: not yet at, under or over its target.
+        let count = TargetDays.count(list.filter { $0.date < today }, value: value)
         return L10n.f("Průměr %@ na zapsaný den.", Fmt.int(mean) + " " + value.unit) + " "
             + L10n.plural("%lld dní v cíli nebo pod ním", count.at + count.below) + ", "
             + L10n.plural("%lld nad ním", count.over) + "."

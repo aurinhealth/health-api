@@ -4707,3 +4707,5 @@
 "Nejdřív zapni sledování cyklu" = "Turn on cycle tracking first";
 "Nejdřív ukáže, co se smaže a co zůstane." = "First shows what is deleted and what stays.";
 "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane." = "Withdraws your consent and deletes your health data. Your account and Pro stay. We show you what happens first.";
+"Denní limit" = "Daily limit";
+"Denní limit: %@" = "Daily limit: %@";

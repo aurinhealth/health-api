@@ -38,6 +38,9 @@ struct AddFoodSheet: View {
     @State private var path: [FoodRoute] = []
     @State private var scanning = false
     @State private var photoMode: String?
+    /// The AI step waiting for the AI consent (photo, gallery, label, lookup):
+    /// asked before the first photo, never an error after it (redesign J).
+    @State private var consentFor: String?
     /// The month's free AI photos without Pro; nil with Pro and in the pilot.
     @State private var photoTrial: SubscriptionStatus.PhotoTrial?
     /// Choosing a food for a meal photo's list (PhotoItemsView "Přidat
@@ -90,10 +93,10 @@ struct AddFoodSheet: View {
                     if query.isEmpty { LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
                         Menu {
-                            Button { photoMode = "portion" } label: { Label("Vyfotit", systemImage: "camera") }
-                            Button { galleryOpen = true } label: { Label("Z galerie", systemImage: "photo.on.rectangle") }
+                            Button { withAI("photo") } label: { Label("Vyfotit", systemImage: "camera") }
+                            Button { withAI("gallery") } label: { Label("Z galerie", systemImage: "photo.on.rectangle") }
                         } label: { tileFace("Vyfotit", "camera") }
-                        tile("Etiketa", "doc.text.viewfinder") { photoMode = "label" }
+                        tile("Etiketa", "doc.text.viewfinder") { withAI("label") }
                         tile("Ručně", "pencil") { path.append(.manual) }
                     }
                     .padding(.top, 16) }
@@ -129,7 +132,7 @@ struct AddFoodSheet: View {
                                     .buttonStyle(.plain)
                             }
                             if query.trimmingCharacters(in: .whitespaces).count >= 2 && !searching {
-                                Button { lookUp() } label: {
+                                Button { withAI("lookup") } label: {
                                     HStack {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Není tu, co hledáš?").font(Typo.sentence(15))
@@ -219,6 +222,9 @@ struct AddFoodSheet: View {
         .onDisappear {
             if pick != nil { startedHere.forEach(model.removePendingFood) } else { model.unwatchPendingFoods(startedHere) }
         }
+        .sheet(item: Binding(get: { consentFor.map(Named.init) }, set: { consentFor = $0?.name })) { step in
+            AIConsentAsk { withAI(step.name) }
+        }
         .photosPicker(isPresented: $galleryOpen, selection: $galleryItem, matching: .images)
         .onChange(of: galleryItem) { _, item in
             guard let item else { return }
@@ -255,12 +261,24 @@ struct AddFoodSheet: View {
         guard !started, let start else { return }
         started = true
         switch start {
-        case .photo: photoMode = "portion"
-        case .label: photoMode = "label"
+        case .photo: withAI("photo")
+        case .label: withAI("label")
         case .scan: scanning = true
-        case .gallery: galleryOpen = true
+        case .gallery: withAI("gallery")
         case .manual: path.append(.manual)
         case .search: break
+        }
+    }
+
+    /// A step that sends the photo or the words to the AI: with the AI off by
+    /// its consent, the consent card first (the same as the coach's), then the step.
+    private func withAI(_ id: String) {
+        if model.aiOff && !model.demo { consentFor = id; return }
+        switch id {
+        case "photo": photoMode = "portion"
+        case "label": photoMode = "label"
+        case "gallery": galleryOpen = true
+        default: lookUp()
         }
     }
 
