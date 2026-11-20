@@ -54,17 +54,79 @@ struct SettingsDivider: View {
     }
 }
 
-/// A thin symbol in its colour, without a tile under it.
+/// A thin symbol in its colour, without a tile under it; on the hub lists of
+/// Settings (the main page, Customization) a filled symbol on a tinted disc.
 struct SettingsIcon: View {
     let systemImage: String
     let color: Color
+    var disc = false
+    /// Something to look at (a source to connect again): a rust dot on the disc's corner.
+    var alert = false
+
+    var body: some View {
+        if disc {
+            SettingsDisc(systemImage: systemImage, color: color, size: 34)
+                .overlay(alignment: .topTrailing) {
+                    if alert {
+                        Circle().fill(Palette.rust).frame(width: 9, height: 9)
+                            .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
+                            .offset(x: 2, y: -2)
+                    }
+                }
+        } else {
+            Image(systemName: systemImage)
+                .scaledFont(18, weight: .regular, cap: .denseCap)
+                .foregroundStyle(color)
+                .frame(width: 26, height: 26)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// A symbol in its colour on a soft disc of the same colour, with a thin rim
+/// (the Settings concept, 2026-11-13): the hub rows, the tiles of the parts
+/// of the app, the goals and the top of every inner page.
+struct SettingsDisc: View {
+    let systemImage: String
+    let color: Color
+    var size: CGFloat = 40
 
     var body: some View {
         Image(systemName: systemImage)
-            .scaledFont(18, weight: .regular, cap: .denseCap)
+            .font(.system(size: size * 0.44, weight: .medium))
             .foregroundStyle(color)
-            .frame(width: 26, height: 26)
+            .frame(width: size, height: size)
+            .background(color.opacity(0.14), in: Circle())
+            .overlay { Circle().strokeBorder(color.opacity(0.22), lineWidth: 1) }
             .accessibilityHidden(true)
+    }
+}
+
+/// The top of an inner Settings page: its own icon on a disc (the one of the
+/// row that leads there) and one serif sentence on what the page holds or how
+/// it is set now.
+struct SettingsHero: View {
+    var systemImage: String? = nil
+    var color: Color = Palette.ink
+    let text: String
+    /// Drawn instead of the disc (the coach's two lights, the goals' icons).
+    var art: AnyView? = nil
+
+    var body: some View {
+        VStack(spacing: 14) {
+            if let art {
+                art
+            } else if let systemImage {
+                SettingsDisc(systemImage: systemImage, color: color, size: 58)
+            }
+            Text(L10n.tr(text)).font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
     }
 }
 
@@ -215,11 +277,16 @@ struct SettingsPage<Content: View>: View {
     let title: String
     /// Kept in ScreenTrail as "page/<title>" (Settings and other pages in its look); off for the report pages themselves.
     var trail = true
+    /// The icon and the sentence on top (Settings pages only).
+    var hero: SettingsHero? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         PageScroll {
-            VStack(alignment: .leading, spacing: 26) { content }
+            VStack(alignment: .leading, spacing: 26) {
+                if let hero { hero }
+                content
+            }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 48)

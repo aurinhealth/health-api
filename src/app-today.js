@@ -11,7 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
-import { verdictText, signsAdvice } from "./day-verdict.js";
+import { verdictText, signsAdvice, numbersLine } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -95,8 +95,10 @@ export function strainTarget({ readiness = null, zone = null, planned = null, de
   // "rest", "no_intensity"): rest first (IOC 2022), whatever the plan says.
   if (recover) mid = Math.min(mid, 3);
   const r1 = v => Math.round(v * 10) / 10;
-  const low = r1(Math.max(1, mid - 1.5));
-  return { low, high: Math.max(low, r1(Math.min(20, mid + 1.5))) };
+  const low = r1(Math.max(1, mid - 1.5)), high = Math.max(low, r1(Math.min(20, mid + 1.5)));
+  // mid: the middle of the shown range, the one number the coach's sentence
+  // says ("strain to about 12.6"), so the AI never picks it (S3/S4).
+  return { low, high, mid: r1((low + high) / 2) };
 }
 
 // The usual day's strain: the 80th percentile of the last 28 days, each day
@@ -120,6 +122,8 @@ const plannedStrain = tss => (tss > 0 ? Math.round(21 * (1 - Math.exp(-tss / 90)
 // location) with the advice whether a ride or a run belongs outdoors
 // (adaptive-week.js environmentFor, the same rule as the coach). Null without a
 // place; without a forecast only the place and the season's advice.
+const hourSpan = w => (w && Number.isInteger(w.start) && Number.isInteger(w.end) ? { start: w.start, end: w.end } : null);
+
 export function todayWeather(location, forecast, date) {
   if (!location || !Number.isFinite(Number(location.latitude)) || !Number.isFinite(Number(location.longitude))) return null;
   const w = forecast && typeof forecast === "object" && Object.keys(forecast).length ? forecast : null;
@@ -139,12 +143,15 @@ export function todayWeather(location, forecast, date) {
     // hours from now, and seven days with their hours and where to train.
     now: Number.isFinite(Number(w?.now?.temp)) ? {
       temp: round(num(w.now.temp)), code: round(num(w.now.code)), wind: round(num(w.now.wind)),
-      windDirection: round(num(w.now.windDirection)), daylight: typeof w.now.daylight === "boolean" ? w.now.daylight : null
+      windDirection: round(num(w.now.windDirection)), daylight: typeof w.now.daylight === "boolean" ? w.now.daylight : null,
+      feelsLike: round(num(w.now.feelsLike)), asOf: typeof w.now.asOf === "string" ? w.now.asOf : null
     } : null,
     next: Array.isArray(w?.next) && w.next.length ? w.next : null,
     week: Array.isArray(w?.week) && w.week.length ? w.week.map(d => ({
       date: d.date, code: round(num(d.code)), max: round(num(d.max)), min: round(num(d.min)), rainProb: round(num(d.rainProb)),
       hours: Array.isArray(d.hours) ? d.hours : [],
+      // The best hours outside (weatherkit.js outdoorWindow): {start, end} local hours, or null.
+      outdoors: { ride: hourSpan(d.outdoors?.ride), run: hourSpan(d.outdoors?.run) },
       ride: { environment: environmentFor(d.date, "ride", d).environment, reason: weatherReason(d.date, "ride", d) },
       run: { environment: environmentFor(d.date, "run", d).environment, reason: weatherReason(d.date, "run", d) }
     })) : null,
@@ -415,7 +422,11 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       // Days of baseline so far while a new athlete has under 14 (recovery-model.js).
       learningDays: readiness.learningDays ?? null,
       // What to do today, a key of day-verdict.js VERDICT_KEYS (the app says it under the number); null on an earlier day.
+      // Kept for older builds and the morning push.
       verdict,
+      // The redesign's line under the number (AI-2): what the numbers say, a
+      // key of day-verdict.js NUMBERS_LINE_KEYS, never advice; null with the verdict.
+      numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest" }) : null,
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
       pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length,

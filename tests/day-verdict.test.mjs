@@ -58,7 +58,7 @@ test("illness, its signs and a paused athlete set the strain target to rest, wha
   const planned = 14, normal = strainTarget({ readiness: 80, zone: "green", planned });
   const rest = strainTarget({ readiness: 80, zone: "green", planned, recover: true });
   assert.ok(normal.high > 10);
-  assert.deepEqual(rest, { low: 1.5, high: 4.5 });
+  assert.deepEqual(rest, { low: 1.5, high: 4.5, mid: 3 });
 });
 
 // Today and the push read the same day: 40 days of wellness, nights ending

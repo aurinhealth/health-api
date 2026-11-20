@@ -90,7 +90,7 @@ struct SwimLevelGroup: View {
 struct SetupGoalPage: View {
     @Binding var focus: SetupFocus
 
-    private static let subtitles = ["fitness": "Víc energie, postupné zlepšení", "race": "Datum a vzdálenost", "lose": "Jídlo i trénink k tomu"]
+    static let subtitles = ["fitness": "Víc energie, postupné zlepšení", "race": "Datum a vzdálenost", "lose": "Jídlo i trénink k tomu"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

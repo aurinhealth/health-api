@@ -1,4 +1,5 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
+import { returnDay, FIRST_DAY_MINUTES, EASY_DAY_MINUTES } from "./illness-return.js";
 import { trainingStatus } from './training-status.js';
 import { intensityClass, isHardSession, isHardKind } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
@@ -12,12 +13,12 @@ function recoveryWhy(half){
 import { cycleState, cycleTrainingCaution } from "./cycle-model.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
-import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
 import { racePhase } from "./athlete-focus.js";
 import { sessionLoad } from "./training-load.js";
 import { MAX_MINUTES } from "./workout-model.js";
 import { sorePartsFor } from "./pain-words.js";
+import { pausedSports } from "./athlete-state.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -331,7 +332,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(daysAhead===1&&ready.score!=null)readinessReasons.push(L("na zítřek beru dnešní připravenost, novější data zatím nejsou","for tomorrow I use today's readiness, as there is no newer data yet"));
   if(farAhead)readinessReasons.push(L("regenerace na tento den ještě není známá, intenzitu určuje zátěž","recovery for this day isn't known yet, so the training load sets the intensity"));
   if(ready.score!=null)readinessReasons.push(ready.score<body.score
-    ?(checkin==="sick"?L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru, snížená Nemocí v Deníku)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average, lowered by Sick in your Journal)"):L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru, snížená ranním pocitem)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average, lowered by the morning check-in)"))
+    ?L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru, snížená Nemocí v Deníku)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average, lowered by Sick in your Journal)")
     :L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average)"));
   if(ready.provisional)readinessReasons.push(L("průměr nového zdroje dat je zatím převzatý z dřívějšího zdroje, číslo je orientační","the new data source's average is carried over from the earlier source for now, so the number is provisional"));
   if(bh&&bh.z<=-1)readinessReasons.push(L("HRV "+Math.round(bh.value)+" ms je pod tvým běžným pásmem "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms","HRV "+Math.round(bh.value)+" ms is below your usual range of "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms"));
@@ -367,12 +368,14 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(hard7===2)readinessReasons.push(W.hard2);
   if(lowerGym.length)readinessReasons.push(L("nedávná lower-body silová zátěž","recent lower-body strength work"));
   if(todayCompleted.length)readinessReasons.push(W.today);
-  // The morning check-in on Today (morning-checkin.js), unless the request
-  // brings its own number.
-  if(manualReadiness==null&&checkin)manualReadiness=manualReadinessFor(checkin);
-  if(manualReadiness!=null){
-    const m=clamp(n(manualReadiness,50),0,100),feeling={fresh:L("svěží","fresh"),normal:L("normál","normal"),tired:L("unavený","tired"),sick:L("nemocný","sick")}[checkin];
-    loadCap(m<34?"red":m<67?"yellow":"green",checkin==="sick"&&manualReadiness===manualReadinessFor(checkin)?L("Nemoc v Deníku","Sick in your Journal"):feeling&&manualReadiness===manualReadinessFor(checkin)?L("ranní pocit: ","morning check-in: ")+feeling:L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
+  // Sick from the Journal (morning-checkin.js readinessCheckin), unless the
+  // request brings its own number. The morning question's answer never acts
+  // here: only the request's own number and Sick do (QA-2, 2026-11-16).
+  const journalSick=manualReadiness==null&&checkin==="sick";
+  if(journalSick)loadCap("red",L("Nemoc v Deníku","Sick in your Journal"));
+  else if(manualReadiness!=null){
+    const m=clamp(n(manualReadiness,50),0,100);
+    loadCap(m<34?"red":m<67?"yellow":"green",L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
   }
   // The number Today shows (after the morning check-in).
   const score=ready.score;
@@ -600,14 +603,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // easy and shorter, the first one only recovery, whatever was planned; after
   // more than 7 days ill, the whole first week (audit wave 2, 9.3: an
   // estimate after Elliott 2020, a graded return).
-  const sinceIll=!policy.paused&&athleteState?.recoveredAt?diffDays(targetDate,athleteState.recoveredAt):null;
-  const illDays=athleteState?.recoveredAt&&athleteState?.sickFrom?diffDays(athleteState.recoveredAt,athleteState.sickFrom):null;
-  const easyDays=illDays!=null&&illDays>7?7:3;
-  if(sinceIll!=null&&sinceIll>=0&&sinceIll<easyDays&&!["race","openers"].includes(kind)){
+  // The rule lives in illness-return.js, shared with the app's card.
+  const sinceIll=!policy.paused?returnDay(athleteState,targetDate):null;
+  if(sinceIll!=null&&!["race","openers"].includes(kind)){
     const easy=sinceIll===0?"recovery":"endurance";
     if(kind!=="recovery"&&kind!==easy)kind=easy;
     returning=true;
-    capAt(sinceIll===0?(short?30:45):(short?40:75),L("návrat po nemoci","back after being ill"));
+    capAt((sinceIll===0?FIRST_DAY_MINUTES:EASY_DAY_MINUTES)[short?1:0],L("návrat po nemoci","back after being ill"));
     adaptations.push(sinceIll===0?L("první den po nemoci: jen lehce a krátce","first day after being ill: just short and easy"):L("návrat po nemoci: "+(sinceIll===1?"druhý":sinceIll===2?"třetí":(sinceIll+1)+".")+" den bez intenzity","back after being ill: day "+(sinceIll+1)+" without intensity"));
     adaptations.push(L("když se potíže během tréninku vrátí, přestaň a odpočívej","if the symptoms come back during the session, stop and rest"));
   }
@@ -663,28 +665,34 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   // Nemoc ticked in Deník today, or yesterday (morning-checkin.js readinessCheckin):
   // rest today like the status Nemoc, without setting it (audit wave 2, 9.1).
-  const sickDay=!policy.paused&&checkin==="sick"&&manualReadiness===manualReadinessFor("sick")&&daysAhead===0;
-  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}:null;
+  const sickDay=!policy.paused&&journalSick&&daysAhead===0;
+  // A sport the athlete rests for a pain ("Plan around your knee?",
+  // athlete-state.js pausedSports): no session of it; the other sports go on.
+  const painPause=!policy.paused&&!sickDay&&pausedSports(athleteState).includes(sport);
+  const pause=policy.paused?policy:sickDay?{headline:L("Nemoc v Deníku, odpočinek","Sick in your Journal, rest"),guidance:[L("V Deníku máš Nemoc: dnes bez tréninku a odpočívej.","You marked Sick in your Journal: no training today, rest."),L("Když budeš nemocný déle, přepni stav na Nemoc.","If you stay ill, switch your status to Sick.")]}
+    :painPause?{headline:L("Plánuju s ohledem na bolest","Planning around the pain"),guidance:[L("Tenhle sport teď kvůli bolesti vynecháváš, ostatní sporty jdou dál.","You're resting this sport for the pain; your other sports go on."),L("Až bolest odezní, odeber ji z paměti kouče a sport se vrátí.","Once the pain is gone, remove it from the coach's memory and the sport comes back.")]}:null;
   const missing=[];
   if(sleepMinutes==null)missing.push("recent sleep duration");
   if(tsb==null)missing.push("current CTL/ATL/TSB");
   if(!completed.length)missing.push(swim?"completed swims for the current week":sport==="run"?"completed runs for the current week":"completed rides for the current week");
-  if(manualReadiness==null)missing.push("subjective readiness / soreness check-in");
+  if(manualReadiness==null&&!journalSick)missing.push("subjective readiness / soreness check-in");
   if(!goal)missing.push("explicit goal/event and phase");
   if(availabilityMinutes==null&&preferences.availableMinutes==null)missing.push("explicit available training time");
 
   return {
     ...CYCLING_COACH_V2_META,
     sport,
+    // The athlete's level in this sport (Profile → Experience), for the fuel cap (workout-explanation.js fuelPlan).
+    experience:experience||null,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
     // The "HRV +15, Tep −8, Spánek −13" row under the readiness on Health:
     // points each signal added to or took from 70, never beats or ms.
-    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,awaitingNight,noBodyData,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
+    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,awaitingNight,noBodyData,flags:[...(body.flags||[]),...(journalSick?["checkin_sick"]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??(journalSick?15:null)},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:pause?pause.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,returning,lastHardDays:[lastHard,lastOtherHard].filter(d=>d!=null).sort((a,b)=>a-b)[0]??null,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
-    recommendation:pause?{session:{kind:'rest',name:pause.headline,durationMinutes:0,steps:[],cadence:null},adaptations:pause.guidance,decisionRule:sickDay?'journal_sick':'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":awaitingNight?"await_night":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
+    recommendation:pause?{session:{kind:'rest',name:pause.headline,durationMinutes:0,steps:[],cadence:null},adaptations:pause.guidance,decisionRule:sickDay?'journal_sick':painPause?'pain_pause':'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":awaitingNight?"await_night":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives:pause?[]:alternatives,
     missingData:missing,
     confidence:missing.length>=4?"low":missing.length>=2?"medium":"high"

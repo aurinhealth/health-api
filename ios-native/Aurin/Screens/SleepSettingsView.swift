@@ -242,6 +242,12 @@ struct SleepSettingsForm: View {
             "wake": .string(wake.map { Self.text(minutes: $0) } ?? "")
         ])
         guard await store.saveProfile(["sleepTonight": value]) else { return }
+        // Tomorrow's own wake time rings on the iPhone too, with the saved alarms
+        // (not the screen's unsaved ones); a failure keeps the alarms set before.
+        if systemAlarm, let problem = await SystemAlarm.sync(profile: store.profile) {
+            alarmOK = false
+            alarmNote = problem
+        }
         await model.refreshHealth()
         await model.refresh()
     }
@@ -287,7 +293,8 @@ struct SleepSettingsForm: View {
             alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend.")
             return
         }
-        if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays) {
+        if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays,
+                                                  once: SystemAlarm.onceWake(store.profile["sleepTonight"])) {
             alarmOK = false
             alarmNote = problem
             systemAlarm = false
@@ -367,7 +374,7 @@ private struct SleepSaveChrome: ViewModifier {
                               pinTitle: true) { dismiss() }
                 .navBarVisibility(.hidden)
         } else {
-            content.toolbar { SaveButton(enabled: enabled, saving: saving, action: save) }
+            content.settingsSaveBar(enabled: enabled, saving: saving, action: save)
         }
     }
 }

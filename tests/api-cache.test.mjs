@@ -224,3 +224,21 @@ test("another copy of the server waits for the coach's inputs a first copy is co
   await Promise.all([cached(env, null, "fitness:90", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 50)); return { status: "ok" }; }, { store }), other.cached(env, null, "fitness:90", async () => { calls++; return { status: "ok" }; }, { store })]);
   assert.equal(calls, 2);
 });
+
+// 2026-11-16: 9 workout picks answered HTTP 500 ("This promise was created by a
+// request that has since ended"): the request computing the entry was given up by
+// the app, and Cloudflare fails the requests waiting for it with this error.
+test("a request waiting for one that has since ended computes the entry itself", async () => {
+  const { env, store } = setup();
+  let calls = 0, end;
+  const never = new Promise((resolve, reject) => { end = reject; });
+  const first = cached(env, null, "pick-base:2026-11-16", () => { calls++; return never; }, { store });
+  first.catch(() => {});
+  await new Promise(resolve => setTimeout(resolve, 5));
+  // Three waiting requests: the first of them computes it, the others wait for that one.
+  const waiting = [1, 2, 3].map(() => cached(env, null, "pick-base:2026-11-16", async () => { calls++; await new Promise(resolve => setTimeout(resolve, 5)); return { status: "ok", day: [] }; }, { store }));
+  await new Promise(resolve => setTimeout(resolve, 5));
+  end(new Error("This promise was created by a request that has since ended, so it can never settle."));
+  for (const answer of await Promise.all(waiting)) assert.deepEqual(answer, { status: "ok", day: [] });
+  assert.equal(calls, 2);
+});

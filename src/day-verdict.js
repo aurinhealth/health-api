@@ -65,3 +65,32 @@ export function dayVerdict({ score = null, zone = null, flags = [], missing = []
   const shown = rest ? "red" : signs && zone === "green" ? "yellow" : zone;
   return { key, level, shown: shown || null, rest, signs, noSleep, sessions, signals, injury, legs, saveFor, weighed };
 }
+
+// The line under the readiness in the redesign (D-DNES-2, AI-2, 2026-11-16):
+// what the numbers say, from the numbers only: the body's zone, breathing or
+// temperature up and a missing night. Advice (tired legs, saving the legs for
+// tomorrow, the morning answer) stays in the coach card. Never "hard workout"
+// with breathing or temperature up, without last night or on a rest day (Sick
+// in the Journal, Sick, Injured or Rest: the status pill says why).
+// hard: green. steady: yellow. easy: red. signs: breathing or temperature
+// above the usual range. usual: green without last night. paused: a rest day.
+export const NUMBERS_LINE_KEYS = ["hard", "steady", "easy", "signs", "usual", "paused"];
+
+export function numbersLine({ zone = null, flags = [], missing = [], rest = false } = {}) {
+  if (!zone) return null;
+  if (rest) return "paused";
+  if ((flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))) return "signs";
+  if (zone === "green") return (missing || []).includes("sleep") ? "usual" : "hard";
+  return zone === "yellow" ? "steady" : zone === "red" ? "easy" : null;
+}
+
+export function numbersLineText(key) {
+  return {
+    hard: L("Tvoje čísla zvládnou tvrdý trénink", "Your numbers support a hard workout"),
+    steady: L("Tvoje čísla jsou pro den s mírou", "Your numbers support a steady day"),
+    easy: L("Tvoje čísla ukazují na lehký den", "Your numbers suggest an easy day"),
+    signs: L("Teplota nebo dech ve spánku jsou nad tvým obvyklým rozmezím", "Your temperature or breathing in sleep is above your usual range"),
+    usual: L("Tvoje čísla jsou v obvyklém rozmezí", "Your numbers are within your usual range"),
+    paused: L("Trénink je dnes pozastavený", "Training is paused today")
+  }[key] || null;
+}

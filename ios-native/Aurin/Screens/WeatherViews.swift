@@ -700,7 +700,7 @@ struct WeatherPlaceView: View {
     @State private var following = DeviceLocation.following
 
     var body: some View {
-        SettingsPage(title: "Poloha pro počasí") {
+        SettingsPage(title: "Poloha pro počasí", hero: SettingsHero(systemImage: "mappin.and.ellipse", color: Palette.blue, text: "Odkud Aurin bere počasí pro tvůj trénink.")) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                 TextField("Město nebo obec", text: $query)

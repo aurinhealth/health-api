@@ -43,7 +43,7 @@ test("weight is required for a calorie target, for everyone", () => {
 test("an incomplete profile lists what is missing; the owner keeps the calibration", () => {
   const b = energyBaseline({ sex: "male" }, 85);
   assert.equal(b.ready, false);
-  assert.deepEqual(b.missing, ["age", "height", "activity", "goal"]);
+  assert.deepEqual(b.missing, ["age", "height", "goal"]);
   const owner = energyBaseline({}, 85, { isOwner: true });
   assert.equal(owner.ready, true);
   assert.equal(owner.source, "owner-calibration");
@@ -87,7 +87,7 @@ test("sleep settings: tonight's own length and wake time", () => {
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
-      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", wakeDays: [1, 2, 3, 4, 5], wakeDaysWeekend: [0, 6], sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
+      sleepGoal: null, fitnessNorm: "", wakeTime: "", wakeTimeWeekend: "", wakeDays: [1, 2, 3, 4, 5], wakeDaysWeekend: [0, 6], sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
       dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: null, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: {},
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });
@@ -163,4 +163,12 @@ test("the daily analysis splits the target by the athlete's diet", async () => {
   assert.equal(m.protein_g, Math.round(80 * 2.2));
   assert.ok(Math.abs(m.protein_g * 4 + m.carbs_g * 4 + m.fat_g * 9 - daily.nutrition.calorieTarget) <= 9);
   assert.deepEqual([daily.nutrition.diet.style, daily.nutrition.diet.eating, daily.nutrition.diet.carbsLimitG, daily.nutrition.diet.netCarbs], ["keto", "vegan", 30, false]);
+});
+
+test("the app's setup (no everyday activity yet) still gets a calorie goal, as lightly active", () => {
+  const profile = { sex: "male", age: 35, height: 180, goal: "maintain" };
+  const b = energyBaseline(profile, 75);
+  assert.equal(b.ready, true);
+  assert.deepEqual(b.missing, []);
+  assert.equal(b.baselineRestTDEE, energyBaseline({ ...profile, activity: "light" }, 75).baselineRestTDEE);
 });

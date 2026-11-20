@@ -61,6 +61,9 @@ struct SetupFlowView: View {
     @State private var minutes = Array(repeating: -1, count: 7)
     @State private var minutesSaved = Array(repeating: -1, count: 7)
     @State private var equipment = false
+    /// A page is turning: a second tap on "Pokračovat" meanwhile goes nowhere
+    /// (a double tap skipped "Připoj svoje data", Tapwright 2026-11-19).
+    @State private var turning = false
 
     private enum Page: Equatable { case consent, sources, about, sport, goal, time, notifications }
 
@@ -86,7 +89,8 @@ struct SetupFlowView: View {
                         // No way back to a consent already given, or from the notifications
                         // to a profile already saved.
                         if index > 0 && pages[index - 1] != .consent && page != .notifications {
-                            CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
+                            CircleButton(systemImage: "chevron.left", label: "Zpět") { turn(by: -1) }
+                                .disabled(turning || saving)
                         }
                     }
                     // How far along: shown once the page count is known (whether iOS asked
@@ -112,8 +116,12 @@ struct SetupFlowView: View {
                 }
                 .frame(height: 40)
 
-                PageScroll {
+                // A plain ScrollView: PageScroll sizes its page to the screen
+                // (containerRelativeFrame), 48 pt wider than this padded column,
+                // which pushed the whole setup left and cut off "Odhlásit".
+                ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 14) { content }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
@@ -129,20 +137,20 @@ struct SetupFlowView: View {
                 if appleOffered {
                     // Skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
-                    Button("Pokračovat") { withAnimation { index += 1 } }
+                    Button("Pokračovat") { Task { await next() } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 50)
-                        .disabled(!ready || appleWorking)
+                        .disabled(!ready || appleWorking || turning)
                 } else {
                     PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                        .disabled(saving || appleWorking || proOffer || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
                                   || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
                 }
                 if page == .notifications {
-                    Button("Později") { Task { await done(notifications: false) } }
+                    Button("Později") { Task { await later() } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving || proOffer)
+                        .disabled(saving || proOffer || turning)
                 }
             }
             .padding(.horizontal, 24)
@@ -195,7 +203,7 @@ struct SetupFlowView: View {
         ("Co", "Tep, variabilita tepu (HRV), spánek, dech, okysličení krve, teplota ve spánku, kroky, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly a co si zapíšeš do deníku."),
         ("Odkud", "Ze služeb, které připojíš (třeba Apple Health, Google Health, WHOOP, prsten Ultrahuman, Intervals.icu nebo Wahoo), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
-        ("Odvolání", "Pozastavením zdravotních dat, nebo smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data.")
+        ("Odvolání", "Souhlas kdykoli odvoláš v Nastavení → Soukromí a data, nebo smažeš účet. Předtím si tam můžeš stáhnout všechna svoje data.")
     ]
 
     @ViewBuilder
@@ -502,22 +510,27 @@ struct SetupFlowView: View {
     // MARK: - Flow
 
     private func next() async {
+        // One tap at a time: the second of a double tap lands here while the first
+        // still saves or the page still turns, and is dropped.
+        guard !turning else { return }
+        turning = true
+        defer { settle() }
         error = nil
         switch page {
         case .consent:
-            if await giveConsent(), !consentOnly { withAnimation { index += 1 } }
+            if await giveConsent(), !consentOnly { step() }
         case .sources:
-            withAnimation { index += 1 }
+            step()
         case .about:
             guard await saveProfile() else { return }
             // Back from the sport and "O tobě" saved again: the focus goes into the new profile.
             focusProfile = nil
-            withAnimation { index += 1 }
+            step()
         case .sport:
-            withAnimation { index += 1 }
+            step()
         case .goal:
             guard await saveFocus() else { return }
-            withAnimation { index += 1 }
+            step()
         case .time:
             guard await saveTime() else { return }
             await afterTime()
@@ -529,18 +542,21 @@ struct SetupFlowView: View {
     /// "Přeskočit": the page's answer goes back to what the server has and
     /// nothing of it is saved (the sport chosen before a skipped goal still is).
     private func skip() async {
+        guard !turning else { return }
+        turning = true
+        defer { settle() }
         error = nil
         switch page {
         case .sport:
             focus.sports = focusSaved.sports
             focus.swims100 = focusSaved.swims100
-            withAnimation { index += 1 }
+            step()
         case .goal:
             focus.goal = focusSaved.goal
             focus.eventName = focusSaved.eventName
             focus.eventDate = focusSaved.eventDate
             guard await saveFocus() else { return }
-            withAnimation { index += 1 }
+            step()
         case .time:
             minutes = minutesSaved
             await afterTime()
@@ -550,7 +566,36 @@ struct SetupFlowView: View {
 
     /// After the time: the notifications page, or the end when iOS asked already.
     private func afterTime() async {
-        if askNotifications { withAnimation { index += 1 } } else { await done(notifications: false) }
+        if askNotifications { step() } else { await done(notifications: false) }
+    }
+
+    /// "Později" on the notifications page, one tap like "Zapnout".
+    private func later() async {
+        guard !turning else { return }
+        turning = true
+        defer { settle() }
+        await done(notifications: false)
+    }
+
+    /// The next page, never past the last one.
+    private func step() {
+        withAnimation { index = min(index + 1, pages.count - 1) }
+    }
+
+    /// "Zpět": one page back, with the same pause as forward.
+    private func turn(by delta: Int) {
+        guard !turning else { return }
+        turning = true
+        withAnimation { index = max(0, index + delta) }
+        settle()
+    }
+
+    /// Taps count again once the page has turned (the animation's length).
+    private func settle() {
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            turning = false
+        }
     }
 
     /// The saved profile and the usual week, once, when the sport page opens
@@ -641,6 +686,8 @@ struct SetupFlowView: View {
         // takes no health data from an account without it (health_consent_required).
         let consentNeeded = await consent ?? true
         consentFirst = consentNeeded
+        // The server said the consent is given: Apple Health may send (AppleHealth.run).
+        if await consent == false { AppModel.healthConsentGiven = true }
         if let s {
             consentOnly = consentNeeded && s.completed == true
             let p = s.savedProfile ?? [:]
@@ -743,6 +790,8 @@ struct SetupFlowView: View {
         defer { saving = false }
         do {
             try await model.api.giveHealthConsent(ai: agreeAI)
+            // Apple Health may send from now on (AppleHealth.run).
+            AppModel.healthConsentGiven = true
             if consentOnly { await model.finishSetup() }
             return true
         } catch {

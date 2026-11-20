@@ -437,6 +437,71 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Redesign C (concept 09-kouc-chat): the opening with the day and the
+    /// prompts, a chat with the steps line, the coach's bare words and a
+    /// Now/New card, the decided card with Undo, "Plan around your knee?",
+    /// a status card with its health line, a message that got no answer and
+    /// the week's messages used up.
+    func testCoachChatRedesign() throws {
+        // English like the concept and the sample texts below.
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let model = AppModel(demo: true)
+        try render("coach-chat-opening", window: true) {
+            CoachView().environment(model).environment(\.locale, L10n.locale)
+        }
+        let json = #"{"status":"ok","answer":"x","chatId":12,"actions":[{"type":"move","eventId":"planned:9","date":"2026-10-11","reason":"Sunday is free in your plan and Saturday's gym stays where it is.","draftId":456,"sport":"ride","eventSnapshot":{"name":"Long endurance ride","date":"2026-10-10"}},{"type":"plan_around","memory":"knee hurts","part":"knee","label":"knee","sports":["run","ride"],"draftId":457,"reason":""},{"type":"status","status":"sick","reason":"Sore throat and a fever since yesterday.","draftId":458}]}"#
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
+        let actions = result.actions ?? []
+        XCTAssertEqual(actions[1].sports, ["run", "ride"])
+        let steps = [CoachStep(id: "a", icon: "figure.run", title: "Looked at this morning's run and your week", text: nil, status: "done", view: nil),
+                     CoachStep(id: "b", icon: "checkmark", title: "Checked it against your plan", text: nil, status: "done", view: nil)]
+        var answer = CoachView.Bubble(mine: false, text: "Your legs already did 8.2 km this morning and Saturday is the long ride.\n\n**Upper body tonight lets the legs come back by Saturday.**")
+        answer.answeredIn = 6
+        answer.steps = steps
+        var move = CoachView.Bubble(mine: false, text: "Sunday works.")
+        move.actions = [actions[0]]
+        var failed = CoachView.Bubble(mine: true, text: "Is Saturday still on if it rains?")
+        failed.failed = "Couldn't get an answer."
+        try render("coach-chat-thread", window: true) {
+            CoachView(preview: [CoachView.Bubble(mine: true, text: "Why upper body tonight and not legs?"), answer,
+                                CoachView.Bubble(mine: true, text: "And move Saturday's ride to Sunday"), move, failed])
+                .environment(model).environment(\.locale, L10n.locale)
+        }
+        try render("coach-chat-cards", height: 1500) {
+            VStack(spacing: 18) {
+                ActionCard(action: actions[0], result: nil, decide: { _ in })
+                ActionCard(action: actions[0], result: "Moved to Sunday", canUndo: true, decide: { _ in })
+                ActionCard(action: actions[1], result: nil, decide: { _ in })
+                ActionCard(action: actions[2], result: nil, decide: { _ in })
+                CoachSystemLine(text: "You've used this week's messages. New ones arrive on Monday.")
+                CoachUsedUpCard(more: {})
+            }
+            .padding(20).environment(model).environment(\.locale, L10n.locale)
+        }
+    }
+
+    /// The Now/New rows come from the card's own fields; only a one-day
+    /// change today is confirmed by a typed yes (AI-4); the folded steps read as one line.
+    func testCoachChatRules() throws {
+        let json = #"[{"type":"move","date":"2026-10-11","draftId":1,"reason":"","eventSnapshot":{"name":"Ride","date":"2026-10-10"}},{"type":"activity_time","date":"2026-10-10","draftId":2,"reason":"","fromTime":"07:02","time":"07:30"},{"type":"rest","date":"2026-10-10","draftId":3,"reason":"","eventSnapshot":{"name":"Ride","date":"2026-10-10"}},{"type":"move","date":"2026-10-10","draftId":4,"reason":"","eventSnapshot":{"name":"Ride","date":"2026-10-10"}}]"#
+        let actions = try JSONDecoder().decode([CoachAction].self, from: Data(json.utf8))
+        XCTAssertEqual(CoachChangeRow.rows(actions[0]).count, 1)
+        XCTAssertEqual(CoachChangeRow.rows(actions[1]).map(\.new), [ClockText.format("07:30")])
+        XCTAssertTrue(CoachChangeRow.rows(actions[2]).isEmpty)
+        // A move to the same day changes nothing worth a row.
+        XCTAssertTrue(CoachChangeRow.rows(actions[3]).isEmpty)
+        XCTAssertTrue(ActionCard.yesConfirms(actions[1], today: "2026-10-10"))
+        XCTAssertFalse(ActionCard.yesConfirms(actions[0], today: "2026-10-10"))
+        XCTAssertFalse(ActionCard.yesConfirms(actions[2], today: "2026-10-10"), "a delete needs the tap")
+        let steps = [CoachStep(id: "a", icon: nil, title: "Looked at Saturday's plan", text: nil, status: "done", view: nil),
+                     CoachStep(id: "b", icon: nil, title: "Looked at the forecast", text: nil, status: "done", view: nil)]
+        XCTAssertEqual(CoachSteps.summary(steps), "Looked at Saturday's plan, looked at the forecast")
+    }
+
     func testEnglishAndImperial() throws {
         L10n.setLanguage("en")
         Units.setSystem("imperial")
@@ -498,6 +563,16 @@ final class SnapshotTests: XCTestCase {
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        // Redesign Na1: Customization, the coach cards page, goal texts without rings.
+        try render("settings-customization", height: 900) { NavigationStack { CustomizationSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-coach-cards", height: 640) { NavigationStack { CoachPlacesSettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-units", height: 760) { NavigationStack { UnitsSettingsView() }.environment(AppModel(demo: true)) }
+        // Redesign Na2: every consent in Privacy & data, Withdraw instead of Pause.
+        try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
+        XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7:30")
+        XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
         XCTAssertEqual(GymRestSettingsView.short(90), "1:30")
@@ -637,7 +712,14 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testNewScreens() throws {
-        try render("add-sheet", height: 1000) { AddSheet().environment(AppModel(demo: true)) }
+        // "+" (redesign N): the card over Today, its edit, and the sheets it opens.
+        UserDefaults.standard.removeObject(forKey: PlusItem.storageKey)
+        UserDefaults.standard.removeObject(forKey: PlusItem.legacyKey)
+        try render("plus-card", height: 560, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}).padding(16) }.environment(AppModel(demo: true)) }
+        try render("plus-card-edit", height: 760, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}, editing: true).padding(16) }.environment(AppModel(demo: true)) }
+        try render("plus-log-workout", height: 1000, window: true) { ManualWorkoutSheet().environment(AppModel(demo: true)) }
+        try render("plus-log-weight", height: 420, window: true) { WeightEntrySheet().environment(AppModel(demo: true)) }
+        try render("plus-log-period", height: 420, window: true) { PeriodLogSheet().environment(AppModel(demo: true)) }
         try render("body-map", height: 320) {
             BodyMap(load: ["chest": 1, "biceps": 0.6, "quads": 0.3], selected: ["chest"]).padding(20)
         }

@@ -23,9 +23,9 @@ export const NUTRITION_DEFAULTS = {
 
 // The same g/h as the workout card and the calendars (CARBS table): a hard
 // ride reads as threshold, any other as endurance; 0 when water is enough.
-export function rideCarbsPerHour(ride) {
+export function rideCarbsPerHour(ride, experience = null) {
   if (!ride) return 0;
-  return carbsPerHour(n(ride.durationHours) * 60, ride.intensity ? "threshold" : "endurance") || 0;
+  return carbsPerHour(n(ride.durationHours) * 60, ride.intensity ? "threshold" : "endurance", "ride", experience) || 0;
 }
 
 function classifyDay(context) {
@@ -86,7 +86,7 @@ export function buildNutritionPlan(context, options = {}) {
   const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend, options.goal || context?.goal);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
-  const rideRate = rideCarbsPerHour(next);
+  const rideRate = rideCarbsPerHour(next, options.experience ?? context?.experience ?? null);
   const plannedRideCarbs = Math.round(durationHours * rideRate);
   // A known weight sets protein per kg; the fixed 176 g is only the fallback.
   const weightKnown = [options.weightKg, context?.weightKg, weightTrend?.latestKg].some(v => Number(v) > 0);

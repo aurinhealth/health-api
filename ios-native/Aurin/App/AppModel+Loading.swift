@@ -23,10 +23,29 @@ extension AppModel {
                              health: SnapshotCache.load(HealthSnapshot.self, key: "health")?.value)
             }.value
             guard self.stillSignedIn(round) else { return }
-            if self.training == nil { self.training = saved.training }
-            if self.health == nil { self.health = saved.health }
+            // Only today's copy: yesterday's Training called its own day "today"
+            // until the server answered (Tapwright pass 2026-11-19).
+            let day = Self.localDate(Date())
+            if self.training == nil, saved.training?.date == day { self.training = saved.training }
+            if self.health == nil, self.selectedDate == nil, saved.health?.date == day { self.health = saved.health }
         }
+        dropPastDay()
         Task.detached(priority: .utility) { SnapshotCache.prune(today: AppModel.localDate(Date())) }
+    }
+
+    /// Past midnight the screens kept in memory or saved on the phone are
+    /// yesterday's: they go, so no tab shows yesterday's activity, strain or
+    /// night under today's date while today loads (Tapwright pass 2026-11-19:
+    /// Today on Thursday afternoon showed Wednesday's walks). Training is
+    /// always today; the others only while today is the day on screen.
+    func dropPastDay() {
+        guard !demo else { return }
+        let day = Self.localDate(Date())
+        if let value = training, value.date != day { training = nil }
+        guard selectedDate == nil else { return }
+        if let value = today, value.date != day { todayScreen.clear() }
+        if let value = food, value.date != day { foodScreen.clear() }
+        if let value = health, value.date != day { health = nil }
     }
 
     /// announce: the app was opened or pulled down, so the pill says it syncs.
@@ -81,6 +100,7 @@ extension AppModel {
         let calendarClient = api
         async let calendarSent: Void = CalendarTime.shared.send(api: calendarClient)
         let health = AppleHealth.shared
+        await recheckConsent()
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
         // the day (or after those 8 s) Today loads alongside the sync and again
@@ -273,6 +293,7 @@ extension AppModel {
     /// from the widget) goes out either way.
     func refreshOnReturn() async {
         guard !demo, phase == .signedIn else { return }
+        dropPastDay()
         // Google Health may have been disconnected meanwhile: then Apple Health gets the food, weight and workouts again.
         scope.task { await self.loadGoogleSync() }
         if !offline && fresh(.today, day: shownDay) {

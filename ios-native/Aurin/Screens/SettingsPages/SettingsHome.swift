@@ -1,7 +1,7 @@
 import SwiftUI
 
-// The top of Nastavení: who you are, your goals as rings and the parts of the
-// app as tiles. Rows below them carry names only (no values, no subtitles).
+// The top of Nastavení: who you are, your goals and the parts of the app as
+// tiles. Rows below them carry names only (no values, no subtitles).
 
 /// The small spaced capital title above a card, as on SettingsGroup.
 struct SettingsTitle: View {
@@ -58,42 +58,20 @@ struct SettingsProfileCard: View {
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 18).padding(.vertical, 16)
-            .background(RadialGradient(colors: [Palette.amber.opacity(0.16), .clear], center: .topLeading, startRadius: 0, endRadius: 220),
-                        in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .cardSurface(cornerRadius: 24)
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
         .accessibilityLabel([L10n.tr("Účet"), name, details ?? ""].filter { !$0.isEmpty }.joined(separator: ", "))
     }
 }
 
-/// A ring filled to the share done today, with the goal's symbol inside.
-struct GoalRing: View {
-    let progress: Double?
-    let color: Color
-    let systemImage: String
-    var size: CGFloat = 46
-
-    var body: some View {
-        ZStack {
-            Circle().stroke(Palette.track, lineWidth: 4.5)
-            if let progress, progress > 0 {
-                Circle().trim(from: 0, to: min(progress, 1))
-                    .stroke(color, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            Image(systemName: systemImage).font(.system(size: size * 0.3, weight: .medium)).foregroundStyle(color)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-    }
-}
-
-/// Cíle on one card: sleep, food, drink and weight, each a ring of today's
-/// share with the goal under it. Opens Cíle.
+/// Cíle on one card: sleep, calories, drinks and the target weight, each its
+/// symbol on a disc with the goal and its unit under it. No rings: a part-filled
+/// ring reads as today's progress, and these are goals (D-NAST-5). Opens Cíle.
 struct SettingsGoalsCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var textSize
     let store: SettingsStore
 
     var body: some View {
@@ -106,81 +84,106 @@ struct SettingsGoalsCard: View {
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 6)
-                HStack(alignment: .top, spacing: 0) {
+                Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6)
+                // Four in a row; two by two at the accessibility text sizes.
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 4),
+                          spacing: 14) {
                     ForEach(cells, id: \.label) { cell in
                         VStack(spacing: 7) {
-                            GoalRing(progress: cell.progress, color: cell.color, systemImage: cell.symbol)
-                            Text(verbatim: cell.value).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                            SettingsDisc(systemImage: cell.symbol, color: cell.color, size: 40)
+                            // The number always 20 pt; the unit small beside it, so the row stays even.
+                            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                                Text(verbatim: cell.number ?? "–").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                                if cell.number != nil {
+                                    Text(verbatim: cell.unit).font(Typo.tiny).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            .lineLimit(1)
                             Text(L10n.tr(cell.label)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.secondary)
-                                .lineLimit(1).minimumScaleFactor(0.8)
+                                .multilineTextAlignment(.center).lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(L10n.tr(cell.label) + " " + cell.value)
+                        .accessibilityLabel(L10n.tr(cell.label) + ", " + (cell.number.map { $0 + " " + cell.unit } ?? L10n.tr("nenastaveno")))
                     }
                 }
             }
             .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 16)
-            .cardSurface(cornerRadius: 24)
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
     }
 
     struct Cell {
         let symbol: String
         let color: Color
-        let value: String
+        /// Nil while the goal is not set: a dash, and "nenastaveno" for VoiceOver.
+        let number: String?
+        let unit: String
         let label: String
-        let progress: Double?
     }
 
-    private static func share(_ done: Double?, _ goal: Double?) -> Double? {
-        guard let done, let goal, goal > 0 else { return nil }
-        return done / goal
+    /// "7" or "7:30" (hours).
+    static func sleepText(_ minutes: Double) -> String {
+        let m = Int(minutes.rounded())
+        return m % 60 == 0 ? String(m / 60) : Fmt.hoursMinutes(minutes)
+    }
+
+    /// "3,2" litres or "108" fl oz.
+    static func drinkText(_ ml: Double) -> String {
+        Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
     }
 
     var cells: [Cell] {
         let today = model.today
         let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
         let kcal = today?.nutrition.target
-        let water = today?.nutrition.water
+        let water = today?.nutrition.water.target
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
-        let waterValue: String = water?.target.map { ml in
-            Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
-        } ?? "–"
         return [
-            Cell(symbol: "moon.fill", color: Palette.indigo, value: sleepGoal.map { Fmt.hoursMinutes($0) } ?? "–", label: "Spánek",
-                 progress: Self.share(today?.sleep?.minutes, sleepGoal)),
-            Cell(symbol: "flame.fill", color: Palette.amber, value: kcal.map { Fmt.int($0) } ?? "–", label: "Kalorie",
-                 progress: Self.share(today?.nutrition.kcal, kcal)),
-            Cell(symbol: "drop.fill", color: Palette.blue, value: waterValue, label: Units.imperial ? "Unce" : "Litry",
-                 progress: Self.share(water?.ml, water?.target)),
-            Cell(symbol: "scalemass.fill", color: Palette.green, value: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) } ?? "–",
-                 label: Units.imperial ? "Libry" : "Kilogramy", progress: nil)
+            Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText), unit: "h", label: "Spánek"),
+            Cell(symbol: "flame.fill", color: Palette.amber, number: kcal.map { Fmt.int($0) }, unit: "kcal", label: "Kalorie"),
+            Cell(symbol: "drop.fill", color: Palette.blue, number: water.map(Self.drinkText), unit: Units.imperial ? Units.volumeUnit : "l", label: "Pití"),
+            Cell(symbol: "scalemass.fill", color: Palette.green, number: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) }, unit: Units.weightUnit, label: "Cílová váha")
         ]
     }
 }
 
-/// Spánek, Posilovna, Jídlo a pití (and Cyklus): one tile each, opening its settings.
+/// The top of Cíle: the four goal symbols on their discs, as on the card.
+struct GoalsHeroArt: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            SettingsDisc(systemImage: "moon.fill", color: Palette.indigo, size: 46)
+            SettingsDisc(systemImage: "flame.fill", color: Palette.amber, size: 46)
+            SettingsDisc(systemImage: "drop.fill", color: Palette.blue, size: 46)
+            SettingsDisc(systemImage: "scalemass.fill", color: Palette.green, size: 46)
+        }
+    }
+}
+
+/// Spánek, Posilovna, Výživa, Deník (and Cyklus): two tiles to a row, each
+/// its symbol on a disc, the name and a chevron, opening its settings.
 struct SettingsSectionTiles: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
 
     /// Cycle tracking is open to everyone; it is a tile for women and for
-    /// anyone who turned it on, otherwise a plain row under Měření.
+    /// anyone who turned it on, otherwise a plain row in Přizpůsobení.
     static func cycleTile(_ store: SettingsStore, _ model: AppModel) -> Bool {
         store.profile["sex"]?.string == "female" || model.cycle?.enabled == true
     }
 
-    /// Four tiles in a row, as in "+" (AddSheet): the icon on its own tile and
-    /// the name under it; Cyklus goes to a second row.
+    @Environment(\.dynamicTypeSize) private var textSize
+
+    /// Two a row; one a row at the accessibility text sizes, where a name no longer fits half the width.
     var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4), alignment: .leading, spacing: 14) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12, alignment: .top), count: textSize.isAccessibilitySize ? 1 : 2), alignment: .leading, spacing: 12) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
-            tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
+            tile("Posilovna", "dumbbell.fill", Palette.rust) { GymSettingsView() }
             tile("Výživa", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
-            tile("Deník", "book.closed.fill", Palette.indigo) { JournalSettingsView() }
+            tile("Deník", "book.closed.fill", Palette.green) { JournalSettingsView() }
             if Self.cycleTile(store, model) {
                 tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
             }
@@ -191,15 +194,22 @@ struct SettingsSectionTiles: View {
         NavigationLink {
             destination()
         } label: {
-            VStack(spacing: 6) {
-                Image(systemName: symbol).scaledFont(20, cap: .denseCap).foregroundStyle(color)
-                    .frame(maxWidth: .infinity).frame(height: 52)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                Text(L10n.tr(title)).font(.caption.weight(.medium)).foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
+            HStack(spacing: 8) {
+                SettingsDisc(systemImage: symbol, color: color, size: 32)
+                // The name first, so the spacer never splits a word: one line,
+                // a little smaller if it must; two at the accessibility sizes
+                // (one tile a row there).
+                Text(L10n.tr(title)).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                    .lineLimit(textSize.isAccessibilitySize ? 2 : 1).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.leading, 10).padding(.trailing, 12)
+            .frame(minHeight: 64)
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableCardStyle())
@@ -207,22 +217,18 @@ struct SettingsSectionTiles: View {
 }
 
 /// Deník: on or off (the Zdraví card, the morning sheet and the coach's view
-/// of it), the morning questions, what it follows, and whether the coach sees
-/// the sensitive items (with their own consent, GDPR art. 9).
+/// of it), the morning questions and what it follows. Its consents (the
+/// sensitive items for the coach, sexual activity) are in Soukromí a data.
 struct JournalSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var enabled = JournalSwitch.isOn
     @State private var askMorning = true
-    @State private var shareSensitive = false
-    @State private var askingConsent = false
-    @State private var appleSex = JournalSwitch.tracksSex
-    @State private var askingSexConsent = false
     @State private var failure: String?
     @State private var tracked: Int?
     @State private var tracking = false
 
     var body: some View {
-        SettingsPage(title: "Deník") {
+        SettingsPage(title: "Deník", hero: SettingsHero(systemImage: "book.closed.fill", color: Palette.green, text: "Tvůj deník a co v něm sleduješ.")) {
             SettingsGroup {
                 SettingsToggle(title: "Sledovat deník", isOn: Binding(get: { enabled }, set: { on in
                     enabled = on
@@ -240,38 +246,16 @@ struct JournalSettingsView: View {
                 SettingsGroup {
                     Button { tracking = true } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.indigo), title: "Co sledovat",
-                                    value: tracked.map { String($0) })
+                                    value: tracked.map { String($0) }, chevron: false)
                     }
                     .buttonStyle(.plain)
                 }
-                SettingsGroup(title: "Apple Health", footer: "Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde.") {
-                    SettingsToggle(title: "Sexuální aktivita", isOn: Binding(get: { appleSex }, set: { on in
-                        if on { askingSexConsent = true; return }
-                        // Off stops reading at once; the server deletes what it has.
-                        appleSex = false
-                        JournalSwitch.remember(appleSex: false)
-                        Task { await setAppleSex(false) }
-                    }))
-                }
-                SettingsGroup(title: "AI kouč", footer: "Náladu, úzkost, konopí, CBD a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy.") {
-                    SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
-                        if on { askingConsent = true; return }
-                        shareSensitive = false
-                        Task { if !(await save(["shareSensitive": .bool(false)])) { await load() } }
-                    }))
-                }
+                // The consents (sensitive items for the coach, sexual activity from Apple Health) live in Soukromí a data.
+                PrivacyLinkRow(subtitle: "Citlivé položky a sexuální aktivita")
             }
             if let failure { Text(failure).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
-        .sheet(isPresented: $askingConsent) {
-            JournalSensitiveConsentSheet {
-                Task { if await save(["shareSensitive": .bool(true)]) { shareSensitive = true } }
-            }
-        }
-        .sheet(isPresented: $askingSexConsent) {
-            AppleSexConsentSheet { Task { await setAppleSex(true) } }
-        }
         .task { await load() }
     }
 
@@ -283,8 +267,6 @@ struct JournalSettingsView: View {
         guard let catalog = try? await model.api.journalCatalog() else { return }
         enabled = catalog.enabled ?? true
         askMorning = catalog.askMorning ?? true
-        shareSensitive = catalog.shareSensitive ?? false
-        appleSex = catalog.appleSex ?? false
         tracked = catalog.pinned.count
         JournalSwitch.remember(catalog.enabled)
     }
@@ -301,20 +283,6 @@ struct JournalSettingsView: View {
             failure = error.localizedDescription
             return false
         }
-    }
-
-    /// The phone reads and sends sexual activity only once the server holds
-    /// the consent (it decides what it keeps, src/apple-health.js). Turned
-    /// on, the last 90 days are read again; turned off and not saved, the
-    /// switch shows what the server still has.
-    private func setAppleSex(_ on: Bool) async {
-        guard await save(["appleSex": .bool(on)]) else {
-            if !on { await load() }
-            return
-        }
-        appleSex = on
-        JournalSwitch.remember(appleSex: on)
-        if on, !model.demo { await AppleHealth.shared.readSexHistory(api: model.api) }
     }
 }
 
@@ -365,7 +333,7 @@ struct AppleSexConsentSheet: View {
 /// the workouts are made from it.
 struct GymSettingsView: View {
     var body: some View {
-        SettingsPage(title: "Posilovna") {
+        SettingsPage(title: "Posilovna", hero: SettingsHero(systemImage: "dumbbell.fill", color: Palette.rust, text: "Jak se staví a časují tvoje tréninky v posilovně.")) {
             GymPreferencesGroup()
             SettingsGroup {
                 NavigationLink { GymExerciseTasteView() } label: {
@@ -390,7 +358,7 @@ struct FoodDrinkSettingsView: View {
     @AppStorage(FoodRegion.key) private var foodRegion = FoodRegion.automatic
 
     var body: some View {
-        SettingsPage(title: "Výživa") {
+        SettingsPage(title: "Výživa", hero: SettingsHero(systemImage: "fork.knife", color: Palette.amber, text: "Jídlo a pití nastavené tak, jak jíš.")) {
             SettingsGroup {
                 NavigationLink { DietSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "leaf", color: Palette.green), title: "Strava")

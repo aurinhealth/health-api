@@ -23,6 +23,7 @@ import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { saveOwnExerciseVideo, techniqueFor, ownExerciseVideo, storedTechnique, exerciseInUse, generateTechnique } from "./exercise-technique.js";
 import { L } from "./lang.js";
+import { effortScale } from "./gym-intensity.js";
 import { sideBalance, lastSideChoice } from "./gym-sides.js";
 import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
@@ -165,6 +166,10 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     const history=await withHistoryOf(env.DB,recent,historyFamily(normalizeExerciseName(exercise)));
     const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
     return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
+  }
+  // The live mode's effort sheet: each letter with its reps left (gym-intensity.js effortScale).
+  if(url.pathname==='/app/api/gym/effort-scale'&&request.method==='GET'){
+    return Response.json({status:'ok',letters:effortScale()},{headers:{'Cache-Control':'no-store'}});
   }
   // The work sets of the last months by exercise and day (the app's exercise
   // history, "minule 82,5 kg × 6" and the suggested load of the next sets).

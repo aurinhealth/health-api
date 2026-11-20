@@ -46,7 +46,8 @@ final class APIClient: @unchecked Sendable {
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
     /// 2: the coach's gym_add and gym_remove cards (src/coach-actions.js).
-    static let apiLevel = 2
+    /// 3: the redesign's coach cards, "Plan around your knee?" (plan_around).
+    static let apiLevel = 3
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?
@@ -189,10 +190,12 @@ final class APIClient: @unchecked Sendable {
 
     /// The server's line ("Návrh potvrzen.", "Smazáno") and, for a change of a
     /// done activity, the token "Vrátit" sends back.
-    func decideCoachAction(draftId: Int, confirm: Bool) async throws -> (message: String?, undo: String?) {
+    /// `sports`: on "Plan around your knee?", the sports that rest (the card's ticked chips).
+    func decideCoachAction(draftId: Int, confirm: Bool, sports: [String]? = nil) async throws -> (message: String?, undo: String?) {
         struct Response: Decodable { let message: String?; let undo: String? }
-        let r: Response = try await send("/app/api/assistant/action", method: "POST",
-                                         body: ["draftId": JSONValue.number(Double(draftId)), "decision": .string(confirm ? "confirm" : "reject")])
+        var body: JSONObject = ["draftId": .number(Double(draftId)), "decision": .string(confirm ? "confirm" : "reject")]
+        if let sports { body["sports"] = .array(sports.map { .string($0) }) }
+        let r: Response = try await send("/app/api/assistant/action", method: "POST", body: body)
         return (r.message, r.undo)
     }
 
@@ -434,10 +437,12 @@ final class APIClient: @unchecked Sendable {
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
     /// A done one comes back with where it was sent (Aurin posílá).
     @discardableResult
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
+    /// `type`: an Intervals.icu type picked under More (sport "other") or a kind of the sport itself.
+    func manualWorkout(name: String, date: String, sport: String, type: String? = nil, minutes: Int, completed: Bool, rpe: Int?, notes: String,
                        start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
+        if let type { body["type"] = .string(type) }
         if let rpe { body["rpe"] = .number(Double(rpe)) }
         if let start {
             // The window the heart rate was read for; the start's clock time in the phone's zone.

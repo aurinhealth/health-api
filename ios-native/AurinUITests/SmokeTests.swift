@@ -80,17 +80,17 @@ final class SmokeTests: XCTestCase {
 
         // "+": what can be added.
         launch("-demo")
-        let add = app.buttons["Přidat záznam"]
+        let add = app.buttons["tab.plus"]
         XCTAssertTrue(add.waitForExistence(timeout: 20))
         add.tap()
-        XCTAssertTrue(app.buttons["plus.edit"].waitForExistence(timeout: 5), "+ did not open")
+        XCTAssertTrue(app.buttons["plus.photo"].waitForExistence(timeout: 5), "+ did not open")
         shot("pridat")
 
         // The coach.
         launch("-demo")
         XCTAssertTrue(tab("Dnes").waitForExistence(timeout: 20))
         hittable(app.buttons.matching(identifier: "coach.entry")).tap()
-        let coach = app.staticTexts["Na co se chceš zeptat?"]
+        let coach = app.descendants(matching: .any)["coach.opening"]
         let consent = app.staticTexts["Kouč používá AI"]
         XCTAssertTrue(coach.waitForExistence(timeout: 8) || consent.exists, "the coach did not open")
         shot("kouc")
@@ -224,7 +224,7 @@ final class SmokeTests: XCTestCase {
         shot("jidlo-2")
         english()
         pause(4)
-        if tapIfThere(app.buttons.matching(identifier: "Add entry").firstMatch) {
+        if tapIfThere(app.buttons["tab.plus"]) {
             pause(2)
             shot("pridat")
         }
@@ -325,9 +325,9 @@ final class SmokeTests: XCTestCase {
             XCTAssertLessThan(frame.midY, screen.height * 0.2, "the coach is not at the top on \(route)")
             XCTAssertGreaterThan(frame.midX, screen.width / 2, "the coach is not on the right on \(route)")
             entry.tap()
-            let coach = app.staticTexts["Ptáš se na"]
-            let open = app.staticTexts["Na co se chceš zeptat?"]
-            XCTAssertTrue(coach.waitForExistence(timeout: 8) || open.exists || app.staticTexts["Kouč používá AI"].exists, "the coach did not open on \(route)")
+            // The redesigned opening: "Co potřebuješ?" with what the chat is about.
+            let coach = app.descendants(matching: .any)["coach.opening"]
+            XCTAssertTrue(coach.waitForExistence(timeout: 8) || app.staticTexts["Kouč používá AI"].exists, "the coach did not open on \(route)")
             shot(file + "-kouc")
         }
     }

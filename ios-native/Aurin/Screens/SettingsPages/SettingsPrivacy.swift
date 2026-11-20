@@ -15,32 +15,28 @@ struct PrivacySettingsView: View {
     @State private var pausing = false
     @State private var stepUp: StepUpRequest?
     @State private var error: String?
+    /// A consent that did not save: shown under the consents, not at the bottom.
+    @State private var consentError: String?
 
     var body: some View {
-        SettingsPage(title: "Soukromí a data") {
-            // What happens to the data, in four lines (the policy says it in full).
-            SettingsGroup {
+        SettingsPage(title: "Soukromí a data", hero: SettingsHero(systemImage: "lock.fill", color: Palette.brown, text: "Tvoje data jsou tvoje. Tady je, kde leží a co ovládáš.")) {
+            // Every consent and data switch lives here (Petr 2026-11-13); the
+            // feature pages only link here. Paused health data takes them all
+            // with it (src/health-pause.js).
+            if !model.healthPaused {
+                PrivacyConsentsGroup(ai: $ai, aiLoaded: aiLoaded, setAI: setAI, error: $consentError)
+                if let consentError {
+                    Text(consentError).font(Typo.small).foregroundStyle(Palette.rust)
+                        .onAppear { AccessibilityNotification.Announcement(consentError).post() }
+                }
+            }
+            // What happens to the data, in three lines (the policy says it in full).
+            SettingsGroup(title: "Tvoje data") {
                 fact("globe.europe.africa", Palette.blue, "Uložená v EU", "Tvoje data leží v databázi Aurinu v Evropě, šifrovaná.")
                 SettingsDivider()
                 fact("nosign", Palette.amber, "Nikdy je neprodáme", "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš.")
                 SettingsDivider()
                 fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
-                SettingsDivider()
-                fact("tray.and.arrow.down", Palette.green, "Stáhneš, pozastavíš, nebo smažeš", "Všechno si stáhneš, zdravotní data pozastavíš, nebo smažeš účet, přímo tady.")
-            }
-            // Paused health data takes the AI consent with it (src/health-pause.js).
-            if !model.healthPaused {
-                SettingsGroup(footer: "Kouč včetně fotek v chatu, jeho denní shrnutí na Dnes, Tréninku a Jídle, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
-                    SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
-                }
-            }
-            // Cycle data is the most sensitive: it shows here too, and is
-            // turned on only in Cyklus with its own consent (plan, decision 3).
-            SettingsGroup {
-                NavigationLink { CycleSettingsView() } label: {
-                    SettingsRow(title: "Sledovat cyklus", value: L10n.tr(model.cycle?.enabled == true ? "Zapnuto" : "Vypnuto"))
-                }
-                .buttonStyle(.plain)
             }
             SettingsGroup {
                 if let exportURL {
@@ -52,22 +48,25 @@ struct PrivacySettingsView: View {
                     .buttonStyle(.plain)
                     .disabled(exporting || model.demo)
                 }
-            }
-            SettingsGroup {
+                SettingsDivider()
                 Link(destination: L10n.legalURL("privacy")) {
                     SettingsRow(title: "Zásady ochrany soukromí", chevron: false)
                         .overlay(alignment: .trailing) {
-                            Image(systemName: "arrow.up.right.square").scaledFont(14).foregroundStyle(Palette.faint)
+                            Image(systemName: "arrow.up.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                                 .padding(.trailing, 18).accessibilityHidden(true)
                         }
                 }
                 .buttonStyle(.plain)
             }
-            // Taking back the consent to health data without deleting the account (GDPR art. 7(3)).
+            // Taking back the consent to health data without deleting the account
+            // (GDPR art. 7(3)); "withdraw", the word the onboarding promises (PRIV-3).
             if !model.healthPaused {
-                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou.") {
-                    Button { pausing = true } label: { SettingsRow(title: "Pozastavit zdravotní data") }
-                        .buttonStyle(.plain)
+                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane.") {
+                    Button { pausing = true } label: {
+                        SettingsRow(title: "Odvolat souhlas se zdravotními daty", chevron: false, titleColor: Palette.rust)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Nejdřív ukáže, co se smaže a co zůstane.")
                         .disabled(model.demo)
                 }
             }
@@ -78,6 +77,7 @@ struct PrivacySettingsView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
+        .environment(\.inPrivacySettings, true)
         .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
             guard !model.demo, !model.healthPaused else { return }
@@ -124,11 +124,12 @@ struct PrivacySettingsView: View {
     }
 
     /// Only a change by the user is saved (not the value loaded from the server).
+    /// Turning it on goes through the consent card (PrivacyConsentsGroup), which gives the consent itself.
     private func setAI(_ value: Bool) {
         let before = ai
         ai = value
         Task {
-            do { try await model.api.setAI(value); model.setAIOff(!value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
+            do { try await model.api.setAI(value); model.setAIOff(!value); consentError = nil } catch { ai = before; consentError = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 

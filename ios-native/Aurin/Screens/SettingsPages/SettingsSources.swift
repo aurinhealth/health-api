@@ -27,7 +27,7 @@ struct SourcesSettingsView: View {
     private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
 
     var body: some View {
-        SettingsPage(title: "Zdroje dat") {
+        SettingsPage(title: "Zdroje dat", hero: SettingsHero(systemImage: "link", color: Palette.green, text: "Odkud Aurin bere tvoje data.")) {
             Text("Připojeno").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
 
             if connected.isEmpty && store.loaded {

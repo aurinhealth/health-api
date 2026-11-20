@@ -2153,7 +2153,7 @@ async function energyForDate(env, date) {
   // Today and ahead, the weight trend corrects the estimate by energy balance
   // (up to ±250 kcal) when the weight moves clearly off the chosen goal
   // (trendAdjustment).
-  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date), weight?.value_numeric, profile?.height) : { adjustment: 0, reason: null };
+  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date), weight?.value_numeric, profile?.height, baseline.weeklyHours) : { adjustment: 0, reason: null };
   const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit + trend.adjustment : null;
   const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
   // Maintaining or gaining, training counts in full; losing, 70 % of it, a
@@ -2219,6 +2219,8 @@ async function energyForDate(env, date) {
       floorGapKcal,
       trendAdjustment: trend.adjustment,
       trendReason: trend.reason,
+      // From 10 h of sport a week losing goes at most 0.5 % a week (energy-profile.js).
+      heavyTraining: Boolean(baseline.heavyTraining),
       workouts: workoutCalories
     },
     proteinReferenceKg: proteinKg,

@@ -146,6 +146,10 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
+    /// checkSetup has answered since this sign-in: until then the tabs wait
+    /// (RootView), so a new account's Today never loads or syncs before the
+    /// consent to health data is known.
+    var setupChecked = false
     /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
     /// the app shows only the paused screen, also before the server answers.
     var healthPaused = UserDefaults.standard.bool(forKey: AppModel.healthPausedKey)

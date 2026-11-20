@@ -240,6 +240,10 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// A swim card in open water (src/coach-actions.js): by time outside, with the safety line.
     var openWater: Bool? = nil
     var quickChange: String? = nil
+    /// "Plan around your knee?" (type plan_around, S3): the sore part in
+    /// words ("knee") and the sports that load it, which rest once confirmed.
+    var label: String? = nil
+    var sports: [String]? = nil
 
     struct Quick: Decodable, Equatable {
         let shorter: Bool
@@ -285,6 +289,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
         case "gym_add": return L10n.f("V posilovně přidat %@", toExercise ?? L10n.tr("cvik"))
         case "gym_remove": return L10n.f("V posilovně odebrat %@", fromExercise ?? L10n.tr("cvik"))
+        case "plan_around": return L10n.f("Plánovat s ohledem na bolest %@?", label ?? "")
         case "activity_delete": return L10n.tr("Smazat aktivitu")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
         case "activity_time": return L10n.tr("Upravit čas")
@@ -295,6 +300,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
             return title.map { L10n.tr($0) } ?? type
         case "status":
+            // Sick and Injured ask, so the card never reads as already decided (kouc-4).
+            if status == "sick" { return L10n.tr("Nastavit stav Nemoc?") }
+            if status == "injured" { return L10n.tr("Nastavit stav Zranění?") }
             let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))
             return L10n.f("Stav: %@", label)
         default: return type
