@@ -13,7 +13,7 @@
     "dev": "npx --yes wrangler@4.147.0 dev",
     "migrate:local": "npx --yes wrangler@4.147.0 d1 migrations apply health-data --local",
     "tail": "npx --yes wrangler@4.147.0 tail health-api",
-    "lint": "eslint src scripts tests",
+    "lint": "eslint src scripts tests && node scripts/lint-probe.mjs",
     "lint:install": "npm install --no-save --no-package-lock eslint@9.39.5 globals@15.15.0"
   }
 }
