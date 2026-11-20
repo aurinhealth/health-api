@@ -191,6 +191,7 @@ struct TodayContent: View {
         if selectedDate == nil && !model.demo {
             DataAgePill()
             ConnectionProblemCard()
+            ProBanner()
         }
     }
 

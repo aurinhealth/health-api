@@ -168,7 +168,6 @@ struct TodayDials: View {
         var value: Double?
         var scale: ClosedRange<Double>
         var band: ClosedRange<Double>?
-        var fill = false
         var number: String
         var unit: String?
         var note: String?
@@ -227,7 +226,7 @@ struct TodayDials: View {
         let note = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
             : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), needText)
             : L10n.f("přesně %@", needText)
-        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: max(0, n - 30)...(n + 30), number: Self.length(minutes),
+        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: Self.length(minutes),
                     note: note, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red, spokenValue: spoken)
     }
 
@@ -235,12 +234,14 @@ struct TodayDials: View {
     var strain: Cell {
         let score = today.strain.score
         guard let t = today.strain.target else {
-            return Cell(value: score, scale: 0...21, fill: true, number: Fmt.decimal(score), unit: L10n.tr("z 21"),
+            return Cell(value: score, scale: 0...21, number: Fmt.decimal(score), unit: L10n.tr("z 21"),
                         note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) })
         }
         let color: Color = score.map { RangeBar.side($0, t.low, t.high) == 0 ? Palette.green : $0 > t.high ? Palette.amber : Palette.muted } ?? Palette.muted
-        return Cell(value: score, scale: 0...21, band: t.low...max(t.low, t.high), fill: true, number: Fmt.decimal(score), unit: L10n.tr("z 21"),
-                    note: L10n.f("cíl %@ až %@", Fmt.int(t.low), Fmt.int(t.high)), color: color)
+        return Cell(value: score, scale: 0...21, band: t.low...max(t.low, t.high), number: Fmt.decimal(score), unit: L10n.tr("z 21"),
+                    note: (score ?? 0) > t.high
+                        ? L10n.f("%@ nad cílem %@ až %@", Fmt.decimal((score ?? 0) - t.high), Fmt.int(t.low), Fmt.int(t.high))
+                        : L10n.f("cíl %@ až %@", Fmt.int(t.low), Fmt.int(t.high)), color: color)
     }
 
     /// HRV against the usual range: "usual 60 to 74"; before the range, the change from the baseline.
@@ -262,13 +263,16 @@ struct TodayDials: View {
         let value = today.steps.today
         guard today.steps.goal > 0 else { return Cell(value: nil, scale: 0...10000, number: Fmt.int(value)) }
         let goal = Double(today.steps.goal)
-        return Cell(value: value, scale: 0...max(goal * 1.2, value ?? 0), band: goal...max(goal, goal * 1.2), fill: true, number: Fmt.int(value),
+        return Cell(value: value, scale: 0...max(goal * 1.2, value ?? 0), band: goal...max(goal, goal * 1.2), number: Fmt.int(value),
                     note: L10n.f("cíl %@", Fmt.int(goal)), color: (value ?? 0) >= goal ? Palette.green : Palette.muted)
     }
 
     private func cell(_ title: String, _ c: Cell) -> some View {
         VStack(spacing: 6) {
-            RangeDial(value: c.value, scale: c.scale, band: c.band, fill: c.fill, size: min(dial, 96), lineWidth: 6) {
+            // Concept D (Petr 2026-11-20, "no colours"): the usual range or the
+            // target in green, the dot in the value's state, no ink fill.
+            RangeDial(value: c.value, scale: c.scale, band: c.band, bandColor: Palette.green.opacity(0.85),
+                      dotColor: c.color == Palette.muted ? Palette.ink.opacity(0.45) : c.color, size: min(dial, 96), lineWidth: 6) {
                 VStack(spacing: 0) {
                     Text(verbatim: c.number).font(Typo.number(22)).foregroundStyle(Palette.ink)
                         .lineLimit(1)

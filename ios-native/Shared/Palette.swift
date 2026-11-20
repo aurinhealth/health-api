@@ -53,6 +53,8 @@ enum Palette {
     static let coffee = Color(light: 0x8A5A3B, dark: 0xD2A07E)
     static let brown = Color(light: 0x8A6D3B, dark: 0xCFB07A)
     static let gold = Color(light: 0xD9A521, dark: 0xE8C25A)
+    /// Aurin Pro's text and outline (the Pro concept): deep gold, pale in dark.
+    static let proGold = Color(light: 0x7A5310, dark: 0xF7E2A6)
     /// The macros in the web app's colours: protein blue, carbs amber, fat violet.
     static let protein = Color(light: 0x2F7FD8, dark: 0x83C7FF)
     static let carbs = Color(light: 0xD98A06, dark: 0xFFC274)

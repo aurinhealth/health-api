@@ -30,6 +30,14 @@ struct SubscriptionStatus: Decodable, Equatable {
     /// The month's free AI photos of food without Pro (src/food-photo-trial.js);
     /// nil with Pro, in the pilot and from an older server.
     var photoTrial: PhotoTrial? = nil
+    /// The Aurin Pro banner on Today (src/pro-banner.js); nil from an older server.
+    var proBanner: ProBanner? = nil
+
+    struct ProBanner: Decodable, Equatable {
+        let show: Bool
+        /// "trial" (the free week was never used) or "get".
+        let offer: String?
+    }
 
     struct PhotoTrial: Decodable, Equatable {
         let limit: Int
@@ -130,6 +138,13 @@ struct CoachPacks: Decodable, Equatable {
 extension APIClient {
     func subscription() async throws -> SubscriptionStatus {
         try await get("/app/api/subscription")
+    }
+
+    /// ✕ on the Pro banner: back in 7 days, after the third close in 30.
+    func closeProBanner() async throws -> SubscriptionStatus.ProBanner? {
+        struct Answer: Decodable { let proBanner: SubscriptionStatus.ProBanner? }
+        let answer: Answer = try await send("/app/api/pro-banner/close", method: "POST", body: [String: String]())
+        return answer.proBanner
     }
 
     func coachPacks() async throws -> CoachPacks {

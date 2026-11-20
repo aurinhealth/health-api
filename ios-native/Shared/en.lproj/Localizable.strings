@@ -4712,6 +4712,8 @@
 "Nejdřív zapni sledování cyklu" = "Turn on cycle tracking first";
 "Nejdřív ukáže, co se smaže a co zůstane." = "First shows what is deleted and what stays.";
 "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane." = "Withdraws your consent and deletes your health data. Your account and Pro stay. We show you what happens first.";
+"Denní limit" = "Daily limit";
+"Denní limit: %@" = "Daily limit: %@";
 
 /* Part O: Finish setting up on Today, sports on About you */
 "Dokonči nastavení" = "Finish setting up";
@@ -4805,3 +4807,16 @@
 "Vyber dva nebo víc" = "Pick two or more";
 "Spojit %@ do supersérie" = "Pair %@ as superset";
 "Zrušit supersérii %@" = "Unpair Superset %@";
+"Vyzkoušej Aurin Pro 7 dní zdarma" = "Try Aurin Pro free for 7 days";
+"Získej Aurin Pro" = "Get Aurin Pro";
+"Kouč, Aurin age, tréninkové plány a další" = "Coach, Aurin Age, training plans and more";
+"Skrýt nabídku Aurin Pro" = "Hide the Aurin Pro offer";
+"Nabídka zůstane v Nastavení." = "The offer stays in Settings.";
+"Správa předplatného" = "Manage Subscription";
+"Používáš verzi zdarma." = "You're on the free plan.";
+"Chytrý zápis jídla" = "Smart Nutrition Tracking";
+"Kouč u tvých čísel" = "Coach Insights";
+"Tréninky pro tvoji posilovnu" = "Smart Gym Workouts";
+"Jídelníček" = "Food Log";
+"Adaptivní plány tréninku" = "Adaptive Training Plans";
+"%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";

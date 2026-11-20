@@ -55,8 +55,9 @@ struct SetupBuildToday: View {
                     .font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                     .frame(minHeight: 72, alignment: .bottom)
-                    .id(step)
-                    .transition(.opacity)
+                    // One title that changes its words: two titles crossing
+                    // stood over each other (device test of build 602).
+                    .contentTransition(.opacity)
                 Capsule().fill(Palette.track).frame(width: 120, height: 3)
                     .overlay(alignment: .leading) {
                         Capsule().fill(Palette.ink).frame(width: progress, height: 3)
