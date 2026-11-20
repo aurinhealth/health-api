@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
-import { isReviewAccount, reviewCodeActive, reviewRefusal, REVIEW_AI_MONTHLY_LIMIT_USD } from "../src/app-review.js";
+import { isReviewAccount, isStagingSampleAccount, reviewCodeActive, reviewRefusal, REVIEW_AI_MONTHLY_LIMIT_USD } from "../src/app-review.js";
 import { handleEmailLogin, reviewCode, sendCode } from "../src/email-login.js";
 import { ensureTenancy, inviteUser, signInEmailUser, scopedDb, _resetTenancyForTest } from "../src/tenancy.js";
 import { aiAllowance, aiMonthlyLimitUsd } from "../src/ai-usage.js";
@@ -131,4 +131,14 @@ test("the review account's AI budget is a small fixed monthly cap", async () => 
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /zase k dispozici od/.test(error.message));
     assert.equal(calls, 0);
   } finally { globalThis.fetch = realFetch; }
+});
+
+test("only sample…@test.aurin.health on the test server gets the sample athlete", () => {
+  const staging = { ENVIRONMENT: "staging" };
+  assert.equal(isStagingSampleAccount(staging, { email: "Sample01@test.aurin.health" }), true);
+  assert.equal(isStagingSampleAccount(staging, { email: "tapwright01@test.aurin.health" }), false);
+  assert.equal(isStagingSampleAccount(staging, { email: "sample01@test.aurin.health.evil.com" }), false);
+  assert.equal(isStagingSampleAccount(staging, { email: "sample01@test.aurin.health", isOwner: true }), false);
+  assert.equal(isStagingSampleAccount({ ENVIRONMENT: "production" }, { email: "sample01@test.aurin.health" }), false);
+  assert.equal(isStagingSampleAccount({}, { email: "sample01@test.aurin.health" }), false);
 });

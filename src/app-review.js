@@ -5,6 +5,7 @@
 // or send anything to them, and its AI budget is a small fixed one. Apple
 // Health upload and the rest of the app work as for anyone.
 import { L } from "./lang.js";
+import { isStaging } from "./staging.js";
 
 export const REVIEW_AI_MONTHLY_LIMIT_USD = 2;
 
@@ -17,6 +18,15 @@ export function isReviewAccount(env, user = null) {
   if (!review) return false;
   if (user ? user.isOwner === true : env?.USER_IS_OWNER === true) return false;
   return normalized(user ? user.email : env?.USER_EMAIL) === review;
+}
+
+// A test account on the test server that gets the same sample athlete
+// (review-sample.js): sample…@test.aurin.health, for the device tests that
+// compare screens with the concepts on real-looking data. Never on the live
+// server, never the owner.
+export function isStagingSampleAccount(env, user) {
+  if (!isStaging(env) || !user || user.isOwner === true) return false;
+  return /^sample[a-z0-9._-]*@test\.aurin\.health$/.test(normalized(user.email));
 }
 
 // Whether the fixed review code still works at `now`: up to the end of the
