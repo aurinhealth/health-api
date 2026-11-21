@@ -256,7 +256,7 @@ struct SleepDial: View {
                     .accessibilityHidden(true)
                 nightArc.frame(width: r * 2, height: r * 2).position(c)
                 ForEach(Array(stride(from: 0, to: 24, by: 3)), id: \.self) { h in
-                    Text("\(h)").font(.caption2).foregroundStyle(Palette.faint)
+                    Text(verbatim: ClockText.hour(h)).font(.caption2).foregroundStyle(Palette.faint)
                         .position(point(h * 60, r - ring / 2 - 14, c))
                 }
                 if let usual {

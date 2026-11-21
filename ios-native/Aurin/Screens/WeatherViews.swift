@@ -34,6 +34,23 @@ struct AppleWeatherMark: View {
 
 /// Texts and symbols for the forecast (WMO weather codes; the server turns Apple's conditions into them).
 enum WeatherText {
+    /// Now is between 8 PM and 6 AM on this phone.
+    static var isNight: Bool {
+        let h = Calendar.current.component(.hour, from: Date())
+        return h < 6 || h >= 20
+    }
+
+    /// An hour of the night (8 PM to 6 AM) gets the moon instead of the sun.
+    static func symbol(_ code: Double?, night: Bool) -> String {
+        let day = symbol(code)
+        guard night else { return day }
+        switch day {
+        case "sun.max.fill": return "moon.stars.fill"
+        case "cloud.sun.fill": return "cloud.moon.fill"
+        default: return day
+        }
+    }
+
     static func symbol(_ code: Double?) -> String {
         guard let code else { return "cloud.sun.fill" }
         switch Int(code) {
@@ -277,7 +294,7 @@ struct WeatherDetails: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
+                Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code, night: WeatherText.isNight))
                     .symbolRenderingMode(.multicolor)
                     .scaledFont(54)
                     .accessibilityHidden(true)
@@ -479,9 +496,9 @@ struct WeatherHourStrip: View {
                     // Only today's hours: the strip runs past midnight.
                     let inWindow = !now && best?.contains(h.hour) == true && (h.date == nil || h.date == hours[0].date)
                     VStack(spacing: 4) {
-                        Text(verbatim: now ? L10n.tr("Teď") : newDay ? WeatherText.weekday(h.date ?? "") : String(h.hour))
+                        Text(verbatim: now ? L10n.tr("Teď") : newDay ? WeatherText.weekday(h.date ?? "") : ClockText.hour(h.hour))
                             .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now || newDay ? Palette.ink : Palette.faint)
-                        Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
+                        Image(systemName: WeatherText.symbol(h.code, night: h.hour < 6 || h.hour >= 20)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
                         Text(verbatim: WeatherText.degrees(now ? (nowTemp ?? h.temp) : h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                         Text(verbatim: (h.rainProb ?? 0) >= 10 ? WeatherText.percent(h.rainProb) : " ")

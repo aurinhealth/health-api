@@ -25,6 +25,19 @@ enum ClockText {
         formatter(timeZone: .autoupdatingCurrent).string(from: date)
     }
 
+    /// An hour on an axis or a dial, by the phone's 12/24-hour setting:
+    /// "21" or "9 PM", midnight "0" or "12 AM".
+    static func hour(_ hour: Int) -> String {
+        let h = ((hour % 24) + 24) % 24
+        guard isTwelveHour else { return String(h) }
+        let date = Date(timeIntervalSinceReferenceDate: TimeInterval(h * 3600))
+        let f = DateFormatter()
+        f.locale = L10n.locale
+        f.timeZone = utc
+        f.dateFormat = "h a"
+        return f.string(from: date)
+    }
+
     /// A clock that may be missing: nil stays nil.
     static func format(optional clock: String?) -> String? {
         guard let clock else { return nil }

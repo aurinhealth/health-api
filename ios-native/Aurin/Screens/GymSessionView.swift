@@ -117,8 +117,6 @@ struct GymSessionView: View {
                      pinTitle: planned || showsDone) {
             content
         }
-        // The planned gym keeps the Gym green from any tab (D-TMAVY-1).
-        .transformEnvironment(\.tabGlow) { if planned { $0 = nil } }
         // Start workout pinned at the bottom as an ink pill (concept K04/017).
         .overlay(alignment: .bottom) {
             if planned, let day, !model.demo || previewing { startPill(day) }
