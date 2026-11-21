@@ -535,8 +535,15 @@ private struct PinnedTopBar: ViewModifier {
     @Environment(AppModel.self) private var model: AppModel?
     @State private var scrolled = false
 
+    /// Without Aurin Pro once the paywall is on: no coach, its "i" stays on its
+    /// own and "Unlock with Pro" floats at the bottom (Pro concept, subpage).
+    private var locked: Bool { coach != nil && model?.coachLocked == true }
+
     func body(content: Content) -> some View {
         let page = content
+            .overlay(alignment: .bottom) {
+                if locked, let model { UnlockProPill { Paywall.present(model) }.padding(.bottom, 12) }
+            }
             .environment(\.floatingBack, true)
             .environment(\.scrollReport, { (offset: CGFloat) in
                 parent?(offset)
@@ -598,14 +605,14 @@ private struct PinnedTopBar: ViewModifier {
                 if let extra {
                     ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
                 }
-                if let coach {
+                if let coach, !locked {
                     // A word ("Uložit") keeps its own button; an icon ("+", "i") joins the coach's capsule.
                     if let trailing, trailing.text != nil {
                         ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
                                      tint: trailing.tint, action: trailing.action)
                     }
                     withCompanion(coach)
-                } else if let trailing {
+                } else if let trailing = trailing ?? (locked ? coach?.companion : nil) {
                     ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
                                  tint: trailing.tint, action: trailing.action)
                 } else if extra == nil {
@@ -621,6 +628,23 @@ private struct PinnedTopBar: ViewModifier {
         var coach = coach
         if coach.companion == nil, let trailing, trailing.text == nil { coach.companion = trailing }
         return coach
+    }
+}
+
+/// "Unlock with Pro" floating in glass at the bottom of a subpage without Pro
+/// (Pro concept): it opens the offer.
+struct UnlockProPill: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 18).frame(height: 44)
+                .chromeGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("unlock-pro")
     }
 }
 

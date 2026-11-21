@@ -281,6 +281,18 @@ final class SnapshotTests: XCTestCase {
         try render("health-vo2max-empty", glow: Palette.Glow.health) { VO2maxDetailContent(health: emptyHealth, period: .constant(.months6)).padding(16).padding(.top, 30) }
         XCTAssertEqual(VO2maxPage.position(49.2, in: try XCTUnwrap(health.vo2max?.compared)), L10n.f("v horní čtvrtině mužů ve věku %@ až %@", "30", "39"))
         XCTAssertEqual(StepsThroughDay.runningTotals([1, 2, 3]), [1, 3, 6])
+        // Without Pro once the paywall is on: "Unlock with Pro" instead of the coach (Pro concept).
+        let locked = AppModel(demo: true)
+        locked.health = model.health
+        locked.coachLocked = true
+        try render("health-restingHR-locked", height: 844, window: true) {
+            NavigationStack {
+                DetailScreen(title: "Klidový tep", info: ChromeAction(systemImage: "info", label: "Jak se to měří") {}) {
+                    HealthValueContent(value: .constant(.restingHR), period: .constant(.days30))
+                }
+            }
+            .environment(locked)
+        }
         // The Health tab (redesign H2): a new account, no Pro, no watch, the Aurin age page.
         try render("health-new", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: emptyHealth) }.padding(.top, 50).padding(.bottom, 40).environment(empty) }
         try render("health-aurinage-states", glow: Palette.Glow.health) {
