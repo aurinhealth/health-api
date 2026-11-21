@@ -38,7 +38,7 @@ struct SleepDetailContent: View {
             SectionLabel(text: L10n.f("Spánek v noci na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
                 // The same arc as Health's sleep card (concept 5, DES-7).
-                NightArc(sleep: sleep).frame(height: 170).padding(.top, 8)
+                NightArc(sleep: sleep, title: sleep.night?.date == AppModel.localDate(Date()) ? "Minulá noc" : "Noc").frame(height: 170).padding(.top, 8)
                 ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", night.inBedMinutes.map { Fmt.duration(Int($0)) } ?? "–")])
                     .padding(.top, 18)
                 if let stages = night.stages {
@@ -147,7 +147,7 @@ struct SleepDetailContent: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Spánkový dluh za posledních 7 nocí").font(.body)
                         Spacer()
-                        Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.ink)
+                        Text(Fmt.hoursMinutesLong(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.ink)
                             .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     }
                     DebtStrip(minutes: debt.minutes)
@@ -158,7 +158,7 @@ struct SleepDetailContent: View {
             if let reg = sleep.regularity, !reg.nights.isEmpty {
                 let usual = RegularityChart.usual(reg.nights)
                 SectionLabel(text: L10n.f("Pravidelnost za %@ nocí", String(reg.nights.count))).padding(.top, 32)
-                Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
+                Text(Fmt.oneStop(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band))))
                     .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 10)
                 Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
             }
@@ -181,7 +181,7 @@ struct SleepDetailContent: View {
 
     /// "8 h 30 min, in bed by 22:10".
     static func tonightLine(_ t: HealthSnapshot.Tonight) -> String {
-        let need = Fmt.hoursMinutes(Double(t.sleep ?? t.need))
+        let need = Fmt.hoursMinutesLong(Double(t.sleep ?? t.need))
         guard let bed = t.bedtime else { return need }
         return L10n.f("%@, v posteli do %@", need, ClockText.format(optional: bed) ?? bed)
     }
@@ -316,7 +316,7 @@ struct StageTotals: View {
                 }
             }
             .frame(height: 10)
-            Text(Fmt.hoursMinutes(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).frame(width: 46, alignment: .trailing)
+            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7).frame(width: 82, alignment: .trailing)
             Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -353,7 +353,7 @@ struct SleepIndexParts: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let parts = night.parts {
-                part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutes(parts.length.minutes), Fmt.hoursMinutes(parts.length.need)),
+                part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutesLong(parts.length.minutes), Fmt.hoursMinutesLong(parts.length.need)),
                      note: L10n.tr("spánek proti potřebě na minulou noc"), fill: parts.length.fill, first: true,
                      spoken: L10n.f("%@ z %@", Fmt.hoursMinutesSpoken(parts.length.minutes), Fmt.hoursMinutesSpoken(parts.length.need)))
                 part("Kvalita", value: L10n.f("efektivita %@", String(parts.quality.efficiency) + Fmt.percentSign),
@@ -681,7 +681,7 @@ struct RegularityChart: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Usínáš obvykle mezi %@ a %@.", Self.clock(usual - Self.band), Self.clock(usual + Self.band)))
+        .accessibilityLabel(Fmt.oneStop(L10n.f("Usínáš obvykle mezi %@ a %@.", Self.clock(usual - Self.band), Self.clock(usual + Self.band))))
     }
 
     private func scale(_ width: CGFloat) -> Scale {

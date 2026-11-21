@@ -721,6 +721,8 @@ struct MiniDial<Center: View>: View {
 /// Sleep detail headline (concept 1 and 5).
 struct NightArc: View {
     let sleep: HealthSnapshot.Sleep
+    /// "Minulá noc" on Health; the Sleep detail of a picked day names its night.
+    var title = "Minulá noc"
 
     private static func minutes(_ clock: String?) -> Double? {
         guard let clock, clock.count >= 4 else { return nil }
@@ -735,8 +737,9 @@ struct NightArc: View {
     var body: some View {
         let night = sleep.night
         let span = 14.0 * 60
-        let from = Self.minutes(night?.start).map(Self.onScale)
         let to = Self.minutes(night?.end).map(Self.onScale)
+        // Asleep before 20:00: the arc starts at the scale's start, not nowhere.
+        let from = Self.minutes(night?.start).map(Self.onScale).map { $0 > span && (to ?? span) <= span ? 0 : $0 }
         return GeometryReader { geo in
             let w = geo.size.width
             let r = min(w / 2 - 28, geo.size.height - 30)
@@ -747,14 +750,14 @@ struct NightArc: View {
                     .stroke(Palette.track, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 if let from, let to, to > from {
                     Path { p in p.addArc(center: c, radius: r, startAngle: angle(from), endAngle: angle(to), clockwise: false) }
-                        // Amber to mint as the concept, clear in light mode too (no khaki, 604 retest).
-                        .stroke(LinearGradient(colors: [Color(light: 0xE8963F, dark: 0xF2B266), Color(light: 0x2FA57B, dark: 0x8FE6C4)],
+                        // Orange through gold to mint as the concept; the gold stop keeps the light middle from going olive (604 retest).
+                        .stroke(LinearGradient(colors: [Color(light: 0xEE8F3A, dark: 0xF2A35A), Color(light: 0xE3BE5C, dark: 0xE3D08A), Color(light: 0x3DBB8C, dark: 0x8FE6C4)],
                                                startPoint: .leading, endPoint: .trailing),
                                 style: StrokeStyle(lineWidth: 8, lineCap: .round))
                         .shadow(color: Color(light: 0x2FA57B, dark: 0x8FE6C4).opacity(0.35), radius: 6)
                 }
                 VStack(spacing: 2) {
-                    Text(verbatim: L10n.tr("Minulá noc").uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.tr(title).uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
                     Text(verbatim: night?.minutes.map { Fmt.duration(Int($0)) } ?? "–").font(Typo.number(34)).foregroundStyle(Palette.ink)
                     if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
                 }
@@ -774,7 +777,7 @@ struct NightArc: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.tr("Minulá noc"), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel([L10n.tr(title), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
     }
 
     /// "6 min short of 7 h 30 min", or "reached your need".

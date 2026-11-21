@@ -8,6 +8,7 @@ import SwiftUI
 /// day's strain, low HRV and debt, minus naps; or the user's own length).
 struct SleepSettingsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.sectionGlow) private var sectionGlow
     @State private var store: SettingsStore?
     var given: SettingsStore? = nil
     /// Opened from Zdraví or Dnes (AppRoute): the app's round back button and
@@ -20,7 +21,9 @@ struct SleepSettingsView: View {
                 SleepSettingsForm(store: store, route: route)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background { Palette.settingsBackground.ignoresSafeArea() }
+                    .background {
+                        if route { ScreenBackground(glow: sectionGlow ?? Palette.Glow.today) } else { Palette.settingsBackground.ignoresSafeArea() }
+                    }
             }
         }
         .task {

@@ -31,4 +31,11 @@ final class HealthValueCurrentTests: XCTestCase {
         XCTAssertNil(HealthValueContent.current(96, series, today))
         XCTAssertEqual(HealthValueContent.current(96, series + [Point(date: today, value: 97)], today), 96)
     }
+
+    func testAddedPointCarriesTheHeadlineState() {
+        let points = [ChartPoint(date: "2026-11-19", value: 52, low: 50, high: 54)]
+        let shown = HealthValueContent.withCurrent(points, today: today, current: 48, state: .off(above: false))
+        XCTAssertEqual(shown.last?.state, "slightly")
+        XCTAssertEqual(shown.last?.side, "below")
+    }
 }

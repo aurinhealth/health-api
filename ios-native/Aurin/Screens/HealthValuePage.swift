@@ -190,7 +190,7 @@ struct HealthValueContent: View {
                 let points = chartPoints(reading)
                 Card {
                     DetailChart(points: points, today: today, period: $period, unit: L10n.tr(value.unit), digits: value.digits,
-                                note: note(points.count), source: source)
+                                note: note(points.filter { $0.date > ISODay.shift(today, -period.days) }.count), source: source)
                 }
                 .padding(.top, 12)
                 let rows = TrendMath.rows(points, today: lastDay(points), lags: period.weekly ? TrendLags.year : TrendLags.month)
@@ -210,22 +210,32 @@ struct HealthValueContent: View {
     /// never shows a drop each morning (D-ZDRAVI-19); the number on top has it.
     private func chartPoints(_ reading: HealthValueReading) -> [ChartPoint] {
         let points = loaded?.shown ?? reading.local
-        return value.partialToday ? points.filter { $0.date < today } : Self.withCurrent(points, today: today, current: reading.current)
+        if value.partialToday { return points.filter { $0.date < today } }
+        // Weekly points are the server's own weeks: a day's value stays out of them.
+        if period.weekly { return points }
+        return Self.withCurrent(points, today: today, current: reading.current, state: reading.state)
     }
 
     /// The headline's number is the chart's point for the day (DES-4, 1 bpm
     /// apart), and a day the series doesn't have yet is added, so "Last
     /// night" never selects an older night (DES-11, oxygen).
-    static func withCurrent(_ points: [ChartPoint], today: String, current: Double?) -> [ChartPoint] {
+    static func withCurrent(_ points: [ChartPoint], today: String, current: Double?, state: MetricState? = nil) -> [ChartPoint] {
         guard let current else { return points }
         var points = points.filter { $0.date <= today }
-        if let i = points.firstIndex(where: { $0.date == today }) {
-            let p = points[i]
-            points[i] = ChartPoint(date: today, value: current, low: p.low, high: p.high, state: p.state, side: p.side)
-        } else {
-            points.append(ChartPoint(date: today, value: current, low: points.last?.low, high: points.last?.high))
-        }
+        let old = points.firstIndex(where: { $0.date == today }).map { points.remove(at: $0) }
+        // The headline's state on the point, so the dot says the same as the words.
+        let words = state.map(Self.stateWords) ?? (old?.state, old?.side)
+        points.append(ChartPoint(date: today, value: current, low: old?.low ?? points.last?.low, high: old?.high ?? points.last?.high,
+                                 state: words.0, side: words.1))
         return points
+    }
+
+    static func stateWords(_ state: MetricState) -> (String?, String?) {
+        switch state {
+        case .within: return ("within", nil)
+        case .off(let above): return ("slightly", above ? "above" : "below")
+        case .far(let above): return ("far", above ? "above" : "below")
+        }
     }
 
     /// The last finished day the Trend rows end on.
@@ -392,7 +402,7 @@ struct HealthValueContent: View {
             guard let r = health?.restingHR, let v = r.value ?? r.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v), label: "Dnes, nejnižší tep v klidu", state: state,
                                       usual: usual(r.usual?.lowerBound, r.usual?.upperBound, value), local: points(r.series, low: r.usual?.lowerBound, high: r.usual?.upperBound),
-                                      current: r.value)
+                                      current: Self.current(r.value, r.series, health?.date))
         case .hrv:
             guard let h = health?.hrv, let v = h.value ?? h.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v), label: "Minulá noc, variabilita tepu", state: state,
