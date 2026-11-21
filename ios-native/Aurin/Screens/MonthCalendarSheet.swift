@@ -10,7 +10,8 @@ struct MonthCalendarSheet: View {
     /// The day Today shows.
     let date: String
     @State private var month: String
-    @AppStorage("monthCalendarMetric") private var metric = Metric.readiness.rawValue
+    /// Always opens on Readiness, as in the concept (TestFlight 606).
+    @State private var metric = Metric.readiness.rawValue
 
     init(date: String) {
         self.date = date
