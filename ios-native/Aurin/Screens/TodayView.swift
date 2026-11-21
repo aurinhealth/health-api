@@ -282,7 +282,14 @@ struct TodayContent: View {
             } else if coachShown, let missed = today.missedWorkout {
                 // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
-                              tip: AnyView(MissedWorkoutBlock(missed: missed)), pinned: (missed.text, missed.advice))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) {
+                                  MissedWorkoutBlock(missed: missed)
+                                  // Today's own workouts keep their Start under it.
+                                  if !TodayCoachAction.planned(today).isEmpty {
+                                      Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
+                                      TodayCoachAction(today: today)
+                                  }
+                              }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,

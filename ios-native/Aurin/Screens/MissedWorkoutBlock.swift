@@ -8,6 +8,7 @@ import SwiftUI
 /// once that is gone.
 struct MissedWorkoutBlock: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     let missed: TodaySnapshot.MissedWorkout
 
     @State private var toast: PlanToast?
@@ -32,6 +33,8 @@ struct MissedWorkoutBlock: View {
         .animation(.snappy, value: toast?.id)
         // Today reloaded under it (the card went): the step stands, what it replaces still goes.
         .onDisappear { if let toast { settle(toast, undo: false) } }
+        // Sent to the background (and maybe closed): the step stands now, so a replaced session still goes.
+        .onChange(of: scenePhase) { _, phase in if phase != .active, let toast { settle(toast, undo: false) } }
         .task(id: toast?.id) {
             guard let current = toast else { return }
             try? await Task.sleep(for: .seconds(6))
@@ -136,10 +139,13 @@ struct MissedWorkoutBlock: View {
 
     /// The usual Move sheet, for the session as Training lists it.
     private func pickDay() async {
-        if model.training == nil { await model.refreshTraining() }
-        let session = model.training?.sessions?.first {
-            missed.eventId != nil ? $0.eventId == missed.eventId : ($0.kind == "gym" && $0.date == missed.gymDate)
+        // The calendar's day (last Sunday is not in this week's list), else this week's list.
+        if model.calendar[missed.date] == nil && model.training == nil { await model.refreshTraining() }
+        let matches = { (s: WeekSession) in
+            missed.eventId != nil ? s.eventId == missed.eventId : (s.kind == "gym" && s.date == missed.gymDate)
         }
+        let session = model.calendar[missed.date]?.activities.map(\.session).first(where: matches)
+            ?? model.training?.sessions?.first(where: matches)
         if let session { picking = session } else { error = L10n.tr("Trénink se teď nepodařilo načíst") }
     }
 
