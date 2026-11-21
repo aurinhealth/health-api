@@ -758,7 +758,7 @@ export const PRO_CONTENTS = {
   free: ['Readiness, sleep and strain', 'Cycle tracking', 'Calorie target and macros', 'Log meals by hand or barcode, and try 5 photo logs free each month', 'Gym log and exercise technique', 'A starter plan for every sport'],
   pro: [['Aurin Intelligence', ['A coach just for you', 'Plan changes in your own words', 'Workout, day and week reviews', 'Food from a photo, words or the web', 'Gym equipment from a photo or web']],
     ['Adaptive training plans', ['Plans for races and goals', 'Shaped by your recovery and progress', 'Fits the time you have each day']],
-    ['Vitamins and minerals', []], ['Own macros and nutrient targets', []]]};
+    ['Aurin Age', []], ['Vitamins and minerals', []], ['Own macros and nutrient targets', []]]};
 // WHOOP and Ultrahuman show their own wordmark, unaltered, from their brand files (WHOOP's developer design guidelines,
 // Ultrahuman's site), black on the light page and white on the dark one; Petr's call on 2026-11-03 while both
 // consent requests are open. Apple and Google allow no device wordmark without a licence, so those stay names.
