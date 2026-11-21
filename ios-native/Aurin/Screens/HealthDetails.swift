@@ -185,7 +185,9 @@ struct SleepDetailContent: View {
     private func arc(_ night: Summary) -> some View {
         let from = 20.0 * 60, to = 34.0 * 60
         let band: ClosedRange<Double>? = {
-            guard let bed = night.bed, let wake = night.wake, wake > bed else { return nil }
+            // Minutes after midnight, a time before noon counted into the next day as the server does.
+            let late = { (m: Double) in m < 12 * 60 ? m + 24 * 60 : m }
+            guard let bed = night.bed.map(late), let wake = night.wake.map(late), wake > bed else { return nil }
             return min(max(bed, from), to)...min(max(wake, from), to)
         }()
         let need = Double(health.sleep.need)

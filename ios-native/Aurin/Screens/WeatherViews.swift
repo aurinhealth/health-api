@@ -181,7 +181,10 @@ struct WeatherDetails: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        SettingsPage(title: "Počasí dnes") {
+        // The Settings page's look without its title: only the grabber and the
+        // close button above (concept a-pocasi-02, 602 point 87).
+        PageScroll {
+            VStack(alignment: .leading, spacing: 26) {
             hero
 
             if weather.max == nil {
@@ -240,7 +243,14 @@ struct WeatherDetails: View {
                 }
                 .padding(.horizontal, 4)
             }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 48)
         }
+        .background { Palette.settingsBackground.ignoresSafeArea() }
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { ScreenTrail.visit("page/Počasí dnes") }
     }
 
     /// The next 24 hours from the one running now (the server's); without the detail, the card's few hours.

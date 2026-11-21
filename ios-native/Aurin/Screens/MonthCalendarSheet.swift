@@ -36,9 +36,12 @@ struct MonthCalendarSheet: View {
     private var firstMonth: String { ISODay.monthStart(ISODay.shift(today, -90)) }
 
     var body: some View {
+        VStack(spacing: 0) {
+        // The month and its buttons stay put while the days scroll.
+        header
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                header
                 metricSwitch
                 Text(summary)
                     .font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
@@ -56,7 +59,8 @@ struct MonthCalendarSheet: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 32)
+            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
+        }
         }
         .background { Palette.background.ignoresSafeArea() }
         .presentationDetents([.large])
