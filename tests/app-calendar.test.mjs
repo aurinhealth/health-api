@@ -70,7 +70,7 @@ test("done sessions paired with their plan: kept to it, done differently, missed
     planned: [plan("planned:1", "2026-10-05", "Sweet spot", "Ride", 3600, 70), plan("planned:2", "2026-10-06", "Tempo", "Ride", 5400, 90),
       plan("planned:3", "2026-10-07", "Běh", "Run", 2700, 40), plan("planned:4", "2026-10-09", "Kolo", "Ride", 3600, 50)],
     activities: [act("a1", "2026-10-05", "Sweet spot", "Ride", 3700, 72), act("a2", "2026-10-06", "Tempo", "Ride", 3600, 60)],
-    gym: { "2026-10-08": { name: "Nohy", exercises: ["Dřep"], sets: 10, logged: 6 } }
+    gym: { "2026-10-08": { name: "Nohy", exercises: ["Dřep"], sets: 10, logged: 6, minutes: 66 } }
   });
   const d = date => out.days.find(x => x.date === date);
   assert.equal(d("2026-10-05").plan, "good");
@@ -84,6 +84,7 @@ test("done sessions paired with their plan: kept to it, done differently, missed
   assert.deepEqual(d("2026-10-07").activities.map(a => [a.status, a.eventId]), [["missed", "planned:3"]]);
   // A gym plan saved in the app with sets logged there: done, but too few of them.
   assert.equal(d("2026-10-08").activities[0].status, "done");
+  assert.equal(d("2026-10-08").activities[0].minutes, 66, "with its stored length (606: Week plan rows had none)");
   assert.equal(d("2026-10-08").activities[0].adherence, "off");
   assert.equal(d("2026-10-08").plan, "off");
   assert.equal(d("2026-10-09").activities[0].status, "planned", "today's plan still waits");
