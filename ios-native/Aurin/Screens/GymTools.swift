@@ -81,7 +81,7 @@ struct LibraryWidget: View {
     var body: some View {
         RouteLink(route: .library) {
             HStack(spacing: 14) {
-                Image(systemName: "books.vertical.fill")
+                Image(systemName: "figure.run.square.stack.fill")
                     .scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent)
                     .frame(width: 34, height: 34)
