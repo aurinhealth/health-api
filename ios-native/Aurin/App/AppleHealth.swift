@@ -213,6 +213,9 @@ final class AppleHealth {
         return await sync(api: api, force: true)
     }
 
+    /// Sexual activity's permission, before its consent sheet (App Review 5.1.1(iv)).
+    func requestSexAccess() async { await reader.requestSexAccess() }
+
     /// Sexual activity just allowed (Nastavení → Deník): HealthKit asks for it
     /// (HealthReader.askNewTypes) and this sync reads its last 90 days, not
     /// only the days since the last sync.
@@ -731,6 +734,12 @@ final class HealthReader: @unchecked Sendable {
     func requestAccess(_ categories: Set<HealthCategory>, share: Set<HKSampleType> = []) async throws {
         let read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
         try await store.requestAuthorization(toShare: share, read: read)
+    }
+
+    /// Sexual activity's permission, asked when its switch moves, before its consent sheet.
+    func requestSexAccess() async {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        _ = try? await store.requestAuthorization(toShare: [], read: [HKCategoryType(.sexualActivity)])
     }
 
     /// Asks for the categories' types iOS has not asked about yet (and sexual

@@ -677,9 +677,10 @@ struct CycleSettingsView: View {
     var body: some View {
         SettingsPage(title: "Cyklus") {
             SettingsGroup {
-                // On asks for its own consent first (GDPR art. 9); off needs none.
+                // On: Health's permission sheet first (no screen of ours before the
+                // system prompt, App Review 5.1.1(iv)), then its own consent (GDPR art. 9); off needs none.
                 SettingsToggle(title: "Sledovat cyklus", isOn: Binding(get: { enabled }, set: { on in
-                    if on { askingTrackingConsent = true } else { turn(false) }
+                    if on { Task { await CycleHealth.requestAccess(); askingTrackingConsent = true } } else { turn(false) }
                 }), disabled: saving)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -740,7 +741,7 @@ struct CycleSettingsView: View {
         .sheet(isPresented: $choosingPack) {
             DateChoiceSheet(title: "První den balení", initial: settings?.packStart) { save(["packStart": .string($0)]) }
         }
-        // Health's permission sheet comes once the consent sheet is gone.
+        // iOS asked already when the switch moved; turn(true) only reads.
         .sheet(isPresented: $askingTrackingConsent, onDismiss: {
             if trackingAccepted { trackingAccepted = false; turn(true) }
         }) {

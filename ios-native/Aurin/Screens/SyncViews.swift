@@ -429,7 +429,15 @@ struct SyncForwardGroup: View {
         Binding(get: { isOn(id, destination) },
                 set: { on in
                     // Wahoo and Google: first the question, the switch moves on its yes.
-                    if on && id != "apple" { asking = id } else { save(id, on: on, backfill: false) }
+                    guard on && id != "apple" else { save(id, on: on, backfill: false); return }
+                    // Into Apple Health: iOS asks first, our question after it, so no
+                    // screen of ours stands before the system prompt (App Review 5.1.1(iv)).
+                    guard to == "apple", var next = sync.destination(to)?.prefs else { asking = id; return }
+                    next.forward = (next.forward ?? []) + [id]
+                    Task { [next] in
+                        try? await AppleHealthExport.shared.requestAccess(next)
+                        asking = id
+                    }
                 })
     }
 
@@ -683,7 +691,13 @@ struct SyncHealthView: View {
         guard var prefs = destination?.prefs else { return }
         // Apple Health: the first type from other apps asks for the yes first (Google's terms).
         if id == "apple", !consent, Self.others.contains(where: health.allows), !Self.others.contains(where: prefs.health.allows) {
-            asking = health
+            // iOS asks first, the yes after it (App Review 5.1.1(iv)).
+            var next = prefs
+            next.health = health
+            Task { [next] in
+                try? await AppleHealthExport.shared.requestAccess(next)
+                asking = health
+            }
             return
         }
         prefs.health = health

@@ -246,7 +246,8 @@ struct JournalSettingsView: View {
                 }
                 SettingsGroup(title: "Apple Health", footer: "Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde.") {
                     SettingsToggle(title: "Sexuální aktivita", isOn: Binding(get: { appleSex }, set: { on in
-                        if on { askingSexConsent = true; return }
+                        // iOS asks first, our consent after it (App Review 5.1.1(iv)).
+                        if on { Task { await AppleHealth.shared.requestSexAccess(); askingSexConsent = true }; return }
                         // Off stops reading at once; the server deletes what it has.
                         appleSex = false
                         JournalSwitch.remember(appleSex: false)

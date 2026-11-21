@@ -135,24 +135,9 @@ struct SetupFlowView: View {
                         .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
                         .padding(.bottom, 10)
                 }
-                if appleOffered {
-                    // Skips connecting, not "O tobě": without age, height and
-                    // weight nothing (calories, strain, recovery) can be worked out.
-                    Button("Pokračovat") { Task { await next() } }
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .disabled(!ready || appleWorking || turning)
-                } else {
-                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
-                        .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
-                                  || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
-                }
-                if page == .notifications {
-                    Button("Později") { Task { await later() } }
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .disabled(saving || proOffer || turning)
-                }
+                PrimaryButton(title: buttonTitle, busy: saving || appleWorking || proOffer) { Task { await next() } }
+                    .disabled(saving || appleWorking || proOffer || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree)
+                              || (page == .sport && focus.sports.kinds.isEmpty) || (page == .goal && focus.goal.isEmpty))
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -177,7 +162,6 @@ struct SetupFlowView: View {
         if appleWorking { return "Moment…" }
         switch page {
         case .time: return askNotifications ? "Pokračovat" : "Hotovo"
-        case .notifications: return "Zapnout"
         default: return "Pokračovat"
         }
     }
@@ -303,16 +287,12 @@ struct SetupFlowView: View {
                     Pill(text: $0, foreground: Palette.secondary, background: Palette.background)
                 }
             }
-            if !health.enabled {
-                PrimaryButton(title: "Připojit Apple Health", busy: appleWorking) { Task { await connectApple() } }
-                    .disabled(appleWorking)
-                    .padding(.top, 2)
-            }
         }
     }
 
-    /// Apple Health still waits for its button on its card: that is the main
-    /// step, so "Pokračovat" under the page is a quiet text button.
+    /// Apple Health not allowed yet: "Pokračovat" under the page always goes
+    /// on to iOS's own question (App Review 5.1.1(iv), 21 Nov 2026: no
+    /// "Connect" and no way past it before the system prompt).
     private var appleOffered: Bool { page == .sources && health.isAvailable && !health.enabled }
 
     private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
@@ -521,6 +501,8 @@ struct SetupFlowView: View {
         case .consent:
             if await giveConsent(), !consentOnly { step() }
         case .sources:
+            // iOS asks; allowing or not is answered there, the setup goes on either way.
+            if appleOffered { await connectApple() }
             step()
         case .about:
             guard await saveProfile() else { return }
@@ -571,13 +553,6 @@ struct SetupFlowView: View {
     }
 
     /// "Později" on the notifications page, one tap like "Zapnout".
-    private func later() async {
-        guard !turning else { return }
-        turning = true
-        defer { settle() }
-        await done(notifications: false)
-    }
-
     /// The next page, never past the last one.
     private func step() {
         withAnimation { index = min(index + 1, pages.count - 1) }
