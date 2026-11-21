@@ -20,4 +20,12 @@ extension AppModel {
             notice = error.localizedDescription
         }
     }
+
+    /// The 91 days up to `end` for a detail's 3-month chart, in the server's
+    /// month-long windows (src/app-days.js DAYS_MAX).
+    func loadQuarter(ending end: String) async {
+        for back in stride(from: 0, through: 60, by: 31) {
+            await loadDays(from: ISODay.shift(end, -(back + 30)), to: ISODay.shift(end, -back))
+        }
+    }
 }

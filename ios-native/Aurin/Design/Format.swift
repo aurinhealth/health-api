@@ -103,6 +103,12 @@ enum Fmt {
         return DateFormatters.make(L10n.isEnglish ? "MMMM d" : "d. MMMM", locale: locale, timeZone: utc, template: L10n.isEnglish).string(from: date)
     }
 
+    /// "sobota 14. listopadu", "Saturday, November 14": a day's section title.
+    static func weekdayDayMonth(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return isoDate }
+        return DateFormatters.make(L10n.isEnglish ? "EEEE MMMM d" : "EEEE d. MMMM", locale: locale, timeZone: utc, template: L10n.isEnglish).string(from: date)
+    }
+
     /// "8. 10.", "Oct 8": the ends of a small chart's time.
     static func dayMonthShort(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return isoDate }

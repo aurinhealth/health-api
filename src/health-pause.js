@@ -96,7 +96,7 @@ const dropEntry = (db, userId) => db.prepare('DELETE FROM health_pauses WHERE us
 // the next cron minute; the last pass follows LAST_PASS_MINUTES later.
 export async function pauseHealthData(env, user, { budgetMs = REQUEST_BUDGET_MS, chunkRows, now = new Date() } = {}) {
   if (!user?.id || Number(user.id) !== Number(env.USER_ID)) throw new Error(L('Účet se nepodařilo ověřit.', "The account couldn't be verified."));
-  if (user.isOwner) throw new Error(L('Účet správce nemůže zdravotní data pozastavit: na nich běží aplikace.', "The admin account can't pause health data: the app runs on it."));
+  if (user.isOwner) throw new Error(L('Účet správce nemůže odvolat souhlas se zdravotními daty: na nich běží aplikace.', "The admin account can't withdraw its health data consent: the app runs on it."));
   const db = central(env), at = now.toISOString();
   const withdraw = kind => db.prepare('INSERT INTO user_consents (user_id, kind, version, granted_at, withdrawn_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, kind) DO UPDATE SET withdrawn_at = excluded.withdrawn_at').bind(env.USER_ID, kind, CONSENT_VERSION, at, at);
   await db.batch([
@@ -182,7 +182,7 @@ export function pausedRefusal(method, pathname) {
   if (!pathname.startsWith('/app/api/') && !CONNECTING.test(pathname)) return null;
   if (OPEN_WHILE_PAUSED.some(open => open.test(pathname))) return null;
   if (pathname === '/app/api/connections' && method === 'DELETE') return null;
-  return Response.json({ status: 'health_paused', message: L('Zdravotní data máš pozastavená. Zapni je v aplikaci.', 'Your health data is paused. Turn it back on in the app.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
+  return Response.json({ status: 'health_paused', message: L('Souhlas se zdravotními daty je odvolaný. Znovu ho dáš v aplikaci.', 'Your health data consent is withdrawn. Give it again in the app.') }, { status: 403, headers: { 'Cache-Control': 'no-store' } });
 }
 
 // An account that never gave the consent to health data (consent.js): the

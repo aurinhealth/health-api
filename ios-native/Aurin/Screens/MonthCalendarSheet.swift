@@ -177,7 +177,8 @@ struct MonthCalendarSheet: View {
 
     private var legend: String {
         switch chosen {
-        case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.")
+        // The dots under the days on Today and Health are this colour too (improvement pass 2026-11-20).
+        case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.") + " " + L10n.tr("Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním.")
         case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený.")
         case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený.")
         case .hrv: return L10n.tr("Šipka je HRV proti obvyklému rozmezí.")

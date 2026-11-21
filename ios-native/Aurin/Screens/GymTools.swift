@@ -81,7 +81,7 @@ struct LibraryWidget: View {
     var body: some View {
         RouteLink(route: .library) {
             HStack(spacing: 14) {
-                Image(systemName: "books.vertical.fill")
+                Image(systemName: "figure.run.square.stack.fill")
                     .scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent)
                     .frame(width: 34, height: 34)
@@ -611,6 +611,11 @@ struct GymBuilderView: View {
                         .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
+                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
+                .simultaneousGesture(TapGesture().onEnded {
+                    // Only today's workout starts by itself; another day opens to look first.
+                    if isoDay == AppModel.localDate(Date()) { TrainingModeView.startOnOpen = isoDay }
+                })
                 .padding(.top, 12)
             } else {
                 SectionLabel(text: "Upravit vlastními slovy").padding(.top, 26)
@@ -788,7 +793,7 @@ struct GymBuilderView: View {
     /// training.
     private func add(_ ex: GymCatalogExercise) {
         guard var p = proposal, !p.exercises.contains(where: { $0.name == ex.name }) else { return }
-        let sets = max(1, min(PlanEditorSheet.count(ex.sets) ?? 3, 6))
+        let sets = max(1, min(EditExercisesSheet.count(ex.sets) ?? 3, 6))
         let rows: [[JSONValue]] = (1...sets).map { n in
             ["WORK", ex.name, String(n), "", ex.reps?.string ?? "10", "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) }
         }

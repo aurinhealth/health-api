@@ -841,12 +841,12 @@ struct SetupSteps: View {
     }
 }
 
-/// Point 7 of the competitor comparison (Petr, 4 Nov 2026): at the end of the
-/// first setup the free week of Aurin Pro (PaywallView's own page) shows once,
-/// only when Pro is on sale (not in the pilot, where everyone has it), the
-/// account has no Pro and this Apple ID can still have the free week. With the
-/// AI features left off it shows too, and its button allows them (release
-/// 1.0.1 point 2, Petr 10 Nov 2026). "Teď ne" or the cross go to Today.
+/// At the end of the first setup the Aurin Pro offer (PaywallView) shows once,
+/// when Today is ready after the animation (part O, decision B), only when Pro
+/// is on sale (not in the pilot, where everyone has it), the account has no Pro
+/// and this Apple ID can still have the free week. With the AI features left
+/// off it shows too, and its button allows them (release 1.0.1 point 2, Petr
+/// 10 Nov 2026). The cross goes to Today.
 @MainActor
 enum SetupProOffer {
     static let shownKey = "aurin.setupProOfferShown"

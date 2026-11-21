@@ -11,6 +11,9 @@ import UIKit
 struct TrainingModeView: View {
     /// The day whose finished workout goes on as it opens (GymSessionView).
     static var resumeOnOpen: String?
+    /// The day whose Start workout was tapped (the training card, the
+    /// detail): it opens with 3, 2, 1 and starts, no second Start (concept 08).
+    static var startOnOpen: String?
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let date: String
@@ -78,7 +81,7 @@ struct TrainingModeView: View {
     static let closeWait: TimeInterval = 10
     /// Dokončit trénink was tapped: the summary shows the totals.
     @State private var finishedSession = false
-    @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool, zones: [Double])?
+    @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool)?
     /// The day as it was before this screen, for Zahodit trénink.
     @State private var original: GymDay?
     /// A day from the watch came while this screen loaded: newer than the load.
@@ -127,8 +130,17 @@ struct TrainingModeView: View {
     /// The part or the exercises on hand came on after the one before and wait
     /// for their own Start ("Na řadě"); only Začít trénink or a tap starts one at once.
     @State private var waiting = false
-    /// Each part's and exercise's time, calories and heart rate, for the summary.
-    @State private var partStats: [String: LiveWorkout.PartStats] = [:]
+    /// Start workout: the 3, 2, 1 over the screen (StartCountdown).
+    @State private var countingDown = false
+    /// Edit warm-up, cardio or stretching open in place of the part (concept 08), until Done.
+    @State private var editingPart: LivePartDraft?
+    /// −1, Done or +1 under a running cardio, passed to it.
+    @State private var cardioCommand: CardioCommand?
+    /// The warm-up's or stretching's move on screen (the header's title) and Next stretch's taps.
+    @State private var partMove: String?
+    @State private var partNext: UUID?
+    /// Where the heart rate came from ("Apple Watch"), kept for the summary after the recording ends.
+    @State private var heartFrom: String?
     @Environment(\.scenePhase) private var scenePhase
     private var live: LiveWorkout { LiveWorkout.shared }
     /// The clock, heart rate and recording run only after "Začít trénink" (or
@@ -148,17 +160,25 @@ struct TrainingModeView: View {
                 let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
                 if !finishedSession, let part = activePart, let routine = parts.routine(part, day: day) {
                     // A warm-up, cardio or stretching in this screen: the workout's
-                    // time and heart rate above it, the day's parts under it.
+                    // time and heart rate above it, the day's parts under it. Its
+                    // Edit lies over it, the runner going on underneath.
+                    let free = LivePartDraft.isFree(routine)
+                    let editing = editingPart?.part == part
+                    ZStack(alignment: .top) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            if live.running {
-                                LiveStatsPanel(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 12)
-                            }
+                            // The part's own card shows its time and heart rate (concept 08): no panel over it.
                             if waiting, part.kind != .cardio {
                                 readyCard(.part(part), day, parts)
                             } else {
                                 partRunner(part, routine, day)
                             }
+                            if free {
+                                Text(part.kind == .warmup ? "Rozcvič se po svém. Až budeš hotový, ťukni na Hotovo." : "Protáhni se po svém. Až budeš hotový, ťukni na Hotovo.")
+                                    .font(Typo.small).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                                    .frame(maxWidth: .infinity).padding(.top, 14)
+                            }
+                            editPill(part, parts, day)
                             partsList(day, parts)
                             Text(verbatim: L10n.tr("Ťukni na část a přepneš na ni."))
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
@@ -174,7 +194,24 @@ struct TrainingModeView: View {
                         if paused {
                             PrimaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { live.resumeFromPause(); syncActivity() }
                                 .padding(.top, 8).padding(.bottom, 6)
+                        } else if part.isCardio, !waiting {
+                            cardioControls(parts.choice(part))
+                        } else if !free, !waiting {
+                            PrimaryButton(title: L10n.tr(part.kind == .stretching ? "Další protažení" : "Další pohyb")) { partNext = UUID() }
+                                .padding(.top, 8).padding(.bottom, 6)
+                        } else if free, !waiting {
+                            // Free time: stopped by hand, and the workout goes on.
+                            PrimaryButton(title: L10n.tr("Hotovo")) {
+                                tick(part, id: LivePartDraft.freeId)
+                                go(step(after: part, day), auto: false)
+                            }
+                            .padding(.top, 8).padding(.bottom, 6)
                         }
+                    }
+                    .opacity(editing ? 0 : 1)
+                    .allowsHitTesting(!editing)
+                    .accessibilityHidden(editing)
+                    if editing, let draft = editingPart { partEditor(draft, day) }
                     }
                 } else if !finishedSession, let exercise = current(day) {
                     // The workout's time, heart rate, calories and volume stay over the list.
@@ -207,6 +244,11 @@ struct TrainingModeView: View {
                         }
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) { pinned(day, exercise, parts) }
+                } else if finishedSession {
+                    // The summary (concept 08): Close stays at the bottom.
+                    ScrollView { doneSummary(day).padding(.bottom, 24) }
+                    .scrollIndicators(.hidden)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { closeButton.padding(.top, 8).padding(.bottom, 6) }
                 } else {
                     ScrollView { finished(day).padding(.bottom, 24) }
                     .scrollIndicators(.hidden)
@@ -219,6 +261,26 @@ struct TrainingModeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
+        .overlay {
+            if countingDown, let day { countdown(day) }
+        }
+        // Another part came on (the watch, a tap in the list): its Edit isn't open.
+        .onChange(of: activePart) { _, _ in editingPart = nil }
+    }
+
+    private func countdown(_ day: GymDay) -> StartCountdown {
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        let part: GymDayPart? = showsParts(day, parts) ? parts.before(day).first { !partDone($0, day) } : nil
+        let title: String = part.map { L10n.tr($0.kind.title) } ?? L10n.tr("Posilovna")
+        let first: String? = part.map { parts.routine($0, day: day)?.items.first?.name } ?? current(day)?.name
+        return StartCountdown(title: title, first: first, live: live,
+                              onStart: { guard countingDown else { return }; countingDown = false; beginFromCountdown(day) },
+                              onCancel: { guard countingDown else { return }; countingDown = false; dismiss() })
+    }
+
+    /// The countdown ran out or was tapped: as Začít trénink.
+    private func beginFromCountdown(_ day: GymDay) {
+        if showsParts(day, GymDayParts.resolved(day, stored: dayParts, date: date)) { startWhole(day) } else { Task { await start() } }
     }
 
     var body: some View {
@@ -368,10 +430,7 @@ struct TrainingModeView: View {
         }
         .sheet(isPresented: $editing) {
             if let day {
-                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
-                                go: { edited, id in Task { await saveEdited(edited, focus: id) } },
-                                // After the sheet is gone: the workout mode closes with it.
-                                discard: { Task { try? await Task.sleep(for: .milliseconds(450)); await discard() } }) { edited in Task { await saveEdited(edited) } }
+                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
@@ -401,18 +460,23 @@ struct TrainingModeView: View {
                 }
                 // The summary has its own title: nothing above it.
                 if let day, !day.exercises.isEmpty, !finishedSession {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                            .lineLimit(2).minimumScaleFactor(0.6)
-                        HStack(spacing: 8) {
-                            if live.running, let key = headKey(day) { HeadClock(live: live, key: key) }
-                            if activePart == nil, let letter = ExerciseOrder.letter(current(day)?.superset) {
-                                Text(verbatim: L10n.f("Supersérie %@", letter)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.indigo)
-                            }
-                        }
+                    if let draft = editingPart, draft.part == activePart {
+                        editHead(draft)
+                    } else {
+                        headTitleBlock(day)
                     }
                     Spacer(minLength: 4)
-                    if started, current(day) != nil || activePart != nil {
+                    if let draft = editingPart, draft.part == activePart {
+                        // Edit: Done keeps the change for today.
+                        Button { applyEdit() } label: {
+                            Text("Hotovo").font(.subheadline.weight(.semibold)).foregroundStyle(draft.canSave ? Palette.green : Palette.muted)
+                                .padding(.horizontal, 14).frame(height: 40)
+                                .chromeGlass(in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .tapTarget(width: 60, height: 40)
+                        .disabled(!draft.canSave)
+                    } else if started, current(day) != nil || activePart != nil {
                         // Sets still left here: asked first, a tap by mistake ends nothing.
                         Button { if current(day) != nil { confirmFinish = true } else { Task { await finish() } } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
@@ -427,6 +491,12 @@ struct TrainingModeView: View {
                         CoachEntry(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date),
                                    menu: AnyView(menuItems(day, exercise)), hint: false)
                     }
+                } else if finishedSession, let day, !day.exercises.isEmpty {
+                    // The summary: its label in the middle, the coach about this workout top right.
+                    Spacer(minLength: 4)
+                    SectionLabel(text: "Trénink dokončen").frame(minHeight: 40)
+                    Spacer(minLength: 4)
+                    CoachEntry(subject: doneSubject(day), hint: false)
                 } else {
                     Spacer()
                 }
@@ -434,6 +504,32 @@ struct TrainingModeView: View {
             if let day, !finishedSession, started, day.exercises.count > 1 {
                 ExerciseSegments(exercises: day.exercises, current: activePart == nil ? index : nil)
             }
+        }
+    }
+
+    /// The exercise or part in serif, its own time under it.
+    private func headTitleBlock(_ day: GymDay) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.6)
+            HStack(spacing: 8) {
+                if let part = activePart, headTitle(day) != L10n.tr(part.kind.title) {
+                    Text(verbatim: L10n.tr(part.kind.title)).font(Typo.small).foregroundStyle(Palette.secondary)
+                }
+                if live.running, let key = headKey(day) { HeadClock(live: live, key: key) }
+                if activePart == nil, let letter = ExerciseOrder.letter(current(day)?.superset) {
+                    Text(verbatim: L10n.f("Supersérie %@", letter)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.indigo)
+                }
+            }
+        }
+    }
+
+    /// Edit warm-up / cardio / stretching, for today only.
+    private func editHead(_ draft: LivePartDraft) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: L10n.tr(Self.editTitle(draft.part))).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.6)
+            Text("Jen dnes").font(Typo.small).foregroundStyle(Palette.secondary)
         }
     }
 
@@ -445,7 +541,15 @@ struct TrainingModeView: View {
 
     /// The exercise under way, or the warm-up, cardio or stretching on screen.
     private func headTitle(_ day: GymDay) -> String {
-        if let part = activePart { return L10n.tr(part.kind.title) }
+        if let part = activePart {
+            // The cardio by its machine ("Exercise bike"), as concept 08.
+            if part.isCardio { return GymCardio.name(GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).type) }
+            // The move on screen ("Hip flexor stretch"), the part under it; Free time has none.
+            if !waiting, let partMove, !LivePartDraft.isFree(GymDayParts.resolved(day, stored: dayParts, date: date).routine(part, day: day)) {
+                return partMove
+            }
+            return L10n.tr(part.kind.title)
+        }
         return current(day)?.name ?? title(day)
     }
 
@@ -1025,6 +1129,8 @@ struct TrainingModeView: View {
     /// else it waits for its Start (it came on after the one before).
     private func go(_ step: Step?, auto: Bool) {
         restEnd = nil
+        // The new part's runner names its first move when it appears.
+        partMove = nil
         waiting = !auto && step != nil
         switch step {
         case .part(let part)?:
@@ -1054,6 +1160,72 @@ struct TrainingModeView: View {
         }
     }
 
+    /// −1 min, Done, +1 min under the running cardio (concept 08); a cardio without a limit has only Done.
+    private func cardioControls(_ choice: GymDayParts.Choice) -> some View {
+        HStack(spacing: 12) {
+            if choice.minutes > 0 { cardioStep("−1", label: "Ubrat minutu", .minus) }
+            PrimaryButton(title: L10n.tr("Hotovo")) { cardioCommand = CardioCommand(kind: .done) }
+            if choice.minutes > 0 { cardioStep("+1", label: "Přidat minutu", .plus) }
+        }
+        .padding(.top, 8).padding(.bottom, 6)
+    }
+
+    private func cardioStep(_ title: String, label: String, _ kind: CardioCommand.Kind) -> some View {
+        Button { cardioCommand = CardioCommand(kind: kind) } label: {
+            Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .frame(width: 56, height: 56)
+                .chromeGlass(in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(L10n.tr(label)))
+    }
+
+    static func editTitle(_ part: GymDayPart) -> String {
+        switch part.kind {
+        case .warmup: return "Upravit rozcvičku"
+        case .stretching: return "Upravit protažení"
+        case .cardio: return "Upravit kardio"
+        }
+    }
+
+    /// Edit warm-up, Edit cardio, Edit stretching under the part (concept 08).
+    private func editPill(_ part: GymDayPart, _ parts: GymDayParts, _ day: GymDay) -> some View {
+        Button { withAnimation(.snappy) { editingPart = LivePartDraft.start(part, parts: parts, day: day) } } label: {
+            Text(verbatim: L10n.tr(Self.editTitle(part))).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 16).frame(height: 36)
+                .background(Palette.ink.opacity(0.08), in: Capsule())
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 12)
+    }
+
+    /// The part's Edit screen in its place.
+    @ViewBuilder
+    private func partEditor(_ draft: LivePartDraft, _ day: GymDay) -> some View {
+        // A change that arrives after the edit closed (a routine still loading) is dropped.
+        let binding = Binding<LivePartDraft>(get: { editingPart ?? draft }, set: { if editingPart?.part == $0.part { editingPart = $0 } })
+        if draft.part.isCardio {
+            LiveCardioEditor(choice: binding.cardio)
+        } else {
+            LiveRoutineEditor(draft: binding, day: day, date: date, done: StretchingCard.done(stretchesDone, date: date))
+                .padding(.horizontal, -20)
+        }
+    }
+
+    /// Done: the change kept for today (the watch gets it with the day's plan).
+    private func applyEdit() {
+        guard let draft = editingPart, let day else { editingPart = nil; return }
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        // Done without a change keeps the plan's own (its length, later plan updates).
+        if draft != LivePartDraft.start(draft.part, parts: parts, day: day), draft.canSave {
+            dayParts = GymDayParts.saving(draft.applied(to: parts), date: date, into: dayParts)
+        }
+        withAnimation(.snappy) { editingPart = nil }
+    }
+
     /// The warm-up's or stretching's holds, or the cardio's time, in this screen.
     private func partRunner(_ part: GymDayPart, _ routine: GymStretching, _ day: GymDay) -> some View {
         let then = step(after: part, day)
@@ -1062,18 +1234,26 @@ struct TrainingModeView: View {
             go(step(after: part, day), auto: false)
         }
         return Group {
-            if part.kind == .cardio, let item = routine.items.first {
+            if LivePartDraft.isFree(routine) {
+                FreeTimeRunner(kind: part.kind, key: part.rawValue).cardSurface(cornerRadius: 22)
+            } else if part.kind == .cardio, let item = routine.items.first {
                 let focused = live.focused
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
                                 inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
                                                                autoStart: partAutoStart, next: stepName(then, day), close: close,
-                                                               started: { waiting = false }))
+                                                               started: { waiting = false }, zoneLows: zoneLows,
+                                                               target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
+                                                               command: cardioCommand))
+                    .cardSurface(cornerRadius: 22)
             } else {
-                StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close)
+                // Its own cards: the hold, then the steps.
+                StretchTimerView(stretching: routine, kind: part.kind, onItemDone: { tick(part, id: $0) }, onClose: close,
+                                 skip: Set(routine.items.map(\.id).filter { StretchingCard.done(stretchesDone, date: date).contains(part.kind.key + $0) }),
+                                 onHold: { partMove = $0 }, nextTap: partNext)
             }
         }
-        .cardSurface(cornerRadius: 22)
-        .id(part)
+        // Another set of moves after Edit: the runner starts over with them.
+        .id(part.rawValue + routine.items.map(\.id).joined(separator: ","))
         .padding(.top, 14)
     }
 
@@ -1263,44 +1443,6 @@ struct TrainingModeView: View {
         .cardSurface(cornerRadius: 22)
     }
 
-    /// The summary's parts: each one's time, calories and average heart rate.
-    private func partsSummary(_ day: GymDay) -> some View {
-        let rows = partRows(day, GymDayParts.resolved(day, stored: dayParts, date: date))
-            .filter { (partStats[$0.key]?.seconds ?? 0) > 0 }
-        // Each exercise once, though it shows under its own name only.
-        var seen = Set<String>()
-        let shown = rows.filter { seen.insert($0.key).inserted }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Text("Části").textCase(.uppercase)
-                Spacer(minLength: 4)
-                Text("Čas").textCase(.uppercase).frame(minWidth: 48, alignment: .trailing)
-                Text(verbatim: "kcal").textCase(.uppercase).frame(minWidth: 40, alignment: .trailing)
-                Text("Prům. tep").textCase(.uppercase).frame(minWidth: 40, alignment: .trailing)
-            }
-            .font(Typo.caption).foregroundStyle(Palette.muted)
-            .padding(.top, 12).padding(.bottom, 4)
-            ForEach(shown) { row in
-                let stats = partStats[row.key] ?? LiveWorkout.PartStats()
-                if row.id != shown.first?.id { Divider().overlay(Palette.hairline) }
-                HStack(spacing: 8) {
-                    Image(systemName: row.symbol).scaledFont(14, cap: .denseCap).foregroundStyle(row.color)
-                        .frame(width: 30, height: 30).background(row.color.opacity(0.12), in: Circle())
-                        .accessibilityHidden(true)
-                    Text(verbatim: row.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(verbatim: Self.clock(stats.seconds)).frame(minWidth: 48, alignment: .trailing)
-                    Text(verbatim: stats.kcal.map { Fmt.int($0) } ?? "–").foregroundStyle(Palette.amber).frame(minWidth: 40, alignment: .trailing)
-                    Text(verbatim: stats.avgHeartRate.map { Fmt.int($0) } ?? "–").foregroundStyle(Palette.rust).frame(minWidth: 40, alignment: .trailing)
-                }
-                .font(Typo.small).monospacedDigit()
-                .frame(minHeight: 46)
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.horizontal, 16).padding(.bottom, 4)
-        .cardSurface(cornerRadius: 22)
-    }
 
     /// "7:12" or "1:02:05".
     static func clock(_ seconds: Int) -> String {
@@ -1324,6 +1466,8 @@ struct TrainingModeView: View {
 
     // MARK: The end
 
+    /// Every set done, not finished yet: the totals so far, what is left after
+    /// the exercises and Dokončit trénink. Once finished, doneSummary.
     private func finished(_ day: GymDay) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(spacing: 8) {
@@ -1333,50 +1477,117 @@ struct TrainingModeView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
             summaryGrid(day).padding(.top, 6)
-            if finishedSession, !partStats.isEmpty { partsSummary(day) }
             ForEach(newRecords(day)) { record in recordCard(record) }
-            if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
             changesCard(day)
             swapsCard
-            if finishedSession { sendCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            if !finishedSession { addExerciseButton }
+            addExerciseButton
             // What comes after the exercises, before the session is closed (GymDayParts).
-            if !finishedSession {
-                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
-                ForEach(parts.after(day).filter { !partDone($0, day) }) { part in nextPartCard(part, day) }
-            }
-            if finishedSession {
-                WorkoutRatingCard(date: date, exercises: day.exerciseNames,
-                                  liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
-                closeButton
-                // Dokončit by mistake: back to the workout, the clock from its start.
-                if !model.demo {
-                    // Tappable while the workout is still saved and sent: it goes on
-                    // once that is done (resume() over a finish() still sending
-                    // would leave the day finished on the server or in Apple Health).
-                    SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") {
-                        if saving { resumeAfterFinish = true } else { Task { await resume() } }
-                    }
-                    .disabled(resumeAfterFinish).opacity(resumeAfterFinish ? 0.4 : 1)
-                }
-                if !reopened {
-                    Button(role: .destructive) { confirmDiscard = true } label: {
-                        Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
-                            .frame(maxWidth: .infinity).frame(height: 46)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(saving)
-                }
-            } else {
-                PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
-                    .disabled(saving)
-            }
-            // The muscles with this workout counted (loaded again once it is saved).
-            if finishedSession, let muscles = model.muscles { WorkoutFatigueCard(data: muscles).padding(.top, 6) }
+            let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+            ForEach(parts.after(day).filter { !partDone($0, day) }) { part in nextPartCard(part, day) }
+            PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
+                .disabled(saving)
         }
         // Swaps from the Apple Watch come in while the workout is open.
         .onAppear { swaps = GymSwaps.list(date) }
+    }
+
+    /// The finished workout (concept 08, Summary): the top, the rating, what
+    /// didn't send, and the way back into it or to throw it away. Close is pinned.
+    private func doneSummary(_ day: GymDay) -> some View {
+        let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let planned: Int = day.exercises.reduce(0) { $0 + $1.workCount }
+        let volume: Double = GymSessionMath.volume(day.exercises)
+        let lifted: Int = day.exercises.filter { $0.doneCount > 0 }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            WorkoutDoneSummary(title: title(day), when: doneWhen(day), sources: doneSources, doneSets: sets, plannedSets: planned,
+                               strain: doneStrain(day), records: newRecords(day).map(doneRecord), minutes: totals?.minutes ?? day.loggedMinutes,
+                               volume: GymSessionMath.volumeText(volume), volumeChange: volumeChange(day, volume),
+                               volumeBetter: volume >= lastVolume(day), exercises: lifted, avgHr: totals?.avgHr, kcal: totals?.kcal)
+            WorkoutRatingCard(date: date, exercises: day.exerciseNames,
+                              liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
+                .padding(.top, 10)
+            // A swap made today (often on the watch): only today, or from now on.
+            swapsCard
+            // Only what failed to send: the rest is quiet (Close's line says it goes on).
+            if shownSendRows.contains(where: { $0.status == .error }) { sendCard }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            if !model.demo {
+                // Finish by mistake: back to the workout, the clock from its start.
+                Button { if saving { resumeAfterFinish = true } else { Task { await resume() } } } label: {
+                    Text("Pokračovat v tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(minHeight: 46)
+                }
+                .buttonStyle(.plain)
+                .disabled(resumeAfterFinish).opacity(resumeAfterFinish ? 0.4 : 1)
+                .padding(.top, 6)
+            }
+            if !reopened {
+                Button(role: .destructive) { confirmDiscard = true } label: {
+                    Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                        .frame(maxWidth: .infinity).frame(minHeight: 46)
+                }
+                .buttonStyle(.plain)
+                .disabled(saving)
+            }
+        }
+        .onAppear { swaps = GymSwaps.list(date) }
+    }
+
+    /// "Today, 17:30 to 18:25" from the times in the sheet.
+    private func doneWhen(_ day: GymDay) -> String? {
+        guard let start = day.startedAt, let end = day.finishedAt else { return nil }
+        let today = AppModel.localDate(Date())
+        let dayText = Fmt.capitalized(Fmt.relativeDay(date, today: today))
+        let clock: (Date) -> String = { $0.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)) }
+        return dayText + ", " + L10n.f("%@ až %@", clock(start), clock(end))
+    }
+
+    /// Aurin recorded it; the heart rate's source after it.
+    private var doneSources: [String] {
+        var out = ["Aurin"]
+        if let heartFrom, !heartFrom.isEmpty, heartFrom != "Aurin" { out.append(heartFrom) }
+        return out
+    }
+
+    /// What this workout added to today's strain, once the server has it (today
+    /// only): the done gym workout of Today that began within 20 min of this one.
+    private func doneStrain(_ day: GymDay) -> WorkoutDoneSummary.Strain? {
+        guard date == AppModel.localDate(Date()), let today = model.today, let score = today.strain.score,
+              let start = day.startedAt else { return nil }
+        let startMinute = Calendar.current.component(.hour, from: start) * 60 + Calendar.current.component(.minute, from: start)
+        let item = today.plan.first { item in
+            guard item.kind == "workout", item.done, item.sport == "strength", let time = item.time ?? item.session?.time else { return false }
+            let parts = time.split(separator: ":").compactMap { Int($0) }
+            guard parts.count >= 2 else { return false }
+            return abs(parts[0] * 60 + parts[1] - startMinute) <= 20
+        }
+        guard let added = item?.strain, added > 0 else { return nil }
+        let target = today.strain.target.map { (low: $0.low, high: $0.high) }
+        return WorkoutDoneSummary.Strain(workout: added, dayFrom: max(0, score - added), dayTo: score, target: target)
+    }
+
+    private func doneRecord(_ record: NewRecord) -> WorkoutDoneSummary.Record {
+        let pounds = lb(record.name)
+        let unit = LiftWeight.unit(machineLb: pounds)
+        // The record before as a whole lift ("100 kg × 2"): records go by the estimated max, not the weight alone.
+        let was = GymSessionMath.lift(record.old, machineLb: pounds)
+        let name = ExerciseCatalog.shownName(record.name)
+        guard let kg = record.lift.kg, kg > 0 else {
+            // Bodyweight: the reps are the record.
+            return WorkoutDoneSummary.Record(name: name, value: GymSessionMath.lift(record.lift) ?? "", unit: "", was: was)
+        }
+        let reps = record.lift.reps.map { " × " + Fmt.int($0) } ?? ""
+        return WorkoutDoneSummary.Record(name: name, value: GymCoach.shown(kg, machineLb: pounds), unit: unit + reps, was: was)
+    }
+
+    /// The coach about this finished workout.
+    private func doneSubject(_ day: GymDay) -> CoachSubject {
+        let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
+        return CoachSubject(kind: .activity, title: title(day),
+                            line: [doneWhen(day), L10n.plural("%lld sérií", sets)].compactMap { $0 }.joined(separator: ", "),
+                            date: date, sport: "gym", view: "workouts", symbol: "dumbbell", color: Palette.Sport.gym,
+                            questions: ["Jak se mi tahle posilovna povedla?", "Kolik mám dát příště?", "Co mám dát zítra?"])
     }
 
     private func summaryGrid(_ day: GymDay) -> some View {
@@ -1420,6 +1631,8 @@ struct TrainingModeView: View {
     struct NewRecord: Identifiable {
         let name: String
         let lift: GymHistory.Lift
+        /// The record before today.
+        let old: GymHistory.Lift
         var id: String { name }
     }
 
@@ -1429,7 +1642,7 @@ struct TrainingModeView: View {
             let lifts = GymSessionMath.lifts(exercise)
             guard let best = lifts.max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
                   let old = GymSessionMath.record(history.exercise(exercise.name), before: date) else { continue }
-            if GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best)) }
+            if GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
         }
         return out
     }
@@ -1874,6 +2087,11 @@ struct TrainingModeView: View {
     // MARK: Server
 
     private func load() async {
+        // Asked once, from GymSessionView or Start workout: never again on a later opening.
+        let resumeAsked = Self.resumeOnOpen == date
+        Self.resumeOnOpen = nil
+        let startAsked = Self.startOnOpen == date
+        Self.startOnOpen = nil
         if model.demo {
             day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized()
             // The sample day has sets done: under way, as a real one opened again (below), without a recording.
@@ -1884,9 +2102,6 @@ struct TrainingModeView: View {
         }
         loading = true
         defer { loading = false }
-        // Asked once, from GymSessionView: never again on a later opening.
-        let resumeAsked = Self.resumeOnOpen == date
-        Self.resumeOnOpen = nil
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
             watchTook = false
@@ -1899,7 +2114,7 @@ struct TrainingModeView: View {
             if let day, day.finishedAt != nil, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 reopened = true
                 finishedSession = true
-                if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
+                if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false) }
             }
             restoreMinimized()
             // A workout under way (sets done, sets left), left or closed by iOS
@@ -1914,6 +2129,7 @@ struct TrainingModeView: View {
             if reopened, resumeAsked {
                 await resume()
             }
+            if startAsked, !finishedSession, !started, let day, current(day) != nil { countingDown = true }
             // The muscles of Celkem dnes now, not only from the exercise screen:
             // back in a rest (the bar, the edge swipe) that screen isn't shown.
             if let day { await loadMuscles(day) }
@@ -1998,12 +2214,10 @@ struct TrainingModeView: View {
     /// exercise with a set left. A rest under way goes on (looking at the
     /// plan or changing it is no reason to cut it short), unless nothing is
     /// left to do after it.
-    private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
+    private func saveEdited(_ edited: GymDay) async {
         day = edited
         if !edited.exercises.contains(where: { $0.sets.contains { !$0.done } }) { restEnd = nil }
         startAtFirstOpen()
-        // "Přejít na cvik": that one, whatever is left before it.
-        if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
         // Saved before the muscles load: a set ticked while they load is saved
         // after this sheet, never under it.
         guard !model.demo else { return await loadMuscles(edited) }
@@ -2111,6 +2325,7 @@ struct TrainingModeView: View {
     /// in Apple Health) and the lock screen's Live Activity start now.
     private func start() async {
         startTapped = true
+        countingDown = false
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         syncActivity()
@@ -2245,8 +2460,8 @@ struct TrainingModeView: View {
         }
         if live.running {
             let saved = await live.finish(at: end)
-            totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
-            partStats = live.partStats(until: end)
+            totals = (live.minutes(at: end), live.kcal, live.avgHeartRate, live.maxHeartRate, saved)
+            heartFrom = live.heartSource
             live.reset()
         }
         // The summary comes first, with the sending, the rating and Zahodit trénink.
@@ -2280,6 +2495,8 @@ struct TrainingModeView: View {
             async let shared = model.shareGym(day, date: date, start: start, minutes: minutes, appleSaved: appleSaved)
             await model.refreshTraining()
             await model.loadMuscles()
+            // Today's strain with this workout in it, for the summary's strain card.
+            await model.reloadToday()
             sendRows = await shared
         }
     }

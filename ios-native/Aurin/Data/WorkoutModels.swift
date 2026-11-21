@@ -152,6 +152,31 @@ extension GymDay {
         }
     }
 
+    /// Make superset (live workout, concept 08): the exercises picked (by id,
+    /// at least two, none in a superset yet) move right after the first of
+    /// them and share a new letter, with as many work sets each.
+    mutating func makeSuperset(_ ids: [String]) {
+        var (list, rest) = blocks
+        let picked = exercises.indices.filter { ids.contains(exercises[$0].id) }
+        guard picked.count >= 2, picked.allSatisfy({ ExerciseOrder.letter(exercises[$0].superset) == nil }) else { return }
+        func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
+        let used = Set(list.indices.compactMap(letter))
+        let value = "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
+        let anchor = picked[0]
+        let moved = picked.dropFirst().map { list[$0] }
+        for i in picked.dropFirst().reversed() { list.remove(at: i) }
+        list.insert(contentsOf: moved, at: anchor + 1)
+        for i in anchor...(anchor + moved.count) {
+            for r in list[i].indices {
+                while list[i][r].count < Self.columns.count { list[i][r].append(.string("")) }
+                list[i][r][12] = .string(value)
+            }
+        }
+        write(list, rest)
+        evenSuperset(value)
+        balanceWarmups()
+    }
+
     /// Joins the exercise with another one into a superset: the other moves
     /// right after it (out of a superset it was in).
     mutating func superset(_ offset: Int, with other: Int) {

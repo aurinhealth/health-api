@@ -433,7 +433,7 @@ struct PlusItem: Identifiable, Equatable {
         PlusItem(id: "start", title: "Začít trénink", symbol: "play.fill"),
         PlusItem(id: "log", title: "Zapsat trénink", symbol: "list.clipboard.fill"),
         PlusItem(id: "aotd", title: "Aktivita dne", symbol: "figure.mixed.cardio"),
-        PlusItem(id: "library", title: "Knihovna", symbol: "books.vertical.fill"),
+        PlusItem(id: "library", title: "Knihovna", symbol: "figure.run.square.stack.fill"),
         PlusItem(id: "build", title: "Sestavit posilovnu", symbol: "dumbbell.fill", asset: "PlusBuild"),
         PlusItem(id: "photo", title: "Vyfotit jídlo", symbol: "camera.fill"),
         PlusItem(id: "search", title: "Hledat jídlo", symbol: "magnifyingglass"),
