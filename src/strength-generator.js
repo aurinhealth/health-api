@@ -1314,6 +1314,10 @@ function choosePlan(context, options = {}) {
       return trained;
     };
     const rested = part => Math.min(99, ...[...gymDates].filter(([, list]) => partOf(list).has(part)).map(([d]) => daysBetween(d, context.date)));
+    // The date itself in the text, never "N days ago": the text stays on the plan
+    // and a count would go stale the next day (606: "5 days ago" on a Saturday for a Sunday).
+    const lastOf = part => [...gymDates].filter(([, list]) => partOf(list).has(part)).map(([d]) => d).sort().at(-1);
+    const lastDay = d => new Date(d + "T12:00:00Z").toLocaleDateString(L("cs-CZ", "en-GB"), { weekday: "short", day: "numeric", month: L("numeric", "short"), timeZone: "UTC" });
     const allowed = parts.filter(p => !(protectLegs && (p === "legs" || p === "lower")));
     const part = allowed.slice().sort((a, b) => rested(b) - rested(a) || parts.indexOf(a) - parts.indexOf(b))[0];
     const upperAccessories = upperSmall();
@@ -1332,7 +1336,7 @@ function choosePlan(context, options = {}) {
       name: names[part],
       split: part,
       exercises: build(template),
-      rationale: L("Při " + days + " posilovnách týdně trénuješ ve splitu (" + parts.map(p => label[p]).join(" / ") + "), aby se partie nepřekrývaly a stihly zregenerovat. Dnes přichází na řadu " + label[part] + ": " + (rested(part) >= 99 ? "v posledních dnech nebyly na programu." : "naposledy před " + rested(part) + " dny.") + " Cviky se střídají podle toho, co jsi dělal naposledy.", "With " + days + " gym sessions a week you train a split (" + parts.map(p => label[p]).join(" / ") + "), so the muscle groups don't overlap and have time to recover. Today it's " + label[part] + ": " + (rested(part) >= 99 ? "not trained in the last days." : "last trained " + rested(part) + " days ago.") + " The exercises rotate by what you did last.") + sexNote,
+      rationale: L("Při " + days + " posilovnách týdně trénuješ ve splitu (" + parts.map(p => label[p]).join(" / ") + "), aby se partie nepřekrývaly a stihly zregenerovat. Dnes přichází na řadu " + label[part] + ": " + (rested(part) >= 99 ? "v posledních dnech nebyly na programu." : "naposledy " + lastDay(lastOf(part))) + " Cviky se střídají podle toho, co jsi dělal naposledy.", "With " + days + " gym sessions a week you train a split (" + parts.map(p => label[p]).join(" / ") + "), so the muscle groups don't overlap and have time to recover. Today it's " + label[part] + ": " + (rested(part) >= 99 ? "not trained in the last days." : "last trained " + lastDay(lastOf(part)) + ".") + " The exercises rotate by what you did last.") + sexNote,
       protectedLegs: part === "legs" || part === "lower" ? false : protectLegs
     };
   }
