@@ -4998,3 +4998,11 @@
 "%@ odebrán" = "%@ removed";
 "Vynecháno" = "Skipped";
 "Aurin Age" = "Aurin Age";
+"Jiná možnost na dnes" = "Another option for today";
+"Ukázat v Knihovně" = "Show in Library";
+"Skrýt v Knihovně" = "Hide in Library";
+"Skrytý sport zmizí jen z této obrazovky. Plány a historie ho dál mají." = "A hidden sport leaves this screen only. Your plans and history keep it.";
+"Tvoje" = "Yours";
+"Kouč na dnes" = "Coach, for today";
+"%@, tento týden nic" = "%@, nothing this week";
+"%@, tento týden hotovo %@, naplánováno %@" = "%@, this week %@ done, %@ planned";

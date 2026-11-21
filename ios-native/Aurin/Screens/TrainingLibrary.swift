@@ -2,82 +2,410 @@ import SwiftUI
 
 // MARK: - Knihovna
 
-/// One library for all sports. Opened from the widget it shows the sports as
-/// panels; a sport opens on its own screen: for ride, run and swim the workouts with
-/// filters (where, the length with its ± tolerance and own presets, the type,
-/// the difficulty), for the gym the AI builder and the exercises.
+/// One library for all sports (concept a-knihovna/004). Opened from Training
+/// it shows the coach's workout for today, the sports as rows with their
+/// week, and the athlete's own workouts; a sport opens on its own page: for
+/// ride, run and swim the workouts with filters, for the gym the builder and
+/// the exercises, for tri the bricks.
 struct TrainingLibraryView: View {
-    @Environment(AppModel.self) private var model
     let sport: LibrarySport?
-    /// Workouts from friends not opened yet (the badge on Od přátel).
-    @State private var unseen = 0
 
     init(sport: String? = nil) {
         self.sport = sport.flatMap { LibrarySport.find($0) }
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: sport?.label ?? "Knihovna tréninků") {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Knihovna tréninků").padding(.top, 24)
-                Text(sport?.label ?? "Knihovna tréninků").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-
-                if let sport {
+        // One title, "LIBRARY", in the middle of the bar (602 point 130).
+        DetailScreen(glow: Palette.Glow.training, title: "Knihovna", pinTitle: true) {
+            if let sport {
+                VStack(alignment: .leading, spacing: 0) {
+                    LibrarySportHeader(sport: sport).padding(.top, 14)
                     if sport.id == "gym" { GymLibrarySection() } else if sport.id == "tri" { BrickLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
-                } else {
-                    HStack(spacing: 10) {
-                        ForEach(LibrarySport.all) { LibrarySportPanel(sport: $0) }
-                    }
-                    .padding(.top, 20)
-                    HStack(spacing: 10) {
-                        LibraryTile(route: .myWorkouts, title: "Moje tréninky", symbol: "bookmark.fill", color: Palette.green)
-                        LibraryTile(route: .friendWorkouts, title: "Od přátel", symbol: "person.2.fill", color: Palette.blue, badge: unseen)
-                    }
-                    .padding(.top, 10)
                 }
+            } else {
+                LibraryHome()
             }
-        }
-        .onAppear {
-            guard sport == nil, !model.demo else { return }
-            Task { unseen = (try? await model.api.myWorkouts().unseen) ?? unseen }
         }
     }
 }
 
-/// Knihovna → Moje tréninky, Od přátel: a wide tile, with the count of new ones.
-struct LibraryTile: View {
+/// A sport page's top: the sport's disc and its name in serif (602 point 135).
+struct LibrarySportHeader: View {
+    let sport: LibrarySport
+    var subtitle: String? = nil
+
+    var body: some View {
+        HStack(spacing: 14) {
+            LibrarySportDisc(sport: sport.id, size: 52)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.tr(sport.label)).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                if let subtitle { Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The library's home (concept a-knihovna/004, "Library home FINAL"): the
+/// coach's card for today, one row to another option, the sports as rows with
+/// this week's dots (Edit hides one), then Yours.
+struct LibraryHome: View {
+    @Environment(AppModel.self) private var model
+    /// The sports hidden with Edit, by id ("swim,tri"); plans and history keep them.
+    @AppStorage("libraryHiddenSports") private var hiddenSports = ""
+    @State private var editing = false
+    @State private var mine: Int?
+    @State private var friends: Int?
+    @State private var unseen = 0
+
+    private var hidden: Set<String> { Set(hiddenSports.split(separator: ",").map(String.init)) }
+    private var today: String { model.training?.date ?? AppModel.localDate(Date()) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let training = model.training, let session = LibraryCoachCard.session(training) {
+                LibraryCoachCard(session: session, route: LibraryCoachCard.route(session, week: training.sessions ?? []))
+                    .padding(.top, 14)
+            }
+            RouteLink(route: .coachPick(false)) {
+                HStack {
+                    Text("Jiná možnost na dnes").font(Typo.body).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 50)
+                .cardSurface(cornerRadius: 18)
+            }
+            .padding(.top, 10)
+
+            HStack {
+                SectionLabel(text: "Sporty")
+                Spacer()
+                Button { withAnimation(.snappy) { editing.toggle() } } label: {
+                    Text(verbatim: L10n.tr(editing ? "Hotovo" : "Upravit"))
+                        .font(Typo.body.weight(editing ? .semibold : .regular)).foregroundStyle(Palette.ink)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.top, 22)
+            VStack(spacing: 10) {
+                ForEach(LibrarySport.all.filter { editing || !hidden.contains($0.id) }) { sport in
+                    let off = hidden.contains(sport.id)
+                    if editing {
+                        Button { toggle(sport.id) } label: {
+                            LibrarySportRow(sport: sport, week: week(sport.id), today: today, badge: off ? .add : .remove)
+                        }
+                        .buttonStyle(.plain)
+                        .opacity(off ? 0.5 : 1)
+                        .accessibilityHint(Text(verbatim: L10n.tr(off ? "Ukázat v Knihovně" : "Skrýt v Knihovně")))
+                    } else {
+                        RouteLink(route: .workoutLibrary(sport.id)) {
+                            LibrarySportRow(sport: sport, week: week(sport.id), today: today)
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
+            if editing {
+                Text("Skrytý sport zmizí jen z této obrazovky. Plány a historie ho dál mají.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            }
+
+            SectionLabel(text: "Tvoje").padding(.top, 26)
+            HStack(spacing: 10) {
+                LibraryYoursTile(route: .myWorkouts, title: "Moje tréninky", count: mine)
+                LibraryYoursTile(route: .friendWorkouts, title: "Od přátel", count: friends, unseen: unseen)
+            }
+            .padding(.top, 10)
+        }
+        .task {
+            let monday = AppModel.monday(of: today)
+            await model.loadCalendar(from: monday, to: ISODay.shift(monday, 6))
+        }
+        .task {
+            guard !model.demo, let r = try? await model.api.myWorkouts() else { return }
+            mine = r.workouts.filter { !$0.fromFriend }.count
+            friends = r.workouts.filter(\.fromFriend).count
+            unseen = r.unseen
+        }
+    }
+
+    /// This week's mark of the sport, Monday first.
+    private func week(_ sport: String) -> [LibraryDayMark] {
+        let monday = AppModel.monday(of: today)
+        return (0..<7).map { LibraryDayMark.of(model.calendar[ISODay.shift(monday, $0)], sport: sport) }
+    }
+
+    private func toggle(_ id: String) {
+        var set = hidden
+        if set.contains(id) { set.remove(id) } else { set.insert(id) }
+        hiddenSports = LibrarySport.all.map(\.id).filter(set.contains).joined(separator: ",")
+    }
+}
+
+/// A day of a sport's week on the library's home: done, planned or nothing.
+enum LibraryDayMark: Equatable {
+    case none, done, planned
+
+    /// A done session wins over a planned one; a missed one is nothing.
+    static func of(_ day: CalendarDay?, sport: String) -> LibraryDayMark {
+        let list = (day?.activities ?? []).filter { LibrarySport.matches(sport, $0.sport) }
+        if list.contains(where: { $0.status == "done" }) { return .done }
+        if list.contains(where: { $0.status == "planned" }) { return .planned }
+        return .none
+    }
+}
+
+/// The coach's workout for today on the library's home (D-KNIH-3 as the
+/// critic kept it): the coach's card with its header, the workout's name and,
+/// as on Training's card, Time, the sport's numbers and Strain est.; the
+/// coach's one sentence why under it. A tap opens the workout.
+struct LibraryCoachCard: View {
+    let session: TrainingSnapshot.Session
+    let route: AppRoute?
+
+    var body: some View {
+        if let route {
+            RouteLink(route: route) { card }
+        } else {
+            card
+        }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                TwoLights(size: 18)
+                Text("Kouč na dnes").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            }
+            HStack(alignment: .center, spacing: 10) {
+                Text(verbatim: session.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if isGym, let muscles = session.muscles, !muscles.isEmpty {
+                    MuscleFigurePair(colors: Dictionary(muscles.map { ($0, Palette.rust) }, uniquingKeysWith: { a, _ in a }), spacing: 2)
+                        .frame(height: 58)
+                        .accessibilityHidden(true)
+                }
+                if route != nil {
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+            }
+            WorkoutNumberRow(cells: Self.numbers(session))
+            if let advice = session.advice?.nilIfBlank {
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                Text(verbatim: advice).font(Typo.body).foregroundStyle(Palette.secondary)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface(cornerRadius: 22)
+        .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var isGym: Bool { session.sport == "strength" || session.sport == "gym" }
+
+    /// Time, the gym's exercises and sets, and the strain as an estimate.
+    static func numbers(_ session: TrainingSnapshot.Session) -> [WorkoutNumberRow.Cell] {
+        var cells: [WorkoutNumberRow.Cell] = []
+        if let m = session.minutes { cells.append(.init(label: L10n.tr("Čas"), value: String(m), unit: "min")) }
+        if let lines = session.lines, !lines.isEmpty {
+            cells.append(.init(label: L10n.tr("Cviky"), value: String(lines.count)))
+            cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + $1.sets })))
+        }
+        if let strain = session.strain, strain > 0 {
+            cells.append(.init(label: L10n.tr("Námaha"), value: Fmt.decimal(strain, digits: 1), unit: L10n.tr("odh.")))
+        }
+        return cells
+    }
+
+    /// Today's first workout still to do; nothing on a day without one.
+    static func session(_ training: TrainingSnapshot) -> TrainingSnapshot.Session? {
+        (training.todaySessions ?? []).first { $0.date == training.date }
+            ?? training.next.flatMap { $0.date == training.date ? $0 : nil }
+    }
+
+    /// The same detail Training's card opens: the week's entry, else the gym day.
+    static func route(_ s: TrainingSnapshot.Session, week: [WeekSession]) -> AppRoute? {
+        let match = week.first { w in
+            if let id = s.eventId { return w.eventId == id }
+            return s.sport == "strength" && w.kind == "gym" && w.date == s.date
+        }
+        if let match { return WeekSessionsList.destination(match) }
+        return s.sport == "strength" ? .gym(s.date) : nil
+    }
+}
+
+/// A sport on the library's home (602 point 128): full width, the sport's
+/// tinted disc with its figure, the name, this week's dots and an arrow.
+struct LibrarySportRow: View {
+    enum Badge { case add, remove }
+
+    let sport: LibrarySport
+    let week: [LibraryDayMark]
+    let today: String
+    var badge: Badge? = nil
+
+    var body: some View {
+        HStack(spacing: 14) {
+            if let badge {
+                Image(systemName: badge == .add ? "plus.circle.fill" : "minus.circle.fill")
+                    .scaledFont(20, weight: .regular, cap: .denseCap)
+                    .foregroundStyle(badge == .add ? Palette.green : Palette.rust)
+                    .accessibilityHidden(true)
+            }
+            LibrarySportDisc(sport: sport.id, size: 44)
+            Text(L10n.tr(sport.label)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            Spacer(minLength: 8)
+            LibraryWeekDots(week: week, today: today, color: sport.color)
+            if badge == nil {
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 68)
+        .cardSurface(cornerRadius: 20)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: Self.spoken(sport, week)))
+    }
+
+    /// "Ride, this week 1 done, 1 planned" (D-KNIH-16: the dots' meaning for VoiceOver).
+    static func spoken(_ sport: LibrarySport, _ week: [LibraryDayMark]) -> String {
+        let done = week.filter { $0 == .done }.count
+        let planned = week.filter { $0 == .planned }.count
+        let name = L10n.tr(sport.label)
+        guard done + planned > 0 else { return L10n.f("%@, tento týden nic", name) }
+        return L10n.f("%@, tento týden hotovo %@, naplánováno %@", name, String(done), String(planned))
+    }
+}
+
+/// This week as seven dots under the weekday letters: full = done, a ring =
+/// planned, grey = nothing. Today's letter is bold. Dots are 10 pt (D-KNIH-16).
+struct LibraryWeekDots: View {
+    let week: [LibraryDayMark]
+    let today: String
+    let color: Color
+
+    var body: some View {
+        let monday = AppModel.monday(of: today)
+        let letters = Self.letters
+        HStack(spacing: 5) {
+            ForEach(0..<7, id: \.self) { i in
+                let isToday = ISODay.shift(monday, i) == today
+                VStack(spacing: 4) {
+                    Text(verbatim: letters[i]).font(.system(size: 10, weight: isToday ? .bold : .medium))
+                        .foregroundStyle(isToday ? Palette.ink : Palette.muted)
+                    dot(i < week.count ? week[i] : .none)
+                }
+                .frame(width: 12)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func dot(_ mark: LibraryDayMark) -> some View {
+        switch mark {
+        case .done: Circle().fill(color).frame(width: 10, height: 10)
+        case .planned: Circle().strokeBorder(color, lineWidth: 1.5).frame(width: 10, height: 10)
+        case .none: Circle().fill(Palette.faint.opacity(0.35)).frame(width: 10, height: 10)
+        }
+    }
+
+    /// "M T W T F S S" in the app's language, Monday first.
+    static var letters: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Fmt.locale
+        let s = calendar.veryShortStandaloneWeekdaySymbols
+        return Array(s[1...]) + [s[0]]
+    }
+}
+
+/// A sport's disc in the library: the app's SportDisc, and for tri one disc
+/// in three parts, swim, run and ride, each in its sport's colour (602 point 131).
+struct LibrarySportDisc: View {
+    let sport: String
+    var size: CGFloat = 44
+
+    var body: some View {
+        if sport == "tri" { TriDisc(size: size) } else { SportDisc(sport: sport == "gym" ? "strength" : sport, size: size) }
+    }
+}
+
+struct TriDisc: View {
+    var size: CGFloat = 44
+    @Environment(\.colorScheme) private var scheme
+
+    /// The parts by the middle of their third: swim on top, run right, ride left.
+    private static let parts: [(String, Double)] = [("swim", -90), ("run", 30), ("ride", 150)]
+
+    var body: some View {
+        let dark = scheme == .dark
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                let sport = Self.parts[i].0
+                let middle = Self.parts[i].1
+                let color = Palette.Sport.color(sport)
+                Sector(start: .degrees(middle - 60), end: .degrees(middle + 60)).fill(color.opacity(dark ? 0.24 : 0.15))
+                Image(systemName: SportDisc.symbol(sport))
+                    .font(.system(size: size * 0.23, weight: .semibold))
+                    .foregroundStyle(color)
+                    .offset(x: CGFloat(cos(middle * .pi / 180)) * size * 0.25, y: CGFloat(sin(middle * .pi / 180)) * size * 0.25)
+            }
+            ForEach([-30.0, 90, 210], id: \.self) { angle in
+                Rectangle().fill(Palette.card).frame(width: size / 2, height: 1.5)
+                    .offset(x: size / 4)
+                    .rotationEffect(.degrees(angle))
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private struct Sector: Shape {
+        let start: Angle
+        let end: Angle
+
+        func path(in rect: CGRect) -> Path {
+            let center = CGPoint(x: rect.midX, y: rect.midY)
+            var path = Path()
+            path.move(to: center)
+            path.addArc(center: center, radius: rect.width / 2, startAngle: start, endAngle: end, clockwise: false)
+            path.closeSubpath()
+            return path
+        }
+    }
+}
+
+/// Yours on the library's home: My workouts and From friends, the count in
+/// serif, a dot while a friend's workout is new.
+struct LibraryYoursTile: View {
     let route: AppRoute
     let title: String
-    let symbol: String
-    let color: Color
-    var badge = 0
+    var count: Int?
+    var unseen = 0
 
     var body: some View {
         RouteLink(route: route) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .top) {
-                    Image(systemName: symbol)
-                        .scaledFont(14, weight: .semibold, cap: .denseCap)
-                        .foregroundStyle(Palette.onAccent)
-                        .frame(width: 32, height: 32)
-                        .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    Spacer()
-                    if badge > 0 {
-                        Text("\(badge)").font(.caption.weight(.bold)).foregroundStyle(Palette.onAccent)
-                            .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
-                            .background(Palette.amberBar, in: Capsule())
-                    }
+                HStack(alignment: .top, spacing: 4) {
+                    Text(verbatim: count.map { String($0) } ?? " ").font(Typo.number(30)).foregroundStyle(Palette.ink)
+                    if unseen > 0 { Circle().fill(Palette.amberBar).frame(width: 8, height: 8).padding(.top, 6) }
                 }
-                .padding(.bottom, 4)
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(L10n.tr(title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .padding(12)
+            .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .cardSurface(cornerRadius: 18)
-            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+            .cardSurface(cornerRadius: 20)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(badge > 0 ? L10n.f("%@, nové: %@", L10n.tr(title), String(badge)) : L10n.tr(title))
+        .accessibilityLabel(unseen > 0 ? L10n.f("%@, nové: %@", L10n.tr(title), String(unseen)) : L10n.tr(title))
     }
 }
 
@@ -92,38 +420,24 @@ struct LibrarySport: Identifiable {
         LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.Sport.ride),
         LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.Sport.run),
         LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.Sport.swim),
-        // Bricks, two sports one right after the other (BrickLibrarySection).
-        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other),
-        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym)
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "figure.strengthtraining.traditional", color: Palette.Sport.gym),
+        // Bricks, two sports one right after the other (BrickLibrarySection):
+        // after the four sports, kept in the app's order Ride, Run, Swim, Gym.
+        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other)
     ]
     /// The sports of one workout (Moje tréninky → +): not the bricks.
     static var single: [LibrarySport] { all.filter { $0.id != "tri" } }
 
     static func find(_ id: String) -> LibrarySport? { all.first { $0.id == id } }
-}
 
-/// A sport's panel in the library; a tap opens the sport.
-struct LibrarySportPanel: View {
-    let sport: LibrarySport
-
-    var body: some View {
-        RouteLink(route: .workoutLibrary(sport.id)) {
-            VStack(alignment: .leading, spacing: 6) {
-                Image(systemName: sport.symbol)
-                    .scaledFont(15, weight: .semibold, cap: .denseCap)
-                    .foregroundStyle(Palette.onAccent)
-                    .frame(width: 32, height: 32)
-                    .background(sport.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .padding(.bottom, 4)
-                Text(sport.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .cardSurface(cornerRadius: 18)
-            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+    /// A calendar session's sport ("strength", "ride"…) belongs to the library's
+    /// sport ("gym", "ride"…); tri has no sessions of its own.
+    static func matches(_ library: String, _ session: String) -> Bool {
+        switch library {
+        case "gym": return session == "strength" || session == "gym"
+        case "tri": return false
+        default: return session == library
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr(sport.label))
     }
 }
 

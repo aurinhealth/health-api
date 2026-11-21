@@ -1155,7 +1155,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
         XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
-        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "tri", "gym"], "the app's order of sports")
+        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "gym", "tri"], "the app's order of sports")
         XCTAssertEqual(LibrarySport.single.map(\.id), ["ride", "run", "swim", "gym"], "one workout: no bricks")
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
@@ -1263,9 +1263,22 @@ final class SnapshotTests: XCTestCase {
             }
             .padding(20)
         }
-        try render("library-choice", glow: Palette.Glow.training, height: 520) {
+        try render("library-choice", glow: Palette.Glow.training, height: 1100) {
             NavigationStack { TrainingLibraryView() }.environment(model)
         }
+        try render("library-sport-discs", glow: Palette.Glow.training, height: 120) {
+            HStack(spacing: 12) { ForEach(LibrarySport.all) { LibrarySportDisc(sport: $0.id, size: 52) } }.padding(20)
+        }
+        // The week's dots: done wins over planned, a missed one is nothing; tri has none of its own.
+        XCTAssertEqual(LibraryDayMark.of(nil, sport: "ride"), .none)
+        if let day = DemoData.calendarByDate.values.first(where: { $0.activities.contains { $0.sport == "strength" && $0.status == "done" } }) {
+            XCTAssertEqual(LibraryDayMark.of(day, sport: "gym"), .done)
+        }
+        XCTAssertTrue(LibrarySport.matches("gym", "strength"))
+        XCTAssertFalse(LibrarySport.matches("tri", "ride"))
+        let ride = try XCTUnwrap(LibrarySport.find("ride"))
+        XCTAssertEqual(LibrarySportRow.spoken(ride, [.done, .none, .planned, .none, .none, .none, .none]), L10n.f("%@, tento týden hotovo %@, naplánováno %@", L10n.tr("Kolo"), "1", "1"))
+        XCTAssertEqual(LibraryWeekDots.letters.count, 7)
     }
 
     func testZonesActiveEnergyAndWeather() throws {
