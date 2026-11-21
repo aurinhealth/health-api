@@ -26,20 +26,21 @@ struct SuggestFeatureView: View {
     }
 
     @ViewBuilder private var form: some View {
-        SettingsGroup(title: "Co by ti v aplikaci pomohlo?") {
+        SettingsGroup {
             TextEditor(text: $text)
                 .font(.body)
                 .foregroundStyle(Palette.ink)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 140)
                 .padding(10)
+                .accessibilityLabel(L10n.tr("Co by ti v aplikaci pomohlo?"))
         }
 
         if let error {
             Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
         }
 
-        PrimaryButton(title: sending ? "Odesílám…" : "Odeslat", systemImage: "paperplane", busy: sending) { Task { await send() } }
+        PrimaryButton(title: sending ? "Odesílám…" : "Odeslat", busy: sending) { Task { await send() } }
             .disabled(sending || !canSend)
             .opacity(canSend ? 1 : 0.5)
     }

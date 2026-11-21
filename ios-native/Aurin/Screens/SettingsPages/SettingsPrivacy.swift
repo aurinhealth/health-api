@@ -32,18 +32,18 @@ struct PrivacySettingsView: View {
             }
             // What happens to the data, in three lines (the policy says it in full).
             SettingsGroup(title: "Tvoje data") {
-                fact("globe.europe.africa", Palette.blue, "Uložená v EU", "Tvoje data leží v databázi Aurinu v Evropě, šifrovaná.")
+                fact("globe.europe.africa", "Uložená v EU", "Tvoje data leží v databázi Aurinu v Evropě, šifrovaná.")
                 SettingsDivider()
-                fact("nosign", Palette.amber, "Nikdy je neprodáme", "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš.")
+                fact("nosign", "Nikdy je neprodáme", "Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš, s OpenAI po tvém souhlasu a s firmami, které pro nás Aurin provozují.")
                 SettingsDivider()
-                fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
+                fact(nil, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
             }
             SettingsGroup {
                 if let exportURL {
-                    ShareLink(item: exportURL) { SettingsRow(title: "Sdílet soubor s daty", chevron: false, titleColor: Palette.blue) }
+                    ShareLink(item: exportURL) { SettingsRow(title: "Sdílet soubor s daty", chevron: false) }
                 } else {
                     Button { Task { await export() } } label: {
-                        SettingsRow(title: exporting ? "Připravuji…" : "Stáhnout moje data", chevron: false, titleColor: Palette.blue)
+                        SettingsRow(title: exporting ? "Připravuji…" : "Stáhnout moje data", chevron: false)
                     }
                     .buttonStyle(.plain)
                     .disabled(exporting || model.demo)
@@ -63,7 +63,8 @@ struct PrivacySettingsView: View {
             if !model.healthPaused {
                 SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou. Nejdřív ti ukážeme, co se stane.") {
                     Button { pausing = true } label: {
-                        SettingsRow(title: "Odvolat souhlas se zdravotními daty", chevron: false, titleColor: Palette.rust)
+                        // Ink with a chevron: it opens a sheet that explains first (602 point 106).
+                        SettingsRow(title: "Odvolat souhlas se zdravotními daty")
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Nejdřív ukáže, co se smaže a co zůstane.")
@@ -105,9 +106,29 @@ struct PrivacySettingsView: View {
         .stepUpSheet($stepUp)
     }
 
-    private func fact(_ symbol: String, _ color: Color, _ title: String, _ text: String) -> some View {
-        SettingsRow(icon: SettingsIcon(systemImage: symbol, color: color), title: title, subtitle: text, chevron: false)
-            .accessibilityElement(children: .combine)
+    /// A fact with its symbol in a small square tile (the concept's 40 pt tile
+    /// for things); the AI fact carries the coach's two lights (nil symbol).
+    private func fact(_ symbol: String?, _ title: String, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Group {
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: 17, weight: .regular)).foregroundStyle(Palette.secondary)
+                } else {
+                    TwoLights(size: 18)
+                }
+            }
+            .frame(width: 40, height: 40)
+            .background(Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body).foregroundStyle(Palette.ink)
+                Text(text).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func export() async {

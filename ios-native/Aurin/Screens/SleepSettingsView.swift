@@ -54,7 +54,6 @@ struct SleepSettingsForm: View {
     @State private var open: String?
     @State private var snoozeTask: Task<Void, Never>?
     @State private var alarmNote: String?
-    @State private var alarmOK = false
     @State private var plannerSaving = false
 
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
@@ -115,7 +114,10 @@ struct SleepSettingsForm: View {
                     }
                 }
                 if let alarmNote {
-                    Text(alarmNote).font(Typo.small).foregroundStyle(alarmOK ? Palette.green : Palette.rust)
+                    Text(alarmNote).font(Typo.small).foregroundStyle(Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if systemAlarm, let alarmSentence {
+                    Text(alarmSentence).font(Typo.small).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -167,15 +169,16 @@ struct SleepSettingsForm: View {
         }
     }
 
-    /// A row with its value in amber; a tap opens its wheel below (and closes any other).
+    /// A row with its value muted and the up-down glyph; a tap opens its wheel below (and closes any other).
     private func wheelRow(_ title: String, value: String, key: String) -> some View {
         Button {
             withAnimation(.easeOut(duration: 0.2)) { open = open == key ? nil : key }
         } label: {
-            HStack {
+            HStack(spacing: 8) {
                 Text(title).font(.body).foregroundStyle(Palette.ink)
-                Spacer(minLength: 8)
-                Text(verbatim: value).font(.body).foregroundStyle(Palette.amber).monospacedDigit()
+                Spacer(minLength: 0)
+                Text(verbatim: value).font(.body).foregroundStyle(Palette.muted).monospacedDigit()
+                Image(systemName: "chevron.up.chevron.down").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 50)
@@ -245,7 +248,6 @@ struct SleepSettingsForm: View {
         // Tomorrow's own wake time rings on the iPhone too, with the saved alarms
         // (not the screen's unsaved ones); a failure keeps the alarms set before.
         if systemAlarm, let problem = await SystemAlarm.sync(profile: store.profile) {
-            alarmOK = false
             alarmNote = problem
         }
         await model.refreshHealth()
@@ -289,29 +291,34 @@ struct SleepSettingsForm: View {
         // Both alarms turned off and saved: the ones set before go too.
         guard work != nil || weekend != nil else {
             SystemAlarm.cancel()
-            alarmOK = false
             alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend.")
             return
         }
         if let problem = await SystemAlarm.sync(work: work, weekend: weekend, workDays: workDays, weekendDays: weekendDays,
                                                   once: SystemAlarm.onceWake(store.profile["sleepTonight"])) {
-            alarmOK = false
             alarmNote = problem
             systemAlarm = false
         } else {
-            var when: [String] = []
-            if let work {
-                when.append(workDays == AlarmDays.work ? L10n.f("v pracovní dny v %@", ClockText.format(work))
-                            : L10n.f("%@ v %@", ReminderDays.summary(workDays), ClockText.format(work)))
-            }
-            if let weekend {
-                when.append(weekendDays == AlarmDays.weekend ? L10n.f("o víkendu v %@", ClockText.format(weekend))
-                            : L10n.f("%@ v %@", ReminderDays.summary(weekendDays), ClockText.format(weekend)))
-            }
-            let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when.joined()
-            alarmOK = true
-            alarmNote = L10n.f("Budík zvoní %@.", joined)
+            alarmNote = nil
         }
+    }
+
+    /// "Alarm rings on weekdays at 6:40 and on weekends at 8:00.", from the alarms on screen.
+    private var alarmSentence: String? {
+        var when: [String] = []
+        if workAlarm {
+            let work = ClockText.format(Self.text(workTime))
+            when.append(workDays == AlarmDays.work ? L10n.f("v pracovní dny v %@", work)
+                        : L10n.f("%@ v %@", ReminderDays.summary(workDays), work))
+        }
+        if weekendAlarm {
+            let weekend = ClockText.format(Self.text(weekendTime))
+            when.append(weekendDays == AlarmDays.weekend ? L10n.f("o víkendu v %@", weekend)
+                        : L10n.f("%@ v %@", ReminderDays.summary(weekendDays), weekend))
+        }
+        guard !when.isEmpty else { return nil }
+        let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when[0]
+        return L10n.f("Budík zvoní %@.", joined)
     }
 
     static func clock(_ text: String) -> Date {

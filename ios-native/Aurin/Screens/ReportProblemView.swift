@@ -30,7 +30,7 @@ struct ReportProblemView: View {
     private static let maxScreenshotBytes = 1_000_000
 
     var body: some View {
-        SettingsPage(title: title, trail: false) {
+        SettingsPage(title: title, trail: false, hero: SettingsHero(systemImage: "ladybug.fill", color: Palette.rust, text: "Napiš nám, co se pokazilo, a podíváme se na to.")) {
             if sent {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Díky, hlášení odešlo.").font(Typo.heading(24)).foregroundStyle(Palette.ink)
@@ -52,9 +52,9 @@ struct ReportProblemView: View {
     @ViewBuilder private var form: some View {
         if Self.watchHasAurin {
             SettingsGroup(title: "Kde se to stalo") {
-                placeRow("iphone", title: "iPhone", systemImage: "iphone")
+                placeRow("iphone", title: "iPhone")
                 SettingsDivider()
-                placeRow("watch", title: "Apple Watch", systemImage: "applewatch")
+                placeRow("watch", title: "Apple Watch")
             }
         }
 
@@ -89,7 +89,7 @@ struct ReportProblemView: View {
             }
             let hasPreview = preview != nil
             PhotosPicker(selection: $photo, matching: .images) {
-                SettingsRow(icon: SettingsIcon(systemImage: "photo", color: Palette.blue), title: !hasPreview ? "Vybrat z fotek" : "Vybrat jiný")
+                SettingsRow(title: !hasPreview ? "Vybrat z fotek" : "Vybrat jiný")
             }
             .buttonStyle(.plain)
         }
@@ -107,7 +107,7 @@ struct ReportProblemView: View {
             Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
         }
 
-        PrimaryButton(title: sending ? "Odesílám…" : "Odeslat", systemImage: "paperplane", busy: sending) { Task { await send() } }
+        PrimaryButton(title: sending ? "Odesílám…" : "Odeslat", busy: sending) { Task { await send() } }
             .disabled(sending || !canSend)
             .opacity(canSend ? 1 : 0.5)
     }
@@ -119,12 +119,11 @@ struct ReportProblemView: View {
         return state.paired && state.installed
     }
 
-    private func placeRow(_ value: String, title: String, systemImage: String) -> some View {
+    private func placeRow(_ value: String, title: String) -> some View {
         Button {
             place = value
         } label: {
             HStack(spacing: 14) {
-                SettingsIcon(systemImage: systemImage, color: Palette.ink)
                 Text(title).font(.body).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 if place == value {

@@ -220,9 +220,11 @@ struct RootView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
-                // "+" open: the page dims under its card; a tap there closes it.
+                // "+" open: the page blurs and dims a little under its card
+                // (concept 14-plus B, 602 point 41); a tap there closes it.
                 if showAdd && !model.immersive {
-                    Color.black.opacity(0.18)
+                    Rectangle().fill(.regularMaterial)
+                        .overlay(Color.black.opacity(0.12))
                         .ignoresSafeArea()
                         .contentShape(Rectangle())
                         .onTapGesture { closeAdd() }
