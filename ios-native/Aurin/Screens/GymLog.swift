@@ -19,6 +19,8 @@ struct GymDoneDetail: View {
     @State private var history: GymHistory = .empty
     @State private var catalog: [GymCatalogExercise] = []
     @State private var historyFor: String?
+    /// An exercise tapped: its sets in a sheet, to see and fix.
+    @State private var opened: String?
     @State private var technique: String?
     @State private var picking = false
     @State private var saveTask: Task<Void, Never>?
@@ -32,22 +34,119 @@ struct GymDoneDetail: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
-            // Who recorded it, and after a merge whose heart rate and calories count.
-            if let line = SourceLine.gym(session) { line.padding(.top, 10) }
-            stats.padding(.top, 18)
+            // Concept wgym (trenink-koncept): the header, Workout details, the
+            // exercises as rows (a tap shows and fixes each set), then the
+            // muscles (GymSessionView) under it.
+            GymHero(kind: L10n.tr("Posilovna"), title: title, line: when) {
+                // Who recorded it, and after a merge whose heart rate and calories count.
+                if let line = SourceLine.gym(session) { line.padding(.top, 6) }
+            }
+            .padding(.top, 20)
+            SectionLabel(text: "Podrobnosti tréninku").padding(.top, 28)
+            stats.padding(.top, 10)
             if let session, session.kcal != nil, session.kcalEstimate?.value != nil {
                 KcalCheck(session: session, date: date)
             }
             // "Splnění plánu": the sets against the plan, every exercise's percent.
             GymComplianceSection(date: date, reload: day.exercises.flatMap(\.sets).filter(\.done).count)
                 .padding(.top, 18)
+            SectionLabel(text: "Cviky").padding(.top, 28)
             if day.exercises.isEmpty {
                 Text("Série z tohoto tréninku tu zatím nejsou. Přidej cviky, ať se počítají do historie a příštích návrhů.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(day.exercises.enumerated()), id: \.element.id) { index, exercise in
+                        if index > 0 { Divider().overlay(Palette.hairline) }
+                        Button { opened = exercise.name } label: { exerciseRow(exercise) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+                .cardSurface(cornerRadius: 20)
+                .padding(.top, 10)
+                Text("Série, opakování a váhy, jak je máš zapsané. Klepni na cvik a uvidíš každou sérii.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8).padding(.horizontal, 4)
             }
-            VStack(spacing: 12) {
-                ForEach(day.exercises) { (exercise: GymExercise) in
+            Button { picking = true } label: {
+                Text(verbatim: "+ " + L10n.tr("Přidat cvik")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .task {
+            history = await model.gymHistory()
+            if !model.demo { catalog = (try? await model.api.gymExercises()) ?? [] }
+        }
+        .sheet(isPresented: $picking) {
+            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day.exercises.map(\.name))) { name in add(name) }
+        }
+        .sheet(item: Binding(get: { opened.map { Named(name: $0) } }, set: { opened = $0?.name })) { item in
+            setsSheet(item.name)
+        }
+    }
+
+    /// "Friday, November 20, 12:04 to 13:20": the day, and when it began and ended.
+    private var when: String {
+        let dayText = Fmt.capitalized(Fmt.weekdayDayMonth(date))
+        guard let span = Self.span(day: day, session: session) else { return dayText }
+        return dayText + ", " + L10n.f("%@ až %@", span.start, span.end)
+    }
+
+    /// When it began and ended: the app's own clock of the workout, else the
+    /// session's start and its minutes.
+    static func span(day: GymDay, session: WeekSession?) -> (start: String, end: String)? {
+        if let start = day.startedAt, let end = day.finishedAt, end > start {
+            return (ClockText.format(start), ClockText.format(end))
+        }
+        guard let time = session?.time, let minutes = session?.minutes, minutes > 0 else { return nil }
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        guard parts.count >= 2 else { return nil }
+        let end = (parts[0] * 60 + parts[1] + minutes) % 1440
+        return (ClockText.format(time), ClockText.format(minutes: end))
+    }
+
+    /// One exercise as a row: its name, "3 × 8" and the top weight, the arrow.
+    private func exerciseRow(_ exercise: GymExercise) -> some View {
+        let summary = Self.summary(exercise)
+        return HStack(spacing: 10) {
+            Text(verbatim: exercise.name).font(Typo.body).foregroundStyle(Palette.ink)
+                .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+            Text(verbatim: summary.sets).font(Typo.small).foregroundStyle(Palette.ink).monospacedDigit()
+            if let kg = summary.kg {
+                Text(verbatim: kg).font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
+                    .frame(minWidth: 58, alignment: .trailing)
+            }
+            Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+        }
+        .frame(minHeight: 52)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(Text("Ukáže každou sérii"))
+    }
+
+    /// The done work sets as "3 × 8" (a side's set counts once, the reps of the
+    /// heaviest set) and the heaviest weight; "0/3" when none is done.
+    static func summary(_ exercise: GymExercise) -> (sets: String, kg: String?) {
+        let work = exercise.sets.filter(\.work)
+        let done = work.filter { $0.done && $0.side != "P" }
+        guard !done.isEmpty else { return ("0/\(work.filter { $0.side != "P" }.count)", nil) }
+        let top = done.max { (LiftWeight.number($0.kg ?? "") ?? 0) < (LiftWeight.number($1.kg ?? "") ?? 0) }
+        let reps = top?.reps.flatMap(LiftWeight.number).map { Fmt.int($0) }
+        let pounds = LiftUnits.pounds(exercise.name)
+        let kg = (top?.kg.flatMap(LiftWeight.number) ?? 0) > 0
+            ? LiftWeight.shown(top?.kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) } : nil
+        return ("\(done.count) × " + (reps ?? "–"), kg)
+    }
+
+    /// An exercise's sets as you logged them, to fix: a weight, a set more.
+    private func setsSheet(_ name: String) -> some View {
+        NavigationStack {
+            ScrollView {
+                if let exercise = day.exercises.first(where: { $0.name == name }) {
                     GymExerciseTable(exercise: exercise,
                                      coachLine: coach[exercise.name],
                                      missingNote: true,
@@ -57,45 +156,45 @@ struct GymDoneDetail: View {
                                      onRemove: { set in remove(set) },
                                      onHistory: { historyFor = exercise.name },
                                      onTechnique: { technique = exercise.name })
+                        .padding(.horizontal, 16).padding(.top, 8)
                 }
             }
-            .padding(.top, 18)
-            Button { picking = true } label: {
-                Label("Přidat cvik", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                    .contentShape(Capsule())
+            .navigationTitle(Text(verbatim: name))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { opened = nil } } }
+            .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
+                ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name))
             }
-            .buttonStyle(.plain)
-            .padding(.top, 14)
+            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         }
-        .task {
-            history = await model.gymHistory()
-            if !model.demo { catalog = (try? await model.api.gymExercises()) ?? [] }
-        }
-        .sheet(isPresented: $picking) {
-            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day.exercises.map(\.name))) { name in add(name) }
-        }
-        .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name))
-        }
-        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        .presentationDetents([.large])
     }
 
     // MARK: Stats
 
+    /// Workout details (concept wgym): Duration, Sets, Volume, Exercises, Energy.
+    /// The length is the session's, the number Training's row shows.
     @ViewBuilder private var stats: some View {
-        let minutes: Int? = day.loggedMinutes ?? session?.minutes
+        let minutes: Int? = session?.minutes ?? day.loggedMinutes
         let clock = minutes.map { GymCoach.clock($0) }
-        HStack(alignment: .top, spacing: 8) {
-            GymStat(label: "Čas", value: clock?.value ?? "–", unit: clock?.unit)
-            GymStat(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit)
-            if let session, session.kcal != nil {
-                KcalStat(session: session, date: date)
-            } else {
-                GymStat(label: "Sérií", value: String(day.doneWorkSets))
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top, spacing: 8) {
+                GymStat(label: "Trvání", value: clock?.value ?? "–", unit: clock?.unit)
+                GymStat(label: "Série", value: String(day.doneWorkSets))
+                GymStat(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit)
+            }
+            HStack(alignment: .top, spacing: 8) {
+                GymStat(label: "Cviky", value: String(day.exercises.filter { $0.doneCount > 0 }.count))
+                if let session, session.kcal != nil {
+                    KcalStat(session: session, date: date)
+                } else {
+                    Color.clear.frame(maxWidth: .infinity)
+                }
+                Color.clear.frame(maxWidth: .infinity)
             }
         }
+        .padding(18)
+        .cardSurface(cornerRadius: 20)
     }
 
     // MARK: Changes
@@ -382,7 +481,7 @@ struct GymExerciseTable: View {
                         Label("Historie", systemImage: "chart.bar.fill").labelStyle(TitleAndOptionalIcon(hasIcon: true))
                     }
                     .font(Typo.small.weight(.semibold))
-                    .foregroundStyle(Palette.amber)
+                    .foregroundStyle(Palette.muted)
                     .buttonStyle(.borderless)
                 }
                 if let onTechnique { SmallInfoButton(action: onTechnique) }
@@ -993,5 +1092,51 @@ private struct DatedLineChart: View {
         }
         .frame(height: height)
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - The header of the gym detail
+
+/// The concept's header (trenink-koncept `whero`): the glowing sport disc, a
+/// done workout's kind over the serif name, and the line under it ("Today at
+/// 17:30, 45 min", "Friday, November 20, 12:04 to 13:20").
+struct GymHero<Extra: View>: View {
+    var kind: String? = nil
+    let title: String
+    let line: String
+    @ViewBuilder var extra: Extra
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            // The glowing header disc (`.dd`): the sport's colour with a soft
+            // shine, a white figure, a halo.
+            Image(systemName: "figure.strengthtraining.traditional")
+                .font(.system(size: 28, weight: .medium)).foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
+                .frame(width: 60, height: 60)
+                .background {
+                    Circle().fill(Palette.Sport.gym.resolved(dark: false))
+                        .overlay(Circle().fill(RadialGradient(colors: [.white.opacity(0.24), .clear], center: UnitPoint(x: 0.32, y: 0.22),
+                                                              startRadius: 0, endRadius: 36)))
+                }
+                .shadow(color: Palette.Sport.gym.opacity(0.44), radius: 8, x: -2, y: 3)
+                .shadow(color: Palette.Sport.gym.opacity(0.24), radius: 22)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                if let kind { Text(verbatim: kind).font(Typo.small).foregroundStyle(Palette.muted) }
+                Text(verbatim: title).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                extra
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension GymHero where Extra == EmptyView {
+    init(kind: String? = nil, title: String, line: String) {
+        self.init(kind: kind, title: title, line: line) { EmptyView() }
     }
 }

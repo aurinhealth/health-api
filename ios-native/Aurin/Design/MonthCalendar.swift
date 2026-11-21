@@ -11,7 +11,7 @@ struct MonthCalendar<Mark: View>: View {
     let month: String
     let today: String
     var selected: String? = nil
-    /// A line under the month ("12 workouts, 14 h 20 min").
+    /// A line under the month ("12 workouts, 14 h 20").
     var subtitle: String? = nil
     /// Future days can be picked (a plan) or not (data).
     var futurePickable = false

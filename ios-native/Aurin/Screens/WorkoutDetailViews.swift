@@ -542,11 +542,15 @@ struct ActivityDetailContent: View {
         hr = Self.samples("heartrate", in: detail)
     }
 
+    /// The workout's minutes, rounded as Training's row rounds them, one value
+    /// for the numbers and the zones (device test 604: 47 against 48).
+    private var minutes: Int? { detail.activity.moving_time.map { Int(($0 / 60).rounded()) } }
+
     var body: some View {
         let a = detail.activity
         VStack(alignment: .leading, spacing: 0) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
-                if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
+                if let m = minutes { stat("Čas", Fmt.duration(m)) }
                 if let d = a.distance, d > 0 { stat("Vzdálenost", isSwim ? Units.swimDistanceText(d) : Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
@@ -587,7 +591,7 @@ struct ActivityDetailContent: View {
             }
 
             if let zones = detail.hrZones, !zones.isEmpty {
-                zoneHeader("Čas v tepových zónách", Fmt.duration(Int((zones.compactMap(\.seconds).reduce(0, +) / 60).rounded())))
+                zoneHeader("Čas v tepových zónách", Fmt.duration(minutes ?? Int((zones.compactMap(\.seconds).reduce(0, +) / 60).rounded())))
                 Card { ZoneList(rows: zoneRows(zones, names: ZoneList.heartNames(zones.count), unit: "bpm"), bars: true) }
                     .padding(.top, 12)
             }

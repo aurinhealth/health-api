@@ -136,9 +136,13 @@ extension AppModel {
 
     /// The calories a calendar row counts with: the estimate once the user
     /// chose it for a flagged session (the calendar itself has the device's).
+    /// The calories the row shows: the same number as the workout's detail
+    /// (the week's session, after a merge or an edit), the calendar's own only
+    /// without one (device test 604: 411 on the row, 285 in the detail).
     func countedKcal(_ activity: CalendarActivity) -> Double? {
-        guard let session = doneSession(for: activity), let estimate = session.kcalEstimate?.value, session.kcal != nil else { return activity.kcal }
-        return KcalChoiceStore.shared.choice(for: session) == "estimate" ? estimate : activity.kcal
+        guard let session = doneSession(for: activity) else { return activity.kcal }
+        if let estimate = session.kcalEstimate?.value, KcalChoiceStore.shared.choice(for: session) == "estimate" { return estimate }
+        return session.kcal ?? activity.kcal
     }
 
     func doneStrengthSession(on date: String) -> WeekSession? {
@@ -521,10 +525,10 @@ enum GymCoach {
         return (diff > 0 ? "+" : "−") + L10n.plural("%lld opakování", abs(diff))
     }
 
-    /// Clock of a workout: "1:02" h, or "52" min under an hour.
-    static func clock(_ minutes: Int) -> (value: String, unit: String) {
+    /// A workout's length as a big number: "52" min, or "1 h 02" (Fmt.duration).
+    static func clock(_ minutes: Int) -> (value: String, unit: String?) {
         if minutes < 60 { return (String(minutes), "min") }
-        return (String(minutes / 60) + ":" + String(format: "%02d", minutes % 60), "h")
+        return (Fmt.duration(minutes), nil)
     }
 }
 

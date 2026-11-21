@@ -624,6 +624,15 @@ final class SnapshotTests: XCTestCase {
         try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
             NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
         }
+        // The done workout as concept wgym: header, Workout details, exercise rows, muscles, quiet actions.
+        var done = DemoData.gym
+        for set in done.exercises.flatMap(\.sets) where !set.done {
+            done.complete(row: set.row, kg: set.plannedKg ?? "20", reps: GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? "8", rpe: "")
+        }
+        try render("gym-done", glow: Palette.Glow.gym, height: 2000, window: true) {
+            NavigationStack { GymSessionView(date: ISODay.shift(AppModel.localDate(Date()), -1), preview: done, muscles: worked) }.environment(AppModel(demo: true))
+        }
+        XCTAssertEqual(GymDoneDetail.summary(done.exercises[0]).sets.hasPrefix("\(done.exercises[0].sets.filter { $0.work && $0.side != "P" }.count) × "), true)
         try render("gym-planned-card-open", height: 420) {
             ExerciseCard(exercise: plan.exercises[1], started: false, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true).padding(20)
         }
@@ -659,7 +668,9 @@ final class SnapshotTests: XCTestCase {
         // VoiceOver reads the tab header's month with its year and week (Today audit 25).
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
-        XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
+        XCTAssertEqual(Fmt.duration(75), "1 h 15")
+        XCTAssertEqual(Fmt.duration(125), "2 h 05")
+        XCTAssertEqual(Fmt.duration(120), "2 h")
         XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
@@ -1069,7 +1080,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30, 42,3 km")
         // The concept's figures: gym is the lifting figure, not a dumbbell.
         XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
         XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)

@@ -4998,3 +4998,9 @@
 "%@ odebrán" = "%@ removed";
 "Vynecháno" = "Skipped";
 "Aurin Age" = "Aurin Age";
+
+/* Done gym detail as concept wgym (GymLog GymDoneDetail) */
+"Podrobnosti tréninku" = "Workout details";
+"Série, opakování a váhy, jak je máš zapsané. Klepni na cvik a uvidíš každou sérii." = "Sets, reps and weight as you logged them. Tap an exercise to see each set.";
+"Ukáže každou sérii" = "Shows each set";
+"Zapojené svaly" = "Muscles";

@@ -194,12 +194,14 @@ enum Fmt {
         return names[utcCalendar.component(.weekday, from: date) - 1]
     }
 
-    /// Minutes as "1 h 15 min" or "45 min".
+    /// "45 min", "1 h 16", "2 h 05", "2 h": one way to write a length everywhere
+    /// (D-ZDRAVI-12, the sleep dial's "6 h 24").
     static func duration(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"
+        guard minutes >= 60 else { return "\(minutes) min" }
+        return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
     }
 
-    /// 860 → "14 h 20 min".
+    /// 860 → "14 h 20".
     static func hoursMinutesLong(_ minutes: Double) -> String {
         duration(Int(minutes.rounded()))
     }
