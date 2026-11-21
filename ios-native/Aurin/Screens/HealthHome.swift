@@ -90,7 +90,8 @@ extension AurinAgeText {
 /// in place of the halo. While it collects data it is a quiet grey pearl.
 /// Drawn in Canvas; it stands still with Reduce Motion or Low Power Mode.
 struct AurinOrb: View {
-    enum Mood { case younger, older, collecting }
+    /// locked: without Aurin Pro, the lit orb with dots in place of the number.
+    enum Mood { case younger, older, collecting, locked }
     var mood: Mood
     var size: CGFloat = 250
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -125,6 +126,7 @@ struct AurinOrb: View {
                     drawPearl(&context, center: center, radius: radius, t: t)
                 } else {
                     drawLit(&context, center: center, radius: radius, t: t)
+                    if mood == .locked { drawDots(&context, center: center, radius: radius, t: t) }
                 }
             }
             .frame(width: size * 1.6, height: size * 1.6)
@@ -181,6 +183,27 @@ struct AurinOrb: View {
         }
     }
 
+    /// Locked (Pro concept, Petr 2026-11-13): cream dots in two blocks the size
+    /// of two digits, drifting a little. Fixed places that never form a number,
+    /// not the real one and not a sample (ios-designer); only the light moves.
+    private func drawDots(_ context: inout GraphicsContext, center: CGPoint, radius: CGFloat, t: Double) {
+        let block = CGSize(width: radius * 0.42, height: radius * 0.6)
+        for side in [-1.0, 1.0] {
+            let origin = CGPoint(x: center.x + side * radius * 0.25 - block.width / 2, y: center.y - radius * 0.12 - block.height / 2)
+            for i in 0..<34 {
+                let seed = Double(i) * 7.31 + (side > 0 ? 91.7 : 0)
+                let x = abs((sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1))
+                let y = abs((sin(seed * 1.93) * 24634.6345).truncatingRemainder(dividingBy: 1))
+                let drift = CGFloat(sin(t * 0.6 + seed)) * 1.2
+                let point = CGPoint(x: origin.x + block.width * x + drift, y: origin.y + block.height * y - drift)
+                let dot = i % 5 == 0 ? radius * 0.05 : radius * 0.034
+                let bright = 0.55 + 0.4 * (0.5 + 0.5 * sin(t * 1.1 + seed * 3))
+                context.fill(Path(ellipseIn: CGRect(x: point.x - dot / 2, y: point.y - dot / 2, width: dot, height: dot)),
+                             with: .color(Color(red: 0.96, green: 0.93, blue: 0.85).opacity(bright)))
+            }
+        }
+    }
+
     /// Collecting (concept 24): a dim pearl, dark at night and light on paper, no glow.
     private func drawPearl(_ context: inout GraphicsContext, center: CGPoint, radius: CGFloat, t: Double) {
         let dark = scheme == .dark
@@ -214,6 +237,7 @@ struct AurinOrb: View {
 /// Aurin age on top of Health: the orb with the estimate, the words against
 /// the real age, the change since 12 weeks ago and when it was updated.
 struct AurinAgeHero: View {
+    @Environment(AppModel.self) private var model: AppModel?
     let health: HealthSnapshot
     var pro: Bool
     var noWearable = false
@@ -287,19 +311,24 @@ struct AurinAgeHero: View {
         return L10n.tr("Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna.")
     }
 
-    /// Without Pro (Pro concept): the orb locked with its dots and the way to unlock.
+    /// Without Pro (Pro concept, Petr 2026-11-13): the lit orb with dots in
+    /// place of the number, no label in it, and "Unlock with Pro" under it,
+    /// which opens the offer. No price on the screen.
     private var locked: some View {
-        VStack(spacing: 12) {
-            AurinOrb(mood: .collecting)
-            Text("Aurin age").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-            // The lock in the button, styled like Add entry (Pro concept).
-            NavigationLink { SubscriptionView() } label: {
-                Label { Text("Odemknout s Aurin Pro") } icon: { Image(systemName: "lock.fill") }
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 22).frame(minHeight: 48)
-                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        VStack(spacing: 14) {
+            AurinOrb(mood: .locked)
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: L10n.tr("Aurin Age") + ", " + L10n.tr("v Aurin Pro")))
+            Button { if let model { Paywall.present(model) } } label: {
+                Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 16).frame(height: 36)
+                    .background(Palette.card, in: Capsule())
+                    .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                    .tapTarget(width: 44, height: 44)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("aurin-age.unlock")
         }
     }
 }

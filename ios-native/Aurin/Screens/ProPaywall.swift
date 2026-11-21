@@ -166,15 +166,25 @@ struct PaywallView: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 14)
                     .accessibilityAddTraits(.isHeader)
-                if step == 0, !reduceMotion || frozenTime != nil {
-                    demoPhone.transition(.opacity)
-                    button(L10n.tr("Pokračovat")) { go(1) }
-                        .padding(.horizontal, 16).padding(.bottom, 10)
+                let demoShown = step == 0 && (!reduceMotion || frozenTime != nil)
+                if demoShown {
+                    // The end of the demo: the phone gets smaller and goes (Pro concept).
+                    demoPhone.transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.3).combined(with: .opacity)))
                 } else {
                     ProFeatureList(frozen: frozenTime != nil)
                         .frame(minHeight: 120, maxHeight: .infinity)
-                        .transition(.opacity)
-                    offer.transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.2)))
+                    // The plans come in as the list settles.
+                    offer.transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity).animation(.easeOut(duration: 0.45).delay(0.35)),
+                                                 removal: .opacity))
+                }
+                // One button: Continue becomes the purchase where it stands (Pro concept).
+                button(demoShown ? L10n.tr("Pokračovat") : cta, busy: !demoShown && store.purchasing) { if demoShown { go(1) } else { buy() } }
+                    .disabled(!demoShown && (store.purchasing || !chosen.priced))
+                    .padding(.horizontal, 16).padding(.bottom, demoShown ? 10 : 0)
+                if !demoShown {
+                    finePrint.padding(.horizontal, 16).padding(.bottom, 6)
+                        .transition(.opacity.animation(.easeOut(duration: 0.3).delay(0.4)))
                 }
             }
         }
@@ -208,22 +218,23 @@ struct PaywallView: View {
 
     // MARK: - The demo
 
-    /// The coach first (Petr 2026-11-14: the demo always starts there), then a
-    /// plan, the food and Training, one after another in one phone. Continue
-    /// skips it any time (D-PRO-6).
+    /// One conversation with the coach in a loop (Pro concept, Petr 2026-11-14:
+    /// the demo always starts at the coach): a half marathon and its plan, the
+    /// plan in Training, food after the run by photo, then how to tell it works,
+    /// with Aurin age. Continue skips it any time (D-PRO-6).
     private var demoPhone: some View {
         clock { time in
-            let screens: [ProScreen] = [.coach, .plan, .food, .training]
-            let index = Int(time / 3.2) % screens.count
+            let now = ProScreen.at(time)
             GeometryReader { geo in
                 PhoneMockup(height: max(200, geo.size.height - 24)) {
-                    ProScreenPage(screen: screens[index], scroll: frozenTime == nil ? min(1, (time.truncatingRemainder(dividingBy: 3.2)) / 3.2) : 0)
+                    ProScreenPage(screen: now.screen, scroll: frozenTime == nil ? now.progress : 0)
                 }
-                .id(index)
+                .id(now.screen.page)
                 .transition(.opacity)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .animation(.easeInOut(duration: 0.5), value: index)
+            .animation(.easeInOut(duration: 0.5), value: now.screen.page)
+            .animation(.snappy, value: now.screen)
         }
         .padding(.top, 18).padding(.bottom, 14)
         .accessibilityElement(children: .ignore)
@@ -241,11 +252,8 @@ struct PaywallView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             if allowAI != nil { aiNote }
-            button(cta, busy: store.purchasing) { buy() }
-                .disabled(store.purchasing || !chosen.priced)
-            finePrint
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
     }
 
     /// What allowing the AI features sends where, in the words of the setup's AI
@@ -327,6 +335,7 @@ struct PaywallView: View {
         Button(action: action) {
             ZStack {
                 Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.background).opacity(busy ? 0 : 1)
+                    .contentTransition(.opacity)
                 if busy { ProgressView().tint(Palette.background) }
             }
             .frame(maxWidth: .infinity).frame(minHeight: 54).background(Palette.ink, in: Capsule())
@@ -400,28 +409,58 @@ struct PaywallView: View {
 
 // MARK: - The app's screens
 
-/// One of the app's screens in a phone, with the sample day. The offer opens on
-/// what Pro adds (the coach, then the race plan), then the day it works from
-/// (approved mockup pro-nabidka-obrazovky, 3 Nov 2026).
-enum ProScreen: CaseIterable {
-    case coach, plan, training, food
+/// One of the app's screens in a phone, with the sample day: the coach's chat
+/// with its first `chat` messages, or a page it opens.
+enum ProScreen: Equatable {
+    case chat(Int), plan, training, food, age
+
+    /// The script, a screen and its seconds; the chat grows one message at a time.
+    static let script: [(screen: ProScreen, seconds: Double)] = [
+        (.chat(0), 1.6), (.chat(1), 1.3), (.chat(2), 3.0), (.plan, 3.0), (.training, 3.0),
+        (.chat(3), 1.3), (.chat(4), 3.0), (.food, 3.0),
+        (.chat(5), 1.3), (.chat(6), 3.0), (.age, 3.4)
+    ]
+
+    /// The screen `time` seconds in, looping, and how far through it (0 to 1).
+    static func at(_ time: Double) -> (screen: ProScreen, progress: Double) {
+        let total = script.reduce(0) { $0 + $1.seconds }
+        var left = max(0, time).truncatingRemainder(dividingBy: total)
+        for step in script {
+            if left < step.seconds { return (step.screen, left / step.seconds) }
+            left -= step.seconds
+        }
+        return (script[0].screen, 0)
+    }
+
+    /// The page it is on: the chat stays one page while it grows.
+    var page: Int {
+        switch self {
+        case .chat: return 0
+        case .plan: return 1
+        case .training: return 2
+        case .food: return 3
+        case .age: return 4
+        }
+    }
 
     /// The screen's page without its background, as tall as it is in the app.
     @ViewBuilder
-    fileprivate var page: some View {
+    fileprivate var view: some View {
         switch self {
-        case .coach: ProCoachSample().padding(.top, 54)
+        case .chat(let shown): ProCoachScript(shown: shown)
         case .plan: ProPlanSample().padding(.horizontal, 24).padding(.top, 70)
         case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
         case .food: FoodContent(food: DemoData.food).padding(.top, 54)
+        case .age: ProAgeSample().padding(.horizontal, 20).padding(.top, 70)
         }
     }
 
     fileprivate var glow: Color {
         switch self {
-        case .coach: return Palette.Glow.today
+        case .chat: return Palette.Glow.today
         case .plan, .training: return Palette.Glow.training
         case .food: return Palette.Glow.food
+        case .age: return Palette.Glow.health
         }
     }
 }
@@ -436,7 +475,7 @@ struct ProScreenPage: View {
     var body: some View {
         ZStack(alignment: .top) {
             ScreenBackground(glow: screen.glow)
-            screen.page
+            screen.view
                 .fixedSize(horizontal: false, vertical: true)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .offset(y: -max(0, height - 844) * scroll)
@@ -446,23 +485,91 @@ struct ProScreenPage: View {
     }
 }
 
-/// The coach mid-conversation on the sample day: two of the questions the demo
-/// answers (DemoData.coachAnswer), in the chat's own bubbles.
-struct ProCoachSample: View {
-    private static let questions = ["Jak mám dnes trénovat?", "Co sníst po tréninku?"]
+/// The coach's chat of the demo, `shown` messages in: the greeting, then the
+/// questions and answers at the bottom over the field, as in the chat.
+struct ProCoachScript: View {
+    let shown: Int
+
+    private static let messages: [(mine: Bool, text: String)] = [
+        (true, "Zvládnu půlmaraton za 1:45?"),
+        (false, "Na Pražský půlmaraton je 1:45 reálný cíl. Upravil jsem ti plán: dva tempové běhy týdně a sobotní dlouhý běh."),
+        (true, "Co sníst po běhu?"),
+        (false, "Do hodiny bílkoviny se sacharidy, třeba kuře s rýží. Vyfoť oběd a zapíšu ho za tebe."),
+        (true, "Jak poznám, že to funguje?"),
+        (false, "Podle Aurin age. Za posledních 12 týdnů klesá, nejvíc díky kondici.")
+    ]
 
     var body: some View {
-        VStack(spacing: 14) {
-            Text("Kouč").font(.headline).foregroundStyle(Palette.ink).padding(.bottom, 4)
-            ForEach(Self.questions, id: \.self) { question in
-                let asked = L10n.tr(question)
-                BubbleView(bubble: CoachView.Bubble(mine: true, text: asked), decide: { _, _ in })
-                BubbleView(bubble: CoachView.Bubble(mine: false, text: DemoData.coachAnswer(asked)), decide: { _, _ in })
+        VStack(spacing: 0) {
+            Text(verbatim: L10n.tr("Kouč").uppercased(with: Fmt.locale))
+                .font(.caption.weight(.semibold)).tracking(1.6).foregroundStyle(Palette.ink)
+                .padding(.top, 66)
+            if shown < 3 {
+                VStack(spacing: 10) {
+                    TwoLights(size: 64)
+                    Text("Dobré ráno.").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Text("Na co se chceš zeptat?").font(Typo.body).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 70)
+                .transition(.opacity)
             }
+            Spacer(minLength: 0)
+            VStack(spacing: 12) {
+                // The last three: older ones have scrolled away under the top.
+                ForEach(Array(Self.messages.prefix(shown).enumerated()).suffix(3), id: \.offset) { index, message in
+                    VStack(spacing: 8) {
+                        BubbleView(bubble: CoachView.Bubble(mine: message.mine, text: L10n.tr(message.text)), decide: { _, _ in })
+                        if index == 1 { card("flag.fill", DemoData.training.event?.name ?? L10n.tr("Půlmaraton"), L10n.tr("Plán upravený")) }
+                        if index == 3 { card("camera.fill", L10n.tr("Kuře s rýží"), L10n.tr("asi 640 kcal, přidáno k obědu")) }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 16)
+            field.padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 40)
         }
-        .padding(.horizontal, 16)
+        .frame(width: 390, height: 844)
+        .clipped()
         // A sample in a capped page: the bubbles stay at the page's size.
         .environment(\.fullTypeSize, nil)
+    }
+
+    /// What the answer did: the plan, the meal.
+    private func card(_ symbol: String, _ title: String, _ detail: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).scaledFont(14, weight: .semibold).foregroundStyle(Palette.ink)
+                .frame(width: 36, height: 36).background(Palette.track, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .cardSurface(cornerRadius: 18)
+    }
+
+    private var field: some View {
+        HStack {
+            Text("Napiš kouči").font(Typo.body).foregroundStyle(Palette.faint)
+            Spacer()
+            Image(systemName: "arrow.up").scaledFont(13, weight: .bold).foregroundStyle(Palette.onButton)
+                .frame(width: 30, height: 30).background(Palette.faint, in: Circle())
+        }
+        .padding(.leading, 18).padding(.trailing, 8).frame(height: 48)
+        .background(Palette.card, in: Capsule())
+    }
+}
+
+/// Aurin age on the sample day: its 12 weeks and what shapes it.
+struct ProAgeSample: View {
+    var body: some View {
+        if let age = DemoData.health.aurinAge {
+            VStack(alignment: .leading, spacing: 16) {
+                AurinAgeTrendCard(age: age)
+                AurinAgeShapes(age: age)
+            }
+        }
     }
 }
 

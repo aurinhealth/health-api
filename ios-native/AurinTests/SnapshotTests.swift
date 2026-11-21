@@ -281,6 +281,18 @@ final class SnapshotTests: XCTestCase {
         try render("health-vo2max-empty", glow: Palette.Glow.health) { VO2maxDetailContent(health: emptyHealth, period: .constant(.months6)).padding(16).padding(.top, 30) }
         XCTAssertEqual(VO2maxPage.position(49.2, in: try XCTUnwrap(health.vo2max?.compared)), L10n.f("v horní čtvrtině mužů ve věku %@ až %@", "30", "39"))
         XCTAssertEqual(StepsThroughDay.runningTotals([1, 2, 3]), [1, 3, 6])
+        // Without Pro once the paywall is on: "Unlock with Pro" instead of the coach (Pro concept).
+        let locked = AppModel(demo: true)
+        locked.health = model.health
+        locked.coachLocked = true
+        try render("health-restingHR-locked", height: 844, window: true) {
+            NavigationStack {
+                DetailScreen(title: "Klidový tep", info: ChromeAction(systemImage: "info", label: "Jak se to měří") {}) {
+                    HealthValueContent(value: .constant(.restingHR), period: .constant(.days30))
+                }
+            }
+            .environment(locked)
+        }
         // The Health tab (redesign H2): a new account, no Pro, no watch, the Aurin age page.
         try render("health-new", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: emptyHealth) }.padding(.top, 50).padding(.bottom, 40).environment(empty) }
         try render("health-aurinage-states", glow: Palette.Glow.health) {
@@ -1352,7 +1364,13 @@ final class SnapshotTests: XCTestCase {
     /// The offer (part Pro): the demo with the coach first, then the offer with
     /// the plans, with and without the free week, and with the AI note of the setup.
     func testPaywallTour() throws {
-        for time in [0.5, 4.0] {
+        // One conversation in a loop: the chat grows, the pages it opens come between.
+        XCTAssertEqual(ProScreen.at(0.5).screen, .chat(0))
+        XCTAssertEqual(ProScreen.at(4).screen, .chat(2))
+        XCTAssertEqual(ProScreen.at(7).screen, .plan)
+        XCTAssertEqual(ProScreen.at(26).screen, .age)
+        XCTAssertEqual(ProScreen.at(ProScreen.script.reduce(0) { $0 + $1.seconds } + 0.5).screen, .chat(0))
+        for time in [0.5, 4.0, 7.0, 14.0, 26.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
