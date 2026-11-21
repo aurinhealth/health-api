@@ -16,6 +16,7 @@ struct TodayView: View {
             screen
                 .navBarVisibility(.hidden)
                 .appRoutes()
+                .tabRoot(.today)
         }
         .journalMorningPrompt()
     }

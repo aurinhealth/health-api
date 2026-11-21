@@ -144,6 +144,9 @@ final class AppModel {
     /// links (aurin://open/sleep) can open any detail.
     var tab: AppTab = .today
     var paths: [AppTab: [AppRoute]] = [:]
+    /// Tabs whose first page has a page pushed over it outside `paths` (a
+    /// NavigationLink): the tab bar hides there as on every detail.
+    var coveredRoots: Set<AppTab> = []
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
     /// checkSetup has answered since this sign-in: until then the tabs wait

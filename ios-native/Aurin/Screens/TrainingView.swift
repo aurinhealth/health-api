@@ -65,6 +65,7 @@ struct TrainingView: View {
             }
             .navBarVisibility(.hidden)
             .appRoutes()
+            .tabRoot(.training)
         }
         .overlay(alignment: .bottom) {
             if let toast {
