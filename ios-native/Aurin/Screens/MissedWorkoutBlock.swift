@@ -30,6 +30,8 @@ struct MissedWorkoutBlock: View {
             }
         }
         .animation(.snappy, value: toast?.id)
+        // Today reloaded under it (the card went): the step stands, what it replaces still goes.
+        .onDisappear { if let toast { settle(toast, undo: false) } }
         .task(id: toast?.id) {
             guard let current = toast else { return }
             try? await Task.sleep(for: .seconds(6))
