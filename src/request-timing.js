@@ -138,7 +138,5 @@ export function databaseSummary(store) {
   if (!(store?.waits?.d1 >= 100)) return "";
   const parts = Object.entries(D1_TARGETS).filter(([kind]) => store.waits[kind] > 0).map(([kind, name]) => `${name} ${store.waits[kind]} ms`);
   parts.push(`SQL ${Math.round(store.sqlMs || 0)} ms (${store.sqlQueries || 0} z ${store.queries || 0} dotazů)`, `souběžně ${store.peers || 0}`);
-  // Where the Worker ran (wrangler.jsonc placement): far from the databases every trip costs more.
-  if (store.placement) parts.push(`server ${store.placement}`);
   return "databáze: " + parts.join(", ");
 }

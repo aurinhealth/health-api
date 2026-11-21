@@ -114,15 +114,10 @@ test("a slow request says which database it waited for, how much was SQL and how
   // The morning report still reads the total and what it waited for.
   const { parseSlow } = await import("../src/ops-report-html.js");
   assert.deepEqual({ ...parseSlow(slow), ms: null }, { ms: null, rows: 2, waited: "D1" });
-  // Where the Worker ran (cf-placement), before what it waited for.
-  const placed = slowness({ ...work, placement: "remote-WAW", started: Date.now() - 3200 });
-  assert.match(placed, /souběžně 1, server remote-WAW; čekání: D1 \d+ ms$/);
-  assert.equal(parseSlow(placed).waited, "D1");
 });
 
 test("the Worker runs next to the databases in eastern Europe, on the live and the test server", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   assert.equal((config.match(/"placement": \{\s*"region": "gcp:europe-central2"\s*\}/g) || []).length, 2);
   assert.doesNotMatch(config, /"mode": "smart"/);
-  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /work\.placement = String\(request\.headers\.get\("cf-placement"\)/);
 });
