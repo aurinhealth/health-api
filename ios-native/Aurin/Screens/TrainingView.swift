@@ -65,6 +65,7 @@ struct TrainingView: View {
             }
             .navBarVisibility(.hidden)
             .appRoutes()
+            .tabRoot(.training)
         }
         .overlay(alignment: .bottom) {
             if let toast {
@@ -989,10 +990,8 @@ struct VO2maxWidget: View {
     var today: String? = nil
     var size: WidgetSize = .small
 
-    /// Aurin's own estimate (Health's VO2max): the small dial shows it, as its
-    /// detail and Health do, with the FRIEND bands of the athlete's age and sex.
-    var own: HealthVO2max? = nil
-    private var bands: FriendBands? { own?.compared }
+    /// The FRIEND bands of the athlete's age and sex (Health's VO2max), for the small dial.
+    var bands: FriendBands? = nil
 
     var body: some View {
         if size == .small { dial } else { full }
@@ -1001,8 +1000,7 @@ struct VO2maxWidget: View {
     /// The small tile (Training concept a-hlavni): the estimate on a dial, the
     /// band of its age group green, the number and its unit in the middle.
     private var dial: some View {
-        let value = own?.value ?? vo2.value
-        let change = own.map(Self.fourWeeks) ?? vo2.change
+        let value = vo2.value
         let edges = bands.map { [$0.p25 - ($0.p50 - $0.p25), $0.p25, $0.p50, $0.p75, $0.p90, $0.p90 + ($0.p90 - $0.p75)] }
             ?? [value - 6, value - 3, value + 3, value + 6]
         let i = max(0, min(edges.count - 2, (edges.firstIndex { $0 > value } ?? edges.count - 1) - 1))
@@ -1020,23 +1018,18 @@ struct VO2maxWidget: View {
             .frame(maxWidth: .infinity)
             .padding(.bottom, -18)
             Group {
-                if let change, change != 0 {
+                if let change = vo2.change, change != 0 {
                     Text(L10n.f(change > 0 ? "o %@ výš za 4 týdny" : "o %@ níž za 4 týdny", Fmt.decimal(abs(change))))
-                } else {
+                } else if vo2.change != nil {
                     Text("Stejně jako před 4 týdny")
+                } else {
+                    // Nothing 4 weeks back to compare with: say whose estimate it is, never "the same".
+                    Text(verbatim: vo2.caption)
                 }
             }
             .font(Typo.caption).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
         }
-    }
-
-    /// The change of the own estimate against its last value at least 4 weeks
-    /// before it, rounded as shown; nil without one that old.
-    static func fourWeeks(_ own: HealthVO2max) -> Double? {
-        let before = ISODay.shift(own.date, -28)
-        guard let then = own.series.last(where: { $0.date <= before }) else { return nil }
-        return ((own.value - then.value) * 10).rounded() / 10
     }
 
     private var full: some View {

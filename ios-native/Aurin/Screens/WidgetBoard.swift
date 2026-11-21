@@ -360,11 +360,13 @@ struct WidgetGallery: View {
     let add: (WidgetKind, WidgetSize) -> Void
     @State private var query = ""
     @State private var choosing: WidgetKind?
+    @Environment(\.dismiss) private var dismiss
 
     private var available: [WidgetKind] { WidgetKind.allCases.filter { !placed.contains($0) } }
 
     private var recommended: [WidgetKind] {
-        Array(panel.recommended.filter { !placed.contains($0) && data.hasData($0) }.prefix(6))
+        // Small dials two to a row: only widgets that come small, two rows at most.
+        Array(panel.recommended.filter { !placed.contains($0) && data.hasData($0) && $0.sizes.contains(.small) }.prefix(4))
     }
 
     private var matches: [WidgetKind] {
@@ -378,6 +380,14 @@ struct WidgetGallery: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    // Concept c-widgety-sekce-04: the serif title with the close button, then search.
+                    HStack {
+                        Text("Přidej widget").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                    }
+                    .padding(.bottom, 14)
                     searchField
                     if query.trimmingCharacters(in: .whitespaces).isEmpty {
                         if !recommended.isEmpty { recommendedRow }
@@ -427,29 +437,22 @@ struct WidgetGallery: View {
     }
 
     private var recommendedRow: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Doporučené").font(.headline).foregroundStyle(Palette.ink)
-                .padding(.top, 26)
-            ScrollView(.horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(recommended) { kind in
-                        WidgetPreview(item: PlacedWidget(kind: kind, size: kind.defaultSize), data: data)
-                            .frame(width: kind.defaultSize == .small ? 170 : 300)
-                            .onTapGesture { choosing = kind }
-                            .accessibilityAddTraits(.isButton)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionLabel(text: "Doporučené")
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(recommended) { kind in
+                    WidgetPreview(item: PlacedWidget(kind: kind, size: .small), data: data)
+                        .onTapGesture { choosing = kind }
+                        .accessibilityAddTraits(.isButton)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
             }
-            .scrollIndicators(.hidden)
-            .padding(.horizontal, -20)
         }
+        .padding(.top, 22)
     }
 
     private var sections: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Sekce").font(.headline).foregroundStyle(Palette.ink)
+            SectionLabel(text: "Sekce")
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(WidgetSection.allCases) { section in
                     NavigationLink(value: section) {
@@ -459,7 +462,7 @@ struct WidgetGallery: View {
                 }
             }
         }
-        .padding(.top, 22)
+        .padding(.top, 24)
     }
 }
 
@@ -468,28 +471,24 @@ struct WidgetSectionTile: View {
     let section: WidgetSection
     let count: Int
 
+    /// A neutral row: the black-and-white icon, the name and the count (concept c-widgety-sekce-04).
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                Image(systemName: section.icon)
-                    .scaledFont(18, weight: .semibold)
-                    .foregroundStyle(section.color)
-                Spacer()
-                Text(String(count)).font(Typo.caption).foregroundStyle(Palette.faint)
-            }
+        HStack(spacing: 10) {
+            Image(systemName: section.icon)
+                .scaledFont(14, weight: .medium, cap: .denseCap)
+                .foregroundStyle(Palette.ink)
+                .frame(width: 20)
             Text(section.title)
-                .font(Typo.bodyStrong)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .padding(.top, 26)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 4)
+            Text(String(count)).font(Typo.caption).foregroundStyle(Palette.faint)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(LinearGradient(colors: [section.color.opacity(0.24), section.color.opacity(0.06)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .cardSurface(cornerRadius: 18)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -569,91 +568,67 @@ struct WidgetAddSheet: View {
         self.kind = kind
         self.data = data
         self.add = add
-        self._current = State(initialValue: kind.sizes.first)
+        self._current = State(initialValue: kind.defaultSize)
     }
 
     private var shown: WidgetSize { current ?? kind.sizes.first ?? .medium }
 
+    /// Concept c-widgety-sekce-04: the section above the serif name, the
+    /// widget in the chosen size, the sizes as a switch and one ink button.
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Text(kind.title)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(Palette.ink)
-                .padding(.top, 30)
-            Text(shown.title)
-                .font(Typo.body)
-                .foregroundStyle(Palette.muted)
-                .padding(.top, 4)
-
-            ScrollView(.horizontal) {
-                HStack(spacing: 14) {
-                    ForEach(kind.sizes) { size in
-                        WidgetPreview(item: PlacedWidget(kind: kind, size: size), data: data)
-                            .frame(width: size == .small ? 170 : nil)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .containerRelativeFrame(.horizontal)
-                            .id(size)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    SectionLabel(text: kind.section.title)
+                    Text(kind.title).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .accessibilityAddTraits(.isHeader)
                 }
-                .scrollTargetLayout()
+                Spacer()
+                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
             }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, 34, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollPosition(id: $current)
-            .frame(maxHeight: .infinity)
+
+            WidgetPreview(item: PlacedWidget(kind: kind, size: shown), data: data)
+                .frame(width: shown == .small ? 170 : nil)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.snappy(duration: 0.25), value: shown)
 
             if kind.sizes.count > 1 {
-                HStack(spacing: 7) {
+                HStack(spacing: 2) {
                     ForEach(kind.sizes) { size in
-                        Circle()
-                            .fill(size == shown ? Palette.ink : Palette.faint.opacity(0.35))
-                            .frame(width: 7, height: 7)
-                            .onTapGesture { withAnimation { current = size } }
+                        let on = size == shown
+                        Button { current = size } label: {
+                            Text(size.title)
+                                .scaledFont(14, weight: on ? .semibold : .regular, cap: .denseCap)
+                                .foregroundStyle(on ? Palette.ink : Palette.muted)
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                                .background(on ? Palette.card : .clear, in: Capsule())
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                .accessibilityHidden(true)
-                .padding(.top, 12)
+                .padding(3)
+                .background(Palette.track, in: Capsule())
+                .padding(.top, 16)
             }
 
             Button { add(shown) } label: {
-                Label("Přidat widget", systemImage: "plus")
+                Text("Přidat widget")
                     .font(Typo.bodyStrong)
-                    .foregroundStyle(Palette.onAccent)
+                    .foregroundStyle(Palette.background)
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(Palette.blue, in: Capsule())
+                    .background(Palette.ink, in: Capsule())
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 20)
-            .padding(.top, 24)
-            .padding(.bottom, 16)
+            .padding(.top, 12)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 24)
+        .padding(.bottom, 16)
         .background { Palette.background.ignoresSafeArea() }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: kind.section.icon)
-                .scaledFont(14, weight: .semibold, cap: .denseCap)
-                .foregroundStyle(kind.section.color)
-                .frame(width: 30, height: 30)
-                .background(kind.section.color.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(kind.section.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Spacer()
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .scaledFont(15, weight: .semibold, cap: .denseCap)
-                    .foregroundStyle(Palette.ink)
-                    .frame(width: 32, height: 32)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Zavřít")
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
     }
 }

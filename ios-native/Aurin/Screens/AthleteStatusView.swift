@@ -182,80 +182,72 @@ struct AthleteStatusSheet: View {
 
     static let durations: [(days: Int?, label: String)] = [(nil, "Do změny"), (1, "1 den"), (3, "3 dny"), (7, "1 týden"), (14, "2 týdny")]
 
+    /// Concept b-podstranky-03/04: the serif title on the left with a line
+    /// under it and the close button on the right, the four states as rows of
+    /// one card, the chosen one with a check disc.
     var body: some View {
-        NavigationStack {
-            PageScroll {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(AthleteStatusKind.allCases) { option in
-                        Button { kind = option } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: option.symbol)
-                                    .scaledFont(16, weight: .semibold, cap: .denseCap)
-                                    .foregroundStyle(Palette.onAccent)
-                                    .frame(width: 40, height: 40)
-                                    .background(option.color, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                                    Text(option.subtitle).font(.footnote).foregroundStyle(Palette.muted)
-                                }
-                                Spacer()
-                                Image(systemName: kind == option ? "largecircle.fill.circle" : "circle")
-                                    .scaledFont(20).foregroundStyle(kind == option ? Palette.ink : Palette.faint)
-                            }
-                            .padding(12)
-                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(kind == option ? Palette.ink.opacity(0.25) : .clear, lineWidth: 1) }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(kind == option ? .isSelected : [])
+        PageScroll {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Tvůj stav").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                            .accessibilityAddTraits(.isHeader)
+                        Text("Kouč podle něj plánuje.").font(.subheadline).foregroundStyle(Palette.muted)
                     }
+                    Spacer()
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                }
+                .padding(.bottom, 6)
 
-                    if kind != .active {
-                        HStack {
-                            Label("Ponechat stav", systemImage: "clock.arrow.circlepath").font(.subheadline).foregroundStyle(Palette.ink)
+                VStack(spacing: 0) {
+                    ForEach(Array(AthleteStatusKind.allCases.enumerated()), id: \.element) { i, option in
+                        if i > 0 { Divider().overlay(Palette.hairline).padding(.leading, 64) }
+                        row(option)
+                    }
+                }
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                if kind != .active {
+                    Menu {
+                        ForEach(Self.durations, id: \.label) { d in Button(L10n.tr(d.label)) { days = d.days } }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Platí do").font(.subheadline).foregroundStyle(Palette.muted)
                             Spacer()
-                            Menu {
-                                ForEach(Self.durations, id: \.label) { d in Button(L10n.tr(d.label)) { days = d.days } }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Text(durationLabel).font(.subheadline).foregroundStyle(Palette.muted)
-                                    Image(systemName: "chevron.up.chevron.down").scaledFont(10).foregroundStyle(Palette.faint)
-                                }
-                            }
+                            Text(durationLabel).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                         }
-                        .padding(.horizontal, 14).frame(minHeight: 48)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .padding(.top, 6)
-                        if kind == .injured {
+                        .padding(.horizontal, 16).frame(minHeight: 48)
+                        .background(Palette.card, in: Capsule())
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    if kind == .injured {
+                        VStack(alignment: .leading, spacing: 8) {
+                            SectionLabel(text: "Poznámka pro kouče")
                             TextField("Co tě omezuje, třeba „bolí koleno, žádné skoky“", text: $note, axis: .vertical)
                                 .lineLimit(2...4)
-                                .padding(14)
-                                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .padding(12)
+                                .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
+                        .padding(14)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     }
+                }
 
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                    PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
-                        .disabled(saving || !changed)
-                        .opacity(changed ? 1 : 0.5)
-                        .padding(.top, 8)
-                }
-                .padding(20)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
+                    .disabled(saving || !changed)
+                    .opacity(changed ? 1 : 0.5)
+                    .padding(.top, 4)
             }
-            .background { Palette.background.ignoresSafeArea() }
-            .navigationTitle("Stav sportovce")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
-                        .accessibilityLabel("Zavřít")
-                }
-            }
+            .padding(20)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
+        .background { Palette.background.ignoresSafeArea() }
         .tint(Palette.ink)
-        // Only as tall as the choice (plus the title bar), not the whole screen.
-        .presentationDetents([.height(contentHeight + 64)])
+        // Only as tall as the choice, not the whole screen.
+        .presentationDetents([.height(contentHeight + 24)])
         .presentationDragIndicator(.visible)
         .onAppear {
             kind = AthleteStatusKind.from(current.status)
@@ -265,6 +257,39 @@ struct AthleteStatusSheet: View {
             days = current.statusUntil.flatMap { until in (1...60).first { ISODay.shift(today, $0) == until } }
             initialDays = days
         }
+    }
+
+    /// One state: its icon in ink on a grey square, name and line, and a
+    /// check disc when chosen.
+    private func row(_ option: AthleteStatusKind) -> some View {
+        let on = kind == option
+        return Button { kind = option } label: {
+            HStack(spacing: 12) {
+                Image(systemName: option.symbol)
+                    .scaledFont(15, weight: .medium, cap: .denseCap)
+                    .foregroundStyle(Palette.ink)
+                    .frame(width: 38, height: 38)
+                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(option.subtitle).font(.footnote).foregroundStyle(Palette.muted)
+                }
+                Spacer()
+                ZStack {
+                    if on {
+                        Circle().fill(Palette.ink)
+                        Image(systemName: "checkmark").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.background)
+                    } else {
+                        Circle().stroke(Palette.faint, lineWidth: 1.5)
+                    }
+                }
+                .frame(width: 24, height: 24)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     /// "1 týden", or "do 17. 10." for a length not in the menu.

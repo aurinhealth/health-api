@@ -52,7 +52,7 @@ struct RootView: View {
     /// No tab bar in a full-screen flow nor on a detail: the detail has its
     /// back button and the edge swipe, and the bar would lie over its last rows.
     private var barHidden: Bool {
-        model.immersive || !(model.paths[model.tab] ?? []).isEmpty
+        model.immersive || !(model.paths[model.tab] ?? []).isEmpty || model.coveredRoots.contains(model.tab)
     }
 
     /// Toasts sit above the tab bar and the hidden-workout bar, whichever show.
@@ -746,3 +746,20 @@ struct TabBar: View {
     }
 }
 
+/// A tab's first page reports when a page is pushed over it, so the tab bar
+/// hides on every detail, however it was opened (TestFlight 604: it stayed on
+/// Stretch, Breakfast and Drinks).
+private struct TabRootReport: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let tab: AppTab
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { model.coveredRoots.remove(tab) }
+            .onDisappear { model.coveredRoots.insert(tab) }
+    }
+}
+
+extension View {
+    func tabRoot(_ tab: AppTab) -> some View { modifier(TabRootReport(tab: tab)) }
+}

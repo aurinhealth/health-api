@@ -81,7 +81,8 @@ enum WidgetPanel: String {
 
 /// The gallery's sections, each a coloured tile.
 enum WidgetSection: String, CaseIterable, Identifiable, Hashable {
-    case health, training, food, sleep, movement, body
+    // The order of the gallery (concept c-widgety-sekce-04).
+    case training, sleep, food, movement, health, body
 
     var id: String { rawValue }
 
@@ -89,7 +90,7 @@ enum WidgetSection: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .health: return "Zdraví"
         case .training: return "Trénink"
-        case .food: return "Jídlo a pití"
+        case .food: return "Jídlo"
         case .sleep: return "Spánek"
         case .movement: return "Pohyb"
         case .body: return "Tělo"
@@ -155,7 +156,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .zones: return "Aktivní minuty v zónách"
         case .musclesFigure: return MuscleFatigue.title
         case .musclesGlance: return L10n.isEnglish ? "Muscles at a glance" : "Svaly v kostce"
-        case .food: return "Jídlo a pití"
+        case .food: return "Jídlo"
         case .drinks: return "Pití a hydratace"
         case .macros: return "Makroživiny"
         case .weekCalories: return "Týdenní kalorie"
@@ -559,7 +560,10 @@ struct PanelWidget: View {
                 HRVWidget(hrv: value, restingHR: data.restingHR?.value, size: item.size)
             }
         case .vo2max:
-            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size, own: model.health?.vo2max) }
+            // Aurin's own estimate when Health has it, the number the detail shows.
+            if let training = data.training, let value = (model.health?.vo2max).map(TrainingSnapshot.VO2max.init(aurin:)) ?? training.vo2max {
+                VO2maxWidget(vo2: value, today: training.date, size: item.size, bands: model.health?.vo2max?.compared)
+            }
         case .respiration:
             if let value = data.health?.respiration { RespirationWidget(respiration: value, size: item.size) }
         case .skinTemp:

@@ -36,51 +36,71 @@ struct MonthCalendarSheet: View {
     private var firstMonth: String { ISODay.monthStart(ISODay.shift(today, -90)) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 14) {
-                    Picker("Zobrazit", selection: $metric) {
-                        ForEach(Metric.allCases) { Text(L10n.tr($0.label)).tag($0.rawValue) }
-                    }
-                    .pickerStyle(.segmented)
+        VStack(spacing: 0) {
+        // The month and its buttons stay put while the days scroll.
+        header
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                metricSwitch
+                Text(summary)
+                    .font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 6) {
                     weekdays
                     grid
-                    Text(summary)
-                        .font(Typo.small).foregroundStyle(Palette.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 16).padding(.vertical, 12)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    Text(legend).font(Typo.caption).foregroundStyle(Palette.faint)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
-            }
-            .background { Palette.background.ignoresSafeArea() }
-            .navigationTitle(ISODay.monthTitle(month))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItemGroup(placement: .topBarLeading) {
-                    Button { move(-1) } label: { Image(systemName: "chevron.left") }
-                        .accessibilityLabel("Předchozí měsíc")
-                        .disabled(month <= firstMonth)
-                    Button { move(1) } label: { Image(systemName: "chevron.right") }
-                        .accessibilityLabel("Další měsíc")
-                        .disabled(month >= ISODay.monthStart(today))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Zavřít")
-                }
+                .padding(.horizontal, 10).padding(.vertical, 14)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                Text(legend).font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
                 if month != ISODay.monthStart(today) {
-                    ToolbarItem(placement: .bottomBar) {
-                        Button("Dnes") { month = ISODay.monthStart(today) }
-                    }
+                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = ISODay.monthStart(today) } }
+                        .frame(maxWidth: .infinity)
                 }
+            }
+            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
+        }
+        }
+        .background { Palette.background.ignoresSafeArea() }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .task(id: month) { await model.loadDays(from: month, to: ISODay.monthEnd(month), force: month == ISODay.monthStart(today)) }
+    }
+
+    /// The month in serif on the left; back, forward and close on the right (concept b-podstranky-04).
+    private var header: some View {
+        HStack(spacing: 8) {
+            Text(verbatim: ISODay.monthTitle(month)).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            ChromeButton(systemImage: "chevron.left", label: "Předchozí měsíc", enabled: month > firstMonth) { move(-1) }
+            ChromeButton(systemImage: "chevron.right", label: "Další měsíc", enabled: month < ISODay.monthStart(today)) { move(1) }
+            ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+        }
+    }
+
+    /// Readiness, Sleep, Strain, HRV: a soft track with the chosen one lifted, as under the charts.
+    private var metricSwitch: some View {
+        HStack(spacing: 2) {
+            ForEach(Metric.allCases) { m in
+                let on = m == chosen
+                Button { metric = m.rawValue } label: {
+                    Text(L10n.tr(m.label))
+                        .scaledFont(14, weight: on ? .semibold : .regular, cap: .denseCap)
+                        .foregroundStyle(on ? Palette.ink : Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(on ? Palette.card : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
-        .tint(Palette.ink)
-        .presentationDetents([.large])
-        .task(id: month) { await model.loadDays(from: month, to: ISODay.monthEnd(month), force: month == ISODay.monthStart(today)) }
+        .padding(3)
+        .background(Palette.track, in: Capsule())
     }
 
     private func move(_ by: Int) {
@@ -99,14 +119,14 @@ struct MonthCalendarSheet: View {
     }
 
     private var grid: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             ForEach(Array(ISODay.monthGrid(month).enumerated()), id: \.offset) { _, week in
-                HStack(spacing: 6) {
+                HStack(spacing: 0) {
                     ForEach(0..<7, id: \.self) { i in
                         if let day = week[i] {
                             cell(day)
                         } else {
-                            Color.clear.frame(maxWidth: .infinity, minHeight: 58)
+                            Color.clear.frame(maxWidth: .infinity, minHeight: 44)
                         }
                     }
                 }
@@ -114,36 +134,34 @@ struct MonthCalendarSheet: View {
         }
     }
 
+    /// The day's number inside its ring, as the week strip on Today; today a
+    /// filled ink disc inside the ring, a day without data a dashed ring,
+    /// days to come only a faint number.
     @ViewBuilder private func cell(_ day: String) -> some View {
         let future = day > today
+        let isToday = day == today
         let mark = DayMark(metric: chosen, values: model.dayValues[day])
         Button {
             dismiss()
             Task { await model.showDate(day) }
         } label: {
-            VStack(spacing: 4) {
-                if future {
-                    Spacer(minLength: 0)
-                } else {
-                    DayRing(mark: mark)
-                }
+            ZStack {
+                if !future { DayRing(mark: mark) }
+                if isToday { Circle().fill(Palette.ink).padding(5) }
                 Text(ISODay.day(day))
-                    .scaledFont(13, weight: day == today ? .bold : .semibold, cap: .denseCap)
-                    .foregroundStyle(future ? Palette.faint : day == today ? Palette.amber : Palette.ink)
+                    .scaledFont(14, weight: isToday ? .bold : .medium, cap: .denseCap)
+                    .monospacedDigit()
+                    .foregroundStyle(isToday ? Palette.background : future ? Palette.faint : Palette.ink)
             }
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .padding(.vertical, 4)
-            .background(future ? Color.clear : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(day == date ? Palette.ink : .clear, lineWidth: 2)
-            }
+            .frame(width: 40, height: 40)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(day == date && !isToday ? Palette.ink.opacity(0.07) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(future || model.demo || model.dayLocked)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.dayMonth(day) + (future ? "" : ", " + mark.spoken))
+        .accessibilityLabel(Fmt.dayMonth(day) + (isToday ? ", " + L10n.tr("dnes") : "") + (future ? "" : ", " + mark.spoken))
         .accessibilityAddTraits(day == date ? .isSelected : [])
     }
 
@@ -176,12 +194,12 @@ struct MonthCalendarSheet: View {
     }
 
     private var legend: String {
+        let dashed = " " + L10n.tr("Čárkovaný kroužek je den bez dat.")
         switch chosen {
-        // The dots under the days on Today and Health are this colour too (improvement pass 2026-11-20).
-        case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100.") + " " + L10n.tr("Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním.")
-        case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Zelený od 85 %, oranžový od 70 %, nižší červený.")
-        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený.")
-        case .hrv: return L10n.tr("Šipka je HRV proti obvyklému rozmezí.")
+        case .readiness: return L10n.tr("Kroužek je připravenost 0 až 100. Oranžová je pod tvým obvyklým rozmezím.") + dashed
+        case .sleep: return L10n.tr("Kroužek je spánek proti tvé potřebě, plný při 100 %. Oranžový pod 85 %.") + dashed
+        case .strain: return L10n.tr("Kroužek je námaha dne 0 až 21.") + dashed
+        case .hrv: return L10n.tr("Kroužek je HRV proti obvyklému rozmezí. Oranžový pod ním.") + dashed
         }
     }
 
@@ -190,12 +208,14 @@ struct MonthCalendarSheet: View {
     }
 }
 
-/// What a day's ring shows for one metric: how full, in what colour, an
-/// arrow inside for HRV, and the same for VoiceOver.
+/// What a day's ring shows for one metric: how full, in which of the shared
+/// status colours (green in or above the usual range, orange below it), and
+/// the same for VoiceOver. Strain is an amount, not good or bad: ink.
 struct DayMark: Equatable {
     var fill: Double = 0
     var color: Color = Palette.ink
-    var symbol: String? = nil
+    /// No value that day: a dashed ring.
+    var empty = true
     var spoken: String = L10n.tr("bez dat")
 
     init(metric: MonthCalendarSheet.Metric, values: DayValues?) {
@@ -203,51 +223,49 @@ struct DayMark: Equatable {
         case .readiness:
             guard let r = values?.readiness else { return }
             fill = Double(r.score) / 100
-            color = ReadinessText.pill(r.zone)?.1 ?? Palette.muted
+            color = r.zone == "green" ? Palette.green : r.zone == "yellow" || r.zone == "red" ? Palette.amber : Palette.muted
             spoken = L10n.f("připravenost %@", String(r.score)) + (ReadinessText.pill(r.zone).map { ", " + $0.0 } ?? "")
         case .sleep:
             guard let s = values?.sleep else { return }
             fill = min(Double(s.percent) / 100, 1)
-            // A colour by state as Bevel (Petr, 2026-11-11): how much of the
-            // need the night covered, in WHOOP's sleep performance bands (85 and
-            // 70 %), only a guide; rust as on a red readiness.
-            color = s.percent >= 85 ? Palette.green : s.percent >= 70 ? Palette.amber : Palette.rust
+            // 85 % of the need as WHOOP's sleep performance band, only a guide.
+            color = s.percent >= 85 ? Palette.green : Palette.amber
             spoken = Fmt.hoursMinutesLong(Double(s.minutes)) + ", " + L10n.f("%@ %% potřeby", String(s.percent))
         case .strain:
             guard let v = values?.strain else { return }
             fill = min(v / 21, 1)
-            // How hard, not good or bad: light under 10, moderate under 14,
-            // high above (the usual bands of the 0-21 strain scale).
-            color = v >= 14 ? Palette.rust : v >= 10 ? Palette.amberBar : Palette.gold
+            color = Palette.ink
             spoken = L10n.f("námaha %@", Fmt.decimal(v, digits: 1))
         case .hrv:
             guard let h = values?.hrv else { return }
             fill = 1
             switch h.band {
-            case "above": color = Palette.green; symbol = "arrow.up"; spoken = L10n.f("HRV %@ ms, nad obvyklým rozmezím", String(h.value))
-            case "below": color = Palette.amber; symbol = "arrow.down"; spoken = L10n.f("HRV %@ ms, pod obvyklým rozmezím", String(h.value))
-            default: color = Palette.muted; symbol = "minus"; spoken = L10n.f("HRV %@ ms, v obvyklém rozmezí", String(h.value))
+            case "above": color = Palette.green; spoken = L10n.f("HRV %@ ms, nad obvyklým rozmezím", String(h.value))
+            case "below": color = Palette.amber; spoken = L10n.f("HRV %@ ms, pod obvyklým rozmezím", String(h.value))
+            default: color = Palette.green; spoken = L10n.f("HRV %@ ms, v obvyklém rozmezí", String(h.value))
             }
         }
+        empty = false
     }
 }
 
-/// A day's ring: an empty track without data.
+/// A day's ring around its number: a dashed ring without data.
 struct DayRing: View {
     let mark: DayMark
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            Circle().stroke(Palette.track, lineWidth: 4)
-            Circle().trim(from: 0, to: mark.fill)
-                .stroke(mark.color, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            if let symbol = mark.symbol {
-                Image(systemName: symbol).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(mark.color)
+            if mark.empty {
+                Circle().stroke(Palette.faint, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
+            } else {
+                Circle().stroke(Palette.track, lineWidth: 3.5)
+                Circle().trim(from: 0, to: mark.fill)
+                    .stroke(mark.color, style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             }
         }
-        .frame(width: 28, height: 28)
+        .padding(2)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: mark.fill)
     }
 }
