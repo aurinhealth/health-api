@@ -196,9 +196,9 @@ struct AurinOrb: View {
                 let y = abs((sin(seed * 1.93) * 24634.6345).truncatingRemainder(dividingBy: 1))
                 let drift = CGFloat(sin(t * 0.6 + seed)) * 1.2
                 let point = CGPoint(x: origin.x + block.width * x + drift, y: origin.y + block.height * y - drift)
-                let side = i % 5 == 0 ? radius * 0.05 : radius * 0.034
+                let dot = i % 5 == 0 ? radius * 0.05 : radius * 0.034
                 let bright = 0.55 + 0.4 * (0.5 + 0.5 * sin(t * 1.1 + seed * 3))
-                context.fill(Path(ellipseIn: CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)),
+                context.fill(Path(ellipseIn: CGRect(x: point.x - dot / 2, y: point.y - dot / 2, width: dot, height: dot)),
                              with: .color(Color(red: 0.96, green: 0.93, blue: 0.85).opacity(bright)))
             }
         }
