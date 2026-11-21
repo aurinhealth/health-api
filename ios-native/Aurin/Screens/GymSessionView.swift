@@ -286,7 +286,9 @@ struct GymSessionView: View {
     @ViewBuilder
     private func plannedDetail(_ day: GymDay) -> some View {
         let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
-        let started = Self.started(day)
+        // Sets tick once the workout is under way, and on a past day (logged afterwards,
+        // no live workout for it); today's plan before the start is only to look at.
+        let started = Self.started(day) || date < AppModel.localDate(Date())
         ScrollViewReader { proxy in
             VStack(alignment: .leading, spacing: 0) {
                 hero(day, parts)
@@ -304,8 +306,9 @@ struct GymSessionView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .frame(minHeight: 44)
                     .accessibilityHint(L10n.tr("Proč tenhle trénink"))
-                    .padding(.top, 16)
+                    .padding(.top, 14)
                 }
                 GymPartsCard(day: day, date: date) { withAnimation(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
                     .padding(.top, 22)
@@ -314,7 +317,7 @@ struct GymSessionView: View {
                     Spacer()
                     if !model.demo || previewing {
                         Button(LocalizedStringKey("Upravit pořadí")) { Task { await loadCatalog(); reordering = true } }
-                            .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                            .font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
                             .buttonStyle(.plain)
                     }
                 }
@@ -331,9 +334,10 @@ struct GymSessionView: View {
                     .padding(.top, 6)
                 }
                 if !muscles.isEmpty { worked.padding(.top, 22) }
-                // Sets ticked here before the live workout: they can still be finished here.
-                if started {
-                    PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
+                // Sets ticked here: finished here. While the live workout runs it finishes there
+                // (finishing here would leave its Apple Health workout running).
+                if started && !LiveWorkout.shared.running {
+                    PrimaryButton(title: L10n.tr("Dokončit trénink"), busy: finishing) {
                         Task { await finish() }
                     }
                     .disabled(finishing)
@@ -352,8 +356,8 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 6)
                 }
-                // Room for the pinned Start workout.
-                Color.clear.frame(height: 40)
+                // Room for the pinned Start workout (52 pt and its fade).
+                Color.clear.frame(height: 84)
             }
         }
     }
@@ -372,7 +376,7 @@ struct GymSessionView: View {
                 .background(Palette.Sport.color("strength"), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Text(day.planName ?? L10n.tr("Silový trénink")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(day.planName ?? L10n.tr("Silový trénink")).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: heroLine(day, parts)).font(Typo.small).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -410,7 +414,8 @@ struct GymSessionView: View {
     /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
     private var worked: some View {
         let primary = Self.names(load.filter { $0.value >= BodyMap.primary })
-        let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary })
+        // A group already primary (one of its muscles) is not secondary again.
+        let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
         return VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Co procvičíš")
             VStack(alignment: .leading, spacing: 12) {
@@ -423,26 +428,34 @@ struct GymSessionView: View {
         }
     }
 
-    /// The muscles' names, each once, in the figure's order.
+    /// The muscle groups by how hard they work, each once ("Chest", "Back", "Triceps"),
+    /// as the concept names them: not every head of the shoulder.
     static func names(_ load: [String: Double]) -> [String] {
-        var seen = Set<String>()
-        return load.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
-            .map { BodyFigure.label($0.key) }
-            .filter { seen.insert($0).inserted }
+        var groups: [String: Double] = [:]
+        for (muscle, value) in load { let g = group[muscle] ?? BodyFigure.label(muscle); groups[g] = max(groups[g] ?? 0, value) }
+        return groups.sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }.map(\.key)
     }
+
+    private static let group: [String: String] = [
+        "chest": "Hrudník", "upper_back": "Záda", "lats": "Záda", "lower_back": "Záda", "traps": "Záda",
+        "front_delts": "Ramena", "side_delts": "Ramena", "rear_delts": "Ramena", "biceps": "Biceps", "triceps": "Triceps",
+        "forearms": "Předloktí", "abs": "Střed těla", "obliques": "Střed těla", "hips": "Hýždě", "quads": "Stehna",
+        "hamstrings": "Zadní stehna", "calves": "Lýtka"
+    ].mapValues { L10n.tr($0) }
 
     private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Circle().fill(filled ? Palette.rust : Palette.rust.opacity(0.45)).frame(width: 7, height: 7)
+                // The figure's colours: rust for primary, amber for secondary.
+                Circle().fill(filled ? Palette.rust : Palette.amberBar).frame(width: 7, height: 7)
                 Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             FlowLayout(spacing: 6) {
                 ForEach(names, id: \.self) { name in
-                    Text(verbatim: name).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 10).frame(height: 28)
+                    Text(verbatim: name).font(Typo.caption.weight(filled ? .semibold : .medium)).foregroundStyle(filled ? Palette.ink : Palette.muted)
+                        .padding(.horizontal, 13).frame(minHeight: 32)
                         .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
-                        .overlay { if !filled { Capsule().stroke(Palette.rust.opacity(0.4), lineWidth: 1) } }
+                        .overlay { if !filled { Capsule().stroke(Palette.amberBar.opacity(0.7), lineWidth: 1.5) } }
                 }
             }
         }
@@ -459,15 +472,18 @@ struct GymSessionView: View {
                 Text(verbatim: L10n.tr(resume ? "Pokračovat v tréninku" : "Začít trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 52)
                     .background(Palette.button, in: Capsule())
-                    .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
             }
             .buttonStyle(.plain)
             // Start workout opens with 3, 2, 1 and starts (concept 08); a started one goes on.
             .simultaneousGesture(TapGesture().onEnded {
                 if resume { TrainingModeView.resumeOnOpen = date } else { TrainingModeView.startOnOpen = date }
             })
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 16)
+            .padding(.top, 28)
             .padding(.bottom, 12)
+            // The page fades out under the pill, so the last row never sits behind it unreadable.
+            .background(LinearGradient(colors: [Palette.background.opacity(0), Palette.background], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)))
         }
     }
 
@@ -710,7 +726,7 @@ struct ExerciseCard: View {
                     }
                     // The same rows as Režim tréninku (GymSetRow): one way to log a set.
                     VStack(spacing: 2) {
-                        GymSetTableHeader()
+                        GymSetTableHeader(planOnly: !started)
                         // By place in the exercise: rows renumbered elsewhere keep what is typed.
                         ForEach(Array(exercise.sets.enumerated()), id: \.offset) { _, set in
                             // Swiped left: just this set goes away.
@@ -746,14 +762,15 @@ struct ExerciseCard: View {
 
     private func row(_ s: GymSet, current: GymSet?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
-        let pick = onIntensity
+        // Before the start the plan is only to look at: no effort letter, no tick.
+        let pick = started ? onIntensity : nil
         return GymSetRow(label: s.warmup ? (s.side == "P" ? "" : "W") : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
                          reps: Fmt.range((s.done ? s.reps : s.plannedReps) ?? ""),
                          state: phase, kgText: $kg, repsText: $reps, repsHint: s.plannedReps.map(Fmt.range),
                          drop: s.drop, intensity: s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : s.intensity, planned: !s.done,
-                         onIntensity: pick == nil ? nil : { pick?(s) }) {
+                         onIntensity: pick == nil ? nil : { pick?(s) }, planOnly: !started) {
             switch phase {
             case .done: onUndo(s)
             case .current:

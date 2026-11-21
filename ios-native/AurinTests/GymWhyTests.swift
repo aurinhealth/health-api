@@ -32,6 +32,17 @@ final class GymWhyTests: XCTestCase {
         XCTAssertNil(GymWhy.coachLine([]))
     }
 
+    /// The generator's "Up next" sentence (src/strength-generator.js, split rationale) leads;
+    /// the long explanation of the split stays in the sheet.
+    func testCoachLinePutsUpNextFirstAndLeavesTheSplitOut() {
+        let note = L10n.isEnglish
+            ? "With 3 gym sessions a week you train a split (pushing / pulling / legs), so the muscle groups don't overlap and have time to recover. Up next: legs, last trained 5 days ago. The exercises rotate by what you did last."
+            : "Při 3 posilovnách týdně trénuješ ve splitu (tlaky / tahy / nohy), aby se partie nepřekrývaly a stihly zregenerovat. Na řadě: nohy, naposledy před 5 dny. Cviky se střídají podle toho, co jsi dělal naposledy."
+        let line = GymWhy.coachLine(GymWhy.reasons(note)) ?? ""
+        XCTAssertTrue(line.hasPrefix(L10n.isEnglish ? "Up next: legs" : "Na řadě: nohy"), line)
+        XCTAssertFalse(line.lowercased().contains("split"), line)
+    }
+
     func testNoNoteNoReasons() {
         XCTAssertTrue(GymWhy.reasons(nil).isEmpty)
         XCTAssertTrue(GymWhy.reasons("Time plan: about 40 of 45 minutes.").isEmpty)

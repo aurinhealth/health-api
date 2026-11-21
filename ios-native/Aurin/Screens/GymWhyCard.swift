@@ -19,7 +19,8 @@ enum GymWhy {
         func rank(_ r: Reason) -> Int {
             switch r.title {
             case L10n.tr("Šetřím nohy"): return 0
-            case nil: return r.detail.hasPrefix(L10n.tr("Na řadě")) ? 1 : 9
+            // The split's long explanation stays in the sheet; another plain sentence is the coach's.
+            case nil: return r.detail.hasPrefix(L10n.tr("Na řadě")) ? 1 : r.detail.lowercased().contains("split") ? 9 : 4
             case L10n.tr("Odlehčený týden"), L10n.tr("Bolest"), L10n.tr("První trénink"): return 2
             case L10n.tr("Nové cviky"), L10n.tr("Nová varianta"): return 3
             case L10n.tr("Cíl"): return 5
@@ -124,20 +125,21 @@ struct GymWhySheet: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(reasons.enumerated()), id: \.element.id) { index, reason in
                             if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                            VStack(alignment: .leading, spacing: 2) {
-                                if let title = reason.title {
-                                    Text(verbatim: title).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                                }
-                                Text(verbatim: reason.detail).font(Typo.body).foregroundStyle(Palette.ink)
+                            // The kind on the left, what it means on the right (concept sheet "whyg").
+                            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                Text(verbatim: reason.title ?? L10n.tr("Kouč")).font(Typo.caption).foregroundStyle(Palette.muted)
+                                    .frame(width: 96, alignment: .leading)
+                                Text(verbatim: reason.detail).font(Typo.bodyStrong.weight(.medium)).foregroundStyle(Palette.ink)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 12)
+                            .accessibilityElement(children: .combine)
                         }
                     }
                     .padding(.horizontal, 18)
                     .cardSurface(cornerRadius: 20)
-                    Text("Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit.")
+                    Text("Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink.")
                         .font(Typo.small).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }

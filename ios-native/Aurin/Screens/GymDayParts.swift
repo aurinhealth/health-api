@@ -162,7 +162,7 @@ struct GymPartsCard: View {
                 SectionLabel(text: "Části tréninku")
                 Spacer()
                 Button(changing ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit")) { withAnimation(.snappy) { changing.toggle() } }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                    .font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
                     .buttonStyle(.plain)
             }
             VStack(spacing: 0) {
