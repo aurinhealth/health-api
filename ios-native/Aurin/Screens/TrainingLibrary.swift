@@ -853,7 +853,7 @@ struct LibraryBrickCard: View {
                 sum + (s.end - s.start) / 60 * pow(s.percent / 100, 2) * 100
             }
         }
-        return StrainDetailView.strain(tss: load)
+        return StrainDetailContent.strain(tss: load)
     }
 }
 
@@ -1257,7 +1257,7 @@ struct LibraryWorkoutCard: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     if let d = workout.duration_minutes { Text(verbatim: LengthControl.short(Int(d))).font(Typo.number(22)).foregroundStyle(Palette.ink) }
                     if let load = workout.target_load, load > 0 {
-                        Text(verbatim: Fmt.decimal(StrainDetailView.strain(tss: load), digits: 1) + "\u{00A0}" + L10n.tr("odh."))
+                        Text(verbatim: Fmt.decimal(StrainDetailContent.strain(tss: load), digits: 1) + "\u{00A0}" + L10n.tr("odh."))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
@@ -1449,7 +1449,7 @@ struct LibraryWorkoutSheet: View {
                 HStack(spacing: 18) {
                     if let d = workout.duration_minutes { meta("Délka", Fmt.duration(Int(d))) }
                     if let m = workout.distance_meters, m > 0 { meta("Vzdálenost", Fmt.int(m) + " m") }
-                    if let l = workout.target_load, l > 0 { meta(L10n.tr("Námaha"), Fmt.decimal(StrainDetailView.strain(tss: l), digits: 1) + "\u{00A0}" + L10n.tr("odh.")) }
+                    if let l = workout.target_load, l > 0 { meta(L10n.tr("Námaha"), Fmt.decimal(StrainDetailContent.strain(tss: l), digits: 1) + "\u{00A0}" + L10n.tr("odh.")) }
                     if let level = workout.difficultyLabel { meta("Obtížnost", level) }
                 }
                 if let s = workout.primary_system {
