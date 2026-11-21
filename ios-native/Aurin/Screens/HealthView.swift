@@ -37,6 +37,17 @@ struct HealthView: View {
 }
 
 /// A drill-down page: the section's background, a back button and a column.
+private struct SectionGlowKey: EnvironmentKey { static let defaultValue: Color? = nil }
+
+extension EnvironmentValues {
+    /// The tab's glow for pages that open from more than one tab (Readiness,
+    /// What affects you, Tonight): Health's indigo from Health (DES-3).
+    var sectionGlow: Color? {
+        get { self[SectionGlowKey.self] }
+        set { self[SectionGlowKey.self] = newValue }
+    }
+}
+
 struct DetailScreen<Content: View>: View {
     var glow: Color = Palette.Glow.health
     /// Shown in the pinned bar once the page is scrolled.

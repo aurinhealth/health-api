@@ -34,6 +34,7 @@ struct SleepSettingsView: View {
 
 struct SleepSettingsForm: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.sectionGlow) private var sectionGlow
     let store: SettingsStore
     var route = false
     /// 0 = by age and the day (automatic); else minutes.
@@ -59,7 +60,8 @@ struct SleepSettingsForm: View {
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
 
     var body: some View {
-        SettingsPage(title: L10n.tr("Spánek")) {
+        // From a card the tab's glow (Health indigo, Today green), as the other pages there (DES-3).
+        SettingsPage(title: L10n.tr("Spánek"), glow: route ? sectionGlow ?? Palette.Glow.today : nil) {
             // Room under the pinned back button.
             if route { Color.clear.frame(height: 46) }
             if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
