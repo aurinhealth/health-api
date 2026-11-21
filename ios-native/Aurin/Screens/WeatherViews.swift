@@ -196,7 +196,7 @@ struct WeatherDetails: View {
             if !hours.isEmpty {
                 Card(padding: 14) {
                     Text("Po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil)
+                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil, nowTemp: weather.now?.temp)
                 }
             }
 
@@ -217,9 +217,14 @@ struct WeatherDetails: View {
             }
             .buttonStyle(.plain)
 
-            // No "Updated 9:41" (Petr 2026-11-20: no other weather sheet has
-            // it); Apple's mark and its legal link are what WeatherKit asks for.
+            // "Updated 9:41" only when the forecast is old (Petr 2026-11-20:
+            // no time on fresh weather; DATA-4: stale data says so). Apple's
+            // mark and its legal link are what WeatherKit asks for.
             if AppleWeather.credited(weather) {
+                if let updated = Self.staleSince(weather.now?.asOf) {
+                    Text(verbatim: L10n.f("Aktualizováno %@.", updated)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .padding(.horizontal, 4)
+                }
                 HStack {
                     AppleWeatherMark(size: 13)
                     Spacer()
@@ -375,6 +380,16 @@ struct WeatherDetails: View {
         return .init(ride: keep(outdoors.ride), run: keep(outdoors.run))
     }
 
+    /// Apple's "asOf" as the phone's time of day, only when it is more than
+    /// three hours old.
+    static func staleSince(_ iso: String?, now: Date = Date()) -> String? {
+        guard let iso else { return nil }
+        let plain = ISO8601DateFormatter(), fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = plain.date(from: iso) ?? fractional.date(from: iso), now.timeIntervalSince(date) > 3 * 3600 else { return nil }
+        return ClockText.format(date)
+    }
+
     private func legend(_ color: Color, _ text: String) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7)
@@ -425,6 +440,9 @@ struct WeatherHourStrip: View {
     let hours: [TodaySnapshot.Weather.Hour]
     /// The first hour is the one running now ("Teď").
     var nowFirst = false
+    /// "Teď" with the temperature at the top of the sheet, not the hour's
+    /// forecast (8° above and 9° here, device comparison of build 602).
+    var nowTemp: Double? = nil
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -438,7 +456,7 @@ struct WeatherHourStrip: View {
                             .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now ? Palette.blue : newDay ? Palette.ink : Palette.faint)
                         Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
-                        Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Text(verbatim: WeatherText.degrees(now ? (nowTemp ?? h.temp) : h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                         Text(verbatim: (h.rainProb ?? 0) >= 10 ? WeatherText.percent(h.rainProb) : " ")
                             .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.blue)
                     }

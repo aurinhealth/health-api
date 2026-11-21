@@ -547,7 +547,7 @@ struct RecoveryTimeContent: View {
                 VStack(spacing: 0) {
                     let lightLater = time.light.map { $0 > now } ?? false
                     row(icon: "figure.walk", color: Palette.green, title: L10n.tr("Lehký trénink"),
-                        detail: L10n.tr(time.legsTired ? "Z1–Z2, posilovna bez nohou" : "Z1–Z2, jiné svaly"),
+                        detail: L10n.tr(time.legsTired ? "klidné tempo, posilovna bez nohou" : "klidné tempo, jiné svaly"),
                         trailing: lightLater ? time.light.map { RecoveryTime.part($0, today: today, now: now) } ?? "" : L10n.tr("už teď"),
                         ready: !lightLater)
                     Divider().overlay(Palette.hairline)
@@ -584,11 +584,17 @@ struct RecoveryTimeContent: View {
             HStack {
                 if let start = time.start { Text(verbatim: RecoveryTime.short(start, ready: false)) }
                 Spacer()
-                Text("teď")
-                Spacer()
                 if let ready = time.ready { Text(verbatim: RecoveryTime.short(ready)) }
             }
             .font(Typo.caption).foregroundStyle(Palette.muted)
+            // "teď" under the end of the fill, where now is on the bar.
+            GeometryReader { geo in
+                let x = geo.size.width * time.liveProgress(now: now)
+                Text("teď").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.green)
+                    .fixedSize()
+                    .position(x: min(max(x, 14), geo.size.width - 14), y: 8)
+            }
+            .frame(height: 16)
         }
         .accessibilityElement(children: .combine)
     }
