@@ -235,16 +235,27 @@ struct SubscriptionView: View {
 enum Paywall {
     private static let tag = 0x10AD
 
-    static func present(_ model: AppModel, closed: (() -> Void)? = nil) {
+    /// `from`: the "Unlock with Pro" tapped, in screen points; the offer then
+    /// comes in around it over the page instead of sliding up (Pro concept).
+    /// `orb`: the Aurin age orb it stood under.
+    static func present(_ model: AppModel, from source: CGRect? = nil, orb: CGRect? = nil, closed: (() -> Void)? = nil) {
         guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
         var top = root
         while let next = top.presentedViewController { top = next }
         guard top.view.tag != tag else { return }
         let host = UIHostingController(rootView: AnyView(EmptyView()))
-        host.rootView = AnyView(PaywallView(close: { [weak host] in host?.dismiss(animated: true) { closed?() } }).environment(model))
+        // Reduce Motion: no way in, the offer at once as from anywhere else.
+        let source = UIAccessibility.isReduceMotionEnabled ? nil : source
+        host.rootView = AnyView(PaywallView(close: { [weak host] in host?.dismiss(animated: true) { closed?() } }, source: source, orb: orb).environment(model))
         host.view.tag = tag
-        host.modalPresentationStyle = .fullScreen
-        top.present(host, animated: true)
+        if source != nil {
+            host.modalPresentationStyle = .overFullScreen
+            host.view.backgroundColor = .clear
+            top.present(host, animated: false)
+        } else {
+            host.modalPresentationStyle = .fullScreen
+            top.present(host, animated: true)
+        }
     }
 }
 

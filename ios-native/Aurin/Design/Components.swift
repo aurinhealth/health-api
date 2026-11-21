@@ -542,7 +542,7 @@ private struct PinnedTopBar: ViewModifier {
     func body(content: Content) -> some View {
         let page = content
             .overlay(alignment: .bottom) {
-                if locked, let model { UnlockProPill { Paywall.present(model) }.padding(.bottom, 12) }
+                if locked, let model { UnlockProPill { Paywall.present(model, from: $0) }.padding(.bottom, 12) }
             }
             .environment(\.floatingBack, true)
             .environment(\.scrollReport, { (offset: CGFloat) in
@@ -637,18 +637,34 @@ private struct PinnedTopBar: ViewModifier {
 /// "Unlock with Pro" floating in glass at the bottom of a subpage without Pro
 /// (Pro concept): it opens the offer.
 struct UnlockProPill: View {
-    let action: () -> Void
+    /// Gets where the pill stands on screen, for the way into the offer.
+    let action: (CGRect) -> Void
+    /// A box, not state: written on every scroll frame without drawing again.
+    @State private var frame = FrameBox()
+    /// Tapped: its copy travels into the offer, so this one steps aside a moment.
+    @State private var tapped = false
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            action(frame.rect)
+            tapped = true
+            Task { try? await Task.sleep(for: .seconds(1)); tapped = false }
+        } label: {
             Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 18).frame(height: 44)
                 .chromeGlass(in: Capsule())
         }
         .buttonStyle(.plain)
+        .opacity(tapped ? 0 : 1)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame.rect = $0 }
         .accessibilityIdentifier("unlock-pro")
     }
+}
+
+/// A place on screen kept without redrawing the view that measures it.
+final class FrameBox {
+    var rect: CGRect = .zero
 }
 
 extension View {
