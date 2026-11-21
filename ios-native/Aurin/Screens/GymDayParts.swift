@@ -123,6 +123,15 @@ extension GymDayParts {
 
     func minutes(_ part: GymDayPart, day: GymDay) -> Int { routine(part, day: day)?.minutes ?? 0 }
 
+    /// The exercises' minutes: the planned session's length (as the Training
+    /// card shows it) less the other parts that are on; the sets' own estimate
+    /// without a length.
+    func exerciseMinutes(_ day: GymDay, total: Int?) -> Int? {
+        guard let total else { return day.plannedMinutes }
+        let others = visible(day).filter { $0 != .exercises && isOn($0) }.reduce(0) { $0 + minutes($1, day: day) }
+        return max(0, total - others)
+    }
+
     /// "Automaticky, 6 min", "Legs, 7 min", "Rotoped, 10 min", "Rotoped, Bez limitu".
     func subtitle(_ part: GymDayPart, day: GymDay) -> String {
         if part.isCardio {
@@ -142,6 +151,8 @@ extension GymDayParts {
 struct GymPartsCard: View {
     let day: GymDay
     let date: String
+    /// The session's length from Training, so this card and the Training card agree.
+    var total: Int? = nil
     /// Exercises: the cards under this one.
     var onExercises: () -> Void = {}
     @Environment(AppModel.self) private var model
@@ -301,7 +312,7 @@ struct GymPartsCard: View {
         switch part {
         case .exercises:
             let words = [L10n.plural("%lld cviků", day.exercises.count), L10n.plural("%lld sérií", day.exercises.reduce(0) { $0 + $1.workCount })]
-            return (words + (day.plannedMinutes.map { ["\($0) min"] } ?? [])).joined(separator: ", ")
+            return (words + (parts.exerciseMinutes(day, total: total).map { ["\($0) min"] } ?? [])).joined(separator: ", ")
         case .warmup, .stretching:
             guard let routine = parts.routine(part, day: day) else { return parts.subtitle(part, day: day) }
             let count = L10n.plural(part == .warmup ? "%lld pohybů" : "%lld protažení", routine.items.count)

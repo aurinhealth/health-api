@@ -747,9 +747,8 @@ struct NextSession: View {
             guard let day = gymDay else { return [] }
             let chosen = GymDayParts.resolved(day, stored: UserDefaults.standard.string(forKey: GymDayParts.storageKey) ?? "", date: session.date)
             let shown = chosen.visible(day).filter { chosen.isOn($0) }
-            let others = shown.filter { $0 != .exercises }.reduce(0) { $0 + chosen.minutes($1, day: day) }
             return shown.map { part in
-                let minutes = part == .exercises ? max(0, (session.minutes ?? 0) - others) : chosen.minutes(part, day: day)
+                let minutes = part == .exercises ? chosen.exerciseMinutes(day, total: session.minutes) ?? 0 : chosen.minutes(part, day: day)
                 return WorkoutCardPart(name: Self.partName(part), minutes: minutes)
             }
             .filter { $0.minutes > 0 }
