@@ -2,6 +2,9 @@ import SwiftUI
 
 // MARK: - Sleep
 
+/// One night (concept 5, "Detail noci"): the arrows through the nights, the
+/// night as an arc from bedtime to waking, three cells, the stages, the
+/// index, tonight's need, the debt and three pages for more.
 struct SleepDetailView: View {
     @Environment(AppModel.self) private var model
     let health: HealthSnapshot
@@ -9,9 +12,10 @@ struct SleepDetailView: View {
     @State private var failed = false
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health, title: "Spánek",
+        DetailScreen(glow: Palette.Glow.today, title: "Spánek",
                      coach: .sleep(line: health.sleep.night?.minutes.map { L10n.f("Dnes %@", Fmt.duration(Int($0))) }, date: health.date)) {
-            SleepDetailContent(health: health, detail: detail, failed: failed) { await load() }
+            SleepDetailContent(health: health, detail: detail, failed: failed, retry: { await load() },
+                               loadNight: model.demo ? nil : { date in try? await model.api.night(date: date) })
         }
         .task {
             guard detail == nil, health.sleep.night != nil else { return }
@@ -31,185 +35,309 @@ struct SleepDetailContent: View {
     /// The night's timeline didn't load: "Zkusit znovu" where the chart goes.
     var failed = false
     var retry: () async -> Void = {}
+    /// An earlier night for the arrows; nil keeps the page on last night.
+    var loadNight: ((String) async -> NightDetail?)? = nil
+
+    /// The night shown, the morning's date; nil is last night.
+    @State private var picked: String?
+    @State private var earlier: [String: NightDetail] = [:]
+
+    private var date: String { picked ?? health.date }
+    private var isLast: Bool { picked == nil || picked == health.date }
+    private var shownDetail: NightDetail? { isLast ? detail : earlier[date] }
+    /// The 14 nights the arrows go through, the ones measured.
+    private var nights: [String] {
+        let list = (health.sleep.index?.nights.map(\.date) ?? []) + health.sleep.week.map(\.date) + [health.date]
+        return Array(Set(list)).filter { $0 <= health.date }.sorted()
+    }
 
     var body: some View {
         let sleep = health.sleep
-        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.f("Spánek v noci na %@", weekday(health.date))).padding(.top, 24)
-            if let night = sleep.night {
-                HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                        .accessibilityLabel(Fmt.hoursMinutesSpoken(night.minutes))
-                    if let index = night.index {
-                        // Taps down to what makes up the index.
-                        Button { withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.partsAnchor, anchor: .top) } } label: {
-                            Pill(text: L10n.f("index %@", String(index)) + " ›", foreground: Palette.indigo, background: Palette.lilac)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.f("Index spánku %d.", index))
-                        .accessibilityHint(L10n.tr("Ukáže, z čeho se index skládá."))
-                        .accessibilityIdentifier("sleep.index")
-                    }
-                }
-                .padding(.top, 12)
-                // The index keeps its place with the usual range and one sentence (D-ZDRAVI-17).
-                if night.index != nil {
-                    Text(verbatim: Self.indexSentence(sleep.index))
-                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-            } else {
-                Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-            }
-
-            if let night = sleep.night {
-                ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
-                    .padding(.top, 26)
-                if night.index != nil {
-                    SectionLabel(text: "Z čeho se skládá index").padding(.top, 30).id(Self.partsAnchor)
-                    Card { SleepIndexParts(night: night, wakeups: detail?.night?.stats?.wakeups) }.padding(.top, 14)
-                }
-                // The window is the last 14 nights, however many of them were measured.
-                if let index = sleep.index, index.nights.count >= 2 {
+            switcher.padding(.top, 8)
+            if let night = summary {
+                arc(night).padding(.top, 6)
+                ThreeCells(cells: [("Usnutí", night.start ?? "–"), ("Probuzení", night.end ?? "–"), ("V posteli", night.inBed.map { TodayDials.length($0) } ?? "–")])
+                    .padding(.top, 18)
+                stages(night).padding(.top, 28)
+                if let index = night.index {
                     HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(text: L10n.f("Index spánku za posledních %@ nocí", "14"))
-                        Spacer(minLength: 8)
-                        Text(verbatim: L10n.f("průměr %@ / 100", String(index.average))).font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                    .padding(.top, 30)
-                    Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
-                }
-                if let stages = night.stages {
-                    SectionLabel(text: "Fáze spánku").padding(.top, 30)
-                    Card {
-                        if failed && detail == nil {
-                            RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry)
-                        } else if let segments = detail?.night?.segments, !segments.isEmpty {
-                            Hypnogram(segments: segments)
-                            HStack {
-                                Text(ClockText.format(optional: night.start) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
-                                Spacer()
-                                Text(ClockText.format(optional: night.end) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
-                            }
-                            .padding(.leading, 56)
-                        }
-                        StageTotals(stages: stages, wakeups: detail?.night?.stats?.wakeups, usual: night.usual)
-                    }
-                    .padding(.top, 14)
-                } else if failed && detail == nil {
-                    RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry).padding(.top, 26)
-                }
-            }
-
-            if let night = detail?.night, let hr = night.hr, hr.count > 3 {
-                SectionLabel(text: "Tělo během noci").padding(.top, 30)
-                // Opens Tep ve spánku with the night already loaded here.
-                NavigationLink { SleepHeartRateView(health: health, night: night) } label: {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text("Tep").font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text(verbatim: Fmt.int(night.stats?.avgHr)).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                            Text("bpm").font(Typo.small).foregroundStyle(Palette.faint)
-                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-                        }
-                        .padding(.vertical, 13)
-                        let end = SleepHeartRate.end(night)
-                        NightHeartChart(hr: hr, low: SleepHeartRate.low(night), end: end, height: 78)
-                            .padding(.top, 2)
-                        NightStageStrip(segments: night.segments ?? [], end: end).padding(.top, 6)
-                        NightClockRow(night: night).padding(.top, 6)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PressableCardStyle())
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(L10n.f("Tep ve spánku, průměr %@ bpm", Fmt.int(night.stats?.avgHr)))
-                .accessibilityIdentifier("open.sleepHeartRate")
-            }
-            VStack(spacing: 0) {
-                if let stats = detail?.night?.stats, let hrv = stats.hrv {
-                    MetricRow(metric: .hrv, title: "HRV v noci", value: Fmt.int(hrv), unit: "ms" + (stats.hrvLow.map { ", " + Fmt.int($0) + "–" + Fmt.int(stats.hrvHigh) } ?? ""))
-                }
-                if let r = health.respiration { MetricRow(metric: .respiration, title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
-                if let d = health.wristTemp?.deviation ?? health.skinTemp?.deviation {
-                    MetricRow(metric: .temperature, title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(d), digits: 1), unit: L10n.f("%@ od obvyklé", Units.temperatureUnit))
-                }
-                if let o = health.oxygen { MetricRow(metric: .oxygen, title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") }
-            }
-            .padding(.top, 14)
-
-            // Tonight as one row; why the need is what it is lives in the
-            // planner only (D-ZDRAVI-17), the debt over the last 7 nights.
-            Card {
-                RouteLink(route: .sleepSettings) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Dnes v noci").font(.body).foregroundStyle(Palette.ink)
-                        Spacer(minLength: 8)
-                        Text(verbatim: Self.tonightLine(sleep.tonight)).font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.trailing)
-                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                if let debt = sleep.debt {
-                    Rectangle().fill(Palette.hairline).frame(height: 1)
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Spánkový dluh za posledních 7 nocí").font(.body)
+                        SectionLabel(text: "Index spánku")
                         Spacer()
-                        Text(Fmt.hoursMinutes(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.ink)
-                            .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
+                        Text(verbatim: String(index)).font(Typo.number(26)).foregroundStyle(Palette.ink)
                     }
-                    DebtStrip(minutes: debt.minutes)
+                    .padding(.top, 28)
+                    // The usual range and one sentence (D-ZDRAVI-17).
+                    Text(verbatim: Self.indexSentence(sleep.index)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+                    if isLast, let last = sleep.night, last.parts != nil {
+                        Card { SleepIndexParts(night: last, wakeups: shownDetail?.night?.stats?.wakeups) }.padding(.top, 10)
+                    }
                 }
+            } else if isLast {
+                Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
+            } else if failed || loadNight == nil {
+                Text("Tuhle noc se nepodařilo načíst.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 16)
+            } else {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
             }
-            .padding(.top, 32)
 
-            if let reg = sleep.regularity, !reg.nights.isEmpty {
-                let usual = RegularityChart.usual(reg.nights)
-                SectionLabel(text: L10n.f("Pravidelnost za %@ nocí", String(reg.nights.count))).padding(.top, 32)
-                Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
-                    .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 10)
-                Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
-            }
-            if let night = sleep.night {
-                VStack(spacing: 0) {
-                    if let latency = night.latencyMinutes { StatRow(title: "Doba do usnutí", value: Fmt.int(latency), unit: "min") }
-                    if let eff = night.efficiency { StatRow(title: "Efektivita spánku", value: String(eff), unit: "%") }
+            if isLast {
+                tonight(sleep.tonight).padding(.top, 28)
+                if let debt = sleep.debt {
+                    Card {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Spánkový dluh").font(.body).foregroundStyle(Palette.ink)
+                                Text("za posledních 7 nocí").font(Typo.caption).foregroundStyle(Palette.muted)
+                            }
+                            Spacer()
+                            Text(verbatim: TodayDials.length(Double(debt.minutes))).font(Typo.number(28)).foregroundStyle(Palette.ink)
+                                .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(debt.minutes)))
+                        }
+                    }
+                    .padding(.top, 12)
                 }
-                .padding(.top, 18)
             }
-        }
+            links.padding(.top, 12)
         }
     }
 
-    static let partsAnchor = "sleep.indexParts"
+    // MARK: The night
+
+    /// What the page shows of a night: last night from the snapshot, an
+    /// earlier one from /app/api/night.
+    struct Summary {
+        let minutes: Double?
+        let inBed: Double?
+        let start: String?
+        let end: String?
+        /// Minutes from midnight of the evening (past midnight above 1440).
+        let bed: Double?
+        let wake: Double?
+        let stages: HealthSnapshot.Stages?
+        let index: Int?
+    }
+
+    private var summary: Summary? {
+        let shown = shownDetail?.night
+        if isLast, let night = health.sleep.night {
+            return Summary(minutes: night.minutes, inBed: night.inBedMinutes,
+                           start: ClockText.format(optional: night.start), end: ClockText.format(optional: night.end),
+                           bed: shown?.bedClock, wake: shown?.wakeClock, stages: night.stages, index: night.index)
+        }
+        guard let night = shown, night.asleepMin != nil || night.segments?.isEmpty == false else { return nil }
+        return Summary(minutes: night.asleepMin ?? Self.stages(night.segments)?.asleep, inBed: night.inBedMin,
+                       start: night.bedClock.map { ClockText.format(minutes: Int($0.rounded()) % 1440) },
+                       end: night.wakeClock.map { ClockText.format(minutes: Int($0.rounded()) % 1440) },
+                       bed: night.bedClock, wake: night.wakeClock, stages: Self.stages(night.segments)?.stages,
+                       index: health.sleep.index?.nights.first { $0.date == date }.map { Int($0.value.rounded()) })
+    }
+
+    /// The stages added up from the night's segments, for an earlier night.
+    static func stages(_ segments: [NightDetail.Segment]?) -> (stages: HealthSnapshot.Stages, asleep: Double)? {
+        guard let segments, !segments.isEmpty else { return nil }
+        func total(_ type: String) -> Double { segments.filter { $0.type == type }.map { $0.e - $0.s }.reduce(0, +) }
+        let stages = HealthSnapshot.Stages(deep: total("DEEP"), light: total("LIGHT"), rem: total("REM"), awake: total("AWAKE"))
+        return (stages, stages.deep + stages.light + stages.rem)
+    }
+
+    /// "< NIGHT TO MON, NOV 9 >": the arrows through the 14 nights.
+    private var switcher: some View {
+        let list = nights, index = list.firstIndex(of: date)
+        let before = index.flatMap { $0 > 0 ? list[$0 - 1] : nil }
+        let after = index.flatMap { $0 + 1 < list.count ? list[$0 + 1] : nil }
+        return HStack {
+            arrow("chevron.left", to: before, label: "Předchozí noc")
+            Spacer()
+            Text(verbatim: L10n.f("Noc na %@", Self.dayName(date)).uppercased(with: Fmt.locale))
+                .scaledFont(12, weight: .medium, cap: .denseCap).tracking(1.5).foregroundStyle(Palette.muted)
+            Spacer()
+            arrow("chevron.right", to: after, label: "Další noc")
+        }
+    }
+
+    private func arrow(_ symbol: String, to night: String?, label: String) -> some View {
+        Button {
+            guard let night else { return }
+            picked = night == health.date ? nil : night
+            guard night != health.date, earlier[night] == nil, let loadNight else { return }
+            Task { if let loaded = await loadNight(night) { earlier[night] = loaded } }
+        } label: {
+            Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(night == nil || loadNight == nil ? Palette.faint.opacity(0.5) : Palette.ink)
+                .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                .frame(width: 44, height: 44).contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(night == nil || loadNight == nil)
+        .accessibilityLabel(L10n.tr(label))
+    }
+
+    /// "Mon, Nov 9" / "po 9. 11." for the morning the night ends on.
+    static func dayName(_ iso: String) -> String {
+        guard let day = ISODay.date(iso) else { return iso }
+        return DateFormatters.make(L10n.isEnglish ? "EEE, MMM d" : "EEEEEE d. M.", locale: Fmt.locale, timeZone: TimeZone(identifier: "UTC")!, template: L10n.isEnglish).string(from: day)
+    }
+
+    /// The night as a green arc on a dial from 20:00 to 10:00, the times at
+    /// its ends, the length and how far from the need in the middle.
+    private func arc(_ night: Summary) -> some View {
+        let from = 20.0 * 60, to = 34.0 * 60
+        let band: ClosedRange<Double>? = {
+            // Minutes after midnight, a time before noon counted into the next day as the server does.
+            let late = { (m: Double) in m < 12 * 60 ? m + 24 * 60 : m }
+            guard let bed = night.bed.map(late), let wake = night.wake.map(late), wake > bed else { return nil }
+            return min(max(bed, from), to)...min(max(wake, from), to)
+        }()
+        let need = Double(health.sleep.need)
+        let gap = night.minutes.map { Int((need - $0).rounded()) }
+        let note: String? = gap.map { g in
+            g > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(g), TodayDials.length(need))
+                : g < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-g), TodayDials.length(need)) : L10n.f("přesně %@", TodayDials.length(need))
+        }
+        return RangeDial(value: nil, scale: from...to, band: band, bandColor: Palette.green, ends: ("20:00", "10:00"), size: 220,
+                         spoken: [L10n.tr("Spánek"), Fmt.hoursMinutesSpoken(night.minutes), note].compactMap { $0 }.joined(separator: ", ")) {
+            VStack(spacing: 2) {
+                Text("Spánek").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: night.minutes.map { Fmt.hoursMinutesLong($0) } ?? "–").font(Typo.number(36)).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                if let note { Text(verbatim: note).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            .padding(.horizontal, 30)
+        }
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .top) {
+            // The night's own times at the ends of its arc.
+            HStack {
+                Text(verbatim: night.start ?? "")
+                Spacer()
+                Text(verbatim: night.end ?? "")
+            }
+            .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
+            .frame(width: 250)
+            .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder
+    private func stages(_ night: Summary) -> some View {
+        if let stages = night.stages {
+            SectionLabel(text: "Fáze spánku")
+            Card {
+                if failed && shownDetail == nil && isLast {
+                    RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry)
+                } else if let segments = shownDetail?.night?.segments, !segments.isEmpty {
+                    Hypnogram(segments: segments)
+                    HStack {
+                        Text(verbatim: night.start ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                        Spacer()
+                        Text(verbatim: night.end ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                    }
+                    .padding(.leading, 56)
+                }
+                StageTotals(stages: stages, wakeups: shownDetail?.night?.stats?.wakeups, usual: isLast ? health.sleep.night?.usual : nil)
+            }
+            .padding(.top, 10)
+        } else if failed && isLast && shownDetail == nil {
+            RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry)
+        }
+    }
+
+    // MARK: Tonight and more
+
+    /// Tonight's need: the number, when to be in bed and the alarm, and the
+    /// planner. Why the need is what it is lives in the planner (D-ZDRAVI-17).
+    private func tonight(_ t: HealthSnapshot.Tonight) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 4) {
+                SectionLabel(text: "Dnešní potřeba spánku")
+                Text(verbatim: TodayDials.length(Double(t.sleep ?? t.need))).font(Typo.number(40)).foregroundStyle(Palette.ink)
+                if let line = Self.bedLine(t) {
+                    Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+            RouteLink(route: .sleepSettings) {
+                HStack {
+                    Text("Naplánovat noc").font(.body).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Text("večerka a budík").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+        }
+    }
+
+    /// "in bed by 23:10, alarm at 06:40".
+    static func bedLine(_ t: HealthSnapshot.Tonight) -> String? {
+        guard let bed = t.bedtime.flatMap({ ClockText.format(optional: $0) }) else { return nil }
+        guard let wake = t.wake.flatMap({ ClockText.format(optional: $0) }) else { return L10n.f("v posteli do %@", bed) }
+        return L10n.f("v posteli do %@, budík v %@", bed, wake)
+    }
+
+    /// Heart rate in sleep, the index over 14 nights and the regularity, each its own page.
+    private var links: some View {
+        Card(padding: 0) {
+            VStack(spacing: 0) {
+                // Only a night whose heart rate covers most of it: a few minutes
+                // drew one spike at the left edge (device comparison point 57).
+                if let night = shownDetail?.night, let hr = night.hr, hr.count > 3,
+                   (hr.last?.m ?? 0) - (hr.first?.m ?? 0) >= 0.5 * SleepHeartRate.end(night) {
+                    NavigationLink { SleepHeartRateView(health: health, night: night) } label: {
+                        linkRow("Tep ve spánku", note: L10n.f("průměr %@ bpm", Fmt.int(night.stats?.avgHr)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("open.sleepHeartRate")
+                    Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 16)
+                }
+                if let index = health.sleep.index, index.nights.count >= 2 {
+                    NavigationLink {
+                        DetailScreen(glow: Palette.Glow.today, title: "Index spánku") {
+                            Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 24)
+                        }
+                    } label: {
+                        linkRow("Index spánku", note: L10n.f("průměr %@ za 14 nocí", String(index.average)))
+                    }
+                    .buttonStyle(.plain)
+                    Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 16)
+                }
+                if let reg = health.sleep.regularity, !reg.nights.isEmpty {
+                    let usual = RegularityChart.usual(reg.nights)
+                    NavigationLink {
+                        DetailScreen(glow: Palette.Glow.today, title: "Pravidelnost") {
+                            Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
+                                .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 24)
+                            Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
+                        }
+                    } label: {
+                        linkRow("Pravidelnost", note: L10n.f("obvykle usínáš kolem %@", RegularityChart.clock(usual)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private func linkRow(_ title: String, note: String) -> some View {
+        HStack {
+            Text(LocalizedStringKey(title)).font(.body).foregroundStyle(Palette.ink)
+            Spacer(minLength: 8)
+            Text(verbatim: note).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 48)
+        .contentShape(Rectangle())
+    }
 
     /// "Usual 75 to 83. The index is the night's length, quality and stages, out of 100."
     static func indexSentence(_ index: HealthSnapshot.IndexNights?) -> String {
         let what = L10n.tr("Index skládá délku, kvalitu a fáze noci do čísla ze 100.")
         guard let low = index?.low, let high = index?.high else { return what }
         return L10n.f("Obvykle %@ až %@.", Fmt.int(low), Fmt.int(high)) + " " + what
-    }
-
-    /// "8 h 30 min, in bed by 22:10".
-    static func tonightLine(_ t: HealthSnapshot.Tonight) -> String {
-        let need = Fmt.hoursMinutes(Double(t.sleep ?? t.need))
-        guard let bed = t.bedtime else { return need }
-        return L10n.f("%@, v posteli do %@", need, ClockText.format(optional: bed) ?? bed)
-    }
-
-    private func weekday(_ iso: String) -> String {
-        if L10n.isEnglish {
-            // "Noc na čtvrtek" (ending Thursday morning) is Wednesday night in English.
-            let formatter = DateFormatters.iso()
-            let before = formatter.date(from: iso).flatMap { Calendar.current.date(byAdding: .day, value: -1, to: $0) }.map { formatter.string(from: $0) } ?? iso
-            let english = ["Su": "Sunday", "Mo": "Monday", "Tu": "Tuesday", "We": "Wednesday", "Th": "Thursday", "Fr": "Friday", "Sa": "Saturday"]
-            return english[Fmt.weekdayShort(before)] ?? iso
-        }
-        let names = ["Ne": "neděli", "Po": "pondělí", "Út": "úterý", "St": "středu", "Čt": "čtvrtek", "Pá": "pátek", "So": "sobotu"]
-        return names[Fmt.weekdayShort(iso)] ?? iso
     }
 }
 
@@ -258,9 +386,10 @@ enum StageStyle {
     static let labels = ["AWAKE": "Bdění", "REM": "REM", "LIGHT": "Lehký", "DEEP": "Hluboký"]
     static func color(_ type: String) -> Color {
         switch type {
-        case "DEEP": return Color(light: 0x3B3A99, dark: 0x7C79E0)
-        case "LIGHT": return Color(light: 0xA9B8EC, dark: 0x5A6AA8)
-        case "REM": return Color(light: 0x7C74E8, dark: 0xA5A1FF)
+        // Greens as concept 5 (Petr 2026-11-20: no purple on Today's pages).
+        case "DEEP": return Color(light: 0x1F6B52, dark: 0x8FE6C4)
+        case "LIGHT": return Color(light: 0xB9DCCB, dark: 0x3E6B5A)
+        case "REM": return Color(light: 0x5FA585, dark: 0x5FC79E)
         default: return Color(light: 0xE0A46A, dark: 0xE0A46A)
         }
     }
@@ -689,7 +818,7 @@ struct RegularityChart: View {
             }
             .frame(height: Self.bubble + plotHeight + 26)
             VStack(alignment: .leading, spacing: 7) {
-                legend(Palette.indigo, "V obvyklém čase")
+                legend(Palette.green, "V obvyklém čase")
                 legend(Palette.amber, "Dřív nebo později než obvykle")
             }
         }
@@ -706,8 +835,11 @@ struct RegularityChart: View {
 
     private func plot(_ scale: Scale, width: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            ForEach(Array(stride(from: scale.lo, through: scale.hi, by: 60)), id: \.self) { hour in
-                hourLine(hour, scale)
+            // A label every hour only where they fit: at least 46 pt apart
+            // ("11:00 PM2:00 AM" ran together, device comparison point 58).
+            let every = max(1, Int((46 / max(scale.width * 60 / CGFloat(scale.hi - scale.lo), 1)).rounded(.up)))
+            ForEach(Array(stride(from: scale.lo, through: scale.hi, by: 60).enumerated()), id: \.element) { i, hour in
+                hourLine(hour, scale, label: i % every == 0)
             }
             ForEach(Array(nights.enumerated()), id: \.offset) { index, night in
                 nightRow(night, y: Self.bubble + Self.rowHeight * (CGFloat(index) + 0.5), scale: scale, width: width)
@@ -724,7 +856,7 @@ struct RegularityChart: View {
             .onEnded { _ in scrub = nil })
     }
 
-    private func hourLine(_ hour: Double, _ scale: Scale) -> some View {
+    private func hourLine(_ hour: Double, _ scale: Scale, label: Bool) -> some View {
         let x = scale.x(hour)
         return ZStack(alignment: .topLeading) {
             Path { p in
@@ -732,9 +864,11 @@ struct RegularityChart: View {
                 p.addLine(to: CGPoint(x: x, y: Self.bubble + plotHeight))
             }
             .stroke(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
-            Text(ClockText.format(minutes: Int(hour) + 18 * 60)).font(.caption2).foregroundStyle(Palette.faint)
-                .fixedSize()
-                .position(x: x, y: Self.bubble + plotHeight + 12)
+            if label {
+                Text(ClockText.format(minutes: Int(hour) + 18 * 60)).font(.caption2).foregroundStyle(Palette.faint)
+                    .fixedSize()
+                    .position(x: x, y: Self.bubble + plotHeight + 12)
+            }
         }
     }
 
@@ -742,7 +876,7 @@ struct RegularityChart: View {
         let inside = abs(night.value - usual) <= Self.band
         let left = scale.x(usual - Self.band), right = scale.x(usual + Self.band)
         return ZStack(alignment: .topLeading) {
-            Rectangle().fill(Palette.lilac.opacity(0.6))
+            Rectangle().fill(Palette.greenSoft)
                 .frame(width: right - left, height: Self.rowHeight - 6)
                 .position(x: (left + right) / 2, y: y)
             Path { p in
@@ -753,7 +887,7 @@ struct RegularityChart: View {
             Text(Fmt.weekdayShort(night.date)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: Self.dayWidth, alignment: .leading)
                 .position(x: Self.dayWidth / 2, y: y)
-            Circle().fill(inside ? Palette.indigo : Palette.amber).frame(width: 12, height: 12)
+            Circle().fill(inside ? Palette.green : Palette.amber).frame(width: 12, height: 12)
                 .position(x: scale.x(night.value), y: y)
             Text(Self.clock(night.value)).font(Typo.small).foregroundStyle(inside ? Palette.secondary : Palette.amber)
                 .lineLimit(1).minimumScaleFactor(0.8)

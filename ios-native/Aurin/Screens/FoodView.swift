@@ -11,6 +11,7 @@ struct FoodView: View {
             screen
                 .navBarVisibility(.hidden)
                 .appRoutes()
+                .tabRoot(.food)
         }
         .task { await model.refreshIfStale(.food) }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }

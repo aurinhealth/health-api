@@ -200,9 +200,9 @@ struct ShareDay: Equatable {
 
     var readinessLabel: String? {
         switch zone {
-        case "green": return "vysoká"
-        case "yellow": return "střední"
-        case "red": return "nízká"
+        // The same words as on Today and Readiness (TestFlight 604 device check).
+        case "green": return "v obvyklém rozmezí"
+        case "yellow", "red": return "pod obvyklým rozmezím"
         default: return nil
         }
     }

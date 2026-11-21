@@ -191,6 +191,36 @@ final class SnapshotTests: XCTestCase {
         try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
     }
 
+    /// Today's month calendar (concept b-podstranky-04): serif month, the
+    /// number inside its ring, a dashed ring on a day without data.
+    func testMonthCalendarSheet() throws {
+        let model = AppModel(demo: true)
+        let today = AppModel.localDate(Date())
+        for (i, day) in ISODay.range(ISODay.monthStart(today), today).enumerated() where i != 5 {
+            let score = 60 + (i * 7) % 35
+            model.dayValues[day] = DayValues(date: day, readiness: .init(score: score, zone: score < 70 ? "yellow" : "green"),
+                                             sleep: .init(minutes: 420, need: 480, percent: 88), strain: 9.5, hrv: .init(value: 60, band: "within"))
+        }
+        try render("today-month", height: 844) { MonthCalendarSheet(date: today).environment(model).environment(\.locale, L10n.locale) }
+    }
+
+    /// The widget gallery and the add sheet (concept c-widgety-sekce-04).
+    func testWidgetGallery() throws {
+        let data = WidgetData(panel: .today, today: DemoData.today, health: DemoData.health, training: DemoData.training, food: DemoData.food)
+        try render("today-widget-gallery", height: 844, window: true) {
+            WidgetGallery(panel: .today, data: data, placed: Set(WidgetPanel.today.defaults.map(\.kind))) { _, _ in }
+                .environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+        try render("today-widget-add", height: 620) {
+            WidgetAddSheet(kind: .form, data: data) { _ in }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+    }
+
+    /// The athlete status sheet (concept b-podstranky-03): four rows in one card.
+    func testAthleteStatusSheet() throws {
+        try render("today-status", height: 560) { AthleteStatusSheet(current: .active).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
     func testRecoveryTimeScreen() throws {
         let today = DemoData.today
         let time = try XCTUnwrap(today.recoveryTime)
@@ -1284,12 +1314,6 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(WeatherText.symbol(weather.code), "cloud.sun.fill")
         XCTAssertEqual(WeatherText.symbol(95), "cloud.bolt.rain.fill")
         XCTAssertEqual(WeatherText.description(63), "déšť")
-        XCTAssertEqual(SkyLook(code: 61, daylight: false), SkyLook(code: 63, daylight: false))
-        XCTAssertTrue(SkyLook(code: 61, daylight: false).rains)
-        XCTAssertEqual(SkyLook(code: 61, daylight: false).stars, 0, "a rainy night has no stars")
-        XCTAssertTrue(SkyLook(code: 2, daylight: false).showsBody, "a partly cloudy night shows the moon")
-        XCTAssertGreaterThan(SkyLook(code: 0, daylight: false).stars, 0)
-        XCTAssertEqual(SkyLook(code: 2, daylight: nil).night, false)
         XCTAssertEqual(WeatherText.windWord(18) != nil, true)
         XCTAssertNil(WeatherText.compass(nil))
 

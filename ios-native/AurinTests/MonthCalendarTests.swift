@@ -23,9 +23,10 @@ final class MonthCalendarTests: XCTestCase {
         XCTAssertEqual(DayMark(metric: .readiness, values: full).fill, 0.82, accuracy: 0.001)
         XCTAssertEqual(DayMark(metric: .sleep, values: full).fill, 0.86, accuracy: 0.001)
         XCTAssertEqual(DayMark(metric: .strain, values: full).fill, 11.4 / 21, accuracy: 0.001)
-        XCTAssertEqual(DayMark(metric: .hrv, values: full).symbol, "arrow.up")
+        XCTAssertEqual(DayMark(metric: .hrv, values: full).color, Palette.green)
         for metric in MonthCalendarSheet.Metric.allCases {
-            XCTAssertEqual(DayMark(metric: metric, values: empty).fill, 0, "a day without data is an empty track")
+            XCTAssertFalse(DayMark(metric: metric, values: full).empty)
+            XCTAssertTrue(DayMark(metric: metric, values: empty).empty, "a day without data is a dashed ring")
         }
     }
 
