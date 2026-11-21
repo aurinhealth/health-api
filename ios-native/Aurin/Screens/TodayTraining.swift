@@ -132,7 +132,8 @@ struct TodayTrainingRow: View {
 
     private var info: some View {
         HStack(spacing: 12) {
-            PlanStateIcon(symbol: SportIcon.symbol(item.sport ?? "other"), state: .upcoming, size: 36)
+            // The concept's sport disc, pale while ahead, as Week plan (never a dashed ring).
+            SportDisc(sport: item.sport ?? "other", type: item.session?.type, state: .ahead, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: meta).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 // An eased session's title is already the easy one (the original is eased.title).
