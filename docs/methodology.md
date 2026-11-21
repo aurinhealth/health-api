@@ -209,6 +209,13 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 - **Limity:** 60 % v zóně, poloviční pauza u VO2max, ±0,75 obtížnosti a pravidla běžeckého základu jsou naše kalibrace. 60 % a poloviční pauzu splní celá knihovna kromě jednoho MTB tréninku; 70 % a pauza 1:1 by odmítly i over-undery, Helgerudovo 4×4 a běžecké 5×3 min se 2 min klusu. Dva tvrdé dny po sobě hlídá praxe hard/easy, ne studie.
 - **Co tvrdit:** trénink sestavený koučem podle pravidel trenérů, s kontrolou délky běhu podle studie. Nikdy „vědecky podložené“.
 
+### 2.12a Trénink kouče v posilovně
+
+- **Výpočet** (`gymHeld`, `gymComposeFaults`, `coachGymSession` v `src/gym-compose.js`): základ je trénink z pravidel (`generateStrengthPlan`). Kouč (AI) smí jen vyměnit cvik za jiný na stejnou partii ze seznamu, který povolí vybavení, bolest, neoblíbené cviky a rozbité stroje, vynechat nejvýš dva cviky, změnit pořadí (hlavní cvik nikdy po izolovaném cviku stejné partie) a ubrat série. Váhy, opakování, rozcvičení a pauzy dál počítají pravidla z historie, žádný cvik nedostane víc pracovních sérií než u pravidel, celkem zůstane aspoň 75 % sérií a nejvýš jeden cvik, který sportovec nikdy nedělal. Při šetřených nohou nesmí přidat cvik na nohy ani zadní řetězec. Kouč nepíše, když jde o den tréninkového plánu, vlastní volbu partií, „Jiný návrh“, odlehčený týden nebo trénink po nemoci, začátečníka, zapamatovanou bolest, méně než 6 tréninků v historii nebo víc než 21 dní bez posilovny. Zdůvodnění se zmínkou o bolesti, nemoci, zranění, léčbě nebo prevenci se nezobrazí.
+- **Zdroj:** kontrola silového trenéra a fyzioterapeuta týmu (2026-11-21). Kvalita programů psaných LLM: Washif JA et al. Biol Sport 2023 (PMC10955742), programy potřebují doladění odborníkem. Pauzy: Schoenfeld BJ et al. J Strength Cond Res 2016;30(7), PMID 26605807. Souběžný trénink: Wilson JM et al. J Strength Cond Res 2012;26:2293.
+- **Limity:** meze úprav (75 % sérií, nejvýš dva vynechané cviky, jeden nový cvik, 6 tréninků, 21 dní) jsou praxe trenérů, ne studie.
+- **Co tvrdit:** trénink upravený koučem v mezích, které hlídají pravidla aplikace. Nikdy „vědecky podložené“.
+
 ### 2.13 Obvyklé pásmo a stav v grafech Zdraví, porovnání VO2max
 
 - **Pásmo u každého bodu** (`src/health-series.js`, `GET /app/api/health/series`): průměr ± 1 SD ze 60 dní před bodem (`personalBaseline`, aspoň 14 dní), u HRV a klidového tepu přesně to pásmo, se kterým počítá index regenerace (`recoveryReadiness`, 2.1). Dech má spodní hranici SD 0,3 jako příznak zvýšeného dechu. Nad 90 dní týdenní průměry.

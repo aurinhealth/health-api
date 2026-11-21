@@ -58,7 +58,7 @@ import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTempla
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
-import { workloadMetrics, loadBalance } from "./workload-ratio.js";
+import { workloadMetrics, loadBalance, LOAD_HISTORY_DAYS } from "./workload-ratio.js";
 import { planOverview } from "./plan-overview.js";
 import { MANUAL_SPORTS, manualWorkoutType } from "./activity-type.js";
 import { illnessReturn } from "./illness-return.js";
@@ -189,6 +189,7 @@ import { firstImport } from "./first-imports.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
+import { missedWorkout, missedWorkoutView, missedDecisions } from "./missed-workout.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
 import { handleCycleApi } from "./routes-cycle.js";
 import { handleJournalApi, journalForCoach } from "./routes-journal.js";
@@ -735,7 +736,6 @@ export default {
     const route = `${request.method} ${routeName(new URL(request.url).pathname)}`;
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
     return timed(async work => {
-      work.placement = String(request.headers.get("cf-placement") || "").replace(/[^A-Za-z-]/g, "").slice(0, 16);
       try {
         const answered = await worker.fetch(request, batchedEnv(env), ctx);
         // The owner's report names why (the route's own error text), before it is made plain.
@@ -1330,7 +1330,7 @@ async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null){
   const risking=saunaRisks(env.DB,date).catch(soft({}));
   const [inputs,week]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading]);
   const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
-  if(recent.failed)degraded=true;
+  if(recent.failed||place.late)degraded=true;
   // The swim coach only for a swimmer: swimming as the main sport or a swim
   // in the last 60 days (one small capabilities read more, nobody else pays it).
   const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);
@@ -3010,6 +3010,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const syncing=syncedPlans(env).catch(()=>({}));
       const planWeekLeft={};
       const proposing=syncing.then(p=>isToday&&p.active?planProposal(env,ctx,planWeekLeft).catch(()=>null):null);
+      // A key workout of the calendar missed this week (missed-workout.js): this week's calendar and what was let go.
+      const missedUrl=url.origin+'/app/api/training/calendar?start='+shiftDate(date,-3)+'&end='+shiftDate(mondayOfDate(date),7),missedReading=isToday?Promise.all([handleDashboardApi(new Request(missedUrl,{headers:request.headers}),env,ctx,new URL(missedUrl),session).then(r=>r.ok?r.json():null),missedDecisions(env.DB)]).catch(error=>{console.warn('Missed workout not read',error?.message);return null;}):null;
       // A gym plan alone: its sessions this week less the gym days already logged (one read of this week).
       const gymDays=syncing.then(p=>isToday&&!p.active&&p.gym?env.DB.prepare("SELECT COUNT(DISTINCT workout_date) AS n FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,mondayOfDate(date),date).first().then(r=>Number(r?.n)||0).catch(()=>null):null);
       const checking=connectionStatus(env).catch(()=>null);
@@ -3050,6 +3052,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       applyEnergyBudget(daily,profile,health);
       const body=withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,dataSources:dataSources(status),location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
         recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess,risks},unavailable:todayUnavailable(failed),morning}),training,morning?.athleteState);
+      const missedRead=await missedReading;
+      if(missedRead?.[0]?.days&&trainingPlan?.proposal?.type!=='missed'){
+        const red=readinessFor({date,google:health?.wellness||[],intervals:fitness?.wellness||[],sessions:sleep?.sessions||[],profile:profile||{},checkin})?.zone==='red';
+        const missedOne=missedWorkoutView(missedWorkout({days:missedRead[0].days,today:date,decided:missedRead[1],red}),date);
+        if(missedOne)body.missedWorkout=missedOne;
+      }
       keepUsualWake(env,ctx,date,profile,body.tonight);
       // Today's row of the food history (nutrition-days.js), after the answer.
       if(isToday&&body.nutrition?.target!=null)ctx.waitUntil(saveNutritionDay(env.DB,nutritionDayOfToday(date,body.nutrition),date).catch(error=>console.error('Nutrition day save failed',error.message)));
@@ -3258,8 +3266,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         loadFitnessInsights(env.DB,date).catch(()=>({})),
         api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null})),
         syncedPlans(env,date).catch(()=>({})),
-        // Muscle load (workload-ratio.js): the gym's work sets of the last 42 days, one read on idx_strength_sets_user_date.
-        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null),
+        // Muscle load (workload-ratio.js): the gym's work sets of the last 98 days (the detail's trend rows), one read on idx_strength_sets_user_date.
+        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-(LOAD_HISTORY_DAYS-1)),date+'~').all().then(r=>r.results||[]).catch(()=>null),
         // The first gym day on record (one index seek), so a lifter back from a break is not learning again.
         env.DB.prepare("SELECT workout_date AS d FROM strength_sets WHERE user_id=? AND completed=1 ORDER BY workout_date LIMIT 1").bind(env.USER_ID).first().then(r=>r?.d?String(r.d).slice(0,10):null).catch(()=>null)
       ]);

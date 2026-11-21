@@ -61,7 +61,9 @@ test("the slow report says what the request waited for: D1, Intervals, AI, anoth
   assert.equal(waitKindOfUrl("https://intervals.icu/api/v1/athlete/0/wellness"), "intervals");
   assert.equal(waitKindOfUrl(new Request("https://api.openai.com/v1/responses")), "ai");
   assert.equal(waitKindOfUrl("https://health.googleapis.com/v4/x"), "google");
-  assert.equal(waitKindOfUrl("https://api.open-meteo.com/v1"), "other");
+  assert.equal(waitKindOfUrl("https://api.open-meteo.com/v1"), "weather");
+  assert.equal(waitKindOfUrl("https://weatherkit.apple.com/api/v1/weather/en/50/14"), "weather");
+  assert.equal(waitKindOfUrl("https://api.example.com/x"), "other");
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const work = await timed(async store => {
     // Two Intervals calls side by side count once; D1 alongside counts for itself.
@@ -112,15 +114,10 @@ test("a slow request says which database it waited for, how much was SQL and how
   // The morning report still reads the total and what it waited for.
   const { parseSlow } = await import("../src/ops-report-html.js");
   assert.deepEqual({ ...parseSlow(slow), ms: null }, { ms: null, rows: 2, waited: "D1" });
-  // Where the Worker ran (cf-placement), before what it waited for.
-  const placed = slowness({ ...work, placement: "remote-WAW", started: Date.now() - 3200 });
-  assert.match(placed, /souběžně 1, server remote-WAW; čekání: D1 \d+ ms$/);
-  assert.equal(parseSlow(placed).waited, "D1");
 });
 
 test("the Worker runs next to the databases in eastern Europe, on the live and the test server", () => {
   const config = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
   assert.equal((config.match(/"placement": \{\s*"region": "gcp:europe-central2"\s*\}/g) || []).length, 2);
   assert.doesNotMatch(config, /"mode": "smart"/);
-  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /work\.placement = String\(request\.headers\.get\("cf-placement"\)/);
 });

@@ -212,6 +212,8 @@
         "CHAT_V1": "true",
         // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn).
         "COACH_FIRST": "true",
+        // Coach writes today's gym session first (src/gym-compose.js coachFirstGymOn); off on the live server until its evals pass.
+        "COACH_FIRST_GYM": "true",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",

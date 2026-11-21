@@ -5,7 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { loadBalance, muscleLoad, USUAL_BAND, MIN_HISTORY_DAYS } from "../src/workload-ratio.js";
+import { loadBalance, muscleLoad, loadByIntensity, USUAL_BAND, MIN_HISTORY_DAYS } from "../src/workload-ratio.js";
 import { buildTraining, withHeartRateLoad } from "../src/app-training.js";
 import { gymSessions, strengthLoad } from "../src/training-load.js";
 import { planOverview } from "../src/plan-overview.js";
@@ -23,14 +23,22 @@ const days = (n, load, from = 0) => Array.from({ length: n }, (_, i) => ({ id: s
 const squats = (day, rpe = 8) => Array.from({ length: 5 }, (_, k) => ({ workout_date: day, type: "WORK", exercise: "Barbell back squat", set_no: k + 1, actual_kg: 80, actual_reps: 8, rpe }));
 const numbersIn = view => JSON.stringify({ ...view, series: undefined, band: undefined, historyDays: undefined, needsDays: undefined }).match(/\d+\.\d+/g);
 
-test("Load balance is words, the usual band and a 14-day series, never a ratio as text", () => {
+test("Load balance is words, the usual band and a 30-day series, never a ratio as text", () => {
   const view = loadBalance(days(40, 50), date);
   assert.equal(view.level, "usual");
   assert.deepEqual(view.band, USUAL_BAND);
   assert.deepEqual(USUAL_BAND, { low: 0.9, high: 1.15 });
   assert.equal(view.needsDays, MIN_HISTORY_DAYS);
-  assert.equal(view.series.length, 14);
+  assert.equal(view.series.length, 30);
   assert.equal(view.series.at(-1).date, date);
+  // Plain loads for the detail: the last 7 days, the usual week, each point's 7 days, the trend's history.
+  assert.equal(view.load, 350);
+  assert.equal(view.usual, 350);
+  assert.equal(view.series.at(-1).load, 350);
+  assert.equal(view.history.length, 40);
+  assert.deepEqual(view.history.at(-1), { date, load: 350 });
+  assert.equal(view.history[0].load, 50, "the first day of history counts only itself");
+  assert.equal(loadBalance(days(120, 50), date).history.length, 98);
   assert.ok(view.text && view.label);
   // The only ratio is each point's plot, for the dial and the chart.
   assert.equal(numbersIn(view), null);
@@ -53,7 +61,7 @@ test("Muscle load counts only the gym's work sets and is empty, not 0, without a
   for (let i = 0; i < 35; i += 3) sets.push(...squats(shift(date, -i)));
   const view = muscleLoad(gymSessions(sets), date, strengthLoad);
   assert.ok(view.level);
-  assert.equal(view.series.length, 14);
+  assert.equal(view.series.length, 30);
   // A swimmer without the gym: no dial value at all.
   assert.equal(muscleLoad([], date, strengthLoad), null);
   // Training → the card: rides and runs move Load balance, never Muscle load.
@@ -238,4 +246,18 @@ test("the first gym day is one seek on the date index, and a lifter back from a 
   assert.equal(returning.level, "wellAbove");
   // History but nothing in the last 28 days: quiet, not learning.
   assert.equal(loadBalance([{ id: shift(date, -35), load: 50 }], date).state, "quiet");
+});
+
+test("Load by intensity splits the last 7 days by the heart's zones, next to the usual range of each", () => {
+  const view = loadBalance(days(40, 50), date);
+  const focus = { weeks: [{ low: 60, high: 30, anaerobic: 10 }, { low: 60, high: 30, anaerobic: 10 }, { low: 60, high: 30, anaerobic: 10 }, { low: 40, high: 40, anaerobic: 20 }] };
+  const parts = loadByIntensity(view, focus);
+  assert.deepEqual(parts.map(p => p.key), ["low", "high", "anaerobic"]);
+  assert.deepEqual(parts.map(p => p.load), [140, 140, 70]);
+  // The usual week 350 split 55 / 32.5 / 12.5 %, 0.9 to 1.15 of it.
+  assert.deepEqual(parts.map(p => [p.low, p.high]), [[173, 221], [102, 131], [39, 50]]);
+  assert.equal(loadByIntensity(view, { weeks: [] }), null);
+  assert.equal(loadByIntensity(loadBalance(days(14, 50), date), focus), null, "no usual week while learning");
+  const training = buildTraining({ date, fitness: { wellness: days(40, 60) }, insights: { cardioFocus: focus } });
+  assert.equal(training.loadBalance.intensity.length, 3);
 });

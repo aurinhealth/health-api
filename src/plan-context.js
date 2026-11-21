@@ -123,29 +123,40 @@ export async function planKeyDates(env,plan,monday){
 // The weather place of the week plan and today's forecast for Today (app-today.js
 // todayWeather). The forecast is cached for 30 minutes per place and week; a
 // failed fetch is not cached. Only for today: past days show no weather.
-export async function todayPlace(env,ctx,date){
+// Today, the pick, Food and the heat advice wait at most WEATHER_WAIT_MS for it
+// (morning report 2026-11-21: Today 12.7 s, 12.1 s of it the three weather reads
+// one after another, each allowed 6 s). The reads go side by side, and one that
+// answers later still fills the cache for the next open.
+export const WEATHER_WAIT_MS=2500;
+export async function todayPlace(env,ctx,date,{waitMs=WEATHER_WAIT_MS}={}){
   try{
     if(date!==localToday())return {location:null,forecast:null};
     const location=(await getWeekPlan(env.DB,date).catch(()=>null))?.location||null;
     if(!location)return {location:null,forecast:null};
-    const monday=mondayOfDate(date);
-    const week=await cached(env,ctx,'weather:'+location.latitude+','+location.longitude+':'+monday,async()=>{
-      const w=await weekWeather(location,monday,env);
-      if(!Object.keys(w).length)throw new Error('no forecast');
-      return w;
-    },{ttl:1800}).catch(()=>({}));
-    const hours=await cached(env,ctx,'weather-hours:'+location.latitude+','+location.longitude+':'+date,async()=>{
-      const h=await dayHours(location,date,env);
-      if(!h.length)throw new Error('no forecast');
-      return h;
-    },{ttl:1800}).catch(()=>[]);
-    // The detail's hours and week, only from Apple Weather.
-    const detail=weatherKitConfigured(env)?await cached(env,ctx,'weather-detail:'+location.latitude+','+location.longitude+':'+date,async()=>{
-      const d=await weatherKitDetail(env,location,date);
-      if(!d.week.length)throw new Error('no forecast');
-      return d;
-    },{ttl:1800}).catch(()=>null):null;
-    return {location,forecast:week?.[date]?{...week[date],hours,...(detail||{})}:null};
+    const monday=mondayOfDate(date),place=location.latitude+','+location.longitude;
+    const forecast=Promise.all([
+      cached(env,ctx,'weather:'+place+':'+monday,async()=>{
+        const w=await weekWeather(location,monday,env);
+        if(!Object.keys(w).length)throw new Error('no forecast');
+        return w;
+      },{ttl:1800}).catch(()=>({})),
+      cached(env,ctx,'weather-hours:'+place+':'+date,async()=>{
+        const h=await dayHours(location,date,env);
+        if(!h.length)throw new Error('no forecast');
+        return h;
+      },{ttl:1800}).catch(()=>[]),
+      // The detail's hours and week, only from Apple Weather.
+      weatherKitConfigured(env)?cached(env,ctx,'weather-detail:'+place+':'+date,async()=>{
+        const d=await weatherKitDetail(env,location,date);
+        if(!d.week.length)throw new Error('no forecast');
+        return d;
+      },{ttl:1800}).catch(()=>null):null
+    ]).then(([week,hours,detail])=>week?.[date]?{...week[date],hours,...(detail||{})}:null).catch(()=>null);
+    ctx?.waitUntil?.(forecast);
+    // late: the answer went without waiting for the forecast, so a cached pick leaves it out (pickBase degraded).
+    let timer;const LATE={};
+    const first=await Promise.race([forecast,new Promise(resolve=>{timer=setTimeout(()=>resolve(LATE),waitMs);})]).finally(()=>clearTimeout(timer));
+    return first===LATE?{location,forecast:null,late:true}:{location,forecast:first};
   }catch{return {location:null,forecast:null};}
 }
 

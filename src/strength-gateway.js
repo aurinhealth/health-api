@@ -17,6 +17,7 @@ import { availabilityOn, trainingBudget, parseTimeWindow } from './training-avai
 import { localToday } from "./user-time.js";
 import { exercisePreferences } from "./exercise-feedback.js";
 import { activePlan, gymPhaseFor } from "./training-plans.js";
+import { coachGymSession } from "./gym-compose.js";
 
 
 export default {
@@ -160,7 +161,10 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       }
     }
 
-    const plan = generateStrengthPlan(context, options);
+    // The coach writes the day's session first when the athlete asks for today's (gym-compose.js).
+    let plan = generateStrengthPlan(context, options);
+    if (body?.userInitiated === true && context.date === localToday()) plan = await coachGymSession(env, { context, options, plan, body });
+    delete plan.swaps;
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
     const guard = await ensureCurrentWorkoutSafeToReplace(env, plan.date);
     if (guard.status !== "ok") return Response.json(guard, { status: 409 });
