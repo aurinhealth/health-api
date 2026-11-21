@@ -227,7 +227,7 @@ enum PlanSessionActions {
             let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: session.time ?? "",
                                                                           back: session.status == "missed")
         } else {
-            try await model.api.moveGym(from: date, to: session.date)
+            try await model.api.moveGym(from: date, to: session.date, back: session.status == "missed")
         }
     }
 }

@@ -421,6 +421,11 @@ final class APIClient: @unchecked Sendable {
         return change
     }
 
+    /// Today's missed workout: "Skip it" (skip true) and its undo (src/missed-workout.js).
+    func decideMissed(key: String, skip: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/planned/missed", method: "POST", body: ["key": JSONValue.string(key), "skip": .bool(skip)], repeatable: true)
+    }
+
     func deletePlanned(eventId: String) async throws {
         let _: JSONValue = try await send("/app/api/planned/delete", method: "POST", body: ["eventId": JSONValue.string(eventId)])
     }

@@ -271,13 +271,13 @@ final class SnapshotTests: XCTestCase {
         // A Zdraví layout saved before the redesign is converted, not lost.
         let old: [PlacedWidget] = [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .hrv, size: .small),
                                    .init(kind: .steps, size: .medium), .init(kind: .oxygen, size: .small), .init(kind: .weight, size: .medium), .init(kind: .bedtime, size: .medium)]
-        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.journal, .night, .healthMonitor, .steps, .body])
+        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.night, .healthMonitor, .steps, .body, .journal])
     }
 
     func testWorkoutScreens() throws {
         let gymDay = DemoData.gym
         try render("gym", glow: Palette.Glow.training) {
-            VStack(spacing: 12) { ForEach(gymDay.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+            VStack(spacing: 12) { ForEach(gymDay.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true) } }
                 .padding(24).padding(.top, 30)
         }
         let sessions = DemoData.training.sessions ?? []
@@ -569,7 +569,7 @@ final class SnapshotTests: XCTestCase {
         try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale).environment(AppModel(demo: true)) }
         try render("site-food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
         try render("site-gym", glow: Palette.Glow.training) {
-            VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+            VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true) } }
                 .padding(24).padding(.top, 30).environment(\.locale, L10n.locale)
         }
     }
@@ -615,9 +615,20 @@ final class SnapshotTests: XCTestCase {
             GymHistory.Session(date: ISODay.shift(historyDay, -21), sets: [GymHistory.Lift(kg: 25, reps: 12, target: nil, rpe: nil), GymHistory.Lift(kg: 25, reps: 8, target: nil, rpe: nil)])
         ])
         try render("gym-history", height: 1250) { ExerciseHistorySheet(name: "Rear delt pec deck", exercise: pecDeck) }
-        try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
+        // The planned gym detail as concept K04/017: hero, coach sentence, parts, folded cards, figure, pinned Start.
+        var plan = DemoData.gym
+        for set in plan.exercises.flatMap(\.sets) where set.done { plan.undo(row: set.row) }
+        let names = plan.exercises.map(\.name)
+        let worked: [String: [String: Double]] = [names[0]: ["quads": 1, "hips": 0.6, "hamstrings": 0.3], names[1]: ["chest": 1, "triceps": 0.5, "front_delts": 0.5],
+                                                   names[2]: ["upper_back": 1, "lats": 0.8, "biceps": 0.5], names[3]: ["side_delts": 1, "front_delts": 0.8, "triceps": 0.4]]
+        try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
+            NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
+        }
+        try render("gym-planned-card-open", height: 420) {
+            ExerciseCard(exercise: plan.exercises[1], started: false, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true).padding(20)
+        }
         let why = "Cíl podle tvého sportu – síla a svaly: těžší hlavní cviky. Na tvoje přání šetřím nohy a trénink soustředím na horní část těla; cviky vybírám podle čerstvosti a nedávné svalové zátěže. Cviky se liší od plánu na čt 29. 10. Časový plán: přibližně 74 z 75 minut včetně rozcvičení, pauz, nastavování strojů a rezervy."
-        try render("gym-why", height: 360) { GymWhyCard(reasons: GymWhy.reasons(why)).padding(20) }
+        try render("gym-why", height: 600) { GymWhySheet(reasons: GymWhy.reasons(why)) }
         try render("gym-stretch-info", height: 700) {
             StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
                                          steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))
@@ -734,7 +745,6 @@ final class SnapshotTests: XCTestCase {
     func testNewScreens() throws {
         // "+" (redesign N): the card over Today, its edit, and the sheets it opens.
         UserDefaults.standard.removeObject(forKey: PlusItem.storageKey)
-        UserDefaults.standard.removeObject(forKey: PlusItem.legacyKey)
         try render("plus-card", height: 560, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}).padding(16) }.environment(AppModel(demo: true)) }
         try render("plus-card-edit", height: 760, window: true) { VStack { Spacer(); PlusCard(close: {}, openCoach: {}, editing: true).padding(16) }.environment(AppModel(demo: true)) }
         try render("plus-log-workout", height: 1000, window: true) { ManualWorkoutSheet().environment(AppModel(demo: true)) }
@@ -1408,6 +1418,18 @@ final class SnapshotTests: XCTestCase {
         let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2027, month: 11, day: 5)))
         let first = try XCTUnwrap(calendar.date(byAdding: .month, value: -12, to: ends))
         XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 11), "12 payments from Nov 2026")
+    }
+
+    /// 602 point 71: the axis counts back from the next payment, so payment 1
+    /// with the next due Nov 21, 2026 starts in Oct 2026, not a year earlier.
+    func testPaymentDotsFirstMonthFromNextPayment() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let next = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 21)))
+        let ends = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 30)))
+        let payments = ProStore.Payments(number: 1, total: 12, next: next, ends: ends)
+        let first = PaymentDots.firstMonth(payments, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.year, .month], from: first), DateComponents(year: 2026, month: 10))
     }
 
     func testFreeWeekDates() throws {

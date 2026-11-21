@@ -9,10 +9,11 @@ import UniformTypeIdentifiers
 /// logs it, and the same place then says what was added, with Undo.
 struct PlusCard: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var textSize
     var close: () -> Void
     var openCoach: () -> Void
     /// The user's actions in order, without the coach (PlusItem.storageKey);
-    /// empty until the first save, then the defaults or the old "+" apply.
+    /// empty until the first save, then the defaults apply.
     @AppStorage(PlusItem.storageKey) private var stored = ""
     @State private var editing = false
     @State private var draft: [String] = []
@@ -40,8 +41,7 @@ struct PlusCard: View {
 
     private var cycleOn: Bool { model.cycle?.enabled == true }
     private var saved: [String] {
-        PlusItem.card(stored: stored, legacy: UserDefaults.standard.string(forKey: PlusItem.legacyKey),
-                      favorites: UserDefaults.standard.string(forKey: DrinkPrefs.favoritesKey) ?? DrinkPrefs.defaultFavorites)
+        PlusItem.card(stored: stored)
     }
     /// What the card shows: the saved actions (Log period only while cycle
     /// tracking is on), the coach in the middle spot.
@@ -97,8 +97,7 @@ struct PlusCard: View {
         self.openCoach = openCoach
         _editing = State(initialValue: editing)
         let defaults = UserDefaults.standard
-        _draft = State(initialValue: editing ? PlusItem.card(stored: defaults.string(forKey: PlusItem.storageKey) ?? "", legacy: defaults.string(forKey: PlusItem.legacyKey),
-                                                              favorites: defaults.string(forKey: DrinkPrefs.favoritesKey) ?? DrinkPrefs.defaultFavorites) : [])
+        _draft = State(initialValue: editing ? PlusItem.card(stored: defaults.string(forKey: PlusItem.storageKey) ?? "") : [])
     }
 
     private var rows: [[String]] { stride(from: 0, to: spots.count, by: 3).map { Array(spots[$0..<min($0 + 3, spots.count)]) } }
@@ -245,7 +244,7 @@ struct PlusCard: View {
                 }
             }
             Text(L10n.tr(item.title)).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
+                .multilineTextAlignment(.center).lineLimit(textSize.isAccessibilitySize ? 2 : 1).minimumScaleFactor(0.7)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
@@ -429,8 +428,6 @@ struct PlusItem: Identifiable, Equatable {
     /// Nine spots: the coach in the middle and eight actions of the user's.
     static let actions = 8
     static let storageKey = "plusMenu.card"
-    /// Today's "+" before the redesign: ids and the "drink" group of favourites.
-    static let legacyKey = "plusMenu.items"
 
     static let all: [PlusItem] = [
         PlusItem(id: "start", title: "Začít trénink", symbol: "play.fill"),
@@ -474,18 +471,10 @@ struct PlusItem: Identifiable, Equatable {
         return list
     }
 
-    /// The saved card; before the first save the old "+" carries over (its
-    /// ids renamed, its drink group as the favourite drinks), or the defaults.
-    static func card(stored: String, legacy: String?, favorites: String) -> [String] {
-        if !stored.isEmpty { return clean(stored.split(separator: ",").map(String.init)) }
-        guard let legacy else { return defaults }
-        let renamed = ["pick": "aotd", "gymBuilder": "build", "scan": "barcode"]
-        let ids = legacy.split(separator: ",").flatMap { part -> [String] in
-            let id = String(part)
-            if id == "drink" { return DrinkPrefs.list(favorites) }
-            return [renamed[id] ?? id]
-        }
-        return clean(ids)
+    /// The saved card, or before the first save the concept's default card
+    /// (the "+" before the redesign does not carry over: 602 point 39).
+    static func card(stored: String) -> [String] {
+        stored.isEmpty ? defaults : clean(stored.split(separator: ",").map(String.init))
     }
 
     /// Known actions once each, at most eight, never the coach (it has its own spot).

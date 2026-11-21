@@ -120,8 +120,8 @@ struct JournalStateMark: View {
 
 // MARK: - Zdraví
 
-/// On Zdraví under Připravenost: "Včerejšek čeká, Doplnit" while yesterday
-/// has open items, and the biggest effects on readiness to swipe through.
+/// On Zdraví, last: "Včerejšek čeká, Doplnit" with the strongest finding
+/// while yesterday has open items, else one row to log today.
 /// A widget, so it can be removed like the others.
 struct JournalHealthCard: View {
     @Environment(AppModel.self) private var model
@@ -131,50 +131,82 @@ struct JournalHealthCard: View {
     private var strongest: JournalEffect? { data?.top?.max { abs($0.effect) < abs($1.effect) } }
 
     var body: some View {
-        Card {
-            WidgetHeader(title: L10n.tr("Deník"), color: Palette.indigo)
+        Group {
+            // Nothing until the first answer, so the card doesn't jump from
+            // "Log today" to "Yesterday is waiting".
             if let card = data?.card {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Včerejšek čeká").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                        Text(verbatim: L10n.plural("%lld otázek", card.open))
-                            .font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                    Spacer(minLength: 8)
-                    Button { model.push(.journal(card.date)) } label: {
-                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
-                            .padding(.horizontal, 18).frame(height: 40).background(Palette.button, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                if strongest != nil { Rectangle().fill(Palette.hairline).frame(height: 1) }
-            }
-            if let effect = strongest {
-                Button { model.push(.journalImpact) } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        effectView(effect)
-                        HStack {
-                            Text("Co na tebe působí").font(Typo.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
-                        }
-                        .frame(minHeight: 44)
-                    }
-                }
-                .buttonStyle(.plain)
-            } else if data?.card == nil, data != nil {
-                Button { model.push(.journal(AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))) } label: {
-                    Text("Co na tebe působí, ukážu po pár dnech.").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
+                waiting(card)
+            } else if data != nil {
+                logToday
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { model.push(.journal(data?.card?.date ?? (AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date())))) }
         .task { await load() }
     }
 
+    /// Concept 20: JOURNAL, "Yesterday is waiting" with the orange Fill in,
+    /// the strongest finding in words and What affects you (D-ZDRAVI-20).
+    private func waiting(_ card: JournalCard) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Deník")
+            Card {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Včerejšek čeká").font(Typo.heading(20, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                        Text(verbatim: Self.questions(card.open)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Button { model.push(.journal(card.date)) } label: {
+                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Color.black.opacity(0.85))
+                            .padding(.horizontal, 18).frame(height: 40).background(Palette.amber, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let effect = strongest {
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                    Button { model.push(.journalImpact) } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            effectView(effect)
+                            HStack {
+                                Text("Co na tebe působí").font(Typo.body).foregroundStyle(Palette.ink)
+                                Spacer()
+                                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                            }
+                            .frame(minHeight: 44)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .contentShape(Rectangle())
+            .onTapGesture { model.push(.journal(card.date)) }
+        }
+    }
+
+    /// Concept 1: nothing waiting, one row "Journal  Log today ›".
+    private var logToday: some View {
+        Button { model.push(.journal(AppModel.localDate(Date()))) } label: {
+            Card {
+                HStack {
+                    Text("Deník").font(Typo.body).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Text("Zapsat dnešek").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .frame(minHeight: 32)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "13 questions, about 3 minutes": about 12 seconds an answer.
+    static func questions(_ count: Int) -> String {
+        let minutes = max(1, Int((Double(count) * 12 / 60).rounded()))
+        let time = minutes == 1 ? L10n.tr("asi minuta") : L10n.f("asi %@ min", String(minutes))
+        return L10n.plural("%lld otázek", count) + ", " + time
+    }
+
+    /// The finding in words, no sign (concept 20, point 48): "17% lower
+    /// readiness the next morning".
     private func effectView(_ effect: JournalEffect) -> some View {
         let color = JournalStyle.effectColor(effect.effect)
         return VStack(alignment: .leading, spacing: 4) {
@@ -183,8 +215,9 @@ struct JournalHealthCard: View {
                 Text(verbatim: effect.name).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(28)).foregroundStyle(Palette.ink)
-                Text("připravenost další ráno").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Text(verbatim: String(abs(effect.effect)) + Fmt.percentSign).font(Typo.number(34)).foregroundStyle(color)
+                Text(effect.effect < 0 ? "nižší připravenost další ráno" : "vyšší připravenost další ráno")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

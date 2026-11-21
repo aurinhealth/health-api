@@ -14,19 +14,24 @@ struct FoodSuggestionsView: View {
     @State private var error: String?
 
     var body: some View {
-        SettingsPage(title: "Návrhy oprav") {
-            Picker("Druh", selection: $kind) {
-                Text(L10n.f("Opravy (%d)", list?.pending?["correction"] ?? 0)).tag("correction")
-                Text(L10n.f("Hlášení (%d)", list?.pending?["report"] ?? 0)).tag("report")
-                Text(L10n.f("Nové (%d)", list?.pending?["new_food"] ?? 0)).tag("new_food")
+        SettingsPage(title: "Návrhy oprav potravin", hero: SettingsHero(systemImage: "tray", color: Palette.amber, text: "Opravy potravin, které lidé poslali.")) {
+            // Both choices on one card.
+            VStack(spacing: 10) {
+                Picker("Druh", selection: $kind) {
+                    Text(L10n.f("Opravy (%d)", list?.pending?["correction"] ?? 0)).tag("correction")
+                    Text(L10n.f("Hlášení (%d)", list?.pending?["report"] ?? 0)).tag("report")
+                    Text(L10n.f("Nové (%d)", list?.pending?["new_food"] ?? 0)).tag("new_food")
+                }
+                .pickerStyle(.segmented)
+                Picker("Stav", selection: $status) {
+                    Text(pendingTitle).tag("pending")
+                    Text("Schválené").tag("approved")
+                    Text("Zamítnuté").tag("rejected")
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
-            Picker("Stav", selection: $status) {
-                Text(pendingTitle).tag("pending")
-                Text("Schválené").tag("approved")
-                Text("Zamítnuté").tag("rejected")
-            }
-            .pickerStyle(.segmented)
+            .padding(12)
+            .cardSurface(cornerRadius: 22)
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if let list {
                 if list.suggestions.isEmpty {

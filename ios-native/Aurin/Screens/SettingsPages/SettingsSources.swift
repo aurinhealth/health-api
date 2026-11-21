@@ -3,7 +3,7 @@ import UserNotifications
 
 // MARK: - Data sources
 
-/// Zdroje dat, laid out like Bevel's: the connected services as cards, each
+/// Zdroje dat (the Settings concept): the connected services on one card, each
 /// with its page (what Aurin reads and sends, permissions, sync, disconnect),
 /// the rest right under them to connect, and syncing everything at the bottom.
 struct SourcesSettingsView: View {
@@ -17,7 +17,9 @@ struct SourcesSettingsView: View {
     @State private var sync: SyncSettingsStore?
 
     /// Apple Health also when Aurin only writes to it (Aurin posílá on its page).
-    private var connected: [ConnectionsResponse.Provider] {
+    private var connected: [ConnectionsResponse.Provider] { Self.connected(store) }
+
+    static func connected(_ store: SettingsStore) -> [ConnectionsResponse.Provider] {
         var list = store.connections.filter { $0.connected == true }
         if !list.contains(where: { $0.id == "apple" }) && !store.demo && AppleHealthExport.shared.isOn {
             list.append(ConnectionsResponse.Provider(id: "apple", name: "Apple Health", connected: true, configured: true, missingPermissions: nil, metrics: nil, note: nil))
@@ -27,24 +29,13 @@ struct SourcesSettingsView: View {
     private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
 
     var body: some View {
-        SettingsPage(title: "Zdroje dat", hero: SettingsHero(systemImage: "link", color: Palette.green, text: "Odkud Aurin bere tvoje data.")) {
-            Text("Připojeno").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-
-            if connected.isEmpty && store.loaded {
-                Text("Zatím není nic propojené.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .cardSurface(cornerRadius: 18)
-            }
-            VStack(spacing: 10) {
-                ForEach(connected) { provider in
-                    NavigationLink {
-                        IntegrationDetailView(provider: provider, store: store, actions: actions)
-                    } label: {
-                        IntegrationCard(provider: provider, dataAt: dataAt(provider), lastNight: lastNight(provider),
-                                        working: actions.working == provider.id)
+        SettingsPage(title: "Zdroje dat", hero: hero) {
+            if !connected.isEmpty {
+                SettingsGroup(title: "Připojeno") {
+                    ForEach(Array(connected.enumerated()), id: \.element.id) { index, provider in
+                        if index > 0 { SettingsDivider() }
+                        sourceRow(provider)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -82,7 +73,10 @@ struct SourcesSettingsView: View {
                     HStack {
                         Text(store.syncing ? "Synchronizuji…" : "Synchronizovat vše").font(.body).foregroundStyle(Palette.ink)
                         Spacer()
-                        if store.syncing { ProgressView() } else if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
+                        if store.syncing { ProgressView() } else {
+                            if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
+                            Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint).accessibilityHidden(true)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .frame(minHeight: 50)
@@ -132,6 +126,53 @@ struct SourcesSettingsView: View {
         }
     }
 
+    /// The connected sources' logos and how many there are, and how many need a look (the concept's top).
+    private var hero: SettingsHero {
+        guard !connected.isEmpty else {
+            return SettingsHero(systemImage: "link", color: Palette.green, text: store.loaded ? "Zatím není nic propojené." : "Odkud Aurin bere tvoje data.")
+        }
+        let n = connected.count
+        let count = n == 1 ? L10n.tr("Připojený je jeden zdroj")
+            : n < 5 ? L10n.f("Připojené jsou %d zdroje", n) : L10n.f("Připojeno je %d zdrojů", n)
+        let now = Date()
+        let issues = connected.filter { IntegrationCard.issue($0, dataAt: dataAt($0), now: now) != nil }.count
+        let attention = issues == 0 ? "." : issues == 1 ? L10n.tr(", jeden potřebuje tvou pozornost.") : L10n.tr(", některé potřebují tvou pozornost.")
+        let logos = HStack(spacing: 8) {
+            ForEach(connected) { IntegrationIcon(id: $0.id, size: 40) }
+        }
+        return SettingsHero(text: count + attention, art: AnyView(logos))
+    }
+
+    /// One source on the Connected card: its page, and Opravit when something is wrong.
+    private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
+        let at = dataAt(provider)
+        let issue = IntegrationCard.issue(provider, dataAt: at, now: Date())
+        return HStack(spacing: 10) {
+            NavigationLink {
+                IntegrationDetailView(provider: provider, store: store, actions: actions)
+            } label: {
+                IntegrationCard(provider: provider, dataAt: at, lastNight: lastNight(provider))
+            }
+            .buttonStyle(.plain)
+            if actions.working == provider.id {
+                Text(L10n.tr("připojuji…")).font(Typo.caption).foregroundStyle(Palette.muted)
+            } else if issue != nil && provider.problemText != nil && !store.demo {
+                // Fix reconnects, so only for an access problem; old data alone shows its line.
+                Button { start(provider.id) } label: {
+                    Text(L10n.tr("Opravit")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(actions.working != nil)
+            }
+            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .frame(minHeight: 60)
+    }
+
     /// The connected sources that measure the night (the ring too) and the day, in the server's order.
     private var nightChoices: [String] { ["ultrahuman", "whoop", "google", "apple"].filter { id in connected.contains { $0.id == id } } }
     private var dayChoices: [String] { ["google", "apple"].filter { id in connected.contains { $0.id == id } } }
@@ -146,7 +187,14 @@ struct SourcesSettingsView: View {
 
     /// When the source's data last reached Aurin: Apple Health from the phone,
     /// the others the server's last good fetch.
-    private func dataAt(_ provider: ConnectionsResponse.Provider) -> Date? {
+    private func dataAt(_ provider: ConnectionsResponse.Provider) -> Date? { Self.dataAt(provider) }
+
+    /// Some connected source needs a look (the hub's dot on Zdroje dat, 602 point 62).
+    static func needsLook(_ store: SettingsStore, now: Date = Date()) -> Bool {
+        connected(store).contains { IntegrationCard.issue($0, dataAt: dataAt($0), now: now) != nil }
+    }
+
+    static func dataAt(_ provider: ConnectionsResponse.Provider) -> Date? {
         if provider.id == "apple", let last = AppleHealth.shared.lastSync { return last }
         return provider.lastSuccessAt.flatMap(SourceActions.date)
     }

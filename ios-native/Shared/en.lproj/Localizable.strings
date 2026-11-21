@@ -4850,6 +4850,56 @@
 "Další trénink %@" = "Next workout %@";
 "VO2max, odhad" = "VO2max, estimate";
 "%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";
+
+/* Settings 602: Privacy */
+"Potřebuje tvou pozornost" = "Needs your attention";
+"Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš, s OpenAI po tvém souhlasu a s firmami, které pro nás Aurin provozují." = "No ads, no data brokers. Shared only with services you connect, with OpenAI once you say yes, and with the providers that run Aurin for us.";
+
+/* Settings 602: Account, Pro, Goals */
+"Přihlášení a zabezpečení" = "Sign-in and security";
+"Přihlašuješ se přes Face ID, nebo kódem poslaným na e-mail." = "You sign in with Face ID, or with a code sent to your email.";
+"Zápis jídla, čárový kód a štítek" = "Food log, barcode and label";
+"Měsíc %lld z %lld" = "Month %lld of %lld";
+"Čas na tréninky" = "Time to train";
+
+/* Settings 602: Sources, Calendar, Help */
+"žádná nová data od %@" = "no new data since %@";
+"Připojený je jeden zdroj" = "One source is connected";
+"Připojené jsou %d zdroje" = "%d sources are connected";
+"Připojeno je %d zdrojů" = "%d sources are connected";
+", jeden potřebuje tvou pozornost." = ", one needs your attention.";
+", některé potřebují tvou pozornost." = ", some need your attention.";
+"Aurin se řídí vzhledem tvého iPhonu." = "Aurin follows the look of your iPhone.";
+"Aurin zůstává světlý ve dne i v noci." = "Aurin stays light, day and night.";
+"Aurin zůstává tmavý ve dne i v noci." = "Aurin stays dark, day and night.";
+"Aurin plánuje tvůj trénink podle tvého kalendáře." = "Aurin plans your training around your calendar.";
+"Aurin tvůj kalendář nečte." = "Aurin does not read your calendar.";
+"Napiš nám, co se pokazilo, a podíváme se na to." = "Tell us what went wrong and we will look at it.";
+"Opravy potravin, které lidé poslali." = "Food corrections that people sent.";
+"Kolik dnes stojí AI." = "What AI costs today.";
+"Lidé z webu, kteří čekají na TestFlight." = "People from the website waiting for TestFlight.";
+
+/* Settings 602: Sleep, Gym, Nutrition, Journal */
+"Tvůj deník je vypnutý." = "Your journal is off.";
+"Tvůj deník je zapnutý." = "Your journal is on.";
+"Tvůj deník je zapnutý, sleduješ v něm %@." = "Your journal is on, with %@ to track.";
+"Táhni měsícem nebo sluncem a změníš noc." = "Drag the moon or the sun to change the night.";
+"Táhni měsícem nebo sluncem a změníš noc. Malá tečka je tvoje obvyklá večerka." = "Drag the moon or the sun to change the night. The small dot is your usual bedtime.";
+"spánku" = "of sleep";
+"obvykle %@" = "usually %@";
+"budík, o víkendu" = "alarm, at the weekend";
+"budík, každý pracovní den" = "alarm, every work day";
+"Aspoň %@" = "At least %@";
+"Dnešní trénink přidává" = "Today's training adds";
+"Dnešní trénink ubírá" = "Today's training takes off";
+"Nízká HRV přidává" = "Low HRV adds";
+"Nízká HRV ubírá" = "Low HRV takes off";
+"Dospání přidává" = "Catching up adds";
+"Dospání ubírá" = "Catching up takes off";
+"Dnešní šlofík přidává" = "Today's nap adds";
+"Dnešní šlofík ubírá" = "Today's nap takes off";
+"Dolní hranice přidává" = "Lower limit adds";
+"Horní hranice ubírá" = "Upper limit takes off";
 "Průměr %@ za celé dny." = "Average %@ on full days.";
 "Dny se splněným cílem bílkovin: %lld z %lld." = "Protein target met on %lld of %lld days.";
 "Dny se splněným cílem sacharidů: %lld z %lld." = "Carbs target met on %lld of %lld days.";
@@ -4919,3 +4969,33 @@
 "Tvoje čísla jsou pod obvyklým rozmezím" = "Your numbers are below your usual range";
 "Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
 "Tréninky jsou jen část ze spálených %@ kcal." = "Workouts count only part of the %@ kcal burned.";
+
+/* Planned gym detail as concept K04/017 (GymSessionView, GymDayParts, GymWhyCard) */
+"Části tréninku" = "Workout";
+"Jen pro dnešek" = "Today only";
+"asi %@ námahy" = "about %@ strain";
+"P" = "R";
+"Jak se cvik dělá" = "How it's done";
+"Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink." = "The coach picks muscle groups that are fresh, keeps the weekly load inside your target and follows the phase of your plan. You can swap any exercise or change the whole workout.";
+"Tep v klidu" = "Resting HR";
+"Kůže tepleji" = "Skin warmer";
+"Kůže chladněji" = "Skin cooler";
+"průměr %@ za týden" = "avg %@ this week";
+"Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is last night. Green arc is your usual 30-day range.";
+"roku mladší" = "years younger";
+"roku starší" = "years older";
+"Čára se začne kreslit po dvou týdnech odhadů." = "The line starts after two weeks of estimates.";
+"První odhad je z %@." = "First estimate %@.";
+"Zapsat dnešek" = "Log today";
+"asi minuta" = "about a minute";
+"asi %@ min" = "about %@ min";
+"nižší připravenost další ráno" = "lower readiness the next morning";
+"vyšší připravenost další ráno" = "higher readiness the next morning";
+"o %@ roku níž" = "%@ years lower";
+"o %@ roku výš" = "%@ years higher";
+"Jiný den…" = "Other day…";
+"Vynechat trénink" = "Skip it";
+"Přesunuto na dnešek" = "Moved to today";
+"%@ odebrán" = "%@ removed";
+"Vynecháno" = "Skipped";
+"Aurin Age" = "Aurin Age";

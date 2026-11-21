@@ -13,7 +13,7 @@ struct AISpendingView: View {
     @State private var month = false
 
     var body: some View {
-        SettingsPage(title: "Útraty AI") {
+        SettingsPage(title: "Útraty AI", hero: SettingsHero(systemImage: "chart.bar.xaxis", color: Palette.green, text: "Kolik dnes stojí AI.")) {
             if let spending {
                 if spending.monthGroups != nil {
                     Picker("Období", selection: $month) {
