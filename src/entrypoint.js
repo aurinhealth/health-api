@@ -3258,7 +3258,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [days,gym,health,fitness,insights,coaches,profiles,plans,gymSets,gymSince]=await Promise.all([
+      const [days,gym,health,fitness,insights,coaches,profiles,plans,gymSets,gymSince,athlete]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
         trainingGymPlans(env,start,end,{summary:true}).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
@@ -3269,12 +3269,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Muscle load (workload-ratio.js): the gym's work sets of the last 42 days, one read on idx_strength_sets_user_date.
         env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null),
         // The first gym day on record (one index seek), so a lifter back from a break is not learning again.
-        env.DB.prepare("SELECT workout_date AS d FROM strength_sets WHERE user_id=? AND completed=1 ORDER BY workout_date LIMIT 1").bind(env.USER_ID).first().then(r=>r?.d?String(r.d).slice(0,10):null).catch(()=>null)
+        env.DB.prepare("SELECT workout_date AS d FROM strength_sets WHERE user_id=? AND completed=1 ORDER BY workout_date LIMIT 1").bind(env.USER_ID).first().then(r=>r?.d?String(r.d).slice(0,10):null).catch(()=>null),
+        // Sick, injured or on a break: the load advice adds no session (load-advice.js).
+        getAthleteState(env.DB).catch(()=>null)
       ]);
       // Without a main race in the profile, the race of the running plan is the one Training counts down to.
       const planTemplate=plans.active&&getTemplate(plans.active.templateId),planRace=planTemplate?.race&&plans.active.raceDate>=date?{name:planTemplate.name,date:plans.active.raceDate}:null;
       // The saved profile says whether the athlete has set a focus yet ("Nastav si zaměření a cíle").
-      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace,gymSets,gymSince}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace,gymSets,gymSince,athleteStatus:athlete?.status||'active'}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -4000,6 +4002,21 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const body=await request.json().catch(()=>({})),date=String(body.date||'');
       if(!validDate(date)||date<localToday())return Response.json({status:'error',message:L('Vyber dnešní nebo budoucí datum.', 'Choose today or a future date.')},{status:400});
       return Response.json(await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(body.workoutId||''),date,confirm:body.confirm===true,environment:body.environment,startTime:typeof body.startTime==='string'?body.startTime:null}),{headers:{'Cache-Control':'no-store'}});
+    }
+    // "Add to plan" under the coach's load sentence on Training (load-advice.js,
+    // decision 6): one easy endurance session of the sport on the day the
+    // advice named, generated as the library does and written only now, after the tap.
+    if(url.pathname==='/app/api/workouts/add-easy'&&request.method==='POST'){
+      const body=await request.json().catch(()=>({})),date=String(body.date||''),sport=['ride','run','swim'].includes(body.sport)?body.sport:null;
+      if(!sport||!validDate(date)||date<=localToday()||date>shiftDate(localToday(),14))return Response.json({status:'error',message:L('Vyber den v příštích dvou týdnech.', 'Choose a day in the next two weeks.')},{status:400});
+      // Once per day: a second tap (or the card again before the plan reloads) adds nothing.
+      const already=await env.DB.prepare("SELECT 1 FROM workout_schedule_links WHERE user_id=? AND scheduled_date=? LIMIT 1").bind(env.USER_ID??env.DB.userId,date).first().catch(()=>null);
+      if(already)return Response.json({status:'ok',already:true},{headers:{'Cache-Control':'no-store'}});
+      const u=new URL('https://internal/app/api/workouts/generate');
+      const g=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:'auto',focus:'endurance',ai:false})}),env,ctx,u,{signedIn:true}).then(r=>r.json()).catch(()=>null);
+      const w=g?.status==='ok'?g.workout:null;
+      if(!w?.id)return Response.json({status:'error',message:g?.message||L('Trénink se nepodařilo připravit.', 'The workout could not be prepared.')},{status:409});
+      return Response.json({...await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(w.id),date,confirm:true,environment:w.environment||'outdoor'}),title:w.name||null},{headers:{'Cache-Control':'no-store'}});
     }
   }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   return null;

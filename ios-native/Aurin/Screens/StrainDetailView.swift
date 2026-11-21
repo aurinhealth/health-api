@@ -1,14 +1,16 @@
-import Charts
 import SwiftUI
 
-/// Námaha from Today: the day's strain on a dial with the plan, what it is
-/// made of, and fitness and fatigue with the forecast to the end of the week.
+/// Strain from Today (concept D, d-strain): Strain, Fitness and Fatigue as
+/// cells on top; the day's strain on a dial against today's target with the
+/// plan dotted; its last 30 days or 3 months; the trend; what it is made of;
+/// the heart rate zones of the day's last workout and what set the target.
 struct StrainDetailView: View {
     @Environment(AppModel.self) private var model
     /// A past day chosen on Training; nil is the day Today shows.
     var date: String? = nil
     /// That day as Today shows it, loaded here.
     @State private var day: TodaySnapshot?
+    @State private var info = false
 
     private var shown: TodaySnapshot? {
         guard let date else { return model.today }
@@ -16,13 +18,19 @@ struct StrainDetailView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Námaha", coach: .strain(date: date ?? model.selectedDate)) {
+        // Today's green from Today, Training's amber from a day on Training (section tint rule).
+        let glow = date == nil ? Palette.Glow.today : Palette.Glow.training
+        DetailTemplate(title: "Námaha", glow: glow) {
+            CoachEntry(subject: .strain(date: date ?? model.selectedDate), view: DetailScreen<EmptyView>.coachView(glow),
+                       companion: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true })
+        } content: {
             if let today = shown {
                 StrainDetailContent(today: today, training: model.training, past: date != nil)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             }
         }
+        .sheet(isPresented: $info) { StrainInfo() }
         .task {
             if let date {
                 if model.today?.date != date, !model.demo { day = try? await model.api.today(date: date) }
@@ -35,24 +43,18 @@ struct StrainDetailView: View {
 }
 
 struct StrainDetailContent: View {
+    @Environment(AppModel.self) private var model
     let today: TodaySnapshot
     let training: TrainingSnapshot?
+    /// A past day chosen on Training: named above the dial, without the plan.
+    var past = false
+
+    @State private var cell = "strain"
+    @State private var period: ChartPeriod = .days30
+    @State private var zones: (title: String, rows: [ZoneList.Row])?
 
     /// The same 0–21 scale as the planned strain on the server (app-today.js).
     static func strain(tss: Double) -> Double { tss > 0 ? 21 * (1 - exp(-tss / 90)) : 0 }
-
-    static func level(_ score: Double) -> (String, Color) {
-        switch score {
-        case ..<7: return ("lehká", Palette.green)
-        case ..<14: return ("střední", Palette.amber)
-        case ..<18: return ("vysoká", Palette.rust)
-        default: return ("maximální", Palette.rust)
-        }
-    }
-
-    /// A past day chosen on Training: named in the title, without the forecast.
-    var past = false
-    private var isToday: Bool { !past }
 
     private var sessions: [WeekSession] {
         today.plan.compactMap { $0.kind == "workout" ? $0.session : nil }
@@ -66,58 +68,161 @@ struct StrainDetailContent: View {
         let openTss = sessions.filter { $0.status == "planned" }.compactMap(\.tss).reduce(0, +)
         let trainingPart = today.strain.training ?? Swift.min(score, Self.strain(tss: doneTss))
         let movement = today.strain.movement ?? (score - trainingPart)
-        let planned = Self.strain(tss: doneTss + openTss) - Self.strain(tss: doneTss)
+        let planned = past ? 0 : Self.strain(tss: doneTss + openTss) - Self.strain(tss: doneTss)
         return (trainingPart, Swift.max(0, movement), Swift.max(0, planned))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Kapitálky with the day and the serif title, as the other details (Petr, 2026-10-24).
-            SectionLabel(text: isToday ? L10n.tr("Trénink dnes") : L10n.f("Trénink %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
-                .padding(.top, 24)
-            Text(verbatim: L10n.tr("Námaha"))
-                .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
-            dial
-            if let target = today.strain.target {
-                SectionLabel(text: isToday ? "Dnešní cíl" : "Cíl dne").padding(.top, 30)
-                targetRows(target).padding(.top, 12)
-            }
-            SectionLabel(text: "Z čeho je").padding(.top, 30)
-            sources.padding(.top, 12)
-            if let form = training?.form, !form.series.isEmpty {
-                SectionLabel(text: "Kondice a únava").padding(.top, 30)
-                // The forecast runs from today; a past day shows the chart without it.
-                FitnessChart(form: form, upcoming: isToday ? upcomingTss : [])
-                    .padding(.top, 12)
+            SiblingCells(cells: cells, selected: cell) { cell = $0; period = .days30 }.padding(.top, 16)
+            if cell == "strain" {
+                strainPage
+            } else if let form = training?.form {
+                formPage(form, fitness: cell == "fitness")
             }
         }
+        .task { await model.loadQuarter(ending: today.date) }
+        .task(id: lastDone?.id) { await loadZones() }
     }
 
-    private var dial: some View {
-        let score: Double = today.strain.score ?? 0
+    private var cells: [SiblingCell] {
+        var list = [SiblingCell(id: "strain", title: "Námaha", value: Fmt.decimal(today.strain.score ?? 0), unit: L10n.f("z %@", "21"))]
+        if let form = training?.form {
+            list.append(SiblingCell(id: "fitness", title: "Kondice", value: Fmt.int(form.fitness)))
+            list.append(SiblingCell(id: "fatigue", title: "Únava", value: Fmt.int(form.fatigue)))
+        }
+        return list
+    }
+
+    // MARK: Strain
+
+    @ViewBuilder
+    private var strainPage: some View {
         let split = parts
-        let level: (String, Color) = Self.level(score)
-        return VStack(spacing: 0) {
-            StrainDial(score: score, planned: today.strain.planned, target: today.strain.target)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 16)
-            Pill(text: L10n.tr(level.0), foreground: level.1, background: level.1.opacity(0.14))
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-            Card { StrainSplitBar(training: split.training, movement: split.movement, planned: split.planned) }
-                .padding(.top, 20)
+        Text(verbatim: past ? Fmt.dayShort(today.date, today: AppModel.localDate(Date())) : L10n.tr("Námaha dnes, zatím"))
+            .font(Typo.body).foregroundStyle(Palette.muted)
+            .frame(maxWidth: .infinity).padding(.top, 22)
+        StrainDial(score: today.strain.score ?? 0, planned: split.planned, target: today.strain.target)
+            .frame(maxWidth: .infinity).padding(.top, 14)
+        let points = strainPoints
+        Card {
+            DetailChart(points: points, today: today.date, period: $period, digits: 1,
+                        note: past ? "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období."
+                            : "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období. Dnešek je zatím jen část dne.",
+                        periods: [.days30, .months3])
+        }
+        .padding(.top, 24)
+        let rows = TrendMath.rows(points.filter { $0.date < today.date }, today: ISODay.shift(today.date, -1))
+        if !rows.isEmpty {
+            SectionLabel(text: "Analýza trendu").padding(.top, 28)
+            Card { TrendTable(rows: rows, digits: 1) }.padding(.top, 10)
+        }
+        SectionLabel(text: "Z čeho je").padding(.top, 28)
+        sources(split).padding(.top, 10)
+        if let zones {
+            SectionLabel(text: L10n.f("Tepové zóny, %@", zones.title)).padding(.top, 28)
+            Card { ZoneList(rows: zones.rows, bars: true) }.padding(.top, 10)
+        }
+        if let target = today.strain.target {
+            SectionLabel(text: past ? "Co určilo cíl dne" : "Co určuje dnešní cíl").padding(.top, 28)
+            targetRows(target).padding(.top, 10)
         }
     }
 
-    /// What set today's target: readiness, sleep debt, the morning answer, the plan.
+    /// The days' strain from /app/api/days with the usual range of the 28
+    /// days before each (mean ± one SD, from 7 days on), as the Health charts.
+    private var strainPoints: [ChartPoint] {
+        var values: [String: Double] = [:]
+        for (date, day) in model.dayValues where date <= today.date { if let s = day.strain { values[date] = s } }
+        if let score = today.strain.score { values[today.date] = score }
+        let dates = values.keys.sorted()
+        return dates.map { date in
+            let before = dates.filter { $0 < date && $0 >= ISODay.shift(date, -28) }.compactMap { values[$0] }
+            var point = ChartPoint(date: date, value: values[date] ?? 0)
+            if before.count >= 7, let mean = ChartBuckets.mean(before) {
+                let sd = (before.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(before.count)).squareRoot()
+                point.low = Swift.max(0, mean - sd)
+                point.high = Swift.min(21, mean + sd)
+            }
+            return point
+        }
+    }
+
+    // MARK: What it is made of
+
+    private func sources(_ split: (training: Double, movement: Double, planned: Double)) -> some View {
+        let done = sessions.filter { $0.status == "done" }
+        let open = past ? [] : sessions.filter { $0.status == "planned" }
+        let doneTss = done.compactMap(\.tss).reduce(0, +)
+        let openTss = open.compactMap(\.tss).reduce(0, +)
+        return Card {
+            StrainSplitBar(training: split.training, movement: split.movement, planned: split.planned, target: today.strain.target)
+            ForEach(done) { s in
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.Sport.color(s.sport), title: s.title, meta: meta(s),
+                          value: share(split.training, s.tss, of: doneTss), planned: false)
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+            StrainRow(symbol: "figure.walk", color: Palette.ink, title: L10n.tr("Pohyb během dne"), meta: movementMeta,
+                      value: split.movement, planned: false)
+            ForEach(open) { s in
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.Sport.color(s.sport), title: s.title,
+                          meta: [ClockText.format(optional: s.time), L10n.tr("naplánováno")].compactMap { $0 }.joined(separator: ", "),
+                          value: share(split.planned, s.tss, of: openTss), planned: true)
+            }
+        }
+    }
+
+    private func share(_ total: Double, _ tss: Double?, of all: Double) -> Double? {
+        all > 0 ? total * (tss ?? 0) / all : nil
+    }
+
+    /// "07:30, 42 min, 8.2 km": what the athlete knows, no TSS (point 68).
+    private func meta(_ s: WeekSession) -> String {
+        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) },
+         s.distanceKm.flatMap { $0 > 0 ? Fmt.decimal(Units.distance($0)) + " " + Units.distanceUnit : nil }]
+            .compactMap { $0 }.joined(separator: ", ")
+    }
+
+    private var movementMeta: String {
+        var parts: [String] = []
+        if let steps = today.steps.today { parts.append(L10n.plural("%@ kroků", Fmt.int(steps), Int(steps.rounded()))) }
+        if let active = today.steps.activeMinutes { parts.append(L10n.f("%@ aktivních min", Fmt.int(active.today))) }
+        return parts.joined(separator: ", ")
+    }
+
+    // MARK: Heart rate zones
+
+    private var lastDone: WeekSession? {
+        sessions.last { $0.status == "done" && $0.activityId != nil }
+    }
+
+    private func loadZones() async {
+        guard let session = lastDone, let id = session.activityId, !model.demo,
+              let detail = try? await model.api.activityDetail(id: id), let list = detail.hrZones, !list.isEmpty else { return }
+        let total = Swift.max(list.compactMap(\.seconds).reduce(0, +), 1)
+        let names = ZoneList.heartNames(list.count)
+        let rows = list.enumerated().map { i, z -> ZoneList.Row in
+            var range: String? = nil
+            if let lo = z.min, let hi = z.max { range = Fmt.int(lo) + "–" + Fmt.int(hi) + " bpm" }
+            else if let hi = z.max { range = "< " + Fmt.int(hi + 1) + " bpm" }
+            else if let lo = z.min { range = Fmt.int(lo) + "+ bpm" }
+            let seconds = z.seconds ?? 0
+            return ZoneList.Row(id: i, name: i < names.count ? names[i] : "Z\(i + 1)", range: range, seconds: seconds, percent: z.percent ?? seconds / total * 100)
+        }
+        zones = (session.title, rows)
+    }
+
+    // MARK: What sets the target
+
+    /// What set today's target: readiness, sleep debt, the plan. The morning
+    /// answer is not one of them (T-HAB-1: it never moves readiness or the target).
     private func targetRows(_ t: TodaySnapshot.Strain.Target) -> some View {
         Card(padding: 0) {
             VStack(spacing: 0) {
                 targetRow("Připravenost", t.readiness.map { String($0) } ?? "–", first: true)
-                targetRow("Spánkový dluh", t.debt.map { Fmt.hoursMinutesLong($0) } ?? "–")
-                if let feeling = t.feeling, let option = MorningCheckinCard.options.first(where: { $0.id == feeling }) {
-                    targetRow("Pocit", L10n.tr(option.label))
-                }
+                targetRow("Spánkový dluh", t.debt.map { TodayDials.length($0) } ?? "–")
                 targetRow("Plán", t.plan ?? L10n.tr("nic v plánu"))
             }
             .padding(.horizontal, 16).padding(.vertical, 4)
@@ -128,155 +233,207 @@ struct StrainDetailContent: View {
         HStack(alignment: .firstTextBaseline) {
             Text(L10n.tr(title)).font(.body).foregroundStyle(Palette.ink)
             Spacer(minLength: 12)
-            Text(verbatim: value).font(.body).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
         .accessibilityElement(children: .combine)
     }
 
-    private var sources: some View {
-        let split = parts
-        let done: [WeekSession] = sessions.filter { $0.status == "done" }
-        let open: [WeekSession] = sessions.filter { $0.status == "planned" }
-        let doneTss: Double = done.compactMap(\.tss).reduce(0, +)
-        let openTss: Double = open.compactMap(\.tss).reduce(0, +)
-        let firstDone: String? = done.first?.id
-        return Card(padding: 0) {
-            VStack(spacing: 0) {
-                ForEach(done) { (s: WeekSession) in
-                    StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.amberBar, title: s.title, meta: meta(s),
-                              value: share(split.training, s.tss, of: doneTss), planned: false, first: s.id == firstDone)
-                }
-                StrainRow(symbol: "shoeprints.fill", color: Palette.sand, title: L10n.tr("Pohyb během dne"), meta: movementMeta,
-                          value: split.movement, planned: false, first: done.isEmpty)
-                ForEach(open) { (s: WeekSession) in
-                    StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.amberBar, title: s.title, meta: L10n.tr("v plánu"),
-                              value: share(split.planned, s.tss, of: openTss), planned: true, first: false)
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 4)
+    // MARK: Fitness and fatigue
+
+    @ViewBuilder
+    private func formPage(_ form: TrainingSnapshot.Form, fitness: Bool) -> some View {
+        let points = form.series.map { ChartPoint(date: $0.date, value: fitness ? $0.fitness : $0.fatigue) }
+        DetailHeadline(value: Fmt.int(fitness ? form.fitness : form.fatigue))
+            .padding(.top, 22)
+        Text(verbatim: form.text).font(Typo.body).foregroundStyle(Palette.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity).multilineTextAlignment(.center)
+            .padding(.top, 8)
+        Card {
+            DetailChart(points: points, today: points.last?.date ?? today.date, period: $period,
+                        note: fitness ? "Kondice je tvoje tréninková zátěž za posledních 6 týdnů. Každý bod je jeden den."
+                            : "Únava je tvoje tréninková zátěž za poslední týden. Každý bod je jeden den.",
+                        periods: points.count > 35 ? [.days30, .months3] : [.days30])
         }
-    }
-
-    private func share(_ total: Double, _ tss: Double?, of all: Double) -> Double? {
-        all > 0 ? total * (tss ?? 0) / all : nil
-    }
-
-    private func meta(_ s: WeekSession) -> String {
-        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: ", ")
-    }
-
-    private var movementMeta: String {
-        var parts: [String] = []
-        if let steps = today.steps.today { parts.append(L10n.plural("%@ kroků", Fmt.int(steps), Int(steps.rounded()))) }
-        if let active = today.steps.activeMinutes { parts.append(L10n.f("%@ aktivních min", Fmt.int(active.today))) }
-        return parts.joined(separator: ", ")
-    }
-
-    /// Planned TSS per day from tomorrow to Sunday (today's open sessions count today).
-    private var upcomingTss: [(date: String, tss: Double)] {
-        let all = training?.sessions ?? []
-        let sunday = ISODay.shift(today.date, 6 - ISODay.weekdayIndex(today.date))
-        let end = sunday == today.date ? ISODay.shift(today.date, 7) : sunday
-        return ISODay.range(today.date, end).map { day in
-            (day, all.filter { $0.date == day && $0.status == "planned" }.compactMap(\.tss).reduce(0, +))
-        }
+        .padding(.top, 20)
     }
 }
 
-/// The day's strain on a 270° dial out of 21, the plan as a lighter arc.
-struct StrainDial: View {
-    let score: Double
-    let planned: Double?
-    var target: TodaySnapshot.Strain.Target? = nil
+/// What strain is, from the "i" top right.
+struct StrainInfo: View {
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        let sweep = 0.75
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text(verbatim: L10n.tr("Námaha")).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
+                }
+                HowMeasuredCard(text: "Námaha je zátěž celého dne na stupnici 0 až 21: tréninky z jejich délky a intenzity a pohyb během dne. Cíl dne určuje připravenost, spánkový dluh a plán. Je to odhad, ne měření tvého těla.")
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationBackground(Palette.background)
+    }
+}
+
+/// The day's strain on a 270° dial out of 21 (concept d-strain): the score in
+/// ink, today's target as a green band, the rest of the plan dotted to an
+/// open dot, and where the day lands against the target.
+struct StrainDial: View {
+    let score: Double
+    /// What the sessions still planned add.
+    let planned: Double
+    var target: TodaySnapshot.Strain.Target? = nil
+
+    private let sweep = 0.75
+    private func at(_ value: Double) -> Double { sweep * Swift.min(Swift.max(value, 0), 21) / 21 }
+
+    var body: some View {
+        let end = score + planned
         ZStack {
             Circle().trim(from: 0, to: sweep)
-                .stroke(Palette.track, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-            // Today's target as a green band on the track.
+                .stroke(Palette.track, style: StrokeStyle(lineWidth: 12, lineCap: .round))
             if let target {
-                Circle().trim(from: sweep * Swift.min(target.low, 21) / 21, to: sweep * Swift.min(target.high, 21) / 21)
-                    .stroke(Palette.green.opacity(0.45), style: StrokeStyle(lineWidth: 14))
+                Circle().trim(from: at(target.low), to: at(target.high))
+                    .stroke(Palette.green.opacity(0.55), style: StrokeStyle(lineWidth: 12))
             }
-            if target == nil, let planned, planned > score {
-                Circle().trim(from: 0, to: sweep * Swift.min(planned, 21) / 21)
-                    .stroke(Palette.amberBar.opacity(0.35), style: StrokeStyle(lineWidth: 14, lineCap: .round))
+            if planned > 0.05 {
+                Circle().trim(from: at(score), to: at(end))
+                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [0.5, 5]))
             }
-            Circle().trim(from: 0, to: Swift.max(0.004, sweep * Swift.min(score, 21) / 21))
-                .stroke(Palette.amberBar, style: StrokeStyle(lineWidth: 14, lineCap: .round))
+            Circle().trim(from: 0, to: Swift.max(0.004, at(score)))
+                .stroke(Palette.ink, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+            if planned > 0.05 {
+                // The open dot where the plan takes the day.
+                Circle().fill(Palette.card).overlay { Circle().stroke(Palette.ink, lineWidth: 2.5) }
+                    .frame(width: 13, height: 13)
+                    .offset(x: 105)
+                    .rotationEffect(.degrees(360 * at(end)))
+            }
         }
         .rotationEffect(.degrees(135))
-        .frame(width: 180, height: 180)
+        .frame(width: 210, height: 210)
         .overlay {
-            VStack(spacing: 2) {
-                Text(verbatim: Fmt.decimal(score)).font(Typo.number(54)).foregroundStyle(Palette.ink)
-                Text(verbatim: subtitle)
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
+            VStack(spacing: 4) {
+                Text(verbatim: Fmt.decimal(score)).font(Typo.number(64)).foregroundStyle(Palette.ink)
+                if planned > 0.05 {
+                    Text(verbatim: L10n.f("%@ v plánu navíc", Fmt.decimal(planned))).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.ink)
+                }
             }
         }
         .overlay(alignment: .bottom) {
-            HStack {
+            HStack(alignment: .firstTextBaseline) {
                 Text(verbatim: "0")
+                Spacer()
+                if let landing { Text(verbatim: landing.0).font(Typo.caption).foregroundStyle(landing.1) }
                 Spacer()
                 Text(verbatim: "21")
             }
             .font(Typo.tiny).foregroundStyle(Palette.faint)
-            .frame(width: 150)
-            .offset(y: 4)
+            .frame(width: 170)
+            .offset(y: 10)
         }
+        .padding(.bottom, 12)
         .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr("Námaha") + " " + Fmt.decimal(score) + ", " + subtitle))
+        .accessibilityLabel(Text(verbatim: spoken))
     }
 
-    private var subtitle: String {
-        let head: String? = target.map { L10n.f("cíl %@–%@", Fmt.int($0.low), Fmt.int($0.high)) } ?? planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
-        return (head.map { $0 + ", " } ?? "") + L10n.f("z %@", "21")
+    private var spoken: String {
+        var parts: [String] = [L10n.tr("Námaha") + " " + Fmt.decimal(score) + " " + L10n.f("z %@", "21")]
+        if planned > 0.05 { parts.append(L10n.f("%@ v plánu navíc", Fmt.decimal(planned))) }
+        if let target { parts.append(L10n.f("cíl %@ až %@", Fmt.int(target.low), Fmt.int(target.high))) }
+        if let landing { parts.append(landing.0) }
+        return parts.joined(separator: ", ")
+    }
+
+    /// "lands in target" in green, above it in amber, below it in grey.
+    private var landing: (String, Color)? {
+        guard let target else { return nil }
+        let end = score + planned, withPlan = planned > 0.05
+        if end > target.high { return (L10n.tr(withPlan ? "skončí nad cílem" : "nad cílem dne"), Palette.amber) }
+        if end >= target.low { return (L10n.tr(withPlan ? "skončí v cíli" : "v cíli"), Palette.green) }
+        return (L10n.tr(withPlan ? "skončí pod cílem" : "pod cílem"), Palette.muted)
     }
 }
 
-/// One line filled by training, movement and (dashed) the rest of the plan.
+/// One line filled by training (ink), movement (grey) and, dotted, the rest
+/// of the plan, with today's target as a green band (concept "What it's made of").
 struct StrainSplitBar: View {
     let training: Double
     let movement: Double
     let planned: Double
+    var target: TodaySnapshot.Strain.Target? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geo in
-                let unit = Swift.max(geo.size.width - 4, 0) / 21
-                HStack(spacing: 2) {
-                    if training > 0 { Rectangle().fill(Palette.amberBar).frame(width: unit * training) }
-                    if movement > 0 { Rectangle().fill(Palette.amberBar.opacity(0.5)).frame(width: unit * movement) }
-                    if planned > 0 {
-                        Rectangle().strokeBorder(Palette.amberBar, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                            .frame(width: unit * Swift.min(planned, Swift.max(0, 21 - training - movement)))
+                let unit = geo.size.width / 21
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    if let target {
+                        Rectangle().fill(Palette.green.opacity(0.45))
+                            .frame(width: unit * Swift.max(0, Swift.min(target.high, 21) - target.low))
+                            .offset(x: unit * target.low)
                     }
-                    Spacer(minLength: 0)
+                    HStack(spacing: 0) {
+                        Rectangle().fill(Palette.ink).frame(width: unit * training)
+                        Rectangle().fill(Palette.muted).frame(width: unit * movement)
+                        if planned > 0 {
+                            Rectangle().strokeBorder(Palette.ink, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
+                                .frame(width: unit * Swift.min(planned, Swift.max(0, 21 - training - movement)))
+                        }
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .background(Palette.track)
                 .clipShape(Capsule())
             }
-            .frame(height: 12)
-            HStack(spacing: 14) {
-                part(training, "trénink")
-                part(movement, "pohyb")
-                if planned > 0 { part(planned, "v plánu", plus: true) }
+            .frame(height: 10)
+            GeometryReader { geo in
+                ZStack(alignment: .topLeading) {
+                    Text(verbatim: "0")
+                    if let target {
+                        Text("cíl námahy").foregroundStyle(Palette.green)
+                            .position(x: geo.size.width * (target.low + target.high) / 42, y: 7)
+                    }
+                    Text(verbatim: "21").frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
+            .font(Typo.tiny).foregroundStyle(Palette.faint)
+            .frame(height: 14)
+            .accessibilityHidden(true)
+            HStack(spacing: 14) {
+                part(training, "trénink", Palette.ink)
+                part(movement, "pohyb", Palette.muted)
+                if planned > 0 { part(planned, "naplánováno", nil) }
+            }
+            .padding(.top, 4)
         }
     }
 
-    private func part(_ value: Double, _ label: String, plus: Bool = false) -> some View {
-        (Text(verbatim: (plus ? "+" : "") + Fmt.decimal(value) + " ").font(.footnote.weight(.semibold)).foregroundColor(Palette.ink)
-            + Text(LocalizedStringKey(label)).font(.footnote).foregroundColor(Palette.muted))
+    private func part(_ value: Double, _ label: String, _ fill: Color?) -> some View {
+        HStack(spacing: 5) {
+            RoundedRectangle(cornerRadius: 2).fill(fill ?? .clear)
+                .overlay { if fill == nil { RoundedRectangle(cornerRadius: 2).stroke(Palette.ink, lineWidth: 1.2) } }
+                .frame(width: 9, height: 9)
+            (Text(verbatim: Fmt.decimal(value) + " ").font(.footnote.weight(.semibold)).foregroundColor(Palette.ink)
+                + Text(LocalizedStringKey(label)).font(.footnote).foregroundColor(Palette.muted))
+        }
     }
 }
 
-/// One source of the day's strain: icon, name, details, its share and value.
+/// One source of the day's strain: a round icon in its sport's colour, the
+/// name and details, and its part of the score (concept d-strain-02).
 struct StrainRow: View {
     let symbol: String
     let color: Color
@@ -284,210 +441,26 @@ struct StrainRow: View {
     let meta: String
     let value: Double?
     let planned: Bool
-    let first: Bool
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
                 .scaledFont(15, weight: .semibold, cap: .denseCap)
-                .foregroundStyle(planned ? color : Palette.onAccent)
-                .frame(width: 38, height: 38)
-                .background {
-                    if planned {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous).strokeBorder(color, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                    } else {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous).fill(color)
-                    }
-                }
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(verbatim: title).font(.subheadline.weight(.semibold)).foregroundStyle(planned ? Palette.muted : Palette.ink).lineLimit(1)
-                    Spacer()
-                    if let value {
-                        Text(verbatim: (planned ? "+" : "") + Fmt.decimal(value)).font(Typo.number(19)).foregroundStyle(planned ? Palette.faint : Palette.ink)
-                        if !planned { Text(L10n.f("z %@", "21")).font(Typo.caption).foregroundStyle(Palette.faint) }
-                    }
-                }
+                .foregroundStyle(color)
+                .frame(width: 40, height: 40)
+                .background(color.opacity(planned ? 0.08 : 0.16), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: title).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 if !meta.isEmpty { Text(verbatim: meta).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
-                if let value {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Palette.track)
-                            if planned {
-                                Capsule().strokeBorder(color, style: StrokeStyle(lineWidth: 1.2, dash: [3, 2]))
-                                    .frame(width: Swift.max(6, geo.size.width * Swift.min(value, 21) / 21))
-                            } else {
-                                Capsule().fill(color).frame(width: Swift.max(4, geo.size.width * Swift.min(value, 21) / 21))
-                            }
-                        }
-                    }
-                    .frame(height: 6)
-                    .padding(.top, 4)
-                }
+            }
+            Spacer(minLength: 8)
+            if let value {
+                Text(verbatim: (planned ? "+" : "") + Fmt.decimal(value)).font(Typo.number(24))
+                    .foregroundStyle(planned ? Palette.muted : Palette.ink)
             }
         }
-        .padding(.vertical, 12)
-        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Fitness (CTL) and fatigue (ATL) over six weeks with the forecast from the
-/// planned sessions (dashed), and form today and at the end of the week.
-struct FitnessChart: View {
-    let form: TrainingSnapshot.Form
-    let upcoming: [(date: String, tss: Double)]
-
-    private struct Point: Identifiable {
-        let id: String
-        let date: Date
-        let value: Double
-        let series: String
-        let forecast: Bool
-    }
-
-    private struct Series {
-        let points: [Point]
-        let forecast: [Point]
-        let lo: Double
-        let hi: Double
-        let today: Date?
-        let endForm: Double?
-    }
-
-    private func series() -> Series {
-        let past = Array(form.series.suffix(42))
-        var ctl = past.last?.fitness ?? form.fitness
-        var atl = past.last?.fatigue ?? form.fatigue
-        var seeds: [(String, Double, Double)] = []
-        if let last = past.last { seeds.append((last.date, last.fitness, last.fatigue)) }
-        for day in upcoming.dropFirst() {
-            ctl += (day.tss - ctl) / 42
-            atl += (day.tss - atl) / 7
-            seeds.append((day.date, ctl, atl))
-        }
-        let points: [Point] = past.flatMap { p -> [Point] in
-            guard let date = ISODay.date(p.date) else { return [] }
-            return [Point(id: "c" + p.date, date: date, value: p.fitness, series: "Kondice", forecast: false),
-                    Point(id: "a" + p.date, date: date, value: p.fatigue, series: "Únava", forecast: false)]
-        }
-        let forecast: [Point] = seeds.count > 1 ? seeds.flatMap { item -> [Point] in
-            let (day, c, a) = item
-            guard let date = ISODay.date(day) else { return [] }
-            return [Point(id: "fc" + day, date: date, value: c, series: "Kondice", forecast: true),
-                    Point(id: "fa" + day, date: date, value: a, series: "Únava", forecast: true)]
-        } : []
-        let values = (points + forecast).map(\.value)
-        let lo = Swift.max(0, ((values.min() ?? 0) - 8).rounded(.down))
-        let hi = (values.max() ?? 1) + 8
-        let endForm: Double? = seeds.count > 1 ? seeds[seeds.count - 1].1 - seeds[seeds.count - 1].2 : nil
-        return Series(points: points, forecast: forecast, lo: lo, hi: hi, today: past.last.flatMap { ISODay.date($0.date) }, endForm: endForm)
-    }
-
-    var body: some View {
-        let data = series()
-        let points = data.points, forecast = data.forecast, lo = data.lo, hi = data.hi
-        let endForm = data.endForm, todayDate = data.today
-
-        VStack(spacing: 12) {
-            Card {
-                HStack(spacing: 14) {
-                    legend(Palette.green, L10n.tr("Kondice") + " " + Fmt.int(form.fitness))
-                    legend(Palette.amberBar, L10n.tr("Únava") + " " + Fmt.int(form.fatigue))
-                    Spacer()
-                }
-                // What the dashed lines after today are.
-                if !forecast.isEmpty {
-                    HStack(spacing: 5) {
-                        DashedLine().stroke(Palette.muted, style: StrokeStyle(lineWidth: 1.6, dash: [4, 3])).frame(width: 14, height: 2)
-                        Text("s plánovanými tréninky").font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                }
-                Chart {
-                    if let todayDate, let last = forecast.last?.date, last > todayDate {
-                        RectangleMark(xStart: .value("Od", todayDate), xEnd: .value("Do", last))
-                            .foregroundStyle(Palette.amberBar.opacity(0.07))
-                        RuleMark(x: .value("Dnes", todayDate)).foregroundStyle(Palette.faint.opacity(0.5))
-                    }
-                    ForEach(points) { p in
-                        LineMark(x: .value("Den", p.date), y: .value("Hodnota", p.value), series: .value("Řada", p.series))
-                            .foregroundStyle(p.series == "Kondice" ? Palette.green : Palette.amberBar)
-                            .lineStyle(StrokeStyle(lineWidth: p.series == "Kondice" ? 2.2 : 1.6))
-                            .interpolationMethod(.monotone)
-                    }
-                    ForEach(forecast) { p in
-                        LineMark(x: .value("Den", p.date), y: .value("Hodnota", p.value), series: .value("Řada", "f" + p.series))
-                            .foregroundStyle(p.series == "Kondice" ? Palette.green : Palette.amberBar)
-                            .lineStyle(StrokeStyle(lineWidth: p.series == "Kondice" ? 2.2 : 1.6, dash: [4, 3]))
-                    }
-                }
-                .chartYScale(domain: lo...hi)
-                .chartXAxis {
-                    AxisMarks(values: .stride(by: .day, count: 14)) { _ in
-                        AxisGridLine().foregroundStyle(Palette.hairline)
-                        AxisValueLabel(format: .dateTime.day().month(.defaultDigits).locale(Fmt.locale)).foregroundStyle(Palette.faint)
-                    }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                        AxisGridLine().foregroundStyle(Palette.hairline)
-                        AxisValueLabel().foregroundStyle(Palette.faint)
-                    }
-                }
-                .frame(height: 170)
-            }
-            Card {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Forma dnes").font(Typo.caption).foregroundStyle(Palette.muted)
-                        Text(verbatim: signed(form.form)).font(Typo.number(30)).foregroundStyle(Palette.ink)
-                        Text(verbatim: form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone))
-                    }
-                    Spacer()
-                    if let endForm, let end = upcoming.last?.date {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text(verbatim: L10n.f("Forma %@ %@", Fmt.weekdayShort(end), Fmt.dayMonth(end))).font(Typo.caption).foregroundStyle(Palette.muted)
-                            Text(verbatim: signed(endForm)).font(Typo.number(30)).foregroundStyle(Palette.ink)
-                            let zone = Self.formZone(endForm)
-                            Text(verbatim: zone == form.zone ? form.label : L10n.tr(Self.formWord(zone))).font(Typo.caption).foregroundStyle(zoneColor(zone))
-                        }
-                    }
-                }
-                Text(verbatim: form.text).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    /// The server's form zones (app-training.js formZone), so the forecast
-    /// uses the same words and limits as today's form (audit 16.4).
-    static func formZone(_ tsb: Double) -> String {
-        if tsb > 25 { return "transition" }
-        if tsb > 5 { return "fresh" }
-        if tsb >= -10 { return "grey" }
-        if tsb >= -30 { return "optimal" }
-        return "risk"
-    }
-
-    static func formWord(_ zone: String) -> String {
-        switch zone {
-        case "transition": return "odpočatý"
-        case "fresh": return "čerstvý"
-        case "grey": return "udržování"
-        case "optimal": return "budování"
-        default: return "hluboká únava"
-        }
-    }
-
-    private func signed(_ v: Double) -> String {
-        let r = v.rounded()
-        return (r > 0 ? "+" : r < 0 ? "−" : "") + Fmt.int(abs(r))
-    }
-
-    private func legend(_ c: Color, _ text: String) -> some View {
-        HStack(spacing: 5) {
-            RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 14, height: 3)
-            Text(verbatim: text).font(Typo.caption).foregroundStyle(Palette.muted)
-        }
-    }
-}

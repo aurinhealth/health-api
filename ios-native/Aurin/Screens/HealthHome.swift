@@ -94,6 +94,10 @@ struct AurinOrb: View {
     var mood: Mood
     var size: CGFloat = 250
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.tabShown) private var tabShown
+    @Environment(\.dayPage) private var drawnAsNeighbour
+    @State private var onScreen = true
     @Environment(\.colorScheme) private var scheme
 
     /// The glow from below: the dark-mode status colours, since the orb is dark in both modes.
@@ -108,7 +112,9 @@ struct AurinOrb: View {
 
     var body: some View {
         let still = reduceMotion || LowPower.shared.on
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { timeline in
+        // Not on a hidden tab, a day drawn beside or scrolled away (as TwoLights).
+        let paused = still || scenePhase != .active || !tabShown || drawnAsNeighbour != nil || !onScreen
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { timeline in
             let t = still ? 0.8 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1000)
             // Drawn on a canvas larger than the orb's frame, so the halo
             // fades out instead of ending in a square (critic 2026-11-21).
@@ -124,6 +130,7 @@ struct AurinOrb: View {
             .frame(width: size * 1.6, height: size * 1.6)
         }
         .frame(width: size, height: size)
+        .modifier(ScreenVisibility(onScreen: $onScreen))
         .accessibilityHidden(true)
     }
 

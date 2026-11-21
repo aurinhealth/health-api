@@ -96,9 +96,13 @@ struct WidgetBoard: View {
     /// The panel's name, and "+" and "Hotovo", which stay at the top of the
     /// screen wherever the page is scrolled, as on the home screen.
     private var editHeader: some View {
-        ZStack {
+        // Concept (Today widgets): the panel's name on the left, "+" and
+        // "Hotovo" together on the right; the "+" on the left stood over the
+        // Day card's times once pinned (device comparison of build 602).
+        HStack(spacing: 10) {
             SectionLabel(text: panel.title)
-            HStack {
+            Spacer()
+            HStack(spacing: 10) {
                 Button { gallery = true } label: {
                     Image(systemName: "plus")
                         .scaledFont(16, weight: .semibold, cap: .denseCap)
@@ -109,7 +113,6 @@ struct WidgetBoard: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Přidat widget")
-                Spacer()
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) { editing = false }
                 } label: {

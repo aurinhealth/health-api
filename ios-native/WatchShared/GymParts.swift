@@ -150,9 +150,11 @@ struct GymDayParts: Codable, Equatable, Sendable {
     var updated: Date? = nil
 
     /// The machine and the minutes; 0 minutes = no limit (a stopwatch).
+    /// `target`: the heart rate zone to hold (2 or 3), nil for none.
     struct Choice: Codable, Equatable, Sendable {
         var type: String
         var minutes: Int
+        var target: Int? = nil
     }
 
     /// The choice (an own routine's id, else automatic with a length; nil = auto) and what it made.

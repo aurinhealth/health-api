@@ -11,6 +11,7 @@ import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
 import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
 import { workloadMetrics, loadBalance, muscleLoad } from "./workload-ratio.js";
+import { loadAdvice, easySport } from "./load-advice.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -227,7 +228,8 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null }) {
+// athleteStatus: training-status.js status (sick, injured, on_break hold the load advice's session).
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null, gymSets = null, gymSince = null, athleteStatus = "active" }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -238,6 +240,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   // what is planned (the planned sessions' TSS).
   let doneCount = 0, plannedCount = 0, doneTss = 0, plannedTss = 0;
   const sessions = [];
+  // Today's plans still open as the week's list shows them (a strength plan a
+  // session done today paired with is gone), for today's cards below.
+  let openToday = null;
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(start, i), training = d <= date ? withHeartRateLoad(byDate.get(d)?.training || {}, google, profile, d) : byDate.get(d)?.training || {};
     const { sessions: daySessionList, planned, completed, gymPlan, gymLogged, pTss, cTss } = daySessions(d, date, training, gym[d]);
@@ -248,6 +253,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     if (d <= date) { doneCount += completed.length + gymLogged; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
     sessions.push(...daySessionList);
+    if (d === date) openToday = new Set(daySessionList.filter(s => s.status === "planned" && s.eventId).map(s => s.eventId));
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d), daySessionList.filter(s => s.status === "done")) : null,
@@ -280,7 +286,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       date: d,
       time: w ? clockOf(w.start) : null,
       minutes: w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
-      title: (w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
+      // A gym card is named by its gym plan: the calendar event can keep an
+      // older plan's name ("Strength — Push") after the plan changed (602 test).
+      title: ((gymCard && plan.name) || w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
       sport,
       tss: round(num(w?.tss)),
       strain: plannedStrain(num(w?.tss)),
@@ -303,7 +311,10 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     const appCopy = w => isStrength(w) && /^(planned:)?local-/.test(String(w?.id ?? ""));
     // A strength session done today (a cancelled gym plan too) does the day's
     // strength plan the pairing missed, as daySessions.
-    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && (gym[d]?.logged > 0 ? appCopy(w) : gymDone && isStrength(w))));
+    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && (gym[d]?.logged > 0 ? appCopy(w) : gymDone && isStrength(w))))
+      // Today: a strength plan the week's list counts as done (paired with the
+      // session done today) never stays as a card still to do.
+      .filter(w => !(d === date && openToday && isStrength(w) && /^planned:/.test(String(w.id || "")) && !openToday.has(String(w.id))));
     const plan = gymDone ? null : gym[d];
     const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
     const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));
@@ -399,6 +410,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // null without any load; Muscle load only from the gym's work sets
     // (`gymSets`), absent for an older caller that does not read them.
     loadBalance: loadBalance(intervals, date),
+    // The coach's conclusion above the load cards and, below the usual, one
+    // easy session on the next free day (load-advice.js, decision 6).
+    loadAdvice: workload.historyDays > 0 ? loadAdvice({ level: workload.acwr.level, date, sport: easySport(profile?.mainSport, sessions),
+      hold: (athleteStatus && athleteStatus !== "active") || ["taper", "race"].includes(eventPlan(athleteFocus(profile, date).event || planRace, date)?.phase),
+      planned: new Set([...days.filter(d => d.date > date && ((d.daily?.training?.planned || []).length || (gym[d.date]?.exercises || []).length)).map(d => d.date)]) }) : null,
     ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad, gymSince) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,

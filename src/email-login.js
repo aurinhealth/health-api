@@ -26,6 +26,7 @@ import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emai
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
 import { L, storedLanguage } from "./lang.js";
+import { isStaging } from "./staging.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -62,9 +63,11 @@ export function requestLanguage(request) {
 }
 
 export async function handleEmailLogin(request, env, pathname, ctx) {
+  // The app's sign-in screen asks whether to offer e-mail at all (LoginView.swift): the test server sends none.
+  if (pathname === "/auth/email" && request.method === "GET") return json({ enabled: emailConfigured(env) || Boolean(testLoginCode(env)) });
   if (pathname !== "/auth/email/start" && pathname !== "/auth/email/verify") return null;
   if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
-  if (!emailConfigured(env)) return json({ message: L("Přihlášení kódem z e-mailu není zapnuté.", "Signing in with an email code isn't turned on.") }, 404);
+  if (!emailConfigured(env) && !testLoginCode(env)) return json({ message: L("Přihlášení kódem z e-mailu není zapnuté.", "Signing in with an email code isn't turned on.") }, 404);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
@@ -116,8 +119,24 @@ export function reviewCode(env, email, now = Date.now()) {
   return /^\d{6}$/.test(code) && reviewCodeActive(env, now) ? code : null;
 }
 
+// Test accounts on the test server only: an address at TEST_DOMAIN (no mail server) signs in with
+// the fixed code STAGING_TEST_CODE (six digits, a Worker secret of health-api-staging) and no e-mail
+// goes out, so a test run can open new accounts without an inbox, Apple or Google. Off unless the
+// server is the test server (ENVIRONMENT "staging") and the secret holds six digits; the live
+// server has neither. Every limit of the e-mail sign-in still applies (as for the App Review code).
+// The owner never gets it. All test addresses together get TEST_CODES_PER_DAY codes a day, so the
+// one shared code cannot be guessed by cycling through addresses (security review 2026-11-19).
+const TEST_DOMAIN = "@test.aurin.health";
+const TEST_CODES_PER_DAY = 100;
+export function testLoginCode(env, email = null) {
+  const code = String(env?.STAGING_TEST_CODE || "").trim();
+  if (!isStaging(env) || !/^\d{6}$/.test(code)) return null;
+  if (email !== null && !(email.endsWith(TEST_DOMAIN) && email.length > TEST_DOMAIN.length && email !== ownerEmail(env))) return null;
+  return code;
+}
+
 async function fixedReviewCode(db, env, email, now) {
-  const code = reviewCode(env, email, now);
+  const code = reviewCode(env, email, now) || testLoginCode(env, email);
   if (!code) return null;
   const user = await db.prepare("SELECT role FROM users WHERE email=?").bind(email).first();
   return user?.role === "admin" ? null : code;
@@ -128,8 +147,11 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
   const access = await emailCodeAccess(env.DB, env, email, now);
   if (!access) return false;
   const review = code ? null : await fixedReviewCode(env.DB, env, email, now);
+  // The test server's test addresses (testLoginCode): nothing to send, the code is known.
+  const test = Boolean(review) && review === testLoginCode(env, email);
+  if (!test && !emailConfigured(env)) return false;
   const sent = code || review || randomCode();
-  return (await claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review) })) === "sent";
+  return (await claimAndSend(env.DB, env, email, sent, "email-code", test ? null : signInCodeEmail(lang, sent), now, { open: access === "open", known, network, review: Boolean(review), test })) === "sent";
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
@@ -143,7 +165,7 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 // at most NETWORK_SHARE of the day's sign-in codes, and as much of the known devices' ones. `review`: the fixed App Review code, outside every budget of the day.
 // Returns "sent", or why not: "resend" (one went out less than a minute ago), "daily" (the day's
 // codes are used up), "locked" (too many wrong codes today) or "budget" (all codes of the day).
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, to = email } = {}) {
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, stepUp = false, known = null, network = null, review = false, test = false, to = email } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   let shared = false;
   // The address's own limits are checked first, so a code it would not get spends no budget.
@@ -158,6 +180,8 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     if (!(await allowRequest(db, "email-codes:step-up:day", { day: stepUpCodesPerDay(env) }, now))) { console.warn("Step-up code budget of the day is used up"); return "budget"; }
   } else if (change) {
     if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return "budget"; }
+  } else if (test) {
+    if (!(await allowRequest(db, "email-codes:test:day", { day: TEST_CODES_PER_DAY }, now))) { console.warn("Test sign-in codes of the day are used up"); return "budget"; }
   } else if (review) {
     // The fixed App Review code: outside every budget of the day.
   } else if (known && (!network || await allowRequest(db, "email-codes:network-known:" + network, { day: networkCodesPerDay(env) }, now))
