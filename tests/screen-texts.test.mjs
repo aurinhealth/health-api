@@ -34,8 +34,10 @@ test("facts, chips and the data shown under Proč? come from the screen's number
   assert.equal(t.facts.plan.length, 1, "bedtime is not a session");
   const food = screenFacts("food", { kcal: 1660, target: 2600, sentence: "Zbývá 940 kcal.", macros: { protein: { eaten: 92, target: 165 }, carbs: { eaten: 180, target: 210 }, fat: { eaten: 40, target: 80 } }, meals: [] });
   assert.deepEqual(food.chips, ["Bílkoviny 92/165 g", "Sacharidy 180/210 g"]);
-  const training = screenFacts("training", { week: 41, thisWeek: { done: 3, planned: 5, doneLoad: 240, plannedLoad: 420 }, form: { fitness: 60, fatigue: 78, form: -18, label: "budování", text: "Únava je nad kondicí." }, sessions: [] });
-  assert.deepEqual(training.chips, ["Týden 3/5", "240 TSS", "Forma −18"]);
+  const training = screenFacts("training", { week: 41, strain: { score: 8.4, target: 12 }, thisWeek: { done: 3, planned: 5, doneLoad: 240, plannedLoad: 420 }, form: { fitness: 60, fatigue: 78, form: -18, label: "budování", text: "Únava je nad kondicí." }, sessions: [] });
+  // Strain, never TSS, on the card (604 device test).
+  assert.deepEqual(training.chips, ["Týden 3/5", "Námaha 8,4", "Forma −18"]);
+  assert.deepEqual(screenFacts("training", { thisWeek: { done: 1, planned: 2, doneLoad: 50 }, sessions: [] }).chips, ["Týden 1/2"], "no strain yet, no chip");
   assert.equal(withLang("en", () => screenFacts("today", today()).chips[0]), "Sleep 6:40");
 });
 
