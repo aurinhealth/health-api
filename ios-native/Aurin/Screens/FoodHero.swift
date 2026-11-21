@@ -78,7 +78,8 @@ struct FoodHero: View {
             TargetPartsRow(parts: food.targetParts, target: target, more: linked)
             // The target counts only part of a workout's burn, on purpose (about 70 %):
             // said in one line, so "+104" next to a 688 kcal ride doesn't read as a mistake.
-            if let burned = food.targetParts?.burnedDone, burned > 0 {
+            // Only when it is part: a target held up by the safe minimum counts the whole burn.
+            if let parts = food.targetParts, let burned = parts.burnedDone, burned.rounded() > parts.workouts.rounded() {
                 Text(verbatim: L10n.f("Tréninky jsou jen část ze spálených %@ kcal.", Fmt.int(burned)))
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }

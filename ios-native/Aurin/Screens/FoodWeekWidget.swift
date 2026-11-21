@@ -39,12 +39,17 @@ struct FoodWeekWidget: View {
     @State private var week: FoodWeek?
     /// The week couldn't be loaded: said so with a retry, never a bare dash.
     @State private var failed = false
+    /// The day whose week `week` is: another week loading shows no stale numbers.
+    @State private var loadedFor: String?
+    /// "Try again" bumps it, so the retry runs in the card's own task.
+    @State private var attempt = 0
 
     /// The week of the day on screen (Jídlo can show another day).
     private var date: String? { page.map(\.selectedDate) ?? model.selectedDate }
 
     var body: some View {
         Card {
+            let week = loadedFor == date ? self.week : nil
             WidgetHeader(title: WidgetKind.weekCalories.title, color: Palette.gold, trailing: week.flatMap(Self.range))
             if let week, let target = week.target {
                 content(week, target: target)
@@ -52,7 +57,7 @@ struct FoodWeekWidget: View {
                 Text("Týden spočítám, až budu znát tvůj denní cíl.").font(Typo.small).foregroundStyle(Palette.muted)
             } else if failed {
                 Text("Týden se teď nepodařilo načíst.").font(Typo.small).foregroundStyle(Palette.muted)
-                Button { Task { await load() } } label: {
+                Button { attempt += 1 } label: {
                     Text("Zkusit znovu").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -62,7 +67,7 @@ struct FoodWeekWidget: View {
         }
         // Again when the day's food changes (a meal added on Jídlo).
         // Not for a day drawn beside during a swipe (DayPager): no request for it.
-        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal)) {
+        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal) + "|" + String(attempt)) {
             if page == nil { await load() }
         }
     }
@@ -129,19 +134,25 @@ struct FoodWeekWidget: View {
     }
 
     private func load() async {
+        let asked = date
         if model.demo {
             week = DemoData.foodWeek
+            loadedFor = asked
             return
         }
         failed = false
         // A request still out after 8 s shows "Try again" too (vylepšení 2026-11-20);
-        // a late answer still fills the card.
-        let slow = Task { try? await Task.sleep(for: .seconds(8)); if week == nil && !Task.isCancelled { failed = true } }
+        // a late answer still fills the card. A tap on it starts this task again,
+        // which cancels the request still out.
+        let slow = Task { try? await Task.sleep(for: .seconds(8)); if loadedFor != asked && !Task.isCancelled { failed = true } }
         defer { slow.cancel() }
         do {
-            week = try await model.api.foodWeek(date: date)
+            let answer = try await model.api.foodWeek(date: asked)
+            guard !Task.isCancelled else { return }
+            week = answer
+            loadedFor = asked
             failed = false
-        } catch { if week == nil && !Task.isCancelled { failed = true } }
+        } catch { if loadedFor != asked && !Task.isCancelled { failed = true } }
     }
 }
 
