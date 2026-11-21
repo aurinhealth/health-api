@@ -1019,8 +1019,11 @@ struct VO2maxWidget: View {
             Group {
                 if let change = vo2.change, change != 0 {
                     Text(L10n.f(change > 0 ? "o %@ výš za 4 týdny" : "o %@ níž za 4 týdny", Fmt.decimal(abs(change))))
-                } else {
+                } else if vo2.change != nil {
                     Text("Stejně jako před 4 týdny")
+                } else {
+                    // Nothing 4 weeks back to compare with: say whose estimate it is, never "the same".
+                    Text(verbatim: vo2.caption)
                 }
             }
             .font(Typo.caption).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
