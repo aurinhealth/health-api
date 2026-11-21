@@ -165,7 +165,9 @@ struct CoachTextCard: View {
                 .manageSubscriptionsSheet(isPresented: $manageSubscription)
             }
 
-            if !basis.isEmpty {
+            // "Proč?" only on Today for now: on Training and Food it read as raw data
+            // (606: TSS, ISO dates, monotony, a strain target unlike Today's).
+            if !basis.isEmpty, screen == "today" {
                 Divider().overlay(Palette.hairline)
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showWhy.toggle() }

@@ -439,7 +439,9 @@ struct MuscleDetailView: View {
     /// "Fresh now", "Recovering, fresh tomorrow".
     private var freshnessText: String {
         guard freshness != .fresh, let ready = muscle?.readyDate else { return L10n.tr("Čerstvé teď") }
-        return freshness.title + ", " + L10n.f("Čerstvé %@", Fmt.relativeDay(ready, today: today)).lowercased(with: Fmt.locale)
+        // Only the first letter lower: "Tired, fresh on Monday" (606 had "monday").
+        let fresh = L10n.f("Čerstvé %@", Fmt.relativeDay(ready, today: today))
+        return freshness.title + ", " + fresh.prefix(1).lowercased(with: Fmt.locale) + fresh.dropFirst()
     }
 
     var body: some View {
@@ -482,7 +484,8 @@ struct MuscleDetailView: View {
                 Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if muscle != nil {
-                    Text(verbatim: freshnessText).font(Typo.small).foregroundStyle(freshness.textColor)
+                    // Neutral as on Muscle freshness (606: red here); the figure carries the colour.
+                    Text(verbatim: freshnessText).font(Typo.small).foregroundStyle(Palette.secondary)
                 }
             }
         }

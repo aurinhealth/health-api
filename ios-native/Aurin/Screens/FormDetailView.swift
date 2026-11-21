@@ -91,10 +91,11 @@ struct FormDetailContent: View {
         return VStack(spacing: 8) {
             Text(verbatim: L10n.tr("Forma dnes, odhad")).font(Typo.body).foregroundStyle(Palette.muted)
             RangeDial(value: form.form, scale: -30...30, band: usual, size: 190, lineWidth: 12, tint: color, bandTint: Palette.ink.opacity(0.3),
-                      spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + state.words) {
+                      spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(verbatim: Fmt.signed(form.form)).font(Typo.number(56)).foregroundStyle(state == .within ? Palette.green : Palette.ink)
             }
-            Text(verbatim: state.words).font(Typo.bodyStrong).foregroundStyle(color)
+            // The server's word of the five form zones (606: "far above your usual range" is none of them).
+            Text(verbatim: Fmt.capitalized(form.label)).font(Typo.bodyStrong).foregroundStyle(color)
             if let week = Self.weekSentence(form) {
                 Text(verbatim: week).font(Typo.small).foregroundStyle(Palette.ink)
             }

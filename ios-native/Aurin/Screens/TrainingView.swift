@@ -718,7 +718,7 @@ struct NextSession: View {
     /// Time, the sport's middle numbers, Strain est.
     private var numbers: [WorkoutNumberRow.Cell] {
         var cells: [WorkoutNumberRow.Cell] = []
-        if let m = session.minutes { cells.append(.init(label: L10n.tr("Čas"), value: String(m), unit: "min")) }
+        if let m = session.minutes ?? gymMinutes { cells.append(.init(label: L10n.tr("Čas"), value: String(m), unit: "min")) }
         if isGym, let lines = session.lines, !lines.isEmpty {
             cells.append(.init(label: L10n.tr("Cviky"), value: String(lines.count)))
             cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + Self.left($1) })))
@@ -732,6 +732,14 @@ struct NextSession: View {
         }
         if let strain = strainValue { cells.append(.init(label: L10n.tr("Námaha"), value: Fmt.decimal(strain, digits: 1), unit: L10n.tr("odh."))) }
         return cells
+    }
+
+    /// A gym day without a length from the server (before it sent one, 606):
+    /// the lifting's time and the parts that are on, as the gym screen counts it.
+    private var gymMinutes: Int? {
+        guard isGym, let day = gymDay, let lifting = day.plannedMinutes else { return nil }
+        let chosen = GymDayParts.resolved(day, stored: UserDefaults.standard.string(forKey: GymDayParts.storageKey) ?? "", date: session.date)
+        return lifting + chosen.visible(day).filter { $0 != .exercises && chosen.isOn($0) }.reduce(0) { $0 + chosen.minutes($1, day: day) }
     }
 
     /// Today: where the workout takes the day's strain, as the target band
@@ -876,8 +884,9 @@ struct FormWidget: View {
         let usual = Self.usual(form.series)
         return Card {
             DialTileTitle(title: "Forma")
-            // Green inside the usual range, amber outside it, the range itself neutral (concept).
-            let color = usual.map { $0.contains(form.form.rounded()) } == false ? Palette.amber : Palette.green
+            // The detail's colour (606: amber here, green there): fresher than usual is
+            // no warning, more tired amber, far below red; the range itself neutral.
+            let color = usual.map { FormDetailView.color(FormDetailView.state(form.form, $0)) } ?? Palette.green
             RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color,
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
