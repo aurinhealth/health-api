@@ -48,9 +48,28 @@ struct FoodWeekWidget: View {
     private var date: String? { page.map(\.selectedDate) ?? model.selectedDate }
 
     var body: some View {
+        let week = loadedFor == date ? self.week : nil
+        // Under its own section label, as every section on Food (604 DES-9).
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: WidgetKind.weekCalories.title)
+                Spacer(minLength: 8)
+                if let range = week.flatMap(Self.range) {
+                    Text(verbatim: range).font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 4)
+            card(week)
+        }
+        // Again when the day's food changes (a meal added on Jídlo).
+        // Not for a day drawn beside during a swipe (DayPager): no request for it.
+        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal) + "|" + String(attempt)) {
+            if page == nil { await load() }
+        }
+    }
+
+    private func card(_ week: FoodWeek?) -> some View {
         Card {
-            let week = loadedFor == date ? self.week : nil
-            WidgetHeader(title: WidgetKind.weekCalories.title, color: Palette.gold, trailing: week.flatMap(Self.range))
             if let week, let target = week.target {
                 content(week, target: target)
             } else if week != nil {
@@ -64,11 +83,6 @@ struct FoodWeekWidget: View {
             } else {
                 Text("Načítám týden…").font(Typo.small).foregroundStyle(Palette.muted)
             }
-        }
-        // Again when the day's food changes (a meal added on Jídlo).
-        // Not for a day drawn beside during a swipe (DayPager): no request for it.
-        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal) + "|" + String(attempt)) {
-            if page == nil { await load() }
         }
     }
 
@@ -86,7 +100,8 @@ struct FoodWeekWidget: View {
             legend(Circle().fill(over ? Palette.red : Palette.ink), "Snězeno", Fmt.int(week.eaten))
         }
         Rectangle().fill(Palette.hairline).frame(height: 1)
-        footer(week).font(Typo.caption).foregroundStyle(Palette.muted)
+        // Whole sentences, never cut with "…" (604 DES-9).
+        footer(week).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
     }
 
     private func legend(_ dot: some View, _ title: String, _ value: String) -> some View {
@@ -104,7 +119,7 @@ struct FoodWeekWidget: View {
         if let over = week.over, over > 0 {
             return Text(L10n.f("O %@ kcal víc", Fmt.int(over))).foregroundColor(Palette.red) + Text(verbatim: " " + L10n.tr("než cíl týdne"))
         }
-        var left = Text(L10n.f("Zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
+        var left = Text(L10n.f("Na zbytek týdne zbývá %@ kcal", Fmt.int(week.left ?? 0))).foregroundColor(Palette.ink)
         if let perDay = week.perDay {
             left = left + Text(verbatim: ", " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
             // Today's part of it: "1 150 kcal more today", or past it the rest is the days ahead's.
