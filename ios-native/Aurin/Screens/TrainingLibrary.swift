@@ -27,7 +27,7 @@ struct TrainingLibraryView: View {
                     if sport.id == "gym" {
                         GymLibrarySection(suggest: $suggest)
                     } else if sport.id == "tri" {
-                        LibrarySportHeader(sport: sport).padding(.top, 14)
+                        LibrarySportHeader(sport: sport, subtitle: L10n.tr("Dva sporty hned po sobě")).padding(.top, 14)
                         BrickLibrarySection()
                     } else {
                         WorkoutLibrarySection(sport: sport.id, suggest: $suggest, suggesting: $suggesting, suggested: $suggested)
@@ -696,7 +696,9 @@ struct GymFocusCard: View {
 // MARK: Tri
 
 /// Knihovna → Tri: bricks, two sports one right after the other
-/// (GET /app/api/workouts/bricks, src/brick-workouts.js).
+/// (GET /app/api/workouts/bricks, src/brick-workouts.js). The same page as
+/// Ride (concept a-knihovna/010, 602 points 151, 152): where, two menus,
+/// then cards with the time, the strain estimate and each leg in zone colours.
 struct BrickLibrarySection: View {
     @Environment(AppModel.self) private var model
     @State private var bricks: [LibraryBrick] = []
@@ -704,6 +706,30 @@ struct BrickLibrarySection: View {
     @State private var loading = true
     @State private var error: String?
     @State private var open: LibraryBrick?
+    /// "ride+run" and the like, nil = all.
+    @State private var pair: String?
+    @State private var length: Length = .any
+
+    enum Length: String, CaseIterable, Identifiable {
+        case any, short, middle, long
+        var id: String { rawValue }
+        var label: String { L10n.tr(["any": "Všechny", "short": "Do 1 h", "middle": "1 až 2 h", "long": "Přes 2 h"][rawValue]!) }
+        func fits(_ minutes: Int) -> Bool {
+            switch self {
+            case .any: return true
+            case .short: return minutes <= 60
+            case .middle: return minutes > 60 && minutes <= 120
+            case .long: return minutes > 120
+            }
+        }
+    }
+
+    private var pairs: [String] {
+        var seen: [String] = []
+        for b in bricks { let p = Self.pair(b); if !seen.contains(p) { seen.append(p) } }
+        return seen
+    }
+    private var shown: [LibraryBrick] { bricks.filter { (pair == nil || Self.pair($0) == pair) && length.fits($0.minutes) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -712,23 +738,35 @@ struct BrickLibrarySection: View {
                 Text("Venku").tag(false)
             }
             .pickerStyle(.segmented)
-            .padding(.top, 18)
-            SectionLabel(text: "Bricky").padding(.top, 22)
+            .padding(.top, 20)
+            HStack(spacing: 10) {
+                LibraryFilterMenu(title: "Sporty", value: pair.map(Self.pairLabel) ?? L10n.tr("Všechny")) {
+                    Button { pair = nil } label: { Text(verbatim: L10n.tr("Všechny")) }
+                    ForEach(pairs, id: \.self) { p in Button { pair = p } label: { Text(verbatim: Self.pairLabel(p)) } }
+                }
+                LibraryFilterMenu(title: "Délka", value: length.label) {
+                    ForEach(Length.allCases) { l in Button { length = l } label: { Text(verbatim: l.label) } }
+                }
+            }
+            .padding(.top, 12)
             if let error {
-                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 10)
+                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else if loading && bricks.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
             } else {
-                Card(padding: 0) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(bricks.enumerated()), id: \.element.id) { index, brick in
-                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 16) }
-                            Button { open = brick } label: { row(brick) }.buttonStyle(.plain)
-                        }
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel(text: "Z knihovny")
+                    Spacer()
+                    Text(L10n.plural("%lld bricků", shown.count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 24)
+                VStack(spacing: 10) {
+                    ForEach(shown) { brick in
+                        Button { open = brick } label: { LibraryBrickCard(brick: brick) }.buttonStyle(PressableCardStyle())
                     }
                 }
                 .padding(.top, 10)
-                Label("Do Apple Watch jako jeden multisport trénink.", systemImage: "applewatch")
+                Text("Do Apple Watch jako jeden multisport trénink.")
                     .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 12)
             }
         }
@@ -736,43 +774,12 @@ struct BrickLibrarySection: View {
         .sheet(item: $open) { LibraryBrickSheet(brick: $0, indoor: indoor) }
     }
 
-    private func row(_ brick: LibraryBrick) -> some View {
-        HStack(spacing: 12) {
-            HStack(spacing: -8) {
-                ForEach(Array(brick.legs.enumerated()), id: \.offset) { _, leg in
-                    let s = LibrarySport.find(leg.sport)
-                    Image(systemName: s?.symbol ?? "figure.mixed.cardio")
-                        .scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
-                        .frame(width: 30, height: 30)
-                        .background(s?.color ?? Palette.green, in: Circle())
-                        .overlay { Circle().stroke(Palette.card, lineWidth: 2.5) }
-                }
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: brick.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Text(verbatim: brick.legs.map { L10n.tr(LibrarySport.find($0.sport)?.label ?? $0.sport) + " " + Fmt.duration($0.minutes) }.joined(separator: " + "))
-                    .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
-                legBar(brick).padding(.top, 4)
-            }
-            Spacer(minLength: 4)
-            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-        }
-        .padding(14)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
+    /// The brick's sports in order, "ride+run".
+    static func pair(_ brick: LibraryBrick) -> String { brick.legs.map(\.sport).joined(separator: "+") }
 
-    /// Each leg's share of the brick's time, in its sport's colour.
-    private func legBar(_ brick: LibraryBrick) -> some View {
-        GeometryReader { geo in
-            HStack(spacing: 2) {
-                ForEach(Array(brick.legs.enumerated()), id: \.offset) { _, leg in
-                    Capsule().fill(LibrarySport.find(leg.sport)?.color ?? Palette.green)
-                        .frame(width: max(4, (geo.size.width - 2) * CGFloat(leg.minutes) / CGFloat(max(1, brick.minutes))))
-                }
-            }
-        }
-        .frame(width: 150, height: 5)
+    /// "Ride + Run".
+    static func pairLabel(_ pair: String) -> String {
+        pair.split(separator: "+").map { L10n.tr(LibrarySport.find(String($0))?.label ?? String($0)) }.joined(separator: " + ")
     }
 
     private func load() async {
@@ -785,6 +792,68 @@ struct BrickLibrarySection: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// A brick as a card: the name and "Ride 1 h, then run 20 min", the time in
+/// serif with the strain estimate, each leg's steps in zone colours, its
+/// share of the time wide. Numbers and units never break apart.
+struct LibraryBrickCard: View {
+    let brick: LibraryBrick
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: brick.name).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                    Text(verbatim: Self.legsLine(brick)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(verbatim: LengthControl.short(brick.minutes)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                    let strain = Self.strain(brick)
+                    if strain > 0 {
+                        Text(verbatim: Fmt.decimal(strain, digits: 1) + "\u{00A0}" + L10n.tr("odh.")).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+            GeometryReader { geo in
+                HStack(spacing: 6) {
+                    ForEach(Array(brick.legs.enumerated()), id: \.offset) { _, leg in
+                        LibraryStepsBar(blocks: leg.steps, sport: leg.sport)
+                            .frame(width: max(12, (geo.size.width - CGFloat(brick.legs.count - 1) * 6) * CGFloat(leg.minutes) / CGFloat(max(1, brick.minutes))))
+                    }
+                }
+            }
+            .frame(height: 22)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface(cornerRadius: 20)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Ride 1 h, then run 20 min" (D-KNIH-13: a number and its unit stay together).
+    static func legsLine(_ brick: LibraryBrick) -> String {
+        brick.legs.enumerated().map { i, leg in
+            let name = L10n.tr(LibrarySport.find(leg.sport)?.label ?? leg.sport)
+            let part = (i == 0 ? name : name.lowercased(with: Fmt.locale)) + "\u{00A0}" + LengthControl.short(leg.minutes)
+            return i == 0 ? part : L10n.f("pak %@", part)
+        }
+        .joined(separator: ", ")
+    }
+
+    /// The brick's strain as the app counts it from its planned load: each
+    /// step's hours × (intensity)² × 100, on the 0–21 scale.
+    static func strain(_ brick: LibraryBrick) -> Double {
+        let load = brick.legs.reduce(0.0) { total, leg in
+            total + WorkoutProfile.segments(leg.steps).reduce(0.0) { sum, s in
+                sum + (s.end - s.start) / 60 * pow(s.percent / 100, 2) * 100
+            }
+        }
+        return StrainDetailView.strain(tss: load)
     }
 }
 

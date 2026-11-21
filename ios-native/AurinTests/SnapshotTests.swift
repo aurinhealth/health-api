@@ -1307,6 +1307,15 @@ final class SnapshotTests: XCTestCase {
         XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.push.ids)), 5, "the builder takes at most five muscles")
         XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.upper.ids)), 8)
         for f in GymFocus.allCases where f.builderFocus == "muscles" { XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(f.ids)), 5, f.rawValue) }
+        // Tri (602 points 151, 152): a brick's legs read in one line that never breaks a number from its unit.
+        let brick = try JSONDecoder().decode(LibraryBrick.self, from: Data(#"{"id":"b1","name":"Ride to run, race pace","note":"","minutes":80,"legs":[{"sport":"ride","workoutId":"r1","minutes":60,"steps":[{"repeats":1,"steps":[{"durationSeconds":3600,"percentLow":80,"percentHigh":90}]}]},{"sport":"run","workoutId":"u1","minutes":20,"steps":[{"repeats":1,"steps":[{"durationSeconds":1200,"percentLow":95,"percentHigh":100}]}]}]}"#.utf8))
+        XCTAssertEqual(LibraryBrickCard.legsLine(brick), L10n.tr("Kolo") + "\u{00A0}1\u{00A0}h, " + L10n.f("pak %@", L10n.tr("Běh").lowercased(with: Fmt.locale) + "\u{00A0}20\u{00A0}min"))
+        XCTAssertGreaterThan(LibraryBrickCard.strain(brick), 0)
+        XCTAssertEqual(BrickLibrarySection.pair(brick), "ride+run")
+        try render("library-brick-card", glow: Palette.Glow.training, height: 150) { LibraryBrickCard(brick: brick).padding(20) }
+        try render("my-workouts", glow: Palette.Glow.training, height: 600) {
+            NavigationStack { MyWorkoutsView(friends: false) }.environment(model)
+        }
     }
 
     func testZonesActiveEnergyAndWeather() throws {
