@@ -817,9 +817,9 @@ struct StreamChart: View {
     var body: some View {
         let values = samples.map(\.value)
         let average = self.average ?? values.reduce(0, +) / Double(max(values.count, 1))
-        let top = values.max() ?? 1, bottom = values.min() ?? 0
+        let highest = values.max() ?? 1, bottom = values.min() ?? 0
         let lo = floorZero ? 0 : max(0, (bottom - 8).rounded(.down))
-        let hi = floorZero ? top * 1.05 : top + 5
+        let hi = floorZero ? highest * 1.05 : highest + 5
         let picked: Sample? = cursor.flatMap { c in samples.min { abs($0.minute - c) < abs($1.minute - c) } }
 
         Card {
@@ -834,7 +834,6 @@ struct StreamChart: View {
                     Text(verbatim: L10n.f("prům. %@ %@", Fmt.int(average), unit)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
-            .frame(minHeight: top == nil ? nil : 20)
             Chart {
                 ForEach(Array(bands.enumerated()), id: \.offset) { _, band in
                     if band.hi > lo, band.lo < hi {
