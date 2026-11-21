@@ -86,7 +86,7 @@
 "Co máš doma" = "What you have at home";
 "Co piješ?" = "What are you drinking?";
 "Co procvičíš" = "What you'll work";
-"Co přidáme?" = "What are you adding?";
+"Co přidáme?" = "What are we adding?";
 "Co se stalo" = "What happened";
 "Co by ti v aplikaci pomohlo?" = "What would help you in the app?";
 "Co sníst před večerním tréninkem?" = "What should I eat before an evening workout?";
@@ -177,7 +177,7 @@
 "Hlavně" = "Primary";
 "Hledat" = "Search";
 "Hledat cvik nebo stroj" = "Search exercises or machines";
-"Hledat potravinu" = "Search foods";
+"Hledat potravinu" = "Search food";
 "Hledám %@…" = "Looking up %@…";
 "Hledám…" = "Searching…";
 "Hluboký" = "Deep";
@@ -4488,9 +4488,7 @@
 "co tělo spálí v klidu" = "what your body uses at rest";
 "kroky a běžný den" = "steps and a normal day";
 "Tréninky se počítají ze %@ %% toho, co spálí. Klidový výdej se odhaduje z tvé váhy, výšky a věku." = "Workouts count at %@%% of what they burn. Resting energy is estimated from your weight, height and age.";
-"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the target, a dashed ring is a day without food logged.";
 "Tento měsíc zatím bez zapsaného jídla." = "No food logged this month yet.";
-"Průměr %@ na zapsaný den." = "Average %@ on logged days.";
 "bez zapsaného jídla" = "no food logged";
 "Snězeno: %@" = "Eaten on %@";
 /* Week plan (redesign W) */
@@ -4902,6 +4900,16 @@
 "Dnešní šlofík ubírá" = "Today's nap takes off";
 "Dolní hranice přidává" = "Lower limit adds";
 "Horní hranice ubírá" = "Upper limit takes off";
+"Průměr %@ za celé dny." = "Average %@ on full days.";
+"Dny se splněným cílem bílkovin: %lld z %lld." = "Protein target met on %lld of %lld days.";
+"Dny se splněným cílem sacharidů: %lld z %lld." = "Carbs target met on %lld of %lld days.";
+"Dny se splněným cílem tuků: %lld z %lld." = "Fat target met on %lld of %lld days.";
+"Kroužek je, kolik jsi ten den snědl z cíle." = "The ring is what you ate out of that day's target.";
+"Červený je nad cílem." = "Red is over the target.";
+"Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla." = "A thin ring is a day without a target, a dashed ring is a day without food logged.";
+"Celé" = "Whole";
+"Zlomek" = "Fraction";
+"žádný zlomek" = "no fraction";
 "Na testovacím serveru Aurin do Apple Health nezapisuje." = "On the test server Aurin doesn't write to Apple Health.";
 "Na testovacím serveru Aurin do Apple Health nezapisuje, aby nepřepsal hodnoty z ostrého serveru." = "On the test server Aurin doesn't write to Apple Health, so it can't replace the live server's values.";
 "Trénuj s koučem, který tě zná" = "Train with a coach that knows you";
@@ -4960,3 +4968,19 @@
 "Některá tvoje čísla jsou pod obvyklým rozmezím" = "Some of your numbers are below your usual range";
 "Tvoje čísla jsou pod obvyklým rozmezím" = "Your numbers are below your usual range";
 "Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
+"Tep v klidu" = "Resting HR";
+"Kůže tepleji" = "Skin warmer";
+"Kůže chladněji" = "Skin cooler";
+"průměr %@ za týden" = "avg %@ this week";
+"Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is last night. Green arc is your usual 30-day range.";
+"roku mladší" = "years younger";
+"roku starší" = "years older";
+"Čára se začne kreslit po dvou týdnech odhadů." = "The line starts after two weeks of estimates.";
+"První odhad je z %@." = "First estimate %@.";
+"Zapsat dnešek" = "Log today";
+"asi minuta" = "about a minute";
+"asi %@ min" = "about %@ min";
+"nižší připravenost další ráno" = "lower readiness the next morning";
+"vyšší připravenost další ráno" = "higher readiness the next morning";
+"o %@ roku níž" = "%@ years lower";
+"o %@ roku výš" = "%@ years higher";

@@ -379,11 +379,13 @@ struct HealthValueContent: View {
                                       usual: usual(low, high, value), local: points(r.series, low: low, high: high))
         case .oxygen:
             guard let o = health?.oxygen else { return HealthValueReading(text: "–") }
-            let banded = o.high > o.low
+            // The same band and state as Health monitor (oxygen is never "above").
+            let band = HealthMonitorCard.oxygenBand(low: o.low, high: o.high)
             return HealthValueReading(value: o.value, text: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1),
-                                      label: "Minulá noc, kyslík v krvi ve spánku", state: state,
-                                      usual: banded ? usual(o.low, o.high, value) : nil,
-                                      local: points(o.series, low: banded ? o.low : nil, high: banded ? o.high : nil))
+                                      label: "Minulá noc, kyslík v krvi ve spánku",
+                                      state: HealthMonitorCard.oxygenState(state, value: o.value, band: band),
+                                      usual: band.map { usual($0.lowerBound, $0.upperBound, value) } ?? nil,
+                                      local: points(o.series, low: band?.lowerBound, high: band?.upperBound))
         case .temperature:
             // The night against the athlete's own nights: within half a degree is the usual night.
             let deviation = health?.wristTemp?.deviation ?? health?.skinTemp?.deviation

@@ -84,27 +84,18 @@ struct PortionWheel: View {
             .background(Palette.track, in: Capsule())
             .overlay { Capsule().stroke(Palette.amber, lineWidth: typing ? 1.5 : 0) }
 
-            HStack(spacing: 0) {
-                column(selection: wholeChoice, values: Array(0...current.most), width: 90) { String($0) }
-                    .id(current.most)
-                column(selection: partChoice, values: Array(Self.parts.indices), width: 56) { Self.parts[$0].label }
-                column(selection: unitChoice, values: Array(units.indices), width: nil) { units[$0].name }
-            }
+            // One wheel of three columns with one shared band, as the concept
+            // draws it (02-jidlo, food detail): number, fraction, unit.
+            WheelColumns(columns: [
+                .init(rows: (0...current.most).map(String.init), width: 90, selection: wholeChoice),
+                // Grams take whole numbers only: no fraction of a gram.
+                .init(rows: current.kind == .base && !product.perPortion ? ["–"] : Self.parts.map(\.label), width: 56, selection: partChoice),
+                .init(rows: units.map(\.name), width: nil, selection: unitChoice),
+            ])
+            .frame(height: 160)
         }
         .onAppear(perform: start)
         .onChange(of: typing) { if typing { typed = amount > 0 ? Self.plain(value) : "" } }
-    }
-
-    /// One column of the wheel; one without a width takes the rest of the row.
-    private func column(selection: Binding<Int>, values: [Int], width: CGFloat?, label: @escaping (Int) -> String) -> some View {
-        Picker("Množství", selection: selection) {
-            ForEach(values, id: \.self) { Text(verbatim: label($0)).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7).tag($0) }
-        }
-        .pickerStyle(.wheel)
-        .frame(minWidth: 0, maxWidth: width ?? .infinity)
-        .frame(height: 140)
-        .clipped()
-        .contentShape(Rectangle())
     }
 
     /// While typing, what was typed; else the amount: "249", "1½" or "0,4".
@@ -182,15 +173,108 @@ struct PortionWheel: View {
         return String(Int(amount.rounded())) + " " + product.unit
     }
 
-    /// Opens on a serving or package when the amount is a fraction of one, else on grams.
+    /// Opens on grams, as the concept shows the amount (02-jidlo, food detail);
+    /// on a serving or package only when the amount is a whole number of them
+    /// ("1 can"), so 25 g never opens as "¼ serving (100 g)".
     private func start() {
         guard !ready else { return }
         ready = true
         amount = min(amount, Self.maxGrams)
         unit = units.indices.dropFirst().first { i in
             let count = amount / units[i].size
-            return count <= Double(units[i].most) && Self.fractions.contains { abs($0.value - count) < 0.01 }
+            return count >= 1 && count <= Double(units[i].most) && abs(count - count.rounded()) < 0.01
         } ?? 0
         kind?.wrappedValue = current.kind
+    }
+}
+
+/// A UIKit wheel of several columns: one selection band across all of them,
+/// which separate SwiftUI wheel pickers can't share. A column without a width
+/// takes the rest of the row.
+struct WheelColumns: UIViewRepresentable {
+    struct Column {
+        let rows: [String]
+        let width: CGFloat?
+        let selection: Binding<Int>
+    }
+
+    let columns: [Column]
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIPickerView {
+        let picker = Wheel()
+        picker.dataSource = context.coordinator
+        picker.delegate = context.coordinator
+        picker.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        picker.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return picker
+    }
+
+    /// The last column's width comes from the row's: asked again when it changes.
+    final class Wheel: UIPickerView {
+        private var laidOutWidth: CGFloat = 0
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.width != laidOutWidth else { return }
+            laidOutWidth = bounds.width
+            reloadAllComponents()
+        }
+    }
+
+    func updateUIView(_ picker: UIPickerView, context: Context) {
+        let coordinator = context.coordinator
+        let rows = columns.map(\.rows)
+        let widths = columns.map(\.width)
+        coordinator.columns = columns
+        if coordinator.rows != rows || coordinator.widths != widths {
+            coordinator.rows = rows
+            coordinator.widths = widths
+            picker.reloadAllComponents()
+        }
+        for (i, column) in columns.enumerated() where !column.rows.isEmpty {
+            let row = min(max(column.selection.wrappedValue, 0), column.rows.count - 1)
+            if picker.selectedRow(inComponent: i) != row { picker.selectRow(row, inComponent: i, animated: false) }
+        }
+    }
+
+    final class Coordinator: NSObject, UIPickerViewDataSource, UIPickerViewAccessibilityDelegate {
+        var columns: [Column] = []
+        var rows: [[String]] = []
+        var widths: [CGFloat?] = []
+
+        func numberOfComponents(in pickerView: UIPickerView) -> Int { rows.count }
+        func pickerView(_ pickerView: UIPickerView, numberOfRowsInComponent component: Int) -> Int { rows[component].count }
+        func pickerView(_ pickerView: UIPickerView, rowHeightForComponent component: Int) -> CGFloat {
+            UIFont.preferredFont(forTextStyle: .title3).lineHeight + 14
+        }
+
+        func pickerView(_ pickerView: UIPickerView, widthForComponent component: Int) -> CGFloat {
+            if let width = widths[component] { return width }
+            let fixed = widths.compactMap { $0 }.reduce(0, +)
+            return max(60, pickerView.bounds.width - fixed - 16)
+        }
+
+        func pickerView(_ pickerView: UIPickerView, viewForRow row: Int, forComponent component: Int, reusing view: UIView?) -> UIView {
+            let label = (view as? UILabel) ?? UILabel()
+            let size = UIFont.preferredFont(forTextStyle: .title3).pointSize
+            label.font = .systemFont(ofSize: size, weight: .semibold)
+            label.textColor = UIColor(Palette.ink)
+            label.adjustsFontSizeToFitWidth = true
+            label.minimumScaleFactor = 0.7
+            label.textAlignment = widths[component] == nil ? .left : .center
+            label.text = rows[component][row]
+            label.accessibilityLabel = label.text == "–" ? L10n.tr("žádný zlomek") : nil
+            return label
+        }
+
+        func pickerView(_ pickerView: UIPickerView, accessibilityLabelForComponent component: Int) -> String? {
+            L10n.tr(["Celé", "Zlomek", "Jednotka"][min(component, 2)])
+        }
+
+        func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
+            guard component < columns.count else { return }
+            columns[component].selection.wrappedValue = row
+        }
     }
 }
