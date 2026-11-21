@@ -152,7 +152,11 @@ export function workloadCaution(metrics) {
 // `plot` in a series is the ratio for drawing the dial needle and the chart
 // line against `band`; the app never prints it.
 export const USUAL_BAND = Object.freeze({ low: 0.9, high: 1.15 });
-export const LOAD_SERIES_DAYS = 14;
+// The detail's chart offers 14 and 30 days; its trend rows go back to 3 months.
+export const LOAD_SERIES_DAYS = 30;
+export const TREND_DAYS = 98;
+// The daily loads loadView needs: the trend's 98 days and the 28 before the chart's first day.
+export const LOAD_HISTORY_DAYS = Math.max(TREND_DAYS, CHRONIC_DAYS + LOAD_SERIES_DAYS - 1);
 const LOAD_TEXTS = bilingual({
   wellBelow: "Posledních 7 dní bylo mnohem lehčích než tvé obvyklé 4 týdny.",
   below: "Posledních 7 dní bylo lehčích než tvé obvyklé 4 týdny.",
@@ -167,17 +171,27 @@ const LOAD_TEXTS = bilingual({
   wellAbove: "The last 7 days were much harder than your usual 4 weeks. Alternate harder and easier days."
 });
 
-// The card and the detail from daily loads (oldest first, `days` at least
-// SERIES_DAYS long, the last one today): null without any load on record;
-// level null while fewer than MIN_HISTORY_DAYS days of history (learning).
+// The load of the 7 days ending on each day from `from` (an index into loads).
+const weekLoads = (loads, from) => loads.slice(from).map((_, i) => Math.round(loads.slice(Math.max(0, from + i - ACUTE_DAYS + 1), from + i + 1).reduce((s, v) => s + v, 0)));
+
+// The card and the detail from daily loads (oldest first, at least
+// CHRONIC_DAYS + LOAD_SERIES_DAYS - 1 days, the last one today): null without
+// any load on record; level null while fewer than MIN_HISTORY_DAYS days of
+// history (learning). Besides the words the detail gets plain loads, never the
+// ratio: `load` the last 7 days, `usual` the average week of the last 4, each
+// point's 7-day `load`, and `history`, the 7-day load of every day since the
+// first load on record (up to TREND_DAYS), for its trend rows.
 export function loadView(series, historyDays) {
   if (!(historyDays > 0) || !Array.isArray(series) || series.length < CHRONIC_DAYS + LOAD_SERIES_DAYS - 1) return null;
   const loads = series.map(d => d.load);
+  const sums = weekLoads(loads, loads.length - LOAD_SERIES_DAYS);
   const points = Array.from({ length: LOAD_SERIES_DAYS }, (_, i) => {
     const end = loads.length - LOAD_SERIES_DAYS + i + 1, r = acwr(loads.slice(0, end), historyDays - (LOAD_SERIES_DAYS - 1 - i));
-    return { date: series[end - 1].date, level: r.level, plot: r.value };
+    return { date: series[end - 1].date, level: r.level, plot: r.value, load: sums[i] };
   });
-  const level = points.at(-1).level;
+  const level = points.at(-1).level, now = acwr(loads, historyDays);
+  const kept = Math.min(TREND_DAYS, historyDays, loads.length);
+  const history = weekLoads(loads, loads.length - kept).map((load, i) => ({ date: series[loads.length - kept + i].date, load }));
   return {
     // learning: under MIN_HISTORY_DAYS of history; quiet: history enough but no load in the last 28 days; ready: a level.
     state: level ? "ready" : historyDays < MIN_HISTORY_DAYS ? "learning" : "quiet",
@@ -187,13 +201,34 @@ export function loadView(series, historyDays) {
     band: USUAL_BAND,
     historyDays,
     needsDays: MIN_HISTORY_DAYS,
-    series: points
+    load: points.at(-1).load,
+    usual: now.chronic != null && historyDays >= MIN_HISTORY_DAYS ? Math.round(now.chronic * ACUTE_DAYS) : null,
+    series: points,
+    history
   };
+}
+
+// The last 7 days' load split by how hard the heart worked (fitness-insights.js
+// cardioFocus: zone minutes weighted by intensity, 4 weeks, the last one
+// newest), next to the athlete's usual range for each part: the 4 weeks'
+// share of the usual week, 0.9 to 1.15 of it as the usual band. Null without
+// zone data or a usual week.
+export function loadByIntensity(view, focus) {
+  const weeks = Array.isArray(focus?.weeks) ? focus.weeks : [];
+  if (!view?.usual || !(view.load >= 0) || weeks.length < 2) return null;
+  const keys = ["low", "high", "anaerobic"];
+  const total = list => list.reduce((s, w) => s + keys.reduce((t, k) => t + (Number(w?.[k]) || 0), 0), 0);
+  const last = weeks.at(-1), all = total(weeks), recent = total([last]);
+  if (!(all > 0)) return null;
+  return keys.map(key => {
+    const usual = view.usual * weeks.reduce((s, w) => s + (Number(w?.[key]) || 0), 0) / all;
+    return { key, load: recent > 0 ? Math.round(view.load * (Number(last?.[key]) || 0) / recent) : 0, low: Math.round(usual * USUAL_BAND.low), high: Math.round(usual * USUAL_BAND.high) };
+  });
 }
 
 // Load balance: every workout's load (the rows of GET /app/api/fitness).
 export function loadBalance(rows, date) {
-  const { series, historyDays } = dailyLoadSeries(rows, date);
+  const { series, historyDays } = dailyLoadSeries(rows, date, LOAD_HISTORY_DAYS);
   return loadView(series, historyDays);
 }
 
@@ -206,7 +241,7 @@ export function loadBalance(rows, date) {
 export function muscleLoad(sessions, date, loadOf, since = null) {
   const rows = (Array.isArray(sessions) ? sessions : []).map(s => ({ id: s.date, load: loadOf(s) })).filter(r => r.load > 0);
   if (!rows.length) return null;
-  const { series, historyDays } = dailyLoadSeries(rows, date);
+  const { series, historyDays } = dailyLoadSeries(rows, date, LOAD_HISTORY_DAYS);
   const first = isDate(since) && since <= date ? daysBetween(since, date) + 1 : 0;
   return loadView(series, Math.max(historyDays, first));
 }

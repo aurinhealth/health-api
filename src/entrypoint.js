@@ -58,7 +58,7 @@ import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTempla
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
-import { workloadMetrics, loadBalance } from "./workload-ratio.js";
+import { workloadMetrics, loadBalance, LOAD_HISTORY_DAYS } from "./workload-ratio.js";
 import { planOverview } from "./plan-overview.js";
 import { MANUAL_SPORTS, manualWorkoutType } from "./activity-type.js";
 import { illnessReturn } from "./illness-return.js";
@@ -3258,8 +3258,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         loadFitnessInsights(env.DB,date).catch(()=>({})),
         api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null})),
         syncedPlans(env,date).catch(()=>({})),
-        // Muscle load (workload-ratio.js): the gym's work sets of the last 42 days, one read on idx_strength_sets_user_date.
-        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-41),date+'~').all().then(r=>r.results||[]).catch(()=>null),
+        // Muscle load (workload-ratio.js): the gym's work sets of the last 98 days (the detail's trend rows), one read on idx_strength_sets_user_date.
+        env.DB.prepare("SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,shiftDate(date,-(LOAD_HISTORY_DAYS-1)),date+'~').all().then(r=>r.results||[]).catch(()=>null),
         // The first gym day on record (one index seek), so a lifter back from a break is not learning again.
         env.DB.prepare("SELECT workout_date AS d FROM strength_sets WHERE user_id=? AND completed=1 ORDER BY workout_date LIMIT 1").bind(env.USER_ID).first().then(r=>r?.d?String(r.d).slice(0,10):null).catch(()=>null)
       ]);
