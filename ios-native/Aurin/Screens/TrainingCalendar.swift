@@ -159,8 +159,9 @@ struct CalendarDayList: View {
     let date: String
     let today: String
     let day: CalendarDay?
-    /// Today's planned workouts in the card below, by title (TrainingCalendarCard.plannedTodayBelow).
-    var hidePlanned: Set<String> = []
+    /// Today's planned workouts in the card below (by event, title, or the gym
+    /// day's strength plan): the concept has a row only for what is done.
+    var hidePlanned: [TrainingSnapshot.Session] = []
     /// A watch session (no Intervals.icu detail) opened in its summary.
     @State private var watch: CalendarActivity?
     /// Two records of one workout: the merge sheet, and the answer being sent.
@@ -204,8 +205,13 @@ struct CalendarDayList: View {
         }
     }
 
-    static func shown(_ list: [CalendarActivity], hidePlanned: Set<String>) -> [CalendarActivity] {
-        list.filter { $0.status != "planned" || !hidePlanned.contains($0.title) }
+    static func shown(_ list: [CalendarActivity], hidePlanned: [TrainingSnapshot.Session]) -> [CalendarActivity] {
+        list.filter { a in
+            a.status != "planned" || !hidePlanned.contains { s in
+                (s.eventId != nil && s.eventId == a.eventId) || s.title == a.title
+                    || (s.sport == "strength" && ["strength", "gym"].contains(a.sport) && s.date == a.date)
+            }
+        }
     }
 
     private struct Proposed: Identifiable {
@@ -271,7 +277,7 @@ struct CalendarActivityRow: View {
                     Text(verbatim: L10n.f("%@ %% plánu", String(percent)))
                         .font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
                 } else if done, state == .offPlan {
-                    Text(verbatim: L10n.tr("mimo plán")).font(Typo.caption.weight(.semibold)).foregroundStyle(state.color)
+                    Text(verbatim: L10n.tr("mimo plán")).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                 }
             }
             if chevron { Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint) }
@@ -352,7 +358,7 @@ struct WatchActivityDetail: View {
                             .scaledFont(20, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 48, height: 48)
-                            .background(Palette.Sport.color(activity.sport), in: Circle())
+                            .background(SportDisc.color(activity.sport), in: Circle())
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: activity.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                             Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
