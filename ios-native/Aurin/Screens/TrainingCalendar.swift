@@ -307,16 +307,16 @@ struct CalendarActivityRow: View {
         return line
     }
 
-    /// "42 min", "1 h 32 min" with the numbers in the serif.
+    /// "42 min", "1 h 05" with the numbers in the serif (Fmt.duration).
     static func duration(_ minutes: Int) -> Text {
         let unit = { (s: String) in Text(verbatim: s).font(Typo.caption).foregroundStyle(Palette.muted) }
-        let number = { (n: Int) in Text(verbatim: String(n)).font(Typo.number(24)).foregroundStyle(Palette.ink) }
-        if minutes < 60 { return number(minutes) + unit(" min") }
+        let number = { (n: String) in Text(verbatim: n).font(Typo.number(24)).foregroundStyle(Palette.ink) }
+        if minutes < 60 { return number(String(minutes)) + unit(" min") }
         let rest = minutes % 60
-        return rest == 0 ? number(minutes / 60) + unit(" h") : number(minutes / 60) + unit(" h ") + number(rest) + unit(" min")
+        return rest == 0 ? number(String(minutes / 60)) + unit(" h") : number(String(minutes / 60)) + unit(" h ") + number(String(format: "%02d", rest))
     }
 
-    /// "Kolo, 1 h 30 min, 42,3 km", "V plánu, 45 min" or "Nesplněno, 1 h".
+    /// "Kolo, 1 h 30, 42,3 km", "V plánu, 45 min" or "Nesplněno, 1 h".
     static func detail(_ a: CalendarActivity) -> String {
         let head: String
         switch a.status {

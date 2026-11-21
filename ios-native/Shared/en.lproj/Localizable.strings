@@ -4998,3 +4998,24 @@
 "%@ odebrán" = "%@ removed";
 "Vynecháno" = "Skipped";
 "Aurin Age" = "Aurin Age";
+
+/* Done gym detail as concept wgym (GymLog GymDoneDetail) */
+"Podrobnosti tréninku" = "Workout details";
+"Série, opakování a váhy, jak je máš zapsané. Klepni na cvik a uvidíš každou sérii." = "Sets, reps and weight as you logged them. Tap an exercise to see each set.";
+"Ukáže každou sérii" = "Shows each set";
+"Podle svalu, podíl z celého tréninku" = "By muscle, share of the whole session";
+"Podíl zátěže tréninku podle svalu, odhadnutý ze zapsaných sérií. Čím sytější barva, tím větší podíl." = "The share of this session's load by muscle, estimated from your logged sets. The stronger the shade, the bigger the share.";
+"Zapojené svaly" = "Muscles";
+
+/* Workout detail as concept wdone */
+"Prům." = "Avg";
+"Min." = "Min";
+"Zóna" = "Zone";
+"Podíl" = "Share";
+"Více z tréninku" = "More from this workout";
+"Prům. tempo" = "Avg pace";
+"Prům. rychlost" = "Avg speed";
+"Prům. výkon" = "Avg power";
+"Prům. kadence" = "Avg cadence";
+"Regenerace, odhad" = "Recovery, estimate";
+"Maximum" = "Max";

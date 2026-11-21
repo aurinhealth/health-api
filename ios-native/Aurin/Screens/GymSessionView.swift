@@ -54,6 +54,7 @@ struct GymSessionView: View {
         _day = State(initialValue: preview)
         _muscles = State(initialValue: muscles)
         _loading = State(initialValue: false)
+        _doneMode = State(initialValue: Self.isDone(preview, date: date))
         previewing = true
     }
 
@@ -111,8 +112,9 @@ struct GymSessionView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: planned ? Palette.Glow.gym : Palette.Glow.training, title: planned ? L10n.tr("Posilovna").uppercased(with: Fmt.locale) : day?.planName ?? "Posilovna",
-                     pinTitle: planned) {
+        DetailScreen(glow: planned || showsDone ? Palette.Glow.gym : Palette.Glow.training,
+                     title: planned || showsDone ? L10n.tr("Posilovna").uppercased(with: Fmt.locale) : day?.planName ?? "Posilovna",
+                     pinTitle: planned || showsDone) {
             content
         }
         // Start workout pinned at the bottom as an ink pill (concept K04/017).
@@ -165,7 +167,7 @@ struct GymSessionView: View {
         VStack(alignment: .leading, spacing: 0) {
             // The planned workout has its own hero (concept K04/017); the label and
             // ⋯ stay for a done one and for a day without a plan.
-            if !planned {
+            if !planned && !showsDone {
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(text: L10n.tr("Posilovna") + ", " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
                     Spacer()
@@ -175,31 +177,6 @@ struct GymSessionView: View {
                             Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                         }
                         .accessibilityLabel("Změnit trénink")
-                    }
-                    // Done: the gym session was another sport (Crossfit, HIIT…).
-                    if !model.demo && showsDone, let typeTarget, let editTarget {
-                        Menu {
-                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
-                            if !editTarget.app {
-                                Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
-                            }
-                            // Paired with the day's gym plan or a plan: apart again, the activity stays.
-                            if doneSession?.unpairTarget != nil {
-                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
-                            }
-                            Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
-                        } label: {
-                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                                .frame(width: 36, height: 32).contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Další volby")
-                        .sheet(isPresented: $changingType) {
-                            ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
-                        }
-                        .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
-                                         kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
-                                         deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
-                        .activityUnpairing(session: doneSession, asking: $unpairing) { dismiss() }
                     }
                 }
                 .padding(.top, 24)
@@ -211,6 +188,8 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
+                // Muscles (concept wgym): the share of the session by muscle group.
+                if let day, !Self.shares(day, muscles: muscles).isEmpty { doneMuscles(day).padding(.top, 28) }
                 // Only a paused workout goes on; a finished one never offers Resume (device test 602).
                 if !model.demo, date == AppModel.localDate(Date()), LiveWorkout.shared.running, LiveWorkout.shared.pausedAt != nil {
                     Button {
@@ -244,6 +223,7 @@ struct GymSessionView: View {
                         ShareWorkoutButton(template: kept, date: nil, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
                     }
                 }
+                if !model.demo { doneActions.padding(.top, 18) }
             } else if let day, !day.exercises.isEmpty {
                 plannedDetail(day)
             } else {
@@ -310,7 +290,7 @@ struct GymSessionView: View {
                     .accessibilityHint(L10n.tr("Proč tenhle trénink"))
                     .padding(.top, 14)
                 }
-                GymPartsCard(day: day, date: date) { withAnimation(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
+                GymPartsCard(day: day, date: date, total: planEntry.minutes) { withAnimation(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
                     .padding(.top, 22)
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(text: "Cviky")
@@ -369,29 +349,37 @@ struct GymSessionView: View {
 
     /// The sport's disc, the name in serif, "Today at 17:30, 45 min, about 4.2 strain".
     private func hero(_ day: GymDay, _ parts: GymDayParts) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            // The concept's glowing header disc (trenink-koncept `.dd`): the
-            // sport's colour with a soft shine, a white figure, a halo.
-            Image(systemName: "figure.strengthtraining.traditional")
-                .font(.system(size: 28, weight: .medium)).foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
-                .frame(width: 60, height: 60)
-                .background {
-                    Circle().fill(Palette.Sport.gym.resolved(dark: false))
-                        .overlay(Circle().fill(RadialGradient(colors: [.white.opacity(0.24), .clear], center: UnitPoint(x: 0.32, y: 0.22),
-                                                              startRadius: 0, endRadius: 36)))
-                }
-                .shadow(color: Palette.Sport.gym.opacity(0.44), radius: 8, x: -2, y: 3)
-                .shadow(color: Palette.Sport.gym.opacity(0.24), radius: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(day.planName ?? L10n.tr("Silový trénink")).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: heroLine(day, parts)).font(Typo.small).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+        WorkoutHero(sport: "strength", title: day.planName ?? L10n.tr("Silový trénink"), line: heroLine(day, parts))
+    }
+
+    /// A done workout's changes, quiet under it (no "…" menu): another kind of
+    /// activity (Crossfit, HIIT…), its calories, apart from the plan, delete.
+    @ViewBuilder private var doneActions: some View {
+        if let typeTarget, let editTarget {
+            VStack(spacing: 0) {
+                quietAction("Změnit typ aktivity") { changingType = true }
+                if !editTarget.app { quietAction("Upravit kalorie") { editingKcal = true } }
+                // Paired with the day's gym plan or a plan: apart again, the activity stays.
+                if doneSession?.unpairTarget != nil { quietAction("Odpárovat od plánu") { unpairing = true } }
+                quietAction("Smazat aktivitu", color: Palette.red) { deleting = true }
             }
+            .frame(maxWidth: .infinity)
+            .sheet(isPresented: $changingType) {
+                ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
+            }
+            .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
+                             kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
+                             deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+            .activityUnpairing(session: doneSession, asking: $unpairing) { dismiss() }
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    private func quietAction(_ title: LocalizedStringKey, color: Color = Palette.muted, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(Typo.small.weight(.medium)).foregroundStyle(color)
+                .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func heroLine(_ day: GymDay, _ parts: GymDayParts) -> String {
@@ -405,19 +393,20 @@ struct GymSessionView: View {
         } else {
             words.append(when)
         }
+        // The length the Training card shows; the parts' sum without one.
         let extra = (parts.before(day) + parts.after(day)).reduce(0) { $0 + parts.minutes($1, day: day) }
-        if let minutes = day.plannedMinutes { words.append("\(minutes + extra) min") }
+        if let minutes = plan.minutes ?? day.plannedMinutes.map({ $0 + extra }) { words.append(Fmt.duration(minutes)) }
         if let strain = plan.strain { words.append(L10n.f("asi %@ námahy", Fmt.decimal(strain, digits: 1))) }
         return words.joined(separator: ", ")
     }
 
     /// The day's gym session in Training: its hour and its strain estimate.
-    private var planEntry: (time: String?, strain: Double?) {
+    private var planEntry: (time: String?, strain: Double?, minutes: Int?) {
         let training = model.training
         let cards = (training?.todaySessions ?? []) + [training?.next].compactMap { $0 }
         let card = cards.first { $0.date == date && $0.sport == "strength" }
         let week = training?.sessions?.first { $0.date == date && $0.sport == "strength" && $0.status != "done" }
-        return (card?.time ?? week?.time, card?.strain)
+        return (card?.time ?? week?.time, card?.strain, card?.minutes ?? week?.minutes)
     }
 
     /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
@@ -439,6 +428,63 @@ struct GymSessionView: View {
 
     /// The muscle groups by how hard they work, each once ("Chest", "Back", "Triceps"),
     /// as the concept names them: not every head of the shoulder.
+    /// Each muscle group's share of a done session, in percent, biggest first:
+    /// the done work sets of each exercise times how much it works the muscle.
+    static func shares(_ day: GymDay, muscles: [String: [String: Double]]) -> [(name: String, percent: Double)] {
+        var groups: [String: Double] = [:]
+        for exercise in day.exercises {
+            let sets = Double(exercise.sets.filter { $0.work && $0.done && $0.side != "P" }.count)
+            guard sets > 0 else { continue }
+            for (muscle, weight) in muscles[exercise.name] ?? [:] {
+                let g = group[muscle] ?? BodyFigure.label(muscle)
+                groups[g, default: 0] += sets * weight
+            }
+        }
+        let total = groups.values.reduce(0, +)
+        guard total > 0 else { return [] }
+        return groups.map { (name: $0.key, percent: $0.value / total * 100) }
+            .sorted { $0.percent == $1.percent ? $0.name < $1.name : $0.percent > $1.percent }
+    }
+
+    /// Muscles of a done session (concept wgym): the figure shaded by share,
+    /// then the biggest groups with their share of the whole session.
+    private func doneMuscles(_ day: GymDay) -> some View {
+        let shares = Array(Self.shares(day, muscles: muscles).prefix(6))
+        let top = max(shares.first?.percent ?? 1, 1)
+        return VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Zapojené svaly")
+            VStack(alignment: .leading, spacing: 0) {
+                BodyMap(load: load, height: 200).padding(.bottom, 12)
+                SectionLabel(text: "Podle svalu, podíl z celého tréninku").padding(.bottom, 4)
+                ForEach(Array(shares.enumerated()), id: \.element.name) { index, share in
+                    let shade = Palette.rust.opacity(0.3 + 0.7 * share.percent / top)
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous).fill(shade).frame(width: 10, height: 10)
+                        Text(verbatim: share.name).font(Typo.body).foregroundStyle(Palette.ink)
+                            .frame(width: 118, alignment: .leading).lineLimit(1).minimumScaleFactor(0.8)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Palette.track)
+                                Capsule().fill(shade).frame(width: max(4, geo.size.width * share.percent / top))
+                            }
+                        }
+                        .frame(height: 6)
+                        NumberText(value: share.percent < 1 ? "<1" : Fmt.int(share.percent), unit: "%", size: 18)
+                            .frame(width: 52, alignment: .trailing)
+                    }
+                    .frame(minHeight: 42)
+                    .overlay(alignment: .top) { if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(18)
+            .cardSurface(cornerRadius: 20)
+            Text("Podíl zátěže tréninku podle svalu, odhadnutý ze zapsaných sérií. Čím sytější barva, tím větší podíl.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+        }
+    }
+
     static func names(_ load: [String: Double]) -> [String] {
         var groups: [String: Double] = [:]
         for (muscle, value) in load { let g = group[muscle] ?? BodyFigure.label(muscle); groups[g] = max(groups[g] ?? 0, value) }

@@ -543,7 +543,10 @@ private struct PinnedTopBar: ViewModifier {
                 page
                     .scrollEdgeEffectStyle(.soft, for: .top)
                     .safeAreaBar(edge: .top) {
+                        // The soft edge alone left the page's text readable under the
+                        // title (device test 602 point 82): the paper goes behind it too.
                         bar.padding(.top, 6).padding(.bottom, 10)
+                            .background { PinnedBarBackground().opacity(scrolled ? 1 : 0) }
                     }
             } else {
                 pinned(page)

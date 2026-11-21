@@ -329,39 +329,16 @@ struct ActivityDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title,
-                     coach: session.status == "done" ? .activity(model.liveSession(session)) : nil) {
+        DetailScreen(glow: Palette.Glow.training, title: Self.kind(session.sport).uppercased(with: Fmt.locale), pinTitle: true,
+                     coach: session.status == "done" ? .activity(model.liveSession(session)) : nil,
+                     info: session.status == "done" && detail != nil ? ChromeAction(systemImage: "square.and.arrow.up", label: "Sdílet", action: { sharing = true }) : nil) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { ", " + ClockText.format($0) } ?? ""))
-                    Spacer()
-                    if session.status == "done", detail != nil {
-                        Button { sharing = true } label: {
-                            Image(systemName: "square.and.arrow.up").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                                .frame(width: 36, height: 32).contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Sdílet")
-                    }
-                    if !model.demo, session.status == "done" {
-                        Menu {
-                            if typeSource != nil {
-                                Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
-                            }
-                            Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
-                            if model.liveSession(session).unpairTarget != nil {
-                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
-                            }
-                            Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
-                        } label: {
-                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                                .frame(width: 36, height: 32).contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Další volby")
-                    }
+                // The concept's header (wdone): the sport's disc, its kind over the name, when and who recorded it.
+                WorkoutHero(sport: session.sport, type: detail?.activity.type, kind: Self.kind(session.sport),
+                            title: detail?.activity.name ?? session.title, line: whenLine) {
+                    if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 4) }
                 }
                 .padding(.top, 24)
-                Text(detail?.activity.name ?? session.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 8) }
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
@@ -381,6 +358,7 @@ struct ActivityDetailView: View {
                 if let planned = session.plannedId, session.sport == "ride" || session.sport == "run" {
                     PlannedTemplateButtons(eventId: planned).padding(.top, 28)
                 }
+                if !model.demo, session.status == "done" { doneActions.padding(.top, 18) }
             }
         }
         .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
@@ -392,6 +370,47 @@ struct ActivityDetailView: View {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: typeSource) { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// "Ride", "Run", "Walk" over the name and in the pinned bar.
+    static func kind(_ sport: String) -> String {
+        switch sport {
+        case "ride": return L10n.tr("Jízda")
+        case "run": return L10n.tr("Běh")
+        case "swim": return L10n.tr("Plavání")
+        case "walk": return L10n.tr("Chůze")
+        default: return L10n.tr("Aktivita")
+        }
+    }
+
+    /// "Monday, November 9, 16:05 to 17:37": the day, the start and the end.
+    private var whenLine: String {
+        let day = Fmt.capitalized(Fmt.weekdayDayMonth(session.date))
+        guard let time = session.time else { return day }
+        let parts = time.split(separator: ":").compactMap { Int($0) }
+        let minutes = detail?.activity.moving_time.map { Int(($0 / 60).rounded()) } ?? session.minutes
+        guard parts.count >= 2, let minutes, minutes > 0 else { return day + ", " + ClockText.format(time) }
+        let end = (parts[0] * 60 + parts[1] + minutes) % 1440
+        return day + ", " + L10n.f("%@ až %@", ClockText.format(time), ClockText.format(minutes: end))
+    }
+
+    /// What the three-dot menu held, as quiet rows under the workout (no menu, 604 retest).
+    private var doneActions: some View {
+        VStack(spacing: 0) {
+            if typeSource != nil { quietAction("Změnit typ aktivity") { changingType = true } }
+            quietAction("Upravit kalorie") { editingKcal = true }
+            if model.liveSession(session).unpairTarget != nil { quietAction("Odpárovat od plánu") { unpairing = true } }
+            quietAction("Smazat aktivitu", color: Palette.red) { deleting = true }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func quietAction(_ title: LocalizedStringKey, color: Color = Palette.muted, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(Typo.small.weight(.medium)).foregroundStyle(color)
+                .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// "Minule vs dnes" of a ride or run from Intervals.icu (its work intervals).
@@ -542,59 +561,46 @@ struct ActivityDetailContent: View {
         hr = Self.samples("heartrate", in: detail)
     }
 
+    /// The workout's minutes, rounded as Training's row rounds them, one value
+    /// for the numbers and the zones (device test 604: 47 against 48).
+    private var minutes: Int? { detail.activity.moving_time.map { Int(($0 / 60).rounded()) } }
+
     var body: some View {
         let a = detail.activity
         VStack(alignment: .leading, spacing: 0) {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
-                if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
-                if let d = a.distance, d > 0 { stat("Vzdálenost", isSwim ? Units.swimDistanceText(d) : Units.distanceText(d / 1000)) }
-                if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
-                if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
-                if let hr = a.average_heartrate { stat("Prům. tep", Fmt.int(hr) + " bpm") }
-                if let hr = a.max_heartrate { stat("Max. tep", Fmt.int(hr) + " bpm") }
-                if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
-                if let pace = pace(a.average_speed) { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
-                if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Units.imperial ? Fmt.int(e * 3.28084) + " ft" : Fmt.int(e) + " m") }
-                if let h = detail.recoveryHours {
-                    VStack(alignment: .leading, spacing: 2) {
-                        stat("Regenerace", Self.recoveryDays(h))
-                        Text("odhad").font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                }
-                if let c = kcal ?? a.calories {
-                    VStack(alignment: .leading, spacing: 2) {
-                        stat("Energie", Fmt.int(c) + " kcal")
-                        if let kcalNote { Text(verbatim: kcalNote).font(Typo.caption).foregroundStyle(Palette.muted) }
-                    }
-                }
-            }
-            .padding(.top, 22)
-            if a.icu_training_load != nil || a.icu_normalized_watts != nil || a.icu_intensity != nil {
-                PowerTermsButton().padding(.top, 10)
-            }
+            // Workout details (concept wdone): the six numbers in two columns.
+            SectionLabel(text: "Podrobnosti tréninku").padding(.top, 28)
+            WorkoutStatsCard(cells: cells).padding(.top, 10)
             if let compliance { compliance.padding(.top, 18) }
             if let rating { rating.padding(.top, compliance == nil ? 18 : 12) }
             if let comparison { comparison }
 
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
-            if watts.count > 10 {
-                StreamChart(title: "Výkon", unit: "W", color: Palette.amberBar, samples: watts, span: span, floorZero: true, cursor: $cursor)
-                    .padding(.top, 22)
+            if a.average_heartrate != nil || hr.count > 10 {
+                SectionLabel(text: "Srdce").padding(.top, 28)
+                heartNumbers.padding(.top, 10)
+                if hr.count > 10 {
+                    StreamChart(title: "Tep", unit: "bpm", color: Palette.rust, samples: hr, span: span, floorZero: false, cursor: $cursor)
+                        .padding(.top, 10)
+                }
             }
-            if hr.count > 10 {
-                StreamChart(title: "Tep", unit: "bpm", color: Palette.rust, samples: hr, span: span, floorZero: false, cursor: $cursor)
-                    .padding(.top, watts.count > 10 ? 12 : 22)
-            }
-
             if let zones = detail.hrZones, !zones.isEmpty {
-                zoneHeader("Čas v tepových zónách", Fmt.duration(Int((zones.compactMap(\.seconds).reduce(0, +) / 60).rounded())))
-                Card { ZoneList(rows: zoneRows(zones, names: ZoneList.heartNames(zones.count), unit: "bpm"), bars: true) }
-                    .padding(.top, 12)
+                SectionLabel(text: "Tepové zóny").padding(.top, 28)
+                Card { ZoneGrid(rows: zoneRows(zones, unit: "bpm"), rangeTitle: "bpm") }.padding(.top, 10)
+            }
+            if watts.count > 10 {
+                SectionLabel(text: "Výkon").padding(.top, 28)
+                StreamChart(title: "Výkon", unit: "W", color: Palette.amberBar, samples: watts, span: span, floorZero: true, cursor: $cursor)
+                    .padding(.top, 10)
             }
             if let zones = detail.analysis?.zones, zones.contains(where: { ($0.seconds ?? 0) >= 30 }) {
-                zoneHeader("Čas ve výkonových zónách", detail.analysis?.ftp.map { "FTP " + Fmt.int($0) + " W" } ?? "")
-                Card { ZoneList(rows: zoneRows(zones, names: ZoneList.powerNames, unit: nil).filter { $0.seconds >= 30 }, bars: false) }
-                    .padding(.top, 12)
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel(text: "Výkonové zóny")
+                    Spacer()
+                    if let ftp = detail.analysis?.ftp { Text(verbatim: "FTP " + Fmt.int(ftp) + " W").font(Typo.caption).foregroundStyle(Palette.faint) }
+                }
+                .padding(.top, 28)
+                Card { ZoneGrid(rows: zoneRows(zones, unit: nil).filter { $0.seconds >= 30 }, rangeTitle: nil) }.padding(.top, 10)
             }
 
             if let laps = detail.intervals, !laps.isEmpty {
@@ -630,7 +636,95 @@ struct ActivityDetailContent: View {
                 StatRow(title: "Pokles tepu po poslední zátěži", value: Fmt.int(drop), unit: L10n.f("tepů za %@ s", Fmt.int(hrr.seconds ?? 60)))
                     .padding(.top, 18)
             }
+
+            if !more.isEmpty {
+                SectionLabel(text: "Více z tréninku").padding(.top, 28)
+                Card {
+                    VStack(spacing: 0) {
+                        ForEach(Array(more.enumerated()), id: \.offset) { i, row in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(LocalizedStringKey(row.label)).font(Typo.body).foregroundStyle(Palette.ink)
+                                Spacer()
+                                NumberText(value: row.value, unit: row.unit, size: 20)
+                            }
+                            .padding(.vertical, 11)
+                            .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                            .accessibilityElement(children: .combine)
+                        }
+                    }
+                }
+                .padding(.top, 10)
+                if a.icu_training_load != nil || a.icu_normalized_watts != nil || a.icu_intensity != nil {
+                    PowerTermsButton().padding(.top, 10)
+                }
+            }
         }
+    }
+
+    /// Duration, distance, speed or pace, heart rate, power and energy, as the concept's six.
+    private var cells: [WorkoutStatsCard.Cell] {
+        let a = detail.activity
+        var cells: [WorkoutStatsCard.Cell] = []
+        if let m = minutes {
+            cells.append(m >= 60 ? .init(label: "Trvání", value: Fmt.duration(m)) : .init(label: "Trvání", value: String(m), unit: "min"))
+        }
+        if let d = a.distance, d > 0 {
+            let (value, unit) = Self.split(isSwim ? Units.swimDistanceText(d) : Units.distanceText(d / 1000))
+            cells.append(.init(label: "Vzdálenost", value: value, unit: unit))
+        }
+        if let text = pace(a.average_speed) {
+            let (value, unit) = Self.split(text)
+            cells.append(.init(label: "Prům. tempo", value: value, unit: unit))
+        } else if let v = a.average_speed, v > 0 {
+            cells.append(.init(label: "Prům. rychlost", value: Fmt.decimal(Units.distance(v * 3.6), digits: 1), unit: Units.imperial ? "mph" : "km/h"))
+        }
+        if let hr = a.average_heartrate { cells.append(.init(label: "Průměrný tep", value: Fmt.int(hr), unit: "bpm")) }
+        if let w = a.average_watts ?? a.icu_normalized_watts {
+            cells.append(.init(label: a.average_watts != nil ? "Prům. výkon" : "NP", value: Fmt.int(w), unit: "W"))
+        }
+        if let c = kcal ?? a.calories { cells.append(.init(label: "Aktivní energie", value: Fmt.int(c), unit: "kcal", note: kcalNote)) }
+        return cells
+    }
+
+    /// The concept's "More from this ride": what the six leave out.
+    private var more: [(label: String, value: String, unit: String?)] {
+        let a = detail.activity
+        var rows: [(label: String, value: String, unit: String?)] = []
+        if let e = a.total_elevation_gain, e > 0 { rows.append(("Převýšení", Fmt.int(Units.imperial ? e * 3.28084 : e), Units.imperial ? "ft" : "m")) }
+        if let c = a.average_cadence, c > 0 { rows.append(("Prům. kadence", Fmt.int(c), isRun ? "spm" : "rpm")) }
+        if let load = a.icu_training_load { rows.append(("Zátěž", Fmt.int(load), "TSS")) }
+        if a.average_watts != nil, let np = a.icu_normalized_watts { rows.append(("NP", Fmt.int(np), "W")) }
+        if let i = a.icu_intensity { rows.append(("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2), nil)) }
+        if let h = detail.recoveryHours { rows.append(("Regenerace, odhad", Self.recoveryDays(h), nil)) }
+        return rows
+    }
+
+    /// The concept's hr3: average, lowest and highest heart rate.
+    private var heartNumbers: some View {
+        let a = detail.activity
+        let low = hr.map(\.value).min()
+        return HStack(spacing: 0) {
+            heartCell("Prům.", a.average_heartrate)
+            heartCell("Min.", low)
+            heartCell("Maximum", a.max_heartrate ?? hr.map(\.value).max())
+        }
+        .padding(16)
+        .cardSurface(cornerRadius: 20)
+    }
+
+    private func heartCell(_ label: String, _ value: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(LocalizedStringKey(label)).font(Typo.caption).foregroundStyle(Palette.muted)
+            NumberText(value: value.map { Fmt.int($0) } ?? "–", unit: value == nil ? nil : "bpm", size: 24)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "42,6 km" as "42,6" and "km"; "5:12 /km" as "5:12" and "/km".
+    static func split(_ text: String) -> (String, String?) {
+        guard let space = text.firstIndex(of: " ") else { return (text, nil) }
+        return (String(text[..<space]), String(text[text.index(after: space)...]))
     }
 
     private var isRun: Bool { (detail.activity.type ?? "").lowercased().contains("run") }
@@ -651,34 +745,21 @@ struct ActivityDetailContent: View {
         return "≈ " + (halves % 2 == 0 ? L10n.plural("%lld dní", halves / 2) : L10n.f("%@ dne", Fmt.decimal(Double(halves) / 2)))
     }
 
-    private func stat(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-        }
-    }
-
-    private func zoneHeader(_ title: String, _ trailing: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            SectionLabel(text: title)
-            Spacer()
-            Text(verbatim: trailing).font(Typo.caption).foregroundStyle(Palette.faint)
-        }
-        .padding(.top, 28)
-    }
-
-    private func zoneRows(_ zones: [ActivityDetail.Zone], names: [String], unit: String?) -> [ZoneList.Row] {
+    /// The zones from the highest down, as the concept's grid lists them.
+    private func zoneRows(_ zones: [ActivityDetail.Zone], unit: String?) -> [ZoneGrid.Row] {
         let total = max(zones.compactMap(\.seconds).reduce(0, +), 1)
         return zones.enumerated().map { i, z in
             var range: String? = nil
-            if let unit {
-                if let lo = z.min, let hi = z.max { range = Fmt.int(lo) + "–" + Fmt.int(hi) + " " + unit }
-                else if let hi = z.max { range = "< " + Fmt.int(hi + 1) + " " + unit }
-                else if let lo = z.min { range = Fmt.int(lo) + "+ " + unit }
+            if unit != nil {
+                if let lo = z.min, let hi = z.max { range = L10n.f("%@ až %@", Fmt.int(lo), Fmt.int(hi)) }
+                else if let hi = z.max { range = L10n.f("do %@", Fmt.int(hi)) }
+                else if let lo = z.min { range = L10n.f("%@ a víc", Fmt.int(lo)) }
             }
             let seconds = z.seconds ?? 0
-            return ZoneList.Row(id: i, name: i < names.count ? names[i] : "Z\(i + 1)", range: range, seconds: seconds, percent: z.percent ?? seconds / total * 100)
+            return ZoneGrid.Row(id: i, range: range, seconds: seconds, percent: z.percent ?? seconds / total * 100)
         }
+        .reversed()
+        .map { $0 }
     }
 
     /// About 240 averaged points with their minute, enough for a phone-wide line.
@@ -776,6 +857,64 @@ struct StreamChart: View {
     static func clock(_ minute: Double) -> String {
         let s = Int((minute * 60).rounded())
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// Time in each zone as the concept's grid (wdone `zgrid`): the zone's dot and
+/// number, its range, a bar in the zone's colour, the share and the time.
+struct ZoneGrid: View {
+    struct Row: Identifiable {
+        /// From 0 (Z1).
+        let id: Int
+        let range: String?
+        let seconds: Double
+        let percent: Double
+    }
+
+    let rows: [Row]
+    /// "bpm" over the ranges; nil hides the column.
+    var rangeTitle: String?
+
+    var body: some View {
+        let top = max(rows.map(\.percent).max() ?? 1, 1)
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+            GridRow {
+                header("Zóna")
+                if let rangeTitle { header(rangeTitle) }
+                Color.clear.frame(height: 1).gridCellUnsizedAxes(.vertical)
+                header("Podíl").gridColumnAlignment(.trailing)
+                header("Čas").gridColumnAlignment(.trailing)
+            }
+            ForEach(rows) { r in
+                Rectangle().fill(Palette.hairline).frame(height: 1).gridCellUnsizedAxes(.horizontal)
+                GridRow {
+                    HStack(spacing: 6) {
+                        Circle().fill(Palette.Zone.color(r.id)).frame(width: 8, height: 8)
+                        Text(verbatim: "\(r.id + 1)").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    }
+                    if rangeTitle != nil { Text(verbatim: r.range ?? "").font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1) }
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.track)
+                            Capsule().fill(Palette.Zone.color(r.id)).frame(width: max(3, geo.size.width * r.percent / top))
+                        }
+                    }
+                    .frame(height: 6)
+                    Text(verbatim: (r.percent > 0 && r.percent < 1 ? "<1" : Fmt.int(r.percent)) + Fmt.percentSign)
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(verbatim: Self.time(r.seconds)).font(Typo.small).foregroundStyle(Palette.muted)
+                }
+            }
+        }
+    }
+
+    private func header(_ text: String) -> some View {
+        Text(LocalizedStringKey(text)).font(Typo.caption).foregroundStyle(Palette.faint)
+    }
+
+    /// "20 s" under a minute, else "41 min" or "1 h 05".
+    static func time(_ seconds: Double) -> String {
+        seconds < 60 ? Fmt.int(seconds) + " s" : Fmt.duration(Int((seconds / 60).rounded()))
     }
 }
 
