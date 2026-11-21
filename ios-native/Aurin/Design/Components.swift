@@ -431,8 +431,16 @@ private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false
 private struct ScrollReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((CGFloat) -> Void)? = nil }
 private struct ScrollDragReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: (() -> Void)? = nil }
 private struct WidgetEditingReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((Bool) -> Void)? = nil }
+private struct TabGlowKey: EnvironmentKey { static let defaultValue: Color? = nil }
 
 extension EnvironmentValues {
+    /// The tint of the tab a detail was opened from (concept rule D-TMAVY-1):
+    /// HRV from Today is green, from Health indigo. Set on each tab's stack.
+    var tabGlow: Color? {
+        get { self[TabGlowKey.self] }
+        set { self[TabGlowKey.self] = newValue }
+    }
+
     /// The page pins its back button (FloatingBackButton); the inline one keeps only its place.
     var floatingBack: Bool {
         get { self[FloatingBackKey.self] }

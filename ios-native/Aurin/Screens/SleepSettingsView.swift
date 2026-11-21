@@ -55,19 +55,61 @@ struct SleepSettingsForm: View {
     @State private var snoozeTask: Task<Void, Never>?
     @State private var alarmNote: String?
     @State private var plannerSaving = false
+    @State private var info = false
 
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
 
     var body: some View {
+        page
+            .onAppear(perform: fill)
+            .task { if model.health == nil { await model.refreshHealth() } }
+            .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
+            .onChange(of: snoozeOn) { _, _ in snoozeChanged() }
+            .onChange(of: snoozeMinutes) { _, _ in snoozeChanged() }
+            // A day added to one alarm leaves the other, unless it was its last.
+            .onChange(of: workDays) { old, new in weekendDays = Self.without(new & ~old, in: weekendDays) }
+            .onChange(of: weekendDays) { old, new in workDays = Self.without(new & ~old, in: workDays) }
+    }
+
+    private var hasTonight: Bool {
+        model.health.map { $0.sleep.tonight.bedtime != nil && $0.sleep.tonight.wake != nil } ?? false
+    }
+
+    /// From Today or Health: only Tonight (concept 19), the coach and "i" top
+    /// right; the alarm changes with a tap on Wake up, the goal stays in Settings.
+    /// Without a night to plan yet (the bedtime setup card) the goal and alarm.
+    @ViewBuilder private var page: some View {
+        if route && hasTonight {
+            DetailScreen(glow: Palette.Glow.today, title: "Dnes v noci", pinTitle: true,
+                         info: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true }) {
+                VStack(alignment: .leading, spacing: 16) {
+                    planner
+                    if let error = store.errorMessage {
+                        Text(error).font(Typo.small).foregroundStyle(Palette.rust)
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .sheet(isPresented: $info) { TonightInfo() }
+        } else {
+            settingsPage
+        }
+    }
+
+    @ViewBuilder private var planner: some View {
+        if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
+            SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
+                         weekendMorning: Self.weekendMorning(after: tonight.date, days: weekendDays),
+                         onChoose: { minutes, wake in Task { await saveTonight(minutes: minutes, wake: wake) } },
+                         onEveryDay: { wake, weekend in Task { await saveEveryDay(wake, weekend: weekend) } })
+        }
+    }
+
+    private var settingsPage: some View {
         SettingsPage(title: L10n.tr("Spánek")) {
             // Room under the pinned back button.
             if route { Color.clear.frame(height: 46) }
-            if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
-                SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
-                             weekendMorning: Self.weekendMorning(after: tonight.date, days: weekendDays),
-                             onChoose: { minutes, wake in Task { await saveTonight(minutes: minutes, wake: wake) } },
-                             onEveryDay: { wake, weekend in Task { await saveEveryDay(wake, weekend: weekend) } })
-            }
+            planner
 
             SettingsGroup(title: "Cíl spánku") {
                 HStack {
@@ -131,14 +173,6 @@ struct SleepSettingsForm: View {
             }
         }
         .modifier(SleepSaveChrome(route: route, enabled: changes != original, saving: store.saving) { Task { await save() } })
-        .onAppear(perform: fill)
-        .task { if model.health == nil { await model.refreshHealth() } }
-        .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
-        .onChange(of: snoozeOn) { _, _ in snoozeChanged() }
-        .onChange(of: snoozeMinutes) { _, _ in snoozeChanged() }
-        // A day added to one alarm leaves the other, unless it was its last.
-        .onChange(of: workDays) { old, new in weekendDays = Self.without(new & ~old, in: weekendDays) }
-        .onChange(of: weekendDays) { old, new in workDays = Self.without(new & ~old, in: workDays) }
     }
 
     static func without(_ added: Int, in days: Int) -> Int {
@@ -363,8 +397,29 @@ struct SleepSettingsCard: View {
     }
 }
 
+/// "i" on Tonight: how the night is planned.
+private struct TonightInfo: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Text("Dnes v noci").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                }
+                HowMeasuredCard(text: "Potřeba spánku je tvůj cíl podle věku, nebo vlastní, k němu dnešní trénink, dospání dluhu a nízká HRV a odečtený šlofík. Večerka je čas vstávání minus doba v posteli, která tolik spánku dá. Je to odhad, ne měření.")
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium])
+        .presentationBackground(Palette.background)
+    }
+}
+
 /// Uložit: in the system bar in Settings, in glass beside the round back
-/// button when the page is opened from a card.
+/// button when the setup is opened from a card.
 private struct SleepSaveChrome: ViewModifier {
     let route: Bool
     let enabled: Bool

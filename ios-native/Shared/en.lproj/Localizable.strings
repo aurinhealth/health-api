@@ -2869,7 +2869,6 @@
 "Snězeno" = "Eaten";
 "O %@ kcal víc" = "%@ kcal more";
 "než cíl týdne" = "than the week's target";
-"Zbývá %@ kcal" = "%@ kcal left";
 "zhruba %@ na den" = "about %@ a day";
 "Dnes ještě %@ kcal" = "%@ kcal more today";
 ", pak zhruba %@ na den" = ", then about %@ a day";
@@ -4986,6 +4985,7 @@
 "Nejlépe venku %@." = "Best outdoors %@.";
 "Přidej widget" = "Add a widget";
 "Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
+"Tréninky jsou jen část ze spálených %@ kcal." = "Workouts count only part of the %@ kcal burned.";
 
 /* Planned gym detail as concept K04/017 (GymSessionView, GymDayParts, GymWhyCard) */
 "Části tréninku" = "Workout";
@@ -5099,5 +5099,7 @@
 "Prům. kadence" = "Avg cadence";
 "Regenerace, odhad" = "Recovery, estimate";
 "Maximum" = "Max";
-"Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený." = "The ring is the day's strain from 0 to 21. Yellow below 10, orange below 14, red above.";
 "%@ zátěže tohoto tréninku: %@" = "%1$@ of this session's load: %2$@";
+"Na zbytek týdne zbývá %@ kcal" = "%@ kcal left for the rest of the week";
+"Kroužek je námaha dne 0 až 21. Žlutý do 10, oranžový do 14, výš červený." = "The ring is the day's strain from 0 to 21. Yellow below 10, orange below 14, red above.";
+"Potřeba spánku je tvůj cíl podle věku, nebo vlastní, k němu dnešní trénink, dospání dluhu a nízká HRV a odečtený šlofík. Večerka je čas vstávání minus doba v posteli, která tolik spánku dá. Je to odhad, ne měření." = "Sleep need is your goal for your age, or your own, plus today's training, paying back sleep debt and a low HRV, minus a nap. Bedtime is your wake time minus the time in bed that gives that much sleep. It is an estimate, not a measurement.";

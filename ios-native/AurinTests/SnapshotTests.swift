@@ -717,6 +717,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Fmt.duration(75), "1 h 15")
         XCTAssertEqual(Fmt.duration(125), "2 h 05")
         XCTAssertEqual(Fmt.duration(120), "2 h")
+        XCTAssertEqual(Fmt.duration(42), "42 min")
         XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
@@ -1212,7 +1213,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
         XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
-        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "tri", "gym"], "the app's order of sports")
+        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "gym", "tri"], "the app's order Ride, Run, Swim, Gym; bricks after them (604)")
         XCTAssertEqual(LibrarySport.single.map(\.id), ["ride", "run", "swim", "gym"], "one workout: no bricks")
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)

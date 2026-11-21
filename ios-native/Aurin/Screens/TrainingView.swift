@@ -231,7 +231,7 @@ struct TrainingContent: View {
             }
         }
         .padding(.top, top - 12)
-        let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
+        let hidden = isToday ? upcoming.filter { $0.date == training.date } : []
         // Until the day's calendar is here, a row's height stands in for its
         // list, so the cards below don't jump down when it comes (602).
         if model.calendar[shownDay] == nil && !model.demo {
@@ -878,7 +878,7 @@ struct FormWidget: View {
             DialTileTitle(title: "Forma")
             // Green inside the usual range, amber outside it, the range itself neutral (concept).
             let color = usual.map { $0.contains(form.form.rounded()) } == false ? Palette.amber : Palette.green
-            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color, bandTint: Palette.ink.opacity(0.3),
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color,
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
             }

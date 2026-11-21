@@ -114,11 +114,11 @@ struct TodayTrainingRow: View {
             }
             if item.sport == "strength" {
                 NavigationLink(value: AppRoute.trainingMode(AppModel.localDate(Date()))) {
-                    Label(L10n.tr("Začít"), systemImage: "play.fill")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .padding(.horizontal, 14).frame(height: 36)
-                        .background(Palette.green, in: Capsule())
-                        .tapTarget(width: 44, height: 36)
+                    // One Start on Today: ink, no icon, as in the Day card (TestFlight 604.1).
+                    Text("Začít").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).frame(height: 30)
+                        .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 30)
                 }
                 .buttonStyle(.plain)
                 // Start workout: it opens with 3, 2, 1 and starts (concept 08).
@@ -132,7 +132,8 @@ struct TodayTrainingRow: View {
 
     private var info: some View {
         HStack(spacing: 12) {
-            PlanStateIcon(symbol: SportIcon.symbol(item.sport ?? "other"), state: .upcoming, size: 36)
+            // The concept's sport disc, pale while ahead, as Week plan (never a dashed ring).
+            SportDisc(sport: item.sport ?? "other", type: item.session?.type, state: .ahead, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: meta).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 // An eased session's title is already the easy one (the original is eased.title).
