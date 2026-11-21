@@ -412,11 +412,18 @@ final class APIClient: @unchecked Sendable {
 
     /// Another day and the time of day: time "" leaves the day without one,
     /// "HH:MM" sets it, nil keeps it. The answer may carry a note about other changes.
-    func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
+    /// back: the undo of a missed session's move, to its past day.
+    func reschedulePlanned(eventId: String, to date: String, time: String?, back: Bool = false) async throws -> PlannedChange {
         var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
+        if back { body["back"] = .bool(true) }
         if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
         let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body, repeatable: true)
         return change
+    }
+
+    /// Today's missed workout: "Skip it" (skip true) and its undo (src/missed-workout.js).
+    func decideMissed(key: String, skip: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/planned/missed", method: "POST", body: ["key": JSONValue.string(key), "skip": .bool(skip)], repeatable: true)
     }
 
     func deletePlanned(eventId: String) async throws {
@@ -673,6 +680,13 @@ final class APIClient: @unchecked Sendable {
         if let name, !name.isEmpty { body["name"] = .string(name) }
         let _: JSONValue = try await send("/auth/app/apple", method: "POST", body: body)
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
+    }
+
+    /// Whether the server signs in by e-mail code at all (GET /auth/email); the test server sends no e-mail.
+    func emailLoginEnabled() async throws -> Bool {
+        struct Answer: Decodable { let enabled: Bool }
+        let answer: Answer = try await get("/auth/email")
+        return answer.enabled
     }
 
     /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).

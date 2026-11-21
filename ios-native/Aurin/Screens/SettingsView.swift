@@ -27,6 +27,7 @@ struct SettingsView: View {
             }
         }
         .tint(Palette.ink)
+        .environment(\.settingsTitles, true)
         .task {
             if store == nil {
                 let s = SettingsStore(api: model.api, demo: model.demo)
@@ -50,7 +51,6 @@ struct SettingsMenu: View {
     var signOut: () -> Void = {}
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var close
-    @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -98,20 +98,13 @@ struct SettingsMenu: View {
 
             SettingsGroup(title: "Data") {
                 NavigationLink { SourcesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.green, disc: true), title: "Zdroje dat")
-                        // A source to connect again: a dot on the icon's disc.
-                        .overlay(alignment: .topLeading) {
-                            if !store.problems.isEmpty {
-                                Circle().fill(Palette.rust).frame(width: 9, height: 9)
-                                    .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
-                                    .offset(x: 44, y: 9)
-                                    .accessibilityLabel("Připojit znovu")
-                            }
-                        }
+                    // Something to look at in a source: the dot on the icon's disc (602 point 62).
+                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.green, disc: true, alert: SourcesSettingsView.needsLook(store)), title: "Zdroje dat")
+                        .accessibilityValue(SourcesSettingsView.needsLook(store) ? L10n.tr("Potřebuje tvou pozornost") : "")
                 }
                 SettingsDivider()
-                NavigationLink { CalendarSettingsView(onChange: { calendarStatus = CalendarSettingsView.status }) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber, disc: true), title: "Kalendář", value: calendarStatus)
+                NavigationLink { CalendarSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber, disc: true), title: "Kalendář")
                 }
                 SettingsDivider()
                 NavigationLink { PrivacySettingsView() } label: {

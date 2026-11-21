@@ -67,3 +67,15 @@ test("a plan with a done set, or a day with its own plan, says why it stays", as
   await cancelGymPlan(env.DB, sunday);
   assert.equal((await move(env, friday, sunday)).status, 409);
 });
+
+test("the day's strength event moves with the gym plan, so nothing stays behind as missed", async () => {
+  const { storeLocalEvent } = await import("../src/local-workouts.js");
+  const { raw, env } = setup(), today = localToday(), friday = shiftDate(today, 1);
+  raw.sqlite.exec((await import("node:fs")).readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8"));
+  await saveGymPlan(env.DB, today, plan(today));
+  await storeLocalEvent(env.DB, { external_id: "health-strength-" + today, category: "WORKOUT", type: "WeightTraining", name: "Strength — Upper Body", start_date_local: today + "T00:00:00" });
+  assert.equal((await move(env, today, friday)).status, 200);
+  const rows = (await env.DB.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND data_type='planned-workout'").bind(1).all()).results;
+  assert.equal(rows.length, 1);
+  assert.equal(String(rows[0].start_time).slice(0, 10), friday);
+});

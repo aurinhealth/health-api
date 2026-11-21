@@ -134,17 +134,24 @@ extension GymDayParts {
     }
 }
 
-/// Dnešní trénink: the parts in order, each with its switch; a tap on a part
-/// changes it for the day (the cardio's machine and minutes, the warm-up's or
-/// stretching's kind and length). Upravit pořadí shows arrows that move a part up or down.
+/// WORKOUT on the planned gym detail (concept K04/017): the parts in order as
+/// rows without icons, what is inside and how long. A tap on the warm-up or the
+/// stretching unfolds its moves, on Exercises goes to the list below. Edit
+/// shows each part's switch for today, the arrows that move it and opens its
+/// change (the cardio's machine and minutes, the warm-up's or stretching's kind).
 struct GymPartsCard: View {
     let day: GymDay
     let date: String
+    /// Exercises: the cards under this one.
+    var onExercises: () -> Void = {}
     @Environment(AppModel.self) private var model
     @AppStorage(GymDayParts.storageKey) private var stored = ""
     @State private var editing: GymDayPart?
     @State private var choosing: GymDayPart?
-    @State private var reordering = false
+    @State private var changing = false
+    @State private var unfolded: Set<GymDayPart> = []
+    /// A move tapped: how it is done (photos, steps).
+    @State private var info: GymStretching.Item?
     @State private var options: [GymPreferences.CardioOption] = []
 
     private var parts: GymDayParts { GymDayParts.resolved(day, stored: stored, date: date) }
@@ -152,21 +159,25 @@ struct GymPartsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Dnešní trénink")
+                SectionLabel(text: "Části tréninku")
                 Spacer()
-                Button(reordering ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit pořadí")) { withAnimation(.snappy) { reordering.toggle() } }
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                Button(changing ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit")) { withAnimation(.snappy) { changing.toggle() } }
+                    .font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
                     .buttonStyle(.plain)
             }
-            Card(padding: 8) {
-                VStack(spacing: 0) {
-                    let shown = parts.visible(day)
-                    ForEach(Array(shown.enumerated()), id: \.element) { index, part in
-                        if index > 0 { Divider().overlay(Palette.hairline).padding(.leading, 48) }
-                        row(part, first: index == 0, last: index == shown.count - 1)
+            VStack(spacing: 0) {
+                // Off parts only while editing: two identical "Cardio, off" rows say nothing.
+                let shown = parts.visible(day).filter { changing || parts.isOn($0) }
+                ForEach(Array(shown.enumerated()), id: \.element) { index, part in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    row(part, first: index == 0, last: index == shown.count - 1)
+                    if !changing, unfolded.contains(part), let routine = parts.routine(part, day: day) {
+                        moves(routine)
                     }
                 }
             }
+            .padding(.horizontal, 16).padding(.vertical, 2)
+            .cardSurface(cornerRadius: 20)
         }
         .sheet(item: $editing) { part in
             GymCardioSheet(choice: parts.choice(part), options: options) { choice in update { $0.cardio[part.rawValue] = choice } }
@@ -174,6 +185,7 @@ struct GymPartsCard: View {
         .sheet(item: $choosing) { part in
             GymRoutineSheet(part: part, day: day, date: date)
         }
+        .sheet(item: $info) { item in StretchInfoSheet(item: item) }
         .task {
             guard !model.demo, options.isEmpty else { return }
             if let loaded = try? await model.api.gymPreferences().cardioOptions { options = loaded }
@@ -188,62 +200,88 @@ struct GymPartsCard: View {
 
     private func row(_ part: GymDayPart, first: Bool, last: Bool) -> some View {
         let on = parts.isOn(part)
+        let open = unfolded.contains(part)
         return HStack(spacing: 10) {
-            Button { open(part) } label: {
+            Button { tap(part) } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: symbol(part)).scaledFont(15, weight: .medium, cap: .denseCap).foregroundStyle(color(part))
-                        .frame(width: 34, height: 34)
-                        .background(color(part).opacity(0.14), in: Circle())
-                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(title(part)).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                        HStack(spacing: 3) {
-                            Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                            if part != .exercises && !reordering {
-                                Image(systemName: "chevron.right").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint)
-                                    .accessibilityHidden(true)
-                            }
-                        }
+                        Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
+                    if !changing || (part != .exercises && on) {
+                        Image(systemName: !changing && open ? "chevron.up" : "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+                            .accessibilityHidden(true)
+                    }
                 }
-                // Off stays readable: only the name and icon fade, the switch keeps its colours.
-                .opacity(on || reordering ? 1 : 0.7)
+                .opacity(on ? 1 : 0.55)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .disabled(part == .exercises || reordering || !on)
-            if reordering {
-                HStack(spacing: 8) {
+            .disabled(changing && (part == .exercises || !on))
+            if changing {
+                HStack(spacing: 6) {
                     arrow(part, up: true).disabled(first).opacity(first ? 0.3 : 1)
                     arrow(part, up: false).disabled(last).opacity(last ? 0.3 : 1)
                 }
-            } else if part != .exercises {
-                Toggle(isOn: Binding(get: { on }, set: { value in
-                    update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
-                })) { EmptyView() }
-                    .toggleStyle(AurinToggleStyle())
-                    .fixedSize()
-                    .accessibilityLabel(Text(title(part)))
+                if part != .exercises {
+                    // "Today only": Settings → Gym keeps the defaults.
+                    Toggle(isOn: Binding(get: { on }, set: { value in
+                        update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
+                    })) { EmptyView() }
+                        .toggleStyle(AurinToggleStyle())
+                        .fixedSize()
+                        .accessibilityLabel(Text(title(part)))
+                        .accessibilityHint(L10n.tr("Jen pro dnešek"))
+                }
             }
         }
-        .padding(.horizontal, 8)
-        .frame(minHeight: 56)
+        .frame(minHeight: 60)
         .accessibilityElement(children: .contain)
     }
 
-    /// A tap on a part: the cardio's machine and minutes, the warm-up's or stretching's kind and length.
-    private func open(_ part: GymDayPart) {
-        if part.isCardio { editing = part } else if part != .exercises { choosing = part }
+    /// The part's moves, unfolded under its row.
+    private func moves(_ routine: GymStretching) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(routine.items.enumerated()), id: \.offset) { _, item in
+                Button { info = item } label: {
+                    HStack {
+                        Text(verbatim: item.name).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 8)
+                        Text(verbatim: item.duration).font(Typo.caption).monospacedDigit().foregroundStyle(Palette.muted)
+                    }
+                    .frame(minHeight: 32)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.tr("Jak se cvik dělá"))
+            }
+        }
+        .padding(.bottom, 12)
+        .transition(.opacity)
+    }
+
+    /// Not editing: the warm-up's or stretching's moves unfold, Exercises scrolls
+    /// to the list. Editing: the part's change (machine and minutes, its kind).
+    private func tap(_ part: GymDayPart) {
+        if changing {
+            if part.isCardio { editing = part } else if part != .exercises { choosing = part }
+            return
+        }
+        if part == .exercises { onExercises(); return }
+        if part.isCardio { editing = part; return }
+        withAnimation(.snappy) { if unfolded.contains(part) { unfolded.remove(part) } else { unfolded.insert(part) } }
     }
 
     private func arrow(_ part: GymDayPart, up: Bool) -> some View {
         Button {
             withAnimation(.snappy) { update { $0.step(part, by: up ? -1 : 1, day: day) } }
         } label: {
-            Image(systemName: up ? "chevron.up" : "chevron.down").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
-                .frame(width: 34, height: 34)
+            Image(systemName: up ? "chevron.up" : "chevron.down").scaledFont(12, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
+                .frame(width: 30, height: 30)
                 .background(Palette.track, in: Circle())
+                .frame(width: 36, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(up ? LocalizedStringKey("Posunout výš") : LocalizedStringKey("Posunout níž")))
@@ -258,22 +296,20 @@ struct GymPartsCard: View {
         }
     }
 
+    /// "6 moves, 5 min", "7 exercises, 23 sets, 34 min", "Exercise bike, 10 min".
     private func subtitle(_ part: GymDayPart) -> String {
         switch part {
         case .exercises:
-            let count = day.exercises.count
-            let word = L10n.plural("%lld cviků", count)
-            return day.plannedMinutes.map { word + ", \($0) min" } ?? word
+            let words = [L10n.plural("%lld cviků", day.exercises.count), L10n.plural("%lld sérií", day.exercises.reduce(0) { $0 + $1.workCount })]
+            return (words + (day.plannedMinutes.map { ["\($0) min"] } ?? [])).joined(separator: ", ")
+        case .warmup, .stretching:
+            guard let routine = parts.routine(part, day: day) else { return parts.subtitle(part, day: day) }
+            let count = L10n.plural(part == .warmup ? "%lld pohybů" : "%lld protažení", routine.items.count)
+            return count + ", \(routine.minutes) min"
         default:
             return parts.subtitle(part, day: day)
         }
     }
-
-    private func symbol(_ part: GymDayPart) -> String {
-        part == .exercises ? "dumbbell.fill" : part.isCardio ? GymCardio.symbol(parts.choice(part).type) : part.kind.symbol
-    }
-
-    private func color(_ part: GymDayPart) -> Color { part == .exercises ? Palette.amberBar : part.kind.color }
 }
 
 /// Kardio: the machine (the active place's, and the jump rope) and the time:

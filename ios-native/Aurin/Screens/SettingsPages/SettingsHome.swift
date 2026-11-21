@@ -136,11 +136,21 @@ struct SettingsGoalsCard: View {
         Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
     }
 
+    /// The drinks goal as Cíle shows it: your own, the build-up's base, or
+    /// today's automatic target (602 point 64: hub and Cíle say the same).
+    static func waterGoal(_ store: SettingsStore, _ water: TodaySnapshot.Water?) -> Double? {
+        switch store.profile["waterMode"]?.string {
+        case "custom": return store.profile["waterGoal"]?.number
+        case "build": return water?.build?.baseMl ?? store.profile["waterStart"]?.number
+        default: return water?.target
+        }
+    }
+
     var cells: [Cell] {
         let today = model.today
         let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
         let kcal = today?.nutrition.target
-        let water = today?.nutrition.water.target
+        let water = Self.waterGoal(store, today?.nutrition.water)
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
         return [
             Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText), unit: "h", label: "Spánek"),
@@ -228,7 +238,7 @@ struct JournalSettingsView: View {
     @State private var tracking = false
 
     var body: some View {
-        SettingsPage(title: "Deník", hero: SettingsHero(systemImage: "book.closed.fill", color: Palette.green, text: "Tvůj deník a co v něm sleduješ.")) {
+        SettingsPage(title: "Deník", hero: SettingsHero(systemImage: "book.closed.fill", color: Palette.green, text: heroText)) {
             SettingsGroup {
                 SettingsToggle(title: "Sledovat deník", isOn: Binding(get: { enabled }, set: { on in
                     enabled = on
@@ -242,11 +252,9 @@ struct JournalSettingsView: View {
                         askMorning = on
                         Task { await save(["askMorning": .bool(on)]) }
                     }))
-                }
-                SettingsGroup {
+                    SettingsDivider()
                     Button { tracking = true } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.indigo), title: "Co sledovat",
-                                    value: tracked.map { String($0) }, chevron: false)
+                        SettingsRow(title: "Co sledovat", value: tracked.map { String($0) })
                     }
                     .buttonStyle(.plain)
                 }
@@ -257,6 +265,13 @@ struct JournalSettingsView: View {
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
         .task { await load() }
+    }
+
+    /// The state in one sentence: "Your journal is on, with 14 items to track."
+    private var heroText: String {
+        guard enabled else { return L10n.tr("Tvůj deník je vypnutý.") }
+        guard let tracked else { return L10n.tr("Tvůj deník je zapnutý.") }
+        return L10n.f("Tvůj deník je zapnutý, sleduješ v něm %@.", L10n.plural("%lld věcí", tracked))
     }
 
     private func load() async {
@@ -335,17 +350,11 @@ struct GymSettingsView: View {
     var body: some View {
         SettingsPage(title: "Posilovna", hero: SettingsHero(systemImage: "dumbbell.fill", color: Palette.rust, text: "Jak se staví a časují tvoje tréninky v posilovně.")) {
             GymPreferencesGroup()
-            SettingsGroup {
-                NavigationLink { GymExerciseTasteView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "hand.thumbsup", color: Palette.green), title: "Cviky", subtitle: "Které tě baví a které ne")
-                }
-            }
-            .buttonStyle(.plain)
             GymRestGroup()
             GymSignalsGroup()
             SettingsGroup {
                 NavigationLink { HeartRateSensorView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "sensor.tag.radiowaves.forward", color: Palette.rust), title: "Snímač tepu")
+                    SettingsRow(title: "Snímač tepu")
                 }
             }
             .buttonStyle(.plain)
@@ -361,26 +370,26 @@ struct FoodDrinkSettingsView: View {
         SettingsPage(title: "Výživa", hero: SettingsHero(systemImage: "fork.knife", color: Palette.amber, text: "Jídlo a pití nastavené tak, jak jíš.")) {
             SettingsGroup {
                 NavigationLink { DietSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "leaf", color: Palette.green), title: "Strava")
+                    SettingsRow(icon: SettingsIcon(systemImage: "leaf.fill", color: Palette.green, disc: true), title: "Strava")
                 }
                 SettingsDivider()
                 NavigationLink { MealSlotsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
+                    SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber, disc: true), title: "Jídla dne")
                 }
                 SettingsDivider()
                 NavigationLink { DrinkSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer", color: Palette.blue), title: "Oblíbené nápoje")
+                    SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer.fill", color: Palette.coffee, disc: true), title: "Oblíbené nápoje")
                 }
                 SettingsDivider()
                 NavigationLink { DrinkFigureSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "face.smiling", color: Palette.blue), title: "Postavička pití")
+                    SettingsRow(icon: SettingsIcon(systemImage: "face.smiling", color: Palette.blue, disc: true), title: "Postavička pití")
                 }
                 SettingsDivider()
                 NavigationLink {
                     OptionListPage(title: "Region potravin", selection: $foodRegion, options: FoodRegion.options,
                                    footer: "Potraviny z tohoto regionu se ve vyhledávání ukážou první. Automaticky se řídí regionem iPhonu.")
                 } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.green), title: "Region potravin",
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.indigo, disc: true), title: "Region potravin",
                                 value: foodRegion == FoodRegion.automatic ? "Automaticky" : FoodRegion.title(foodRegion))
                 }
             }

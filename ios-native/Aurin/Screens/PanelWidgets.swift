@@ -55,9 +55,10 @@ enum WidgetPanel: String {
             // weight) are on Health.
             return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
-            // Redesign H: the five values as one monitor, the night and the body as one card each.
-            return [.init(kind: .journal, size: .medium), .init(kind: .healthMonitor, size: .medium),
-                    .init(kind: .night, size: .medium), .init(kind: .body, size: .medium)]
+            // Redesign H: the five values as one monitor, the night and the body
+            // as one card each, the journal last (concept 1 and 20).
+            return [.init(kind: .healthMonitor, size: .medium), .init(kind: .night, size: .medium),
+                    .init(kind: .body, size: .medium), .init(kind: .journal, size: .medium)]
         case .training:
             // Redesign T: the Overview of the concept; the week, its workouts and the
             // zones stay in the gallery to add back.
@@ -259,9 +260,10 @@ enum WidgetLayoutStore {
             seen.insert(kind)
             out.append(PlacedWidget(kind: kind, size: size))
         }
-        // Deník came to Zdraví after the layouts were saved: on top, until removed.
+        // Deník came to Zdraví after the layouts were saved: last, as in the
+        // concept, until removed.
         if panel == .health, !seen.contains(.journal), !UserDefaults.standard.bool(forKey: journalRemovedKey) {
-            out.insert(PlacedWidget(kind: .journal, size: .medium), at: 0)
+            out.append(PlacedWidget(kind: .journal, size: .medium))
         }
         if panel == .health, !UserDefaults.standard.bool(forKey: healthRedesignKey) { out = redesigned(out) }
         return out
@@ -287,6 +289,8 @@ enum WidgetLayoutStore {
             seen.insert(kind)
             out.append(kind == item.kind ? item : PlacedWidget(kind: kind, size: .medium))
         }
+        // The journal goes last until the athlete arranges Zdraví (concept 1 and 20).
+        if let i = out.firstIndex(where: { $0.kind == .journal }) { out.append(out.remove(at: i)) }
         return out
     }
 
@@ -556,7 +560,7 @@ struct PanelWidget: View {
                 HRVWidget(hrv: value, restingHR: data.restingHR?.value, size: item.size)
             }
         case .vo2max:
-            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size) }
+            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size, bands: model.health?.vo2max?.compared) }
         case .respiration:
             if let value = data.health?.respiration { RespirationWidget(respiration: value, size: item.size) }
         case .skinTemp:
@@ -645,7 +649,7 @@ struct PanelWidget: View {
         case .healthMonitor:
             if let h = data.health { HealthMonitorCard(health: h).allowsHitTesting(linked) }
         case .night:
-            if let h = data.health { SleepNightCard(sleep: h.sleep).allowsHitTesting(linked) }
+            if let h = data.health { SleepNightCard(sleep: h.sleep, date: h.date).allowsHitTesting(linked) }
         case .body:
             if let h = data.health { BodyCard(health: h).allowsHitTesting(linked) }
         case .cycle:

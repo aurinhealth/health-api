@@ -17,6 +17,7 @@ import { writeIntervalsZones } from "./intervals-zones.js";
 import { writeWahooZones, writeWahooZonesLater } from "./wahoo.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
+import { shiftDate } from "./dashboard-shared.js";
 import { thresholdCheckState, TEST_IDS, manualTestResult } from "./threshold-check-state.js";
 
 // What sets the power zones in watts: only a change of these (or "save
@@ -33,7 +34,8 @@ export async function handleTrainingEditsApi(request,env,ctx,url,session,interna
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{
       const body=await request.json().catch(()=>({}));
-      if(url.pathname.endsWith('/move')&&String(body.date||'')<localToday())return Response.json({status:'error',message:L('Trénink jde přesunout jen na dnešek nebo pozdější den.', 'A workout can only be moved to today or a later day.')},{status:400});
+      // The undo of a missed session's move (back:true) puts it back on its day of the last week.
+      if(url.pathname.endsWith('/move')&&String(body.date||'')<(body.back===true?shiftDate(localToday(),-7):localToday()))return Response.json({status:'error',message:L('Trénink jde přesunout jen na dnešek nebo pozdější den.', 'A workout can only be moved to today or a later day.')},{status:400});
       if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}

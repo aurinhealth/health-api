@@ -106,13 +106,20 @@ struct ProPage: View {
         VStack(alignment: .leading, spacing: 0) {
             Text(verbatim: state.unlocked ? "Aurin Pro" : "Aurin Free").font(Typo.heading(28)).foregroundStyle(Night.ink)
             Text(verbatim: cardLine).font(.subheadline).foregroundStyle(Night.muted).padding(.top, 2).padding(.bottom, 10)
-            ForEach(ProContents.free, id: \.self) { row($0, sub: false) }
+            ForEach(ProContents.free, id: \.self) { row(freeLine($0)) }
             Text(verbatim: L10n.tr(state.unlocked ? "TAKÉ V CENĚ" : "S AURIN PRO"))
-                .scaledFont(11, weight: .semibold, cap: .denseCap).tracking(0.7).foregroundStyle(Night.lilac)
+                .scaledFont(11, weight: .semibold, cap: .denseCap).tracking(0.7).foregroundStyle(Night.faint)
                 .padding(.top, 12).padding(.bottom, 2)
+            // A group with items: its name in bold without a mark, the items under it at the same level.
             ForEach(ProContents.pro) { group in
-                row(group.title, sub: false, pro: true)
-                ForEach(group.items, id: \.self) { row($0, sub: true, pro: true) }
+                if group.items.isEmpty {
+                    row(group.title, pro: true)
+                } else {
+                    Text(verbatim: L10n.tr(group.title)).font(.body.weight(.semibold)).foregroundStyle(Night.ink)
+                        .padding(.top, 6).padding(.bottom, 1)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(group.items, id: \.self) { row($0, pro: true) }
+                }
             }
         }
         .padding(.horizontal, 18).padding(.top, 18).padding(.bottom, 12)
@@ -120,24 +127,28 @@ struct ProPage: View {
         .background(Night.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
+    /// With everything unlocked, the photo logs are no longer a free try.
+    private func freeLine(_ title: String) -> String {
+        state.unlocked && title == "Zápis jídla, čárový kód a 5 fotek jídla s AI měsíčně" ? "Zápis jídla, čárový kód a štítek" : title
+    }
+
     private var cardLine: String {
         if !state.unlocked { return L10n.tr("Zatím nemáš Pro.") }
         return L10n.tr(state.pilot && !state.hasPro ? "Během pilotu je všechno zdarma." : "Všechno je odemčené.")
     }
 
-    private func row(_ title: String, sub: Bool, pro: Bool = false) -> some View {
+    private func row(_ title: String, pro: Bool = false) -> some View {
         let locked = pro && !state.unlocked
         return HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: locked ? "sparkle" : "checkmark")
-                .scaledFont(sub ? 11 : 13, weight: .bold)
+                .scaledFont(13, weight: .bold)
                 .foregroundStyle(locked ? Night.lilac : Night.mint)
                 .frame(width: 18)
             Text(verbatim: L10n.tr(title))
-                .font(sub ? .subheadline : .body)
-                .foregroundStyle(sub ? Night.muted : Night.ink)
+                .font(.body)
+                .foregroundStyle(Night.ink)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.leading, sub ? 30 : 0)
         .padding(.vertical, 5)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.tr(title) + (locked ? ", " + L10n.tr("v Aurin Pro") : ""))
@@ -241,8 +252,8 @@ struct PaymentDots: View {
 
     var body: some View {
         let total = max(1, payments.total), number = min(max(1, payments.number), total)
-        let first = calendar.date(byAdding: .month, value: -total, to: payments.ends) ?? payments.ends
-        let last = calendar.date(byAdding: .month, value: -1, to: payments.ends) ?? payments.ends
+        let first = Self.firstMonth(payments, calendar: calendar)
+        let last = calendar.date(byAdding: .month, value: total - 1, to: first) ?? payments.ends
         VStack(alignment: .leading, spacing: 14) {
             Text(verbatim: L10n.f("Platba %lld z %lld", number, total)).font(Typo.heading(24)).foregroundStyle(Night.ink)
             HStack(spacing: 0) {
@@ -274,9 +285,53 @@ struct PaymentDots: View {
         .accessibilityLabel(L10n.f("Platba %lld z %lld", number, total) + (payments.next.map { ", " + L10n.f("Další platba %@", PaywallView.dayMonth($0)) } ?? ""))
     }
 
+    /// The month of payment 1, counted back from the next payment, so the axis
+    /// and the pointer come from the same transaction: the commitment's end can
+    /// still be the last cycle's after a renewal (seen 20 Nov 2026: "Nov 2025 …
+    /// Oct 2026" with payment 1 and the next one on Nov 21). Without a next
+    /// payment (the last one), from the end of the 12 months.
+    static func firstMonth(_ payments: ProStore.Payments, calendar: Calendar = .current) -> Date {
+        let total = max(1, payments.total), number = min(max(1, payments.number), total)
+        if let next = payments.next, let first = calendar.date(byAdding: .month, value: -number, to: next) { return first }
+        return calendar.date(byAdding: .month, value: -total, to: payments.ends) ?? payments.ends
+    }
+
     /// "Nov 2026" / "lis 2026".
     static func month(_ date: Date) -> String {
         date.formatted(.dateTime.month(.abbreviated).year().locale(L10n.locale))
+    }
+}
+
+/// Settings → the Aurin Pro row, under its title: the 12 payments as dots
+/// (this month's larger), "Měsíc 4 z 12" and when the 12 months renew.
+struct ProHubTimeline: View {
+    let payments: ProStore.Payments
+    var calendar: Calendar = .current
+
+    var body: some View {
+        let total = max(1, payments.total), number = min(max(1, payments.number), total)
+        let renews = calendar.date(byAdding: .month, value: total, to: PaymentDots.firstMonth(payments, calendar: calendar)) ?? payments.ends
+        let renewal = L10n.f("Obnoví se %@", DateFormatters.make("yMMMd", locale: L10n.locale, template: true).string(from: renews))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 0) {
+                ForEach(1...total, id: \.self) { i in
+                    if i > 1 {
+                        Rectangle().fill(i <= number ? Palette.proGold : Palette.hairline).frame(height: 2)
+                    }
+                    Circle().fill(i <= number ? Palette.proGold : Palette.faint)
+                        .frame(width: i == number ? 14 : 6, height: i == number ? 14 : 6)
+                        .overlay { if i == number { Circle().stroke(Palette.proGold.opacity(0.3), lineWidth: 4) } }
+                }
+            }
+            .frame(height: 18)
+            HStack {
+                Text(verbatim: L10n.f("Měsíc %lld z %lld", number, total)).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(verbatim: renewal).font(.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.f("Měsíc %lld z %lld", number, total) + ", " + renewal)
     }
 }
 

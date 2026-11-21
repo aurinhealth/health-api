@@ -1,36 +1,28 @@
 import XCTest
 @testable import Aurin
 
-/// "+" (redesign N): today's saved "+" carries over to the nine spots.
+/// "+" (redesign N): the nine spots, saved or the concept's default card.
 final class PlusMenuTests: XCTestCase {
     func testNothingSavedGivesPetrsDefaultCard() {
-        let card = PlusItem.card(stored: "", legacy: nil, favorites: "water,coffee,tea")
+        let card = PlusItem.card(stored: "")
         XCTAssertEqual(PlusItem.withCoach(card), ["photo", "search", "barcode", "start", "coach", "log", "water", "journal", "weight"])
     }
 
-    func testOldPlusCarriesOverRenamedWithItsDrinks() {
-        // Today's default "+" saved by its pencil: renamed ids, the drink group as the favourites, eight at most.
-        let card = PlusItem.card(stored: "", legacy: "start,log,pick,library,photo,search,drink", favorites: "water,coffee,tea")
-        XCTAssertEqual(card, ["start", "log", "aotd", "library", "photo", "search", "water", "coffee"])
-        XCTAssertEqual(PlusItem.withCoach(card).count, 9)
-        XCTAssertEqual(PlusItem.withCoach(card)[4], "coach")
-    }
-
-    func testOldCoachUnknownAndTwiceAreDropped() {
-        let card = PlusItem.card(stored: "", legacy: "coach,scan,gymBuilder,nothing,scan,weight", favorites: "")
-        XCTAssertEqual(card, ["barcode", "build", "weight"])
-        // Fewer than four actions: the coach comes last.
-        XCTAssertEqual(PlusItem.withCoach(card), ["barcode", "build", "weight", "coach"])
+    func testOldPlusDoesNotCarryOver() {
+        // The pre-redesign "+" (plusMenu.items) is ignored: everyone starts from the concept's card.
+        UserDefaults.standard.set("start,log,pick,library,photo,search,drink", forKey: "plusMenu.items")
+        defer { UserDefaults.standard.removeObject(forKey: "plusMenu.items") }
+        XCTAssertEqual(PlusItem.card(stored: ""), PlusItem.defaults)
     }
 
     /// Every action removed and saved: the card stays empty, the defaults don't come back.
     func testEmptySavedCardStaysEmpty() {
-        XCTAssertEqual(PlusItem.card(stored: "-", legacy: "photo,search", favorites: "water"), [])
+        XCTAssertEqual(PlusItem.card(stored: "-"), [])
         XCTAssertEqual(PlusItem.withCoach([]), ["coach"])
     }
 
-    func testSavedCardWinsOverTheOldOne() {
-        XCTAssertEqual(PlusItem.card(stored: "water,period", legacy: "start", favorites: ""), ["water", "period"])
+    func testSavedCardIsKeptAndCleaned() {
+        XCTAssertEqual(PlusItem.card(stored: "water,period,coach,nothing,water"), ["water", "period"])
     }
 
     func testEveryActionHasAnIconAndOnlyDrinksPour() {

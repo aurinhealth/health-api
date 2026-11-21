@@ -32,6 +32,9 @@ struct TodaySnapshot: Decodable, Equatable {
     let trainingPlan: PlanLine?
     /// Cycle tracking, nil when off (Data/CycleModels.swift).
     var cycle: TodayCycle? = nil
+    /// A key workout of the calendar missed this week, with the day the coach
+    /// proposes for it (src/missed-workout.js); nil when none, on another day or from an older server.
+    var missedWorkout: MissedWorkout? = nil
     /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
     /// nil when nothing is left to recover from, on another day or from an older server.
     var recoveryTime: RecoveryTime? = nil
@@ -61,6 +64,33 @@ struct TodaySnapshot: Decodable, Equatable {
         let date: String
         /// "green", "yellow", "red"; nil without a readiness or after the day.
         let zone: String?
+    }
+
+    struct MissedWorkout: Decodable, Equatable {
+        /// One per session: "gym:<date>" for a day's gym plan, else the event's id.
+        let key: String
+        /// The calendar event, or nil for a gym plan saved only in the app (gymDate).
+        let eventId: String?
+        let gymDate: String?
+        let title: String
+        let sport: String
+        let date: String
+        /// The day proposed, nil when none fits this week (let it go).
+        let suggest: String?
+        /// The easy sessions on that day it takes the place of.
+        let replaces: [Replaced]
+        /// Today to Sunday, for "Other day…".
+        let days: [String]
+        /// The card's sentence, the green key one, the row's line and the button.
+        let text: String
+        let advice: String
+        let detail: String?
+        let move: String?
+
+        struct Replaced: Decodable, Equatable {
+            let eventId: String
+            let title: String
+        }
     }
 
     struct PlanLine: Decodable, Equatable {

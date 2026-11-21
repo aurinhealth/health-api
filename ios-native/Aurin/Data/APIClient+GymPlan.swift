@@ -23,9 +23,11 @@ extension APIClient {
     }
 
     /// To today or later; the server refuses (409) a plan with logged sets or a day that has its own plan.
-    func moveGym(from: String, to: String) async throws {
-        let _: JSONValue = try await send("/app/api/gym", method: "POST",
-                                          body: ["date": JSONValue.string(from), "action": .string("move"), "to": .string(to)])
+    /// back: the undo of a missed session's move, to its past day.
+    func moveGym(from: String, to: String, back: Bool = false) async throws {
+        var body: JSONObject = ["date": JSONValue.string(from), "action": .string("move"), "to": .string(to)]
+        if back { body["back"] = .bool(true) }
+        let _: JSONValue = try await send("/app/api/gym", method: "POST", body: body)
     }
 }
 

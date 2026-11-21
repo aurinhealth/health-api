@@ -149,7 +149,7 @@ struct MusclesWidget: View {
         Card {
             WidgetHeader(title: MuscleFatigue.title, color: Palette.amberBar)
             if showFigure {
-                MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 92).frame(maxWidth: .infinity)
+                MuscleFigurePair(colors: data.freshnessColors, spacing: 2).frame(height: 92).frame(maxWidth: .infinity)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: data.headline).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
                     Text(verbatim: data.headlineNote).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
@@ -168,23 +168,9 @@ struct MusclesWidget: View {
         .accessibilityElement(children: .combine)
     }
 
-    // M1.
+    // M1: the Training overview's Muscle freshness (concept a-hlavni).
     private func mediumFigure(_ data: MuscleFatigue) -> some View {
-        Card {
-            WidgetHeader(title: MuscleFatigue.title, color: Palette.amberBar)
-            HStack(spacing: 14) {
-                MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 110)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(data.tired.prefix(2)) { TiredLine(muscle: $0, today: data.date) }
-                    }
-                    .padding(.top, 4)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
+        MuscleFreshnessCard(data: data)
     }
 
     // M with the rings.
@@ -200,7 +186,7 @@ struct MusclesWidget: View {
         Card {
             WidgetHeader(title: MuscleFatigue.title, color: Palette.amberBar)
             HStack(spacing: 14) {
-                MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 132)
+                MuscleFigurePair(colors: data.freshnessColors, spacing: 2).frame(height: 132)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
@@ -227,28 +213,22 @@ struct MusclesWidget: View {
 
 // MARK: - Svaly
 
-/// Svaly: Odpočinek (the figure, what is tired and until when, what to train
-/// today) and Tento týden (how often each body part was trained this week).
+/// Svaly (concept trenink-koncept muscles()): the sentence of what is fresh
+/// when, the figure with every muscle in its colour, the three states as
+/// filters, the muscle load of the week and the eleven muscle groups with
+/// today and the next two days.
 struct MusclesView: View {
     @Environment(AppModel.self) private var model
     @State private var error: String?
-    @State private var tab = 0
+    @State private var filter: Freshness?
     @State private var explaining = false
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title, coach: .muscles(date: model.selectedDate)) {
+        DetailScreen(glow: Palette.Glow.training, title: L10n.tr("Svaly"), coach: .muscles(date: model.selectedDate),
+                     info: ChromeAction(systemImage: "info", label: "Jak se čerstvost odhaduje") { explaining = true }) {
             VStack(alignment: .leading, spacing: 0) {
-                // Kapitálky and the serif title, as the other details (Petr, 2026-10-24).
-                SectionLabel(text: "Svaly po tréninku").padding(.top, 24)
-                Text(verbatim: MuscleFatigue.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
-                Picker("Pohled", selection: $tab) {
-                    Text("Odpočinek").tag(0)
-                    Text("Tento týden").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.top, 14)
                 if let data = model.muscles {
-                    if tab == 0 { rest(data) } else { week(data) }
+                    content(data)
                 } else if let error {
                     VStack(spacing: 16) {
                         Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
@@ -262,7 +242,6 @@ struct MusclesView: View {
             }
         }
         .task { await load() }
-        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
         .refreshable { await load() }
         .sheet(isPresented: $explaining) { MuscleFatigueInfoSheet() }
     }
@@ -274,176 +253,104 @@ struct MusclesView: View {
         }
     }
 
-    // MARK: Odpočinek
-
-    @ViewBuilder private func rest(_ data: MuscleFatigue) -> some View {
-        let muscles = data.muscles ?? []
-        Card {
-            if let figure = MuscleModelStore.shared.figure {
-                MuscleFigureSpinner(figure: figure, data: data).frame(height: 410).frame(maxWidth: .infinity)
-            } else {
-                MuscleFigurePair(colors: data.figureColors, spacing: 8) { id in model.push(.muscle(id)) }
-                    .frame(height: 300).frame(maxWidth: .infinity)
+    @ViewBuilder private func content(_ data: MuscleFatigue) -> some View {
+        let headline = data.freshnessHeadline
+        let groups = data.freshnessGroups
+        VStack(spacing: 6) {
+            Text("Čerstvost svalů, odhad").font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: headline.title).font(Typo.heading(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let note = headline.note {
+                Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary)
             }
-            HStack(alignment: .top) {
-                stat(L10n.f("%@ z %@", String(muscles.count - data.tired.count), String(muscles.count)), L10n.tr("odpočatých"), Palette.ink)
-                if let names = readyOn(data, days: 1) { stat(L10n.tr("zítra"), names, Palette.amber) }
-                if let names = readyOn(data, days: 2) { stat(L10n.tr("pozítří"), names, Palette.rust) }
-            }
-            .padding(.top, 4)
         }
-        .padding(.top, 14)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 22)
 
-        if let title = data.readyTitle {
-            Card {
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onButton)
-                        .frame(width: 38, height: 38).background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        Card {
+            MuscleFigurePair(colors: data.freshnessColors, spacing: 22) { id in model.push(.muscle(id)) }
+                .frame(height: 300).frame(maxWidth: .infinity)
+            // In one row while the names fit, else one under another (large text, Czech).
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(Freshness.allCases, id: \.self) { state in pill(state, count: data.freshnessCount(state)).fixedSize() }
+                }
+                VStack(spacing: 6) {
+                    ForEach(Freshness.allCases, id: \.self) { state in pill(state, count: data.freshnessCount(state)) }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 6)
+        }
+        .padding(.top, 20)
+
+        if let load = model.training?.muscleLoad {
+            Button { model.push(.load(LoadKind.muscle.rawValue)) } label: {
+                HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: L10n.f("Dnes se hodí: %@", title.lowercased())).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        if let reason = reason(data) {
-                            Text(verbatim: reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                        }
+                        Text("Zátěž svalů za posledních 7 dní").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                        Text(verbatim: load.text ?? LoadWords.level(load.level) ?? LoadKind.muscle.missing)
+                            .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .padding(.horizontal, 18).padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardSurface()
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 12)
+        }
+
+        SectionLabel(text: "Svalové partie").padding(.top, 22)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Další tři dny").font(Typo.caption).foregroundStyle(Palette.muted)
+                Spacer()
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Text(verbatim: Fmt.weekdayShort(ISODay.shift(data.date, i)))
+                            .font(Typo.caption.weight(i == 0 ? .semibold : .regular))
+                            .foregroundStyle(i == 0 ? Palette.ink : Palette.muted)
+                            .frame(width: 34)
                     }
                 }
             }
-            .padding(.top, 12)
-        }
-
-        if !data.tired.isEmpty {
-            HStack {
-                SectionLabel(text: "Unavené svaly")
-                Spacer()
-                SmallInfoButton(label: "Co znamenají procenta") { explaining = true }
-            }
-            .padding(.top, 14)
-            Card {
-                ForEach(Array(data.tired.enumerated()), id: \.element.id) { index, muscle in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    Button { model.push(.muscle(muscle.id)) } label: { tiredRow(muscle, today: data.date) }
-                        .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, 10)
-        }
-        let rested = muscles.count - data.tired.count
-        if rested > 0, !data.tired.isEmpty {
-            Text(verbatim: L10n.f("Ostatní svaly (%@) jsou odpočaté.", String(rested))).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 12)
-        } else if data.tired.isEmpty {
-            Text("Všechny svaly jsou odpočaté").font(Typo.sentence(20)).foregroundStyle(Palette.ink).padding(.top, 18)
-        }
-        if let title = data.readyTitle {
-            PrimaryButton(title: L10n.f("Trénink: %@", title.lowercased()), systemImage: "sparkles") { model.push(.gymQuick) }
-                .padding(.top, 18)
-        }
-    }
-
-    private func stat(_ value: String, _ note: String, _ color: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(verbatim: value).font(Typo.sentence(20)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
-            Text(verbatim: note).font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center).lineLimit(2)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// The body parts rested in so many days, "hýždě a lýtka".
-    private func readyOn(_ data: MuscleFatigue, days: Int) -> String? {
-        let names = (data.groups ?? []).filter { g in
-            g.state != "rested" && g.readyDate.map { MuscleFatigue.days(from: data.date, to: $0) == days } == true
-        }.map { L10n.tr($0.label).lowercased() }
-        guard !names.isEmpty else { return nil }
-        return names.count == 1 ? names[0] : L10n.f("%@ a %@", names.dropLast().joined(separator: ", "), names.last!)
-    }
-
-    private func reason(_ data: MuscleFatigue) -> String? {
-        guard let r = data.recommend else { return nil }
-        guard let days = r.daysSince else { return L10n.f("%@ jsou tento měsíc ještě bez tréninku.", L10n.tr(r.label)) }
-        guard days >= 3 else { return nil }
-        return L10n.f("%@ naposledy před %@ dny.", L10n.tr(r.label), String(days))
-    }
-
-    private func tiredRow(_ muscle: MuscleFatigue.Muscle, today: String) -> some View {
-        let percent = max(5, Int(((1 - (muscle.level ?? 0)) * 100).rounded()))
-        return VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(muscle.label).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer(minLength: 8)
-                Text(verbatim: "\(percent)" + Fmt.percentSign).font(Typo.bodyStrong).foregroundStyle(muscle.textColor).monospacedDigit()
-            }
-            ProgressLine(fraction: Double(percent) / 100, color: muscle.color, height: 6)
-            HStack {
-                Text(verbatim: causes(muscle)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                Spacer(minLength: 8)
-                Text(verbatim: muscle.readyText(today: today)).font(Typo.caption).foregroundStyle(muscle.textColor).lineLimit(1)
+            .padding(.vertical, 10)
+            ForEach(groups.filter { filter == nil || $0.state(on: data.date) == filter }) { group in
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                Button { model.push(.muscle(group.open)) } label: { FreshnessRow(group: group, today: data.date) }
+                    .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr(muscle.label) + ", " + L10n.f("odpočaté na %@ %%", String(percent)) + ", " + muscle.readyText(today: today))
+        .padding(.horizontal, 18).padding(.vertical, 4)
+        .cardSurface()
+        .padding(.top, 10)
+        Text("Odhad z tvých zapsaných sérií, běhů a jízd a z toho, jak dávno byly. Slouží k plánování, není to měření svalu.")
+            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
     }
 
-    /// "Barbell back squat, Běh 14 km, včera".
-    private func causes(_ muscle: MuscleFatigue.Muscle) -> String {
-        let from = muscle.from ?? []
-        guard let first = from.first else { return "" }
-        return from.map { L10n.tr($0.title) }.joined(separator: ", ") + ", " + L10n.tr(first.day)
-    }
-
-    // MARK: Tento týden
-
-    @ViewBuilder private func week(_ data: MuscleFatigue) -> some View {
-        let groups = data.groups ?? []
-        Text(verbatim: L10n.f("Na růst svalu stačí každou partii procvičit %@× týdně.", "2"))
-            .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
-        Card {
-            ForEach(Array(groups.enumerated()), id: \.element.id) { index, group in
-                if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                weekRow(group)
+    /// "Fresh 6": shows only that state's groups; a second tap shows all.
+    /// 44 pt to tap, the chosen one filled in ink (concept .mfil).
+    private func pill(_ state: Freshness, count: Int) -> some View {
+        let on = filter == state
+        return Button { withAnimation(.snappy(duration: 0.2)) { filter = on ? nil : state } } label: {
+            HStack(spacing: 6) {
+                Circle().fill(state.color).frame(width: 8, height: 8)
+                Text(verbatim: state.title).font(Typo.caption).lineLimit(1)
+                Text(verbatim: String(count)).font(Typo.caption.weight(.semibold)).monospacedDigit()
             }
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .padding(.horizontal, 9).frame(minHeight: 44)
+            .frame(maxWidth: .infinity)
+            .background(on ? Palette.button : Palette.ink.opacity(0.05), in: Capsule())
+            .contentShape(Capsule())
         }
-        .padding(.top, 12)
-        let missing = groups.filter { ($0.thisWeek ?? 0) < ($0.target ?? 2) }
-        if !missing.isEmpty {
-            Card {
-                HStack(spacing: 12) {
-                    Image(systemName: "exclamationmark").scaledFont(15, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
-                        .frame(width: 38, height: 38).background(Palette.amberBar, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    Text(verbatim: L10n.f("Do konce týdne ještě: %@.", missing.map { L10n.tr($0.label).lowercased() }.joined(separator: ", ")))
-                        .font(Typo.small).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(.top, 12)
-        }
-    }
-
-    private func weekRow(_ group: MuscleFatigue.Group) -> some View {
-        let done = group.thisWeek ?? 0, target = group.target ?? 2
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: group.label).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Text(verbatim: last(group)).font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: 5) {
-                ForEach(0..<max(target, done), id: \.self) { i in
-                    Circle().fill(i < done ? Palette.green : Palette.ink.opacity(0.1)).frame(width: 12, height: 12)
-                }
-            }
-            Text(verbatim: L10n.f("%@× z %@", String(done), String(target))).font(Typo.caption.weight(.semibold))
-                .foregroundStyle(done >= target ? Palette.green : Palette.muted).monospacedDigit().frame(width: 52, alignment: .trailing)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func last(_ group: MuscleFatigue.Group) -> String {
-        guard let days = group.daysSince else { return L10n.tr("4 týdny bez tréninku") }
-        switch days {
-        case 0: return L10n.tr("naposledy dnes")
-        case 1: return L10n.tr("naposledy včera")
-        default: return L10n.f("naposledy před %@ dny", String(days))
-        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -527,6 +434,13 @@ struct MuscleDetailView: View {
     private var today: String { model.muscles?.date ?? AppModel.localDate(Date()) }
     /// The server names the muscle in the app's language; the sample day only in Czech.
     private var label: String? { (muscle?.label ?? detail?.label).map(L10n.tr) }
+    /// Fresh, recovering or tired, as on Svaly.
+    private var freshness: Freshness { Freshness.of(readyDate: muscle?.readyDate, rested: muscle?.state == "rested", on: today) }
+    /// "Fresh now", "Recovering, fresh tomorrow".
+    private var freshnessText: String {
+        guard freshness != .fresh, let ready = muscle?.readyDate else { return L10n.tr("Čerstvé teď") }
+        return freshness.title + ", " + L10n.f("Čerstvé %@", Fmt.relativeDay(ready, today: today)).lowercased(with: Fmt.locale)
+    }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: label ?? MuscleFatigue.title) {
@@ -549,7 +463,6 @@ struct MuscleDetailView: View {
             }
         }
         .task { await load() }
-        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
     }
 
     private func load() async {
@@ -558,36 +471,18 @@ struct MuscleDetailView: View {
         do { detail = try await model.api.muscleDetail(id: id) } catch { self.error = error.localizedDescription }
     }
 
-    @ViewBuilder private var header: some View {
-        if let figure = MuscleModelStore.shared.figure {
-            // The 3D figure close on this muscle, turned to the side it is on.
-            Muscle3DView(figure: figure, colors: [id: muscle?.figureColor ?? Palette.green], selected: id, focus: id, yaw: MuscleFigure3D.facing(id))
-                .frame(height: 220).frame(maxWidth: .infinity)
-                .background(Palette.card)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .accessibilityHidden(true)
-                .padding(.top, 20)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let muscle {
-                    Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
-                }
-            }
-            .padding(.top, 18)
-        } else {
-            flatHeader
-        }
-    }
+    /// The flat figure front and back with this muscle in its colour, as on
+    /// Svaly (the 3D close-up stayed blank on some phones, 602).
+    private var header: some View { flatHeader }
 
     private var flatHeader: some View {
         HStack(spacing: 14) {
-            MuscleFigurePair(colors: [id: muscle?.figureColor ?? Palette.green], selected: id, spacing: 2).frame(height: 104)
+            MuscleFigurePair(colors: [id: freshness.color], selected: id, spacing: 2).frame(height: 104)
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: label ?? "").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                if let muscle {
-                    Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
+                if muscle != nil {
+                    Text(verbatim: freshnessText).font(Typo.small).foregroundStyle(freshness.textColor)
                 }
             }
         }
@@ -607,27 +502,36 @@ struct MuscleDetailView: View {
                     .font(Typo.heading(22)).foregroundStyle(percent > 0 ? Palette.green : percent < 0 ? Palette.amber : Palette.ink)
                 Text(verbatim: L10n.f("Odhad maxima: %@, z tvých sérií.", L10n.tr(s.exercise))).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
+                // The area starts at the scale's bottom, not at 0 kg, so it
+                // stays inside the card (build 602: it ran down past the card).
+                let lo = s.points.map(\.kg).min()! * 0.95, hi = max(s.points.map(\.kg).max()! * 1.05, lo + 1)
                 Chart(s.points) { p in
-                    AreaMark(x: .value("Týden", p.week), y: .value("kg", p.kg))
-                        .foregroundStyle(LinearGradient(colors: [Palette.green.opacity(0.25), Palette.green.opacity(0)], startPoint: .top, endPoint: .bottom))
+                    AreaMark(x: .value("Týden", p.week), yStart: .value("kg", lo), yEnd: .value("kg", p.kg))
+                        .foregroundStyle(Palette.green.opacity(0.12))
                     LineMark(x: .value("Týden", p.week), y: .value("kg", p.kg))
-                        .foregroundStyle(Palette.green).lineStyle(StrokeStyle(lineWidth: 2.5))
-                    PointMark(x: .value("Týden", p.week), y: .value("kg", p.kg))
-                        .foregroundStyle(Palette.green).symbolSize(p.id == s.points.last?.id ? 60 : 20)
-                        .annotation(position: .top, alignment: .trailing) {
-                            if p.id == s.points.last?.id {
-                                Text(verbatim: Units.weightText(p.kg, digits: 0)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
-                            }
-                        }
+                        .foregroundStyle(Palette.green).lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    if p.id == s.points.last?.id {
+                        PointMark(x: .value("Týden", p.week), y: .value("kg", p.kg))
+                            .foregroundStyle(Palette.green).symbolSize(50)
+                    }
                 }
-                .chartYScale(domain: (s.points.map(\.kg).min()! * 0.95)...(s.points.map(\.kg).max()! * 1.05))
-                .chartYAxis(.hidden)
+                .chartYScale(domain: lo...hi)
+                .chartYAxis {
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Palette.hairline)
+                        AxisValueLabel {
+                            Text(verbatim: Units.weightText(value.as(Double.self) ?? 0, digits: 0)).font(Typo.tiny).foregroundStyle(Palette.muted)
+                        }
+                    }
+                }
                 .chartXAxis {
                     AxisMarks(values: [s.points[0].week, s.points[s.points.count - 1].week]) { value in
                         AxisValueLabel { Text(verbatim: short(value.as(String.self) ?? "")).font(Typo.tiny).foregroundStyle(Palette.faint) }
                     }
                 }
+                .chartPlotStyle { $0.clipped() }
                 .frame(height: 130)
+                .padding(.top, 6)
             } else if let s = d.strength, let p = s.points.last {
                 Text(verbatim: Units.weightText(p.kg, digits: 0)).font(Typo.heading(22)).foregroundStyle(Palette.ink)
                 Text(verbatim: L10n.f("Odhad maxima: %@. Trend uvidíš po dalším týdnu.", L10n.tr(s.exercise))).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -678,7 +582,7 @@ struct MuscleDetailView: View {
         }
     }
 
-    private var weekdays: [String] { L10n.isEnglish ? ["M", "T", "W", "T", "F", "S", "S"] : ["P", "Ú", "S", "Č", "P", "S", "N"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     private func cell(_ date: String, trained: Set<String>) -> some View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -743,10 +647,9 @@ struct MuscleFatigueInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private let lines = [
-        "Procento říká, jak moc je sval už odpočatý. 100 % je plně připravený, 5 % je hned po tvrdém tréninku.",
-        "Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra.",
+        "Každá zapsaná série, běh a jízda přidá práci svalům, které zapojí. Čerstvost se odhaduje z toho, kolik práce sval dostal a jak dávno.",
         "Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení.",
-        "Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy.",
+        "Zelená je čerstvý sval, oranžová čerstvý zítra, červená později. Je to vodítko pro plánování, ne měření svalu.",
     ]
 
     var body: some View {
@@ -760,7 +663,7 @@ struct MuscleFatigueInfoSheet: View {
                 .padding(20)
             }
             .background(Palette.background)
-            .navigationTitle(L10n.tr("Únava svalů"))
+            .navigationTitle(L10n.tr("Jak se čerstvost odhaduje"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
         }

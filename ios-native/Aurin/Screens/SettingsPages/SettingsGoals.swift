@@ -105,7 +105,7 @@ struct GoalsSettingsView: View {
                 .buttonStyle(.plain)
                 SettingsDivider()
                 Button { planSettings = true } label: {
-                    SettingsRow(title: "Čas na trénink", value: freeTimeValue, chevron: false)
+                    SettingsRow(title: "Čas na tréninky", value: freeTimeValue)
                 }
                 .buttonStyle(.plain)
                 .disabled(model.demo)
@@ -186,10 +186,10 @@ struct GoalsSettingsView: View {
         return L10n.f("%@ do závodu.", L10n.plural("%lld týdnů", days / 7))
     }
 
-    /// "8 h 15 týdně", the week plan's own time, or "–" before it is set.
+    /// "23 h 30 min týdně", the week plan's own time, or "–" before it is set.
     private var freeTimeValue: String {
         guard let freeTime, freeTime.contains(where: { $0 >= 0 }) else { return "–" }
-        return WeekPlanSettingsText.total(freeTime)
+        return L10n.f("%@ týdně", Fmt.duration(freeTime.reduce(0) { $0 + max(0, $1) }))
     }
 
     /// "Auto, ≈ 4,5 h" from the last four weeks, or Vlastní.
@@ -216,14 +216,13 @@ struct GoalsSettingsView: View {
 
     /// "Auto, 3,2 l", "Vlastní, 2,0 l" or "Postupně, 2,25 l".
     private var waterValue: String {
-        let water = model.today?.nutrition.water
         let mode = store.profile["waterMode"]?.string ?? ""
         let word = mode == "custom" ? "Vlastní" : mode == "build" ? "Postupně" : "Auto"
-        let ml = mode == "build" ? water?.build?.baseMl ?? store.profile["waterStart"]?.number : mode == "custom" ? store.profile["waterGoal"]?.number : water?.target
+        let ml = SettingsGoalsCard.waterGoal(store, model.today?.nutrition.water)
         return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
-    /// "7:30 h", or "automaticky" while the goal follows age and the day.
+    /// "7:30 h", or "Auto" while the goal follows age and the day.
     private var sleepValue: String {
         store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" } ?? L10n.tr("Auto")
     }

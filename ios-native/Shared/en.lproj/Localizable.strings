@@ -86,7 +86,7 @@
 "Co máš doma" = "What you have at home";
 "Co piješ?" = "What are you drinking?";
 "Co procvičíš" = "What you'll work";
-"Co přidáme?" = "What are you adding?";
+"Co přidáme?" = "What are we adding?";
 "Co se stalo" = "What happened";
 "Co by ti v aplikaci pomohlo?" = "What would help you in the app?";
 "Co sníst před večerním tréninkem?" = "What should I eat before an evening workout?";
@@ -177,7 +177,7 @@
 "Hlavně" = "Primary";
 "Hledat" = "Search";
 "Hledat cvik nebo stroj" = "Search exercises or machines";
-"Hledat potravinu" = "Search foods";
+"Hledat potravinu" = "Search food";
 "Hledám %@…" = "Looking up %@…";
 "Hledám…" = "Searching…";
 "Hluboký" = "Deep";
@@ -2802,10 +2802,7 @@
 "Zpět do tréninku" = "Back to the workout";
 "Únava svalů" = "Muscle fatigue";
 "Co znamenají procenta" = "What the percentages mean";
-"Procento říká, jak moc je sval už odpočatý. 100 % je plně připravený, 5 % je hned po tvrdém tréninku." = "The percentage is how rested a muscle already is. 100 % is fully ready, 5 % is right after a hard workout.";
-"Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra." = "The lower the number, the longer the muscle still needs. A muscle at 5 % may be rested in 4 days, one at 30 % tomorrow.";
 "Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení." = "Large muscles (thighs, glutes, back) take up to 3 days after heavy lifts, the small muscles of the arms and shoulders about 2 days. Sets to failure make it longer.";
-"Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy." = "It comes from your gym sets of the last 7 days and from the runs, rides and walks that load your legs.";
 "rozjeté" = "started";
 "hotové" = "done";
 "Šlofík" = "Nap";
@@ -4429,7 +4426,6 @@
 "Zatím bez posilovny" = "No gym workouts yet";
 "Zatím bez tréninků" = "No workouts yet";
 "Žádný trénink za 4 týdny" = "No workouts in 4 weeks";
-"Šedé pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí." = "The grey band is your usual load. Days above it were harder, days below it easier.";
 "Za poslední 4 týdny tu není žádný trénink." = "There's no workout in the last 4 weeks.";
 "Co mi tohle říká?" = "What does this tell me?";
 "Mám tento týden přidat, nebo ubrat?" = "Should I do more or less this week?";
@@ -4486,9 +4482,7 @@
 "co tělo spálí v klidu" = "what your body uses at rest";
 "kroky a běžný den" = "steps and a normal day";
 "Tréninky se počítají ze %@ %% toho, co spálí. Klidový výdej se odhaduje z tvé váhy, výšky a věku." = "Workouts count at %@%% of what they burn. Resting energy is estimated from your weight, height and age.";
-"Kroužek je, kolik jsi ten den snědl z cíle. Červený je nad cílem, čárkovaný je den bez zapsaného jídla." = "The ring is what you ate out of that day's target. Red is over the target, a dashed ring is a day without food logged.";
 "Tento měsíc zatím bez zapsaného jídla." = "No food logged this month yet.";
-"Průměr %@ na zapsaný den." = "Average %@ on logged days.";
 "bez zapsaného jídla" = "no food logged";
 "Snězeno: %@" = "Eaten on %@";
 /* Week plan (redesign W) */
@@ -4812,7 +4806,103 @@
 "Tréninky pro tvoji posilovnu" = "Smart Gym Workouts";
 "Jídelníček" = "Food Log";
 "Adaptivní plány tréninku" = "Adaptive Training Plans";
+
+/* Training concept T/W: week strip, month sheet, muscle freshness */
+"Další týden" = "Next week";
+"Předchozí týden" = "Previous week";
+"mimo plán" = "outside plan";
+"%@ kcal k ověření" = "%@ kcal to check";
+"Tento měsíc zatím bez tréninku." = "No workouts yet this month.";
+"celkem %@." = "%@ in total.";
+"Barva je sport. Bledá je teprve v plánu, šedá nesplněná, tečka je den volna." = "The colour is the sport. Pale is still ahead, grey was missed, a dot is a rest day.";
+"Zelené pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí." = "The green band is your usual load. Days above it were harder, days below it easier.";
+"Čerstvé" = "Fresh";
+"Zotavuje se" = "Recovering";
+"Unavené" = "Tired";
+"Všechny svaly čerstvé" = "All muscles fresh";
+"Nohy čerstvé %@" = "Legs fresh %@";
+"Horní část těla čerstvá %@" = "Upper body is fresh %@";
+"Čerstvost svalů" = "Muscle freshness";
+"Čerstvé teď" = "Fresh now";
+"Čerstvé %@" = "Fresh %@";
+"Naposledy %@" = "Last trained %@";
+"Kyčle" = "Hips";
+"Jak se čerstvost odhaduje" = "How muscle freshness is estimated";
+"Čerstvost svalů, odhad" = "Muscle freshness, an estimate";
+"Zátěž svalů za posledních 7 dní" = "Muscle load, last 7 days";
+"Svalové partie" = "Muscle groups";
+"Další tři dny" = "Next three days";
+"Odhad z tvých zapsaných sérií, běhů a jízd a z toho, jak dávno byly. Slouží k plánování, není to měření svalu." = "Estimated from your logged sets, runs and rides and how long ago they were. It is a guide for planning, not a measurement of the muscle.";
+"Každá zapsaná série, běh a jízda přidá práci svalům, které zapojí. Čerstvost se odhaduje z toho, kolik práce sval dostal a jak dávno." = "Each logged set, run and ride adds work to the muscles it uses. Freshness is estimated from how much work a muscle got and how long ago.";
+"Zelená je čerstvý sval, oranžová čerstvý zítra, červená později. Je to vodítko pro plánování, ne měření svalu." = "Green is a fresh muscle, orange fresh tomorrow, red later. It is a guide for planning, not a measurement of the muscle.";
+"o %@ výš za 4 týdny" = "%@ higher in 4 weeks";
+"o %@ níž za 4 týdny" = "%@ lower in 4 weeks";
+"Stejně jako před 4 týdny" = "Same as 4 weeks ago";
+"Další trénink %@" = "Next workout %@";
+"VO2max, odhad" = "VO2max, estimate";
 "%@ nad cílem %@ až %@" = "%1$@ over target %2$@ to %3$@";
+
+/* Settings 602: Privacy */
+"Potřebuje tvou pozornost" = "Needs your attention";
+"Žádné reklamy ani prodejci dat. Sdílíme je jen se službami, které připojíš, s OpenAI po tvém souhlasu a s firmami, které pro nás Aurin provozují." = "No ads, no data brokers. Shared only with services you connect, with OpenAI once you say yes, and with the providers that run Aurin for us.";
+
+/* Settings 602: Account, Pro, Goals */
+"Přihlášení a zabezpečení" = "Sign-in and security";
+"Přihlašuješ se přes Face ID, nebo kódem poslaným na e-mail." = "You sign in with Face ID, or with a code sent to your email.";
+"Zápis jídla, čárový kód a štítek" = "Food log, barcode and label";
+"Měsíc %lld z %lld" = "Month %lld of %lld";
+"Čas na tréninky" = "Time to train";
+
+/* Settings 602: Sources, Calendar, Help */
+"žádná nová data od %@" = "no new data since %@";
+"Připojený je jeden zdroj" = "One source is connected";
+"Připojené jsou %d zdroje" = "%d sources are connected";
+"Připojeno je %d zdrojů" = "%d sources are connected";
+", jeden potřebuje tvou pozornost." = ", one needs your attention.";
+", některé potřebují tvou pozornost." = ", some need your attention.";
+"Aurin se řídí vzhledem tvého iPhonu." = "Aurin follows the look of your iPhone.";
+"Aurin zůstává světlý ve dne i v noci." = "Aurin stays light, day and night.";
+"Aurin zůstává tmavý ve dne i v noci." = "Aurin stays dark, day and night.";
+"Aurin plánuje tvůj trénink podle tvého kalendáře." = "Aurin plans your training around your calendar.";
+"Aurin tvůj kalendář nečte." = "Aurin does not read your calendar.";
+"Napiš nám, co se pokazilo, a podíváme se na to." = "Tell us what went wrong and we will look at it.";
+"Opravy potravin, které lidé poslali." = "Food corrections that people sent.";
+"Kolik dnes stojí AI." = "What AI costs today.";
+"Lidé z webu, kteří čekají na TestFlight." = "People from the website waiting for TestFlight.";
+
+/* Settings 602: Sleep, Gym, Nutrition, Journal */
+"Tvůj deník je vypnutý." = "Your journal is off.";
+"Tvůj deník je zapnutý." = "Your journal is on.";
+"Tvůj deník je zapnutý, sleduješ v něm %@." = "Your journal is on, with %@ to track.";
+"Táhni měsícem nebo sluncem a změníš noc." = "Drag the moon or the sun to change the night.";
+"Táhni měsícem nebo sluncem a změníš noc. Malá tečka je tvoje obvyklá večerka." = "Drag the moon or the sun to change the night. The small dot is your usual bedtime.";
+"spánku" = "of sleep";
+"obvykle %@" = "usually %@";
+"budík, o víkendu" = "alarm, at the weekend";
+"budík, každý pracovní den" = "alarm, every work day";
+"Aspoň %@" = "At least %@";
+"Dnešní trénink přidává" = "Today's training adds";
+"Dnešní trénink ubírá" = "Today's training takes off";
+"Nízká HRV přidává" = "Low HRV adds";
+"Nízká HRV ubírá" = "Low HRV takes off";
+"Dospání přidává" = "Catching up adds";
+"Dospání ubírá" = "Catching up takes off";
+"Dnešní šlofík přidává" = "Today's nap adds";
+"Dnešní šlofík ubírá" = "Today's nap takes off";
+"Dolní hranice přidává" = "Lower limit adds";
+"Horní hranice ubírá" = "Upper limit takes off";
+"Průměr %@ za celé dny." = "Average %@ on full days.";
+"Dny se splněným cílem bílkovin: %lld z %lld." = "Protein target met on %lld of %lld days.";
+"Dny se splněným cílem sacharidů: %lld z %lld." = "Carbs target met on %lld of %lld days.";
+"Dny se splněným cílem tuků: %lld z %lld." = "Fat target met on %lld of %lld days.";
+"Kroužek je, kolik jsi ten den snědl z cíle." = "The ring is what you ate out of that day's target.";
+"Červený je nad cílem." = "Red is over the target.";
+"Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla." = "A thin ring is a day without a target, a dashed ring is a day without food logged.";
+"Celé" = "Whole";
+"Zlomek" = "Fraction";
+"žádný zlomek" = "no fraction";
+"Na testovacím serveru Aurin do Apple Health nezapisuje." = "On the test server Aurin doesn't write to Apple Health.";
+"Na testovacím serveru Aurin do Apple Health nezapisuje, aby nepřepsal hodnoty z ostrého serveru." = "On the test server Aurin doesn't write to Apple Health, so it can't replace the live server's values.";
 "Trénuj s koučem, který tě zná" = "Train with a coach that knows you";
 "Ukázka rozhovoru s koučem" = "Sample coach conversation";
 "Zobrazit všechny tarify" = "See all plans";
@@ -4895,3 +4985,34 @@
 "pocitově %@" = "feels like %@";
 "Nejlépe venku %@." = "Best outdoors %@.";
 "Přidej widget" = "Add a widget";
+"Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
+
+/* Planned gym detail as concept K04/017 (GymSessionView, GymDayParts, GymWhyCard) */
+"Části tréninku" = "Workout";
+"Jen pro dnešek" = "Today only";
+"asi %@ námahy" = "about %@ strain";
+"P" = "R";
+"Jak se cvik dělá" = "How it's done";
+"Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink." = "The coach picks muscle groups that are fresh, keeps the weekly load inside your target and follows the phase of your plan. You can swap any exercise or change the whole workout.";
+"Tep v klidu" = "Resting HR";
+"Kůže tepleji" = "Skin warmer";
+"Kůže chladněji" = "Skin cooler";
+"průměr %@ za týden" = "avg %@ this week";
+"Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is last night. Green arc is your usual 30-day range.";
+"roku mladší" = "years younger";
+"roku starší" = "years older";
+"Čára se začne kreslit po dvou týdnech odhadů." = "The line starts after two weeks of estimates.";
+"První odhad je z %@." = "First estimate %@.";
+"Zapsat dnešek" = "Log today";
+"asi minuta" = "about a minute";
+"asi %@ min" = "about %@ min";
+"nižší připravenost další ráno" = "lower readiness the next morning";
+"vyšší připravenost další ráno" = "higher readiness the next morning";
+"o %@ roku níž" = "%@ years lower";
+"o %@ roku výš" = "%@ years higher";
+"Jiný den…" = "Other day…";
+"Vynechat trénink" = "Skip it";
+"Přesunuto na dnešek" = "Moved to today";
+"%@ odebrán" = "%@ removed";
+"Vynecháno" = "Skipped";
+"Aurin Age" = "Aurin Age";

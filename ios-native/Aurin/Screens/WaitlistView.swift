@@ -11,7 +11,7 @@ struct WaitlistView: View {
     @State private var working: Int?
 
     var body: some View {
-        SettingsPage(title: "Zájemci") {
+        SettingsPage(title: "Zájemci", hero: SettingsHero(systemImage: "person.2", color: Palette.green, text: "Lidé z webu, kteří čekají na TestFlight.")) {
             if let list {
                 SettingsGroup {
                     SettingsRow(title: "Testeři", value: list.testers.map { "\($0) / \(list.limit)" } ?? "–", chevron: false)

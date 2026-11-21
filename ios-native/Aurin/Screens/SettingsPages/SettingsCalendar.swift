@@ -14,6 +14,8 @@ struct CalendarSettingsView: View {
     @State private var busy = false
     @State private var error: String?
 
+    private static let footer = "Počítají se i kalendáře Google, Outlook a iCloud přidané v iPhonu (Nastavení iOS → Aplikace → Kalendář → Účty). Aurin posílá jen volné minuty na každý den, nikdy tvoje události."
+
     /// "Vypnuto", "Čte" or "Čte a zapisuje" for the row that opens this page.
     static var status: String {
         let calendar = CalendarTime.shared
@@ -21,13 +23,16 @@ struct CalendarSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Kalendář", hero: SettingsHero(systemImage: "calendar", color: Palette.amber, text: "Tvůj kalendář a volný čas na trénink.")) {
-            SettingsGroup(footer: "Počítají se i kalendáře Google, Outlook a iCloud přidané v iPhonu (Nastavení iOS → Aplikace → Kalendář → Účty). Aurin posílá jen volné minuty na každý den, nikdy tvoje události.") {
+        SettingsPage(title: "Kalendář", hero: SettingsHero(systemImage: "calendar", color: Palette.amber,
+                                                          text: read ? "Aurin plánuje tvůj trénink podle tvého kalendáře." : "Aurin tvůj kalendář nečte.")) {
+            SettingsGroup(footer: read ? nil : Self.footer) {
                 SettingsToggle(title: "Číst kalendář", subtitle: "Plán týdne a Aktivita dne se vejdou do volného času",
                                isOn: Binding(get: { read }, set: { on in Task { await setRead(on) } }),
                                disabled: busy || model.demo)
-                if read {
-                    SettingsDivider()
+            }
+            // Writing the workouts, once the calendar is read (the concept's second card).
+            if read {
+                SettingsGroup(footer: Self.footer) {
                     SettingsToggle(title: "Zapisovat tréninky", subtitle: "Tréninky, které v Aurinu naplánuješ, se objeví v kalendáři",
                                    isOn: Binding(get: { write }, set: { setWrite($0) }), disabled: busy)
                     if write {

@@ -36,26 +36,37 @@ struct IntegrationOfferCard: View {
     }
 }
 
-/// One connected service: its icon, name and state (no subtitle, only a problem shows).
+/// One connected service on the Connected card: its logo, name and how fresh
+/// its data is, or what is wrong in amber (DATA-4). Data sources puts Opravit
+/// and the chevron after it.
 struct IntegrationCard: View {
     let provider: ConnectionsResponse.Provider
     /// When its newest data reached Aurin (Today audit 20: every source, not
     /// only Apple Health), and whether this morning's night came from it.
     var dataAt: Date? = nil
     var lastNight = false
-    var working = false
     var now = Date()
 
-    /// Older than 12 hours: the dot turns orange.
+    /// Older than 12 hours: the source needs a look.
     static func stale(_ date: Date, now: Date) -> Bool { now.timeIntervalSince(date) > 12 * 3600 }
+
+    /// What is wrong, in a few words: the access, or no new data for 12 hours.
+    static func issue(_ provider: ConnectionsResponse.Provider, dataAt: Date?, now: Date) -> String? {
+        if let problem = provider.problemText { return problem }
+        guard let dataAt, stale(dataAt, now: now) else { return nil }
+        let since = Calendar.current.isDate(dataAt, inSameDayAs: now) ? ClockText.format(dataAt)
+            : DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, template: L10n.isEnglish).string(from: dataAt)
+        return L10n.f("žádná nová data od %@", since)
+    }
 
     var body: some View {
         HStack(spacing: 14) {
-            IntegrationIcon(id: provider.id, size: 50)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                if let problem = provider.problemText {
-                    Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
+            IntegrationIcon(id: provider.id, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
+                if let issue = Self.issue(provider, dataAt: dataAt, now: now) {
+                    Text(verbatim: issue).font(Typo.caption).foregroundStyle(Palette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if let dataAt {
                     Text(verbatim: DataAgePill.age(last: dataAt, now: now) + (lastNight ? ", " + L10n.tr("poslední noc dorazila") : ""))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
@@ -63,22 +74,7 @@ struct IntegrationCard: View {
                 }
             }
             Spacer(minLength: 8)
-            if working || provider.needsAttention {
-                Text(working ? L10n.tr("připojuji…") : L10n.tr("Opravit"))
-                    .font(Typo.caption.weight(.semibold))
-                    .foregroundStyle(provider.needsAttention ? Palette.onButton : Palette.ink)
-                    .padding(.horizontal, 12).frame(height: 30)
-                    .background(provider.needsAttention ? Palette.rust : Palette.ink.opacity(0.07), in: Capsule())
-            } else {
-                // Connected: green, orange once its data is over 12 hours old.
-                let old = dataAt.map { Self.stale($0, now: now) } ?? false
-                Circle().fill(old ? Palette.amber : Palette.green).frame(width: 10, height: 10)
-                    .accessibilityLabel(old ? L10n.tr("propojeno, data starší než 12 h") : L10n.tr("propojeno"))
-            }
         }
-        .padding(14)
-        .cardSurface(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
     }
 }

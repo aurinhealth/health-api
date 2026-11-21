@@ -1,7 +1,7 @@
 import XCTest
 @testable import Aurin
 
-/// The gym plan's note as short reasons (GymWhyCard.swift): the generator's sentences
+/// The gym plan's note as short reasons (GymWhyCard.swift, the sheet behind the coach sentence): the generator's sentences
 /// get a title, the time plan and the sentence about other sports go, the rest stays.
 final class GymWhyTests: XCTestCase {
     func testEnglishNoteBecomesThreeReasons() {
@@ -21,6 +21,26 @@ final class GymWhyTests: XCTestCase {
         XCTAssertTrue(reasons[2].detail.hasSuffix("čt 29. 10"))
         XCTAssertNil(reasons[3].title)
         XCTAssertEqual(reasons[3].detail, "Ráno byl běh, dřep jen středně")
+    }
+
+    /// The coach sentence under the title: the legs first, then what is new, the goal left for the sheet.
+    func testCoachLineIsTwoSentencesLegsFirst() {
+        let note = "Goal from your sport – strength and muscle: heavier main lifts. As you asked, I'm sparing your legs and focusing on the upper body; exercises are chosen by freshness. The exercises differ from the plan for Thu 29 Oct."
+        let line = GymWhy.coachLine(GymWhy.reasons(note))
+        XCTAssertEqual(line?.hasPrefix("As you asked, I'm sparing your legs and focusing on the upper body. "), true)
+        XCTAssertEqual(line?.hasSuffix("Thu 29 Oct."), true)
+        XCTAssertNil(GymWhy.coachLine([]))
+    }
+
+    /// The generator's "Up next" sentence (src/strength-generator.js, split rationale) leads;
+    /// the long explanation of the split stays in the sheet.
+    func testCoachLinePutsUpNextFirstAndLeavesTheSplitOut() {
+        let note = L10n.isEnglish
+            ? "With 3 gym sessions a week you train a split (pushing / pulling / legs), so the muscle groups don't overlap and have time to recover. Up next: legs, last trained 5 days ago. The exercises rotate by what you did last."
+            : "Při 3 posilovnách týdně trénuješ ve splitu (tlaky / tahy / nohy), aby se partie nepřekrývaly a stihly zregenerovat. Na řadě: nohy, naposledy před 5 dny. Cviky se střídají podle toho, co jsi dělal naposledy."
+        let line = GymWhy.coachLine(GymWhy.reasons(note)) ?? ""
+        XCTAssertTrue(line.hasPrefix(L10n.isEnglish ? "Up next: legs" : "Na řadě: nohy"), line)
+        XCTAssertFalse(line.lowercased().contains("split"), line)
     }
 
     func testNoNoteNoReasons() {

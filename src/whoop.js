@@ -21,6 +21,7 @@ import { againAfterOutage } from './outage-retry.js';
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
+import { isStaging } from './staging.js';
 import { resolveSources } from './source-priority.js';
 import { readReadOff, readAllowed } from './source-reading.js';
 
@@ -229,6 +230,8 @@ export async function syncWhoop(env, { days = 3, fetchImpl = fetch, now = Date.n
 export async function revokeWhoop(env, fetchImpl = fetch) {
   const tokens = readWhoopTokens(env);
   if (!tokens) return 'none';
+  // The test server shares the live server's OAuth client: a revoke there would end the live connection too.
+  if (isStaging(env)) return 'skipped';
   // An expired access token is refreshed first, else the revoke is refused.
   const token = await whoopAccessToken(env, { fetchImpl }).catch(() => tokens.access_token);
   const response = await fetchImpl(API + '/v2/user/access', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(10000) }).catch(() => null);
