@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync,readdirSync,statSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WATCH_ON_SITE,WORDMARKS,PRO_PRICE,PRO_CONTENTS} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME,WEARABLES,WATCH_ON_SITE,WORDMARKS,PRO_CONTENTS} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -373,11 +373,11 @@ test('the price block follows the app’s Free and Pro list and says the US pric
   const html=await overviewPage(new Request('https://aurin.health/')).text();
   const price=html.match(/<section id="cena"[\s\S]*?<\/section>/)[0];
   for(const x of [...free,...pro.flatMap(([t,i])=>[t,...i])])assert.ok(price.includes(x),x);
-  assert.ok(price.includes(PRO_PRICE.month)&&price.includes(PRO_PRICE.year));
+  assert.ok(price.includes('First week free')&&!/[$€]\s?\d|\d\s?(Kč|kr)\b/.test(price),'no prices on the site, the App Store shows them');
   assert.equal((price.match(/Free while we test/g)||[]).length,1);
   assert.match(price,/href="#join"/);
   const faq=html.match(/<summary>What does it cost\?<\/summary><p>([^<]*)/)[1];
-  assert.ok(faq.includes(PRO_PRICE.month+' a month')&&faq.includes(PRO_PRICE.year+' a year'),'the FAQ says the same prices');
+  assert.ok(faq.includes('free week')&&!/[$€]\s?\d/.test(faq),'the FAQ names no price');
   assert.ok(html.indexOf('id="cena"')>html.indexOf('id="soukromi"')&&html.indexOf('id="cena"')<html.indexOf('id="faq"'));
 });
 
