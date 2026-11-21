@@ -1653,5 +1653,25 @@
 			<string>%lld protažení</string>
 		</dict>
 	</dict>
+	<key>%lld bricků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld bricky</string>
+			<key>many</key>
+			<string>%lld bricků</string>
+			<key>one</key>
+			<string>%lld brick</string>
+			<key>other</key>
+			<string>%lld bricků</string>
+		</dict>
+	</dict>
 </dict>
 </plist>
