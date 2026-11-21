@@ -542,6 +542,10 @@ struct LoadIntensity: View {
                     Capsule().fill(Palette.track)
                     Rectangle().fill(Palette.ink.opacity(0.3)).frame(width: max(x(part.high) - x(part.low), 2)).offset(x: x(part.low))
                     Capsule().fill(Palette.ink).frame(width: max(x(part.load), 3))
+                    // The range's edges stay visible over the fill (concept K04/020).
+                    ForEach([part.low, part.high], id: \.self) { edge in
+                        Rectangle().fill(Palette.muted).frame(width: 1.5).offset(x: x(edge) - 0.75)
+                    }
                 }
             }
             .frame(height: 6)

@@ -301,7 +301,8 @@ extension TrainingSnapshot.VO2max {
     /// the tile and the page say one number (redesign 602 point 105).
     init(aurin h: HealthVO2max) {
         let series = h.series.sorted { $0.date < $1.date }
-        let before = series.last(where: { $0.date <= ISODay.shift(h.date, -28) })
+        // "In 4 weeks" only from an estimate 4 to 5 weeks old, never one from months ago.
+        let before = series.last(where: { $0.date <= ISODay.shift(h.date, -28) && $0.date >= ISODay.shift(h.date, -35) })
         self.init(value: h.value, source: "aurin", change: before.map { ((h.value - $0.value) * 10).rounded() / 10 },
                   series: series.filter { $0.date > ISODay.shift(h.date, -182) })
     }

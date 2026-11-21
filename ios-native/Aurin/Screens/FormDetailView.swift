@@ -87,16 +87,17 @@ struct FormDetailContent: View {
     }
 
     private func dial(_ form: TrainingSnapshot.Form, usual: ClosedRange<Double>) -> some View {
-        let state = Self.state(form.form, usual)
+        let state = Self.state(form.form, usual), color = Self.color(state)
         return VStack(spacing: 8) {
             Text(verbatim: L10n.tr("Forma dnes, odhad")).font(Typo.body).foregroundStyle(Palette.muted)
-            RangeDial(value: form.form, scale: -30...30, band: usual, size: 190, lineWidth: 12, tint: state.color, bandTint: Palette.ink.opacity(0.3),
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 190, lineWidth: 12, tint: color, bandTint: Palette.ink.opacity(0.3),
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + state.words) {
                 Text(verbatim: Fmt.signed(form.form)).font(Typo.number(56)).foregroundStyle(state == .within ? Palette.green : Palette.ink)
             }
-            Text(verbatim: state.words).font(Typo.bodyStrong).foregroundStyle(state.color)
-            Text(verbatim: form.text).font(Typo.small).foregroundStyle(Palette.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: state.words).font(Typo.bodyStrong).foregroundStyle(color)
+            if let week = Self.weekSentence(form) {
+                Text(verbatim: week).font(Typo.small).foregroundStyle(Palette.ink)
+            }
             Text(verbatim: L10n.f("Obvyklé rozmezí %@ až %@", Fmt.signed(usual.lowerBound), Fmt.signed(usual.upperBound)))
                 .font(Typo.caption).foregroundStyle(Palette.muted)
         }
@@ -129,6 +130,23 @@ struct FormDetailContent: View {
         return .off(above: v > usual.upperBound)
     }
 
+    /// Fresher than usual is no warning: green like the range; more tired
+    /// amber, far below red (critic, the colour must match the words).
+    static func color(_ state: MetricState) -> Color {
+        switch state {
+        case .within, .off(above: true), .far(above: true): return Palette.Status.good
+        case .off: return Palette.Status.warn
+        case .far: return Palette.Status.bad
+        }
+    }
+
+    /// "Fresher than a week ago" from the form 7 days back (concept K04/022).
+    static func weekSentence(_ form: TrainingSnapshot.Form) -> String? {
+        guard let last = form.series.last, let then = form.series.last(where: { $0.date <= ISODay.shift(last.date, -7) }) else { return nil }
+        let diff = (form.form - (then.fitness - then.fatigue)).rounded()
+        return L10n.tr(diff >= 2 ? "Čerstvější než před týdnem" : diff <= -2 ? "Unavenější než před týdnem" : "Zhruba jako před týdnem")
+    }
+
     static func points(_ form: TrainingSnapshot.Form, metric: String, usual: ClosedRange<Double>) -> [ChartPoint] {
         form.series.map { p in
             switch metric {
@@ -136,7 +154,8 @@ struct FormDetailContent: View {
             case "fatigue": return ChartPoint(date: p.date, value: p.fatigue.rounded())
             default:
                 let v = (p.fitness - p.fatigue).rounded(), s = state(v, usual)
-                let key: String? = switch s { case .within: "within"; case .off: "slightly"; case .far: "far" }
+                // Only below the range is a warning dot; fresher keeps the line's colour.
+                let key: String? = switch s { case .within, .off(above: true), .far(above: true): "within"; case .off: "slightly"; case .far: "far" }
                 return ChartPoint(date: p.date, value: v, low: usual.lowerBound, high: usual.upperBound, state: key, side: v > usual.upperBound ? "above" : "below")
             }
         }

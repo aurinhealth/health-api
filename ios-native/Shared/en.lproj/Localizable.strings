@@ -5050,3 +5050,7 @@
 "méně než %@" = "under %@";
 "víc než %@" = "over %@";
 "odhad Aurinu" = "Aurin estimate";
+"Čerstvější než před týdnem" = "Fresher than a week ago";
+"Unavenější než před týdnem" = "More tired than a week ago";
+"Zhruba jako před týdnem" = "About the same as a week ago";
+"body zátěže" = "load";

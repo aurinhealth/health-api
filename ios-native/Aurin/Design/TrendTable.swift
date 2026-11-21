@@ -83,7 +83,8 @@ enum TrendMath {
     /// rounds to nothing, else "0.3 higher" or "1 lower", with its arrow.
     static func change(now: Double, then: Double, digits: Int) -> (symbol: String?, text: String) {
         let scale = pow(10, Double(digits))
-        let diff = ((now - then) * scale).rounded() / scale
+        // From the values as the table shows them, so 49.2 against 48.4 reads 0.8.
+        let diff = ((now * scale).rounded() - (then * scale).rounded()) / scale
         if diff == 0 { return (nil, L10n.tr("beze změny")) }
         let size = Fmt.decimal(abs(diff), digits: digits)
         return diff > 0 ? ("arrow.up", L10n.f("o %@ výš", size)) : ("arrow.down", L10n.f("o %@ níž", size))

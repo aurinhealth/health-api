@@ -64,11 +64,13 @@ final class TrainingLoadTests: XCTestCase {
     }
 
     func testVO2maxTileUsesAurinsEstimate() {
-        let h = HealthVO2max(value: 51.3, date: "2026-11-12", series: [Point(date: "2026-10-01", value: 50.1), Point(date: "2026-11-12", value: 51.3)])
+        let h = HealthVO2max(value: 51.3, date: "2026-11-12", series: [Point(date: "2026-10-10", value: 50.1), Point(date: "2026-11-12", value: 51.3)])
         let tile = TrainingSnapshot.VO2max(aurin: h)
         XCTAssertEqual(tile.value, 51.3)
         XCTAssertEqual(tile.change, 1.2)
         XCTAssertEqual(tile.source, "aurin")
+        // An estimate from months ago is no "in 4 weeks".
+        XCTAssertNil(TrainingSnapshot.VO2max(aurin: HealthVO2max(value: 51.3, date: "2026-11-12", series: [Point(date: "2026-06-01", value: 45)])).change)
     }
 
     func testPlanCardFromRace() throws {
