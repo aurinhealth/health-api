@@ -1071,10 +1071,9 @@ final class SnapshotTests: XCTestCase {
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
         XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
-        XCTAssertEqual(MonthGrid.value(calendar.days.first, .count), "2")
-        XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")
-        XCTAssertEqual(MonthGrid.value(calendar.days.first, .kcal), Fmt.int(1250))
-        XCTAssertEqual(MonthGrid.value(calendar.days.last, .count), " ")
+        // The concept's figures: gym is the lifting figure, not a dumbbell.
+        XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
+        XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)
         // A response without the plan's state still decodes: done counts as outside the plan.
         XCTAssertNil(calendar.days.first?.plan)
         XCTAssertEqual(PlanState(day: calendar.days.first), .offPlan)
@@ -1119,14 +1118,15 @@ final class SnapshotTests: XCTestCase {
         try render("training-calendar", glow: Palette.Glow.training, height: 700) {
             NavigationStack {
                 VStack(spacing: 16) {
-                    MonthGrid(month: ISODay.monthStart(today), today: today, selected: today, mode: .time, days: DemoData.calendarByDate, pick: { _ in }, move: { _ in })
+                    TrainingCalendarCard(today: today, onPick: { _ in })
                     CalendarDayList(date: ISODay.shift(today, -2), today: today, day: DemoData.calendarByDate[ISODay.shift(today, -2)])
                 }
-                .padding(.vertical, 14)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 24))
                 .padding(24)
             }
             .environment(model)
+        }
+        try render("training-month", glow: Palette.Glow.training, height: 844) {
+            TrainingMonthSheet(today: today, selected: today) { _ in }.environment(model)
         }
         try render("calendar-days", glow: Palette.Glow.training, height: 140) {
             HStack(spacing: 0) {
@@ -1214,6 +1214,14 @@ final class SnapshotTests: XCTestCase {
 
     func testMuscleScreens() throws {
         let model = AppModel(demo: true)
+        // Fresh once the ready day comes, recovering the day before, tired earlier.
+        XCTAssertEqual(Freshness.of(readyDate: "2026-11-21", rested: false, on: "2026-11-20"), .recovering)
+        XCTAssertEqual(Freshness.of(readyDate: "2026-11-22", rested: false, on: "2026-11-20"), .tired)
+        XCTAssertEqual(Freshness.of(readyDate: "2026-11-20", rested: false, on: "2026-11-20"), .fresh)
+        XCTAssertEqual(Freshness.of(readyDate: "2026-11-25", rested: true, on: "2026-11-20"), .fresh)
+        let muscles = DemoData.muscles
+        XCTAssertEqual(muscles.freshnessGroups.first.map { $0.state(on: muscles.date) }, .tired)
+        XCTAssertEqual(Freshness.allCases.map { muscles.freshnessCount($0) }.reduce(0, +), muscles.freshnessGroups.count)
         try render("muscles-widgets", glow: Palette.Glow.training, height: 1500) {
             VStack(spacing: 12) {
                 HStack(alignment: .top, spacing: 12) {

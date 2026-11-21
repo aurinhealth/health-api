@@ -240,6 +240,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   // what is planned (the planned sessions' TSS).
   let doneCount = 0, plannedCount = 0, doneTss = 0, plannedTss = 0;
   const sessions = [];
+  // Today's plans still open as the week's list shows them (a strength plan a
+  // session done today paired with is gone), for today's cards below.
+  let openToday = null;
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(start, i), training = d <= date ? withHeartRateLoad(byDate.get(d)?.training || {}, google, profile, d) : byDate.get(d)?.training || {};
     const { sessions: daySessionList, planned, completed, gymPlan, gymLogged, pTss, cTss } = daySessions(d, date, training, gym[d]);
@@ -250,6 +253,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     if (d <= date) { doneCount += completed.length + gymLogged; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
     sessions.push(...daySessionList);
+    if (d === date) openToday = new Set(daySessionList.filter(s => s.status === "planned" && s.eventId).map(s => s.eventId));
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d), daySessionList.filter(s => s.status === "done")) : null,
@@ -282,7 +286,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
       date: d,
       time: w ? clockOf(w.start) : null,
       minutes: w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
-      title: (w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
+      // A gym card is named by its gym plan: the calendar event can keep an
+      // older plan's name ("Strength — Push") after the plan changed (602 test).
+      title: ((gymCard && plan.name) || w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
       sport,
       tss: round(num(w?.tss)),
       strain: plannedStrain(num(w?.tss)),
@@ -305,7 +311,10 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     const appCopy = w => isStrength(w) && /^(planned:)?local-/.test(String(w?.id ?? ""));
     // A strength session done today (a cancelled gym plan too) does the day's
     // strength plan the pairing missed, as daySessions.
-    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && (gym[d]?.logged > 0 ? appCopy(w) : gymDone && isStrength(w))));
+    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && (gym[d]?.logged > 0 ? appCopy(w) : gymDone && isStrength(w))))
+      // Today: a strength plan the week's list counts as done (paired with the
+      // session done today) never stays as a card still to do.
+      .filter(w => !(d === date && openToday && isStrength(w) && /^planned:/.test(String(w.id || "")) && !openToday.has(String(w.id))));
     const plan = gymDone ? null : gym[d];
     const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
     const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));

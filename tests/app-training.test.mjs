@@ -310,7 +310,7 @@ test("A gym plan done in the app leaves today's sessions, with the app's own cop
   const copy = { id: "planned:local-7", name: "Strength — Lower Body", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 1.25 };
   const today = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [copy], completed: [], matched: [] } } } : d);
   const gym = { [DATE]: { name: "Lower Body", exercises: ["Pendulum squat"], sets: 12, logged: 0 } };
-  assert.equal(buildTraining({ ...input, days: today, gym }).todaySessions[0].title, "Strength — Lower Body", "ahead while nothing is logged");
+  assert.equal(buildTraining({ ...input, days: today, gym }).todaySessions[0].title, "Lower Body", "ahead while nothing is logged, named by the gym plan");
   const done = buildTraining({ ...input, days: today, gym: { [DATE]: { ...gym[DATE], logged: 13 } } });
   assert.deepEqual(done.todaySessions, []);
   assert.notEqual(done.next?.date, DATE);
@@ -341,4 +341,22 @@ test("a training plan's race leg tells the watch it is a race", () => {
   assert.equal(sessions.find(s => s.eventId === "planned:local-a1").race, true);
   assert.equal(sessions.find(s => s.eventId === "planned:local-a1").next, "planned:local-b2");
   assert.equal(sessions.find(s => s.eventId === "planned:local-c3").race, undefined);
+});
+
+test("today's gym card takes the gym plan's name, not an older calendar event's (602 test: Push card opened Legs)", () => {
+  const stale = { id: "planned:local-p1", name: "Strength — Push: chest, shoulders, triceps", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 1 };
+  const withEvent = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [stale], completed: [], matched: [] } } } : d);
+  const gym = { [DATE]: { name: "Legs", exercises: ["Barbell back squat"], sets: 12, logged: 0 } };
+  const out = buildTraining({ ...input, days: withEvent, gym });
+  assert.equal(out.todaySessions[0].title, "Legs");
+  assert.equal(out.todaySessions[0].sport, "strength");
+});
+
+test("a strength plan paired with today's gym session leaves today's cards, also when it is not the app's own copy", () => {
+  const plan = { id: "planned:991", name: "Strength — Push: chest, shoulders, triceps", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 1 };
+  const aurin = { id: "aurin-gym:" + DATE, source: "local", type: "WeightTraining", name: "Upper Body", durationHours: 1, start: DATE + "T11:00:00" };
+  const today = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [plan], completed: [aurin], matched: [] } } } : d);
+  const gym = { [DATE]: { name: "Upper Body", exercises: ["DB bench press"], sets: 12, logged: 12 } };
+  const out = buildTraining({ ...input, days: today, gym });
+  assert.deepEqual(out.todaySessions, []);
 });

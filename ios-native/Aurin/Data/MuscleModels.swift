@@ -81,7 +81,7 @@ struct MuscleFatigue: Decodable {
     }
 
     /// The screen's and the widget's name.
-    static var title: String { L10n.tr("Únava svalů") }
+    static var title: String { L10n.tr("Čerstvost svalů") }
 
     /// The muscles that are not rested yet, the most tired first.
     var tired: [Muscle] { (muscles ?? []).filter { $0.state != "rested" } }

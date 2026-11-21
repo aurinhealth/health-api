@@ -142,6 +142,9 @@ struct TrainingContent: View {
     @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var focusSheet = false
+    @State private var monthSheet = false
+    /// The day the strip goes to: the header's "Dnes" or a day from the month.
+    @State private var monthJump: DayJump?
     @Environment(\.wideLayout) private var wide
 
     var body: some View {
@@ -150,8 +153,10 @@ struct TrainingContent: View {
                 // The same top as Dnes (TabHeader); the calendar picks the day, "Dnes" brings it back.
                 // The coach first, then the Library (a book), the account last (redesign T, D-TRENINK-11).
                 // Log a workout is in "+" (Tools = A, Petr 2026-11-14).
+                // "November ⌄" opens the month (Strain or Workouts), as on Today.
                 TabHeader(date: day ?? training.date, followsDay: false,
                           showToday: shownDay == training.date ? nil : showToday,
+                          month: { monthSheet = true },
                           coach: actions.coach, settings: actions.settings) {
                     LibraryHeaderIcon()
                 }
@@ -187,9 +192,12 @@ struct TrainingContent: View {
         .padding(.horizontal, 24)
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
+        .sheet(isPresented: $monthSheet) {
+            TrainingMonthSheet(today: training.date, selected: shownDay) { pickDay($0); jumpTo($0) }
+        }
     }
 
-    /// The calendar and the plan under it (redesign T: no strain, no race card,
+    /// The week strip and the plan under it (redesign T: no strain, no race card,
     /// no tools row; Strain lives on Today, the race in the plan).
     @ViewBuilder private var week: some View {
         // Until the main sport and goal are set (FocusSheet.swift).
@@ -198,33 +206,57 @@ struct TrainingContent: View {
                 .padding(.top, 18)
         }
 
-        TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
-                             plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
-            .padding(.top, 18)
+        TrainingCalendarCard(today: training.date, onPick: pickDay, jump: monthJump)
+            .onChange(of: jumpDay) { _, jump in monthJump = jump }
+            .padding(.top, 14)
+            .padding(.horizontal, -8)
 
         PlanSummaryCard(training: training)
-            .padding(.top, 14)
+            .padding(.top, 12)
     }
 
-    /// "TODAY" with Week plan on the right, then today's workouts still to do
-    /// with Start workout. On another day the line that today holds the rest.
+    /// "TODAY" (or the chosen day) with Week plan on the right, the day's done
+    /// sessions as rows, today's workouts still to do as cards with Start
+    /// workout, then the coach (concept a-hlavni: one coach card, under the
+    /// workout, D-TRENINK-3). On another day the line that today holds the load.
     @ViewBuilder private func todayList(top: CGFloat) -> some View {
-        if shownDay == training.date {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Dnes")
-                Spacer(minLength: 8)
-                WeekPlanLink {
-                    Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
-                        .frame(minHeight: 44).contentShape(Rectangle())
-                }
+        let isToday = shownDay == training.date
+        HStack(alignment: .firstTextBaseline) {
+            SectionLabel(text: isToday ? L10n.tr("Dnes") : Fmt.weekdayDayMonth(shownDay))
+            Spacer(minLength: 8)
+            WeekPlanLink {
+                Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
-            .padding(.top, top - 12)
-            // The coach above the workout card (concept a-hlavni/000, D-TRENINK-3).
-            CoachTextCard(screen: "training").padding(.top, 6)
-            if !upcoming.isEmpty {
-                TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
-                    .padding(.top, 14)
+        }
+        .padding(.top, top - 12)
+        let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
+        // Until the day's calendar is here, a row's height stands in for its
+        // list, so the cards below don't jump down when it comes (602).
+        if model.calendar[shownDay] == nil && !model.demo {
+            Color.clear.frame(height: 72).padding(.top, 2).accessibilityHidden(true)
+        } else if !CalendarDayList.shown(model.calendar[shownDay]?.activities ?? [], hidePlanned: hidden).isEmpty || model.calendar[shownDay]?.merge != nil
+            || (!isToday || !upcoming.contains { $0.date == training.date }) {
+            CalendarDayList(date: shownDay, today: training.date, day: model.calendar[shownDay], hidePlanned: hidden)
+                .daySlide(date: shownDay)
+                .padding(.top, 2)
+        }
+        if isToday {
+            let todays = upcoming.filter { $0.date == training.date }
+            if !todays.isEmpty {
+                TodaySessions(sessions: todays, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                    .padding(.top, 12)
+            } else if let next = upcoming.first, next.date != training.date {
+                // Nothing left today: the next planned day under its own name,
+                // never under "Today" (602: tomorrow's Push read as today's).
+                SectionLabel(text: L10n.f("Další trénink %@", Fmt.relativeDay(next.date, today: training.date)))
+                    .padding(.top, 18)
+                TodaySessions(sessions: [next], today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
+                    .padding(.top, 10)
             }
+            // Without the coach's own word (no AI, the sample day) the plan's
+            // reason for the workout stands in, so the card is always there.
+            CoachTextCard(screen: "training", fallbackText: upcoming.first?.advice).padding(.top, 14)
         } else {
             // D-TRENINK-8: the load and the overview are today's, never shown under another day.
             Button(action: showToday) {
@@ -267,6 +299,9 @@ struct TrainingContent: View {
 
     private var shownDay: String { day ?? training.date }
 
+    /// A day picked in the month: the strip and the list follow it.
+    private func jumpTo(_ date: String) { monthJump = DayJump(date: date) }
+
     /// Today's workouts still to do, else the next planned one (older answers: only that).
     private var upcoming: [TrainingSnapshot.Session] {
         if let today = training.todaySessions, !today.isEmpty { return today }
@@ -280,7 +315,7 @@ struct LibraryHeaderIcon: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HeaderIcon(systemImage: "books.vertical", label: "Knihovna") { model.open(.library) }
+        HeaderIcon(systemImage: "figure.run.square.stack.fill", label: "Knihovna") { model.open(.library) }
             .accessibilityIdentifier("open.library")
     }
 }
@@ -444,13 +479,13 @@ struct TodaySessions: View {
 
     var body: some View {
         if sessions.count == 1, let session = sessions.first {
-            NextSession(session: session, today: today, route: route(session), strainNow: strainNow)
+            NextSession(session: session, today: today, route: route(session), planned: match(session), strainNow: strainNow)
         } else {
             VStack(spacing: 12) {
                 ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: 24) {
                         ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
-                            NextSession(session: session, today: today, route: route(session), strainNow: strainNow, fill: true)
+                            NextSession(session: session, today: today, route: route(session), planned: match(session), strainNow: strainNow, fill: true)
                                 .frame(maxHeight: .infinity)
                                 .containerRelativeFrame(.horizontal)
                                 .id(index)
@@ -487,13 +522,17 @@ struct TodaySessions: View {
         }
     }
 
-    /// The gym plan opens the gym day, a planned ride or run its detail.
-    private func route(_ s: TrainingSnapshot.Session) -> AppRoute? {
-        let match = week.first { w in
+    /// The week's entry of this session.
+    private func match(_ s: TrainingSnapshot.Session) -> WeekSession? {
+        week.first { w in
             if let id = s.eventId { return w.eventId == id }
             return s.sport == "strength" && w.kind == "gym" && w.date == s.date
         }
-        if let match { return WeekSessionsList.destination(match) }
+    }
+
+    /// The gym plan opens the gym day, a planned ride or run its detail.
+    private func route(_ s: TrainingSnapshot.Session) -> AppRoute? {
+        if let match = match(s) { return WeekSessionsList.destination(match) }
         return s.sport == "strength" ? .gym(s.date) : nil
     }
 }
@@ -559,6 +598,8 @@ struct NextSession: View {
     let today: String
     /// Where a tap on the card opens (Start workout keeps its own tap).
     var route: AppRoute? = nil
+    /// The week's entry of it, for the coach about it.
+    var planned: WeekSession? = nil
     /// Today's strain so far (TodaySessions).
     var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
@@ -570,6 +611,13 @@ struct NextSession: View {
     @State private var gymDay: GymDay?
     /// The floating copy above the tab bar stands in for this card's button.
     private var standIn: Bool { startSpot?.floating == session.date }
+    @State private var askLighter = false
+
+    /// Muscles not rested yet for it (the day's decision, src/day-decision.js).
+    private var lighter: String? {
+        model?.today?.day?.lighter(title: session.title, date: session.date)
+            ?? planned.flatMap { model?.today?.day?.lighter(title: $0.title, date: session.date) }
+    }
 
     private var sport: String { session.sport ?? "other" }
     private var isGym: Bool { sport == "strength" }
@@ -582,6 +630,22 @@ struct NextSession: View {
                 RouteLink(route: route) { info }
             } else {
                 info
+            }
+            // As on Today (TodayTrainingRow): with Aurin Pro the coach makes it
+            // lighter; without it the session's detail opens, where it can be changed.
+            if let lighter {
+                Group {
+                    if !ProStore.shared.entitled, let route {
+                        NavigationLink(value: route) { lighterLine(lighter) }.buttonStyle(.plain)
+                    } else {
+                        Button { askLighter = true } label: { lighterLine(lighter) }.buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, -8)
+                .accessibilityIdentifier("training.lighter")
+                .sheet(isPresented: $askLighter) {
+                    CoachEntry.chat(subject: planned.map(CoachSubject.planned), view: "training", date: nil)
+                }
             }
             if isGym && session.date == today {
                 NavigationLink(value: AppRoute.trainingMode(session.date)) {
@@ -615,6 +679,18 @@ struct NextSession: View {
         .task(id: [session.eventId ?? "", session.date, session.title]) { await loadParts() }
     }
 
+    private func lighterLine(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "figure.cooldown").scaledFont(11, weight: .semibold).foregroundStyle(Palette.amber)
+            Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
+        }
+        .frame(minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
     private var info: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 8) {
@@ -632,10 +708,7 @@ struct NextSession: View {
             }
             WorkoutNumberRow(cells: numbers)
             if !parts.isEmpty { WorkoutPartsRow(parts: parts) }
-            if let advice = session.advice {
-                Text(advice).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            // Why this workout is the coach's card under it (D-TRENINK-3), not a paragraph here.
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -794,6 +867,39 @@ struct FormWidget: View {
     var size: WidgetSize = .small
 
     var body: some View {
+        if size == .small { dial } else { full }
+    }
+
+    /// The small tile (Training concept a-hlavni): the form on a dial from
+    /// −30 to +30, the usual range as its band, the number in the middle.
+    private var dial: some View {
+        let usual = Self.usual(form.series)
+        return Card {
+            DialTileTitle(title: "Forma")
+            // Green inside the usual range, amber outside it, the range itself neutral (concept).
+            let color = usual.map { $0.contains(form.form.rounded()) } == false ? Palette.amber : Palette.green
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color, bandTint: Palette.ink.opacity(0.3),
+                      spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
+                Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, -18)
+            Text(verbatim: usual.map { L10n.f("obvykle %@ až %@", Fmt.signed($0.lowerBound), Fmt.signed($0.upperBound)) } ?? form.label)
+                .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+        }
+        .accessibilityHint("Otevře detail formy a kondice")
+    }
+
+    /// The middle 80 % of the last 90 days' form, rounded; nil with under two weeks.
+    static func usual(_ series: [TrainingSnapshot.FormPoint]) -> ClosedRange<Double>? {
+        let values = series.suffix(90).map { ($0.fitness - $0.fatigue).rounded() }.sorted()
+        guard values.count >= 14 else { return nil }
+        let lo = values[Int(Double(values.count - 1) * 0.1)], hi = values[Int(Double(values.count - 1) * 0.9)]
+        return lo...max(hi, lo + 1)
+    }
+
+    private var full: some View {
         Card {
             WidgetHeader(title: "Forma", color: Palette.amberBar)
             SizedWidgetBody(size: size) {
@@ -883,7 +989,46 @@ struct VO2maxWidget: View {
     var today: String? = nil
     var size: WidgetSize = .small
 
+    /// The FRIEND bands of the athlete's age and sex (Health's VO2max), for the small dial.
+    var bands: FriendBands? = nil
+
     var body: some View {
+        if size == .small { dial } else { full }
+    }
+
+    /// The small tile (Training concept a-hlavni): the estimate on a dial, the
+    /// band of its age group green, the number and its unit in the middle.
+    private var dial: some View {
+        let value = vo2.value
+        let edges = bands.map { [$0.p25 - ($0.p50 - $0.p25), $0.p25, $0.p50, $0.p75, $0.p90, $0.p90 + ($0.p90 - $0.p75)] }
+            ?? [value - 6, value - 3, value + 3, value + 6]
+        let i = max(0, min(edges.count - 2, (edges.firstIndex { $0 > value } ?? edges.count - 1) - 1))
+        return Card {
+            DialTileTitle(title: "VO2max, odhad")
+            // Without the age group's bands the dot would always sit in the middle and say nothing.
+            RangeDial(value: bands == nil ? nil : value, scale: edges[0]...edges[edges.count - 1], band: bands == nil ? nil : edges[i]...edges[i + 1],
+                      size: 118, lineWidth: 7, tint: Palette.green,
+                      spoken: "VO2max " + Fmt.decimal(value, digits: 1) + " ml/kg/min") {
+                VStack(spacing: 0) {
+                    Text(verbatim: Fmt.decimal(value, digits: 1)).font(Typo.number(30)).foregroundStyle(Palette.green)
+                    Text(verbatim: "ml/kg/min").font(Typo.tiny).foregroundStyle(Palette.muted)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, -18)
+            Group {
+                if let change = vo2.change, change != 0 {
+                    Text(L10n.f(change > 0 ? "o %@ výš za 4 týdny" : "o %@ níž za 4 týdny", Fmt.decimal(abs(change))))
+                } else {
+                    Text("Stejně jako před 4 týdny")
+                }
+            }
+            .font(Typo.caption).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    private var full: some View {
         Card {
             WidgetHeader(title: "VO2max", color: Palette.green, trailing: L10n.tr("odhad"))
             SizedWidgetBody(size: size) {
@@ -1187,5 +1332,20 @@ struct ZoneBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(parts.map { L10n.tr($0.0) + " " + Fmt.int($0.1 / total * 100) + Fmt.percentSign }.joined(separator: ", "))
+    }
+}
+
+/// A dial tile's name in small capitals with the chevron, as Load balance and
+/// Muscle freshness (Training concept a-hlavni).
+struct DialTileTitle: View {
+    let title: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(verbatim: L10n.tr(title).uppercased(with: Fmt.locale))
+                .font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted).lineLimit(1)
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+        }
     }
 }

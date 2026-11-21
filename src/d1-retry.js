@@ -4,13 +4,14 @@
 // route doesn't answer 500 (or the app show an empty card) for a blip.
 //
 // A read is tried again after any of these. A write only when D1 says the
-// request waited in the queue and never ran: after a lost connection or a
+// request waited in the queue and never ran (or was refused because the whole
+// account was too busy: "back off and try again later", 2026-11-19): after a lost connection or a
 // reset a write may already have happened, and running it twice could add a
 // row twice.
 import { beginWait, noteD1, viaBatcher } from "./request-timing.js";
 
-const TRANSIENT = /D1 DB is overloaded|Requests queued for too long|exceeded its CPU time limit and was reset|Network connection lost|storage caused object to be reset|transient issue|Cannot resolve D1 DB|internal error; reference/i;
-const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long/i;
+const TRANSIENT = /D1 DB is overloaded|Requests queued for too long|generating too much load on D1|exceeded its CPU time limit and was reset|Network connection lost|storage caused object to be reset|transient issue|Cannot resolve D1 DB|internal error; reference/i;
+const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long|generating too much load on D1/i;
 export const D1_RETRY_DELAYS_MS = [150, 500];
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));

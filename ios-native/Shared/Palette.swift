@@ -106,6 +106,14 @@ enum Palette {
     /// Sport colours (Training main page, Petr 2026-11-16): an identity only,
     /// never a state. A workout's state is the fill: done = filled, waiting =
     /// pale, missed = grey (`Sport.fill`).
+    /// Muscle freshness, one set everywhere (Training concept, Petr
+    /// 2026-11-16): fresh a soft green, recovering amber, tired red.
+    enum Freshness {
+        static let fresh = Color(light: 0x73A191, dark: 0x639A85)
+        static let recovering = Color(light: 0xD99A0B, dark: 0xF2AE3D)
+        static let tired = Color(light: 0xDE5638, dark: 0xEB6B4E)
+    }
+
     enum Sport {
         static let ride = Color(light: 0x7657D6, dark: 0xB7A0F5)
         static let run = Color(light: 0xC8600A, dark: 0xFF9238)
