@@ -166,15 +166,25 @@ struct PaywallView: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 14)
                     .accessibilityAddTraits(.isHeader)
-                if step == 0, !reduceMotion || frozenTime != nil {
-                    demoPhone.transition(.opacity)
-                    button(L10n.tr("Pokračovat")) { go(1) }
-                        .padding(.horizontal, 16).padding(.bottom, 10)
+                let demoShown = step == 0 && (!reduceMotion || frozenTime != nil)
+                if demoShown {
+                    // The end of the demo: the phone gets smaller and goes (Pro concept).
+                    demoPhone.transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.3).combined(with: .opacity)))
                 } else {
                     ProFeatureList(frozen: frozenTime != nil)
                         .frame(minHeight: 120, maxHeight: .infinity)
-                        .transition(.opacity)
-                    offer.transition(.move(edge: .bottom).combined(with: .opacity))
+                        .transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.2)))
+                    // The plans come in as the list settles.
+                    offer.transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity).animation(.easeOut(duration: 0.45).delay(0.35)),
+                                                 removal: .opacity))
+                }
+                // One button: Continue becomes the purchase where it stands (Pro concept).
+                button(demoShown ? L10n.tr("Pokračovat") : cta, busy: !demoShown && store.purchasing) { if demoShown { go(1) } else { buy() } }
+                    .disabled(!demoShown && (store.purchasing || !chosen.priced))
+                    .padding(.horizontal, 16).padding(.bottom, demoShown ? 10 : 0)
+                if !demoShown {
+                    finePrint.padding(.horizontal, 16).padding(.bottom, 6)
+                        .transition(.opacity.animation(.easeOut(duration: 0.3).delay(0.4)))
                 }
             }
         }
@@ -242,11 +252,8 @@ struct PaywallView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             if allowAI != nil { aiNote }
-            button(cta, busy: store.purchasing) { buy() }
-                .disabled(store.purchasing || !chosen.priced)
-            finePrint
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 6)
+        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 10)
     }
 
     /// What allowing the AI features sends where, in the words of the setup's AI
@@ -328,6 +335,7 @@ struct PaywallView: View {
         Button(action: action) {
             ZStack {
                 Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.background).opacity(busy ? 0 : 1)
+                    .contentTransition(.opacity)
                 if busy { ProgressView().tint(Palette.background) }
             }
             .frame(maxWidth: .infinity).frame(minHeight: 54).background(Palette.ink, in: Capsule())
