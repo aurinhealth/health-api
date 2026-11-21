@@ -537,7 +537,7 @@ private struct PinnedTopBar: ViewModifier {
 
     /// Without Aurin Pro once the paywall is on: no coach, its "i" stays on its
     /// own and "Unlock with Pro" floats at the bottom (Pro concept, subpage).
-    private var locked: Bool { coach != nil && model?.coachLocked == true }
+    private var locked: Bool { coach != nil && model?.coachLocked == true && !ProStore.shared.entitled }
 
     func body(content: Content) -> some View {
         let page = content

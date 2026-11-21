@@ -136,7 +136,7 @@ struct HealthContent: View {
             if !editing {
                 // Redesign H: Aurin age on top, readiness is a row of Health
                 // monitor below (D-ZDRAVI-1, -3).
-                AurinAgeHero(health: health, pro: !model.coachLocked || model.demo, noWearable: model.noWearable)
+                AurinAgeHero(health: health, pro: !model.coachLocked || ProStore.shared.entitled || model.demo, noWearable: model.noWearable)
                     .padding(.top, 20)
                 if let age = health.aurinAge {
                     AurinAgeTrendCard(age: age).padding(.top, 20)

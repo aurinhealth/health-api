@@ -318,7 +318,7 @@ struct AurinAgeHero: View {
         VStack(spacing: 14) {
             AurinOrb(mood: .locked)
                 .accessibilityElement()
-                .accessibilityLabel(Text(verbatim: L10n.tr("Aurin age") + ", " + L10n.tr("v Aurin Pro")))
+                .accessibilityLabel(Text(verbatim: L10n.tr("Aurin Age") + ", " + L10n.tr("v Aurin Pro")))
             Button { if let model { Paywall.present(model) } } label: {
                 Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)

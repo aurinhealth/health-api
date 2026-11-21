@@ -333,6 +333,7 @@ extension AppModel {
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.healthConsentKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
+        coachLocked = false
         needsSetup = false
         setupChecked = false
         // The next sign-in asks the server whether its health data is paused.
