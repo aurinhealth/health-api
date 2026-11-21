@@ -124,8 +124,7 @@ extension DayCircle {
 
         init(day: CalendarDay?, date: String, today: String) {
             let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
-            let done = list.filter { $0.status == "done" }
-            guard let first = done.first(where: { $0.sport != "walk" }) ?? done.first ?? list.first else {
+            guard let first = Self.lead(list) else {
                 label = L10n.tr(day == nil ? "bez dat" : "volno")
                 return
             }
@@ -134,6 +133,14 @@ extension DayCircle {
             state = SportDisc.State(status: first.status)
             second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport
             label = L10n.tr(SportStyle.name(first.sport)) + ", " + L10n.tr(state == .done ? "hotovo" : state == .missed ? "nesplněno" : "v plánu")
+        }
+
+        /// The day's disc: a workout done, else a workout planned or missed (602/606:
+        /// a walk never stands in for today's Legs still ahead), a walk only on a
+        /// day with nothing else.
+        static func lead(_ list: [CalendarActivity]) -> CalendarActivity? {
+            let workouts = list.filter { $0.sport != "walk" }
+            return workouts.first { $0.status == "done" } ?? workouts.first ?? list.first { $0.status == "done" } ?? list.first
         }
     }
 }
