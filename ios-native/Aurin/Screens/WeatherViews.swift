@@ -156,13 +156,15 @@ struct WeatherSheet: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                // Only the grabber and the close button on the right (concept a-pocasi-02, Jednotnost 14).
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }
             }
         }
         .tint(Palette.ink)
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -179,7 +181,10 @@ struct WeatherDetails: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        SettingsPage(title: "Počasí dnes") {
+        // The Settings page's look without its title: only the grabber and the
+        // close button above (concept a-pocasi-02, 602 point 87).
+        PageScroll {
+            VStack(alignment: .leading, spacing: 26) {
             hero
 
             if weather.max == nil {
@@ -187,16 +192,14 @@ struct WeatherDetails: View {
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
-            if let outdoors = Self.remaining(weather.week?.first, today: clock?.day ?? APIClient.localToday(),
-                                                hour: clock?.hour ?? Calendar.current.component(.hour, from: Date())),
-               outdoors.ride != nil || outdoors.run != nil {
-                bestOutdoors(outdoors)
-            }
-
+            let outdoors = Self.remaining(weather.week?.first, today: clock?.day ?? APIClient.localToday(),
+                                          hour: clock?.hour ?? Calendar.current.component(.hour, from: Date()))
             if !hours.isEmpty {
                 Card(padding: 14) {
-                    Text("Po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil, nowTemp: weather.now?.temp)
+                    SectionLabel(text: "Po hodinách")
+                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil, nowTemp: weather.now?.temp,
+                                     best: Self.window(outdoors))
+                    if let outdoors, outdoors.ride != nil || outdoors.run != nil { bestOutdoors(outdoors) }
                 }
             }
 
@@ -210,10 +213,17 @@ struct WeatherDetails: View {
                 }
             }
 
-            SettingsGroup {
-                NavigationLink { WeatherPlaceView(onSave: close) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "location.fill", color: Palette.green), title: "Poloha pro počasí", value: weather.place)
+            NavigationLink { WeatherPlaceView(onSave: close) } label: {
+                HStack(spacing: 10) {
+                    PlacePin().fill(Palette.blue, style: FillStyle(eoFill: true)).frame(width: 11, height: 14)
+                    Text("Poloha pro počasí").font(Typo.body).foregroundStyle(Palette.ink)
+                    Spacer()
+                    if let place = weather.place { Text(verbatim: place).font(Typo.body).foregroundStyle(Palette.muted).lineLimit(1) }
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
+                .padding(.horizontal, 16).frame(minHeight: 50)
+                .background(Palette.card, in: Capsule())
+                .contentShape(Capsule())
             }
             .buttonStyle(.plain)
 
@@ -233,13 +243,18 @@ struct WeatherDetails: View {
                 }
                 .padding(.horizontal, 4)
             }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 48)
         }
+        .background { Palette.settingsBackground.ignoresSafeArea() }
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { ScreenTrail.visit("page/Počasí dnes") }
     }
 
     /// The next 24 hours from the one running now (the server's); without the detail, the card's few hours.
     private var hours: [TodaySnapshot.Weather.Hour] { weather.next ?? weather.hours ?? [] }
-
-    private var look: SkyLook { SkyLook(code: weather.now?.code ?? weather.code, daylight: weather.now?.daylight) }
 
     /// The place, the temperature now with the sun, moon or symbol, and three
     /// numbers like Today's (Petr, 2026-10-27, B): high / low, wind and rain.
@@ -255,22 +270,17 @@ struct WeatherDetails: View {
                         }
                     }
                     Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
+                    // "Rain, feels like 6°" on one line (concept point 4).
                     if let text = WeatherText.description(weather.now?.code ?? weather.code) {
-                        Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
-                    }
-                    if let feels = weather.now?.feelsLike, Int(feels.rounded()) != Int((weather.now?.temp ?? feels).rounded()) {
-                        Text(verbatim: L10n.f("Pocitově %@", WeatherText.degrees(feels))).font(Typo.caption).foregroundStyle(Palette.muted)
+                        (Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundColor(Palette.ink)
+                         + Text(verbatim: feelsLike.map { ", " + L10n.f("pocitově %@", WeatherText.degrees($0)) } ?? "").font(.subheadline).foregroundColor(Palette.muted))
                     }
                 }
                 Spacer(minLength: 0)
-                if look.showsBody {
-                    WeatherSkyBody(night: look.night)
-                } else {
-                    Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
-                        .symbolRenderingMode(.multicolor)
-                        .scaledFont(54)
-                        .accessibilityHidden(true)
-                }
+                Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
+                    .symbolRenderingMode(.multicolor)
+                    .scaledFont(54)
+                    .accessibilityHidden(true)
             }
             .accessibilityElement(children: .combine)
 
@@ -279,19 +289,18 @@ struct WeatherDetails: View {
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
                 stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windBeside)
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
-                stat("Déšť dnes", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
+                stat("Šance na déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)
             .overlay(alignment: .top) { Divider().overlay(Palette.hairline) }
         }
-        .background(alignment: .top) {
-            // The sky reaches under the bar above and fades into the page.
-            WeatherSky(look: look)
-                .frame(height: 460)
-                .padding(.horizontal, -20)
-                .offset(y: -170)
-        }
+    }
+
+    /// The feeling temperature when it differs from the temperature by a degree or more.
+    private var feelsLike: Double? {
+        guard let feels = weather.now?.feelsLike, Int(feels.rounded()) != Int((weather.now?.temp ?? feels).rounded()) else { return nil }
+        return feels
     }
 
     /// The wind now, else the day's strongest.
@@ -329,7 +338,7 @@ struct WeatherDetails: View {
     private func weekCard(_ week: [TodaySnapshot.Weather.Day]) -> some View {
         let low = week.compactMap(\.min).min() ?? 0, high = week.compactMap(\.max).max() ?? 1
         return Card(padding: 14) {
-            Text("Tento týden").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+            SectionLabel(text: "Tento týden")
             VStack(spacing: 0) {
                 ForEach(Array(week.enumerated()), id: \.element.date) { index, day in
                     if index > 0 { Divider().overlay(Palette.hairline) }
@@ -346,27 +355,41 @@ struct WeatherDetails: View {
         }
     }
 
-    /// "Best time outdoors": today's dry daylight hours for a ride and a run
-    /// (concept 11-pocasi, D-POCASI-1), or the indoor figure when none fits.
-    private func bestOutdoors(_ outdoors: TodaySnapshot.Weather.Outdoors) -> some View {
-        Card(padding: 14) {
-            Text("Nejlepší čas venku").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
-            // One sport a line, so two times fit at 320 pt and in 12-hour time.
-            VStack(alignment: .leading, spacing: 8) {
+    /// "Best outdoors 13:00 to 16:00." under the hours, with a green dot as
+    /// the window's green in the strip (concept a-pocasi-02); one line a sport
+    /// when a ride and a run differ, the indoor figure when one has none.
+    @ViewBuilder private func bestOutdoors(_ outdoors: TodaySnapshot.Weather.Outdoors) -> some View {
+        if let both = outdoors.ride, both == outdoors.run {
+            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                Circle().fill(Palette.green).frame(width: 7, height: 7).accessibilityHidden(true)
+                Text(verbatim: L10n.f("Nejlépe venku %@.", Self.spanText(both))).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
                 span(.ride, outdoors.ride)
                 span(.run, outdoors.run)
             }
         }
     }
 
+    private static func spanText(_ span: TodaySnapshot.Weather.Span) -> String {
+        L10n.f("%@ až %@", ClockText.format(minutes: span.start * 60), ClockText.format(minutes: span.end * 60))
+    }
+
+    /// The hours of today's window: both sports' when they share one, else the ride's or the run's.
+    static func window(_ outdoors: TodaySnapshot.Weather.Outdoors?) -> Range<Int>? {
+        guard let span = outdoors?.ride ?? outdoors?.run, span.end > span.start else { return nil }
+        return span.start..<span.end
+    }
+
     private func span(_ sport: WeatherPlace, _ span: TodaySnapshot.Weather.Span?) -> some View {
-        let text = span.map { L10n.f("%@ až %@", ClockText.format(minutes: $0.start * 60), ClockText.format(minutes: $0.end * 60)) } ?? L10n.tr("uvnitř")
+        let text = span.map(Self.spanText) ?? L10n.tr("uvnitř")
         return HStack(spacing: 8) {
-            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(15, weight: .semibold)
+            Image(systemName: sport.symbol(indoor: span == nil)).scaledFont(14, weight: .semibold)
                 .frame(minWidth: 22)
                 .foregroundStyle(span == nil ? Palette.amberBar : Palette.green)
                 .accessibilityHidden(true)
-            Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: text).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? "Kolo" : "Běh") + ", " + text))
@@ -443,6 +466,8 @@ struct WeatherHourStrip: View {
     /// "Teď" with the temperature at the top of the sheet, not the hour's
     /// forecast (8° above and 9° here, device comparison of build 602).
     var nowTemp: Double? = nil
+    /// Today's best hours outdoors, tinted green.
+    var best: Range<Int>? = nil
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -451,9 +476,11 @@ struct WeatherHourStrip: View {
                 ForEach(Array(hours.enumerated()), id: \.offset) { index, h in
                     let now = nowFirst && index == 0
                     let newDay = index > 0 && h.date != nil && h.date != hours[index - 1].date
+                    // Only today's hours: the strip runs past midnight.
+                    let inWindow = !now && best?.contains(h.hour) == true && (h.date == nil || h.date == hours[0].date)
                     VStack(spacing: 4) {
                         Text(verbatim: now ? L10n.tr("Teď") : newDay ? WeatherText.weekday(h.date ?? "") : String(h.hour))
-                            .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now ? Palette.blue : newDay ? Palette.ink : Palette.faint)
+                            .font(newDay ? Typo.tiny.weight(.semibold) : Typo.tiny).foregroundStyle(now || newDay ? Palette.ink : Palette.faint)
                         Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
                         Text(verbatim: WeatherText.degrees(now ? (nowTemp ?? h.temp) : h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
@@ -461,7 +488,8 @@ struct WeatherHourStrip: View {
                             .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.blue)
                     }
                     .frame(width: 46).padding(.vertical, 7)
-                    .background(now ? Palette.blue.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    // "Now" neutral, not blue (concept notes a-pocasi-03); the dry window green.
+                    .background(now ? Palette.track : inWindow ? Palette.greenSoft : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -508,7 +536,8 @@ struct WeatherDayRow: View {
             .accessibilityHint(Text("Ukáže hodiny dne"))
 
             if open {
-                if let hours = day.hours, !hours.isEmpty { WeatherHourStrip(hours: hours) }
+                // The day's waking hours, not the night before (602 point 99).
+                if let hours = day.hours?.filter({ $0.hour >= 6 }), !hours.isEmpty { WeatherHourStrip(hours: hours) }
                 // Each on its own line, the verdict in its colour (Petr, 2026-10-27).
                 VStack(alignment: .leading, spacing: 4) {
                     reason("Kolo", day.ride)
@@ -525,7 +554,7 @@ struct WeatherDayRow: View {
             let from = ((day.min ?? low) - low) / span, to = ((day.max ?? high) - low) / span
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.track)
-                Capsule().fill(Palette.amberBar)
+                Capsule().fill(Palette.ink)
                     .frame(width: max(geo.size.width * (to - from), 5))
                     .offset(x: geo.size.width * from)
             }
@@ -536,8 +565,7 @@ struct WeatherDayRow: View {
         let indoor = WeatherText.indoor(advice)
         return Image(systemName: sport.symbol(indoor: indoor)).scaledFont(12, weight: .semibold, cap: .denseCap)
             .foregroundStyle(indoor ? Palette.amberBar : Palette.green)
-            .frame(width: 28, height: 24)
-            .background(indoor ? Palette.amberSoft : Palette.greenSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(width: 26, height: 24)
             .accessibilityLabel(Text(verbatim: L10n.tr(sport == .ride ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))))
     }
 
@@ -547,10 +575,12 @@ struct WeatherDayRow: View {
             let indoor = WeatherText.indoor(advice)
             let head = L10n.tr(sport == "Kolo" ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))
             let why = advice.reason.flatMap { $0.isEmpty ? nil : $0 }
-            // The colour as the legend's dot, the words in ink for contrast.
+            // The same figure as in the row, the head in its colour (concept "Otevřený den").
             HStack(alignment: .top, spacing: 6) {
-                Circle().fill(indoor ? Palette.amber : Palette.green).frame(width: 7, height: 7).padding(.top, 5).accessibilityHidden(true)
-                (Text(verbatim: head + (why == nil ? "." : ": ")).fontWeight(.semibold).foregroundColor(Palette.ink)
+                Image(systemName: (sport == "Kolo" ? WeatherPlace.ride : .run).symbol(indoor: indoor))
+                    .scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(indoor ? Palette.amberBar : Palette.green)
+                    .frame(width: 18).accessibilityHidden(true)
+                (Text(verbatim: head + ". ").fontWeight(.semibold).foregroundColor(indoor ? Palette.amberBar : Palette.green)
                  + Text(verbatim: why ?? "").foregroundColor(Palette.muted))
                     .font(Typo.caption).fixedSize(horizontal: false, vertical: true)
             }

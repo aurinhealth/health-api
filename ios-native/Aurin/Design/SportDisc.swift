@@ -15,7 +15,7 @@ struct SportDisc: View {
 
     var body: some View {
         let dark = scheme == .dark
-        let color = Palette.Sport.color(sport)
+        let color = Self.color(sport)
         ZStack {
             switch state {
             case .rest:
@@ -39,6 +39,12 @@ struct SportDisc: View {
         Image(systemName: Self.symbol(sport, type: type))
             .font(.system(size: size * 0.5, weight: .medium))
             .accessibilityHidden(true)
+    }
+
+    /// The sport's colour; a walk is a neutral disc (decision D-TRENINK-14):
+    /// it is everyday movement, not one of the training sports.
+    static func color(_ sport: String) -> Color {
+        ["walk", "walking"].contains(sport.lowercased()) ? Palette.secondary : Palette.Sport.color(sport)
     }
 
     /// The concept's figures (one set for the whole app, consistency point 3):

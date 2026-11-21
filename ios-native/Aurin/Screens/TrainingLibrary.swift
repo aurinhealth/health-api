@@ -1442,7 +1442,7 @@ struct LibraryWorkoutSheet: View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(workout.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(verbatim: LibraryWorkoutCard.shownName(workout.name)).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
@@ -1757,12 +1757,17 @@ struct ExerciseCatalog: View {
 /// One exercise: the muscles on the figure, then its technique.
 struct ExerciseSheet: View {
     let exercise: GymCatalogExercise
+    @Environment(\.dismiss) private var dismiss
     @State private var technique = false
 
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 14) {
-                Text(exercise.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(exercise.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+                }
                 Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
                     .font(Typo.small).foregroundStyle(Palette.muted)
                 BodyMap(load: exercise.muscles ?? [:], height: 280, legend: true)
@@ -1865,11 +1870,8 @@ struct LengthControl: View {
     }
 
     /// "45 min", "1 h", "1 h 30" (602 point 139), never broken inside.
-    static func short(_ minutes: Int) -> String {
-        let nb = "\u{00A0}"
-        guard minutes >= 60 else { return "\(minutes)\(nb)min" }
-        return "\(minutes / 60)\(nb)h" + (minutes % 60 > 0 ? "\(nb)" + String(format: "%02d", minutes % 60) : "")
-    }
+    /// The app's one length format (Fmt.duration, "1 h 05"), with no-break spaces so it never wraps.
+    static func short(_ minutes: Int) -> String { Fmt.duration(minutes).replacingOccurrences(of: " ", with: "\u{00A0}") }
 
     private func clamp(_ value: Int) -> Double { min(max(Double(value), range.lowerBound), range.upperBound) }
 

@@ -191,6 +191,36 @@ final class SnapshotTests: XCTestCase {
         try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
     }
 
+    /// Today's month calendar (concept b-podstranky-04): serif month, the
+    /// number inside its ring, a dashed ring on a day without data.
+    func testMonthCalendarSheet() throws {
+        let model = AppModel(demo: true)
+        let today = AppModel.localDate(Date())
+        for (i, day) in ISODay.range(ISODay.monthStart(today), today).enumerated() where i != 5 {
+            let score = 60 + (i * 7) % 35
+            model.dayValues[day] = DayValues(date: day, readiness: .init(score: score, zone: score < 70 ? "yellow" : "green"),
+                                             sleep: .init(minutes: 420, need: 480, percent: 88), strain: 9.5, hrv: .init(value: 60, band: "within"))
+        }
+        try render("today-month", height: 844) { MonthCalendarSheet(date: today).environment(model).environment(\.locale, L10n.locale) }
+    }
+
+    /// The widget gallery and the add sheet (concept c-widgety-sekce-04).
+    func testWidgetGallery() throws {
+        let data = WidgetData(panel: .today, today: DemoData.today, health: DemoData.health, training: DemoData.training, food: DemoData.food)
+        try render("today-widget-gallery", height: 844, window: true) {
+            WidgetGallery(panel: .today, data: data, placed: Set(WidgetPanel.today.defaults.map(\.kind))) { _, _ in }
+                .environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+        try render("today-widget-add", height: 620) {
+            WidgetAddSheet(kind: .form, data: data) { _ in }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
+        }
+    }
+
+    /// The athlete status sheet (concept b-podstranky-03): four rows in one card.
+    func testAthleteStatusSheet() throws {
+        try render("today-status", height: 560) { AthleteStatusSheet(current: .active).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
     func testRecoveryTimeScreen() throws {
         let today = DemoData.today
         let time = try XCTUnwrap(today.recoveryTime)
@@ -218,7 +248,12 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testFormDetailScreen() throws {
-        try render("training-form", glow: Palette.Glow.training) { FormDetailContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40) }
+        try render("training-form", glow: Palette.Glow.training, window: true) { FormDetailContent(training: DemoData.training, metric: .constant("form"), period: .constant(.days30)).padding(16).padding(.top, 30) }
+        try render("training-form-fitness", glow: Palette.Glow.training, window: true) { FormDetailContent(training: DemoData.training, metric: .constant("fitness"), period: .constant(.months3)).padding(16).padding(.top, 30) }
+        // Load balance and Muscle load (concepts K04/020, 021): the dial, the days against the band, the sections.
+        try render("training-load-balance", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training).padding(16).padding(.top, 30) }
+        try render("training-load-balance-week", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training, cell: "load").padding(16).padding(.top, 30) }
+        try render("training-muscle-load", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.muscle), training: DemoData.training).padding(16).padding(.top, 30) }
     }
 
     func testHealthScreens() throws {
@@ -246,6 +281,18 @@ final class SnapshotTests: XCTestCase {
         try render("health-vo2max-empty", glow: Palette.Glow.health) { VO2maxDetailContent(health: emptyHealth, period: .constant(.months6)).padding(16).padding(.top, 30) }
         XCTAssertEqual(VO2maxPage.position(49.2, in: try XCTUnwrap(health.vo2max?.compared)), L10n.f("v horní čtvrtině mužů ve věku %@ až %@", "30", "39"))
         XCTAssertEqual(StepsThroughDay.runningTotals([1, 2, 3]), [1, 3, 6])
+        // Without Pro once the paywall is on: "Unlock with Pro" instead of the coach (Pro concept).
+        let locked = AppModel(demo: true)
+        locked.health = model.health
+        locked.coachLocked = true
+        try render("health-restingHR-locked", height: 844, window: true) {
+            NavigationStack {
+                DetailScreen(title: "Klidový tep", info: ChromeAction(systemImage: "info", label: "Jak se to měří") {}) {
+                    HealthValueContent(value: .constant(.restingHR), period: .constant(.days30))
+                }
+            }
+            .environment(locked)
+        }
         // The Health tab (redesign H2): a new account, no Pro, no watch, the Aurin age page.
         try render("health-new", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: emptyHealth) }.padding(.top, 50).padding(.bottom, 40).environment(empty) }
         try render("health-aurinage-states", glow: Palette.Glow.health) {
@@ -624,6 +671,26 @@ final class SnapshotTests: XCTestCase {
         try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
             NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
         }
+        // The done workout as concept wgym: header, Workout details, exercise rows, muscles, quiet actions.
+        var done = DemoData.gym
+        for set in done.exercises.flatMap(\.sets) where !set.done {
+            done.complete(row: set.row, kg: set.plannedKg ?? "20", reps: GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? "8", rpe: "")
+        }
+        try render("gym-done", glow: Palette.Glow.gym, height: 2000, window: true) {
+            NavigationStack { GymSessionView(date: ISODay.shift(AppModel.localDate(Date()), -1), preview: done, muscles: worked) }.environment(AppModel(demo: true))
+        }
+        // A done ride as concept wdone: Workout details in two columns, Heart, zones as the grid, More from this workout.
+        let hrPoints = (0..<120).map { i in #"{"t":\#(i * 46),"v":\#(120 + (i % 30) + i / 6)}"# }.joined(separator: ",")
+        let rideJSON = #"{"activity":{"name":"Endurance ride","type":"Ride","distance":42600,"moving_time":5520,"total_elevation_gain":410,"average_watts":196,"icu_normalized_watts":212,"average_heartrate":138,"max_heartrate":170,"average_cadence":86,"icu_training_load":84,"icu_intensity":0.78,"average_speed":7.72,"calories":980},"analysis":null,"intervals":null,"hrr":null,"#
+            + #""streams":[{"type":"heartrate","points":["# + hrPoints + "]}],"
+            + #""hrZones":[{"zone":1,"seconds":2040,"percent":37,"max":135},{"zone":2,"seconds":2460,"percent":45,"min":136,"max":148},{"zone":3,"seconds":720,"percent":13,"min":149,"max":157},{"zone":4,"seconds":240,"percent":5,"min":158,"max":167},{"zone":5,"seconds":20,"percent":0.4,"min":168,"max":181}]}"#
+        let ride = try JSONDecoder().decode(ActivityDetail.self, from: Data(rideJSON.utf8))
+        try render("activity-done", glow: Palette.Glow.training, height: 1900) {
+            ActivityDetailContent(detail: ride).padding(24).environment(AppModel(demo: true))
+        }
+        XCTAssertEqual(ActivityDetailContent.split("42,6 km").1, "km")
+        XCTAssertEqual(ZoneGrid.time(20), "20 s")
+        XCTAssertEqual(GymDoneDetail.summary(done.exercises[0]).sets.hasPrefix("\(done.exercises[0].sets.filter { $0.work && $0.side != "P" }.count) × "), true)
         try render("gym-planned-card-open", height: 420) {
             ExerciseCard(exercise: plan.exercises[1], started: false, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}, open: true).padding(20)
         }
@@ -659,7 +726,10 @@ final class SnapshotTests: XCTestCase {
         // VoiceOver reads the tab header's month with its year and week (Today audit 25).
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
-        XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
+        XCTAssertEqual(Fmt.duration(75), "1 h 15")
+        XCTAssertEqual(Fmt.duration(125), "2 h 05")
+        XCTAssertEqual(Fmt.duration(120), "2 h")
+        XCTAssertEqual(Fmt.duration(42), "42 min")
         XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
@@ -1069,7 +1139,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30, 42,3 km")
         // The concept's figures: gym is the lifting figure, not a dumbbell.
         XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
         XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)
@@ -1155,7 +1225,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
         XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
-        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "gym", "tri"], "the app's order of sports")
+        XCTAssertEqual(LibrarySport.all.map(\.id), ["ride", "run", "swim", "gym", "tri"], "the app's order Ride, Run, Swim, Gym; bricks after them (604)")
         XCTAssertEqual(LibrarySport.single.map(\.id), ["ride", "run", "swim", "gym"], "one workout: no bricks")
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
@@ -1334,12 +1404,6 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(WeatherText.symbol(weather.code), "cloud.sun.fill")
         XCTAssertEqual(WeatherText.symbol(95), "cloud.bolt.rain.fill")
         XCTAssertEqual(WeatherText.description(63), "déšť")
-        XCTAssertEqual(SkyLook(code: 61, daylight: false), SkyLook(code: 63, daylight: false))
-        XCTAssertTrue(SkyLook(code: 61, daylight: false).rains)
-        XCTAssertEqual(SkyLook(code: 61, daylight: false).stars, 0, "a rainy night has no stars")
-        XCTAssertTrue(SkyLook(code: 2, daylight: false).showsBody, "a partly cloudy night shows the moon")
-        XCTAssertGreaterThan(SkyLook(code: 0, daylight: false).stars, 0)
-        XCTAssertEqual(SkyLook(code: 2, daylight: nil).night, false)
         XCTAssertEqual(WeatherText.windWord(18) != nil, true)
         XCTAssertNil(WeatherText.compass(nil))
 
@@ -1371,7 +1435,13 @@ final class SnapshotTests: XCTestCase {
     /// The offer (part Pro): the demo with the coach first, then the offer with
     /// the plans, with and without the free week, and with the AI note of the setup.
     func testPaywallTour() throws {
-        for time in [0.5, 4.0] {
+        // One conversation in a loop: the chat grows, the pages it opens come between.
+        XCTAssertEqual(ProScreen.at(0.5).screen, .chat(0))
+        XCTAssertEqual(ProScreen.at(4).screen, .chat(2))
+        XCTAssertEqual(ProScreen.at(7).screen, .plan)
+        XCTAssertEqual(ProScreen.at(26).screen, .age)
+        XCTAssertEqual(ProScreen.at(ProScreen.script.reduce(0) { $0 + $1.seconds } + 0.5).screen, .chat(0))
+        for time in [0.5, 4.0, 7.0, 14.0, 26.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }

@@ -65,6 +65,7 @@ struct TrainingView: View {
             }
             .navBarVisibility(.hidden)
             .appRoutes()
+            .tabRoot(.training)
         }
         .overlay(alignment: .bottom) {
             if let toast {
@@ -230,7 +231,7 @@ struct TrainingContent: View {
             }
         }
         .padding(.top, top - 12)
-        let hidden: Set<String> = isToday ? Set(upcoming.filter { $0.date == training.date }.map(\.title)) : []
+        let hidden = isToday ? upcoming.filter { $0.date == training.date } : []
         // Until the day's calendar is here, a row's height stands in for its
         // list, so the cards below don't jump down when it comes (602).
         if model.calendar[shownDay] == nil && !model.demo {
@@ -746,9 +747,8 @@ struct NextSession: View {
             guard let day = gymDay else { return [] }
             let chosen = GymDayParts.resolved(day, stored: UserDefaults.standard.string(forKey: GymDayParts.storageKey) ?? "", date: session.date)
             let shown = chosen.visible(day).filter { chosen.isOn($0) }
-            let others = shown.filter { $0 != .exercises }.reduce(0) { $0 + chosen.minutes($1, day: day) }
             return shown.map { part in
-                let minutes = part == .exercises ? max(0, (session.minutes ?? 0) - others) : chosen.minutes(part, day: day)
+                let minutes = part == .exercises ? chosen.exerciseMinutes(day, total: session.minutes) ?? 0 : chosen.minutes(part, day: day)
                 return WorkoutCardPart(name: Self.partName(part), minutes: minutes)
             }
             .filter { $0.minutes > 0 }
@@ -878,7 +878,7 @@ struct FormWidget: View {
             DialTileTitle(title: "Forma")
             // Green inside the usual range, amber outside it, the range itself neutral (concept).
             let color = usual.map { $0.contains(form.form.rounded()) } == false ? Palette.amber : Palette.green
-            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color, bandTint: Palette.ink.opacity(0.3),
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color,
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
             }
@@ -1019,8 +1019,11 @@ struct VO2maxWidget: View {
             Group {
                 if let change = vo2.change, change != 0 {
                     Text(L10n.f(change > 0 ? "o %@ výš za 4 týdny" : "o %@ níž za 4 týdny", Fmt.decimal(abs(change))))
-                } else {
+                } else if vo2.change != nil {
                     Text("Stejně jako před 4 týdny")
+                } else {
+                    // Nothing 4 weeks back to compare with: say whose estimate it is, never "the same".
+                    Text(verbatim: vo2.caption)
                 }
             }
             .font(Typo.caption).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)

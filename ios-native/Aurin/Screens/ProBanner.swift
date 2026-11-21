@@ -79,6 +79,7 @@ struct ProBanner: View {
     private func load() async {
         guard !model.demo, let status = try? await model.api.subscription() else { return }
         await store.load()
+        model.coachLocked = !status.pilot && !status.hasAI && !store.entitled
         withAnimation(.easeInOut(duration: 0.25)) { banner = status.proBanner }
     }
 

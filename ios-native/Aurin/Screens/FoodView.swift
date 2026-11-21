@@ -11,6 +11,7 @@ struct FoodView: View {
             screen
                 .navBarVisibility(.hidden)
                 .appRoutes()
+                .tabRoot(.food)
         }
         .task { await model.refreshIfStale(.food) }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
@@ -191,7 +192,7 @@ struct FoodContent: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jídla")
                 Spacer()
-                NavigationLink { MealSlotsSettingsView() } label: {
+                NavigationLink { MealSlotsSettingsView(title: "Časy jídel") } label: {
                     Text("Časy jídel").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                         .frame(minHeight: 44).contentShape(Rectangle())
                 }

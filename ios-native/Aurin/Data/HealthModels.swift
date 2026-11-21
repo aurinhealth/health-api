@@ -291,6 +291,13 @@ struct NightDetail: Decodable, Equatable {
     }
 
     struct Night: Decodable, Equatable {
+        /// The night's own summary (src/night-detail.js), for an earlier night
+        /// picked with the arrows on Sleep; nil from an older server.
+        var start: String? = nil
+        var end: String? = nil
+        var asleepMin: Double? = nil
+        var inBedMin: Double? = nil
+        /// Minutes from midnight of the evening, past midnight above 1440.
         let bedClock: Double?
         let wakeClock: Double?
         let segments: [Segment]?
