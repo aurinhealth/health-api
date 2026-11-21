@@ -92,9 +92,10 @@ struct LibrarySport: Identifiable {
         LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.Sport.ride),
         LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.Sport.run),
         LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.Sport.swim),
-        // Bricks, two sports one right after the other (BrickLibrarySection).
-        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other),
-        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym)
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym),
+        // Bricks, two sports one right after the other (BrickLibrarySection):
+        // after the four sports, kept in the app's order Ride, Run, Swim, Gym.
+        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other)
     ]
     /// The sports of one workout (Moje tréninky → +): not the bricks.
     static var single: [LibrarySport] { all.filter { $0.id != "tri" } }
