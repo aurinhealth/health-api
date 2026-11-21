@@ -106,6 +106,7 @@
     // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn):
     // on since the evals passed (run 92, D01–D16 × 3, 48/48; Petr "vydej" 2026-11-16).
     "COACH_FIRST": "true",
+    "COACH_FIRST_GYM": "true",
     // The account the deploy smoke test acts as: its own, empty and disabled, never the
     // owner's (src/tenancy.js smokeUser; security audit 2026-11, SEC-010). Nobody receives mail there.
     "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
