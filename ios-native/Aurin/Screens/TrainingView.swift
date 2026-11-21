@@ -886,7 +886,7 @@ struct FormWidget: View {
             DialTileTitle(title: "Forma")
             // The detail's colour (606: amber here, green there): fresher than usual is
             // no warning, more tired amber, far below red; the range itself neutral.
-            let color = usual.map { FormDetailView.color(FormDetailView.state(form.form, $0)) } ?? Palette.green
+            let color = usual.map { FormDetailContent.color(FormDetailContent.state(form.form, $0)) } ?? Palette.green
             RangeDial(value: form.form, scale: -30...30, band: usual, size: 118, lineWidth: 7, tint: color,
                       spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + form.label) {
                 Text(Fmt.signed(form.form)).font(Typo.number(32)).foregroundStyle(color)
