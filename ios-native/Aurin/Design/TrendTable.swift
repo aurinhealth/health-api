@@ -64,6 +64,21 @@ enum TrendMath {
         }
     }
 
+    /// The rows from each day's own value (Form, a 7-day load, which is
+    /// already a week): then is the value on the day `lag` days back, the
+    /// sparkline the values from then to now.
+    static func dailyRows(_ points: [ChartPoint], lags: [Int] = TrendLags.month) -> [TrendRow] {
+        guard let last = points.last else { return [] }
+        let byDay = Dictionary(points.map { ($0.date, $0.value) }, uniquingKeysWith: { _, b in b })
+        return lags.compactMap { lag in
+            let thenDay = ISODay.shift(last.date, -lag)
+            guard let then = byDay[thenDay] else { return nil }
+            let count = min(lag, 8)
+            let spark = (0...count).compactMap { byDay[ISODay.shift(thenDay, Int((Double(lag) * Double($0) / Double(count)).rounded()))] }
+            return TrendRow(lag: lag, then: then, now: last.value, spark: spark)
+        }
+    }
+
     /// The change in words, as the table shows it: "no change" when it
     /// rounds to nothing, else "0.3 higher" or "1 lower", with its arrow.
     static func change(now: Double, then: Double, digits: Int) -> (symbol: String?, text: String) {
@@ -86,6 +101,12 @@ struct TrendTable: View {
     var color: Color = Palette.green
     /// Wider sparklines (84 pt) in All metrics.
     var wide = false
+    /// What the number under the sentence is, and the line under the rows,
+    /// when the rows are not 7-day averages (Form, Load).
+    var nowCaption = "průměr posledních 7 dní"
+    /// Values around zero with their sign ("−11", "+3"): Form.
+    var signed = false
+    var footnote = "Každý řádek porovnává tvých posledních 7 dní se 7 dny, které tehdy skončily."
     /// At the accessibility sizes the sparklines step aside, so the words fit.
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -97,8 +118,8 @@ struct TrendTable: View {
             }
             if let now = rows.first?.now {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(verbatim: Fmt.decimal(now, digits: digits)).font(Typo.number(34)).foregroundStyle(Palette.ink)
-                    Text(verbatim: L10n.tr("průměr posledních 7 dní")).font(Typo.small).foregroundStyle(Palette.muted)
+                    Text(verbatim: signed ? Fmt.signed(now) : Fmt.decimal(now, digits: digits)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.tr(nowCaption)).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 .padding(.top, sentence == nil ? 0 : 14)
                 .padding(.bottom, 16)
@@ -120,7 +141,7 @@ struct TrendTable: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.vertical, 7)
                             .accessibilityLabel(spoken(row))
-                        Text(verbatim: Fmt.decimal(row.then, digits: digits)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text(verbatim: signed ? Fmt.signed(row.then) : Fmt.decimal(row.then, digits: digits)).font(Typo.number(20)).foregroundStyle(Palette.ink)
                             .accessibilityHidden(true)
                         changeText(row).accessibilityHidden(true)
                         if !typeSize.isAccessibilitySize {
@@ -130,7 +151,7 @@ struct TrendTable: View {
                 }
             }
             Divider().overlay(Palette.hairline)
-            Text(verbatim: L10n.tr("Každý řádek porovnává tvých posledních 7 dní se 7 dny, které tehdy skončily."))
+            Text(verbatim: L10n.tr(footnote))
                 .font(Typo.caption).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)

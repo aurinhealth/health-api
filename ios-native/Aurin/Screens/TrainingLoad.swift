@@ -44,9 +44,9 @@ enum LoadKind: String, CaseIterable {
     var measured: String {
         switch self {
         case .balance:
-            return L10n.tr("Aurin spočítá zátěž každého tréninku z jeho délky a intenzity a porovná posledních 7 dní s průměrem posledních 4 týdnů. Je to odhad, ne měření tvého těla.")
+            return L10n.tr("Každý trénink dostane zátěž podle délky a toho, jak byl těžký (TSS, bez wattmetru odhad z tepu). Aurin porovná posledních 7 dní s průměrem tvých 4 týdnů. Rozdělení podle intenzity je z času v zónách tepu. Je to odhad, ne měření tvého těla.")
         case .muscle:
-            return L10n.tr("Počítají se jen pracovní série v posilovně, z délky tréninku a úsilí. Kardio a vytrvalostní tréninky se nepočítají. Je to odhad, ne měření tvého těla.")
+            return L10n.tr("Zátěž svalů sčítá pracovní série, které zapíšeš v posilovně, z délky tréninku a úsilí. Kardio a vytrvalostní tréninky se nepočítají. Posledních 7 dní se porovnává s tvým obvyklým týdnem, průměrem 4 týdnů. Je to odhad pro plánování.")
         }
     }
 }
@@ -186,21 +186,26 @@ struct LoadTile: View {
 
 // MARK: - Detail
 
-/// Load balance or Muscle load: the dial, the server's sentence, the last 14
-/// days against the usual band and how it is measured. The coach top right.
+/// Load balance or Muscle load (concepts K04/020 and 021): the three values on
+/// top, the dial in words, the days against the usual band, Load by
+/// intensity or Days by load status, Trend analysis and How it's measured.
+/// The ratio is never printed (Petr's decision B, 2026-11-16).
 struct LoadDetailView: View {
     @State var kind: LoadKind
     let training: TrainingSnapshot
+    @State private var info = false
 
     var body: some View {
         DetailTemplate(title: kind.title, glow: Palette.Glow.training) {
-            if kind == .balance {
-                CoachEntry(subject: .load(title: kind.title, date: training.date), view: "training")
-            } else {
-                CoachEntry(view: "training")
-            }
+            CoachEntry(subject: kind == .balance ? CoachSubject.load(title: kind.title, date: training.date) : nil, view: "training",
+                       companion: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true })
         } content: {
             LoadDetailContent(kind: $kind, training: training)
+        }
+        .sheet(isPresented: $info) {
+            ScrollView { LoadDetailContent.howMeasured(kind, kind.view(training)).padding(24) }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Palette.background)
         }
     }
 }
@@ -208,104 +213,408 @@ struct LoadDetailView: View {
 struct LoadDetailContent: View {
     @Binding var kind: LoadKind
     let training: TrainingSnapshot
+    /// "level", "load" or "usual": the value on top that the page shows.
+    @State var cell = "level"
+    @State private var period: ChartPeriod = .days30
 
     var body: some View {
         let view = kind.view(training)
-        VStack(alignment: .leading, spacing: 20) {
-            SiblingCells(cells: LoadKind.allCases.map { k in
-                let v = k.view(training)
-                return SiblingCell(id: k.rawValue, title: k.title,
-                                   value: v?.state == "ready" ? (LoadWords.level(v?.level) ?? "–") : "–",
-                                   spokenState: LoadWords.state(v?.level)?.words)
-            }, selected: kind.rawValue) { id in kind = LoadKind(rawValue: id) ?? .balance }
-            .padding(.top, 16)
-
+        VStack(alignment: .leading, spacing: 0) {
             if let view, view.state == "ready" {
-                VStack(spacing: 10) {
-                    RangeDial(value: view.plot, scale: LoadWords.scale, band: LoadWords.band(view), ends: ("Lehčí", "Těžší"), size: 220,
-                              tint: LoadWords.state(view.level)?.color ?? Palette.green,
-                              spoken: [kind.title, LoadWords.level(view.level), LoadWords.state(view.level)?.words].compactMap { $0 }.joined(separator: ", ")) {
-                        Text(verbatim: LoadWords.level(view.level) ?? "–").font(Typo.heading(30)).foregroundStyle(Palette.ink)
-                    }
-                    if let state = LoadWords.state(view.level) {
-                        Text(verbatim: LoadWords.sentence(state)).font(Typo.bodyStrong).foregroundStyle(state.color)
-                    }
-                    if let text = view.text {
-                        Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
+                let cells = Self.cells(kind, view)
+                if cells.count > 1 {
+                    SiblingCells(cells: cells, selected: cell) { cell = $0 }.padding(.top, 16)
+                }
+                if cell == "level" {
+                    dial(view)
+                    Card { LoadChart(view: view, today: training.date, grey: kind == .muscle) }
+                } else if let history = view.history {
+                    DetailHeadline(label: cell == "load" ? "Posledních 7 dní" : "Tvůj průměrný týden, poslední 4 týdny",
+                                   value: Fmt.int((cell == "load" ? view.load : view.usual) ?? 0), unit: cell == "load" ? "body zátěže" : "za týden")
+                    Card {
+                        DetailChart(points: history.map { ChartPoint(date: $0.date, value: $0.load) }, today: training.date, period: $period,
+                                    note: "Každý bod je zátěž 7 dní končících tím dnem. Čárkovaně průměr období.", periods: [.days30, .months3])
                     }
                 }
-                .frame(maxWidth: .infinity)
-                Card {
-                    Text(verbatim: L10n.tr("Posledních 14 dní")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    LoadChart(view: view)
-                    Text(verbatim: L10n.tr("Zelené pásmo je tvoje obvyklá zátěž. Nad ním byly dny těžší, pod ním lehčí."))
-                        .font(Typo.small).foregroundStyle(Palette.muted)
+                if kind == .balance, let parts = view.intensity, !parts.isEmpty {
+                    SectionLabel(text: "Zátěž podle intenzity").padding(.top, 28)
+                    Card { LoadIntensity(parts: parts) }.padding(.top, 10)
+                    Text(verbatim: L10n.tr("Zátěž posledních 7 dní rozdělená podle toho, jak tvrdě pracovalo srdce. Světlejší část pruhu je tvoje obvyklé rozmezí z posledních 4 týdnů."))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
                         .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8).padding(.horizontal, 4)
+                }
+                if kind == .muscle {
+                    SectionLabel(text: "Dny podle stavu zátěže, posledních 30 dní").padding(.top, 28)
+                    Card { LoadDaysByStatus(series: view.series) }.padding(.top, 10)
+                }
+                let rows = TrendMath.dailyRows((view.history ?? []).map { ChartPoint(date: $0.date, value: $0.load) })
+                if !rows.isEmpty {
+                    SectionLabel(text: "Analýza trendu").padding(.top, 28)
+                    Card {
+                        TrendTable(rows: rows, nowCaption: kind == .muscle ? "zátěž svalů za posledních 7 dní" : "zátěž za posledních 7 dní",
+                                   footnote: "Každý řádek je zátěž 7 dní tehdy vedle zátěže posledních 7 dní.")
+                    }
+                    .padding(.top, 10)
+                }
+                if kind == .muscle, let balance = training.loadBalance, balance.state == "ready" {
+                    Button { kind = .balance; cell = "level" } label: {
+                        Card {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(verbatim: LoadKind.balance.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                    Text(verbatim: L10n.f("%@, posledních 7 dní proti průměru 4 týdnů", LoadWords.level(balance.level) ?? "–"))
+                                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 12)
                 }
             } else if let view, view.state == "learning" {
-                Card { LearningState(kind: LearningState.kind(have: view.historyDays, need: view.needsDays), text: kind.about) }
+                Card { LearningState(kind: LearningState.kind(have: view.historyDays, need: view.needsDays), text: kind.about) }.padding(.top, 16)
             } else if let view {
-                Card { LearningState(kind: .missing, text: view.state == "quiet" ? L10n.tr("Za poslední 4 týdny tu není žádný trénink.") : kind.about) }
+                Card { LearningState(kind: .missing, text: view.state == "quiet" ? L10n.tr("Za poslední 4 týdny tu není žádný trénink.") : kind.about) }.padding(.top, 16)
             } else {
-                Card { LearningState(kind: .missing, text: kind.missing) }
+                Card { LearningState(kind: .missing, text: kind.missing) }.padding(.top, 16)
             }
-
-            HowMeasuredCard(text: kind.measured)
+            Self.howMeasured(kind, view).padding(.top, 28)
         }
+        .onChange(of: kind) { cell = "level" }
+    }
+
+    /// Load balance "As usual", Load 7 days "412", Average "368 a week"; the plain
+    /// loads only from a server that sends them.
+    static func cells(_ kind: LoadKind, _ view: TrainingSnapshot.LoadView) -> [SiblingCell] {
+        var cells = [SiblingCell(id: "level", title: kind.title, value: LoadWords.level(view.level) ?? "–", spokenState: LoadWords.state(view.level)?.words)]
+        if view.history != nil, let load = view.load {
+            cells.append(SiblingCell(id: "load", title: kind == .muscle ? "Svaly 7 dní" : "Zátěž 7 dní", value: Fmt.int(load), unit: "body zátěže"))
+            if let usual = view.usual { cells.append(SiblingCell(id: "usual", title: "Průměr", value: Fmt.int(usual), unit: "za týden")) }
+        }
+        return cells
+    }
+
+    private func dial(_ view: TrainingSnapshot.LoadView) -> some View {
+        let state = LoadWords.state(view.level)
+        return VStack(spacing: 8) {
+            Text(verbatim: L10n.tr(kind == .muscle ? "Posledních 7 dní proti tvému obvyklému týdnu" : "Posledních 7 dní proti tvému průměru 4 týdnů"))
+                .font(Typo.body).foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center)
+            RangeDial(value: view.plot, scale: LoadWords.scale(around: view), band: LoadWords.band(view), size: 190, lineWidth: 12,
+                      tint: state?.color ?? Palette.green,
+                      spoken: [kind.title, LoadWords.level(view.level), state?.words].compactMap { $0 }.joined(separator: ", ")) {
+                Text(verbatim: LoadWords.level(view.level) ?? "–").font(Typo.heading(30)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).minimumScaleFactor(0.7).padding(.horizontal, 24)
+            }
+            if let state {
+                Text(verbatim: state.words).font(Typo.bodyStrong).foregroundStyle(state.color)
+            }
+            if let load = view.load, let usual = view.usual {
+                Text(verbatim: L10n.f(kind == .muscle ? "%@ za posledních 7 dní, %@ je tvůj obvyklý týden" : "%@ za posledních 7 dní, %@ je tvůj průměr 4 týdnů", Fmt.int(load), Fmt.int(usual)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+            } else if let text = view.text {
+                Text(verbatim: text).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
+
+    static func howMeasured(_ kind: LoadKind, _ view: TrainingSnapshot.LoadView?) -> some View {
+        var rows: [(String, String)] = []
+        // The 7-day loads of the four weeks ending today, oldest first.
+        if let history = view?.history, let last = history.last?.date {
+            let byDay = Dictionary(history.map { ($0.date, $0.load) }, uniquingKeysWith: { _, b in b })
+            let weeks = [21, 14, 7, 0].compactMap { byDay[ISODay.shift(last, -$0)] }
+            if weeks.count == 4 { rows.append(("Poslední čtyři týdny", weeks.map { Fmt.int($0) }.joined(separator: ", "))) }
+        }
+        rows.append(("Aktualizace", "po každém tréninku"))
+        return HowMeasuredCard(text: kind.measured, rows: rows)
     }
 }
 
-/// The 14 days as a line against the usual band. No values on the axis: the
-/// place against the band is the meaning, the ratio itself is never shown.
+/// The last 14 or 30 days against the usual band (concept K04/020): a dot per
+/// day, the band, the usual week dashed, a finger to read one day in words.
+/// No values on the axis: the place against the band is the meaning, the
+/// ratio itself is never shown.
 struct LoadChart: View {
     let view: TrainingSnapshot.LoadView
+    let today: String
+    /// Muscle load's band is grey (concept K04/021).
+    var grey = false
+    @State private var days = 14
+    @State private var page = 0
+    @State private var picked: Date?
 
     private struct Day: Identifiable {
         let date: Date
+        let iso: String
         let plot: Double
-        var id: Date { date }
+        let level: String?
+        var id: String { iso }
     }
 
-    private var days: [Day] {
+    private var all: [Day] {
         view.series.compactMap { p in
             guard let plot = p.plot, let date = ISODay.date(p.date) else { return nil }
-            return Day(date: date, plot: min(max(plot, LoadWords.scale.lowerBound), LoadWords.scale.upperBound))
+            return Day(date: date, iso: p.date, plot: min(max(plot, LoadWords.scale.lowerBound), LoadWords.scale.upperBound), level: p.level)
         }
+    }
+
+    private var shown: [Day] {
+        let list = all, end = list.count - page * days
+        return Array(list[max(0, end - days)..<max(0, end)])
     }
 
     var body: some View {
-        let list = days, band = LoadWords.band(view)
-        Chart {
-            if let first = list.first?.date, let last = list.last?.date {
-                RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
-                              yStart: .value("Obvyklé od", band.lowerBound), yEnd: .value("Obvyklé do", band.upperBound))
-                    .foregroundStyle(Palette.green.opacity(0.14))
+        let list = shown
+        VStack(alignment: .leading, spacing: 14) {
+            header(list)
+            if list.isEmpty {
+                Text(verbatim: L10n.tr("Za toto období nejsou data.")).font(Typo.small).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, minHeight: 150)
+            } else {
+                plot(list)
             }
+            if all.count > 14 { spanControl }
+            Text(verbatim: L10n.tr(grey ? "Každá tečka je jeden den: zátěž svalů 7 dní končících tím dnem proti tvému obvyklému týdnu. Šedé pásmo je tvoje obvyklé rozmezí, čárkovaně tvůj obvyklý týden."
+                                    : "Každá tečka je jeden den: zátěž 7 dní končících tím dnem proti tvému průměru 4 týdnů. Zelené pásmo je tvoje obvyklé rozmezí, čárkovaně tvůj obvyklý týden."))
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .onChange(of: days) { page = 0; picked = nil }
+    }
+
+    private func header(_ list: [Day]) -> some View {
+        let older = all.count - (page + 1) * days > 0
+        return HStack {
+            Button { page += 1; picked = nil } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
+                .disabled(!older)
+                .foregroundStyle(older ? Palette.ink : Palette.faint.opacity(0.5))
+                .accessibilityLabel(L10n.tr("Předchozí období"))
+            Spacer(minLength: 0)
+            if let first = list.first?.iso, let last = list.last?.iso {
+                Text(verbatim: DetailChart.periodTitle(start: first, end: last, year: false))
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            }
+            Spacer(minLength: 0)
+            Button { page = max(page - 1, 0); picked = nil } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
+                .disabled(page == 0)
+                .foregroundStyle(page > 0 ? Palette.ink : Palette.faint.opacity(0.5))
+                .accessibilityLabel(L10n.tr("Další období"))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, -12)
+    }
+
+    private func plot(_ list: [Day]) -> some View {
+        let band = LoadWords.band(view)
+        let values = list.map(\.plot) + [band.lowerBound, band.upperBound, 1]
+        let lo = (values.min() ?? 0.8) - 0.08, hi = (values.max() ?? 1.3) + 0.08
+        let selected = picked.flatMap { date in list.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
+        let shownDay = selected ?? list.last
+        let bandFill = grey ? Palette.ink.opacity(0.09) : Palette.green.opacity(0.16)
+        let first = list.first?.date ?? Date(), last = list.last?.date ?? Date()
+        // Room after the last day for the "Usual" pill.
+        let domainEnd = last.addingTimeInterval(Double(list.count) * 86400 * 0.16)
+        return Chart {
+            RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
+                          yStart: .value("Obvyklé od", band.lowerBound), yEnd: .value("Obvyklé do", band.upperBound))
+                .foregroundStyle(bandFill)
+            RuleMark(y: .value("Obvyklý týden", 1))
+                .foregroundStyle(Palette.faint)
+                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
             ForEach(list) { day in
                 LineMark(x: .value("Den", day.date), y: .value("Zátěž", day.plot))
-                    .foregroundStyle(Palette.ink)
-                    .interpolationMethod(.monotone)
+                    .foregroundStyle(Palette.green)
+                    .lineStyle(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                 PointMark(x: .value("Den", day.date), y: .value("Zátěž", day.plot))
-                    .foregroundStyle(Palette.ink)
-                    .symbolSize(18)
+                    .foregroundStyle(dotColor(day))
+                    .symbolSize(22)
+            }
+            if let shownDay {
+                if selected != nil {
+                    RuleMark(x: .value("Den", shownDay.date)).foregroundStyle(Palette.faint).lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 4]))
+                }
+                PointMark(x: .value("Den", shownDay.date), y: .value("Zátěž", shownDay.plot))
+                    .symbol { LatestDot(color: dotColor(shownDay)) }
             }
         }
-        .chartYScale(domain: LoadWords.scale)
+        .chartXScale(domain: first...max(domainEnd, first))
+        .chartYScale(domain: lo...hi)
         .chartYAxis(.hidden)
         .chartXAxis {
-            // The days are UTC midnights (ISODay): named from their ISO date, never the phone's zone.
-            AxisMarks(values: list.enumerated().filter { $0.offset % 3 == (list.count - 1) % 3 }.map(\.element.date)) { value in
-                if let date = value.as(Date.self) {
-                    AxisValueLabel { Text(verbatim: Fmt.weekdayShort(ISODay.iso(date))) }
+            AxisMarks(values: DetailChart.ticks(start: list.first?.iso ?? today, end: list.last?.iso ?? today).enumerated().filter { $0.offset != 2 }.map(\.element)) { value in
+                AxisValueLabel {
+                    if let date = value.as(Date.self) {
+                        let iso = ISODay.iso(date)
+                        Text(verbatim: iso == today ? L10n.tr("Dnes") : Fmt.dayMonthShort(iso)).font(.caption2).foregroundStyle(Palette.faint)
+                    }
                 }
             }
         }
-        .frame(height: 150)
+        .chartXSelection(value: $picked)
+        .chartOverlay { proxy in
+            GeometryReader { geo in
+                if let frame = proxy.plotFrame {
+                    let rect = geo[frame]
+                    if let y = proxy.position(forY: 1.0) {
+                        AveragePill(text: L10n.tr("Obvykle"))
+                            .frame(width: rect.maxX, alignment: .trailing)
+                            .position(x: rect.maxX / 2, y: rect.minY + y)
+                    }
+                    if let shownDay, let x = proxy.position(forX: shownDay.date) {
+                        DayBubble(date: shownDay.iso == today ? L10n.f("Dnes, %@", Fmt.dayMonthShort(shownDay.iso)) : Fmt.weekdayShort(shownDay.iso) + " " + Fmt.dayMonthShort(shownDay.iso),
+                                  value: LoadWords.level(shownDay.level) ?? "–")
+                            .fixedSize()
+                            .position(x: min(max(rect.minX + x, 60), max(geo.size.width - 60, 60)), y: rect.minY - 36)
+                    }
+                }
+            }
+        }
+        .frame(height: 170)
+        .padding(.top, 64)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.tr("Posledních 14 dní"))
+        .accessibilityLabel(L10n.f("Posledních %@ dní", String(list.count)))
         .accessibilityValue(view.text ?? "")
+    }
+
+    private func dotColor(_ day: Day) -> Color { LoadWords.state(day.level)?.color ?? Palette.green }
+
+    /// 14 days | 30 days, the chart's control in the look of PeriodControl.
+    private var spanControl: some View {
+        HStack(spacing: 2) {
+            ForEach([14, 30], id: \.self) { n in
+                let on = n == days
+                Button { days = n } label: {
+                    Text(verbatim: L10n.plural("%lld dní", n))
+                        .scaledFont(13, weight: on ? .semibold : .regular, cap: .denseCap)
+                        .foregroundStyle(on ? Palette.ink : Palette.muted)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(on ? Palette.card : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Palette.track, in: Capsule())
+    }
+}
+
+/// Load by intensity (concept K04/020): the last 7 days' load of each part,
+/// a bar with the usual range lighter behind it and the state in words.
+struct LoadIntensity: View {
+    let parts: [TrainingSnapshot.LoadView.Part]
+
+    var body: some View {
+        let top = max(parts.map { max($0.high * 1.25, $0.load * 1.05) }.max() ?? 1, 1)
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(parts.enumerated()), id: \.element.id) { i, part in
+                if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 12) }
+                row(part, top: top)
+            }
+        }
+    }
+
+    private func row(_ part: TrainingSnapshot.LoadView.Part, top: Double) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Circle().fill(Self.color(part.key)).frame(width: 7, height: 7).alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: Self.name(part.key)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(verbatim: Self.hint(part.key)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                Spacer(minLength: 8)
+                Text(verbatim: Fmt.int(part.load)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                Text(verbatim: L10n.tr("body zátěže")).font(.caption).foregroundStyle(Palette.faint)
+                Text(verbatim: Self.state(part)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .frame(minWidth: 64, alignment: .trailing)
+            }
+            GeometryReader { geo in
+                let x = { (v: Double) in geo.size.width * CGFloat(min(max(v / top, 0), 1)) }
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Rectangle().fill(Palette.ink.opacity(0.18)).frame(width: max(x(part.high) - x(part.low), 2)).offset(x: x(part.low))
+                    Capsule().fill(Palette.ink).frame(width: max(x(part.load), 3))
+                }
+            }
+            .frame(height: 6)
+            .clipShape(Capsule())
+            .accessibilityHidden(true)
+            Text(verbatim: L10n.f("Obvykle %@ až %@", Fmt.int(part.low), Fmt.int(part.high))).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    static func name(_ key: String) -> String {
+        switch key {
+        case "low": return L10n.tr("Nízká aerobní")
+        case "high": return L10n.tr("Vysoká aerobní")
+        default: return L10n.tr("Anaerobní")
+        }
+    }
+
+    static func hint(_ key: String) -> String {
+        switch key {
+        case "low": return L10n.tr("lehce, dá se mluvit")
+        case "high": return L10n.tr("tvrdě, ale stabilně")
+        default: return L10n.tr("krátce, naplno")
+        }
+    }
+
+    /// Heart-rate zone colours: Z2 blue, Z4 amber, Z5 red.
+    static func color(_ key: String) -> Color {
+        Palette.Zone.color(key == "low" ? 1 : key == "high" ? 3 : 4)
+    }
+
+    static func state(_ part: TrainingSnapshot.LoadView.Part) -> String {
+        part.load < part.low ? L10n.tr("Pod obvyklým") : part.load > part.high ? L10n.tr("Nad obvyklým") : L10n.tr("V rozmezí")
+    }
+}
+
+/// Days by load status, last 30 days (concept K04/021): how many of the days
+/// were below, in or above the usual range.
+struct LoadDaysByStatus: View {
+    let series: [TrainingSnapshot.LoadView.Point]
+
+    var body: some View {
+        let levels = series.compactMap(\.level)
+        let groups: [(String, Int, Bool)] = [
+            ("Pod obvyklým", levels.filter { $0 == "below" || $0 == "wellBelow" }.count, false),
+            ("V rozmezí", levels.filter { $0 == "usual" }.count, true),
+            ("Nad obvyklým", levels.filter { $0 == "above" || $0 == "wellAbove" }.count, false)
+        ]
+        let total = max(levels.count, 1)
+        VStack(spacing: 14) {
+            ForEach(Array(groups.enumerated()), id: \.offset) { _, group in
+                let (name, count, usual) = group
+                HStack(spacing: 12) {
+                    Text(verbatim: L10n.tr(name)).font(Typo.body).foregroundStyle(Palette.ink)
+                        .frame(width: 84, alignment: .leading)
+                    Text(verbatim: L10n.plural("%lld dní", count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        .frame(width: 62, alignment: .leading)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.track)
+                            Capsule().fill(usual ? Palette.green : Palette.muted).frame(width: geo.size.width * CGFloat(count) / CGFloat(total))
+                        }
+                    }
+                    .frame(height: 5)
+                    HStack(alignment: .firstTextBaseline, spacing: 1) {
+                        Text(verbatim: String(Int((Double(count) / Double(total) * 100).rounded()))).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text(verbatim: "%").font(.caption2).foregroundStyle(Palette.faint)
+                    }
+                    .frame(width: 44, alignment: .trailing)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
     }
 }
 

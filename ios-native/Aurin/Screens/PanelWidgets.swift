@@ -559,7 +559,10 @@ struct PanelWidget: View {
                 HRVWidget(hrv: value, restingHR: data.restingHR?.value, size: item.size)
             }
         case .vo2max:
-            if let training = data.training, let value = training.vo2max { VO2maxWidget(vo2: value, today: training.date, size: item.size, bands: model.health?.vo2max?.compared) }
+            // Aurin's own estimate when Health has it, the number the detail shows.
+            if let training = data.training, let value = (model.health?.vo2max).map(TrainingSnapshot.VO2max.init(aurin:)) ?? training.vo2max {
+                VO2maxWidget(vo2: value, today: training.date, size: item.size, bands: model.health?.vo2max?.compared)
+            }
         case .respiration:
             if let value = data.health?.respiration { RespirationWidget(respiration: value, size: item.size) }
         case .skinTemp:

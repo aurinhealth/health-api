@@ -63,6 +63,14 @@ struct TrainingSnapshot: Decodable, Equatable {
         let historyDays: Int?
         let needsDays: Int?
         let series: [Point]
+        /// The last 7 days' load and the usual week (the 4 weeks' average),
+        /// plain loads, never the ratio (older servers: nil).
+        var load: Double? = nil
+        var usual: Double? = nil
+        /// The 7-day load of every day since the first load, up to 98 days, for the trend rows.
+        var history: [Day]? = nil
+        /// Load balance: the last 7 days by how hard the heart worked, each with its usual range.
+        var intensity: [Part]? = nil
 
         struct Band: Decodable, Equatable {
             let low: Double
@@ -73,7 +81,23 @@ struct TrainingSnapshot: Decodable, Equatable {
             let date: String
             let level: String?
             let plot: Double?
+            /// The 7 days' load ending that day (older servers: nil).
+            var load: Double? = nil
             var id: String { date }
+        }
+
+        struct Day: Decodable, Equatable {
+            let date: String
+            let load: Double
+        }
+
+        /// "low", "high" or "anaerobic".
+        struct Part: Decodable, Equatable, Identifiable {
+            let key: String
+            let load: Double
+            let low: Double
+            let high: Double
+            var id: String { key }
         }
 
         /// Today's place for the dot; nil while learning.
@@ -251,7 +275,7 @@ struct TrainingSnapshot: Decodable, Equatable {
         let series: [TodaySnapshot.Point]
 
         /// The value is an estimate and says whose (MDR, audit 16.5).
-        var caption: String { L10n.tr(source == "intervals" ? "odhad z Intervals.icu" : "odhad zařízení") }
+        var caption: String { L10n.tr(source == "aurin" ? "odhad Aurinu" : source == "intervals" ? "odhad z Intervals.icu" : "odhad zařízení") }
     }
 
     struct ActiveCalories: Decodable, Equatable {
@@ -269,5 +293,16 @@ struct TrainingSnapshot: Decodable, Equatable {
         let planned: Int
         let doneLoad: Double
         let plannedLoad: Double
+    }
+}
+
+extension TrainingSnapshot.VO2max {
+    /// Aurin's own estimate from Health, the one the VO2max detail shows, so
+    /// the tile and the page say one number (redesign 602 point 105).
+    init(aurin h: HealthVO2max) {
+        let series = h.series.sorted { $0.date < $1.date }
+        let before = series.last(where: { $0.date <= ISODay.shift(h.date, -28) })
+        self.init(value: h.value, source: "aurin", change: before.map { ((h.value - $0.value) * 10).rounded() / 10 },
+                  series: series.filter { $0.date > ISODay.shift(h.date, -182) })
     }
 }
