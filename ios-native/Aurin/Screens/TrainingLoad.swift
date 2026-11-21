@@ -540,7 +540,7 @@ struct LoadIntensity: View {
                 let x = { (v: Double) in geo.size.width * CGFloat(min(max(v / top, 0), 1)) }
                 ZStack(alignment: .leading) {
                     Capsule().fill(Palette.track)
-                    Rectangle().fill(Palette.ink.opacity(0.18)).frame(width: max(x(part.high) - x(part.low), 2)).offset(x: x(part.low))
+                    Rectangle().fill(Palette.ink.opacity(0.3)).frame(width: max(x(part.high) - x(part.low), 2)).offset(x: x(part.low))
                     Capsule().fill(Palette.ink).frame(width: max(x(part.load), 3))
                 }
             }
@@ -574,7 +574,7 @@ struct LoadIntensity: View {
     }
 
     static func state(_ part: TrainingSnapshot.LoadView.Part) -> String {
-        part.load < part.low ? L10n.tr("Pod obvyklým") : part.load > part.high ? L10n.tr("Nad obvyklým") : L10n.tr("V rozmezí")
+        part.load < part.low ? L10n.tr("Pod") : part.load > part.high ? L10n.tr("Nad") : L10n.tr("V rozmezí")
     }
 }
 
@@ -586,9 +586,9 @@ struct LoadDaysByStatus: View {
     var body: some View {
         let levels = series.compactMap(\.level)
         let groups: [(String, Int, Bool)] = [
-            ("Pod obvyklým", levels.filter { $0 == "below" || $0 == "wellBelow" }.count, false),
+            ("Pod", levels.filter { $0 == "below" || $0 == "wellBelow" }.count, false),
             ("V rozmezí", levels.filter { $0 == "usual" }.count, true),
-            ("Nad obvyklým", levels.filter { $0 == "above" || $0 == "wellAbove" }.count, false)
+            ("Nad", levels.filter { $0 == "above" || $0 == "wellAbove" }.count, false)
         ]
         let total = max(levels.count, 1)
         VStack(spacing: 14) {

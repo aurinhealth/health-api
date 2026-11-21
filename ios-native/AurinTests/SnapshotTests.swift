@@ -218,12 +218,12 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testFormDetailScreen() throws {
-        try render("training-form", glow: Palette.Glow.training) { FormDetailContent(training: DemoData.training, metric: .constant("form"), period: .constant(.days30)).padding(16).padding(.top, 30) }
-        try render("training-form-fitness", glow: Palette.Glow.training) { FormDetailContent(training: DemoData.training, metric: .constant("fitness"), period: .constant(.months3)).padding(16).padding(.top, 30) }
+        try render("training-form", glow: Palette.Glow.training, window: true) { FormDetailContent(training: DemoData.training, metric: .constant("form"), period: .constant(.days30)).padding(16).padding(.top, 30) }
+        try render("training-form-fitness", glow: Palette.Glow.training, window: true) { FormDetailContent(training: DemoData.training, metric: .constant("fitness"), period: .constant(.months3)).padding(16).padding(.top, 30) }
         // Load balance and Muscle load (concepts K04/020, 021): the dial, the days against the band, the sections.
-        try render("training-load-balance", glow: Palette.Glow.training) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training).padding(16).padding(.top, 30) }
-        try render("training-load-balance-week", glow: Palette.Glow.training) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training, cell: "load").padding(16).padding(.top, 30) }
-        try render("training-muscle-load", glow: Palette.Glow.training) { LoadDetailContent(kind: .constant(.muscle), training: DemoData.training).padding(16).padding(.top, 30) }
+        try render("training-load-balance", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training).padding(16).padding(.top, 30) }
+        try render("training-load-balance-week", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.balance), training: DemoData.training, cell: "load").padding(16).padding(.top, 30) }
+        try render("training-muscle-load", glow: Palette.Glow.training, window: true) { LoadDetailContent(kind: .constant(.muscle), training: DemoData.training).padding(16).padding(.top, 30) }
     }
 
     func testHealthScreens() throws {
