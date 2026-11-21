@@ -37,6 +37,9 @@ struct CoachTextCard: View {
     /// Today's recovery tip under the sentence (RecoveryTipRows); it shows the card on its own too,
     /// also when the coach is off on Dnes.
     var tip: AnyView? = nil
+    /// Words the day needs said instead of the coach's text (a missed key workout,
+    /// MissedWorkoutBlock): the sentence and the green one.
+    var pinned: (String, String)? = nil
 
     @Environment(\.tabActions) private var actions
     @State private var loaded: CoachText?
@@ -46,7 +49,8 @@ struct CoachTextCard: View {
     @AppStorage private var shown: Bool
     @AppStorage private var folded: Bool
 
-    init(screen: String, fallbackText: String? = nil, fallbackAdvice: String? = nil, live: Bool = true, tip: AnyView? = nil) {
+    init(screen: String, fallbackText: String? = nil, fallbackAdvice: String? = nil, live: Bool = true, tip: AnyView? = nil, pinned: (String, String)? = nil) {
+        self.pinned = pinned
         self.screen = screen
         self.fallbackText = fallbackText
         self.fallbackAdvice = fallbackAdvice
@@ -57,8 +61,8 @@ struct CoachTextCard: View {
     }
 
     private var ai: CoachText? { shown && live && (loaded?.isAI ?? false) ? loaded : nil }
-    private var text: String? { shown ? ai?.text ?? fallbackText?.nilIfBlank : nil }
-    private var advice: String? { !shown ? nil : ai != nil ? ai?.advice?.nilIfBlank : fallbackAdvice?.nilIfBlank }
+    private var text: String? { shown ? pinned?.0 ?? ai?.text ?? fallbackText?.nilIfBlank : nil }
+    private var advice: String? { !shown ? nil : pinned != nil ? pinned?.1 : ai != nil ? ai?.advice?.nilIfBlank : fallbackAdvice?.nilIfBlank }
     /// Today audit 40, on Today only: without Aurin Pro (the paywall on) the
     /// rule-based text says where the coach's personal word is; in the last two
     /// days of a free week that nothing follows, when it ends. Nothing blurred
@@ -73,8 +77,8 @@ struct CoachTextCard: View {
         }
         return nil
     }
-    private var chips: [String] { shown && live && !folded ? (loaded?.chips ?? []) : [] }
-    private var basis: [CoachText.Basis] { shown && live && !folded ? (loaded?.basis ?? []) : [] }
+    private var chips: [String] { shown && live && !folded && pinned == nil ? (loaded?.chips ?? []) : [] }
+    private var basis: [CoachText.Basis] { shown && live && !folded && pinned == nil ? (loaded?.basis ?? []) : [] }
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -217,7 +221,7 @@ struct CoachTextCard: View {
             TwoLights(size: 18).accessibilityHidden(true)
             Text("Kouč").font(Typo.bodyStrong)
             Spacer(minLength: 8)
-            if let time = ai?.time {
+            if pinned == nil, let time = ai?.time {
                 Text(verbatim: L10n.f("dnes %@", ClockText.format(time))).font(Typo.caption).foregroundStyle(Palette.faint)
             }
             if chevron {

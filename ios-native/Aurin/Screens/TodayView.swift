@@ -279,6 +279,11 @@ struct TodayContent: View {
                 CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
                               tip: AnyView(TodayCoachAction(today: today)))
                     .padding(.top, 12)
+            } else if coachShown, let missed = today.missedWorkout {
+                // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
+                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                              tip: AnyView(MissedWorkoutBlock(missed: missed)), pinned: (missed.text, missed.advice))
+                    .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
                               tip: AnyView(TodayCoachAction(today: today)))
