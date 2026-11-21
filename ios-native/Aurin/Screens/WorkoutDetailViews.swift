@@ -549,6 +549,8 @@ struct ActivityDetailContent: View {
     /// The charts' points, made once: dragging the cursor redraws the body every frame.
     private let watts: [StreamChart.Sample]
     private let hr: [StreamChart.Sample]
+    /// The lowest and highest heart rate of every point, not of the averaged chart points.
+    private let hrRange: (min: Double, max: Double)?
 
     init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, compliance: AnyView? = nil, rating: AnyView? = nil, comparison: AnyView? = nil) {
         self.detail = detail
@@ -559,6 +561,8 @@ struct ActivityDetailContent: View {
         self.comparison = comparison
         watts = Self.samples("watts", in: detail)
         hr = Self.samples("heartrate", in: detail)
+        let beats = (detail.streams?.first { $0.type == "heartrate" }?.points ?? []).compactMap(\.v).filter { $0 > 0 }
+        hrRange = beats.min().flatMap { low in beats.max().map { (min: low, max: $0) } }
     }
 
     /// The workout's minutes, rounded as Training's row rounds them, one value
@@ -578,10 +582,12 @@ struct ActivityDetailContent: View {
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
             if a.average_heartrate != nil || hr.count > 10 {
                 SectionLabel(text: "Srdce").padding(.top, 28)
-                heartNumbers.padding(.top, 10)
                 if hr.count > 10 {
-                    StreamChart(title: "Tep", unit: "bpm", color: Palette.rust, samples: hr, span: span, floorZero: false, cursor: $cursor)
+                    StreamChart(title: "Tep", unit: "bpm", color: Palette.rust, samples: hr, span: span, floorZero: false, cursor: $cursor,
+                                average: a.average_heartrate, bands: heartBands, top: AnyView(heartNumbers))
                         .padding(.top, 10)
+                } else {
+                    Card { heartNumbers }.padding(.top, 10)
                 }
             }
             if let zones = detail.hrZones, !zones.isEmpty {
@@ -678,7 +684,7 @@ struct ActivityDetailContent: View {
         } else if let v = a.average_speed, v > 0 {
             cells.append(.init(label: "Prům. rychlost", value: Fmt.decimal(Units.distance(v * 3.6), digits: 1), unit: Units.imperial ? "mph" : "km/h"))
         }
-        if let hr = a.average_heartrate { cells.append(.init(label: "Průměrný tep", value: Fmt.int(hr), unit: "bpm")) }
+        if let hr = a.average_heartrate { cells.append(.init(label: "Prům. tep", value: Fmt.int(hr), unit: "bpm")) }
         if let w = a.average_watts ?? a.icu_normalized_watts {
             cells.append(.init(label: a.average_watts != nil ? "Prům. výkon" : "NP", value: Fmt.int(w), unit: "W"))
         }
@@ -692,7 +698,6 @@ struct ActivityDetailContent: View {
         var rows: [(label: String, value: String, unit: String?)] = []
         if let e = a.total_elevation_gain, e > 0 { rows.append(("Převýšení", Fmt.int(Units.imperial ? e * 3.28084 : e), Units.imperial ? "ft" : "m")) }
         if let c = a.average_cadence, c > 0 { rows.append(("Prům. kadence", Fmt.int(c), isRun ? "spm" : "rpm")) }
-        if let load = a.icu_training_load { rows.append(("Zátěž", Fmt.int(load), "TSS")) }
         if a.average_watts != nil, let np = a.icu_normalized_watts { rows.append(("NP", Fmt.int(np), "W")) }
         if let i = a.icu_intensity { rows.append(("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2), nil)) }
         if let h = detail.recoveryHours { rows.append(("Regenerace, odhad", Self.recoveryDays(h), nil)) }
@@ -702,14 +707,19 @@ struct ActivityDetailContent: View {
     /// The concept's hr3: average, lowest and highest heart rate.
     private var heartNumbers: some View {
         let a = detail.activity
-        let low = hr.map(\.value).min()
         return HStack(spacing: 0) {
             heartCell("Prům.", a.average_heartrate)
-            heartCell("Min.", low)
-            heartCell("Maximum", a.max_heartrate ?? hr.map(\.value).max())
+            heartCell("Min.", hrRange?.min)
+            heartCell("Max", a.max_heartrate ?? hrRange?.max)
         }
-        .padding(16)
-        .cardSurface(cornerRadius: 20)
+    }
+
+    /// The zones' bpm ranges as bands behind the heart-rate line.
+    private var heartBands: [(lo: Double, hi: Double, color: Color)] {
+        (detail.hrZones ?? []).enumerated().compactMap { i, z in
+            guard z.min != nil || z.max != nil else { return nil }
+            return (lo: z.min ?? 0, hi: (z.max ?? 250) + 1, color: Palette.Zone.color(i))
+        }
     }
 
     private func heartCell(_ label: String, _ value: Double?) -> some View {
@@ -797,33 +807,53 @@ struct StreamChart: View {
     let span: Double
     let floorZero: Bool
     @Binding var cursor: Double?
+    /// The workout's own average (the number above it), drawn as a dashed line.
+    var average: Double? = nil
+    /// Heart rate zones as soft bands behind the line (concept wdone).
+    var bands: [(lo: Double, hi: Double, color: Color)] = []
+    /// Shown in place of the title row's name (the Heart card's Avg/Min/Max).
+    var top: AnyView? = nil
 
     var body: some View {
         let values = samples.map(\.value)
-        let average = values.reduce(0, +) / Double(max(values.count, 1))
+        let average = self.average ?? values.reduce(0, +) / Double(max(values.count, 1))
         let top = values.max() ?? 1, bottom = values.min() ?? 0
         let lo = floorZero ? 0 : max(0, (bottom - 8).rounded(.down))
         let hi = floorZero ? top * 1.05 : top + 5
         let picked: Sample? = cursor.flatMap { c in samples.min { abs($0.minute - c) < abs($1.minute - c) } }
 
         Card {
+            if let top { top }
             HStack(alignment: .firstTextBaseline) {
-                Text(title).font(Typo.bodyStrong).foregroundStyle(color)
+                if top == nil { Text(title).font(Typo.bodyStrong).foregroundStyle(color) }
                 Spacer()
                 if let picked {
                     Text(verbatim: Self.clock(picked.minute) + "   " + Fmt.int(picked.value) + " " + unit)
                         .font(Typo.number(17)).foregroundStyle(Palette.ink)
-                } else {
+                } else if top == nil {
                     Text(verbatim: L10n.f("prům. %@ %@", Fmt.int(average), unit)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
+            .frame(minHeight: top == nil ? nil : 20)
             Chart {
+                ForEach(Array(bands.enumerated()), id: \.offset) { _, band in
+                    if band.hi > lo, band.lo < hi {
+                        RectangleMark(xStart: .value("Minuta", 0), xEnd: .value("Minuta", span),
+                                      yStart: .value("Spodek", max(band.lo, lo)), yEnd: .value("Vršek", min(band.hi, hi)))
+                            .foregroundStyle(band.color.opacity(0.1))
+                    }
+                }
                 ForEach(samples) { s in
                     AreaMark(x: .value("Minuta", s.minute), yStart: .value("Spodek", lo), yEnd: .value(title, s.value))
                         .foregroundStyle(color.opacity(0.12))
                     LineMark(x: .value("Minuta", s.minute), y: .value(title, s.value))
                         .foregroundStyle(color)
                         .lineStyle(StrokeStyle(lineWidth: 1.4, lineJoin: .round))
+                }
+                if self.average != nil {
+                    RuleMark(y: .value("Průměr", average))
+                        .foregroundStyle(Palette.muted.opacity(0.7))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 }
                 if let picked {
                     RuleMark(x: .value("Minuta", picked.minute)).foregroundStyle(Palette.faint.opacity(0.6))
@@ -834,9 +864,11 @@ struct StreamChart: View {
             .chartXScale(domain: 0...span)
             .chartYScale(domain: lo...max(hi, lo + 1))
             .chartXAxis {
-                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                AxisMarks(values: .automatic(desiredCount: 5)) { value in
                     AxisGridLine().foregroundStyle(Palette.hairline)
-                    AxisValueLabel().foregroundStyle(Palette.faint)
+                    AxisValueLabel {
+                        if let minute = value.as(Double.self) { Text(verbatim: Self.hours(minute)).foregroundStyle(Palette.faint) }
+                    }
                 }
             }
             .chartYAxis {
@@ -847,10 +879,15 @@ struct StreamChart: View {
             }
             .chartXSelection(value: $cursor)
             .frame(height: 150)
-            Text("min").font(Typo.tiny).foregroundStyle(Palette.faint).frame(maxWidth: .infinity, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.f("prům. %@ %@", Fmt.int(average), unit)))
+    }
+
+    /// The time axis as the concept writes it: 30 → "0:30", 92 → "1:32".
+    static func hours(_ minute: Double) -> String {
+        let m = Int(minute.rounded())
+        return String(format: "%d:%02d", m / 60, m % 60)
     }
 
     /// 31.5 → "31:30".
