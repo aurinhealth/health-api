@@ -41,6 +41,13 @@ struct FoodSnapshot: Decodable, Equatable {
             let moreActive: Double
         }
 
+        /// What the workouts done burned in all, of which "workouts" is the counted part.
+        var burnedDone: Double? {
+            guard workouts > 0 else { return nil }
+            if let items { return items.filter { $0.kind == "done" }.map(\.kcal).reduce(0, +) }
+            return coverage.flatMap { $0 > 0 ? workouts / $0 : nil }
+        }
+
         /// One workout: "done" or "planned", what it burns and what it adds.
         struct Item: Decodable, Equatable {
             let kind: String
