@@ -525,7 +525,7 @@ struct WeekStrip: View {
     /// The dot is the day's readiness, in the colours of the month calendar.
     private func cell(_ day: String) -> some View {
         let isToday = day == today, selected = day == shown, future = day > lastDay
-        let color = ReadinessText.pill(zone(day))?.1
+        let color = zone(day).map { $0 == "green" ? Palette.green : Palette.amber }
         return VStack(spacing: 5) {
             Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(isToday ? .bold : selected ? .semibold : .medium))
                 .foregroundStyle(selected || isToday ? Palette.ink : Palette.muted)
