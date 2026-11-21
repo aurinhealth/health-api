@@ -1064,6 +1064,28 @@ export function stalledExercises(rows, date) {
   return new Set([...byExercise].filter(([ex, list]) => progressionDecision(list, ex, EXERCISES[ex].reps, 1, date, priorMuscleSets(rows, ex))?.stalled).map(([ex]) => ex));
 }
 
+// The block's main lifts: per movement pattern, the main exercise (with its
+// variants) done in the most sessions of the last 42 days (at least three, ties
+// to the latest). The block changes with variantFor's five-week variant or a stall.
+const ANCHOR_BONUS = 5;
+export function blockAnchors(rows, date) {
+  const days = new Map();
+  for (const r of rows || []) {
+    // A variant counts for its main exercise (variantFor turns one into the other every five weeks).
+    const name = normalizeExerciseName(r.exercise), ex = EXERCISES[name]?.variantOf && EXERCISES[EXERCISES[name].variantOf] ? EXERCISES[name].variantOf : name, d = dateKey(r.workout_date), def = EXERCISES[ex];
+    if (!def?.warmup || !d || r.planned || String(r.type || "WORK").toUpperCase() !== "WORK" || daysBetween(d, date) <= 0) continue;
+    (days.get(ex) || days.set(ex, new Set()).get(ex)).add(d);
+  }
+  const best = new Map();
+  for (const [ex, set] of days) {
+    const list = [...set].sort(), recent = list.filter(d => daysBetween(d, date) <= 42).length, last = list.at(-1), pattern = EXERCISES[ex].pattern;
+    if (recent < 3) continue;
+    const b = best.get(pattern);
+    if (!b || recent > b.recent || recent === b.recent && last > b.last) best.set(pattern, { ex, recent, last });
+  }
+  return new Set([...best.values()].map(b => b.ex));
+}
+
 // The athlete's thumbs (exercise-feedback.js): disliked exercises are left
 // out while the pattern or group has another one; a liked one wins a close call.
 const LIKED_BONUS = 0.4;
@@ -1144,10 +1166,16 @@ function choosePlan(context, options = {}) {
   // Three sessions at the same load without more reps: another variant of
   // the movement takes over for a while (a new stimulus), if there is one.
   const stalled = stalledExercises(context?.strength?.recentCompletedSets, context.date), stallSwaps = {};
+  // A block (strength coach, 2026-11-21): the main lift (one with warm-up sets)
+  // the athlete did most in the last six weeks, at least three times, stays the lift
+  // of its movement group, so its load can progress session after session. It
+  // gives way when it stalls; its variant changes every five weeks (variantFor).
+  const anchors = blockAnchors(context?.strength?.recentCompletedSets, context.date);
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return (shown.has(ex) ? SHOWN_PENALTY : 0) + recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    const anchor = anchors.has(ex) && !(withStall && stalled.has(ex)) ? ANCHOR_BONUS : 0;
+    return (shown.has(ex) ? SHOWN_PENALTY : 0) + recent - anchor + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
