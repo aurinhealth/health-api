@@ -11,6 +11,7 @@ import { revokeWahoo } from "./wahoo.js";
 import { revokeIntervals } from "./intervals-oauth.js";
 import { rememberAiLimits } from "./ai-limit-memory.js";
 import { keepEndedPurchases, withColumns } from "./app-store.js";
+import { isStaging } from "./staging.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -80,6 +81,8 @@ export function exportAccountStream(env, user, { now = new Date(), pageRows = EX
 // before forgetting the key (here and on disconnecting Google Health).
 export async function revokeGoogle(env, fetchImpl = fetch) {
   if (!env.GOOGLE_REFRESH_TOKEN) return "none";
+  // The test server shares the live server's Google client: a revoke there would end the live consent too.
+  if (isStaging(env)) return "skipped";
   try {
     const response = await fetchImpl("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: env.GOOGLE_REFRESH_TOKEN }) });
     return response.ok ? "revoked" : "failed";

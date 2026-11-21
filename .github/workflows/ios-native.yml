@@ -50,7 +50,9 @@ jobs:
     # preview and the iPhone Duo screenshots: 81 to 97 minutes (cancelled at 60
     # and then 90 min before; the open Duo shots add 1 to 2), so 110, plus room
     # for a second warm-up and a test that ran out of time run once more.
-    timeout-minutes: 125
+    # On 2026-11-19 two main runs reached "Build for iPhone" only after 113 minutes and were
+    # cut there, so Vydat had no checked build: 160.
+    timeout-minutes: 160
     defaults:
       run:
         working-directory: ios-native

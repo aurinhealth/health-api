@@ -25,6 +25,7 @@ import { againAfterOutage } from './outage-retry.js';
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
+import { isStaging } from './staging.js';
 import { resolveSources } from './source-priority.js';
 import { readReadOff, readAllowed } from './source-reading.js';
 
@@ -217,6 +218,8 @@ export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today =
 export async function revokeUltrahuman(env, fetchImpl = fetch) {
   const tokens = readUltrahumanTokens(env);
   if (!tokens || !ultrahumanConfigured(env)) return 'none';
+  // The test server shares the live server's OAuth client: a revoke there would end the live connection too.
+  if (isStaging(env)) return 'skipped';
   // An expired access token is refreshed first, else the revoke is refused.
   const token = await ultrahumanAccessToken(env, { fetchImpl }).catch(() => tokens.access_token);
   const response = await fetchImpl(REVOKE, {
