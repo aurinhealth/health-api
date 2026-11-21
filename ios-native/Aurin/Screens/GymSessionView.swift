@@ -188,8 +188,8 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
-                // Muscles (concept wgym): what the logged exercises worked.
-                if !muscles.isEmpty { worked(title: "Zapojené svaly").padding(.top, 22) }
+                // Muscles (concept wgym): the share of the session by muscle group.
+                if let day, !Self.shares(day, muscles: muscles).isEmpty { doneMuscles(day).padding(.top, 28) }
                 // Only a paused workout goes on; a finished one never offers Resume (device test 602).
                 if !model.demo, date == AppModel.localDate(Date()), LiveWorkout.shared.running, LiveWorkout.shared.pausedAt != nil {
                     Button {
@@ -313,7 +313,7 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 6)
                 }
-                if !muscles.isEmpty { worked().padding(.top, 22) }
+                if !muscles.isEmpty { worked.padding(.top, 22) }
                 // Sets ticked here: finished here. While the live workout runs it finishes there
                 // (finishing here would leave its Apple Health workout running).
                 if started && !LiveWorkout.shared.running {
@@ -349,7 +349,7 @@ struct GymSessionView: View {
 
     /// The sport's disc, the name in serif, "Today at 17:30, 45 min, about 4.2 strain".
     private func hero(_ day: GymDay, _ parts: GymDayParts) -> some View {
-        GymHero(title: day.planName ?? L10n.tr("Silový trénink"), line: heroLine(day, parts))
+        WorkoutHero(sport: "strength", title: day.planName ?? L10n.tr("Silový trénink"), line: heroLine(day, parts))
     }
 
     /// A done workout's changes, quiet under it (no "…" menu): another kind of
@@ -410,12 +410,12 @@ struct GymSessionView: View {
     }
 
     /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
-    private func worked(title: String = "Co procvičíš") -> some View {
+    private var worked: some View {
         let primary = Self.names(load.filter { $0.value >= BodyMap.primary })
         // A group already primary (one of its muscles) is not secondary again.
         let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
         return VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: title)
+            SectionLabel(text: "Co procvičíš")
             VStack(alignment: .leading, spacing: 12) {
                 BodyMap(load: load, height: 200)
                 if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
@@ -428,6 +428,63 @@ struct GymSessionView: View {
 
     /// The muscle groups by how hard they work, each once ("Chest", "Back", "Triceps"),
     /// as the concept names them: not every head of the shoulder.
+    /// Each muscle group's share of a done session, in percent, biggest first:
+    /// the done work sets of each exercise times how much it works the muscle.
+    static func shares(_ day: GymDay, muscles: [String: [String: Double]]) -> [(name: String, percent: Double)] {
+        var groups: [String: Double] = [:]
+        for exercise in day.exercises {
+            let sets = Double(exercise.sets.filter { $0.work && $0.done && $0.side != "P" }.count)
+            guard sets > 0 else { continue }
+            for (muscle, weight) in muscles[exercise.name] ?? [:] {
+                let g = group[muscle] ?? BodyFigure.label(muscle)
+                groups[g, default: 0] += sets * weight
+            }
+        }
+        let total = groups.values.reduce(0, +)
+        guard total > 0 else { return [] }
+        return groups.map { (name: $0.key, percent: $0.value / total * 100) }
+            .sorted { $0.percent == $1.percent ? $0.name < $1.name : $0.percent > $1.percent }
+    }
+
+    /// Muscles of a done session (concept wgym): the figure shaded by share,
+    /// then the biggest groups with their share of the whole session.
+    private func doneMuscles(_ day: GymDay) -> some View {
+        let shares = Array(Self.shares(day, muscles: muscles).prefix(6))
+        let top = max(shares.first?.percent ?? 1, 1)
+        return VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Zapojené svaly")
+            VStack(alignment: .leading, spacing: 0) {
+                BodyMap(load: load, height: 200).padding(.bottom, 12)
+                SectionLabel(text: "Podle svalu, podíl z celého tréninku").padding(.bottom, 4)
+                ForEach(Array(shares.enumerated()), id: \.element.name) { index, share in
+                    let shade = Palette.rust.opacity(0.3 + 0.7 * share.percent / top)
+                    HStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous).fill(shade).frame(width: 10, height: 10)
+                        Text(verbatim: share.name).font(Typo.body).foregroundStyle(Palette.ink)
+                            .frame(width: 118, alignment: .leading).lineLimit(1).minimumScaleFactor(0.8)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Palette.track)
+                                Capsule().fill(shade).frame(width: max(4, geo.size.width * share.percent / top))
+                            }
+                        }
+                        .frame(height: 6)
+                        NumberText(value: share.percent < 1 ? "<1" : Fmt.int(share.percent), unit: "%", size: 18)
+                            .frame(width: 52, alignment: .trailing)
+                    }
+                    .frame(minHeight: 42)
+                    .overlay(alignment: .top) { if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .padding(18)
+            .cardSurface(cornerRadius: 20)
+            Text("Podíl zátěže tréninku podle svalu, odhadnutý ze zapsaných sérií. Čím sytější barva, tím větší podíl.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 4)
+        }
+    }
+
     static func names(_ load: [String: Double]) -> [String] {
         var groups: [String: Double] = [:]
         for (muscle, value) in load { let g = group[muscle] ?? BodyFigure.label(muscle); groups[g] = max(groups[g] ?? 0, value) }

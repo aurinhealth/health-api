@@ -37,7 +37,7 @@ struct GymDoneDetail: View {
             // Concept wgym (trenink-koncept): the header, Workout details, the
             // exercises as rows (a tap shows and fixes each set), then the
             // muscles (GymSessionView) under it.
-            GymHero(kind: L10n.tr("Posilovna"), title: title, line: when) {
+            WorkoutHero(sport: "strength", kind: L10n.tr("Posilovna"), title: title, line: when) {
                 // Who recorded it, and after a merge whose heart rate and calories count.
                 if let line = SourceLine.gym(session) { line.padding(.top, 6) }
             }
@@ -174,27 +174,28 @@ struct GymDoneDetail: View {
 
     /// Workout details (concept wgym): Duration, Sets, Volume, Exercises, Energy.
     /// The length is the session's, the number Training's row shows.
-    @ViewBuilder private var stats: some View {
+    private var stats: some View {
         let minutes: Int? = session?.minutes ?? day.loggedMinutes
         let clock = minutes.map { GymCoach.clock($0) }
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 8) {
-                GymStat(label: "Trvání", value: clock?.value ?? "–", unit: clock?.unit)
-                GymStat(label: "Série", value: String(day.doneWorkSets))
-                GymStat(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit)
-            }
-            HStack(alignment: .top, spacing: 8) {
-                GymStat(label: "Cviky", value: String(day.exercises.filter { $0.doneCount > 0 }.count))
-                if let session, session.kcal != nil {
-                    KcalStat(session: session, date: date)
-                } else {
-                    Color.clear.frame(maxWidth: .infinity)
-                }
-                Color.clear.frame(maxWidth: .infinity)
-            }
+        var cells: [WorkoutStatsCard.Cell] = [
+            .init(label: "Trvání", value: clock?.value ?? "–", unit: clock?.unit),
+            .init(label: "Série", value: String(day.doneWorkSets)),
+            .init(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit),
+            .init(label: "Cviky", value: String(day.exercises.filter { $0.doneCount > 0 }.count))
+        ]
+        if let session, session.kcal != nil {
+            // The estimate chosen for flagged calories, with the way back to the device's.
+            let store = KcalChoiceStore.shared
+            let choice = store.choice(for: session)
+            let estimate = session.kcalEstimate?.value
+            let shown = choice == "estimate" ? (estimate ?? session.kcal) : session.kcal
+            let undo: (() -> Void)? = choice != nil && estimate != nil
+                ? { Task { await store.choose(nil, for: session, date: date, model: model) } } : nil
+            cells.append(.init(label: "Aktivní energie", value: Fmt.int(shown), unit: "kcal",
+                               note: undo == nil ? nil : choice == "estimate" ? L10n.f("původně %@ kcal", Fmt.int(session.kcal)) : L10n.tr("změnit"),
+                               noteAction: undo))
         }
-        .padding(18)
-        .cardSurface(cornerRadius: 20)
+        return WorkoutStatsCard(cells: cells)
     }
 
     // MARK: Changes
@@ -310,34 +311,6 @@ final class KcalChoiceStore {
             chosen[session.id] = nil
             self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
         }
-    }
-}
-
-/// "Energie 320 kcal" with "↶ z 711" to go back to the check.
-struct KcalStat: View {
-    @Environment(AppModel.self) private var model
-    let session: WeekSession
-    let date: String
-    private var store: KcalChoiceStore { KcalChoiceStore.shared }
-
-    var body: some View {
-        let choice = store.choice(for: session)
-        let estimate = session.kcalEstimate?.value
-        let shown: Double? = choice == "estimate" ? (estimate ?? session.kcal) : session.kcal
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Energie").font(Typo.small).foregroundStyle(Palette.muted)
-            NumberText(value: Fmt.int(shown), unit: "kcal", size: 30)
-            if choice != nil, estimate != nil {
-                Button { Task { await store.choose(nil, for: session, date: date, model: model) } } label: {
-                    Label(choice == "estimate" ? L10n.f("původně %@ kcal", Fmt.int(session.kcal)) : L10n.tr("změnit"), systemImage: "arrow.uturn.backward")
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                        .labelStyle(TitleAndOptionalIcon(hasIcon: true))
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Vrátit volbu kalorií")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1095,48 +1068,3 @@ private struct DatedLineChart: View {
     }
 }
 
-// MARK: - The header of the gym detail
-
-/// The concept's header (trenink-koncept `whero`): the glowing sport disc, a
-/// done workout's kind over the serif name, and the line under it ("Today at
-/// 17:30, 45 min", "Friday, November 20, 12:04 to 13:20").
-struct GymHero<Extra: View>: View {
-    var kind: String? = nil
-    let title: String
-    let line: String
-    @ViewBuilder var extra: Extra
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            // The glowing header disc (`.dd`): the sport's colour with a soft
-            // shine, a white figure, a halo.
-            Image(systemName: "figure.strengthtraining.traditional")
-                .font(.system(size: 28, weight: .medium)).foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
-                .frame(width: 60, height: 60)
-                .background {
-                    Circle().fill(Palette.Sport.gym.resolved(dark: false))
-                        .overlay(Circle().fill(RadialGradient(colors: [.white.opacity(0.24), .clear], center: UnitPoint(x: 0.32, y: 0.22),
-                                                              startRadius: 0, endRadius: 36)))
-                }
-                .shadow(color: Palette.Sport.gym.opacity(0.44), radius: 8, x: -2, y: 3)
-                .shadow(color: Palette.Sport.gym.opacity(0.24), radius: 22)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                if let kind { Text(verbatim: kind).font(Typo.small).foregroundStyle(Palette.muted) }
-                Text(verbatim: title).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                extra
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-extension GymHero where Extra == EmptyView {
-    init(kind: String? = nil, title: String, line: String) {
-        self.init(kind: kind, title: title, line: line) { EmptyView() }
-    }
-}
