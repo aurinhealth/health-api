@@ -674,7 +674,7 @@ final class SnapshotTests: XCTestCase {
             + #""hrZones":[{"zone":1,"seconds":2040,"percent":37,"max":135},{"zone":2,"seconds":2460,"percent":45,"min":136,"max":148},{"zone":3,"seconds":720,"percent":13,"min":149,"max":157},{"zone":4,"seconds":240,"percent":5,"min":158,"max":167},{"zone":5,"seconds":20,"percent":0.4,"min":168,"max":181}]}"#
         let ride = try JSONDecoder().decode(ActivityDetail.self, from: Data(rideJSON.utf8))
         try render("activity-done", glow: Palette.Glow.training, height: 1900) {
-            ScrollView { ActivityDetailContent(detail: ride).padding(24) }
+            ActivityDetailContent(detail: ride).padding(24).environment(AppModel(demo: true))
         }
         XCTAssertEqual(ActivityDetailContent.split("42,6 km").1, "km")
         XCTAssertEqual(ZoneGrid.time(20), "20 s")

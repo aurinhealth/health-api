@@ -152,7 +152,6 @@ struct GymDoneDetail: View {
                                      missingNote: true,
                                      onToggle: { set, kg, reps in toggle(set, kg: kg, reps: reps) },
                                      onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
-                                     onAddSet: { addSet(exercise) },
                                      onRemove: { set in remove(set) },
                                      onHistory: { historyFor = exercise.name },
                                      onTechnique: { technique = exercise.name })
@@ -177,8 +176,9 @@ struct GymDoneDetail: View {
     private var stats: some View {
         let minutes: Int? = session?.minutes ?? day.loggedMinutes
         let clock = minutes.map { GymCoach.clock($0) }
-        var cells: [WorkoutStatsCard.Cell] = [
-            .init(label: "Trvání", value: clock?.value ?? "–", unit: clock?.unit),
+        // No length known (logged without a start and end): the cell is left out, not "–".
+        var cells: [WorkoutStatsCard.Cell] = clock.map { [.init(label: "Trvání", value: $0.value, unit: $0.unit)] } ?? []
+        cells += [
             .init(label: "Série", value: String(day.doneWorkSets)),
             .init(label: "Objem", value: Fmt.int(LiftWeight.shownValue(day.volume)), unit: Units.weightUnit),
             .init(label: "Cviky", value: String(day.exercises.filter { $0.doneCount > 0 }.count))

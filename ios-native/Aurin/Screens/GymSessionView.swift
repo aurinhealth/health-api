@@ -219,7 +219,7 @@ struct GymSessionView: View {
                 if let day, !day.exercises.isEmpty {
                     let kept = WorkoutTemplate.from(day, minutes: nil)
                     if !kept.isEmpty {
-                        SaveWorkoutButton(template: kept).padding(.top, 10)
+                        SaveWorkoutButton(template: kept).padding(.top, 24)
                         ShareWorkoutButton(template: kept, date: nil, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
                     }
                 }
@@ -449,12 +449,37 @@ struct GymSessionView: View {
     /// Muscles of a done session (concept wgym): the figure shaded by share,
     /// then the biggest groups with their share of the whole session.
     private func doneMuscles(_ day: GymDay) -> some View {
-        let shares = Array(Self.shares(day, muscles: muscles).prefix(6))
+        let all = Self.shares(day, muscles: muscles)
+        let shares = Array(all.prefix(6))
         let top = max(shares.first?.percent ?? 1, 1)
+        // The figure shows the listed groups, shaded as their rows (the same share, one hue).
+        let shaded = Dictionary(uniqueKeysWithValues: Self.group.compactMap { muscle, name in
+            shares.first { $0.name == name }.map { (muscle, $0.percent / top) }
+        })
+        let region = Self.region(all)
         return VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: "Zapojené svaly")
             VStack(alignment: .leading, spacing: 0) {
-                BodyMap(load: load, height: 200).padding(.bottom, 12)
+                if let region {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle().stroke(Palette.track, lineWidth: 6)
+                            Circle().trim(from: 0, to: region.percent / 100)
+                                .stroke(Palette.rust, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                            Text(verbatim: Fmt.int(region.percent)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        }
+                        .frame(width: 60, height: 60)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: region.name).font(Typo.heading(26)).foregroundStyle(Palette.ink)
+                            Text(verbatim: L10n.f("%@ zátěže tohoto tréninku: %@", Fmt.int(region.percent) + Fmt.percentSign, region.groups))
+                                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .padding(.bottom, 16)
+                }
+                BodyMap(load: shaded, height: 200, share: true).padding(.bottom, 12)
                 SectionLabel(text: "Podle svalu, podíl z celého tréninku").padding(.bottom, 4)
                 ForEach(Array(shares.enumerated()), id: \.element.name) { index, share in
                     let shade = Palette.rust.opacity(0.3 + 0.7 * share.percent / top)
@@ -483,6 +508,21 @@ struct GymSessionView: View {
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 4)
         }
+    }
+
+    /// The body part with most of a done session's load (concept wgym's "70 Legs"):
+    /// legs, core or upper body, its share and its biggest groups in words.
+    static func region(_ shares: [(name: String, percent: Double)]) -> (name: String, percent: Double, groups: String)? {
+        let legs = Set(["Stehna", "Zadní stehna", "Hýždě", "Lýtka"].map { L10n.tr($0) })
+        let core = L10n.tr("Střed těla")
+        func part(_ name: String) -> String { legs.contains(name) ? "Nohy" : name == core ? "Střed těla" : "Horní část těla" }
+        var parts: [String: Double] = [:]
+        for share in shares { parts[part(share.name), default: 0] += share.percent }
+        guard let best = parts.max(by: { $0.value < $1.value }), best.value > 0 else { return nil }
+        let list = ListFormatter()
+        list.locale = Fmt.locale
+        let names = shares.filter { part($0.name) == best.key }.prefix(3).map { $0.name.lowercased(with: Fmt.locale) }
+        return (L10n.tr(best.key), best.value, list.string(from: names) ?? names.joined(separator: ", "))
     }
 
     static func names(_ load: [String: Double]) -> [String] {
