@@ -61,7 +61,9 @@ test("the slow report says what the request waited for: D1, Intervals, AI, anoth
   assert.equal(waitKindOfUrl("https://intervals.icu/api/v1/athlete/0/wellness"), "intervals");
   assert.equal(waitKindOfUrl(new Request("https://api.openai.com/v1/responses")), "ai");
   assert.equal(waitKindOfUrl("https://health.googleapis.com/v4/x"), "google");
-  assert.equal(waitKindOfUrl("https://api.open-meteo.com/v1"), "other");
+  assert.equal(waitKindOfUrl("https://api.open-meteo.com/v1"), "weather");
+  assert.equal(waitKindOfUrl("https://weatherkit.apple.com/api/v1/weather/en/50/14"), "weather");
+  assert.equal(waitKindOfUrl("https://api.example.com/x"), "other");
   const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
   const work = await timed(async store => {
     // Two Intervals calls side by side count once; D1 alongside counts for itself.
