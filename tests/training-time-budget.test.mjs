@@ -13,6 +13,7 @@ import { buildCyclingCoachV2 } from '../src/cycling-coach-v2.js';
 import { CYCLING_WORKOUTS, generateWorkout, getCapabilities, capabilitiesWithLevel, getWorkout, scheduleWorkoutInIntervals } from '../src/workout-library.js';
 import { storeLocalEvent, syncLocalWorkout, completeLocalWorkout } from '../src/local-workouts.js';
 import { generateStrengthPlan, plannedSessionFromRows, weeklyGymDays } from '../src/strength-generator.js';
+import { coachGymSession } from '../src/gym-compose.js';
 import { readGymPlan, writeStrengthPlanToDb } from '../src/gym-plan-store.js';
 import { writeStrengthPlanToIntervals } from '../src/intervals-strength.js';
 import { exerciseMuscles } from '../src/fitness-insights.js';
@@ -47,7 +48,7 @@ async function api(minutes) {
     validTrainingDay: validDay, mondayOfDate: weekStartOf, localToday: () => today,
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes, MANUAL_SPORTS, manualWorkoutType,
     buildCyclingCoachV2, FOCUS_OF, kindOfSystem, isHardKind, generateWorkout, getCapabilities, capabilitiesWithLevel, getWorkout, scheduleWorkoutInIntervals,
-    storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan, plannedSessionFromRows, weeklyGymDays,
+    storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan, coachGymSession, plannedSessionFromRows, weeklyGymDays,
     readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
     weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }), planForWeek: async () => ({ plan: null, pw: null, roles: {}, load: null, apply: t => t }), activePlan: async () => null, gymPhaseFor: () => null,
     cached: async (_env, _ctx, _key, load) => load(), athleteThresholds: async () => ({ ftp: 250 }),

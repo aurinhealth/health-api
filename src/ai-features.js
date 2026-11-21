@@ -23,6 +23,7 @@ export const AI_FEATURES = {
   "workout-describe": { name: "popis vlastního tréninku" },
   "session-change": { name: "úprava tréninku slovy" },
   "gym-adjust": { name: "úprava posilovny slovy" },
+  "gym-compose": { name: "trénink do posilovny od kouče" },
   "gym-equipment": { name: "vybavení posilovny" },
   technique: { name: "technika cviku", free: true },
   "food-photo": { name: "jídlo z fotky", food: true, trial: true },
