@@ -8,7 +8,12 @@ import SwiftUI
 /// ride, run and swim the workouts with filters, for the gym the builder and
 /// the exercises, for tri the bricks.
 struct TrainingLibraryView: View {
+    @Environment(AppModel.self) private var model
     let sport: LibrarySport?
+    /// The pinned Suggest a workout of ride, run and swim (WorkoutLibrarySection).
+    @State private var suggest = 0
+    @State private var suggesting = false
+    @State private var suggested = false
 
     init(sport: String? = nil) {
         self.sport = sport.flatMap { LibrarySport.find($0) }
@@ -19,11 +24,23 @@ struct TrainingLibraryView: View {
         DetailScreen(glow: Palette.Glow.training, title: "Knihovna", pinTitle: true) {
             if let sport {
                 VStack(alignment: .leading, spacing: 0) {
-                    LibrarySportHeader(sport: sport).padding(.top, 14)
-                    if sport.id == "gym" { GymLibrarySection() } else if sport.id == "tri" { BrickLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
+                    if sport.id == "gym" {
+                        LibrarySportHeader(sport: sport).padding(.top, 14)
+                        GymLibrarySection()
+                    } else if sport.id == "tri" {
+                        LibrarySportHeader(sport: sport).padding(.top, 14)
+                        BrickLibrarySection()
+                    } else {
+                        WorkoutLibrarySection(sport: sport.id, suggest: $suggest, suggesting: $suggesting, suggested: $suggested)
+                    }
                 }
             } else {
                 LibraryHome()
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let sport, ["ride", "run", "swim"].contains(sport.id), !model.demo {
+                SuggestWorkoutButton(title: suggested ? "Jiná možnost" : "Navrhnout trénink", busy: suggesting) { suggest += 1 }
             }
         }
     }
@@ -680,10 +697,17 @@ struct LibraryBrickSheet: View {
 struct WorkoutLibrarySection: View {
     @Environment(AppModel.self) private var model
     let sport: String
+    /// The pinned Suggest a workout below the page (TrainingLibraryView): a
+    /// tap counts up, the section answers with its state.
+    @Binding var suggest: Int
+    @Binding var suggesting: Bool
+    @Binding var suggested: Bool
     @AppStorage("libraryIndoor") private var indoor = true
     @AppStorage("libraryPresetsRide") private var presetsRide = "60,90,120,180"
     @AppStorage("libraryPresetsRun") private var presetsRun = "30,45,60,90"
     @AppStorage("libraryPresetsSwim") private var presetsSwim = "30,45,60"
+    // The ± window around the length is no longer on screen (decision 6, 602
+    // point 138): what an athlete set before still applies, quietly.
     @AppStorage("libraryToleranceRide") private var toleranceRide = 15
     @AppStorage("libraryToleranceRun") private var toleranceRun = 10
     @AppStorage("libraryToleranceSwim") private var toleranceSwim = 10
@@ -692,7 +716,12 @@ struct WorkoutLibrarySection: View {
     @State private var recommended: Int?
     @State private var system: String? = nil
     @State private var level: Level = .any
+    /// The day a workout is planned on (Day row), today unless chosen.
+    @State private var day = AppModel.localDate(Date())
     @State private var workouts: [LibraryWorkout] = []
+    /// The sport's whole catalogue (the search's catalogSize) and the athlete's FTP.
+    @State private var catalog: Int?
+    @State private var ftp: Double?
     @State private var loading = false
     @State private var error: String?
     @State private var open: LibraryWorkout?
@@ -729,7 +758,7 @@ struct WorkoutLibrarySection: View {
 
     private var range: ClosedRange<Double> { sport == "swim" ? 15...90 : sport == "run" ? 20...150 : 30...300 }
     private var step: Double { sport == "ride" ? 15 : 5 }
-    private var tolerance: Binding<Int> { sport == "swim" ? $toleranceSwim : sport == "run" ? $toleranceRun : $toleranceRide }
+    private var tolerance: Int { sport == "swim" ? toleranceSwim : sport == "run" ? toleranceRun : toleranceRide }
     /// A swim has no tempo or sweet spot (src/swimming-workouts.js).
     private var systems: [(String, String)] {
         sport == "swim" ? LibraryWorkout.systems.filter { ["recovery", "endurance", "threshold", "vo2max", "sprint"].contains($0.0) } : LibraryWorkout.systems
@@ -737,116 +766,147 @@ struct WorkoutLibrarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // The same card as the gym's "When and how long" (Petr decision 6):
-            // where as a one-tap segment, then the one length control.
-            SectionLabel(text: "Kde a jak dlouho").padding(.top, 16)
+            if let library = LibrarySport.find(sport) {
+                LibrarySportHeader(sport: library, subtitle: subtitle).padding(.top, 14)
+            }
+            // The same card as the gym's (Petr decision 6, 602 point 136): where
+            // as a one-tap segment, the day, then the one length control.
+            SectionLabel(text: "Kde, kdy a jak dlouho").padding(.top, 24)
             Card {
-                Picker("Kde", selection: $indoor) {
-                    Text(sport == "swim" ? "Bazén" : sport == "run" ? "Pás" : "Trenažér").tag(true)
-                    Text(sport == "swim" ? "Volná voda" : "Venku").tag(false)
+                HStack(spacing: 12) {
+                    Text("Kde").font(Typo.body).foregroundStyle(Palette.secondary)
+                    Spacer(minLength: 8)
+                    Picker("Kde", selection: $indoor) {
+                        Text(sport == "swim" ? "Bazén" : sport == "run" ? "Pás" : "Trenažér").tag(true)
+                        Text(sport == "swim" ? "Volná voda" : "Venku").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 220)
                 }
-                .pickerStyle(.segmented)
-                lengthFilter
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                LibraryDayRow(day: $day)
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                LengthControl(minutes: $minutes, recommended: recommended, range: range, step: step,
+                              presets: sport == "swim" ? $presetsSwim : sport == "run" ? $presetsRun : $presetsRide,
+                              fallback: sport == "ride" ? 90 : 45)
             }
             .padding(.top, 10)
 
-            coachPick
-            SectionLabel(text: "Typ").padding(.top, 20)
-            ChipFlow(items: [""] + systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
-                     isOn: { ($0.isEmpty && system == nil) || $0 == system }, toggle: { system = $0.isEmpty ? nil : $0 })
-                .padding(.top, 8)
-            SectionLabel(text: "Obtížnost").padding(.top, 20)
-            Picker("Obtížnost", selection: $level) {
-                ForEach(Level.allCases) { Text($0.label).tag($0) }
+            // Type and difficulty as two menus in one row (602 point 141).
+            HStack(spacing: 10) {
+                LibraryFilterMenu(title: "Typ", value: system.map { LibraryWorkout.systemLabel($0) } ?? L10n.tr("Doporučený")) {
+                    Button { system = nil } label: { Text(verbatim: L10n.tr("Doporučený")) }
+                    ForEach(systems.map { $0.0 }, id: \.self) { id in
+                        Button { system = id } label: { Text(verbatim: LibraryWorkout.systemLabel(id)) }
+                    }
+                }
+                LibraryFilterMenu(title: "Obtížnost", value: L10n.tr(level.label)) {
+                    ForEach(Level.allCases) { l in
+                        Button { level = l } label: { Text(verbatim: L10n.tr(l.label)) }
+                    }
+                }
             }
-            .pickerStyle(.segmented)
-            .padding(.top, 8)
+            .padding(.top, 12)
 
-            if composeShown { composedPick }
+            madeForYou
 
-            if loading && workouts.isEmpty && !composeShown {
+            if loading && workouts.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
             } else if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else if workouts.isEmpty {
-                Text(composeShown ? "V knihovně tomuto výběru nic neodpovídá." : "Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
+                Text("V knihovně tomuto výběru nic neodpovídá.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text(L10n.plural(composeShown ? "Z knihovny, %lld tréninků" : "%lld tréninků", workouts.count))
-                    .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
+                HStack(alignment: .firstTextBaseline) {
+                    SectionLabel(text: "Z knihovny")
+                    Spacer()
+                    Text(L10n.plural("%lld tréninků", workouts.count)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                .padding(.top, 24)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
-                        Button { open = w } label: { LibraryWorkoutCard(workout: w) }.buttonStyle(PressableCardStyle())
+                        Button { open = w } label: { LibraryWorkoutCard(workout: w, sport: sport) }.buttonStyle(PressableCardStyle())
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, 10)
                 .opacity(loading ? 0.5 : 1)
             }
         }
-        .task(id: "\(minutes ?? 0)|\(tolerance.wrappedValue)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
-        .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
-    }
-
-    /// The coach's one workout for today, from the length chosen below.
-    private var coachPick: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let workout = proposal?.workout {
-                SectionLabel(text: "Návrh kouče")
-                Button { open = workout; touched = true } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
-                if proposal?.aiPending == true && !touched {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Kouč píše…").font(Typo.small).foregroundStyle(Palette.muted)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-                if (proposal?.variantCount ?? 0) > 1 {
-                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { touched = true; variant += 1; await propose() } }
-                        .disabled(proposing)
-                }
-            } else {
-                PrimaryButton(title: proposing ? "Hledám…" : "Navrhnout trénink na dnes", systemImage: "sparkles", busy: proposing) {
-                    Task { variant = 0; touched = false; await propose() }
-                }
-                .disabled(model.demo)
-            }
-            if let message = proposalError ?? (proposal?.workout == nil ? proposal?.message : nil) {
-                Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+        .task(id: "\(minutes ?? 0)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
+        .task { await loadFtp() }
+        .onChange(of: suggest) {
+            Task {
+                if proposal?.workout == nil { variant = 0; touched = false } else { touched = true; variant += 1 }
+                await propose()
             }
         }
-        .padding(.top, 20)
+        .onChange(of: proposing) { _, busy in suggesting = busy }
+        .onChange(of: proposal?.workout?.id) { _, id in suggested = id != nil && (proposal?.variantCount ?? 0) > 1 }
         .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil; touched = true }
+        .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor, start: LibraryDayRow.local(day)) }
+    }
+
+    /// "214 workouts, sized to your FTP 262 W" (602 points 135 and 147): the
+    /// sport's whole catalogue, not the list below.
+    private var subtitle: String? {
+        guard let catalog, catalog > 0 else { return nil }
+        let count = L10n.plural("%lld tréninků", catalog)
+        if sport == "ride", let ftp, ftp > 0 { return L10n.f("%@, na míru tvému FTP %@", count, Fmt.int(ftp) + "\u{00A0}W") }
+        return count
+    }
+
+    /// MADE FOR YOU (602 point 146): the coach's proposal from Suggest a
+    /// workout and the AI's own workout when the library has few of a type.
+    @ViewBuilder private var madeForYou: some View {
+        let workout = proposal?.workout
+        if workout != nil || proposing || composeShown || proposalError != nil || (proposal?.workout == nil && proposal?.message != nil) {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Pro tebe")
+                if let workout {
+                    Button { open = workout; touched = true } label: { LibraryWorkoutCard(workout: workout, sport: sport) }.buttonStyle(PressableCardStyle())
+                    if proposal?.aiPending == true && !touched {
+                        CoachThinking(text: L10n.tr("Kouč píše…"))
+                    }
+                } else if proposing {
+                    CoachThinking(text: L10n.tr("Hledám…"))
+                }
+                if let message = proposalError ?? (proposal?.workout == nil ? proposal?.message : nil) {
+                    Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                }
+                if composeShown {
+                    if let composed, !composing {
+                        Button { open = composed } label: { LibraryWorkoutCard(workout: composed, sport: sport) }.buttonStyle(PressableCardStyle())
+                        Text("Napsal ho kouč pro tyto filtry, v knihovně jich je málo.")
+                            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        if composeMore {
+                            Button { Task { await compose(variant: composeVariant + 1) } } label: {
+                                Text(verbatim: L10n.tr("Jiná možnost")).font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(minHeight: 44)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } else {
+                        CoachThinking(text: L10n.tr("Skládám trénink podle tvého výběru…"))
+                    }
+                }
+            }
+            .padding(.top, 24)
+        }
     }
 
     /// Shown while the AI writes and once it has; a failure or an empty answer hides it.
     private var composeShown: Bool { composeWanted && (composing || composed != nil) }
 
-    /// Na míru od AI: the AI's own workout for the filters above the library's few.
-    private var composedPick: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                AIMark()
-                Text(verbatim: L10n.tr("Na míru od AI").uppercased(with: Fmt.locale))
-                    .font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.amber)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            if let composed, !composing {
-                Button { open = composed } label: { LibraryWorkoutCard(workout: composed) }.buttonStyle(PressableCardStyle())
-                if composeMore {
-                    SecondaryButton(title: "Jiný návrh") { Task { await compose(variant: composeVariant + 1) } }
-                }
-            } else {
-                CoachThinking(text: L10n.tr("Skládám trénink podle tvého výběru…"))
-            }
-        }
-        .padding(.top, 24)
+    private func loadFtp() async {
+        guard sport == "ride", !model.demo else { return }
+        ftp = (try? await model.api.myWorkouts())?.athlete.ftp
     }
 
     private func compose(variant: Int) async {
         composing = true
         defer { composing = false }
         do {
-            let result = try await model.api.composeWorkout(sport: sport, minutes: minutes, tolerance: tolerance.wrappedValue, system: system,
+            let result = try await model.api.composeWorkout(sport: sport, minutes: minutes, tolerance: tolerance, system: system,
                                                             indoor: indoor, difficulty: level.range, variant: variant)
             guard !Task.isCancelled else { return }
             if let workout = result.workout {
@@ -888,14 +948,6 @@ struct WorkoutLibrarySection: View {
         if run == proposeRun, proposal?.aiPending == true { proposal?.aiPending = nil }
     }
 
-    /// One length control for every sport (LengthControl, Petr decision 6).
-    private var lengthFilter: some View {
-        LengthControl(minutes: $minutes, recommended: recommended, range: range, step: step,
-                      presets: sport == "swim" ? $presetsSwim : sport == "run" ? $presetsRun : $presetsRide,
-                      tolerance: tolerance, fallback: sport == "ride" ? 90 : 45)
-            .padding(.top, 6)
-    }
-
     private func load() async {
         guard !model.demo else { error = "V ukázce se knihovna nenačítá."; return }
         // The slider and the chips change quickly: wait until they settle.
@@ -904,9 +956,10 @@ struct WorkoutLibrarySection: View {
         loading = true
         defer { loading = false }
         do {
-            let result = try await model.api.searchWorkouts(sport: sport, minutes: minutes, tolerance: tolerance.wrappedValue,
+            let result = try await model.api.searchWorkouts(sport: sport, minutes: minutes, tolerance: tolerance,
                                                             system: system, indoor: indoor, difficulty: level.range)
             workouts = result.workouts
+            catalog = result.catalogSize ?? catalog
             if let length = result.coachPick?.durationMinutes {
                 recommended = Int(length)
             }
@@ -925,36 +978,183 @@ struct WorkoutLibrarySection: View {
     }
 }
 
+/// A library workout (concept a-knihovna/007): the name, the length in serif
+/// with the strain estimate under it, one grey line, and the steps in the
+/// zone colours (602 points 142 to 145).
 struct LibraryWorkoutCard: View {
     let workout: LibraryWorkout
+    var sport = "ride"
 
     var body: some View {
-        Card {
-            HStack(alignment: .firstTextBaseline) {
-                Text(workout.name).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
-                Spacer(minLength: 8)
-                if let d = workout.duration_minutes { Text(Fmt.duration(Int(d))).font(Typo.number(19)).foregroundStyle(Palette.ink) }
-                if workout.ai != nil { AIMark() }
-            }
-            HStack(spacing: 8) {
-                if let s = workout.primary_system { Pill(text: LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft) }
-                if let level = workout.difficultyLabel { Text(level).font(Typo.caption).foregroundStyle(Palette.muted) }
-                if let load = workout.target_load { Text(Fmt.int(load) + " TSS").font(Typo.caption).foregroundStyle(Palette.muted) }
-            }
-            if let blocks = workout.steps, !blocks.isEmpty { StepsProfile(blocks: blocks).frame(height: 36) }
-            if let line = workout.description?.nilIfBlank ?? workout.guide?.how?.dropFirst().first {
-                Text(line).font(Typo.caption).foregroundStyle(Palette.secondary).lineLimit(2).multilineTextAlignment(.leading)
-            }
-            if let reason = workout.ai?.reason {
-                Text(reason).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(3).multilineTextAlignment(.leading)
-                if let warning = workout.ai?.warning {
-                    Label(warning, systemImage: "exclamationmark.triangle").font(Typo.caption).foregroundStyle(Palette.amber)
-                        .lineLimit(3).multilineTextAlignment(.leading)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(verbatim: Self.shownName(workout.name)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        if workout.ai != nil { AIMark() }
+                    }
+                    if let line = subtitle {
+                        Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2).multilineTextAlignment(.leading)
+                    }
                 }
-            } else if let why = workout.reasons?.first {
-                Label(Fmt.capitalized(why), systemImage: "checkmark").font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let d = workout.duration_minutes { Text(verbatim: LengthControl.short(Int(d))).font(Typo.number(22)).foregroundStyle(Palette.ink) }
+                    if let load = workout.target_load, load > 0 {
+                        Text(verbatim: Fmt.decimal(StrainDetailView.strain(tss: load), digits: 1) + "\u{00A0}" + L10n.tr("odh."))
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+            if let blocks = workout.steps, !blocks.isEmpty { LibraryStepsBar(blocks: blocks, sport: sport).frame(height: 22) }
+            if let reason = workout.ai?.reason {
+                Text(reason).font(Typo.caption).foregroundStyle(Palette.secondary).lineLimit(3).multilineTextAlignment(.leading)
+                if let warning = workout.ai?.warning {
+                    Text(warning).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(3).multilineTextAlignment(.leading)
+                }
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface(cornerRadius: 20)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Threshold, hard, 3 × 10 min at 229 to 262 W": the type, then the server's line.
+    private var subtitle: String? {
+        let type = workout.primary_system.map { LibraryWorkout.systemLabel($0) }
+        let parts = [type, workout.difficultyLabel, workout.description?.nilIfBlank].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// The length is on the right, so not again in the name ("Endurance, 60 min"; 602 point 144).
+    static func shownName(_ name: String) -> String {
+        guard let r = name.range(of: #",\s*\d+\s*min$"#, options: .regularExpression) else { return name }
+        return String(name[..<r.lowerBound])
+    }
+}
+
+/// A workout's steps as bars in the zone colours (set B), their height by
+/// the effort, their width by the time (602 point 143).
+struct LibraryStepsBar: View {
+    let blocks: [PlannedWorkout.Block]
+    var sport = "ride"
+
+    var body: some View {
+        let segments = WorkoutProfile.segments(blocks)
+        let total = max(segments.last?.end ?? 1, 1)
+        GeometryReader { geo in
+            HStack(alignment: .bottom, spacing: 1) {
+                ForEach(segments) { s in
+                    let percent = WorkoutProfile.shown(s.percent, sport: sport)
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(s.step.rest == true ? Palette.Zone.color(0) : Palette.Zone.color(Self.zone(percent)))
+                        .frame(width: max(1, (geo.size.width - CGFloat(segments.count)) * CGFloat((s.end - s.start) / total)),
+                               height: geo.size.height * CGFloat(min(max(percent / 130, 0.3), 1)))
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Coggan's zones on % of threshold, Z1 to Z7 as 0 to 6.
+    static func zone(_ percent: Double) -> Int {
+        switch percent {
+        case ..<56: return 0
+        case ..<76: return 1
+        case ..<91: return 2
+        case ..<106: return 3
+        case ..<121: return 4
+        case ..<151: return 5
+        default: return 6
+        }
+    }
+}
+
+/// The library's Day row: today and the next six days in a menu.
+struct LibraryDayRow: View {
+    @Binding var day: String
+
+    var body: some View {
+        let today = AppModel.localDate(Date())
+        HStack(spacing: 12) {
+            Text("Den").font(Typo.body).foregroundStyle(Palette.secondary)
+            Spacer(minLength: 8)
+            Menu {
+                ForEach(0..<7, id: \.self) { i in
+                    let date = ISODay.shift(today, i)
+                    Button { day = date } label: { Text(verbatim: Self.label(date, today: today)) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(verbatim: Self.label(day, today: today)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Image(systemName: "chevron.down").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                }
+                .frame(minHeight: 44)
+            }
+        }
+    }
+
+    /// The day's local midnight, for the date picker of the workout's sheet.
+    static func local(_ iso: String) -> Date? {
+        let parts = iso.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+    }
+
+    static func label(_ date: String, today: String) -> String {
+        Fmt.capitalized(Fmt.relativeDay(date, today: today))
+    }
+}
+
+/// A filter as a menu in a card, its name grey and its value dark ("Type Threshold ⌄").
+struct LibraryFilterMenu<Items: View>: View {
+    let title: String
+    let value: String
+    @ViewBuilder var items: Items
+
+    var body: some View {
+        Menu { items } label: {
+            HStack(spacing: 6) {
+                Text(L10n.tr(title)).font(Typo.small).foregroundStyle(Palette.muted)
+                Text(verbatim: value).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .cardSurface(cornerRadius: 16)
+        }
+        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + value))
+    }
+}
+
+/// The pinned Suggest a workout (glossary D-KNIH-8): an ink pill with the
+/// coach's two lights, the page fading out under it.
+struct SuggestWorkoutButton: View {
+    var title = "Navrhnout trénink"
+    var busy = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                TwoLights(size: 18, mode: busy ? .thinking : .idle)
+                Text(verbatim: L10n.tr(title)).font(Typo.bodyStrong)
+            }
+            .foregroundStyle(Palette.onButton)
+            .frame(maxWidth: .infinity).frame(height: 52)
+            .background(Palette.button, in: Capsule())
+            .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .background(LinearGradient(colors: [Palette.background.opacity(0), Palette.background], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)))
     }
 }
 
@@ -974,6 +1174,8 @@ struct LibraryWorkoutSheet: View {
     let workout: LibraryWorkout
     let sport: String
     let indoor: Bool
+    /// The day chosen in the library's Day row.
+    var start: Date? = nil
     @State private var date = Date()
     @State private var saving = false
     @State private var done = false
@@ -992,7 +1194,7 @@ struct LibraryWorkoutSheet: View {
                 HStack(spacing: 18) {
                     if let d = workout.duration_minutes { meta("Délka", Fmt.duration(Int(d))) }
                     if let m = workout.distance_meters, m > 0 { meta("Vzdálenost", Fmt.int(m) + " m") }
-                    if let l = workout.target_load { meta("Zátěž", Fmt.int(l) + " TSS") }
+                    if let l = workout.target_load, l > 0 { meta(L10n.tr("Námaha"), Fmt.decimal(StrainDetailView.strain(tss: l), digits: 1) + "\u{00A0}" + L10n.tr("odh.")) }
                     if let level = workout.difficultyLabel { meta("Obtížnost", level) }
                 }
                 if let s = workout.primary_system {
@@ -1050,6 +1252,7 @@ struct LibraryWorkoutSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+        .onAppear { if let start { date = max(start, Calendar.current.startOfDay(for: Date())) } }
     }
 
     /// The workout among the athlete's own, to change its sections or share it.
@@ -1343,11 +1546,11 @@ struct ExerciseSheet: View {
     }
 }
 
-/// The one length control of the redesign (Petr decision 6, 2026-11-16): the
-/// Ride library's "Recommended" chip, own presets with "+ Save", a slider in
-/// steps, and for ride, run and swim how far from it a workout may be. The gym
-/// takes it over without the tolerance. The time above follows the finger;
-/// holding a preset removes it.
+/// The one length control of the redesign (Petr decision 6, 2026-11-16) for
+/// every sport (602 points 137 to 139): the length big in serif with the
+/// coach's length for today beside it, a slider in steps, then the
+/// "Recommended" chip, own presets and "+ Save". No ± window on screen. The
+/// time follows the finger; holding a preset removes it.
 struct LengthControl: View {
     /// nil is the coach's length for today.
     @Binding var minutes: Int?
@@ -1356,8 +1559,6 @@ struct LengthControl: View {
     let step: Double
     /// The own presets, "60,90,120" (kept per sport on the phone).
     @Binding var presets: String
-    /// ± minutes; nil hides it (the gym).
-    var tolerance: Binding<Int>? = nil
     /// The slider's start before the coach's length is known.
     var fallback: Int = 60
     @State private var slider: Double = 60
@@ -1368,24 +1569,29 @@ struct LengthControl: View {
     var body: some View {
         let shown = dragging || minutes != nil ? Int(slider) : recommended
         let own = minutes.flatMap { values.contains($0) ? nil : $0 }
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Délka")
-                Spacer()
-                if let shown {
-                    Text(verbatim: Fmt.duration(shown)).font(Typo.number(26)).foregroundStyle(Palette.ink)
-                        .contentTransition(.numericText()).animation(.snappy, value: shown)
-                    if let tolerance {
-                        Text(verbatim: "± \(tolerance.wrappedValue) min").font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
+                Text(verbatim: Self.short(shown ?? Int(slider))).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                    .contentTransition(.numericText()).animation(.snappy, value: shown)
+                Spacer(minLength: 8)
+                if let recommended {
+                    Text(verbatim: L10n.f("Kouč dnes doporučuje %@", Self.short(recommended)))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.trailing)
                 }
             }
+            Slider(value: $slider, in: range, step: step, onEditingChanged: { editing in
+                dragging = editing
+                if !editing { minutes = Int(slider) }
+            })
+            .tint(Palette.ink)
+            .accessibilityLabel(Text(verbatim: L10n.tr("Délka")))
+            .accessibilityValue(Self.short(Int(slider)))
             FlowLayout(spacing: 8) {
-                if recommended != nil || tolerance != nil {
+                if recommended != nil {
                     chip(L10n.tr("Doporučená"), on: minutes == nil && !dragging) { minutes = nil; if let recommended { slider = clamp(recommended) } }
                 }
                 ForEach(values, id: \.self) { value in
-                    chip(Fmt.duration(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
+                    chip(Self.short(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
                         .contextMenu {
                             Button(role: .destructive) { remove(value) } label: { Label("Odebrat z předvoleb", systemImage: "trash") }
                         }
@@ -1393,35 +1599,16 @@ struct LengthControl: View {
                 Button { if let own { add(own) } } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "plus")
-                        if let own { Text(verbatim: L10n.f("Uložit %@", Fmt.duration(own))) }
+                        Text(verbatim: own.map { L10n.f("Uložit %@", Self.short($0)) } ?? L10n.tr("Uložit"))
                     }
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(own == nil ? Palette.faint : Palette.amber)
-                        .padding(.horizontal, 12).frame(minWidth: 32, minHeight: 32)
-                        .background(own == nil ? Color.clear : Palette.amberSoft, in: Capsule())
-                        .overlay { Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(own == nil ? Palette.muted : Palette.ink)
+                    .padding(.horizontal, 12).frame(minHeight: 32)
+                    .overlay { Capsule().stroke(Palette.ink.opacity(own == nil ? 0.25 : 0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
                 }
                 .buttonStyle(.plain)
                 .disabled(own == nil || values.count >= 8)
-                .accessibilityLabel(own.map { L10n.f("Uložit %@", Fmt.duration($0)) } ?? L10n.tr("Uložit délku jako předvolbu"))
-            }
-            Slider(value: $slider, in: range, step: step, onEditingChanged: { editing in
-                dragging = editing
-                if !editing { minutes = Int(slider) }
-            })
-            .tint(Palette.ink)
-            .accessibilityValue(Fmt.duration(Int(slider)))
-            if let tolerance {
-                Menu {
-                    ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
-                        Button("± \(t) min") { tolerance.wrappedValue = t }
-                    }
-                } label: {
-                    Label("± \(tolerance.wrappedValue) min", systemImage: "arrow.left.and.right")
-                        .font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 12).frame(height: 32)
-                        .background(Palette.card, in: Capsule())
-                }
+                .accessibilityLabel(own.map { L10n.f("Uložit %@", Self.short($0)) } ?? L10n.tr("Uložit délku jako předvolbu"))
             }
         }
         .onAppear { slider = clamp(minutes ?? recommended ?? values.first ?? fallback) }
@@ -1431,6 +1618,13 @@ struct LengthControl: View {
         .onChange(of: minutes) { _, value in
             if !dragging, let value { slider = clamp(value) }
         }
+    }
+
+    /// "45 min", "1 h", "1 h 30" (602 point 139), never broken inside.
+    static func short(_ minutes: Int) -> String {
+        let nb = "\u{00A0}"
+        guard minutes >= 60 else { return "\(minutes)\(nb)min" }
+        return "\(minutes / 60)\(nb)h" + (minutes % 60 > 0 ? "\(nb)" + String(format: "%02d", minutes % 60) : "")
     }
 
     private func clamp(_ value: Int) -> Double { min(max(Double(value), range.lowerBound), range.upperBound) }

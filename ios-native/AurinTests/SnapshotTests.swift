@@ -1279,6 +1279,24 @@ final class SnapshotTests: XCTestCase {
         let ride = try XCTUnwrap(LibrarySport.find("ride"))
         XCTAssertEqual(LibrarySportRow.spoken(ride, [.done, .none, .planned, .none, .none, .none, .none]), L10n.f("%@, tento týden hotovo %@, naplánováno %@", L10n.tr("Kolo"), "1", "1"))
         XCTAssertEqual(LibraryWeekDots.letters.count, 7)
+        // The sport page (602 points 135 to 145): one length format, the name without its length, zones by % FTP.
+        XCTAssertEqual(LengthControl.short(45), "45\u{00A0}min")
+        XCTAssertEqual(LengthControl.short(60), "1\u{00A0}h")
+        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30")
+        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(LibraryWorkoutCard.shownName("Endurance with cadence drills, 60 min"), "Endurance with cadence drills")
+        XCTAssertEqual(LibraryWorkoutCard.shownName("Over-unders 3 × 10"), "Over-unders 3 × 10")
+        XCTAssertEqual(LibraryStepsBar.zone(50), 0)
+        XCTAssertEqual(LibraryStepsBar.zone(100), 3)
+        XCTAssertEqual(LibraryStepsBar.zone(160), 6)
+        let card = Data(#"{"id":"w1","name":"Over-unders 3 × 10, 70 min","primary_system":"threshold","duration_minutes":70,"target_load":62,"intensity_factor":0.9,"difficulty":7,"description":"3 × 10 min switching 229 and 262 W","source_name":null,"environment":"indoor","steps":[{"repeats":1,"steps":[{"durationSeconds":600,"percentLow":50,"percentHigh":65}]},{"repeats":3,"steps":[{"durationSeconds":120,"percentLow":95,"percentHigh":105},{"durationSeconds":60,"percentLow":105,"percentHigh":110},{"durationSeconds":300,"percentLow":50,"percentHigh":55,"rest":true}]},{"repeats":1,"steps":[{"durationSeconds":600,"percentLow":45,"percentHigh":55}]}]}"#.utf8)
+        let workout = try JSONDecoder().decode(LibraryWorkout.self, from: card)
+        try render("library-workout-card", glow: Palette.Glow.training, height: 170) {
+            LibraryWorkoutCard(workout: workout).padding(20)
+        }
+        try render("library-ride", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { TrainingLibraryView(sport: "ride") }.environment(model)
+        }
     }
 
     func testZonesActiveEnergyAndWeather() throws {
