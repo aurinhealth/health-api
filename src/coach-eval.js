@@ -1069,13 +1069,24 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
 
 // A D situation: today's proposal as the app makes it (dailyOwnWorkout), nothing kept.
 // `refused`: a model whose drafts run 20 min too long, so both tries fail (the fallback branch).
-// A G situation: the rules' gym session for a regular athlete with six weeks
-// of history, then the coach's session through the real model and the same
-// checks the app makes; the eval adds the ones the athlete would notice.
-const GYM_HISTORY = ['DB bench press', 'Low row', 'Pivot leg press', 'DB shoulder press', 'Prone leg curl Prime', 'Cable curl', 'Cable triceps extension'];
+// A G situation: the rules' gym session for a regular athlete, then the
+// coach's session through the real model and the same checks the app makes;
+// the eval adds the ones the athlete would notice. The history is seven weeks
+// of three sessions a week as the rules themselves wrote them (run 97: a made-up
+// history of exercises the rules never pick made every exercise look new).
+const gymSimContext = (date, history, extra = {}) => ({ date, cycling: { recentActivities: [], plannedWorkouts: [], recentRideTss: 0 }, strength: { recentCompletedSets: history.filter(r => r.workout_date < date), plannedSessions: [] },
+  athleteState: { status: 'active', memories: [] }, trainingSetup: { experience: 'regular' }, recovery: {}, checkin: null, ...extra });
+export function gymEvalHistory(date = COACH_EVAL_DATE) {
+  const history = [];
+  for (let week = 7; week >= 1; week--) for (const n of [1, 3, 5]) {
+    const d = shift(date, -7 * week + n), plan = generateStrengthPlan(gymSimContext(d, history), { durationMinutes: 60 });
+    for (const r of plan.rows.filter(r => r[0] === 'WORK')) history.push({ workout_date: d, exercise: r[1], actual_kg: Number(r[3]) || 0, actual_reps: parseInt(r[4], 10) || 8, set_no: 1, rpe: 8 });
+  }
+  return history;
+}
 export async function runGymScenario(env, scenario, { ask = callOpenAI, date = COACH_EVAL_DATE } = {}) {
   const c = scenario.gym, started = Date.now(), day = n => shift(date, n);
-  const recentCompletedSets = [-18, -15, -12, -9, -6, -3].flatMap(n => GYM_HISTORY.map(exercise => ({ workout_date: day(n), exercise, actual_kg: EXERCISES[exercise].baseKg, actual_reps: 8, set_no: 1, rpe: 8 })));
+  const recentCompletedSets = gymEvalHistory(date);
   const context = { date, cycling: { recentActivities: c.bigRide ? [{ date: day(-1), tss: 320, durationHours: 4.5 }] : [], plannedWorkouts: [], recentRideTss: c.bigRide ? 320 : 0 },
     strength: { recentCompletedSets, plannedSessions: [] }, athleteState: { status: 'active', memories: c.pain ? [L('Bolí mě koleno při dřepech', 'My knee hurts when I squat')] : [] },
     trainingSetup: { experience: c.experience || 'regular' }, recovery: {}, checkin: null };
@@ -1086,6 +1097,8 @@ export async function runGymScenario(env, scenario, { ask = callOpenAI, date = C
   const composed = own !== plan && own.coach?.composed, tried = plan.coachTry || {}, mine = composed ? sessionOf(own) : [];
   const kg = p => Object.fromEntries((p.rows || []).filter(r => r[0] === 'WORK').map(r => [r[1], r[3]]));
   const list = s => s.map(e => `${e.name} ${e.sets}×`).join(', ');
+  const times = n => new Set(recentCompletedSets.filter(r => r.exercise === n && r.workout_date >= day(-42)).map(r => r.workout_date)).size;
+  const fresh = l => l.filter(e => !times(e.name)).length, swapped = mine.filter(e => !rules.some(r => r.name === e.name));
   const rulesKg = kg(plan), why = composed ? String(own.rationale || '').split(/(?<=\.)\s/)[0] : '';
   const checks = c.held ? [quality(`zůstala pravidla (${c.held})`, !composed && tried.reason === c.held, tried.reason || tried.result || 'kouč psal')]
     : [quality('kouč napsal trénink, který prošel kontrolami', Boolean(composed), tried.rejected || tried.result || ''),
@@ -1097,9 +1110,13 @@ export async function runGymScenario(env, scenario, { ask = callOpenAI, date = C
         ...(c.bigRide ? [safety('šetřené nohy: žádný nový cvik na nohy', mine.every(e => rules.some(r => r.name === e.name) || !['quads', 'hamstrings', 'glutes', 'hips', 'calves', 'lower_back'].includes(EXERCISES[e.name].muscle)))] : []),
         ...(c.zone === 'yellow' ? [quality('žluté ráno: ubráno nejvýš pětina sérií', mine.reduce((s, e) => s + e.sets, 0) >= 0.8 * rules.reduce((s, e) => s + e.sets, 0), list(mine))] : []),
         ...(c.zone === 'yellow' ? [quality('žluté ráno: celkem nejvýš tolik sérií jako pravidla', mine.reduce((s, e) => s + e.sets, 0) <= rules.reduce((s, e) => s + e.sets, 0))] : []),
+        // Strength coach 2026-11-21: the main lifts stay, and an exercise the athlete
+        // already does and has done fewer than 12 times in six weeks is not swapped.
+        safety('hlavní cviky z pravidel zůstaly', rules.filter(r => EXERCISES[r.name].warmup).every(r => mine.some(e => e.name === r.name)), list(mine)),
+        quality('cvik, který dělá krátce, nevyměnil', rules.filter(r => { const t = times(r.name); return t > 0 && t < 12; }).every(r => mine.some(e => e.name === r.name) || !mine.some(e => !rules.some(x => x.name === e.name) && EXERCISES[e.name].muscle === EXERCISES[r.name].muscle)), list(mine)),
         quality(`vejde se do ${c.minutes} min`, Number(own.timing?.estimatedMinutes) <= c.minutes + 5, String(own.timing?.estimatedMinutes)),
         quality('název a zdůvodnění bez bolesti, nemoci a léčby', !/bol|nemoc|zraněn|léč|\bpain|\bill(ness)?\b|injur|\bheal(?!th)|therap/i.test(why), why)] : [])];
-  const answer = composed ? [`**${own.planName}**`, why, `Kouč: ${list(mine)}`, `Pravidla: ${list(rules)}`].filter(Boolean).join('\n') : `Zůstala pravidla: ${tried.reason || tried.rejected || tried.result || ''}. ${list(rules)}`;
+  const answer = composed ? [`**${own.planName}**`, why, `Kouč: ${list(mine)}`, `Pravidla: ${list(rules)}`, `Změny: ${swapped.length ? swapped.map(e => e.name + ' (' + times(e.name) + '× za 6 týdnů)').join(', ') : 'žádná výměna'}; cviky, které nikdy nedělal: pravidla ${fresh(rules)}, kouč ${fresh(mine)}`].filter(Boolean).join('\n') : `Zůstala pravidla: ${tried.reason || tried.rejected || tried.result || ''}. ${list(rules)}`;
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'gym-compose', message: `Posilovna ${c.minutes} min, připravenost ${c.score} (${c.zone})`,
     model: c.held ? 'gate' : lightModel(env), ms: Date.now() - started, answer, proposed: [], kept: [], checks, passed: checks.every(x => x.ok || x.severity !== 'safety') };
 }

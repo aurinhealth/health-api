@@ -80,6 +80,8 @@ export function gymComposeFaults({ session, plan, history = [], zone = null }) {
   for (const n of names) { const d = EXERCISES[n]; if (d.warmup && seen.has(d.muscle)) { faults.push("order"); break; } if (!d.warmup) seen.add(d.muscle); }
   // Legs kept fresh: no leg or hinge exercise the rules did not put there.
   if (plan.protectedLegs && names.some(n => !ruleNames.has(n) && (LEGS.has(EXERCISES[n].muscle) || EXERCISES[n].pattern === "hinge"))) faults.push("legs");
+  // The rules' main lifts stay: the same lift session after session lets the load progress.
+  if (rules.some(e => EXERCISES[e.name].warmup && !names.includes(e.name))) faults.push("main");
   // At most one exercise the athlete has never done.
   const done = new Set(history.map(r => r.exercise));
   if (names.filter(n => !ruleNames.has(n) && !done.has(n)).length > 1) faults.push("new");
@@ -103,12 +105,14 @@ export async function coachGymSession(env, { context, options, plan, body = {}, 
   const history = context.strength?.recentCompletedSets || [], last = new Map();
   for (const r of history) { const d = String(r.workout_date || "").slice(0, 10); if (d && d < context.date && !(last.get(r.exercise) > d)) last.set(r.exercise, d); }
   const ago = n => last.has(n) ? days(last.get(n), context.date) : null;
+  // How many sessions in the last six weeks had the exercise (a swap is worth it after about 12).
+  const times = n => new Set(history.filter(r => r.exercise === n).map(r => String(r.workout_date || "").slice(0, 10)).filter(d => d < context.date && days(d, context.date) <= 42)).size;
   const facts = {
     language: L("cs", "en"), minutes: Number(options.durationMinutes) || 60, goal: plan.goal || null, level: context.trainingSetup?.experience || null,
     readiness: { zone: context.adaptive?.recovery?.zone || null, score: context.adaptive?.recovery?.score ?? null, feeling: context.checkin || null },
     legsKeptFresh: Boolean(plan.protectedLegs),
-    session: sessionOf(plan).map(e => ({ ...e, muscle: EXERCISES[e.name].muscle, main: Boolean(EXERCISES[e.name].warmup), daysSinceDone: ago(e.name) })),
-    swaps: Object.fromEntries(Object.entries(plan.swaps || {}).map(([m, list]) => [m, list.map(name => ({ name, main: Boolean(EXERCISES[name].warmup), daysSinceDone: ago(name) }))]))
+    session: sessionOf(plan).map(e => ({ ...e, muscle: EXERCISES[e.name].muscle, main: Boolean(EXERCISES[e.name].warmup), daysSinceDone: ago(e.name), sessions6w: times(e.name) })),
+    swaps: Object.fromEntries(Object.entries(plan.swaps || {}).map(([m, list]) => [m, list.map(name => ({ name, main: Boolean(EXERCISES[name].warmup), daysSinceDone: ago(name), sessions6w: times(name) }))]))
   };
   let session;
   try {
