@@ -1181,7 +1181,7 @@
 			<string>%lld steps</string>
 		</dict>
 	</dict>
-	<key>%lld dní v cíli nebo pod ním</key>
+	<key>%lld dní v cíli</key>
 	<dict>
 		<key>NSStringLocalizedFormatKey</key>
 		<string>%#@n@</string>
@@ -1192,9 +1192,57 @@
 			<key>NSStringFormatValueTypeKey</key>
 			<string>lld</string>
 			<key>one</key>
-			<string>%lld day at or under the target</string>
+			<string>%lld day at the target</string>
 			<key>other</key>
-			<string>%lld days at or under the target</string>
+			<string>%lld days at the target</string>
+		</dict>
+	</dict>
+	<key>%lld výrazně pod ním</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld well below</string>
+			<key>other</key>
+			<string>%lld well below</string>
+		</dict>
+	</dict>
+	<key>%lld dní nad cílem</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld day over the target</string>
+			<key>other</key>
+			<string>%lld days over the target</string>
+		</dict>
+	</dict>
+	<key>%lld dní výrazně pod cílem</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>one</key>
+			<string>%lld day well below the target</string>
+			<key>other</key>
+			<string>%lld days well below the target</string>
 		</dict>
 	</dict>
 	<key>%lld nad ním</key>
