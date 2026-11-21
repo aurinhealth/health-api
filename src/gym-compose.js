@@ -20,7 +20,7 @@ import { instructions } from "./private/gym-compose.js";
 export const coachFirstGymOn = env => env?.COACH_FIRST_GYM === "true";
 const LEGS = new Set(["quads", "hamstrings", "glutes", "hips", "calves", "lower_back"]);
 // The "why" talks about training only: no pain, illness, injury or therapy (MDR).
-const MEDICAL = /bol(est|í|el)|nemoc|zraněn|úraz|léč|terap|rehab|diagn|preven|uzdrav|pain|ill(ness)?\b|sick|injur|heal|therap|rehab|diagnos|prevent|recover from/i;
+const MEDICAL = /bol(est|í|el|et|av)|nemoc|zraněn|poraněn|úraz|zánět|léč|terap|rehab|diagn|preven|uzdrav|fyzio|\bpain|\bill(ness)?\b|sick|injur|\bheal(?!th)|hurt|\bsore|\bache|therap|physio|diagnos|prevent|recover(y| from)/i;
 
 const days = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
 const workRows = plan => (plan?.rows || []).filter(r => String(r?.[0] || "WORK").toUpperCase() === "WORK" && r?.[1]);
@@ -46,8 +46,15 @@ export function gymHeld({ context = {}, options = {}, plan = {}, body = {} } = {
   return null;
 }
 
+// The coach's exercises with the sets they may get: never more than the rules
+// gave that exercise or, for a swap, the rules' exercise of its muscle.
+export function cappedSession(session, plan) {
+  const rules = sessionOf(plan), most = m => Math.max(0, ...rules.filter(e => EXERCISES[e.name]?.muscle === m).map(e => e.sets));
+  return (Array.isArray(session?.exercises) ? session.exercises : []).map(e => ({ name: String(e?.name || ""), sets: Math.min(Number(e?.sets) || 0, rules.find(r => r.name === e?.name)?.sets ?? most(EXERCISES[e?.name]?.muscle)) }));
+}
+
 // What the AI's session breaks; empty when it keeps to the brief.
-export function gymComposeFaults({ session, plan, history = [] }) {
+export function gymComposeFaults({ session, plan, history = [], zone = null }) {
   const faults = [], rules = sessionOf(plan), ruleNames = new Set(rules.map(e => e.name));
   const swaps = plan.swaps || {}, allowed = new Set([...ruleNames, ...Object.values(swaps).flat()]);
   const list = Array.isArray(session?.exercises) ? session.exercises : [];
@@ -56,13 +63,23 @@ export function gymComposeFaults({ session, plan, history = [] }) {
   if (new Set(names).size !== names.length) faults.push("duplicate");
   if (list.length > rules.length || list.length < Math.max(2, rules.length - 2)) faults.push("count");
   if (list.some(e => !(Number.isInteger(e?.sets) && e.sets >= 1 && e.sets <= 4))) faults.push("sets");
-  const total = list.reduce((s, e) => s + Math.min(Number(e?.sets) || 0, rules.find(r => r.name === e.name)?.sets ?? 4), 0), ruleTotal = rules.reduce((s, e) => s + e.sets, 0);
-  if (total < 0.75 * ruleTotal) faults.push("volume");
+  if (faults.includes("unknown")) return faults;
+  const capped = cappedSession(session, plan), sum = (l, f) => l.filter(f).reduce((s, e) => s + e.sets, 0);
+  if (sum(capped, () => true) < 0.75 * sum(rules, () => true)) faults.push("volume");
+  // Per muscle: no more exercises or sets than the rules gave it, and a swap no
+  // more tiring than the rules' exercises of that muscle (the easiest of them on
+  // a yellow or red morning).
+  for (const m of new Set(names.map(n => EXERCISES[n].muscle))) {
+    const of = e => EXERCISES[e.name]?.muscle === m, mine = capped.filter(of), theirs = rules.filter(of);
+    if (mine.length > theirs.length || sum(mine, () => true) > sum(theirs, () => true)) faults.push("muscle");
+    const limit = theirs.length ? (["yellow", "red"].includes(zone) ? Math.min : Math.max)(...theirs.map(e => EXERCISES[e.name].fatigue)) : 0;
+    if (mine.some(e => !ruleNames.has(e.name) && EXERCISES[e.name].fatigue > limit)) faults.push("fatigue");
+  }
   // A main lift (one with warm-up sets) never after an isolation exercise of the same muscle.
   const seen = new Set();
-  for (const n of names) { const d = EXERCISES[n]; if (!d) continue; if (d.warmup && seen.has(d.muscle)) { faults.push("order"); break; } if (!d.warmup) seen.add(d.muscle); }
+  for (const n of names) { const d = EXERCISES[n]; if (d.warmup && seen.has(d.muscle)) { faults.push("order"); break; } if (!d.warmup) seen.add(d.muscle); }
   // Legs kept fresh: no leg or hinge exercise the rules did not put there.
-  if (plan.protectedLegs && names.some(n => !ruleNames.has(n) && (LEGS.has(EXERCISES[n]?.muscle) || EXERCISES[n]?.pattern === "hinge"))) faults.push("legs");
+  if (plan.protectedLegs && names.some(n => !ruleNames.has(n) && (LEGS.has(EXERCISES[n].muscle) || EXERCISES[n].pattern === "hinge"))) faults.push("legs");
   // At most one exercise the athlete has never done.
   const done = new Set(history.map(r => r.exercise));
   if (names.filter(n => !ruleNames.has(n) && !done.has(n)).length > 1) faults.push("new");
@@ -98,19 +115,20 @@ export async function coachGymSession(env, { context, options, plan, body = {}, 
     const r = await ask(env, { feature: "gym-compose", instructions: instructions(), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: SCHEMA, maxOutputTokens: 1200, model: lightModel(env), timeoutMs: 15000 });
     session = JSON.parse(r.text);
   } catch (error) { return out("error"); }
-  const faults = gymComposeFaults({ session, plan, history });
+  const faults = gymComposeFaults({ session, plan, history, zone: context.adaptive?.recovery?.zone || null });
   if (faults.length) return out("rejected", { rejected: faults.join(",") });
-  const why = String(session.why || "").trim().slice(0, 240), name = String(session.name || "").trim().slice(0, 80);
-  // No exercise gets more work sets than the rules gave its muscle's exercise (the length trim may have cut them).
-  const rules = sessionOf(plan), most = m => Math.max(0, ...rules.filter(e => EXERCISES[e.name].muscle === m).map(e => e.sets));
-  const exercises = session.exercises.map(e => ({ name: e.name, sets: Math.min(e.sets, rules.find(r => r.name === e.name)?.sets ?? most(EXERCISES[e.name].muscle)) }));
+  const clean = t => { t = String(t || "").trim(); return t && !MEDICAL.test(t) ? t : null; };
+  const why = clean(String(session.why || "").slice(0, 240)), name = clean(String(session.name || "").slice(0, 80));
+  const exercises = cappedSession(session, plan);
   let own;
-  try { own = generateStrengthPlan(context, { ...options, coachSession: { exercises, name: name || null, why: why && !MEDICAL.test(why) ? why : null } }); }
+  try { own = generateStrengthPlan(context, { ...options, coachSession: { exercises, name, why } }); }
   catch { return out("rejected", { rejected: "build" }); }
   // The built session still fits the time and keeps three quarters of the rules' work.
   const after = [];
   if (Number(own.timing?.estimatedMinutes) > (Number(options.durationMinutes) || 60) + 5) after.push("length");
   if (workRows(own).length < 0.75 * workRows(plan).length) after.push("volume");
+  const built = sessionOf(own), ruleSets = sessionOf(plan), per = (l, m) => l.filter(e => EXERCISES[e.name].muscle === m).reduce((t, e) => t + e.sets, 0);
+  if (built.some(e => per(built, EXERCISES[e.name].muscle) > per(ruleSets, EXERCISES[e.name].muscle))) after.push("muscle");
   if (after.length) return out("rejected", { rejected: after.join(",") });
   if (log) console.log(JSON.stringify({ gym_compose: "composed" }));
   return { ...own, coach: { composed: true } };

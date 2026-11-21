@@ -1089,13 +1089,13 @@ export async function runGymScenario(env, scenario, { ask = callOpenAI, date = C
   const checks = c.held ? [quality(`zůstala pravidla (${c.held})`, !composed && tried.reason === c.held, tried.reason || tried.result || 'kouč psal')]
     : [quality('kouč napsal trénink, který prošel kontrolami', Boolean(composed), tried.rejected || tried.result || ''),
       ...(composed ? [
-        safety('žádný cvik nemá víc pracovních sérií než u pravidel', mine.every(e => e.sets <= Math.max(...rules.filter(r => EXERCISES[r.name].muscle === EXERCISES[e.name].muscle).map(r => r.sets), 0))),
+        safety('žádná partie nemá víc cviků ani sérií než u pravidel', mine.every(e => { const m = EXERCISES[e.name].muscle, of = l => l.filter(x => EXERCISES[x.name].muscle === m); return of(mine).length <= of(rules).length && of(mine).reduce((t, x) => t + x.sets, 0) <= of(rules).reduce((t, x) => t + x.sets, 0); })),
         safety('váhy stejné jako z pravidel, kde je cvik stejný', Object.entries(kg(own)).every(([n, w]) => !(n in rulesKg) || rulesKg[n] === w)),
         safety('jen partie z pravidel', mine.every(e => rules.some(r => EXERCISES[r.name].muscle === EXERCISES[e.name].muscle))),
         ...(c.bigRide ? [safety('šetřené nohy: žádný nový cvik na nohy', mine.every(e => rules.some(r => r.name === e.name) || !['quads', 'hamstrings', 'glutes', 'hips', 'calves', 'lower_back'].includes(EXERCISES[e.name].muscle)))] : []),
         ...(c.zone === 'yellow' ? [quality('žluté ráno: celkem nejvýš tolik sérií jako pravidla', mine.reduce((s, e) => s + e.sets, 0) <= rules.reduce((s, e) => s + e.sets, 0))] : []),
         quality(`vejde se do ${c.minutes} min`, Number(own.timing?.estimatedMinutes) <= c.minutes + 5, String(own.timing?.estimatedMinutes)),
-        quality('zdůvodnění bez bolesti, nemoci a léčby', !/bol|nemoc|zraněn|léč|pain|ill\b|injur|heal|therap/i.test(why), why)] : [])];
+        quality('název a zdůvodnění bez bolesti, nemoci a léčby', !/bol|nemoc|zraněn|léč|\bpain|\bill(ness)?\b|injur|\bheal(?!th)|therap/i.test(why), why)] : [])];
   const list = s => s.map(e => `${e.name} ${e.sets}×`).join(', ');
   const answer = composed ? [`**${own.planName}**`, why, `Kouč: ${list(mine)}`, `Pravidla: ${list(rules)}`].filter(Boolean).join('\n') : `Zůstala pravidla: ${tried.reason || tried.rejected || tried.result || ''}. ${list(rules)}`;
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'gym-compose', message: `Posilovna ${c.minutes} min, připravenost ${c.score} (${c.zone})`,

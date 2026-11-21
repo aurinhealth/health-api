@@ -78,3 +78,18 @@ test("the eval's gym situations: the coach writes G01–G04 within the checks, G
     assert.ok(r.checks.every(c => c.ok), s.id + ": " + r.checks.filter(c => !c.ok).map(c => c.name).join(", "));
   }
 });
+
+test("review: no muscle gets more exercises or sets than the rules gave it, swaps no more tiring, a medical name is dropped", async () => {
+  const ctx = context(), plan = generateStrengthPlan(ctx, options), rules = sessionOf(plan);
+  // Two other muscles' slots filled with more of one muscle that has swaps.
+  const m = Object.keys(plan.swaps).find(k => plan.swaps[k].length >= 2), keep = rules.filter(e => EXERCISES[e.name].muscle === m || EXERCISES[e.name].warmup);
+  const piled = [...keep, ...plan.swaps[m].slice(0, rules.length - keep.length).map(name => ({ name, sets: 3 }))];
+  assert.ok(gymComposeFaults({ session: { exercises: piled }, plan, history: plan.swaps[m].map(exercise => ({ exercise })) }).includes("muscle"));
+  // A swap more tiring than every rules exercise of its muscle.
+  const fake = { rows: [["WORK", "Cable curl", "1"], ["WORK", "Cable curl", "2"], ["WORK", "DB bench press", "1"], ["WORK", "Low row", "1"]], swaps: { biceps: ["Hammer curl"], back: ["Barbell good morning"] } };
+  const heavy = Object.keys(EXERCISES).find(n => EXERCISES[n].muscle === "back" && EXERCISES[n].fatigue > EXERCISES["Low row"].fatigue);
+  if (heavy) { fake.swaps.back = [heavy]; assert.ok(gymComposeFaults({ session: { exercises: [{ name: "DB bench press", sets: 1 }, { name: heavy, sets: 1 }, { name: "Cable curl", sets: 2 }] }, plan: fake, history: [{ exercise: heavy }] }).includes("fatigue")); }
+  const own = await coachGymSession(env(), { context: ctx, options, plan, ask: answer({ name: "Rehab: šetříme koleno", exercises: rules, why: "Back first." }), log: false });
+  assert.doesNotMatch(own.planName, /Rehab/);
+  assert.match(own.rationale, /^Back first\./);
+});

@@ -1723,7 +1723,10 @@ export function generateStrengthPlan(context, options = {}) {
   // then the next one the athlete's equipment allows. A band or floor variant
   // takes a turn only for an exercise that is a stand-in itself.
   const fits = name => availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
-  exercises = [...new Set(exercises.map(ex => variantFor(ex, context.date, name => fits(name) && (!isStandIn(name) || isStandIn(ex)))))];
+  const variantOf = ex => variantFor(ex, context.date, name => fits(name) && (!isStandIn(name) || isStandIn(ex)));
+  exercises = [...new Set(exercises.map(variantOf))];
+  // The coach's sets follow its exercise to the variant the rules take this week.
+  for (const e of coachSession?.exercises || []) { const v = variantOf(e.name); if (v !== e.name) coachSets.set(v, Math.min(coachSets.get(v) ?? 4, Math.round(Number(e.sets)) || 4)); }
 
   // Warm-up exercises must be the first exercises of the session. Keep the
   // relative order otherwise, so each exercise's warm-up sets stay immediately
@@ -1880,7 +1883,7 @@ export function generateStrengthPlan(context, options = {}) {
   return { date: context.date, planName: (focusMuscles ? L("Cílený trénink: ", "Targeted workout: ") + focusLabels : planPhase ? planPhase.name : coachSession?.name ? coachSession.name : chosen.name) + (deload ? deload.illness ? L(', po nemoci', ', after being ill') : L(', odlehčený týden', ', deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + (coachSession?.why ? coachSession.why + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, spare: planRoutines(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions).spare, cardio: cardioFor(context.trainingSetup || {}, size.cardio), goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows,
     // Other exercises the athlete's filters allow for each muscle of the
     // session (equipment, pain, dislikes, broken machines): the coach's swaps (gym-compose.js).
-    swaps: Object.fromEntries([...new Set(exercises.filter(ex => !PLYOMETRICS.includes(ex)).map(ex => EXERCISES[ex]?.muscle).filter(Boolean))].map(muscle => [muscle, Object.keys(EXERCISES).filter(name => EXERCISES[name].muscle === muscle && !PLYOMETRICS.includes(name) && !exercises.includes(name) && fits(name)).sort((a, b) => EXERCISES[a].fatigue - EXERCISES[b].fatigue || a.localeCompare(b)).slice(0, 10)])) };
+    swaps: Object.fromEntries([...new Set(exercises.filter(ex => !PLYOMETRICS.includes(ex)).map(ex => EXERCISES[ex]?.muscle).filter(Boolean))].map(muscle => [muscle, Object.keys(EXERCISES).filter(name => EXERCISES[name].muscle === muscle && !PLYOMETRICS.includes(name) && !exercises.includes(name) && fits(name) && variantOf(name) === name).sort((a, b) => EXERCISES[a].fatigue - EXERCISES[b].fatigue || a.localeCompare(b)).slice(0, 10)])) };
 }
 
 export { EXERCISES };
