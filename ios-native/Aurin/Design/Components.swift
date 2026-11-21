@@ -542,7 +542,7 @@ private struct PinnedTopBar: ViewModifier {
     func body(content: Content) -> some View {
         let page = content
             .overlay(alignment: .bottom) {
-                if locked, let model { UnlockProPill { Paywall.present(model) }.padding(.bottom, 12) }
+                if locked, let model { UnlockProPill { Paywall.present(model, from: $0) }.padding(.bottom, 12) }
             }
             .environment(\.floatingBack, true)
             .environment(\.scrollReport, { (offset: CGFloat) in
@@ -634,16 +634,19 @@ private struct PinnedTopBar: ViewModifier {
 /// "Unlock with Pro" floating in glass at the bottom of a subpage without Pro
 /// (Pro concept): it opens the offer.
 struct UnlockProPill: View {
-    let action: () -> Void
+    /// Gets where the pill stands on screen, for the way into the offer.
+    let action: (CGRect) -> Void
+    @State private var frame: CGRect = .zero
 
     var body: some View {
-        Button(action: action) {
+        Button { action(frame) } label: {
             Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 18).frame(height: 44)
                 .chromeGlass(in: Capsule())
         }
         .buttonStyle(.plain)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
         .accessibilityIdentifier("unlock-pro")
     }
 }

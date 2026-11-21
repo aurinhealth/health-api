@@ -140,14 +140,24 @@ struct PaywallView: View {
     @State private var thanks: String?
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Opened from an "Unlock with Pro" (Paywall.present with `from`): where it
+    /// stood on screen. The pill goes to Continue, the rest comes in around it.
+    var source: CGRect? = nil
+    /// The Aurin age orb: the phone grows out of it (Pro concept, entry 3).
+    var orb: CGRect? = nil
+    @State private var arrived = true
+    @State private var continueFrame: CGRect = .zero
 
     init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared,
-         allowAI: (() async throws -> Void)? = nil) {
+         allowAI: (() async throws -> Void)? = nil, source: CGRect? = nil, orb: CGRect? = nil) {
         self.close = close
         self.frozenTime = frozenTime
         self.store = store
         self.allowAI = allowAI
+        self.source = source
+        self.orb = orb
         _step = State(initialValue: step)
+        _arrived = State(initialValue: source == nil)
     }
 
     private var offers: [ProOffer] { ProOffer.all(store) }
@@ -159,17 +169,23 @@ struct PaywallView: View {
 
     var body: some View {
         ZStack {
-            ScreenBackground(glow: Palette.Glow.today)
+            // From an "Unlock with Pro" the page under it fades out as this comes in.
+            ScreenBackground(glow: Palette.Glow.today).opacity(arrived ? 1 : 0)
             VStack(spacing: 0) {
-                topBar
+                topBar.opacity(arrived ? 1 : 0)
+                // The heading gathers out of a blur, as the concept's grains.
                 Text("Trénuj s koučem, který tě zná")
                     .font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center).padding(.horizontal, 24).padding(.top, 14)
                     .accessibilityAddTraits(.isHeader)
+                    .blur(radius: arrived ? 0 : 14).opacity(arrived ? 1 : 0).scaleEffect(arrived ? 1 : 1.08)
                 let demoShown = step == 0 && (!reduceMotion || frozenTime != nil)
                 if demoShown {
                     // The end of the demo: the phone gets smaller and goes (Pro concept).
-                    demoPhone.transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.3).combined(with: .opacity)))
+                    demoPhone
+                        .scaleEffect(arrived ? 1 : 0.35, anchor: phoneAnchor)
+                        .opacity(arrived ? 1 : 0)
+                        .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.3).combined(with: .opacity)))
                 } else {
                     ProFeatureList(frozen: frozenTime != nil)
                         .frame(minHeight: 120, maxHeight: .infinity)
@@ -181,6 +197,8 @@ struct PaywallView: View {
                 // One button: Continue becomes the purchase where it stands (Pro concept).
                 button(demoShown ? L10n.tr("Pokračovat") : cta, busy: !demoShown && store.purchasing) { if demoShown { go(1) } else { buy() } }
                     .disabled(!demoShown && (store.purchasing || !chosen.priced))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { continueFrame = $0 }
+                    .opacity(arrived ? 1 : 0)
                     .padding(.horizontal, 16).padding(.bottom, demoShown ? 10 : 0)
                 if !demoShown {
                     finePrint.padding(.horizontal, 16).padding(.bottom, 6)
@@ -188,6 +206,8 @@ struct PaywallView: View {
                 }
             }
         }
+        .overlay { if source != nil && !arrivedSettled { travellingPill } }
+        .task(id: "arrive") { await arrive() }
         .environment(demo)
         // Opened from UIKit too (Paywall.present), so the app's cap is set here: the button always fits.
         .dynamicTypeSize(...DynamicTypeSize.screenCap)
@@ -239,6 +259,51 @@ struct PaywallView: View {
         .padding(.top, 18).padding(.bottom, 14)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.tr("Ukázka aplikace"))
+    }
+
+    // MARK: - The way in
+
+    @State private var arrivedSettled = false
+
+    /// The phone grows from the orb (Aurin age) or from the pill (a subpage).
+    private var phoneAnchor: UnitPoint {
+        guard let from = orb ?? source, continueFrame != .zero else { return .bottom }
+        let screen = UIScreen.main.bounds
+        return UnitPoint(x: from.midX / screen.width, y: min(1, from.midY / screen.height))
+    }
+
+    /// "Unlock with Pro" travelling down from where it was tapped, widening into
+    /// Continue and taking its ink (Pro concept, entries 2 and 3).
+    private var travellingPill: some View {
+        let from = source ?? .zero
+        let to = continueFrame == .zero ? from : continueFrame
+        let box = arrived ? to : from
+        return ZStack {
+            Capsule().fill(arrived ? Palette.ink : Palette.card)
+                .shadow(color: .black.opacity(arrived ? 0 : 0.12), radius: 10, y: 4)
+            Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                .opacity(arrived ? 0 : 1)
+            Text("Pokračovat").font(Typo.bodyStrong).foregroundStyle(Palette.background)
+                .opacity(arrived ? 1 : 0)
+        }
+        .frame(width: box.width, height: box.height)
+        .position(x: box.midX, y: box.midY)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Plays the way in once the button has its place, then hands over to it.
+    private func arrive() async {
+        guard source != nil, !arrived else { return }
+        if reduceMotion { arrived = true; arrivedSettled = true; return }
+        // One layout pass, so Continue's place is known.
+        try? await Task.sleep(for: .milliseconds(30))
+        withAnimation(.smooth(duration: 0.7)) { arrived = true }
+        try? await Task.sleep(for: .milliseconds(720))
+        arrivedSettled = true
+        started = Date()
     }
 
     // MARK: - The offer
