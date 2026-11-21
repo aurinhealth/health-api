@@ -167,14 +167,14 @@ test("every morning: accounts and AI against what Pro brings in, with a proposal
   const limits = { monthly: 6, unpaidShare: 0.5, totalAlert: 10, totalLimit: 30 };
   const daily = accountsReport({ ...stats, nearCap: pilot.nearCap }, limits);
   assert.match(daily, /Platí: 1 \(měsíčně 1, ročně 0\), pilot a dárky 1, ve zkušebním týdnu 1/);
-  assert.match(daily, /Pro vydělá asi 5\.90 \$ za měsíc, strop na účet 6\.00 \$, bez placení 3\.00 \$/);
+  assert.match(daily, /Pro vydělá asi 7\.80 \$ za měsíc, strop na účet 6\.00 \$, bez placení 3\.00 \$/);
   assert.match(daily, /Návrhy\n- pilot@x\.cz má za měsíc 5\.00 \$ z 6\.00 \$ \(83 %\)\. Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z 6\.00 \$ na 8\.00 \$/);
   const quiet = { ...stats, nearCap: [] };
   assert.match(accountsReport(quiet, limits), /Návrhy\n- Limity stačí, není potřeba nic měnit\./, "the numbers come every day, quiet or not");
   const grouped = accountsReport({ ...quiet, groups: [{ grp: "paid", cost_usd: 1.2, brake_usd: 10 }, { grp: "free", cost_usd: 4, brake_usd: 5 }] }, limits);
   assert.match(grouped, /AI včera podle skupin: platící 1\.20 \$ z 10\.00 \$, bez nákupu 4\.00 \$ z 5\.00 \$/);
   assert.match(grouped, /Skupina „bez nákupu“ včera vyčerpala 80 % své denní pojistky/);
-  assert.match(accountsReport({ ...quiet, monthUsd: 10 }, limits), /AI tento měsíc vyjde asi na 11\.07 \$, víc, než Pro vydělá \(5\.90 \$ za 1 platících\)\. Sniž COACH_WEEKLY_MESSAGES/);
+  assert.match(accountsReport({ ...quiet, monthUsd: 10 }, limits), /AI tento měsíc vyjde asi na 11\.07 \$, víc, než Pro vydělá \(7\.80 \$ za 1 platících\)\. Sniž COACH_WEEKLY_MESSAGES/);
   assert.match(accountsReport({ ...quiet, totalYesterdayUsd: 22 }, limits), /Včera padlo 73 % denní brzdy pro všechny\. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na 45\.00 \$ a AI_TOTAL_DAILY_ALERT_USD na 15\.00 \$/);
   assert.match(accountsReport({ ...quiet, accounts: 18 }, limits), /Účtů je 18 z 20 testerů/);
 });

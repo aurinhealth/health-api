@@ -76,14 +76,14 @@ No private key is needed: verification uses Apple's public certificate chain onl
 1. Agreements, Tax and Banking: the **Paid Apps** agreement signed, with bank and tax forms.
 2. The app (bundle `health.aurin.app`) → Monetization → Subscriptions → a subscription group
    **Aurin Pro** with two auto-renewable subscriptions at the same level:
-   - `health.aurin.app.pro.monthly`, 1 month, 199 Kč (base storefront Czechia),
-   - `health.aurin.app.pro.yearly`, 1 year, 1 490 Kč, with the billing plan **Monthly with
-     12-Month Commitment** at 149 Kč (iOS 26.4+, not in the US).
+   - `health.aurin.app.pro.monthly`, 1 month, 249 Kč (base storefront Czechia),
+   - `health.aurin.app.pro.yearly`, 1 year, 1 990 Kč, with the billing plan **Monthly with
+     12-Month Commitment** at 179 Kč (iOS 26.4+, not in the US).
    Display names and descriptions in Czech and English, and a review screenshot of the offer.
 3. On the yearly one, an **introductory offer**: free trial, 1 week, new subscribers, all storefronts,
    once for each billing plan (1 Year Upfront and Monthly with 12-Month Commitment).
    In-App Purchases: the two packs above as **Consumable**, 99 Kč and 199 Kč.
-4. On the yearly one, an **offer code** campaign: pay up front, 1 year, 745 Kč, one-time-use
+4. On the yearly one, an **offer code** campaign: pay up front, 1 year, 999 Kč, one-time-use
    codes, for new and expired subscribers. Codes are redeemed in the app (⋯ → Uplatnit promo kód)
    or by the App Store link.
 5. App Information → **App Store Server Notifications**: Version 2, the production URL
