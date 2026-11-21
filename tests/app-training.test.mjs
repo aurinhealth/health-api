@@ -360,3 +360,20 @@ test("a strength plan paired with today's gym session leaves today's cards, also
   const out = buildTraining({ ...input, days: today, gym });
   assert.deepEqual(out.todaySessions, []);
 });
+
+test("a walk the watch found counts toward neither number of the week (602: 10 of 12 beside five workouts)", () => {
+  const walk = { id: "gw:1", type: "Walk", name: "Walk", durationHours: 0.5, tss: 5 };
+  const base = buildTraining(input).thisWeek;
+  const withWalk = days.map(d => d.date === DATE ? { ...d, daily: { training: { ...(d.daily?.training || {}), completed: [...(d.daily?.training?.completed || []), walk] } } } : d);
+  const t = buildTraining({ ...input, days: withWalk }).thisWeek;
+  assert.equal(t.done, base.done);
+  assert.equal(t.planned, base.planned);
+});
+
+test("a planned walk that was done, and a hike, still count toward the week", () => {
+  const plan = { id: "planned:77", type: "Walk", name: "Walk", start: DATE + "T08:00:00", durationHours: 0.5 };
+  const walk = { id: "gw:2", type: "Walk", name: "Walk", durationHours: 0.5 };
+  const hike = { id: "gw:3", type: "Hike", name: "Hike", durationHours: 3 };
+  const week = completed => buildTraining({ ...input, days: days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [plan], completed, matched: completed.length ? [{ planned: plan, actualId: "gw:2" }] : [] } } } : d) }).thisWeek;
+  assert.equal(week([walk, hike]).done - week([]).done, 2);
+});
