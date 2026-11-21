@@ -1613,5 +1613,45 @@
 			<string>Z minulé noci a tvých předchozích %lld nocí</string>
 		</dict>
 	</dict>
+	<key>%lld pohybů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld pohyby</string>
+			<key>many</key>
+			<string>%lld pohybu</string>
+			<key>one</key>
+			<string>%lld pohyb</string>
+			<key>other</key>
+			<string>%lld pohybů</string>
+		</dict>
+	</dict>
+	<key>%lld protažení</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld protažení</string>
+			<key>many</key>
+			<string>%lld protažení</string>
+			<key>one</key>
+			<string>%lld protažení</string>
+			<key>other</key>
+			<string>%lld protažení</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

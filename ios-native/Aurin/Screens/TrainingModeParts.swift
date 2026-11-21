@@ -232,6 +232,8 @@ struct GymSetTableHeader: View {
     var pounds = false
     /// The live workout's table: "Effort" over the letters, the 44 pt columns of GymSetRow(large:).
     var effort = false
+    /// The planned detail before the start: the plan to look at, no effort and tick columns.
+    var planOnly = false
     var onPounds: (Bool) -> Void = { _ in }
 
     var body: some View {
@@ -245,7 +247,7 @@ struct GymSetTableHeader: View {
             if effort {
                 Text("Úsilí").lineLimit(1).fixedSize().frame(width: 44)
                 Color.clear.frame(width: 44, height: 1)
-            } else {
+            } else if !planOnly {
                 Color.clear.frame(width: 40, height: 1)
                 Color.clear.frame(width: 34, height: 1)
             }
@@ -313,6 +315,8 @@ struct GymSetRow: View {
     var onKgTap: (() -> Void)? = nil
     /// The live workout: the letter and the tick each 44 × 44 pt (D-ZIVY-4), rows stay 44 pt.
     var large = false
+    /// The planned detail before the start: no tick to tap (GymSetTableHeader(planOnly:)).
+    var planOnly = false
     var toggle: () -> Void = {}
 
     private enum Field { case kg, reps }
@@ -332,7 +336,8 @@ struct GymSetRow: View {
                     .foregroundStyle(drop ? GymIntensity.color("D") : state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
                     .frame(width: side == nil ? labelWidth : labelWidth - 10, alignment: .leading)
                 if let side {
-                    Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
+                    // Stored as "L"/"P"; shown as the language's letter, neutral (no colour without a meaning).
+                    Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted).frame(width: 12)
                 }
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
@@ -350,6 +355,7 @@ struct GymSetRow: View {
                 .accessibilityLabel(intensity.map { GymIntensity.name($0) } ?? L10n.tr("Bez hodnocení"))
                 .accessibilityHint(L10n.tr("Jak těžká série byla"))
             }
+            if !planOnly {
             Button(action: toggle) {
                 Group {
                     if state == .done {
@@ -366,6 +372,7 @@ struct GymSetRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(state == .done ? "Vrátit sérii" : "Série hotová"))
+            }
         }
         .padding(.horizontal, large ? 8 : 10)
         .padding(.vertical, large ? 0 : 5)

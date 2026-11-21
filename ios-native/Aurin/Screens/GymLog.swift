@@ -456,7 +456,7 @@ struct GymSetTableRow: View {
                     .font(Typo.number(18))
                     .foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
                 if let side = set.side {
-                    Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side))
+                    Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted)
                 }
             }
             .frame(width: set.side == nil ? 22 : 36, alignment: .leading)

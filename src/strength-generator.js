@@ -1304,7 +1304,7 @@ function choosePlan(context, options = {}) {
       name: names[part],
       split: part,
       exercises: build(template),
-      rationale: L("Při " + days + " posilovnách týdně trénuješ ve splitu (" + parts.map(p => label[p]).join(" / ") + "), aby se partie nepřekrývaly a stihly zregenerovat. Dnes přichází na řadu " + label[part] + ": " + (rested(part) >= 99 ? "v posledních dnech nebyly na programu." : "naposledy před " + rested(part) + " dny.") + " Cviky se střídají podle toho, co jsi dělal naposledy.", "With " + days + " gym sessions a week you train a split (" + parts.map(p => label[p]).join(" / ") + "), so the muscle groups don't overlap and have time to recover. Today it's " + label[part] + ": " + (rested(part) >= 99 ? "not trained in the last days." : "last trained " + rested(part) + " days ago.") + " The exercises rotate by what you did last.") + sexNote,
+      rationale: L("Při " + days + " posilovnách týdně trénuješ ve splitu (" + parts.map(p => label[p]).join(" / ") + "), aby se partie nepřekrývaly a stihly zregenerovat. Na řadě: " + label[part] + ", " + (rested(part) >= 99 ? "v posledních dnech nebyly na programu." : "naposledy před " + rested(part) + " dny.") + " Cviky se střídají podle toho, co jsi dělal naposledy.", "With " + days + " gym sessions a week you train a split (" + parts.map(p => label[p]).join(" / ") + "), so the muscle groups don't overlap and have time to recover. Up next: " + label[part] + ", " + (rested(part) >= 99 ? "not trained in the last days." : "last trained " + rested(part) + " days ago.") + " The exercises rotate by what you did last.") + sexNote,
       protectedLegs: part === "legs" || part === "lower" ? false : protectLegs
     };
   }

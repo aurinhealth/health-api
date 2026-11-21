@@ -4968,6 +4968,14 @@
 "Některá tvoje čísla jsou pod obvyklým rozmezím" = "Some of your numbers are below your usual range";
 "Tvoje čísla jsou pod obvyklým rozmezím" = "Your numbers are below your usual range";
 "Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
+
+/* Planned gym detail as concept K04/017 (GymSessionView, GymDayParts, GymWhyCard) */
+"Části tréninku" = "Workout";
+"Jen pro dnešek" = "Today only";
+"asi %@ námahy" = "about %@ strain";
+"P" = "R";
+"Jak se cvik dělá" = "How it's done";
+"Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink." = "The coach picks muscle groups that are fresh, keeps the weekly load inside your target and follows the phase of your plan. You can swap any exercise or change the whole workout.";
 "Tep v klidu" = "Resting HR";
 "Kůže tepleji" = "Skin warmer";
 "Kůže chladněji" = "Skin cooler";
