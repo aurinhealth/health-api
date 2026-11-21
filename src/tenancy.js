@@ -151,7 +151,9 @@ export const PERSONAL_TABLES = {
   // When the Pro banner was closed and how often (pro-banner.js).
   pro_banner: {},
   // The chips under a coach question the server asked (coach-questions.js).
-  coach_questions: {}
+  coach_questions: {},
+  // Missed workouts let go on Today's coach card (missed-workout.js).
+  missed_decisions: { pk: ["user_id", "item_key"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

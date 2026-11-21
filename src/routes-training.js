@@ -18,6 +18,7 @@ import { writeWahooZones, writeWahooZonesLater } from "./wahoo.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
+import { decideMissed } from "./missed-workout.js";
 import { thresholdCheckState, TEST_IDS, manualTestResult } from "./threshold-check-state.js";
 
 // What sets the power zones in watts: only a change of these (or "save
@@ -28,6 +29,14 @@ const powerKey=p=>JSON.stringify([p?.ftp||null,p?.powerZoneModel||null,p?.powerZ
 // Planned workouts moved or deleted, pairs, session energy and feedback.
 export async function handleTrainingEditsApi(request,env,ctx,url,session,internalAuth){
   // Planned workouts: move (drag between days) or delete, in Intervals.icu and locally.
+  // Today's coach card on a missed key workout: "Skip it" (skip:true) and its Undo (missed-workout.js).
+  if(url.pathname==='/app/api/planned/missed'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{const body=await request.json().catch(()=>({}));await decideMissed(env.DB,body.key,body.skip!==false);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
   if(url.pathname==='/app/api/planned/move'||url.pathname==='/app/api/planned/delete'||url.pathname==='/app/api/planned/environment'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
