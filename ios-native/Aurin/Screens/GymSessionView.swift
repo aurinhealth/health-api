@@ -111,7 +111,7 @@ struct GymSessionView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: planned ? L10n.tr("Posilovna").uppercased(with: Fmt.locale) : day?.planName ?? "Posilovna",
+        DetailScreen(glow: planned ? Palette.Glow.gym : Palette.Glow.training, title: planned ? L10n.tr("Posilovna").uppercased(with: Fmt.locale) : day?.planName ?? "Posilovna",
                      pinTitle: planned) {
             content
         }
@@ -370,10 +370,19 @@ struct GymSessionView: View {
     /// The sport's disc, the name in serif, "Today at 17:30, 45 min, about 4.2 strain".
     private func hero(_ day: GymDay, _ parts: GymDayParts) -> some View {
         HStack(alignment: .center, spacing: 14) {
+            // The concept's glowing header disc (trenink-koncept `.dd`): the
+            // sport's colour with a soft shine, a white figure, a halo.
             Image(systemName: "figure.strengthtraining.traditional")
-                .font(.system(size: 28, weight: .medium)).foregroundStyle(Palette.background)
+                .font(.system(size: 28, weight: .medium)).foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
                 .frame(width: 60, height: 60)
-                .background(Palette.Sport.color("strength"), in: Circle())
+                .background {
+                    Circle().fill(Palette.Sport.gym.resolved(dark: false))
+                        .overlay(Circle().fill(RadialGradient(colors: [.white.opacity(0.24), .clear], center: UnitPoint(x: 0.32, y: 0.22),
+                                                              startRadius: 0, endRadius: 36)))
+                }
+                .shadow(color: Palette.Sport.gym.opacity(0.44), radius: 8, x: -2, y: 3)
+                .shadow(color: Palette.Sport.gym.opacity(0.24), radius: 22)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(day.planName ?? L10n.tr("Silový trénink")).font(Typo.heading(34, relativeTo: .title)).foregroundStyle(Palette.ink)
