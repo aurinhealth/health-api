@@ -3012,7 +3012,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const planWeekLeft={};
       const proposing=syncing.then(p=>isToday&&p.active?planProposal(env,ctx,planWeekLeft).catch(()=>null):null);
       // A key workout of the calendar missed this week (missed-workout.js): this week's calendar and what was let go.
-      const missedMonday=mondayOfDate(date),missedReading=isToday?Promise.all([handleDashboardApi(new Request(url.origin+'/app/api/training/calendar?start='+missedMonday+'&end='+shiftDate(missedMonday,6),{headers:request.headers}),env,ctx,new URL(url.origin+'/app/api/training/calendar?start='+missedMonday+'&end='+shiftDate(missedMonday,6)),session).then(r=>r.ok?r.json():null),missedDecisions(env.DB)]).catch(error=>{console.warn('Missed workout not read',error?.message);return null;}):null;
+      const missedUrl=url.origin+'/app/api/training/calendar?start='+shiftDate(date,-3)+'&end='+shiftDate(mondayOfDate(date),7),missedReading=isToday?Promise.all([handleDashboardApi(new Request(missedUrl,{headers:request.headers}),env,ctx,new URL(missedUrl),session).then(r=>r.ok?r.json():null),missedDecisions(env.DB)]).catch(error=>{console.warn('Missed workout not read',error?.message);return null;}):null;
       // A gym plan alone: its sessions this week less the gym days already logged (one read of this week).
       const gymDays=syncing.then(p=>isToday&&!p.active&&p.gym?env.DB.prepare("SELECT COUNT(DISTINCT workout_date) AS n FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?").bind(env.USER_ID,mondayOfDate(date),date).first().then(r=>Number(r?.n)||0).catch(()=>null):null);
       const checking=connectionStatus(env).catch(()=>null);

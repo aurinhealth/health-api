@@ -54,6 +54,19 @@ test("a missed gym plan goes to the first day without gym; its strength event is
   assert.equal(missedWorkout({ days, today, decided: new Set(["gym:2026-11-19"]) }), null);
 });
 
+test("a Sunday miss is offered on Monday, and an interval swim is key (an easy swim is not)", () => {
+  const monday = "2026-11-23";
+  const days = [day("2026-11-22", ride("2026-11-22", "Sweet spot 3x15", 90, "missed")), day("2026-11-23"), day("2026-11-24")];
+  assert.equal(missedWorkout({ days, today: monday }).suggest, monday);
+  assert.equal(withLang("en", () => missedWorkoutView(missedWorkout({ days, today: monday }), monday)).text, "Yesterday you missed Sweet spot 3x15.");
+  const swim = (title, status) => ({ ...ride("2026-11-19", title, 50, status), sport: "swim" });
+  assert.equal(missedWorkout({ days: [day("2026-11-19", swim("10x100 threshold", "missed")), day("2026-11-20")], today }).suggest, today);
+  assert.equal(missedWorkout({ days: [day("2026-11-19", swim("Easy technique swim", "missed"))], today }), null);
+  // A planned interval swim is not an easy session to replace.
+  const hardSwim = [day("2026-11-19", ride("2026-11-19", "VO2max 5x4 min", 75, "missed")), day("2026-11-20", { ...ride("2026-11-20", "10x100 threshold", 50), sport: "swim" }), day("2026-11-21"), day("2026-11-22")];
+  assert.notEqual(missedWorkout({ days: hardSwim, today }).suggest, today);
+});
+
 test("Skip it is kept, and its Undo brings the card back", async () => {
   const db = scopedDb(createD1(), 1);
   await decideMissed(db, "gym:2026-11-19", true);

@@ -1,13 +1,13 @@
-// A key workout of the calendar missed this week (Intervals.icu, the app's
+// A key workout of the calendar missed in the last two days (Intervals.icu, the app's
 // own plans, the gym): Today's coach card proposes a day for it. The plans of
 // the app's training templates have their own (training-plans.js missedSession).
 // Rules, as coaches give them: a missed easy session is let go; a key one
 // (intervals, a test, a long one, a gym session) moves to the first day ahead
-// this week that is not next to another hard day, in place of an easy session
+// this week (to Sunday) that is not next to another hard day, in place of an easy session
 // that day; no such day, then let it go. Today is left out on a red morning.
 // Offered the day after the miss and once more the next day, then it goes.
 import { L } from "./lang.js";
-import { isHardSession } from "./session-intensity.js";
+import { isHardSession, isQualityName } from "./session-intensity.js";
 import { shiftDate } from "./dashboard-shared.js";
 
 const TO = () => [L("na pondělí", "to Monday"), L("na úterý", "to Tuesday"), L("na středu", "to Wednesday"), L("na čtvrtek", "to Thursday"), L("na pátek", "to Friday"), L("na sobotu", "to Saturday"), L("na neděli", "to Sunday")];
@@ -18,18 +18,18 @@ const LONG_MINUTES = { ride: 150, run: 90, swim: 75 };
 
 const gym = a => a.sport === "strength";
 const long = a => a.minutes != null && a.minutes >= (LONG_MINUTES[a.sport] ?? Infinity);
-// A hard ride, run or swim: a long one, or hard by its name or load.
-const hardEndurance = a => !gym(a) && (long(a) || (["ride", "run"].includes(a.sport) && isHardSession({ name: a.title, sport: a.sport, durationHours: a.minutes ? a.minutes / 60 : null })));
+// A hard ride, run or swim: a long one, or hard by its name or load (a swim by its name: "10×100 threshold").
+const hardEndurance = a => !gym(a) && (long(a) || (["ride", "run"].includes(a.sport) ? isHardSession({ name: a.title, sport: a.sport, durationHours: a.minutes ? a.minutes / 60 : null }) : a.sport === "swim" && isQualityName(a.title)));
 // A key session: a gym session or a hard ride, run or swim.
 export const isKey = a => gym(a) || hardEndurance(a);
 // One decision per session; a day's gym plan and its strength event are one session.
 export const missedKey = a => (gym(a) ? "gym:" + a.date : String(a.id));
 
-// `days` are the training calendar's days of this week (app-calendar.js
-// buildCalendar), `decided` the keys let go already, `red` a red morning.
+// `days` are the training calendar's days from three days back to next
+// Monday (app-calendar.js buildCalendar; a Sunday miss is offered on Monday), `decided` the keys let go already, `red` a red morning.
 export function missedWorkout({ days = [], today, decided = new Set(), red = false }) {
-  const monday = shiftDate(today, -weekday(today)), sunday = shiftDate(monday, 6);
-  const items = days.filter(d => d.date >= monday && d.date <= sunday).flatMap(d => (d.activities || []).map(a => ({ ...a, date: a.date || d.date })));
+  const monday = shiftDate(today, -weekday(today));
+  const items = days.flatMap(d => (d.activities || []).map(a => ({ ...a, date: a.date || d.date })));
   const candidates = items.filter(a => a.status === "missed" && a.date < today && a.date >= shiftDate(today, -2) && (a.eventId || String(a.id).startsWith("gym:")) && isKey(a) && !decided.has(missedKey(a)));
   // The latest; of a day's gym plan and its strength event, the plan (it moves both).
   const missed = candidates.sort((a, b) => b.date.localeCompare(a.date) || Number(Boolean(a.eventId)) - Number(Boolean(b.eventId)))[0];
