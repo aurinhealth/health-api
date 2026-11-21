@@ -56,12 +56,11 @@ test("the monthly brake follows the plan and stays under what it nets", async ()
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "1", AI_UNPAID_LIMIT_USD: "1.25" }, 1, "unpaid"), 1);
   // Only paid plans have a week, 30 % of their month.
   assert.deepEqual([aiWeeklyLimitUsd(5, "paid"), aiWeeklyLimitUsd(1.25, "unpaid"), aiWeeklyLimitUsd(null, "paid")], [1.5, null, null]);
-  // What a plan nets a month in Czechia after 21 % VAT and Apple's 15 % at 22.10 Kč a dollar (ČNB 13 Nov 2026):
-  // 199 Kč monthly 6.33, 1 490 Kč yearly 3.95, 149 Kč × 12 with the commitment 4.74 USD. The
-  // yearly plans net less than the brake on purpose: only the heaviest users reach it, and the
-  // morning report weighs spending against what Pro brings in (Petr 2026-11-16).
+  // What a plan nets a month in Czechia after 21 % VAT and Apple's 15 % at 22.10 Kč a dollar (ČNB 13 Nov 2026),
+  // prices from 1.0 (Petr 2026-11-21): 249 Kč monthly 7.92, 179 Kč × 12 with the commitment 5.69 USD, both
+  // above the brake; 1 990 Kč yearly 5.27 sits just above it too (monetization review 2026-11-21).
   const net = czk => czk / 1.21 * 0.85 / 22.1;
-  assert.ok(5 < net(199) && 5 > net(149) && 1.25 < net(1490 / 12));
+  assert.ok(5 < net(249) && 5 < net(179) && 5 < net(1990 / 12) && 1.25 < net(1990 / 12));
 });
 
 test("an account without Pro stops at its small brake", async () => {

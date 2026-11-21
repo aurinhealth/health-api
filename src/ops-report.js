@@ -154,9 +154,9 @@ export async function stuckAccountDeletions(db, { minAttempts = STUCK_DELETION_A
 }
 
 // What a paying account brings in a month after VAT (21 %) and Apple (15 %,
-// Small Business Program): 199 Kč monthly, 1 490 Kč yearly
-// (audit/aurin-pro-ai-limity-plan-2026-10-18.md).
-export const NET_USD_PER_MONTH = { monthly: 5.9, yearly: 3.7 };
+// Small Business Program): 249 Kč monthly, 1 990 Kč yearly, 179 Kč × 12 counted as yearly
+// (monetization review 2026-11-21, prices from 1.0).
+export const NET_USD_PER_MONTH = { monthly: 7.8, yearly: 5.2 };
 // Petr's cap of TestFlight testers; the report warns a little before it.
 export const TESTER_CAP = 20;
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
