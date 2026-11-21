@@ -40,7 +40,9 @@ struct VO2maxPage: View {
     }
 
     static func sources(_ list: [String]?) -> String? {
-        let names = (list ?? []).map(HealthValueContent.serviceName)
+        // One name per service: "google-wearables" and "google" are both Google Health.
+        var names: [String] = []
+        for name in (list ?? []).map(HealthValueContent.serviceName) where !names.contains(name) { names.append(name) }
         guard !names.isEmpty else { return nil }
         // In the app's language, not the phone's.
         let formatter = ListFormatter()
@@ -86,16 +88,29 @@ struct VO2maxDetailContent: View {
 
     @ViewBuilder private func content(_ vo2: HealthVO2max) -> some View {
         let compared = vo2.compared
-        DetailHeadline(value: Fmt.decimal(vo2.value, digits: 1), unit: "ml/kg/min",
-                       usual: compared.map { VO2maxPage.position(vo2.value, in: $0) })
+        // The number, the place among the group in green, the unit under it (concept s390).
+        VStack(spacing: 6) {
+            Text(verbatim: Fmt.decimal(vo2.value, digits: 1)).font(Typo.number(64)).foregroundStyle(Palette.ink)
+                .accessibilityLabel(Fmt.decimal(vo2.value, digits: 1) + " ml/kg/min")
+            if let compared {
+                Text(verbatim: VO2maxPage.position(vo2.value, in: compared)).font(Typo.bodyStrong).foregroundStyle(Palette.green)
+            }
+            Text(verbatim: "ml/kg/min").font(Typo.caption).foregroundStyle(Palette.muted)
+                .accessibilityHidden(true)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .accessibilityElement(children: .combine)
         if let compared {
             Card { FriendBandsView(value: vo2.value, bands: compared) }
         }
         let points = loaded?.shown ?? vo2.series.map { ChartPoint(date: $0.date, value: $0.value) }
         Card {
             DetailChart(points: points, today: health.date, period: $period, digits: 1,
-                        note: "Každý bod je jeden odhad Aurinu, ne laboratorní test.",
-                        source: VO2maxPage.sources(vo2.sources))
+                        note: period.weekly ? "Každý bod je týdenní průměr tvého odhadu Aurinu. Čárkovaně průměr období."
+                            : "Každý bod je jeden den tvého odhadu Aurinu. Čárkovaně průměr období.",
+                        source: L10n.tr("Aurin, aktualizováno denně"))
         }
         .padding(.top, 12)
         let rows = TrendMath.rows(points, today: points.last?.date ?? health.date, lags: period.weekly ? TrendLags.year : TrendLags.month)
@@ -104,13 +119,16 @@ struct VO2maxDetailContent: View {
             Card { TrendTable(rows: rows, digits: 1) }.padding(.top, 10)
         }
         if let years = health.aurinAge?.parts["vo2max"], abs(years) >= 0.05 {
-            Card {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Vliv na Aurin age").font(Typo.body).foregroundStyle(Palette.ink)
-                    Spacer(minLength: 12)
-                    Text(verbatim: AurinAgeText.effect(years)).font(Typo.body).foregroundStyle(Palette.muted)
+            RouteLink(route: .aurinAge) {
+                Card {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Vliv na Aurin age").font(Typo.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 12)
+                        Text(verbatim: AurinAgeText.effect(years)).font(Typo.body).foregroundStyle(Palette.muted)
+                        Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
-                .accessibilityElement(children: .combine)
             }
             .padding(.top, 12)
         }
@@ -166,8 +184,8 @@ struct FriendBandsView: View {
     private func label(_ i: Int) -> String {
         let f = { (x: Double) in Fmt.decimal(x, digits: 1) }
         switch i {
-        case 0: return L10n.f("pod %@", f(bands.p25))
-        case 4: return L10n.f("nad %@", f(bands.p90))
+        case 0: return L10n.f("méně než %@", f(bands.p25))
+        case 4: return L10n.f("víc než %@", f(bands.p90))
         default: return f(edges[i - 1]) + "–" + f(edges[i])
         }
     }

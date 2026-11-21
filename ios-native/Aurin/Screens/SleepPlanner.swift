@@ -215,7 +215,7 @@ struct SleepPlanner: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 510 → "8 h 30 min", 480 → "8 h": a length in a line of text, as everywhere
+    /// 510 → "8 h 30", 480 → "8 h": a length in a line of text, as everywhere
     /// else in the app (Fmt.duration). The dial's big number is "8:30", as the night
     /// on Spánek is "7:12".
     static func short(_ minutes: Int) -> String {

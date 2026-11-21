@@ -162,6 +162,9 @@ struct BodyMap: View {
     var height: CGFloat = 260
     var compact = false
     var legend = false
+    /// A done session (concept wgym): `load` is each muscle's share against the
+    /// biggest, drawn in one rust shade, stronger for a bigger share.
+    var share = false
 
     static let primary = 0.7
     static let secondary = 0.3
@@ -225,6 +228,7 @@ struct BodyMap: View {
             return AnyShapeStyle(LinearGradient(colors: [Palette.green, Palette.green.opacity(0.8)], startPoint: .top, endPoint: .bottom))
         }
         guard let w = load[id], w > 0 else { return AnyShapeStyle(Palette.ink.opacity(0.07)) }
+        if share { return AnyShapeStyle(Palette.rust.opacity(0.3 + 0.7 * min(w, 1))) }
         let color = w >= Self.primary ? Palette.rust : w >= Self.secondary ? Palette.amberBar : Palette.sand
         let strength = w >= Self.primary ? 0.75 + 0.25 * min(w, 1) : w >= Self.secondary ? 0.55 + 0.4 * w : 0.85
         return AnyShapeStyle(LinearGradient(colors: [color.opacity(strength), color.opacity(strength * 0.78)], startPoint: .top, endPoint: .bottom))
@@ -232,7 +236,7 @@ struct BodyMap: View {
 
     private func glow(_ id: String) -> Color {
         if selected.contains(id) { return Palette.green.opacity(0.35) }
-        if let w = load[id], w >= Self.primary { return Palette.rust.opacity(0.25) }
+        if !share, let w = load[id], w >= Self.primary { return Palette.rust.opacity(0.25) }
         return .clear
     }
 

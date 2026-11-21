@@ -31,24 +31,15 @@ struct HealthView: View {
             }
             .navBarVisibility(.hidden)
             .appRoutes()
+            .tabRoot(.health)
         }
         .task { await model.refreshIfStale(.health) }
     }
 }
 
 /// A drill-down page: the section's background, a back button and a column.
-private struct SectionGlowKey: EnvironmentKey { static let defaultValue: Color? = nil }
-
-extension EnvironmentValues {
-    /// The tab's glow for pages that open from more than one tab (Readiness,
-    /// What affects you, Tonight): Health's indigo from Health (DES-3).
-    var sectionGlow: Color? {
-        get { self[SectionGlowKey.self] }
-        set { self[SectionGlowKey.self] = newValue }
-    }
-}
-
 struct DetailScreen<Content: View>: View {
+    @Environment(\.tabGlow) private var tabGlow
     var glow: Color = Palette.Glow.health
     /// Shown in the pinned bar once the page is scrolled.
     var title: String? = nil
@@ -66,7 +57,7 @@ struct DetailScreen<Content: View>: View {
 
     var body: some View {
         ZStack {
-            ScreenBackground(glow: glow)
+            ScreenBackground(glow: tabGlow ?? glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     BackSlot { dismiss() }
@@ -145,7 +136,7 @@ struct HealthContent: View {
             if !editing {
                 // Redesign H: Aurin age on top, readiness is a row of Health
                 // monitor below (D-ZDRAVI-1, -3).
-                AurinAgeHero(health: health, pro: ProStore.shared.entitled || model.demo, noWearable: model.noWearable)
+                AurinAgeHero(health: health, pro: !model.coachLocked || ProStore.shared.entitled || model.demo, noWearable: model.noWearable)
                     .padding(.top, 20)
                 if let age = health.aurinAge {
                     AurinAgeTrendCard(age: age).padding(.top, 20)
@@ -410,7 +401,7 @@ struct ReadinessDetailContent: View {
         switch key {
         case "hrv": return r.hrv.map { Fmt.int($0) + " ms" } ?? "–"
         case "restingHR": return r.restingHR.map { Fmt.int($0) + " bpm" } ?? "–"
-        case "sleep": return Fmt.hoursMinutes(r.sleepMinutes)
+        case "sleep": return r.sleepMinutes.map(Fmt.hoursMinutesLong) ?? "–"
         case "respiration": return health.respiration.map { Fmt.decimal($0.value) + " /min" } ?? "–"
         case "skinTemp": return health.skinTemp.map { Fmt.signed(Units.temperatureChange($0.deviation), digits: 1) + " " + Units.temperatureUnit } ?? "–"
         case "wristTemp": return health.wristTemp?.deviation.map { Fmt.signed(Units.temperatureChange($0), digits: 1) + " " + Units.temperatureUnit } ?? "–"
@@ -432,7 +423,7 @@ struct SleepWidget: View {
             WidgetHeader(title: "Spánek", color: Palette.indigo)
             SizedWidgetBody(size: size) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    NumberText(value: Fmt.hoursMinutes(sleep.night?.minutes), unit: "h", spoken: Fmt.hoursMinutesSpoken(sleep.night?.minutes))
+                    NumberText(value: sleep.night?.minutes.map(Fmt.hoursMinutesLong) ?? "–", spoken: Fmt.hoursMinutesSpoken(sleep.night?.minutes))
                     Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 if let index = sleep.night?.index {
@@ -454,7 +445,7 @@ struct SleepWidget: View {
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
                              height: height,
-                             targetTag: (name: L10n.tr("odhad potřeby"), value: Fmt.hoursMinutes(need)))
+                             targetTag: (name: L10n.tr("odhad potřeby"), value: Fmt.hoursMinutesLong(need)))
                 }
             }
         }
@@ -469,12 +460,12 @@ struct SleepDebtWidget: View {
         Card {
             WidgetHeader(title: "Spánkový dluh", color: Palette.amberBar)
             if size == .small {
-                NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
+                NumberText(value: Fmt.duration(debt.minutes), spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                 Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
                 DebtStrip(minutes: debt.minutes)
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    NumberText(value: Fmt.hoursMinutes(Double(debt.minutes)), unit: "h", spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
+                    NumberText(value: Fmt.duration(debt.minutes), spoken: Fmt.hoursMinutesSpoken(Double(debt.minutes)))
                     Spacer(minLength: 8)
                     Text(nights).font(Typo.caption).foregroundStyle(Palette.faint)
                 }

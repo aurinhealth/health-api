@@ -6,13 +6,12 @@ import SwiftUI
 
 struct JournalImpactView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.sectionGlow) private var sectionGlow
     @State private var metric = "readiness"
     @State private var impact: JournalImpact?
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: sectionGlow ?? Palette.Glow.today, title: "Co na tebe působí") {
+        DetailScreen(glow: Palette.Glow.today, title: "Co na tebe působí") {
             Text("Co na tebe působí").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 .padding(.top, 8)
             Picker(L10n.tr("Ukazatel"), selection: $metric) {
@@ -182,14 +181,13 @@ struct DivergingBar: View {
 
 struct JournalItemView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.sectionGlow) private var sectionGlow
     let key: String
     let metric: String
     @State private var detail: JournalDetail?
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: sectionGlow ?? Palette.Glow.today, title: detail?.name) {
+        DetailScreen(glow: Palette.Glow.today, title: detail?.name) {
             if let detail {
                 HStack(spacing: 12) {
                     JournalIcon(symbol: detail.icon, color: tone(detail), size: 44)

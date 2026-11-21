@@ -39,3 +39,19 @@ final class HealthValueCurrentTests: XCTestCase {
         XCTAssertEqual(shown.last?.side, "below")
     }
 }
+
+/// Oxygen's chart says what its headline says (606 retest, critic 9).
+@MainActor
+final class OxygenPointsTests: XCTestCase {
+    func testHighOxygenIsNeverFarAbove() {
+        let shown = HealthValueContent.oxygenPoints([ChartPoint(date: "2026-11-21", value: 98, low: 94, high: 96, state: "far", side: "above")])
+        XCTAssertEqual(shown.first?.state, "within")
+        XCTAssertNil(shown.first?.side)
+    }
+
+    func testLowOxygenKeepsItsWords() {
+        let shown = HealthValueContent.oxygenPoints([ChartPoint(date: "2026-11-21", value: 90, low: 94, high: 97, state: "far", side: "below")])
+        XCTAssertEqual(shown.first?.state, "far")
+        XCTAssertEqual(shown.first?.side, "below")
+    }
+}

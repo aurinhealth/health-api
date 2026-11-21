@@ -45,7 +45,32 @@ final class TrainingLoadTests: XCTestCase {
         let training = DemoData.training
         XCTAssertEqual(training.loadBalance?.state, "ready")
         XCTAssertEqual(training.muscleLoad?.level, "below")
-        XCTAssertEqual(training.loadBalance?.series.count, 14)
+        XCTAssertEqual(training.loadBalance?.series.count, 30)
+        // The plain loads of the detail: 7 days, the usual week, the trend's history, by intensity.
+        XCTAssertNotNil(training.loadBalance?.load)
+        XCTAssertNotNil(training.loadBalance?.usual)
+        XCTAssertEqual(training.loadBalance?.history?.count, 98)
+        XCTAssertEqual(training.loadBalance?.intensity?.map(\.key), ["low", "high", "anaerobic"])
+        XCTAssertEqual(TrendMath.dailyRows((training.loadBalance?.history ?? []).map { ChartPoint(date: $0.date, value: $0.load) }).map(\.lag), [7, 14, 30, 91])
+        // The three values on top: Load balance, Load 7 days, Average.
+        XCTAssertEqual(LoadDetailContent.cells(.balance, try XCTUnwrap(DemoData.training.loadBalance)).count, 3)
+    }
+
+    func testFormStateAgainstTheUsualRange() {
+        XCTAssertEqual(FormDetailContent.state(-2, -10...5), .within)
+        XCTAssertEqual(FormDetailContent.state(8, -10...5), .off(above: true))
+        XCTAssertEqual(FormDetailContent.state(-14, -10...5), .off(above: false))
+        XCTAssertEqual(FormDetailContent.state(-35, -10...5), .far(above: false))
+    }
+
+    func testVO2maxTileUsesAurinsEstimate() {
+        let h = HealthVO2max(value: 51.3, date: "2026-11-12", series: [Point(date: "2026-10-10", value: 50.1), Point(date: "2026-11-12", value: 51.3)])
+        let tile = TrainingSnapshot.VO2max(aurin: h)
+        XCTAssertEqual(tile.value, 51.3)
+        XCTAssertEqual(tile.change, 1.2)
+        XCTAssertEqual(tile.source, "aurin")
+        // An estimate from months ago is no "in 4 weeks".
+        XCTAssertNil(TrainingSnapshot.VO2max(aurin: HealthVO2max(value: 51.3, date: "2026-11-12", series: [Point(date: "2026-06-01", value: 45)])).change)
     }
 
     func testPlanCardFromRace() throws {

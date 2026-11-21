@@ -243,7 +243,6 @@ struct HealthRoute: View {
     @Environment(AppModel.self) private var model
     let route: AppRoute
     @State private var info = false
-    @Environment(\.sectionGlow) private var sectionGlow
 
     var body: some View {
         content
@@ -257,8 +256,8 @@ struct HealthRoute: View {
             switch route {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
-                // Today's green: readiness lives on Today (concept 4); from Health its indigo.
-                DetailScreen(glow: sectionGlow ?? Palette.Glow.today, title: "Připravenost",
+                // Today's green: readiness lives on Today (concept 4, Health keeps a row).
+                DetailScreen(glow: Palette.Glow.today, title: "Připravenost",
                              info: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true }) {
                     ReadinessDetailContent(health: health, summary: model.today?.summary, noWearable: model.noWearable)
                 }

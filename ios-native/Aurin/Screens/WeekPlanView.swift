@@ -637,9 +637,9 @@ struct WeekPlanRow: View {
     let open: Bool?
 
     var body: some View {
-        let state = PlanState(activity.session)
         HStack(spacing: 12) {
-            PlanStateIcon(symbol: SportIcon.symbol(activity.sport, type: activity.type), state: state, size: 40, percent: activity.compliance)
+            // The concept's sport disc (as the week strip): pale while ahead, never a dashed ring.
+            SportDisc(sport: activity.sport, type: activity.type, state: SportDisc.State(status: activity.status), size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: activity.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
                 if let line {

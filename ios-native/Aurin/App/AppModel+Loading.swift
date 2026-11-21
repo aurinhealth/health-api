@@ -143,6 +143,10 @@ extension AppModel {
                 // Yesterday's screens wait until the coach's cards have asked, so they do
                 // not queue in the account's database with them (report 2026-11-12).
                 prefetchAround(Self.localDate(Date()), after: .seconds(10))
+                // Training has no copy of today on the phone yet (the first open of
+                // the day): loaded shortly after Today, so its tab opens without
+                // a spinner (device test 604: 0.8 s on the first visit).
+                if training == nil { scope.task(priority: .utility) { try? await Task.sleep(for: .seconds(2)); await self.refreshIfStale(.training) } }
                 await cycle
             }
             if let status = await status, stillSignedIn(account) { athleteStatus = status }

@@ -17,7 +17,9 @@ enum CoachTextPlaces {
         "coach-text-shown-" + (screen == "nutrients" ? "food" : screen)
     }
 
-    static func foldedKey(_ screen: String) -> String { "coach-text-folded-" + screen }
+    /// A new key (TestFlight 604.1): the card starts open as in the concept,
+    /// also for those who folded it on the old card.
+    static func foldedKey(_ screen: String) -> String { "coach-text-folded2-" + screen }
 }
 
 /// The answers of this launch, so switching tabs does not ask again.

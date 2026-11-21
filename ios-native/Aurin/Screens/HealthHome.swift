@@ -105,7 +105,8 @@ extension AurinAgeText {
 /// in place of the halo. While it collects data it is a quiet grey pearl.
 /// Drawn in Canvas; it stands still with Reduce Motion or Low Power Mode.
 struct AurinOrb: View {
-    enum Mood { case younger, older, collecting }
+    /// locked: without Aurin Pro, the lit orb with dots in place of the number.
+    enum Mood { case younger, older, collecting, locked }
     var mood: Mood
     var size: CGFloat = 250
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -140,6 +141,7 @@ struct AurinOrb: View {
                     drawPearl(&context, center: center, radius: radius, t: t)
                 } else {
                     drawLit(&context, center: center, radius: radius, t: t)
+                    if mood == .locked { drawDots(&context, center: center, radius: radius, t: t) }
                 }
             }
             .frame(width: size * 1.6, height: size * 1.6)
@@ -196,6 +198,32 @@ struct AurinOrb: View {
         }
     }
 
+    /// Locked (Pro concept, Petr 2026-11-13): cream dots in two blocks the size
+    /// of two digits, drifting a little. Fixed places that never form a number,
+    /// not the real one and not a sample (ios-designer); only the light moves.
+    private func drawDots(_ context: inout GraphicsContext, center: CGPoint, radius: CGFloat, t: Double) {
+        // Two blocks a digit's size apart, as the concept draws them.
+        let block = CGSize(width: radius * 0.36, height: radius * 0.56)
+        for (b, side) in [-1.0, 1.0].enumerated() {
+            let origin = CGPoint(x: center.x + side * radius * 0.23 - block.width / 2, y: center.y - radius * 0.1 - block.height / 2)
+            // A loose grid with jitter: even, but no strokes a number could be read from.
+            for row in 0..<8 {
+                for col in 0..<5 {
+                    let seed = Double(b * 40 + row * 5 + col) * 7.31
+                    let jx = (abs((sin(seed) * 43758.5453).truncatingRemainder(dividingBy: 1)) - 0.5) * 0.9
+                    let jy = (abs((sin(seed * 1.93) * 24634.6345).truncatingRemainder(dividingBy: 1)) - 0.5) * 0.9
+                    let drift = CGFloat(sin(t * 0.6 + seed)) * 0.8
+                    let point = CGPoint(x: origin.x + block.width * (CGFloat(col) + 0.5 + jx) / 5 + drift,
+                                        y: origin.y + block.height * (CGFloat(row) + 0.5 + jy) / 8 - drift)
+                    let dot = (row + col) % 4 == 0 ? radius * 0.05 : radius * 0.036
+                    let bright = 0.5 + 0.45 * (0.5 + 0.5 * sin(t * 1.1 + seed * 3))
+                    context.fill(Path(ellipseIn: CGRect(x: point.x - dot / 2, y: point.y - dot / 2, width: dot, height: dot)),
+                                 with: .color(Color(red: 0.96, green: 0.93, blue: 0.85).opacity(bright)))
+                }
+            }
+        }
+    }
+
     /// Collecting (concept 24): a dim pearl, dark at night and light on paper, no glow.
     private func drawPearl(_ context: inout GraphicsContext, center: CGPoint, radius: CGFloat, t: Double) {
         let dark = scheme == .dark
@@ -229,6 +257,11 @@ struct AurinOrb: View {
 /// Aurin age on top of Health: the orb with the estimate, the words against
 /// the real age, the change since 12 weeks ago and when it was updated.
 struct AurinAgeHero: View {
+    @Environment(AppModel.self) private var model: AppModel?
+    /// Where the orb and its pill stand, for the way into the offer.
+    @State private var orbFrame = FrameBox()
+    @State private var pillFrame = FrameBox()
+    @State private var tapped = false
     let health: HealthSnapshot
     var pro: Bool
     var noWearable = false
@@ -302,19 +335,33 @@ struct AurinAgeHero: View {
         return L10n.tr("Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna.")
     }
 
-    /// Without Pro (Pro concept): the orb locked with its dots and the way to unlock.
+    /// Without Pro (Pro concept, Petr 2026-11-13): the lit orb with dots in
+    /// place of the number, no label in it, and "Unlock with Pro" under it,
+    /// which opens the offer. No price on the screen.
     private var locked: some View {
-        VStack(spacing: 12) {
-            AurinOrb(mood: .collecting)
-            Text("Aurin age").font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-            // The lock in the button, styled like Add entry (Pro concept).
-            NavigationLink { SubscriptionView() } label: {
-                Label { Text("Odemknout s Aurin Pro") } icon: { Image(systemName: "lock.fill") }
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 22).frame(minHeight: 48)
-                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        VStack(spacing: 14) {
+            AurinOrb(mood: .locked)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { orbFrame.rect = $0 }
+                .accessibilityElement()
+                .accessibilityLabel(Text(verbatim: L10n.tr("Aurin Age") + ", " + L10n.tr("v Aurin Pro")))
+            Button {
+                guard let model else { return }
+                Paywall.present(model, from: pillFrame.rect, orb: orbFrame.rect)
+                // Its copy travels into the offer, so this one steps aside a moment.
+                tapped = true
+                Task { try? await Task.sleep(for: .seconds(1)); tapped = false }
+            } label: {
+                Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 16).frame(height: 36)
+                    .background(Palette.card, in: Capsule())
+                    .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+                    .tapTarget(width: 44, height: 44)
             }
             .buttonStyle(.plain)
+            .opacity(tapped ? 0 : 1)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pillFrame.rect = $0 }
+            .accessibilityIdentifier("aurin-age.unlock")
         }
     }
 }
@@ -717,12 +764,9 @@ struct MiniDial<Center: View>: View {
 
 // MARK: - Sleep
 
-/// Last night on a 20:00 to 10:00 half circle: Health's sleep card and the
-/// Sleep detail headline (concept 1 and 5).
+/// Last night on a 20:00 to 10:00 half circle (Health's sleep card, concept 1).
 struct NightArc: View {
     let sleep: HealthSnapshot.Sleep
-    /// "Minulá noc" on Health; the Sleep detail of a picked day names its night.
-    var title = "Minulá noc"
 
     private static func minutes(_ clock: String?) -> Double? {
         guard let clock, clock.count >= 4 else { return nil }
@@ -742,7 +786,8 @@ struct NightArc: View {
         let from = Self.minutes(night?.start).map(Self.onScale).map { $0 > span && (to ?? span) <= span ? 0 : $0 }
         return GeometryReader { geo in
             let w = geo.size.width
-            let r = min(w / 2 - 28, geo.size.height - 30)
+            // Room above the arc for a time label at its top (606 retest: 0:30 sat on the arc).
+            let r = min(w / 2 - 28, geo.size.height - 44)
             let c = CGPoint(x: w / 2, y: geo.size.height - 18)
             let angle = { (m: Double) in Angle.degrees(180 + 180 * min(1, max(0, m / span))) }
             ZStack {
@@ -757,7 +802,7 @@ struct NightArc: View {
                         .shadow(color: Color(light: 0x2FA57B, dark: 0x8FE6C4).opacity(0.35), radius: 6)
                 }
                 VStack(spacing: 2) {
-                    Text(verbatim: L10n.tr(title).uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.tr("Minulá noc").uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
                     Text(verbatim: night?.minutes.map { Fmt.duration(Int($0)) } ?? "–").font(Typo.number(34)).foregroundStyle(Palette.ink)
                     if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
                 }
@@ -771,13 +816,18 @@ struct NightArc: View {
                     Text(verbatim: ClockText.format(end)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
                         .position(x: c.x + cos(b) * out + 6, y: max(8, c.y + sin(b) * out))
                 }
-                // The scale ends sit under the arc, clear of its round caps (DES-11).
-                Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 14)
-                Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 14)
+                // The scale ends sit under the arc, clear of its round caps (DES-11),
+                // and give way to a time of the night close to them (606 retest).
+                if (from ?? span) > 75 {
+                    Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 14)
+                }
+                if (to ?? 0) < span - 75 {
+                    Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 14)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.tr(title), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel([L10n.tr("Minulá noc"), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
     }
 
     /// "6 min short of 7 h 30 min", or "reached your need".

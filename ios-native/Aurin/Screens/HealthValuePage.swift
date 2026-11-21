@@ -209,7 +209,8 @@ struct HealthValueContent: View {
     /// that is still running (steps, active energy) stays out, so the chart
     /// never shows a drop each morning (D-ZDRAVI-19); the number on top has it.
     private func chartPoints(_ reading: HealthValueReading) -> [ChartPoint] {
-        let points = loaded?.shown ?? reading.local
+        var points = loaded?.shown ?? reading.local
+        if value == .oxygen { points = Self.oxygenPoints(points) }
         if value.partialToday { return points.filter { $0.date < today } }
         // Weekly points are the server's own weeks: a day's value stays out of them.
         if period.weekly { return points }
@@ -228,6 +229,19 @@ struct HealthValueContent: View {
         points.append(ChartPoint(date: today, value: current, low: old?.low ?? points.last?.low, high: old?.high ?? points.last?.high,
                                  state: words.0, side: words.1))
         return points
+    }
+
+    /// Oxygen's points in the headline's band and words: never "above" (606
+    /// retest: 98 % read "far above" in the bubble under a green headline).
+    static func oxygenPoints(_ points: [ChartPoint]) -> [ChartPoint] {
+        points.map { p in
+            let band = p.low.flatMap { low in p.high.flatMap { HealthMonitorCard.oxygenBand(low: low, high: $0) } }
+            guard let state = HealthMonitorCard.oxygenState(MetricState(state: p.state, side: p.side), value: p.value, band: band) else {
+                return ChartPoint(date: p.date, value: p.value, low: band?.lowerBound ?? p.low, high: band?.upperBound ?? p.high)
+            }
+            let words = stateWords(state)
+            return ChartPoint(date: p.date, value: p.value, low: band?.lowerBound ?? p.low, high: band?.upperBound ?? p.high, state: words.0, side: words.1)
+        }
     }
 
     static func stateWords(_ state: MetricState) -> (String?, String?) {
@@ -265,7 +279,9 @@ struct HealthValueContent: View {
     static func serviceName(_ id: String) -> String {
         switch id.lowercased() {
         case "apple", "apple-health", "applehealth", "healthkit": return "Apple Health"
-        case "google", "google-health", "fitbit": return "Google Health"
+        case "google", "google-health", "google-wearables", "fitbit": return "Google Health"
+        // A workout added in Aurin itself.
+        case "local", "aurin": return "Aurin"
         case "whoop": return "WHOOP"
         case "oura": return "Oura"
         case "garmin": return "Garmin"

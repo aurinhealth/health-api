@@ -1,185 +1,174 @@
 import SwiftUI
 
-/// "Forma a kondice": the drill-down from the Form widget on Training.
+/// Form (concept K04/022): Fitness, Fatigue and Form on top as a switch, the
+/// form on a dial against the athlete's usual range, the chart with the band
+/// and its periods, What the range means, Trend analysis and How it's
+/// measured. All three are estimates from the workouts.
 struct FormDetailView: View {
     let training: TrainingSnapshot
-    @Environment(\.dismiss) private var dismiss
+    @State private var metric = "form"
+    @State private var period: ChartPeriod = .days30
+    @State private var info = false
 
     var body: some View {
-        ZStack {
-            ScreenBackground(glow: Palette.Glow.training)
-            PageScroll {
-                FormDetailContent(training: training, back: { dismiss() })
-                    .padding(.bottom, 100)
-            }
+        DetailTemplate(title: "Forma", glow: Palette.Glow.training) {
+            CoachEntry(view: "training", companion: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true })
+        } content: {
+            FormDetailContent(training: training, metric: $metric, period: $period)
         }
-        .floatingBack(title: "Forma a kondice", coach: CoachEntry(view: "training")) { dismiss() }
-        .navBarVisibility(.hidden)
+        .sheet(isPresented: $info) {
+            ScrollView { FormDetailContent.howMeasured(training.form).padding(24) }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Palette.background)
+        }
     }
 }
 
 struct FormDetailContent: View {
     let training: TrainingSnapshot
-    var back: () -> Void = {}
+    /// "fitness", "fatigue" or "form".
+    @Binding var metric: String
+    @Binding var period: ChartPeriod
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                BackSlot(action: back)
-                Spacer()
-                SectionLabel(text: "Forma a kondice")
-                Spacer()
-                Color.clear.frame(width: 36, height: 36)
-            }
-
             if let form = training.form {
-                Text("Forma").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
-                HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.signed(form.form)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                    Pill(text: form.label, foreground: zoneColor(form.zone), background: form.zone == "risk" ? Palette.rust.opacity(0.14) : form.zone == "optimal" || form.zone == "fresh" ? Palette.greenSoft : Palette.amberSoft)
+                let usual = Self.usual(form)
+                SiblingCells(cells: [
+                    SiblingCell(id: "fitness", title: "Kondice", value: Fmt.int(form.fitness)),
+                    SiblingCell(id: "fatigue", title: "Únava", value: Fmt.int(form.fatigue)),
+                    SiblingCell(id: "form", title: "Forma", value: Fmt.signed(form.form), spokenState: Self.state(form.form, usual).words)
+                ], selected: metric) { metric = $0 }
+                .padding(.top, 16)
+                if metric == "form" {
+                    dial(form, usual: usual)
+                } else {
+                    DetailHeadline(label: metric == "fitness" ? "Kondice dnes, odhad" : "Únava dnes, odhad",
+                                   value: Fmt.int(metric == "fitness" ? form.fitness : form.fatigue))
                 }
-                // What the zone means (the server's text, audit 16.4).
-                Text(verbatim: form.text).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
+                let points = Self.points(form, metric: metric, usual: usual)
                 Card {
-                    // How the number above comes out: Form +5 = Fitness 42 − Fatigue 37;
-                    // the two lines alone where the sum does not fit on one line.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 8) {
-                            Text(verbatim: L10n.tr("Forma") + " " + Fmt.signed(form.form) + " =").font(Typo.small).foregroundStyle(Palette.muted)
-                            legend("Kondice", form.fitness, Palette.green)
-                            Text(verbatim: "−").font(Typo.small).foregroundStyle(Palette.muted)
-                            legend("Únava", form.fatigue, Palette.amberBar)
-                        }
-                        .lineLimit(1).fixedSize()
-                        HStack(spacing: 18) {
-                            legend("Kondice", form.fitness, Palette.green)
-                            legend("Únava", form.fatigue, Palette.amberBar)
-                        }
+                    DetailChart(points: points, today: training.date, period: $period,
+                                note: metric == "form" ? L10n.f("Forma je kondice minus únava. Pásmo je tvoje obvyklé rozmezí, %@ až %@. Pod ním jsi unavenější než obvykle, nad ním čerstvější.", Fmt.signed(usual.lowerBound), Fmt.signed(usual.upperBound))
+                                    : metric == "fitness" ? "Kondice je průměr zátěže posledních 42 dní. Čárkovaně průměr období."
+                                    : "Únava je průměr zátěže posledních 7 dní. Čárkovaně průměr období.",
+                                periods: [.days30, .months3, .months6])
+                }
+                if metric == "form" {
+                    SectionLabel(text: "Co znamená rozmezí").padding(.top, 28)
+                    Card {
+                        rangeRow("Čerstvý", L10n.f("nad %@", Fmt.signed(usual.upperBound)))
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                        rangeRow("Obvyklé rozmezí", L10n.f("%@ až %@", Fmt.signed(usual.lowerBound), Fmt.signed(usual.upperBound)))
+                        Rectangle().fill(Palette.hairline).frame(height: 1)
+                        rangeRow("Unavený", L10n.f("pod %@", Fmt.signed(usual.lowerBound)))
                     }
-                    FormLines(series: form.series, height: 170, scale: true)
+                    .padding(.top, 10)
+                    Text(verbatim: L10n.tr("Čerstvý chceš být v den závodu. Když jsi unavený mnoho dní po sobě, zátěž obvykle roste rychleji, než se stíháš zotavit."))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8).padding(.horizontal, 4)
                 }
-                .padding(.top, 24)
-            }
-
-            // The last 7 days against the usual 28 on a scale in ink, no
-            // ratio, bands or colours (Today audit D4).
-            if let level = training.acwr?.level, TrainingSnapshot.ACWR.levels.contains(level) {
-                header("Posledních 7 dní vs. obvyklých 28", trailing: nil)
-                LoadLevelScale(level: level).padding(.top, 14)
-            }
-
-            if training.load.weeks.count > 1 {
-                header("Zátěž po týdnech", trailing: L10n.f("týden %@", "\(training.week)"))
-                WeeklyLoadChart(weeks: training.load.weeks)
-                    .padding(.top, 14)
-            }
-
-            if let vo2 = training.vo2max {
-                header("VO2max", trailing: vo2.change.map { L10n.f("%@ %@ za 4 týdny", $0 >= 0 ? "↑" : "↓", Fmt.decimal(abs($0))) })
-                HStack(alignment: .bottom, spacing: 16) {
-                    Text(Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1)).font(Typo.number(56)).foregroundStyle(Palette.ink)
-                    VO2maxLine(values: vo2.series.map(\.value), last: vo2.series.last?.date, today: training.date, height: 56)
+                let rows = TrendMath.dailyRows(points)
+                if !rows.isEmpty {
+                    SectionLabel(text: "Analýza trendu").padding(.top, 28)
+                    Card {
+                        TrendTable(rows: rows, nowCaption: metric == "form" ? "forma dnes" : metric == "fitness" ? "kondice dnes" : "únava dnes",
+                                   signed: metric == "form", footnote: "Každý řádek je tvoje hodnota toho dne vedle dneška.")
+                    }
+                    .padding(.top, 10)
                 }
-                .padding(.top, 10)
-                Text(verbatim: vo2.caption).font(Typo.small).foregroundStyle(Palette.muted)
-            }
-
-            if let intensity = training.load.intensity {
-                header("Intenzita za 4 týdny", trailing: nil)
-                ZoneBar(parts: [("Lehká", intensity.low, Palette.sand), ("Vysoká", intensity.high, Palette.amberBar), ("Anaerobní", intensity.anaerobic, Palette.rust)])
-                    .padding(.top, 14)
-            }
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
-    }
-
-    private func legend(_ title: String, _ value: Double, _ color: Color) -> some View {
-        HStack(spacing: 6) {
-            Capsule().fill(color).frame(width: 14, height: 3)
-            Text(title).font(Typo.small).foregroundStyle(Palette.muted)
-            Text(Fmt.int(value)).font(Typo.number(18)).foregroundStyle(Palette.ink)
-        }
-    }
-
-    private func header(_ title: String, trailing: String?) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            SectionLabel(text: title)
-            Spacer()
-            if let trailing { Text(trailing).font(Typo.caption).foregroundStyle(Palette.faint) }
-        }
-        .padding(.top, 34)
-    }
-}
-
-/// Well below, Below, Usual, Above, Well above, the current step filled.
-struct LoadLevelScale: View {
-    let level: String
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        let levels = TrainingSnapshot.ACWR.levels
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                ForEach(levels, id: \.self) { step in
-                    Capsule().fill(step == level ? Palette.ink : Palette.track).frame(height: 6)
-                }
-            }
-            // At the largest text sizes five words do not fit side by side: only the current one.
-            if typeSize.isAccessibilitySize {
-                Text(verbatim: TrainingSnapshot.ACWR.word(level) ?? "")
-                    .font(Typo.caption.weight(.semibold))
-                    .foregroundStyle(Palette.ink)
             } else {
-                HStack(alignment: .top, spacing: 4) {
-                    ForEach(levels, id: \.self) { step in
-                        Text(verbatim: TrainingSnapshot.ACWR.word(step) ?? "")
-                            .font(step == level ? Typo.caption.weight(.semibold) : Typo.caption)
-                            .foregroundStyle(step == level ? Palette.ink : Palette.faint)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.8)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
+                Card { LearningState(kind: .missing, text: "Forma se ukáže po prvních trénincích s tepem nebo výkonem.") }
+                    .padding(.top, 20)
             }
+            Self.howMeasured(training.form).padding(.top, 28)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.f("Posledních 7 dní vs. obvyklých 28: %@", TrainingSnapshot.ACWR.word(level) ?? "")))
     }
-}
 
-/// Weekly load bars: done weeks solid, this week's load solid inside its plan
-/// dashed around it.
-struct WeeklyLoadChart: View {
-    let weeks: [TrainingSnapshot.WeekLoad]
-
-    var body: some View {
-        let values = weeks.map { max($0.load, $0.planned ?? 0) }
-        let top = max(values.max() ?? 1, 1)
-        let planAhead = weeks.last.map { ($0.planned ?? 0) > $0.load } ?? false
-        VStack(alignment: .leading, spacing: 10) {
-            Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
-            BarChart(values: values,
-                     styles: weeks.indices.map { i in
-                         i == weeks.count - 1 && planAhead ? BarStyle(fill: Palette.amberBar, dashed: true, done: weeks[i].load) : BarStyle(fill: i == weeks.count - 1 ? Palette.amberBar : Palette.amberBar.opacity(0.55))
-                     },
-                     hi: top,
-                     labels: weeks.map { String($0.week) },
-                     highlighted: weeks.count - 1,
-                     spacing: 8,
-                     height: 96,
-                     scale: scaleTicks(0, top, count: 3))
-            if planAhead {
-                ChartLegend(items: [.init(color: Palette.amberBar, text: L10n.tr("hotovo"), mark: .bar),
-                                    .init(color: Palette.amberBar.opacity(0.55), text: L10n.tr("naplánováno"), mark: .dashedBar)])
+    private func dial(_ form: TrainingSnapshot.Form, usual: ClosedRange<Double>) -> some View {
+        let state = Self.state(form.form, usual), color = Self.color(state)
+        return VStack(spacing: 8) {
+            Text(verbatim: L10n.tr("Forma dnes, odhad")).font(Typo.body).foregroundStyle(Palette.muted)
+            RangeDial(value: form.form, scale: -30...30, band: usual, size: 190, lineWidth: 12, tint: color, bandTint: Palette.ink.opacity(0.3),
+                      spoken: L10n.tr("Forma") + " " + Fmt.signed(form.form) + ", " + state.words) {
+                Text(verbatim: Fmt.signed(form.form)).font(Typo.number(56)).foregroundStyle(state == .within ? Palette.green : Palette.ink)
             }
-            if let current = weeks.last {
-                Text(current.planned.flatMap { $0 > current.load ? L10n.f("tento týden %@ z %@", Fmt.int(current.load), Fmt.int($0)) : nil } ?? L10n.f("tento týden %@", Fmt.int(current.load)))
-                    .font(Typo.caption).foregroundStyle(Palette.faint)
+            Text(verbatim: state.words).font(Typo.bodyStrong).foregroundStyle(color)
+            if let week = Self.weekSentence(form) {
+                Text(verbatim: week).font(Typo.small).foregroundStyle(Palette.ink)
+            }
+            Text(verbatim: L10n.f("Obvyklé rozmezí %@ až %@", Fmt.signed(usual.lowerBound), Fmt.signed(usual.upperBound)))
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
+
+    private func rangeRow(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(verbatim: L10n.tr(title)).font(Typo.body).foregroundStyle(Palette.muted)
+            Spacer()
+            Text(verbatim: value).font(Typo.body).foregroundStyle(Palette.ink)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// The athlete's own usual form (the tile's: the middle 80 % of 90 days),
+    /// else the range where fitness holds, −10 to +5 (src/app-training.js formZone).
+    static func usual(_ form: TrainingSnapshot.Form) -> ClosedRange<Double> {
+        FormWidget.usual(form.series) ?? -10...5
+    }
+
+    /// In the usual range, above it (fresher) or below it (more tired); far
+    /// beyond the server's deep-fatigue and transition lines.
+    static func state(_ value: Double, _ usual: ClosedRange<Double>) -> MetricState {
+        let v = value.rounded()
+        if usual.contains(v) { return .within }
+        if v > 25 || v < -30 { return .far(above: v > 0) }
+        return .off(above: v > usual.upperBound)
+    }
+
+    /// Fresher than usual is no warning: green like the range; more tired
+    /// amber, far below red (critic, the colour must match the words).
+    static func color(_ state: MetricState) -> Color {
+        switch state {
+        case .within, .off(above: true), .far(above: true): return Palette.Status.good
+        case .off: return Palette.Status.warn
+        case .far: return Palette.Status.bad
+        }
+    }
+
+    /// "Fresher than a week ago" from the form 7 days back (concept K04/022).
+    static func weekSentence(_ form: TrainingSnapshot.Form) -> String? {
+        guard let last = form.series.last, let then = form.series.last(where: { $0.date <= ISODay.shift(last.date, -7) }) else { return nil }
+        let diff = (form.form - (then.fitness - then.fatigue)).rounded()
+        return L10n.tr(diff >= 2 ? "Čerstvější než před týdnem" : diff <= -2 ? "Unavenější než před týdnem" : "Zhruba jako před týdnem")
+    }
+
+    static func points(_ form: TrainingSnapshot.Form, metric: String, usual: ClosedRange<Double>) -> [ChartPoint] {
+        form.series.map { p in
+            switch metric {
+            case "fitness": return ChartPoint(date: p.date, value: p.fitness.rounded())
+            case "fatigue": return ChartPoint(date: p.date, value: p.fatigue.rounded())
+            default:
+                let v = (p.fitness - p.fatigue).rounded(), s = state(v, usual)
+                // Only below the range is a warning dot; fresher keeps the line's colour.
+                let key: String? = switch s { case .within, .off(above: true), .far(above: true): "within"; case .off: "slightly"; case .far: "far" }
+                return ChartPoint(date: p.date, value: v, low: usual.lowerBound, high: usual.upperBound, state: key, side: v > usual.upperBound ? "above" : "below")
             }
         }
+    }
+
+    static func howMeasured(_ form: TrainingSnapshot.Form?) -> some View {
+        var rows: [(String, String)] = []
+        if let form, let last = form.series.last?.date {
+            let from = ISODay.shift(last, -89)
+            rows.append(("Dny s daty za posledních 90", String(form.series.filter { $0.date >= from }.count)))
+        }
+        rows.append(("Aktualizace", "po každém tréninku"))
+        return HowMeasuredCard(text: "Kondice je průměr zátěže posledních 42 dní, únava posledních 7 dní, obojí s větší vahou posledních dní. Forma je jejich rozdíl. Všechny tři jsou odhady z tvých tréninků, ne měření tvého těla.",
+                               rows: rows)
     }
 }
