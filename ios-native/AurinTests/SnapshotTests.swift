@@ -115,7 +115,7 @@ final class SnapshotTests: XCTestCase {
         let thursday = Calendar.current.date(from: parts) ?? Date()
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
-        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "za 2 dny")
+        XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "čtvrtek")
         parts.hour = 14
         XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
@@ -174,7 +174,7 @@ final class SnapshotTests: XCTestCase {
             XCTFail("the strain follows the workout")
         }
         XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
-        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
+        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Čas", "Energie"])
     }
 
     /// A nap sits among what was done in the order of the day.
@@ -566,7 +566,7 @@ final class SnapshotTests: XCTestCase {
         // Whole screens for the website's scenes, longer than the simulator's screenshots.
         let health = DemoData.health
         try render("site-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
-        try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
+        try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale).environment(AppModel(demo: true)) }
         try render("site-food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
         try render("site-gym", glow: Palette.Glow.training) {
             VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }

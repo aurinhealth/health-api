@@ -155,10 +155,10 @@ const range = (pos, color, start) => `<i class="rb"><b></b><u style="--x:${pos}%
 const HIST = [65, 69, 60, 82, 67, 71, 62, 53, 75, 80, 63, 54, 77, 78];
 const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
-<div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>within your usual range</span></div>
-<div class="sl">What makes up today’s score</div>
-${[['Sleep', '7:12', 'usual range 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'usual range 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'usual range 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
-    .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
+<div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>in your usual range</span></div>
+<div class="sl">Last night vs your usual</div>
+${[['Sleep', '7 h 12', 'below your usual range', 'rust', 12], ['Resting heart rate', '48 bpm', 'below your usual range', 'green', 20], ['HRV', '64 ms', 'above your usual range', 'green', 83]]
+    .map(([k, v, dir, c, x], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}</div>`).join('')}
 </div>`;
 
 const journal = `<div class="dm pad">
@@ -181,25 +181,25 @@ const gauge = (size, start) => {
 };
 const strainScreen = `<div class="app glow-training">${STATUS}
 <div class="nav c"><span class="cb">${ic('chev', 'flip')}</span><span class="pill grn">${ic('spark')}Coach</span></div>
-<div class="sl">Today’s training</div>
-<div class="sent title">Strain</div>
-<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
-<div class="center"><span class="pill amb"${at('1700')}>moderate</span></div>
-<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
-<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>+5.0</b> in plan</div></div>
-<div class="sl pad2">Today’s target</div>
-<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51 min</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
+<div class="sl center">Strain</div>
+<div class="center mut s">Strain today, so far</div>
+<div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">5.0 more planned</span></div><div class="gl"><span>0</span><span>21</span></div></div>
+<div class="center"><span class="mut s"${at('1700')}>lands in target</span></div>
 <div class="sl pad2">What it’s made of</div>
-<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
+<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
+<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>5.0</b> planned</div></div>
+<div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 8.2 km</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement during the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
+<div class="sl pad2">What sets today’s target</div>
+<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
 </div>`;
 
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
 <div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num" data-n="0,5.1,400,900,1;5.1,8.4,1700,900,1;8.4,13.4,3000,900,1">13.4</span></div>
-<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 48 TSS</span></div><span class="num">5.1</span></div>
-<div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
-<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM, in plan</span></div><span class="num faint">+5.0</span></div>
+<div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM, 42 min, 8.2 km</span></div><span class="num">5.1</span></div>
+<div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement during the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
+<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM, planned</span></div><span class="num faint">+5.0</span></div>
 <p class="note"${at('4000')}>Lands inside today’s target.</p>
 </div>`;
 
@@ -323,11 +323,9 @@ ${setRow('3', '77.5 × 8', '80', '6–8', '<i class="ip dash">H</i>', 'next')}
 // One thing at a time (the review's V3): beside the phone, only the line the step talks about, larger than on
 // the screen. Readiness: HRV's line from ReadinessDetail; Training mode: the set at hand from GymSetRow.
 const readyOne = `<div class="dm pad one">
-<div class="row sp base"><b>HRV</b><span class="s grn">better than usual</span></div>
+<div class="row sp base"><b>HRV</b><span class="s grn">above your usual range</span></div>
 <div class="row base one-v"><span class="num big"${n(55, 64, 300, 900, 'i')}>64</span><span class="mut">ms</span></div>
-<div class="mut">usual range 55–61 ms</div>
 ${range(83, 'green', 600)}
-<div class="one-pt grn"${at('1300')}>+9 readiness points</div>
 </div>`;
 const tmOne = `<div class="dm pad one tm">
 <div class="row sp base"><b>Squat</b><span class="mut">Set 2 of 4</span></div>
@@ -560,7 +558,7 @@ const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge
 // the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
 const rise = ms => at(String(ms));
 const actReadiness = `<div class="dm wc">
-<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>within your usual range</span></div>
+<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>in your usual range</span></div>
 <div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
 <div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">↑ above usual</span></div></div>

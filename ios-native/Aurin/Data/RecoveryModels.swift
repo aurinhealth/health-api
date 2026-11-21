@@ -129,13 +129,13 @@ struct RecoveryTime: Decodable, Equatable {
         return Int((b.timeIntervalSince(a) / 86400).rounded())
     }
 
-    /// "dnes odpoledne", "zítra dopoledne", "za 2 dny" / "this afternoon",
-    /// "tomorrow morning", "in 2 days"; "už teď" once it has passed (an
-    /// older Today kept on the phone).
+    /// "dnes odpoledne", "zítra dopoledne", "čtvrtek" / "this afternoon",
+    /// "tomorrow morning", "Thu": the day, not "in 4 days" (improvement pass
+    /// 2026-11-20); "už teď" once it has passed (an older Today kept on the phone).
     static func part(_ date: Date, today: String, now: Date? = nil) -> String {
         let d = day(date), ahead = days(from: today, to: d)
         if ahead < 0 || now.map({ date <= $0 }) == true { return L10n.tr("už teď") }
-        if ahead >= 2 { return L10n.f("za %@", L10n.plural("%lld dní", ahead)) }
+        if ahead >= 2 { return format(d, L10n.isEnglish ? "EEE" : "EEEE") }
         let parts = ahead == 1 ? ["zítra dopoledne", "zítra odpoledne", "zítra večer"] : ["dnes dopoledne", "dnes odpoledne", "dnes večer"]
         return L10n.tr(parts[slot(d)])
     }

@@ -10,9 +10,12 @@ extension ReadinessText {
     /// One key from the server (src/day-verdict.js NUMBERS_LINE_KEYS).
     static func numbersLine(_ key: String?) -> String? {
         switch key {
-        case "hard": return L10n.tr("Tvoje čísla zvládnou tvrdý trénink")
-        case "steady": return L10n.tr("Tvoje čísla jsou pro den s mírou")
-        case "easy": return L10n.tr("Tvoje čísla ukazují na lehký den")
+        // Descriptive only (improvement pass 2026-11-20): "support a hard
+        // workout" read as advice and said the opposite of the coach's card
+        // after a finished workout.
+        case "hard": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí nebo lepší")
+        case "steady": return L10n.tr("Některá tvoje čísla jsou pod obvyklým rozmezím")
+        case "easy": return L10n.tr("Tvoje čísla jsou pod obvyklým rozmezím")
         case "signs": return L10n.tr("Teplota nebo dech jsou nad tvým obvyklým rozmezím")
         case "usual": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí")
         case "paused": return L10n.tr("Trénink je dnes pozastavený")
@@ -204,12 +207,14 @@ struct TodayDials: View {
 
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
-    /// "6 h 54" (the length rule, as "2 h 05" elsewhere).
-    static func length(_ minutes: Double?) -> String {
+    /// "6 h 54" (the length rule, as "2 h 05" elsewhere); a whole hour is
+    /// "7 h", as in the concept's "6 min short of 7 h".
+    nonisolated static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
         let m = Int(minutes.rounded())
         // No-break spaces: "6 h 54" never splits inside the dial.
-        return m < 60 ? "\(m)\u{00A0}min" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
+        if m < 60 { return "\(m)\u{00A0}min" }
+        return m % 60 == 0 ? "\(m / 60)\u{00A0}h" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
     }
 
     /// The night against its need: "6 min short of 7 h", amber below the need,

@@ -20,7 +20,7 @@ final class TodayRedesignTests: XCTestCase {
             XCTAssertFalse(line?.lowercased().hasPrefix("go ") ?? true, key)
             XCTAssertFalse(line?.contains("Good day") ?? true, key)
         }
-        XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers support a hard workout")
+        XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers are in your usual range or better")
         XCTAssertNil(ReadinessText.numbersLine(nil))
         XCTAssertNil(ReadinessText.numbersLine("legs"))
     }
@@ -54,6 +54,7 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(TodayDials.length(414), "6\u{00A0}h\u{00A0}54")
         XCTAssertEqual(TodayDials.length(425), "7\u{00A0}h\u{00A0}05")
         XCTAssertEqual(TodayDials.length(45), "45\u{00A0}min")
+        XCTAssertEqual(TodayDials.length(420), "7\u{00A0}h")
         let dials = TodayDials(today: DemoData.today)
         // The need in the same "8 h 05" as the dial.
         XCTAssertEqual(dials.sleep.note, "53 min short of 8\u{00A0}h\u{00A0}05")
@@ -66,6 +67,14 @@ final class TodayRedesignTests: XCTestCase {
         let hourly = Array(repeating: 100.0, count: 24)
         XCTAssertEqual(StepsDayLine.totals(hourly, through: 2), [100, 200, 300])
         XCTAssertEqual(StepsDayLine.totals(hourly, through: 30).count, 24)
+    }
+
+    /// Weather sheet: the time of the forecast only when it is old (DATA-4).
+    func testWeatherTimeOnlyWhenStale() {
+        let now = ISO8601DateFormatter().date(from: "2026-11-20T12:00:00Z")!
+        XCTAssertNil(WeatherDetails.staleSince("2026-11-20T10:30:00Z", now: now))
+        XCTAssertNotNil(WeatherDetails.staleSince("2026-11-20T08:30:00Z", now: now))
+        XCTAssertNil(WeatherDetails.staleSince(nil, now: now))
     }
 
     /// Weather sheet: the best hours outside and feels like.

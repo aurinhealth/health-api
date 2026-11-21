@@ -246,7 +246,9 @@ struct TrainingContent: View {
         if shownDay != training.date {
             CoachTextCard(screen: "training").padding(.top, 18)
         } else {
-            LoadSection(training: training).padding(.top, 28)
+            // The coach's conclusion over the load (src/load-advice.js, decision 6).
+            if let advice = training.loadAdvice { LoadAdviceCard(advice: advice).padding(.top, 28) }
+            LoadSection(training: training).padding(.top, training.loadAdvice == nil ? 28 : 14)
         }
     }
 
