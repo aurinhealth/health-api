@@ -147,6 +147,10 @@ final class AppModel {
     /// Tabs whose first page has a page pushed over it outside `paths` (a
     /// NavigationLink): the tab bar hides there as on every detail.
     var coveredRoots: Set<AppTab> = []
+    /// The coach is locked for this account: the paywall is on and there is no
+    /// Aurin Pro (subscription status, read with the Pro banner on Today).
+    /// Subpages then show "Unlock with Pro" instead of the coach (Pro concept).
+    var coachLocked = false
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
     /// checkSetup has answered since this sign-in: until then the tabs wait

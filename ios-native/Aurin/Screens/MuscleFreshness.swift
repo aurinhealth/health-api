@@ -177,7 +177,7 @@ struct FreshnessRow: View {
                         RoundedRectangle(cornerRadius: 4, style: .continuous).fill(group.state(on: ISODay.shift(today, i)).color).frame(width: 34, height: 12)
                     }
                 }
-                Text(verbatim: when).font(Typo.caption.weight(.medium)).foregroundStyle(now.textColor)
+                Text(verbatim: when).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
             }
         }
         .padding(.vertical, 10)

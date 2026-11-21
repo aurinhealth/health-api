@@ -161,8 +161,7 @@ struct WorkoutDayMark: View {
     var future = false
 
     var body: some View {
-        let all = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
-        let list = Array((all.filter { $0.sport != "walk" }.isEmpty ? all : all.filter { $0.sport != "walk" }).prefix(2))
+        let list = Self.marks(day)
         HStack(spacing: 1) {
             if list.isEmpty {
                 if day != nil, !future { Circle().fill(Palette.faint.opacity(0.6)).frame(width: 4, height: 4) }
@@ -170,11 +169,22 @@ struct WorkoutDayMark: View {
                 ForEach(list) { a in
                     Image(systemName: SportDisc.symbol(a.sport, type: a.type))
                         .scaledFont(14, weight: .medium, cap: .denseCap)
-                        .foregroundStyle(a.status == "missed" ? Palette.muted : Palette.Sport.color(a.sport))
+                        .foregroundStyle(a.status == "missed" ? Palette.muted : SportDisc.color(a.sport))
                         .opacity(a.status == "planned" ? 0.62 : a.status == "missed" ? 0.55 : 1)
                 }
             }
         }
         .frame(height: 16)
+    }
+
+    /// The same one or two the week strip shows for the day (DayCircle.Look):
+    /// what was done first (a walk only on a day without a workout), then a
+    /// second workout not missed. A day can never read differently in the two.
+    static func marks(_ day: CalendarDay?) -> [CalendarActivity] {
+        let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
+        let done = list.filter { $0.status == "done" }
+        guard let first = done.first(where: { $0.sport != "walk" }) ?? done.first ?? list.first else { return [] }
+        let second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }
+        return [first] + (second.map { [$0] } ?? [])
     }
 }

@@ -535,8 +535,15 @@ private struct PinnedTopBar: ViewModifier {
     @Environment(AppModel.self) private var model: AppModel?
     @State private var scrolled = false
 
+    /// Without Aurin Pro once the paywall is on: no coach, its "i" stays on its
+    /// own and "Unlock with Pro" floats at the bottom (Pro concept, subpage).
+    private var locked: Bool { coach != nil && model?.coachLocked == true && !ProStore.shared.entitled }
+
     func body(content: Content) -> some View {
         let page = content
+            .overlay(alignment: .bottom) {
+                if locked, let model { UnlockProPill { Paywall.present(model, from: $0) }.padding(.bottom, 12) }
+            }
             .environment(\.floatingBack, true)
             .environment(\.scrollReport, { (offset: CGFloat) in
                 parent?(offset)
@@ -551,7 +558,10 @@ private struct PinnedTopBar: ViewModifier {
                 page
                     .scrollEdgeEffectStyle(.soft, for: .top)
                     .safeAreaBar(edge: .top) {
+                        // The soft edge alone left the page's text readable under the
+                        // title (device test 602 point 82): the paper goes behind it too.
                         bar.padding(.top, 6).padding(.bottom, 10)
+                            .background { PinnedBarBackground().opacity(scrolled ? 1 : 0) }
                     }
             } else {
                 pinned(page)
@@ -598,14 +608,14 @@ private struct PinnedTopBar: ViewModifier {
                 if let extra {
                     ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
                 }
-                if let coach {
+                if let coach, !locked {
                     // A word ("Uložit") keeps its own button; an icon ("+", "i") joins the coach's capsule.
                     if let trailing, trailing.text != nil {
                         ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
                                      tint: trailing.tint, action: trailing.action)
                     }
                     withCompanion(coach)
-                } else if let trailing {
+                } else if let trailing = trailing ?? (locked ? coach?.companion : nil) {
                     ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
                                  tint: trailing.tint, action: trailing.action)
                 } else if extra == nil {
@@ -622,6 +632,39 @@ private struct PinnedTopBar: ViewModifier {
         if coach.companion == nil, let trailing, trailing.text == nil { coach.companion = trailing }
         return coach
     }
+}
+
+/// "Unlock with Pro" floating in glass at the bottom of a subpage without Pro
+/// (Pro concept): it opens the offer.
+struct UnlockProPill: View {
+    /// Gets where the pill stands on screen, for the way into the offer.
+    let action: (CGRect) -> Void
+    /// A box, not state: written on every scroll frame without drawing again.
+    @State private var frame = FrameBox()
+    /// Tapped: its copy travels into the offer, so this one steps aside a moment.
+    @State private var tapped = false
+
+    var body: some View {
+        Button {
+            action(frame.rect)
+            tapped = true
+            Task { try? await Task.sleep(for: .seconds(1)); tapped = false }
+        } label: {
+            Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 18).frame(height: 44)
+                .chromeGlass(in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .opacity(tapped ? 0 : 1)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame.rect = $0 }
+        .accessibilityIdentifier("unlock-pro")
+    }
+}
+
+/// A place on screen kept without redrawing the view that measures it.
+final class FrameBox {
+    var rect: CGRect = .zero
 }
 
 extension View {

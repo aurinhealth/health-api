@@ -92,9 +92,10 @@ struct LibrarySport: Identifiable {
         LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.Sport.ride),
         LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.Sport.run),
         LibrarySport(id: "swim", label: "Plavání", symbol: "figure.pool.swim", color: Palette.Sport.swim),
-        // Bricks, two sports one right after the other (BrickLibrarySection).
-        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other),
-        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym)
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.Sport.gym),
+        // Bricks, two sports one right after the other (BrickLibrarySection):
+        // after the four sports, kept in the app's order Ride, Run, Swim, Gym.
+        LibrarySport(id: "tri", label: "Tri", symbol: "figure.open.water.swim", color: Palette.Sport.other)
     ]
     /// The sports of one workout (Moje tréninky → +): not the bricks.
     static var single: [LibrarySport] { all.filter { $0.id != "tri" } }
@@ -625,7 +626,8 @@ struct LibraryWorkoutCard: View {
             HStack(spacing: 8) {
                 if let s = workout.primary_system { Pill(text: LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft) }
                 if let level = workout.difficultyLabel { Text(level).font(Typo.caption).foregroundStyle(Palette.muted) }
-                if let load = workout.target_load { Text(Fmt.int(load) + " TSS").font(Typo.caption).foregroundStyle(Palette.muted) }
+                // Strain, not TSS, as everywhere in the app (0–21, the planned strain of the server).
+                if let load = workout.target_load, load > 0 { Text(L10n.f("Námaha %@", Fmt.decimal(StrainDetailContent.strain(tss: load), digits: 1))).font(Typo.caption).foregroundStyle(Palette.muted) }
             }
             if let blocks = workout.steps, !blocks.isEmpty { StepsProfile(blocks: blocks).frame(height: 36) }
             if let line = workout.description?.nilIfBlank ?? workout.guide?.how?.dropFirst().first {
