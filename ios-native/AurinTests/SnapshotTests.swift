@@ -271,7 +271,7 @@ final class SnapshotTests: XCTestCase {
         // A Zdraví layout saved before the redesign is converted, not lost.
         let old: [PlacedWidget] = [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .hrv, size: .small),
                                    .init(kind: .steps, size: .medium), .init(kind: .oxygen, size: .small), .init(kind: .weight, size: .medium), .init(kind: .bedtime, size: .medium)]
-        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.journal, .night, .healthMonitor, .steps, .body])
+        XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.night, .healthMonitor, .steps, .body, .journal])
     }
 
     func testWorkoutScreens() throws {
