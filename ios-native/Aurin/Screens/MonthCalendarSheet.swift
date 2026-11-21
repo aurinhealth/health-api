@@ -219,7 +219,7 @@ struct DayMark: Equatable {
         case .readiness:
             guard let r = values?.readiness else { return }
             fill = Double(r.score) / 100
-            color = r.zone == "green" ? Palette.green : Palette.amber
+            color = r.zone == "green" ? Palette.green : r.zone == "yellow" || r.zone == "red" ? Palette.amber : Palette.muted
             spoken = L10n.f("připravenost %@", String(r.score)) + (ReadinessText.pill(r.zone).map { ", " + $0.0 } ?? "")
         case .sleep:
             guard let s = values?.sleep else { return }

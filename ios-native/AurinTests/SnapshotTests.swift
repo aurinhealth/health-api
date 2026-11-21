@@ -207,7 +207,7 @@ final class SnapshotTests: XCTestCase {
     /// The widget gallery and the add sheet (concept c-widgety-sekce-04).
     func testWidgetGallery() throws {
         let data = WidgetData(panel: .today, today: DemoData.today, health: DemoData.health, training: DemoData.training, food: DemoData.food)
-        try render("today-widget-gallery", height: 844) {
+        try render("today-widget-gallery", height: 844, window: true) {
             WidgetGallery(panel: .today, data: data, placed: Set(WidgetPanel.today.defaults.map(\.kind))) { _, _ in }
                 .environment(AppModel(demo: true)).environment(\.locale, L10n.locale)
         }
