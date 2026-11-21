@@ -747,11 +747,6 @@ export const WEARABLES = ['Apple Watch', 'Fitbit', 'WHOOP', 'Ultrahuman'];
 // The Apple Watch app takes a break in the testers' build (#915), so its part and the menu links stay off until
 // it is back. Workouts sent to the Apple Watch and the watch as a source of data stay.
 export const WATCH_ON_SITE = false;
-// Aurin Pro's US prices in App Store Connect (Petr, 2026-11-21, with 1.0); the App Store shows each country its own.
-export const PRO_PRICE = {month: '$9.99', year: '$79.99'};
-// What the year saves against 12 months paid monthly, in whole percent rounded down, as the app's plans show it
-// (ProOffer.saving, variant 8c of the paywall, Petr 2026-11-04): 33 for $79.99 against 12 × $9.99.
-export const PRO_SAVE = Math.floor((1 - parseFloat(PRO_PRICE.year.slice(1)) / (12 * parseFloat(PRO_PRICE.month.slice(1)))) * 100);
 // What Aurin has for everyone and what Pro adds, as Settings → Aurin Pro lists them (ProContents in
 // SubscriptionView.swift, in the app's English). A Pro group with items lists them under its title.
 export const PRO_CONTENTS = {
@@ -896,7 +891,7 @@ ${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i
     ['How soon does Aurin know me?', 'By the next morning if your watch or ring already has a few weeks of data: Aurin reads them when you connect. Starting fresh, Aurin first learns your usual range: readiness comes after 14 days of HRV or resting heart rate, and your usual sleep range after 7 nights.'],
     ['Why is my readiness different from my watch’s?', 'Every app works out its own score. Aurin compares last night’s HRV, resting heart rate and sleep with your own usual range from the last weeks, so its number can differ from the one your watch shows. Follow how it moves from day to day rather than comparing the two.'],
     ['Does Aurin know my cycle?', 'If you turn on cycle tracking in Settings → Cycle, yes. Your readiness then weighs your resting heart rate and temperature in the days before your period against your own days in that phase, and, if you allow it, the coach knows it too.'],
-    ['What does it cost?', `Nothing while we test. After the release, everything under Free stays free, and Aurin Pro is ${PRO_PRICE.year} a year with the first week free, or ${PRO_PRICE.month} a month. Cancel any time in Settings → Aurin Pro → Manage subscription; your data stays and the free part keeps working.`],
+    ['What does it cost?', `Nothing while we test. After the release, everything under Free stays free, and Aurin Pro starts with a free week, then you pay yearly or monthly. The App Store shows the price in your currency before you buy. Cancel any time in Settings → Aurin Pro → Manage subscription; your data stays and the free part keeps working.`],
     ['How do I get early access?', 'Leave your email <a href="#join">below</a>. Once we add you to the test, Apple’s TestFlight emails you a link: install TestFlight, open the link and Aurin installs for free. Once Aurin is in the App Store, you sign in with the same account and keep your data.'],
     ['What does the AI coach see?', 'Only what it needs, and only once you allow AI features in Settings → Privacy &amp; data. When you ask the coach or log food from a photo, it gets the numbers that question needs, and once a day it reads your Today, Training and Food to write its short summary. That goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. <a href="/privacy">More in the privacy policy</a>.'],
@@ -964,9 +959,9 @@ ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 <div class="plans">
 <div class="plan reveal"><div class="pk">Aurin</div><h3>Free</h3><p class="pl">Now and after the release.</p>
 <ul>${PRO_CONTENTS.free.map(x => `<li>${x}</li>`).join('')}</ul></div>
-<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>${PRO_PRICE.year}<small> a year</small> <span class="save">Save ${PRO_SAVE}%</span></h3><p class="pl">with the first week free, or ${PRO_PRICE.month} a month, cancel any month. Once Aurin is in the App Store.</p>
+<div class="plan pro reveal"><div class="pk">Aurin Pro</div><h3>First week free</h3><p class="pl">Then yearly or monthly, cancel any month. Once Aurin is in the App Store.</p>
 <ul>${PRO_CONTENTS.pro.map(([t, items]) => `<li>${t}${items.length ? `<ul>${items.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}</li>`).join('')}</ul>
-<p class="pn">Prices vary by country. The App Store shows yours before you buy.</p></div>
+<p class="pn">The App Store shows the price in your currency before you buy.</p></div>
 </div>
 <a class="nav-cta go-join" href="#join">Get early access</a>
 </div></section>
