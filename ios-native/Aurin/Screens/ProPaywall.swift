@@ -363,7 +363,7 @@ struct PaywallView: View {
         VStack(spacing: 3) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 16) {
-                Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
+                Link(destination: L10n.legalURL("terms")) { Text("Podmínky užití").underline() }
                 Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
             }
@@ -987,7 +987,7 @@ struct AllProPlans: View {
                         .padding(.top, 12)
                 }
                 HStack(spacing: 16) {
-                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
+                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky užití").underline() }
                     Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
                 }
                 .font(.caption2).foregroundStyle(Night.faint).padding(.top, 3).padding(.bottom, 16)

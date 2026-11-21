@@ -733,6 +733,12 @@ final class HealthReader: @unchecked Sendable {
         try await store.requestAuthorization(toShare: share, read: read)
     }
 
+    /// Sexual activity's permission, asked when its switch moves, before its consent sheet.
+    func requestSexAccess() async {
+        guard isAvailable else { return }
+        _ = try? await store.requestAuthorization(toShare: [], read: [HKCategoryType(.sexualActivity)])
+    }
+
     /// Asks for the categories' types iOS has not asked about yet (and sexual
     /// activity once its consent is on); true when it did.
     func askNewTypes(_ categories: Set<HealthCategory>) async -> Bool {
