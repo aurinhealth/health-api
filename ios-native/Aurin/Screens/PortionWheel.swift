@@ -86,13 +86,15 @@ struct PortionWheel: View {
 
             // One wheel of three columns with one shared band, as the concept
             // draws it (02-jidlo, food detail): number, fraction, unit.
-            WheelColumns(columns: [
-                .init(rows: (0...current.most).map(String.init), width: 90, selection: wholeChoice),
-                // Grams take whole numbers only: no fraction of a gram.
-                .init(rows: current.kind == .base && !product.perPortion ? ["–"] : Self.parts.map(\.label), width: 56, selection: partChoice),
-                .init(rows: units.map(\.name), width: nil, selection: unitChoice),
-            ])
+            // Grams take whole numbers only: no fraction column, so no lone "–" (606 #34).
+            let grams = current.kind == .base && !product.perPortion
+            let wholeColumn = WheelColumns.Column(rows: (0...current.most).map(String.init), width: 90, label: "Celé", selection: wholeChoice)
+            let fractionColumn = WheelColumns.Column(rows: Self.parts.map(\.label), width: 56, label: "Zlomek", selection: partChoice)
+            let unitColumn = WheelColumns.Column(rows: units.map(\.name), width: nil, label: "Jednotka", selection: unitChoice)
+            WheelColumns(columns: grams ? [wholeColumn, unitColumn] : [wholeColumn, fractionColumn, unitColumn])
             .frame(height: 160)
+            // The wheel's own height is larger: its rows never run under the text below.
+            .clipped()
         }
         .onAppear(perform: start)
         .onChange(of: typing) { if typing { typed = amount > 0 ? Self.plain(value) : "" } }
@@ -195,6 +197,8 @@ struct WheelColumns: UIViewRepresentable {
     struct Column {
         let rows: [String]
         let width: CGFloat?
+        /// What VoiceOver calls the column.
+        let label: String
         let selection: Binding<Int>
     }
 
@@ -269,7 +273,7 @@ struct WheelColumns: UIViewRepresentable {
         }
 
         func pickerView(_ pickerView: UIPickerView, accessibilityLabelForComponent component: Int) -> String? {
-            L10n.tr(["Celé", "Zlomek", "Jednotka"][min(component, 2)])
+            component < columns.count ? L10n.tr(columns[component].label) : nil
         }
 
         func pickerView(_ pickerView: UIPickerView, didSelectRow row: Int, inComponent component: Int) {
