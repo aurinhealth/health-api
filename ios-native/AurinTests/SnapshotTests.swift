@@ -638,7 +638,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
         try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
         XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
-        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7:30")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7 h 30")
         XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
