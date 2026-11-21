@@ -636,19 +636,32 @@ private struct PinnedTopBar: ViewModifier {
 struct UnlockProPill: View {
     /// Gets where the pill stands on screen, for the way into the offer.
     let action: (CGRect) -> Void
-    @State private var frame: CGRect = .zero
+    /// A box, not state: written on every scroll frame without drawing again.
+    @State private var frame = FrameBox()
+    /// Tapped: its copy travels into the offer, so this one steps aside a moment.
+    @State private var tapped = false
 
     var body: some View {
-        Button { action(frame) } label: {
+        Button {
+            action(frame.rect)
+            tapped = true
+            Task { try? await Task.sleep(for: .seconds(1)); tapped = false }
+        } label: {
             Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
                 .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 18).frame(height: 44)
                 .chromeGlass(in: Capsule())
         }
         .buttonStyle(.plain)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+        .opacity(tapped ? 0 : 1)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame.rect = $0 }
         .accessibilityIdentifier("unlock-pro")
     }
+}
+
+/// A place on screen kept without redrawing the view that measures it.
+final class FrameBox {
+    var rect: CGRect = .zero
 }
 
 extension View {

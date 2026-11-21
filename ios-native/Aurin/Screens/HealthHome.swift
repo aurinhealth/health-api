@@ -244,8 +244,9 @@ struct AurinOrb: View {
 struct AurinAgeHero: View {
     @Environment(AppModel.self) private var model: AppModel?
     /// Where the orb and its pill stand, for the way into the offer.
-    @State private var orbFrame: CGRect = .zero
-    @State private var pillFrame: CGRect = .zero
+    @State private var orbFrame = FrameBox()
+    @State private var pillFrame = FrameBox()
+    @State private var tapped = false
     let health: HealthSnapshot
     var pro: Bool
     var noWearable = false
@@ -325,10 +326,16 @@ struct AurinAgeHero: View {
     private var locked: some View {
         VStack(spacing: 14) {
             AurinOrb(mood: .locked)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { orbFrame = $0 }
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { orbFrame.rect = $0 }
                 .accessibilityElement()
                 .accessibilityLabel(Text(verbatim: L10n.tr("Aurin Age") + ", " + L10n.tr("v Aurin Pro")))
-            Button { if let model { Paywall.present(model, from: pillFrame, orb: orbFrame) } } label: {
+            Button {
+                guard let model else { return }
+                Paywall.present(model, from: pillFrame.rect, orb: orbFrame.rect)
+                // Its copy travels into the offer, so this one steps aside a moment.
+                tapped = true
+                Task { try? await Task.sleep(for: .seconds(1)); tapped = false }
+            } label: {
                 Label { Text("Odemknout s Pro") } icon: { Image(systemName: "lock.fill").scaledFont(12, weight: .semibold) }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 16).frame(height: 36)
@@ -337,7 +344,8 @@ struct AurinAgeHero: View {
                     .tapTarget(width: 44, height: 44)
             }
             .buttonStyle(.plain)
-            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pillFrame = $0 }
+            .opacity(tapped ? 0 : 1)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { pillFrame.rect = $0 }
             .accessibilityIdentifier("aurin-age.unlock")
         }
     }

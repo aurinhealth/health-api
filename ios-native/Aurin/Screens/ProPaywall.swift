@@ -147,6 +147,7 @@ struct PaywallView: View {
     var orb: CGRect? = nil
     @State private var arrived = true
     @State private var continueFrame: CGRect = .zero
+    @State private var phoneFrame: CGRect = .zero
 
     init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared,
          allowAI: (() async throws -> Void)? = nil, source: CGRect? = nil, orb: CGRect? = nil) {
@@ -183,6 +184,7 @@ struct PaywallView: View {
                 if demoShown {
                     // The end of the demo: the phone gets smaller and goes (Pro concept).
                     demoPhone
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { if source != nil, !arrivedSettled { phoneFrame = $0 } }
                         .scaleEffect(arrived ? 1 : 0.35, anchor: phoneAnchor)
                         .opacity(arrived ? 1 : 0)
                         .transition(.asymmetric(insertion: .opacity, removal: .scale(scale: 0.3).combined(with: .opacity)))
@@ -267,9 +269,9 @@ struct PaywallView: View {
 
     /// The phone grows from the orb (Aurin age) or from the pill (a subpage).
     private var phoneAnchor: UnitPoint {
-        guard let from = orb ?? source, continueFrame != .zero else { return .bottom }
-        let screen = UIScreen.main.bounds
-        return UnitPoint(x: from.midX / screen.width, y: min(1, from.midY / screen.height))
+        guard let from = orb ?? source, phoneFrame.width > 0, phoneFrame.height > 0 else { return .bottom }
+        // In the phone's own bounds; outside 0...1 when the orb is above it.
+        return UnitPoint(x: (from.midX - phoneFrame.minX) / phoneFrame.width, y: (from.midY - phoneFrame.minY) / phoneFrame.height)
     }
 
     /// "Unlock with Pro" travelling down from where it was tapped, widening into
@@ -297,9 +299,8 @@ struct PaywallView: View {
     /// Plays the way in once the button has its place, then hands over to it.
     private func arrive() async {
         guard source != nil, !arrived else { return }
-        if reduceMotion { arrived = true; arrivedSettled = true; return }
-        // One layout pass, so Continue's place is known.
-        try? await Task.sleep(for: .milliseconds(30))
+        // Until Continue has its place (at most about half a second).
+        for _ in 0..<30 where continueFrame == .zero { try? await Task.sleep(for: .milliseconds(16)) }
         withAnimation(.smooth(duration: 0.7)) { arrived = true }
         try? await Task.sleep(for: .milliseconds(720))
         arrivedSettled = true

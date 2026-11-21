@@ -244,6 +244,8 @@ enum Paywall {
         while let next = top.presentedViewController { top = next }
         guard top.view.tag != tag else { return }
         let host = UIHostingController(rootView: AnyView(EmptyView()))
+        // Reduce Motion: no way in, the offer at once as from anywhere else.
+        let source = UIAccessibility.isReduceMotionEnabled ? nil : source
         host.rootView = AnyView(PaywallView(close: { [weak host] in host?.dismiss(animated: true) { closed?() } }, source: source, orb: orb).environment(model))
         host.view.tag = tag
         if source != nil {
