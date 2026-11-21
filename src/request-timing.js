@@ -25,10 +25,10 @@ export function timed(fn) {
 }
 
 // What a request waited for, in wall time: D1, Intervals.icu, the AI, Google,
-// other services, and an entry another request of this isolate was already
+// the weather, other services, and an entry another request of this isolate was already
 // computing (api-cache.js). Calls running side by side count once, so the
 // numbers say how much of the request's time each kind of waiting took.
-export const WAIT_KINDS = { d1: "D1", intervals: "Intervals", ai: "AI", google: "Google", shared: "jiný požadavek", other: "jiné služby" };
+export const WAIT_KINDS = { d1: "D1", intervals: "Intervals", ai: "AI", google: "Google", weather: "počasí", shared: "jiný požadavek", other: "jiné služby" };
 // The D1 wait split by database (d1-retry.js target): the user's own data
 // database, the central one (accounts, sessions, AI usage) and the food catalogue.
 export const D1_TARGETS = { d1user: "účet", d1core: "hlavní", d1foods: "katalog" };
@@ -50,6 +50,7 @@ export function waitKindOfUrl(url) {
   if (host === "intervals.icu") return "intervals";
   if (host === "api.openai.com") return "ai";
   if (host === "googleapis.com" || host.endsWith(".googleapis.com")) return "google";
+  if (host === "weatherkit.apple.com" || host === "api.open-meteo.com") return "weather";
   return "other";
 }
 // Every fetch made inside a timed request or job is counted by the host it
@@ -137,7 +138,5 @@ export function databaseSummary(store) {
   if (!(store?.waits?.d1 >= 100)) return "";
   const parts = Object.entries(D1_TARGETS).filter(([kind]) => store.waits[kind] > 0).map(([kind, name]) => `${name} ${store.waits[kind]} ms`);
   parts.push(`SQL ${Math.round(store.sqlMs || 0)} ms (${store.sqlQueries || 0} z ${store.queries || 0} dotazů)`, `souběžně ${store.peers || 0}`);
-  // Where the Worker ran (wrangler.jsonc placement): far from the databases every trip costs more.
-  if (store.placement) parts.push(`server ${store.placement}`);
   return "databáze: " + parts.join(", ");
 }
