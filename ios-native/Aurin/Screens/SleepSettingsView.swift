@@ -72,7 +72,7 @@ struct SleepSettingsForm: View {
     }
 
     private var hasTonight: Bool {
-        model.health?.sleep.tonight.map { $0.bedtime != nil && $0.wake != nil } ?? false
+        model.health.map { $0.sleep.tonight.bedtime != nil && $0.sleep.tonight.wake != nil } ?? false
     }
 
     /// From Today or Health: only Tonight (concept 19), the coach and "i" top
