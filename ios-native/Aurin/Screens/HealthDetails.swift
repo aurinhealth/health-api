@@ -458,7 +458,7 @@ struct StageTotals: View {
                 }
             }
             .frame(height: 10)
-            Text(Fmt.hoursMinutes(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).frame(width: 46, alignment: .trailing)
+            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8).frame(width: 62, alignment: .trailing)
             Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -495,7 +495,7 @@ struct SleepIndexParts: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let parts = night.parts {
-                part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutes(parts.length.minutes), Fmt.hoursMinutes(parts.length.need)),
+                part("Délka", value: L10n.f("%@ z %@", Fmt.hoursMinutesLong(parts.length.minutes), Fmt.hoursMinutesLong(parts.length.need)),
                      note: L10n.tr("spánek proti potřebě na minulou noc"), fill: parts.length.fill, first: true,
                      spoken: L10n.f("%@ z %@", Fmt.hoursMinutesSpoken(parts.length.minutes), Fmt.hoursMinutesSpoken(parts.length.need)))
                 part("Kvalita", value: L10n.f("efektivita %@", String(parts.quality.efficiency) + Fmt.percentSign),

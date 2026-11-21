@@ -195,11 +195,13 @@ enum Fmt {
     }
 
     /// Minutes as "1 h 15 min" or "45 min".
+    /// 75 → "1 h 15", 120 → "2 h", 42 → "42 min": the one way a length is
+    /// written (concept rule D-ZDRAVI-12, "2 h 05").
     static func duration(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"
+        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " " + String(format: "%02d", minutes % 60) : "") : "\(minutes) min"
     }
 
-    /// 860 → "14 h 20 min".
+    /// 860 → "14 h 20".
     static func hoursMinutesLong(_ minutes: Double) -> String {
         duration(Int(minutes.rounded()))
     }

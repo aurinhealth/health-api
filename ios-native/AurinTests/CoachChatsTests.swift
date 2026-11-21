@@ -48,6 +48,8 @@ import SwiftUI
         let date = AppModel.localDate(Date())
         XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date).count, 3)
         XCTAssertEqual(CoachSuggestions.forDay(today: nil, sessions: [], date: date, limit: 8).count, CoachSuggestions.fallback.count)
+        // Readiness in the usual range: no "why is it low" (TestFlight 604.1).
+        XCTAssertFalse(CoachSuggestions.forDay(today: DemoData.today, sessions: [], date: date, limit: 8).contains(L10n.tr("Proč mám nízkou připravenost?")))
     }
 
     /// The questions under an answer follow the language the athlete writes in, whatever the app's.
