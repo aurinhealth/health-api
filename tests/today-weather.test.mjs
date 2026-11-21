@@ -22,6 +22,8 @@ test("Today does not wait for a weather service that does not answer", async () 
   assert.ok(Date.now() - started < 1000);
   assert.equal(place.location.name, "Praha");
   assert.equal(place.forecast, null);
+  // A pick made without the forecast is not cached (pickBase degraded).
+  assert.equal(place.late, true);
   // The reads go on after the answer, so a late forecast still fills the cache.
   assert.equal(kept.length, 1);
 });
@@ -41,6 +43,7 @@ test("the weather reads go side by side, not one after another", async () => {
   };
   const place = await withPlace(fetchImpl, env => todayPlace(env, null, date));
   assert.equal(most, 2);
+  assert.equal(place.late, undefined);
   assert.equal(place.forecast.max, 9);
   assert.deepEqual(place.forecast.hours, [{ hour: 8, temp: 7, code: 3 }]);
 });

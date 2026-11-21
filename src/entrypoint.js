@@ -1330,7 +1330,7 @@ async function pickBase(env,ctx,internalAuth,date,athleteRead,hour=null){
   const risking=saunaRisks(env.DB,date).catch(soft({}));
   const [inputs,week]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading]);
   const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
-  if(recent.failed)degraded=true;
+  if(recent.failed||place.late)degraded=true;
   // The swim coach only for a swimmer: swimming as the main sport or a swim
   // in the last 60 days (one small capabilities read more, nobody else pays it).
   const eff=profiles?.effective||{},allowed=Array.isArray(eff.sports)?eff.sports:null,mains=mainKindsOf(eff);

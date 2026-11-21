@@ -153,9 +153,10 @@ export async function todayPlace(env,ctx,date,{waitMs=WEATHER_WAIT_MS}={}){
       },{ttl:1800}).catch(()=>null):null
     ]).then(([week,hours,detail])=>week?.[date]?{...week[date],hours,...(detail||{})}:null).catch(()=>null);
     ctx?.waitUntil?.(forecast);
-    let timer;
-    const late=new Promise(resolve=>{timer=setTimeout(()=>resolve(null),waitMs);});
-    return {location,forecast:await Promise.race([forecast,late]).finally(()=>clearTimeout(timer))};
+    // late: the answer went without waiting for the forecast, so a cached pick leaves it out (pickBase degraded).
+    let timer;const LATE={};
+    const first=await Promise.race([forecast,new Promise(resolve=>{timer=setTimeout(()=>resolve(LATE),waitMs);})]).finally(()=>clearTimeout(timer));
+    return first===LATE?{location,forecast:null,late:true}:{location,forecast:first};
   }catch{return {location:null,forecast:null};}
 }
 
