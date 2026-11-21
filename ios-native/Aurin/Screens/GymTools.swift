@@ -227,6 +227,11 @@ struct GymBuilderView: View {
     /// "Sestavit krátký trénink" (Cviky, no big muscle rested): 30 minutes of
     /// the smaller muscles rested today (MuscleFatigue.shortFocus).
     var short = false
+    /// From the Library's gym page: its focus tile ("auto", "upper", "lower",
+    /// "rested" or "muscles" with these muscles) and its length (nil = usual).
+    var presetFocus: String? = nil
+    var presetMuscles: [String] = []
+    var presetMinutes: Int? = nil
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
@@ -299,6 +304,12 @@ struct GymBuilderView: View {
             // The sample day keeps its own date; the real one opens on the day picked.
             if model.demo { day = earliest } else if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
+            if let presetFocus, !focusPreset, proposal == nil {
+                focusPreset = true
+                focus = presetFocus
+                muscles = Set(presetMuscles)
+                if let presetMinutes { minutes = presetMinutes; lengthPicked = true }
+            }
             // Read again on every return, so a list changed in Vybavení shows here (after its save).
             if !model.demo {
                 await EquipmentView.pendingSave?.value

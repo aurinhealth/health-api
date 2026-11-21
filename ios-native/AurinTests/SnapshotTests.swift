@@ -1297,6 +1297,16 @@ final class SnapshotTests: XCTestCase {
         try render("library-ride", glow: Palette.Glow.training, height: 1000) {
             NavigationStack { TrainingLibraryView(sport: "ride") }.environment(model)
         }
+        // The gym page (602 points 153 to 158): focus tiles map to the builder's focus, rows don't repeat the name.
+        try render("library-gym", glow: Palette.Glow.training, height: 1200) {
+            NavigationStack { TrainingLibraryView(sport: "gym") }.environment(model)
+        }
+        XCTAssertEqual(GymFocus.allCases.count, 9)
+        XCTAssertEqual(GymFocus.legs.builderFocus, "lower")
+        XCTAssertEqual(GymFocus.push.builderFocus, "muscles")
+        XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.push.ids)), 5, "the builder takes at most five muscles")
+        XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.upper.ids)), 8)
+        for f in GymFocus.allCases where f.builderFocus == "muscles" { XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(f.ids)), 5, f.rawValue) }
     }
 
     func testZonesActiveEnergyAndWeather() throws {

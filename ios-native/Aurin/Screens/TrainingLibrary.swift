@@ -25,8 +25,7 @@ struct TrainingLibraryView: View {
             if let sport {
                 VStack(alignment: .leading, spacing: 0) {
                     if sport.id == "gym" {
-                        LibrarySportHeader(sport: sport).padding(.top, 14)
-                        GymLibrarySection()
+                        GymLibrarySection(suggest: $suggest)
                     } else if sport.id == "tri" {
                         LibrarySportHeader(sport: sport).padding(.top, 14)
                         BrickLibrarySection()
@@ -39,7 +38,7 @@ struct TrainingLibraryView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            if let sport, ["ride", "run", "swim"].contains(sport.id), !model.demo {
+            if let sport, ["ride", "run", "swim", "gym"].contains(sport.id), !model.demo {
                 SuggestWorkoutButton(title: suggested ? "Jiná možnost" : "Navrhnout trénink", busy: suggesting) { suggest += 1 }
             }
         }
@@ -458,52 +457,239 @@ struct LibrarySport: Identifiable {
     }
 }
 
-/// The gym part of the library: build a session with AI, the muscles, then the exercises.
+/// The gym page of the library (concept a-knihovna/011 with D-KNIH-4, 602
+/// points 153 to 155): the same card as Ride (where, day, the one length
+/// control), the FOCUS card with nine tiles, then the exercises; Suggest a
+/// workout pinned below puts the session together with these choices.
 struct GymLibrarySection: View {
     @Environment(AppModel.self) private var model
+    @Binding var suggest: Int
+    @State private var day = AppModel.localDate(Date())
+    @State private var minutes: Int? = nil
+    @AppStorage("libraryPresetsGym") private var presets = "30,45,60,90"
+    @State private var focus: GymFocus?
+    @State private var equipment: GymEquipment?
+    @State private var catalog: [GymCatalogExercise] = []
+    @State private var building = false
+    @State private var picking = false
+
+    /// The coach's focus for today until one is tapped.
+    private var shown: GymFocus { focus ?? GymFocus.coach(model.muscles) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            RouteLink(route: .gymBuilder) {
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles")
-                        .scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
-                        .frame(width: 38, height: 38)
-                        .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-                }
-                .padding(14)
-                .cardSurface(cornerRadius: 18)
+            if let gym = LibrarySport.find("gym") {
+                LibrarySportHeader(sport: gym, subtitle: subtitle).padding(.top, 14)
             }
-            .padding(.top, 18)
-
-            if let data = model.muscles {
-                RouteLink(route: .muscles) {
-                    HStack(spacing: 14) {
-                        MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 84)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
-                            Text(verbatim: data.headline).font(Typo.heading(22)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
-                            if let most = data.tired.first {
-                                Text(verbatim: L10n.f("%@: odpočaté %@", L10n.tr(most.label), most.readyText(today: data.date)))
-                                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
-                    }
-                    .padding(14)
-                    .cardSurface(cornerRadius: 18)
-                }
-                .padding(.top, 12)
+            SectionLabel(text: "Kde, kdy a jak dlouho").padding(.top, 24)
+            Card {
+                placeRow
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                LibraryDayRow(day: $day)
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                LengthControl(minutes: $minutes, recommended: GymLength.usual ?? 60, range: 20...120, step: 5, presets: $presets, fallback: 60)
             }
+            .padding(.top, 10)
 
-            SectionLabel(text: "Cviky").padding(.top, 26)
+            SectionLabel(text: "Zaměření").padding(.top, 24)
+            GymFocusCard(focus: shown, coach: GymFocus.coach(model.muscles), data: model.muscles, pick: { focus = $0 }, pickMuscles: { picking = true })
+                .padding(.top, 10)
+
+            SectionLabel(text: "Cviky").padding(.top, 28)
             ExerciseCatalog()
         }
-        .task { if model.musclesStale { await model.loadMuscles() } }
+        .task {
+            if model.musclesStale { await model.loadMuscles() }
+            guard !model.demo else { return }
+            async let eq = try? model.api.gymEquipment()
+            async let list = try? model.api.gymExercises()
+            equipment = await eq
+            catalog = await list ?? []
+        }
+        .onChange(of: suggest) { building = true }
+        .navigationDestination(isPresented: $building) {
+            GymBuilderView(date: day, quick: true, presetFocus: shown.builderFocus, presetMuscles: shown.muscles(model.muscles), presetMinutes: minutes)
+        }
+        .navigationDestination(isPresented: $picking) {
+            GymBuilderView(date: day, presetFocus: "muscles", presetMinutes: minutes)
+        }
+    }
+
+    /// "312 exercises, 148 with your equipment".
+    private var subtitle: String? {
+        guard !catalog.isEmpty else { return nil }
+        let fit = catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) }.count
+        return L10n.f("%@, %@ s tvým vybavením", L10n.plural("%lld cviků", catalog.count), String(fit))
+    }
+
+    /// Where: the saved places in a menu (the starred first), the active one ticked.
+    private var placeRow: some View {
+        let places = (equipment?.places ?? []).sorted { ($0.favorite == true ? 0 : 1) < ($1.favorite == true ? 0 : 1) }
+        let active = places.first { $0.id == equipment?.activePlace }
+        return HStack(spacing: 12) {
+            Text("Kde").font(Typo.body).foregroundStyle(Palette.secondary)
+            Spacer(minLength: 8)
+            Menu {
+                ForEach(places) { place in
+                    Button { Task { await choose(place.id) } } label: {
+                        if place.id == active?.id { Label(place.name, systemImage: "checkmark") } else { Text(verbatim: place.name) }
+                    }
+                }
+                Divider()
+                Button { model.push(.equipment) } label: { Text(verbatim: L10n.tr("Upravit místa")) }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(verbatim: active?.name ?? EquipmentView.summary(equipment)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    Image(systemName: "chevron.down").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                }
+                .frame(minHeight: 44)
+            }
+            .disabled(model.demo)
+        }
+    }
+
+    private func choose(_ id: String) async {
+        guard let places = equipment?.places, var saved = try? await model.api.saveGymPlaces(places, active: id) else { return }
+        saved.stations = equipment?.stations
+        saved.sections = equipment?.sections
+        equipment = saved
+    }
+}
+
+/// The gym's focus tiles (Petr's FOCUS, 2026-11-14): 3 × 3 tiles, each a set
+/// of the figure's muscles the builder works.
+enum GymFocus: String, CaseIterable, Identifiable {
+    case full, upper, legs, push, pull, core, sport, arms, rested
+    var id: String { rawValue }
+
+    var title: String {
+        L10n.tr(["full": "Celé tělo", "upper": "Horní", "legs": "Nohy", "push": "Tlaky", "pull": "Tahy", "core": "Střed těla",
+                 "sport": "Můj sport", "arms": "Paže", "rested": "Odpočaté"][rawValue]!)
+    }
+
+    /// The figure's muscles of the tile (BodyFigure ids, at most five choices).
+    var ids: [String] {
+        switch self {
+        case .full, .rested: return []
+        case .upper: return ["chest", "upper_back", "lats", "front_delts", "side_delts", "rear_delts", "biceps", "triceps"]
+        case .legs: return ["quads", "hamstrings", "hips", "calves"]
+        case .push: return ["chest", "front_delts", "side_delts", "rear_delts", "triceps"]
+        case .pull: return ["upper_back", "lats", "rear_delts", "biceps"]
+        case .core: return ["abs", "obliques", "lower_back"]
+        // Strength for an endurance sport: legs, hips and the trunk.
+        case .sport: return ["quads", "hamstrings", "hips", "calves", "abs"]
+        case .arms: return ["biceps", "triceps", "forearms"]
+        }
+    }
+
+    /// The builder's focus: its own words for the whole body, upper and legs, else muscles.
+    var builderFocus: String {
+        switch self {
+        case .full: return "auto"
+        case .upper: return "upper"
+        case .legs: return "lower"
+        case .rested: return "rested"
+        default: return "muscles"
+        }
+    }
+
+    func muscles(_ data: MuscleFatigue?) -> [String] { builderFocus == "muscles" ? ids : [] }
+
+    /// What the coach would pick today (the muscles' ready part), else the whole body.
+    static func coach(_ data: MuscleFatigue?) -> GymFocus {
+        switch data?.focus {
+        case "upper": return .upper
+        case "lower": return .legs
+        default: return .full
+        }
+    }
+
+    enum Mark { case none, almost, tired }
+
+    /// Rested = no mark, almost ready = amber ring, still tired = coral dot.
+    func mark(_ data: MuscleFatigue?) -> Mark {
+        guard let data else { return .none }
+        let list = (self == .full ? BodyFigure.muscles.map(\.id) : ids).compactMap { data.tired(body: $0) }
+        if list.contains(where: { $0.state == "fatigued" }) { return self == .full ? .none : .tired }
+        return list.isEmpty ? .none : .almost
+    }
+}
+
+/// FOCUS (D-KNIH-4): the caption with the figure (a tap opens Muscles), the
+/// focus with its muscles and one reason line, the nine tiles, "Pick muscles"
+/// and the legend.
+struct GymFocusCard: View {
+    let focus: GymFocus
+    let coach: GymFocus
+    let data: MuscleFatigue?
+    let pick: (GymFocus) -> Void
+    let pickMuscles: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RouteLink(route: .muscles) {
+                HStack(spacing: 12) {
+                    if let data { MuscleFigurePair(colors: data.freshnessColors, spacing: 2).frame(height: 70) }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(verbatim: focus.title).font(Typo.heading(22)).foregroundStyle(Palette.ink)
+                        if let reason { Text(verbatim: reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .contentShape(Rectangle())
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                ForEach(GymFocus.allCases) { tile($0) }
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+            Button(action: pickMuscles) {
+                HStack {
+                    Text("Vybrat svaly").font(Typo.body).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                }
+                .frame(minHeight: 40).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            HStack(spacing: 14) {
+                HStack(spacing: 5) { Circle().strokeBorder(Palette.Freshness.recovering, lineWidth: 1.5).frame(width: 9, height: 9); Text("skoro připravené") }
+                HStack(spacing: 5) { Circle().fill(Palette.Freshness.tired).frame(width: 7, height: 7); Text("ještě unavené") }
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+        .padding(16)
+        .cardSurface(cornerRadius: 22)
+    }
+
+    /// "All rested. Last trained 5 days ago." or the most tired muscle of the focus.
+    private var reason: String? {
+        guard let data else { return nil }
+        let tired = (focus.ids.isEmpty ? [] : focus.ids).compactMap { data.tired(body: $0) }.first
+        if let tired { return L10n.f("Ještě unavené: %@, odpočaté %@", L10n.tr(tired.label).lowercased(with: Fmt.locale), tired.readyText(today: data.date)) }
+        return [L10n.tr("Vše odpočaté."), data.lastGymText].compactMap { $0 }.joined(separator: " ")
+    }
+
+    private func tile(_ f: GymFocus) -> some View {
+        let on = f == focus
+        let mark = f.mark(data)
+        return Button { pick(f) } label: {
+            HStack(spacing: 5) {
+                if f == coach { TwoLights(size: 12) }
+                Text(verbatim: f.title).lineLimit(1).minimumScaleFactor(0.75)
+                switch mark {
+                case .tired: Circle().fill(Palette.Freshness.tired).frame(width: 7, height: 7)
+                case .almost: Circle().strokeBorder(Palette.Freshness.recovering, lineWidth: 1.5).frame(width: 9, height: 9)
+                case .none: EmptyView()
+                }
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(on ? Palette.button : Palette.ink.opacity(0.05), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
@@ -1355,19 +1541,22 @@ struct ExerciseCatalog: View {
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .padding(.top, 12)
 
-            ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                    chip("Vše", muscle == nil && !rested) { muscle = nil; rested = false }
+            // Muscles and Equipment as two menus, never a sideways row (602 point 156).
+            HStack(spacing: 10) {
+                LibraryFilterMenu(title: "Filtr svalů", value: rested ? L10n.tr("Odpočaté") : muscle.map(BodyFigure.label) ?? L10n.tr("Všechny")) {
+                    Button { muscle = nil; rested = false } label: { Text(verbatim: L10n.tr("Všechny")) }
                     if model.muscles.map({ !$0.tired.isEmpty }) == true {
-                        chip("Odpočaté", rested, dot: Palette.green) { rested.toggle() }
+                        Button { muscle = nil; rested = true } label: { Text(verbatim: L10n.tr("Odpočaté")) }
                     }
                     ForEach(BodyFigure.choices, id: \.self) { id in
-                        chip(BodyFigure.name(id), muscle == id) { muscle = muscle == id ? nil : id }
+                        Button { muscle = id; rested = false } label: { Text(verbatim: BodyFigure.label(id)) }
                     }
                 }
-                .padding(.vertical, 2)
+                LibraryFilterMenu(title: "Vybavení", value: L10n.tr(mine ? "Moje" : "Všechno")) {
+                    Button { mine = true } label: { Text(verbatim: L10n.tr("Moje")) }
+                    Button { mine = false } label: { Text(verbatim: L10n.tr("Všechno")) }
+                }
             }
-            .scrollIndicators(.hidden)
             .padding(.top, 12)
 
             // The rested muscles shown: a workout of them, the proposal straight away.
@@ -1385,9 +1574,6 @@ struct ExerciseCatalog: View {
                         .padding(.top, 8)
                 }
             }
-
-            PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
-                .padding(.top, 12)
 
             if loading {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -1438,15 +1624,14 @@ struct ExerciseCatalog: View {
         return (names[muscle] ?? []).contains(fold(ex.muscle ?? ""))
     }
 
+    /// The name and what it is done with (602 points 157, 158): no figures, no
+    /// tired line, the equipment only when the name doesn't already say it.
     private func row(_ ex: GymCatalogExercise) -> some View {
         HStack(spacing: 12) {
-            BodyMap(load: ex.muscles ?? [:], height: 54, compact: true).frame(width: 64).allowsHitTesting(false)
             VStack(alignment: .leading, spacing: 2) {
-                Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                if let m = tired(ex), let data = model.muscles {
-                    Text(verbatim: L10n.f("%@ unavené, odpočaté %@", m.label, m.readyText(today: data.date)))
-                        .font(Typo.caption).foregroundStyle(Palette.rust).lineLimit(1)
+                Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                if let line = Self.equipmentLine(ex) {
+                    Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
@@ -1456,8 +1641,14 @@ struct ExerciseCatalog: View {
         .contentShape(Rectangle())
     }
 
-    /// The tired muscle behind the exercise's main muscle, nil when it is rested.
-    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? { Self.tired(ex, model.muscles) }
+    /// "Quads, leg press" without repeating the name ("Pivot leg press": only "Quads").
+    static func equipmentLine(_ ex: GymCatalogExercise) -> String? {
+        let name = fold(ex.name)
+        let station = ex.station?.nilIfBlank.flatMap { name.contains(fold($0)) ? nil : $0 }
+        let parts = [ex.muscle?.nilIfBlank, station].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
 
     /// Odpočaté keeps the exercise: its main muscle is rested today, as the
     /// rings and Sestavit z odpočatých count it (MuscleFatigue.ready).
@@ -1470,22 +1661,6 @@ struct ExerciseCatalog: View {
     static func tired(_ ex: GymCatalogExercise, _ data: MuscleFatigue?) -> MuscleFatigue.Muscle? {
         guard let data, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
         return data.tired(body: main.key)
-    }
-
-    private func chip(_ title: String, _ on: Bool, dot: Color? = nil, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
-                Text(verbatim: L10n.tr(title))
-            }
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(on ? Palette.onButton : Palette.ink)
-            .padding(.horizontal, 12).frame(height: 32)
-            .background(on ? Palette.button : Palette.card, in: Capsule())
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func load() async {
