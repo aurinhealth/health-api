@@ -8,13 +8,14 @@ import SwiftUI
 struct DetailTemplate<Trailing: View, Content: View>: View {
     let title: String
     var glow: Color = Palette.Glow.health
+    @Environment(\.tabGlow) private var tabGlow
     @ViewBuilder var trailing: Trailing
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         ZStack {
-            ScreenBackground(glow: glow)
+            ScreenBackground(glow: tabGlow ?? glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     DetailTitleRow(title: title, back: { dismiss() }) { trailing }

@@ -76,11 +76,14 @@ struct RootView: View {
     }
 
     @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
+        // Every page of a tab takes the tab's tint (concept rule D-TMAVY-1).
         switch tab {
         case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true }).environment(\.tabActions, tabActions)
+            .environment(\.tabGlow, Palette.Glow.today)
         case .training: TrainingView().environment(\.tabActions, tabActions).environment(\.compactTabBar, compactBar)
-        case .food: FoodView().environment(\.tabActions, tabActions)
-        case .health: HealthView().environment(\.tabActions, tabActions)
+            .environment(\.tabGlow, Palette.Glow.training)
+        case .food: FoodView().environment(\.tabActions, tabActions).environment(\.tabGlow, Palette.Glow.food)
+        case .health: HealthView().environment(\.tabActions, tabActions).environment(\.tabGlow, Palette.Glow.health)
         }
     }
 

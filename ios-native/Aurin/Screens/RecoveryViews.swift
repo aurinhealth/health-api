@@ -84,7 +84,7 @@ struct RecoveryTipRows: View {
     private func row(_ item: RecoveryToday.Item) -> some View {
         switch item.kind {
         case "stretch":
-            Button { routineItem = item } label: { line(item, trailing: AnyView(chevronOrCheck(item))) }
+            Button { routineItem = item } label: { line(item, trailing: AnyView(startOrCheck(item))) }
                 .buttonStyle(.plain)
         case "sauna":
             Button {
@@ -117,18 +117,16 @@ struct RecoveryTipRows: View {
         .contentShape(Rectangle())
     }
 
-    private var chevron: some View {
-        Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
-            .accessibilityHidden(true)
-    }
-
+    /// Stretching starts like a workout: Today's one ink Start (602 point 16).
     @ViewBuilder
-    private func chevronOrCheck(_ item: RecoveryToday.Item) -> some View {
+    private func startOrCheck(_ item: RecoveryToday.Item) -> some View {
         if item.isDone {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                 .accessibilityLabel("Hotovo")
         } else {
-            chevron
+            Text("Začít").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                .padding(.horizontal, 14).frame(height: 30)
+                .background(Palette.button, in: Capsule())
         }
     }
 
@@ -651,7 +649,7 @@ struct RecoveryTimeContent: View {
     static func detail(_ c: RecoveryTime.Cause, today: String) -> String {
         switch c.kind {
         case "sleep":
-            let slept = c.minutes.map { String(format: "%d:%02d", $0 / 60, $0 % 60) } ?? ""
+            let slept = c.minutes.map(Fmt.duration) ?? ""
             guard let m = c.minutes, let need = c.need, need > 0 else { return slept }
             return slept + ", " + L10n.f("%d %% potřeby", Int((Double(m) / Double(need) * 100).rounded()))
         case "hrv":

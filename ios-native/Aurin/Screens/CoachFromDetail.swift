@@ -242,7 +242,9 @@ enum CoachSuggestions {
             out.append(L10n.f("Jak na zítřejší %@?", in: language, key.title))
             out.append(tr("Co sníst dnes večer?"))
         }
-        for q in fallback.map(tr) where !out.contains(q) { out.append(q) }
+        // Only asks why readiness is low when it is (TestFlight 604.1: it was offered in the usual range).
+        let low = today.map { $0.readiness.zone == "red" || $0.readiness.zone == "yellow" } ?? true
+        for q in fallback.filter({ low || $0 != "Proč mám nízkou připravenost?" }).map(tr) where !out.contains(q) { out.append(q) }
         var seen = Set<String>()
         return Array(out.filter { seen.insert($0).inserted }.prefix(limit))
     }
