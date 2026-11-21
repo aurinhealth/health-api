@@ -172,7 +172,8 @@ function trainingFacts(d) {
   ].filter(Boolean);
   const chips = [
     week.planned != null && L("Týden ", "Week ") + (week.done ?? 0) + "/" + week.planned,
-    week.doneLoad != null && (week.doneLoad || 0) + " TSS",
+    // Strain, not TSS, as everywhere in the app (the 0–21 scale of Today).
+    facts.strainToday != null && L("Námaha ", "Strain ") + decimal(facts.strainToday),
     form && L("Forma ", "Form ") + signed(form.form)
   ].filter(Boolean);
   return {
