@@ -401,6 +401,9 @@ struct RootView: View {
                 guard !model.paths.values.contains(where: { $0.last == .trainingMode(date) }) else { return }
                 model.open(.trainingMode(date))
             }
+            // A workout or a night synced while the app is open (TestFlight 606:
+            // the second walk on Training, not on Today and Food).
+            .onChange(of: AppleHealth.shared.newInApp) { Task { await model.followNewHealthData() } }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo {
                     BackgroundRefresh.schedule()

@@ -16,4 +16,12 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
         return viewControllers.count > 1 && transitionCoordinator == nil
     }
 
+    /// A touch at the left edge goes back before a chart's scrub or a row of
+    /// cells takes it (TestFlight 606: the swipe did nothing on Resting HR,
+    /// whose chart reaches the edge). Off the edge the swipe fails at once.
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                                  shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        gestureRecognizer == interactivePopGestureRecognizer && viewControllers.count > 1
+    }
+
 }
