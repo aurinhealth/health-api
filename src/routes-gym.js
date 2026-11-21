@@ -260,7 +260,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // A saved plan without its Intervals.icu event, dragged to another day in the week.
       if(body.action==='move'){
         const to=String(body.to||'');
-        if(!/^\d{4}-\d{2}-\d{2}$/.test(to)||to<localToday())return Response.json({message:L('Gym jde přesunout jen na dnešek nebo pozdější den.', 'The gym session can only be moved to today or a later day.')},{status:400});
+        // The undo of a missed session's move (back:true) puts it back on its day of the last week.
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(to)||to<(body.back===true?shiftDate(localToday(),-7):localToday()))return Response.json({message:L('Gym jde přesunout jen na dnešek nebo pozdější den.', 'The gym session can only be moved to today or a later day.')},{status:400});
         const moved=await moveGymPlan(env.DB,date,to);
         if(!moved.moved){
           const why={target:L('Gym se nepodařilo přesunout: ten den už má vlastní gym plán.', 'The gym session couldn\'t be moved: that day already has its own gym plan.'),logged:L('Gym se nepodařilo přesunout: v tréninku už jsou zapsané série.', 'The gym session couldn\'t be moved: the workout already has logged sets.'),missing:L('Gym se nepodařilo přesunout: plán toho dne už neexistuje.', 'The gym session couldn\'t be moved: that day\'s plan no longer exists.')};

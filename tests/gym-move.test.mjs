@@ -79,3 +79,14 @@ test("the day's strength event moves with the gym plan, so nothing stays behind 
   assert.equal(rows.length, 1);
   assert.equal(String(rows[0].start_time).slice(0, 10), friday);
 });
+
+test("the undo of a missed gym session's move puts it back on its past day, only with back", async () => {
+  const { env } = setup(), today = localToday(), yesterday = shiftDate(today, -1);
+  await saveGymPlan(env.DB, today, plan(today));
+  const url = new URL(ORIGIN + "/app/api/gym");
+  const post = async body => (await handleGymPlanApi(new Request(url, { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, {}, url, { signedIn: true }, {})).status;
+  assert.equal(await post({ date: today, action: "move", to: yesterday }), 400);
+  assert.equal(await post({ date: today, action: "move", to: yesterday, back: true }), 200);
+  assert.equal((await readGymPlan(env.DB, yesterday)).stored, true);
+  assert.equal(await post({ date: yesterday, action: "move", to: shiftDate(today, -9), back: true }), 400);
+});
