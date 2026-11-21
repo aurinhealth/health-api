@@ -125,9 +125,11 @@ struct MealSlotsSettingsView: View {
     @State private var chosen: Set<String> = Set(MealSlot.usual)
     @State private var original: Set<String> = Set(MealSlot.usual)
     @State private var saved = false
+    /// Food's "Časy jídel" link opens it under that name.
+    var title = "Jídla dne"
 
     var body: some View {
-        SettingsPage(title: "Jídla dne") {
+        SettingsPage(title: title) {
             SettingsGroup(title: "Jím obvykle") {
                 ForEach(Array(MealSlot.all.enumerated()), id: \.element.id) { index, slot in
                     if index > 0 { SettingsDivider() }
