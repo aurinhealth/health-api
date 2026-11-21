@@ -627,7 +627,7 @@ struct LibraryWorkoutCard: View {
                 if let s = workout.primary_system { Pill(text: LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft) }
                 if let level = workout.difficultyLabel { Text(level).font(Typo.caption).foregroundStyle(Palette.muted) }
                 // Strain, not TSS, as everywhere in the app (0–21, the planned strain of the server).
-                if let load = workout.target_load, load > 0 { Text(L10n.f("Námaha %@", Fmt.decimal(StrainDetailView.strain(tss: load), digits: 1))).font(Typo.caption).foregroundStyle(Palette.muted) }
+                if let load = workout.target_load, load > 0 { Text(L10n.f("Námaha %@", Fmt.decimal(StrainDetailContent.strain(tss: load), digits: 1))).font(Typo.caption).foregroundStyle(Palette.muted) }
             }
             if let blocks = workout.steps, !blocks.isEmpty { StepsProfile(blocks: blocks).frame(height: 36) }
             if let line = workout.description?.nilIfBlank ?? workout.guide?.how?.dropFirst().first {
