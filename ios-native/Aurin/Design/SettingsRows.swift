@@ -282,6 +282,8 @@ struct SettingsPage<Content: View>: View {
     /// The title in small spaced capitals (the Settings concept): on for
     /// every page pushed inside Settings (settingsTitles), or when asked.
     var spacedTitle: Bool? = nil
+    /// A section's glow instead of the Settings background (Tonight opened from a card).
+    var glow: Color? = nil
     @Environment(\.settingsTitles) private var settingsTitles
     @ViewBuilder var content: Content
 
@@ -295,7 +297,9 @@ struct SettingsPage<Content: View>: View {
                 .padding(.top, 12)
                 .padding(.bottom, 48)
         }
-        .background { Palette.settingsBackground.ignoresSafeArea() }
+        .background {
+            if let glow { ScreenBackground(glow: glow) } else { Palette.settingsBackground.ignoresSafeArea() }
+        }
         .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

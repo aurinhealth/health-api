@@ -34,52 +34,13 @@ struct SleepDetailContent: View {
 
     var body: some View {
         let sleep = health.sleep
-        ScrollViewReader { proxy in
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: L10n.f("Spánek v noci na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
-                HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                        .accessibilityLabel(Fmt.hoursMinutesSpoken(night.minutes))
-                    if let index = night.index {
-                        // Taps down to what makes up the index.
-                        Button { withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.partsAnchor, anchor: .top) } } label: {
-                            Pill(text: L10n.f("index %@", String(index)) + " ›", foreground: Palette.indigo, background: Palette.lilac)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(L10n.f("Index spánku %d.", index))
-                        .accessibilityHint(L10n.tr("Ukáže, z čeho se index skládá."))
-                        .accessibilityIdentifier("sleep.index")
-                    }
-                }
-                .padding(.top, 12)
-                // The index keeps its place with the usual range and one sentence (D-ZDRAVI-17).
-                if night.index != nil {
-                    Text(verbatim: Self.indexSentence(sleep.index))
-                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 6)
-                }
-            } else {
-                Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-            }
-
-            if let night = sleep.night {
-                ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
-                    .padding(.top, 26)
-                if night.index != nil {
-                    SectionLabel(text: "Z čeho se skládá index").padding(.top, 30).id(Self.partsAnchor)
-                    Card { SleepIndexParts(night: night, wakeups: detail?.night?.stats?.wakeups) }.padding(.top, 14)
-                }
-                // The window is the last 14 nights, however many of them were measured.
-                if let index = sleep.index, index.nights.count >= 2 {
-                    HStack(alignment: .firstTextBaseline) {
-                        SectionLabel(text: L10n.f("Index spánku za posledních %@ nocí", "14"))
-                        Spacer(minLength: 8)
-                        Text(verbatim: L10n.f("průměr %@ / 100", String(index.average))).font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                    .padding(.top, 30)
-                    Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
-                }
+                // The same arc as Health's sleep card (concept 5, DES-7).
+                NightArc(sleep: sleep).frame(height: 170).padding(.top, 8)
+                ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", night.inBedMinutes.map { Fmt.duration(Int($0)) } ?? "–")])
+                    .padding(.top, 18)
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
                     Card {
@@ -100,6 +61,34 @@ struct SleepDetailContent: View {
                 } else if failed && detail == nil {
                     RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry).padding(.top, 26)
                 }
+                // The index with its value in the header, then what makes it up (concept 5).
+                if let index = night.index {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(text: "Index spánku")
+                        Spacer(minLength: 8)
+                        Text(verbatim: String(index)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                            .accessibilityLabel(L10n.f("Index spánku %d.", index))
+                            .accessibilityIdentifier("sleep.index")
+                    }
+                    .padding(.top, 30)
+                    // The index keeps the usual range and one sentence (D-ZDRAVI-17).
+                    Text(verbatim: Self.indexSentence(sleep.index))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                    Card { SleepIndexParts(night: night, wakeups: detail?.night?.stats?.wakeups) }.padding(.top, 14)
+                }
+                // The window is the last 14 nights, however many of them were measured.
+                if let index = sleep.index, index.nights.count >= 2 {
+                    HStack(alignment: .firstTextBaseline) {
+                        SectionLabel(text: L10n.f("Index spánku za posledních %@ nocí", "14"))
+                        Spacer(minLength: 8)
+                        Text(verbatim: L10n.f("průměr %@ / 100", String(index.average))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.top, 30)
+                    Card { SleepIndexNights(index: index, date: health.date) }.padding(.top, 14)
+                }
+            } else {
+                Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
             }
 
             if let night = detail?.night, let hr = night.hr, hr.count > 3 {
@@ -181,10 +170,7 @@ struct SleepDetailContent: View {
                 .padding(.top, 18)
             }
         }
-        }
     }
-
-    static let partsAnchor = "sleep.indexParts"
 
     /// "Usual 75 to 83. The index is the night's length, quality and stages, out of 100."
     static func indexSentence(_ index: HealthSnapshot.IndexNights?) -> String {
@@ -222,7 +208,7 @@ struct ThreeCells: View {
                 if i > 0 { Rectangle().fill(Palette.hairline).frame(width: 1) }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(cells[i].0).font(Typo.caption).foregroundStyle(Palette.muted)
-                    Text(cells[i].1).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                    Text(cells[i].1).font(Typo.number(26)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, i > 0 ? 14 : 0)
@@ -258,10 +244,11 @@ enum StageStyle {
     static let labels = ["AWAKE": "Bdění", "REM": "REM", "LIGHT": "Lehký", "DEEP": "Hluboký"]
     static func color(_ type: String) -> Color {
         switch type {
-        case "DEEP": return Color(light: 0x3B3A99, dark: 0x7C79E0)
-        case "LIGHT": return Color(light: 0xA9B8EC, dark: 0x5A6AA8)
-        case "REM": return Color(light: 0x7C74E8, dark: 0xA5A1FF)
-        default: return Color(light: 0xE0A46A, dark: 0xE0A46A)
+        // Green tones from deep (brightest) to light, awake grey (concept 5, DES-7).
+        case "DEEP": return Color(light: 0x1F6B52, dark: 0x8FE6C4)
+        case "REM": return Color(light: 0x3E9C7A, dark: 0x58B894)
+        case "LIGHT": return Color(light: 0x9BD3BC, dark: 0x2F6E58)
+        default: return Color(light: 0xB9B4AA, dark: 0x8C8A85)
         }
     }
 }
@@ -403,7 +390,7 @@ struct SleepIndexParts: View {
                 Text(verbatim: value).font(.body).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             }
             Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary)
-            ProgressLine(fraction: fill, color: Palette.indigo).padding(.top, 8)
+            ProgressLine(fraction: fill, color: Palette.Status.good).padding(.top, 8)
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
@@ -447,11 +434,11 @@ struct SleepIndexNights: View {
                 ZStack(alignment: .topLeading) {
                     ChartScale(ticks: [50.0, 75, 100].filter { $0 > lo }.map { ScaleTick(value: $0, text: Fmt.int($0)) }, width: w, y: y)
                     if let low = index.low, let high = index.high {
-                        Rectangle().fill(Palette.indigo.opacity(0.2))
+                        Rectangle().fill(Palette.Status.good.opacity(0.2))
                             .frame(width: w, height: max(2, y(low) - y(high)))
                             .offset(y: y(high))
                         ForEach([low, high], id: \.self) { edge in
-                            DashedLine().stroke(Palette.indigo.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            DashedLine().stroke(Palette.Status.good.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                                 .frame(width: w, height: 1)
                                 .offset(y: y(edge))
                         }
@@ -463,10 +450,10 @@ struct SleepIndexNights: View {
                             p.addLine(to: CGPoint(x: x(b.slot), y: y(b.value)))
                         }
                     }
-                    .stroke(Palette.indigo.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(Palette.Status.good.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     ForEach(marks) { m in
                         let last = m.id == marks.last?.id
-                        Circle().fill(last ? Palette.indigo : Palette.indigo.opacity(0.6))
+                        Circle().fill(last ? Palette.Status.good : Palette.Status.good.opacity(0.6))
                             .frame(width: last ? 11 : 6, height: last ? 11 : 6)
                             .position(x: x(m.slot), y: y(m.value))
                         if last {
@@ -493,12 +480,12 @@ struct SleepIndexNights: View {
             HStack(spacing: 14) {
                 if let low = index.low, let high = index.high {
                     HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 2).fill(Palette.indigo.opacity(0.3)).frame(width: 14, height: 6)
+                        RoundedRectangle(cornerRadius: 2).fill(Palette.Status.good.opacity(0.3)).frame(width: 14, height: 6)
                         Text(verbatim: L10n.f("obvyklé rozmezí %@–%@", Fmt.int(low), Fmt.int(high))).font(Typo.tiny).foregroundStyle(Palette.muted)
                     }
                 }
                 HStack(spacing: 5) {
-                    Circle().fill(Palette.indigo).frame(width: 7, height: 7)
+                    Circle().fill(Palette.Status.good).frame(width: 7, height: 7)
                     Text("poslední noc").font(Typo.tiny).foregroundStyle(Palette.muted)
                 }
             }
@@ -649,7 +636,7 @@ struct WeightEntrySheet: View {
 
 /// Pravidelnost (Petr's design of 2026-10-17): one row per night with a dot
 /// at the time of falling asleep on an hourly axis; the band is the usual
-/// time ± 30 min. A dot in the band is indigo, outside it amber, earlier or
+/// time ± 30 min. A dot in the band is green, outside it amber, earlier or
 /// later alike. Sliding a finger over the chart shows the exact time there.
 struct RegularityChart: View {
     /// Bedtime as minutes after 18:00 (src/app-health.js regularity).
@@ -689,7 +676,7 @@ struct RegularityChart: View {
             }
             .frame(height: Self.bubble + plotHeight + 26)
             VStack(alignment: .leading, spacing: 7) {
-                legend(Palette.indigo, "V obvyklém čase")
+                legend(Palette.Status.good, "V obvyklém čase")
                 legend(Palette.amber, "Dřív nebo později než obvykle")
             }
         }
@@ -742,7 +729,7 @@ struct RegularityChart: View {
         let inside = abs(night.value - usual) <= Self.band
         let left = scale.x(usual - Self.band), right = scale.x(usual + Self.band)
         return ZStack(alignment: .topLeading) {
-            Rectangle().fill(Palette.lilac.opacity(0.6))
+            Rectangle().fill(Palette.Status.good.opacity(0.12))
                 .frame(width: right - left, height: Self.rowHeight - 6)
                 .position(x: (left + right) / 2, y: y)
             Path { p in
@@ -753,7 +740,7 @@ struct RegularityChart: View {
             Text(Fmt.weekdayShort(night.date)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: Self.dayWidth, alignment: .leading)
                 .position(x: Self.dayWidth / 2, y: y)
-            Circle().fill(inside ? Palette.indigo : Palette.amber).frame(width: 12, height: 12)
+            Circle().fill(inside ? Palette.Status.good : Palette.amber).frame(width: 12, height: 12)
                 .position(x: scale.x(night.value), y: y)
             Text(Self.clock(night.value)).font(Typo.small).foregroundStyle(inside ? Palette.secondary : Palette.amber)
                 .lineLimit(1).minimumScaleFactor(0.8)

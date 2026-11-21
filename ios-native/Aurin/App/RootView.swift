@@ -80,7 +80,7 @@ struct RootView: View {
         case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true }).environment(\.tabActions, tabActions)
         case .training: TrainingView().environment(\.tabActions, tabActions).environment(\.compactTabBar, compactBar)
         case .food: FoodView().environment(\.tabActions, tabActions)
-        case .health: HealthView().environment(\.tabActions, tabActions)
+        case .health: HealthView().environment(\.tabActions, tabActions).environment(\.sectionGlow, Palette.Glow.health)
         }
     }
 
