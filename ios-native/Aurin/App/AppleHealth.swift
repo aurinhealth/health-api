@@ -405,7 +405,8 @@ final class AppleHealth {
                         // Woken in the background: the widgets follow the new data,
                         // after HealthKit heard back (BackgroundRefresh.healthWake).
                         if UIApplication.shared.applicationState == .active {
-                            if await AppleHealth.shared.run(api: api).changed { AppleHealth.shared.newInApp += 1 }
+                            // HealthKit says something new came: no 10-minute wait.
+                            if await AppleHealth.shared.run(api: api, force: true).changed { AppleHealth.shared.newInApp += 1 }
                         }
                         else { await BackgroundRefresh.healthWake(api: api) }
                     }

@@ -343,7 +343,7 @@ private struct ReminderDayOverview: View {
                 label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 8)
                 label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 8)
                 label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 8)
-                label("23:00", alignment: .trailing).position(x: width - 30, y: 8)
+                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 8)
                 Rectangle()
                     .fill(Palette.hairline)
                     .frame(width: width, height: 1)
