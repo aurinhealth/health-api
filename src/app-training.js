@@ -10,7 +10,7 @@ import { athleteFocus, racePhase, DEFAULT_PHASES } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
 import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
-import { workloadMetrics, loadBalance, muscleLoad } from "./workload-ratio.js";
+import { workloadMetrics, loadBalance, muscleLoad, loadByIntensity } from "./workload-ratio.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -335,8 +335,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     next = sessionsOf(d)[0] || null;
   }
 
-  // Form: fitness (CTL), fatigue (ATL) and their difference, 12 weeks.
-  const pmc = intervals.filter(r => r.id > shift(date, -84) && num(r.ctl) != null && num(r.atl) != null)
+  // Form: fitness (CTL), fatigue (ATL) and their difference, half a year
+  // (the detail's chart offers 30 days, 90 days and 6 months).
+  const pmc = intervals.filter(r => r.id > shift(date, -182) && num(r.ctl) != null && num(r.atl) != null)
     .map(r => ({ date: r.id, fitness: round(num(r.ctl), 1), fatigue: round(num(r.atl), 1) }));
   const lastPmc = pmc.at(-1) || null;
   const tsb = lastPmc ? round(lastPmc.fitness - lastPmc.fatigue) : null;
@@ -346,6 +347,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   // the same daily loads as fitness and fatigue (workload-ratio.js); null
   // without any load on record.
   const workload = workloadMetrics(intervals, date);
+  const balance = loadBalance(intervals, date);
 
   // Load per week (Monday to Sunday) for the last 8 weeks, from Intervals.icu,
   // split by intensity where the activities have heart-rate or power zones.
@@ -413,7 +415,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     // Training → Load (redesign): two dials in words against the usual band,
     // null without any load; Muscle load only from the gym's work sets
     // (`gymSets`), absent for an older caller that does not read them.
-    loadBalance: loadBalance(intervals, date),
+    loadBalance: balance && { ...balance, intensity: loadByIntensity(balance, insights.cardioFocus) },
     ...(Array.isArray(gymSets) ? { muscleLoad: muscleLoad(gymSessions(gymSets.map(s => ({ ...s, workout_date: String(s?.workout_date || "").slice(0, 10) }))), date, strengthLoad, gymSince) } : {}),
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, source: vo2.length ? "watch" : "intervals", change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,

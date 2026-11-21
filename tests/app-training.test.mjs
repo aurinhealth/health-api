@@ -139,7 +139,7 @@ test("Form, load per week, zones and VO2max", () => {
   const t = buildTraining(input);
   assert.equal(t.form.form, Math.round(t.form.fitness - t.form.fatigue));
   assert.equal(t.form.zone, "grey");
-  assert.equal(t.form.series.length, 84);
+  assert.equal(t.form.series.length, 100, "every day of the half year that has one");
   assert.equal(t.load.weeks.length, 8);
   assert.equal(t.load.weeks[7].start, "2026-10-05");
   assert.equal(t.load.weeks[7].planned, 307);
