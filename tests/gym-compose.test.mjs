@@ -31,10 +31,12 @@ test("the coach's session keeps to the rules' exercises, swaps, order, volume an
   const plan = generateStrengthPlan(context(), options), rules = sessionOf(plan);
   assert.ok(rules.length >= 3, "a rules session to edit");
   assert.deepEqual(gymComposeFaults({ session: { exercises: rules }, plan }), []);
-  const swapMuscle = Object.keys(plan.swaps).find(m => plan.swaps[m].length), from = rules.find(e => EXERCISES[e.name].muscle === swapMuscle);
+  const swapMuscle = Object.keys(plan.swaps).find(m => plan.swaps[m].length && rules.some(e => EXERCISES[e.name].muscle === m && !EXERCISES[e.name].warmup)), from = rules.find(e => EXERCISES[e.name].muscle === swapMuscle && !EXERCISES[e.name].warmup);
   const swapped = rules.map(e => e === from ? { name: plan.swaps[swapMuscle][0], sets: e.sets } : e);
   assert.deepEqual(gymComposeFaults({ session: { exercises: swapped }, plan, history: [{ exercise: plan.swaps[swapMuscle][0] }] }), []);
   assert.deepEqual(gymComposeFaults({ session: { exercises: [...rules.slice(1), { name: "Made-up press", sets: 3 }] }, plan }), ["unknown"]);
+  const main = rules.find(e => EXERCISES[e.name].warmup);
+  if (main) assert.ok(gymComposeFaults({ session: { exercises: rules.filter(e => e !== main) }, plan }).includes("main"), "the rules' main lifts stay");
   assert.ok(gymComposeFaults({ session: { exercises: [...rules, rules[0]] }, plan }).includes("duplicate"));
   assert.deepEqual(gymComposeFaults({ session: { exercises: rules.map(e => ({ ...e, sets: 1 })) }, plan }), ["volume"]);
   assert.deepEqual(gymComposeFaults({ session: { exercises: rules.map(e => ({ ...e, sets: 5 })) }, plan }), ["sets"]);
