@@ -236,7 +236,9 @@ struct HealthValueContent: View {
     static func serviceName(_ id: String) -> String {
         switch id.lowercased() {
         case "apple", "apple-health", "applehealth", "healthkit": return "Apple Health"
-        case "google", "google-health", "fitbit": return "Google Health"
+        case "google", "google-health", "google-wearables", "fitbit": return "Google Health"
+        // A workout added in Aurin itself.
+        case "local", "aurin": return "Aurin"
         case "whoop": return "WHOOP"
         case "oura": return "Oura"
         case "garmin": return "Garmin"

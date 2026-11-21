@@ -31,6 +31,7 @@ struct HealthView: View {
             }
             .navBarVisibility(.hidden)
             .appRoutes()
+            .tabRoot(.health)
         }
         .task { await model.refreshIfStale(.health) }
     }

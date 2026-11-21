@@ -55,7 +55,7 @@ final class ShareImageTests: XCTestCase {
         let d = ShareDay(today: DemoData.today)
         XCTAssertEqual(d.readiness, 78)
         XCTAssertEqual(d.sleepEnd, "07:02")
-        XCTAssertEqual(d.readinessLabel, "vysoká")
+        XCTAssertEqual(d.readinessLabel, "v obvyklém rozmezí")
         // The demo's morning run is done; the gym session is still planned.
         XCTAssertEqual(d.workouts.count, 1)
         XCTAssertEqual(ShareDay.minutes("17:30"), 1050)
