@@ -206,13 +206,8 @@ struct HealthValueContent: View {
     /// that is still running (steps, active energy) stays out, so the chart
     /// never shows a drop each morning (D-ZDRAVI-19); the number on top has it.
     private func chartPoints(_ reading: HealthValueReading) -> [ChartPoint] {
-        var points = loaded?.shown ?? reading.local
-        if value.partialToday { return points.filter { $0.date < today } }
-        // Today's point is the number in the header (606: HRV 100 on top, 99 in the bubble).
-        if !period.weekly, let v = reading.value, let last = points.last, last.date == today {
-            points[points.count - 1] = ChartPoint(date: last.date, value: v, low: last.low, high: last.high, state: last.state, side: last.side)
-        }
-        return points
+        let points = loaded?.shown ?? reading.local
+        return value.partialToday ? points.filter { $0.date < today } : points
     }
 
     /// The last finished day the Trend rows end on.
