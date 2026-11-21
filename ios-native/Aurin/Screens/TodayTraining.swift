@@ -114,11 +114,11 @@ struct TodayTrainingRow: View {
             }
             if item.sport == "strength" {
                 NavigationLink(value: AppRoute.trainingMode(AppModel.localDate(Date()))) {
-                    Label(L10n.tr("Začít"), systemImage: "play.fill")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .padding(.horizontal, 14).frame(height: 36)
-                        .background(Palette.green, in: Capsule())
-                        .tapTarget(width: 44, height: 36)
+                    // One Start on Today: ink, no icon, as in the Day card (TestFlight 604.1).
+                    Text("Začít").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).frame(height: 30)
+                        .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 30)
                 }
                 .buttonStyle(.plain)
                 // Start workout: it opens with 3, 2, 1 and starts (concept 08).
