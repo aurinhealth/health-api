@@ -76,6 +76,12 @@ struct FoodHero: View {
         VStack(alignment: .leading, spacing: 10) {
             FoodTargetBar(eaten: eaten, target: target, parts: food.targetParts)
             TargetPartsRow(parts: food.targetParts, target: target, more: linked)
+            // The target counts only part of a workout's burn, on purpose (about 70 %):
+            // said in one line, so "+104" next to a 688 kcal ride doesn't read as a mistake.
+            if let burned = food.targetParts?.burnedDone, burned > 0 {
+                Text(verbatim: L10n.f("Tréninky jsou jen část ze spálených %@ kcal.", Fmt.int(burned)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .contentShape(Rectangle())
     }

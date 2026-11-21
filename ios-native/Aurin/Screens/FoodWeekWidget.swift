@@ -134,7 +134,14 @@ struct FoodWeekWidget: View {
             return
         }
         failed = false
-        do { week = try await model.api.foodWeek(date: date) } catch { if week == nil && !Task.isCancelled { failed = true } }
+        // A request still out after 8 s shows "Try again" too (vylepšení 2026-11-20);
+        // a late answer still fills the card.
+        let slow = Task { try? await Task.sleep(for: .seconds(8)); if week == nil && !Task.isCancelled { failed = true } }
+        defer { slow.cancel() }
+        do {
+            week = try await model.api.foodWeek(date: date)
+            failed = false
+        } catch { if week == nil && !Task.isCancelled { failed = true } }
     }
 }
 
