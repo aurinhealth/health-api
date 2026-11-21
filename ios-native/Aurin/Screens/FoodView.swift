@@ -104,6 +104,12 @@ struct FoodContent: View {
     @Environment(\.dayPage) private var page
     let food: FoodSnapshot
     var add: (String) -> Void = { _ in }
+    /// The coach card's row (concept 02-jidlo/000, point 4): the next meal still
+    /// empty with what is left for it, and "+ Add". The server gives a meal's
+    /// suggestion only while it is still ahead.
+    private var nextMeal: FoodSnapshot.Meal? {
+        food.meals.first { $0.entries.isEmpty && ($0.suggestion?.kcal ?? 0) > 0 }
+    }
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
@@ -185,7 +191,7 @@ struct FoodContent: View {
             let day = page.map(\.selectedDate) ?? model.selectedDate
             if day.map({ $0 > today }) ?? true {
                 CoachTextCard(screen: "food", fallbackText: food.target == nil ? L10n.tr("Zapiš první jídlo a pomůžu ti s energií na trénink.") : food.sentence,
-                              live: day == nil)
+                              live: day == nil, tip: day == nil ? nextMeal.map { AnyView(NextMealRow(meal: $0, add: { add($0.type) })) } : nil)
                     .padding(.top, 14)
             }
         } right: {
@@ -823,5 +829,35 @@ struct MacroBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.tr(title) + " " + FiberRow.text(eaten: eaten, target: target, limit: false))
+    }
+}
+
+/// "Afternoon snack about 360 kcal, 45 g carbs" and "+ Add" under the coach's
+/// sentence on Food.
+struct NextMealRow: View {
+    let meal: FoodSnapshot.Meal
+    let add: (FoodSnapshot.Meal) -> Void
+
+    private var text: String {
+        guard let s = meal.suggestion else { return meal.label }
+        var text = L10n.f("%@ kolem %@ kcal", meal.label, Fmt.int(s.kcal))
+        if let carbs = s.carbs, carbs > 0 { text += L10n.f(", %@ g sacharidů", Fmt.int(carbs)) }
+        return text
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Button { add(meal) } label: {
+                Label("Přidat", systemImage: "plus").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14).frame(minHeight: 36)
+                    .background(Palette.track, in: Capsule())
+                    .frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: L10n.tr("Přidat") + ", " + meal.label))
+        }
     }
 }
