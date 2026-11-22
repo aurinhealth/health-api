@@ -33,53 +33,28 @@ struct TrainingMonthSheet: View {
     private var lastMonth: String { ISODay.monthStart(ISODay.shift(today, TrainingCalendarCard.daysAhead)) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Picker("Zobrazit", selection: $valueRaw) {
-                        ForEach(Value.allCases, id: \.rawValue) { Text(L10n.tr($0.title)).tag($0.rawValue) }
-                    }
-                    .pickerStyle(.segmented)
-                    Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Card {
-                        MonthCalendar(month: month, today: today, selected: selected,
-                                      futurePickable: value == .workouts,
-                                      pick: { day in
-                                          guard day <= ISODay.shift(today, TrainingCalendarCard.daysAhead) else { return }
-                                          dismiss()
-                                          pick(day)
-                                      },
-                                      move: move,
-                                      spoken: { spoken($0) }) { day in
-                            switch value {
-                            case .strain: StrainDayRing(strain: day > today ? nil : model.dayValues[day]?.strain, future: day > today)
-                            case .workouts: WorkoutDayMark(day: model.calendar[day], future: day > today)
-                            }
-                        }
-                    }
-                    Text(verbatim: legend).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
-            }
-            .background { Palette.background.ignoresSafeArea() }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Zavřít")
+        MonthSheet(month: $month, first: firstMonth, last: lastMonth,
+                   options: Value.allCases.map { ($0.rawValue, $0.title) }, selection: $valueRaw) {
+            Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            MonthCalendar(month: month, today: today, selected: selected,
+                          futurePickable: value == .workouts, header: false,
+                          pick: { day in
+                              guard day <= ISODay.shift(today, TrainingCalendarCard.daysAhead) else { return }
+                              dismiss()
+                              pick(day)
+                          },
+                          move: { _ in },
+                          spoken: { spoken($0) }) { day in
+                switch value {
+                case .strain: StrainDayRing(strain: day > today ? nil : model.dayValues[day]?.strain, future: day > today)
+                case .workouts: WorkoutDayMark(day: model.calendar[day], future: day > today)
                 }
             }
+            .monthSheetCard()
+            Text(verbatim: legend).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
-        .tint(Palette.ink)
-        .presentationDetents([.large])
         .task(id: month + valueRaw) { await load() }
-    }
-
-    private func move(_ by: Int) {
-        let next = ISODay.addMonths(month, by)
-        guard next >= firstMonth, next <= lastMonth else { return }
-        withAnimation(.snappy(duration: 0.25)) { month = next }
     }
 
     private func load() async {

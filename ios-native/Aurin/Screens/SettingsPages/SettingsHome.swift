@@ -136,13 +136,15 @@ struct SettingsGoalsCard: View {
         Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000, digits: 1)
     }
 
-    /// The drinks goal as Cíle shows it: your own, the build-up's base, or
-    /// today's automatic target (602 point 64: hub and Cíle say the same).
+    /// The drinks goal as Cíle shows it: today's goal from the server, the
+    /// same number Today and Food show (606: hub 1.0 l, Food 1.7 l with the
+    /// workout's extra); before Today loads, your own or the build-up's start.
     static func waterGoal(_ store: SettingsStore, _ water: TodaySnapshot.Water?) -> Double? {
+        if let target = water?.target { return target }
         switch store.profile["waterMode"]?.string {
         case "custom": return store.profile["waterGoal"]?.number
-        case "build": return water?.build?.baseMl ?? store.profile["waterStart"]?.number
-        default: return water?.target
+        case "build": return store.profile["waterStart"]?.number
+        default: return nil
         }
     }
 

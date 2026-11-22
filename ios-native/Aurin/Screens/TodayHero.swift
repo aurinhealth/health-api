@@ -36,7 +36,7 @@ struct WeatherCapsule: View {
         Button { open = true } label: {
             HStack(spacing: 5) {
                 if let weather {
-                    Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
+                    Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code, night: WeatherText.isNight))
                         .symbolRenderingMode(.multicolor)
                         .scaledFont(14, weight: .semibold, cap: .denseCap)
                     Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max))

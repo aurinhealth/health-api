@@ -526,7 +526,7 @@ struct StepsThroughDay: View {
             .chartXScale(domain: 6...23)
             .chartXAxis {
                 AxisMarks(values: [6, 10, 14, 18, 22]) { v in
-                    AxisValueLabel { Text(verbatim: "\(v.as(Int.self) ?? 0):00") }.foregroundStyle(Palette.faint)
+                    AxisValueLabel { Text(verbatim: ClockText.format(minutes: (v.as(Int.self) ?? 0) * 60)) }.foregroundStyle(Palette.faint)
                 }
             }
             .chartYAxis {

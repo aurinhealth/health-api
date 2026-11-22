@@ -401,6 +401,9 @@ struct RootView: View {
                 guard !model.paths.values.contains(where: { $0.last == .trainingMode(date) }) else { return }
                 model.open(.trainingMode(date))
             }
+            // A workout or a night synced while the app is open (TestFlight 606:
+            // the second walk on Training, not on Today and Food).
+            .onChange(of: AppleHealth.shared.newInApp) { Task { await model.followNewHealthData() } }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo {
                     BackgroundRefresh.schedule()
@@ -714,13 +717,10 @@ struct TabBar: View {
         .accessibilityIdentifier("tab.plus")
     }
 
-    /// The icon with the section's name under it (Petr, 2026-10-24), all in
-    /// ink: grey on glass reads too faintly. The open one is bolder, on a soft
-    /// fill like the system tab bar's (it still shows with Bold Text on): 12 %
-    /// ink, as the 8 % of the tracks read too faintly on glass (design review
-    /// 2026-11-10, point 15). The fill sits 6 pt inside its slot on every side,
-    /// so at the ends of the bar it follows the capsule's curve and is the same
-    /// size for every section.
+    /// The icon with the section's name under it (Petr, 2026-10-24), in ink:
+    /// grey on glass reads too faintly. The open one is the outline icon with
+    /// its name in amber and bolder, no fill behind it (concept consistency
+    /// rule "active tab = outline icon + amber label", 606).
     private func item(_ value: AppTab, _ label: String) -> some View {
         let open = tab == value
         return Button { tab = value } label: {
@@ -732,15 +732,12 @@ struct TabBar: View {
                     .scaledFont(10, weight: open ? .semibold : .regular)
                     .lineLimit(1).minimumScaleFactor(0.9)
             }
-            .foregroundStyle(Palette.ink)
+            .foregroundStyle(open ? Palette.amber : Palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Long press shows the tab large, as the system tab bar does.
             .accessibilityShowsLargeContentViewer {
                 Image(systemName: Self.symbol(value))
                 Text(L10n.tr(label))
-            }
-            .background {
-                if open { Capsule().fill(Palette.ink.opacity(0.12)).padding(6) }
             }
             .contentShape(Rectangle())
         }

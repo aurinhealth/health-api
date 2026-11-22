@@ -283,6 +283,7 @@ struct SettingsPage<Content: View>: View {
     /// every page pushed inside Settings (settingsTitles), or when asked.
     var spacedTitle: Bool? = nil
     @Environment(\.settingsTitles) private var settingsTitles
+    @Environment(\.tabGlow) private var tabGlow
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -295,7 +296,11 @@ struct SettingsPage<Content: View>: View {
                 .padding(.top, 12)
                 .padding(.bottom, 48)
         }
-        .background { Palette.settingsBackground.ignoresSafeArea() }
+        .background {
+            // A page pushed from a tab (Food > Meal times) keeps the tab's tint.
+            if let tabGlow, !settingsTitles { ScreenBackground(glow: tabGlow) }
+            else { Palette.settingsBackground.ignoresSafeArea() }
+        }
         .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

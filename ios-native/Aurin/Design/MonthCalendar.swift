@@ -15,6 +15,8 @@ struct MonthCalendar<Mark: View>: View {
     var subtitle: String? = nil
     /// Future days can be picked (a plan) or not (data).
     var futurePickable = false
+    /// Off in MonthSheet, which has the month and its arrows on top.
+    var header = true
     let pick: (String) -> Void
     /// -1 back a month, +1 forward.
     let move: (Int) -> Void
@@ -27,23 +29,7 @@ struct MonthCalendar<Mark: View>: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack {
-                Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
-                    .accessibilityLabel(L10n.tr("Předchozí měsíc"))
-                Spacer(minLength: 0)
-                VStack(spacing: 1) {
-                    Text(verbatim: ISODay.monthTitle(first)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    if let subtitle { Text(verbatim: subtitle).font(Typo.caption).foregroundStyle(Palette.muted) }
-                }
-                .accessibilityElement(children: .combine)
-                Spacer(minLength: 0)
-                Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
-                    .disabled(!canGoForward)
-                    .opacity(canGoForward ? 1 : 0.35)
-                    .accessibilityLabel(L10n.tr("Další měsíc"))
-            }
-            .foregroundStyle(Palette.ink)
-            .buttonStyle(.plain)
+            if header { monthRow }
             HStack(spacing: 0) {
                 ForEach(Array(Fmt.weekdaysFromMonday.enumerated()), id: \.offset) { _, name in
                     Text(verbatim: name).font(.caption2.weight(.semibold)).foregroundStyle(Palette.faint).frame(maxWidth: .infinity)
@@ -62,6 +48,26 @@ struct MonthCalendar<Mark: View>: View {
                 }
             }
         }
+    }
+
+    private var monthRow: some View {
+        HStack {
+            Button { move(-1) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }
+                .accessibilityLabel(L10n.tr("Předchozí měsíc"))
+            Spacer(minLength: 0)
+            VStack(spacing: 1) {
+                Text(verbatim: ISODay.monthTitle(first)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                if let subtitle { Text(verbatim: subtitle).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            Button { move(1) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }
+                .disabled(!canGoForward)
+                .opacity(canGoForward ? 1 : 0.35)
+                .accessibilityLabel(L10n.tr("Další měsíc"))
+        }
+        .foregroundStyle(Palette.ink)
+        .buttonStyle(.plain)
     }
 
     private func cell(_ day: String) -> some View {

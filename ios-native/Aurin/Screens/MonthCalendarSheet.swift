@@ -10,7 +10,8 @@ struct MonthCalendarSheet: View {
     /// The day Today shows.
     let date: String
     @State private var month: String
-    @AppStorage("monthCalendarMetric") private var metric = Metric.readiness.rawValue
+    /// Always opens on Readiness, as in the concept (TestFlight 606).
+    @State private var metric = Metric.readiness.rawValue
 
     init(date: String) {
         self.date = date
@@ -36,77 +37,20 @@ struct MonthCalendarSheet: View {
     private var firstMonth: String { ISODay.monthStart(ISODay.shift(today, -90)) }
 
     var body: some View {
-        VStack(spacing: 0) {
-        // The month and its buttons stay put while the days scroll.
-        header
-            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                metricSwitch
-                Text(summary)
-                    .font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                VStack(spacing: 6) {
-                    weekdays
-                    grid
-                }
-                .padding(.horizontal, 10).padding(.vertical, 14)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                Text(legend).font(Typo.small).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                if month != ISODay.monthStart(today) {
-                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = ISODay.monthStart(today) } }
-                        .frame(maxWidth: .infinity)
-                }
+        MonthSheet(month: $month, first: firstMonth, last: ISODay.monthStart(today),
+                   options: Metric.allCases.map { ($0.rawValue, $0.label) }, selection: $metric) {
+            Text(summary)
+                .font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 6) {
+                weekdays
+                grid
             }
-            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
+            .monthSheetCard()
+            Text(legend).font(Typo.small).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        }
-        .background { Palette.background.ignoresSafeArea() }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
         .task(id: month) { await model.loadDays(from: month, to: ISODay.monthEnd(month), force: month == ISODay.monthStart(today)) }
-    }
-
-    /// The month in serif on the left; back, forward and close on the right (concept b-podstranky-04).
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text(verbatim: ISODay.monthTitle(month)).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-            ChromeButton(systemImage: "chevron.left", label: "Předchozí měsíc", enabled: month > firstMonth) { move(-1) }
-            ChromeButton(systemImage: "chevron.right", label: "Další měsíc", enabled: month < ISODay.monthStart(today)) { move(1) }
-            ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
-        }
-    }
-
-    /// Readiness, Sleep, Strain, HRV: a soft track with the chosen one lifted, as under the charts.
-    private var metricSwitch: some View {
-        HStack(spacing: 2) {
-            ForEach(Metric.allCases) { m in
-                let on = m == chosen
-                Button { metric = m.rawValue } label: {
-                    Text(L10n.tr(m.label))
-                        .scaledFont(14, weight: on ? .semibold : .regular, cap: .denseCap)
-                        .foregroundStyle(on ? Palette.ink : Palette.muted)
-                        .lineLimit(1).minimumScaleFactor(0.75)
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .background(on ? Palette.card : .clear, in: Capsule())
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(3)
-        .background(Palette.track, in: Capsule())
-    }
-
-    private func move(_ by: Int) {
-        let next = ISODay.addMonths(month, by)
-        guard next >= firstMonth, next <= ISODay.monthStart(today) else { return }
-        withAnimation(.snappy(duration: 0.25)) { month = next }
     }
 
     private var weekdays: some View {
@@ -205,6 +149,91 @@ struct MonthCalendarSheet: View {
 
     private static func mean(_ list: [Double]) -> Int {
         Int((list.reduce(0, +) / Double(max(list.count, 1))).rounded())
+    }
+}
+
+/// The month sheet of every section (Today, Health, Training, Food; "Month
+/// calendar identical everywhere", 606): the month in serif with back,
+/// forward and close on the right (concept b-podstranky-04), the switch of
+/// what the days show, then the section's own summary, month and legend, and
+/// "Today" back from another month.
+struct MonthSheet<Content: View>: View {
+    @Binding var month: String
+    /// The first and the last month that can be shown.
+    let first: String
+    let last: String
+    /// (id, Czech label) for the switch.
+    let options: [(String, String)]
+    @Binding var selection: String
+    @ViewBuilder var content: Content
+    @Environment(\.dismiss) private var dismiss
+
+    private var thisMonth: String { ISODay.monthStart(AppModel.localDate(Date())) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // The month and its buttons stay put while the days scroll.
+            HStack(spacing: 8) {
+                Text(verbatim: ISODay.monthTitle(month)).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                ChromeButton(systemImage: "chevron.left", label: "Předchozí měsíc", enabled: month > first) { move(-1) }
+                ChromeButton(systemImage: "chevron.right", label: "Další měsíc", enabled: month < last) { move(1) }
+                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+            }
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    switcher
+                    content
+                    if month != thisMonth {
+                        ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = thisMonth } }
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
+            }
+        }
+        .background { Palette.background.ignoresSafeArea() }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// A soft track with the chosen one lifted, as under the charts.
+    private var switcher: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.0) { id, label in
+                let on = id == selection
+                Button { selection = id } label: {
+                    Text(L10n.tr(label))
+                        .scaledFont(14, weight: on ? .semibold : .regular, cap: .denseCap)
+                        .foregroundStyle(on ? Palette.ink : Palette.muted)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(on ? Palette.card : .clear, in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(Palette.track, in: Capsule())
+    }
+
+    private func move(_ by: Int) {
+        let next = ISODay.addMonths(month, by)
+        guard next >= first, next <= last else { return }
+        withAnimation(.snappy(duration: 0.25)) { month = next }
+    }
+}
+
+extension View {
+    /// The month's card in the month sheet.
+    func monthSheetCard() -> some View {
+        padding(.horizontal, 10).padding(.vertical, 14)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
 

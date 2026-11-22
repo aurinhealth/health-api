@@ -196,7 +196,7 @@ struct SleepDetailContent: View {
             g > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(g), TodayDials.length(need))
                 : g < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-g), TodayDials.length(need)) : L10n.f("přesně %@", TodayDials.length(need))
         }
-        return RangeDial(value: nil, scale: from...to, band: band, bandColor: Palette.green, ends: ("20:00", "10:00"), size: 220,
+        return RangeDial(value: nil, scale: from...to, band: band, bandColor: Palette.green, ends: (ClockText.format(minutes: 20 * 60), ClockText.format(minutes: 10 * 60)), size: 220,
                          spoken: [L10n.tr("Spánek"), Fmt.hoursMinutesSpoken(night.minutes), note].compactMap { $0 }.joined(separator: ", ")) {
             VStack(spacing: 2) {
                 Text("Spánek").font(Typo.caption).foregroundStyle(Palette.muted)

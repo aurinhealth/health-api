@@ -446,53 +446,28 @@ struct FoodMonthSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Picker("Zobrazit", selection: $valueRaw) {
-                        ForEach(FoodValue.allCases, id: \.rawValue) { Text(L10n.tr($0.title)).tag($0.rawValue) }
-                    }
-                    .pickerStyle(.segmented)
-                    if let summary {
-                        Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Card {
-                        MonthCalendar(month: month, today: today, selected: date,
-                                      pick: { day in
-                                          dismiss()
-                                          Task { await model.showDate(day) }
-                                      },
-                                      move: move,
-                                      spoken: { spoken($0) }) { day in
-                            FoodDayRing(day: days[day], value: value, future: day > today)
-                        }
-                    }
-                    Text(verbatim: [L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle."),
-                                    value == .calories ? L10n.tr("Červený je nad cílem.") : nil,
-                                    L10n.tr("Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla.")].compactMap { $0 }.joined(separator: " "))
-                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 32)
+        MonthSheet(month: $month, first: firstMonth, last: ISODay.monthStart(today),
+                   options: FoodValue.allCases.map { ($0.rawValue, $0.title) }, selection: $valueRaw) {
+            if let summary {
+                Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .background { Palette.background.ignoresSafeArea() }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Zavřít")
-                }
+            MonthCalendar(month: month, today: today, selected: date, header: false,
+                          pick: { day in
+                              dismiss()
+                              Task { await model.showDate(day) }
+                          },
+                          move: { _ in },
+                          spoken: { spoken($0) }) { day in
+                FoodDayRing(day: days[day], value: value, future: day > today)
             }
+            .monthSheetCard()
+            Text(verbatim: [L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle."),
+                            value == .calories ? L10n.tr("Červený je nad cílem.") : nil,
+                            L10n.tr("Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla.")].compactMap { $0 }.joined(separator: " "))
+                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
-        .tint(Palette.ink)
-        .presentationDetents([.large])
         .task { await load() }
-    }
-
-    private func move(_ by: Int) {
-        let next = ISODay.addMonths(month, by)
-        guard next >= firstMonth, next <= ISODay.monthStart(today) else { return }
-        withAnimation(.snappy(duration: 0.25)) { month = next }
     }
 
     private func load() async {

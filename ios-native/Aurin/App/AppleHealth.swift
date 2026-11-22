@@ -130,6 +130,9 @@ final class AppleHealth {
     private(set) var enabled: Bool
     private(set) var categories: Set<HealthCategory>
     private(set) var syncing = false
+    /// Counts the HealthKit wakes in the open app that sent something new
+    /// (a walk that just ended): the open tabs load again (RootView).
+    private(set) var newInApp = 0
     private(set) var lastSync: Date?
     var message: String?
     /// What the history import sent (part O, About you's "N nocí" row): the
@@ -401,7 +404,10 @@ final class AppleHealth {
                     if let api = AppleHealth.shared.api {
                         // Woken in the background: the widgets follow the new data,
                         // after HealthKit heard back (BackgroundRefresh.healthWake).
-                        if UIApplication.shared.applicationState == .active { _ = await AppleHealth.shared.sync(api: api) }
+                        if UIApplication.shared.applicationState == .active {
+                            // HealthKit says something new came: no 10-minute wait.
+                            if await AppleHealth.shared.run(api: api, force: true).changed { AppleHealth.shared.newInApp += 1 }
+                        }
                         else { await BackgroundRefresh.healthWake(api: api) }
                     }
                     completion()

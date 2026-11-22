@@ -122,12 +122,9 @@ extension AppModel {
             // The day is on screen: the arrows and swipes work again.
             loading = false
             if let sync, await sync.value.changed { changed = true; try? await loadToday(onlyIfChanged: true) }
-            // New nights or workouts reach the Health snapshot too: the sleep
-            // detail opened from Today shows it.
-            if changed {
-                fetched[.health] = nil
-                if self.health != nil { scope.task { await self.refreshHealth() } }
-            }
+            // New nights or workouts reach the other tabs too: the sleep
+            // detail opened from Today, Training's day, Food's calories.
+            if changed { followOtherTabs() }
             async let status = try? api.athleteStatus()
             if !aiConsentLoaded { scope.task { await self.loadAIConsent() } }
             if selectedDate == nil, let today {
@@ -284,6 +281,22 @@ extension AppModel {
         case .health: await refreshHealth()
         case .food: await refreshFood()
         }
+    }
+
+    /// Apple Health sent something new while the app is open: Today and the
+    /// tabs already opened load again.
+    func followNewHealthData() async {
+        guard !demo, phase == .signedIn, !loading else { return }
+        try? await loadToday(onlyIfChanged: true)
+        followOtherTabs()
+    }
+
+    /// Health, Training and Food again after new data, those opened at once.
+    private func followOtherTabs() {
+        for tab in [AppTab.health, .training, .food] { fetched[tab] = nil }
+        if health != nil { scope.task { await self.refreshHealth() } }
+        if training != nil { scope.task { await self.refreshTraining() } }
+        if food != nil { scope.task { await self.refreshFood() } }
     }
 
     /// The tab's data came from the server in the last 5 minutes, for this day.

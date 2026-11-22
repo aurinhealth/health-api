@@ -303,7 +303,7 @@ struct PaymentDots: View {
 }
 
 /// Settings → the Aurin Pro row, under its title: the 12 payments as dots
-/// (this month's larger), "Měsíc 4 z 12" and when the 12 months renew.
+/// (this month's larger), "Měsíc 4 z 12" and the next payment.
 struct ProHubTimeline: View {
     let payments: ProStore.Payments
     var calendar: Calendar = .current
@@ -311,7 +311,11 @@ struct ProHubTimeline: View {
     var body: some View {
         let total = max(1, payments.total), number = min(max(1, payments.number), total)
         let renews = calendar.date(byAdding: .month, value: total, to: PaymentDots.firstMonth(payments, calendar: calendar)) ?? payments.ends
-        let renewal = L10n.f("Obnoví se %@", DateFormatters.make("yMMMd", locale: L10n.locale, template: true).string(from: renews))
+        // The next payment, as Aurin Pro's page says it (606: "Renews Sep 22,
+        // 2027" here beside "Next payment Nov 22" there read as two dates);
+        // the 12 months' renewal only after the last payment.
+        let renewal = payments.next.map { L10n.f("Další platba %@", PaywallView.dayMonth($0)) }
+            ?? L10n.f("Obnoví se %@", DateFormatters.make("yMMMd", locale: L10n.locale, template: true).string(from: renews))
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 ForEach(1...total, id: \.self) { i in
