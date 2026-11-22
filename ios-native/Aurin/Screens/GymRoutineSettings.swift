@@ -30,7 +30,7 @@ struct GymRoutineSettingsView: View {
     var body: some View {
         SettingsPage(title: kind.title) {
             SettingsGroup(title: "Ve výchozím stavu") {
-                choice(L10n.tr("Automaticky"), selected: on && current == nil) {
+                choice(L10n.tr("Auto"), selected: on && current == nil) {
                     save([kind.id: .bool(true), kind.id + "Routine": .string("auto")])
                 }
                 ForEach(mine) { own in

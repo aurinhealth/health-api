@@ -83,18 +83,19 @@ struct WatchSettingsView: View {
         settings.pages = order.filter { settings.pages.contains($0) }
     }
 
-    /// The page's sentence: paired, installed and when Today last went to the watch.
+    /// The page's sentence: paired, installed and when Aurin last sent Today to the watch
+    /// (what the app knows; it gets no receipt from the watch).
     private var deviceText: String {
         let state = WatchBridge.shared.watchState
         if !state.paired { return L10n.tr("Hodinky nejsou spárované s tímto iPhonem.") }
         if !state.installed { return L10n.tr("Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu.") }
         if let sent = WatchBridge.shared.lastSent {
-            let time = sent.formatted(date: .omitted, time: .shortened)
+            let time = ClockText.format(sent)
             return Calendar.current.isDateInToday(sent)
-                ? L10n.f("Tvoje Apple Watch jsou připojené, data dostaly dnes v %@.", time)
-                : L10n.f("Tvoje Apple Watch jsou připojené, data dostaly %@.", sent.formatted(date: .abbreviated, time: .shortened))
+                ? L10n.f("Aurin poslal hodinkám data dnes v %@.", time)
+                : L10n.f("Aurin poslal hodinkám data %@.", sent.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted).locale(L10n.locale)) + " " + time)
         }
-        return L10n.tr("Tvoje Apple Watch jsou připojené.")
+        return L10n.tr("Apple Watch jsou spárované a Aurin v nich je.")
     }
 
     /// A small watch with Readiness on its face (the concept's drawing).

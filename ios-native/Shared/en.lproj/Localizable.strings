@@ -1460,6 +1460,7 @@
 "Zapsat den" = "Log the day";
 "Vážení" = "Weigh-in";
 "podle spánku" = "by sleep";
+"%@ před spaním" = "%@ before bedtime";
 "Podle spánku" = "By sleep";
 "Vlastní čas" = "Custom time";
 "každý den" = "every day";
@@ -3349,9 +3350,9 @@
 "Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek." = "Only one device rings. The wake time is the one in Settings → Sleep.";
 "Hodinky nejsou spárované s tímto iPhonem." = "No Apple Watch is paired with this iPhone.";
 "Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu." = "Aurin isn't on your watch yet. Install it in the Watch app on your iPhone.";
-"Tvoje Apple Watch jsou připojené, data dostaly dnes v %@." = "Your Apple Watch is connected and synced today at %@.";
-"Tvoje Apple Watch jsou připojené, data dostaly %@." = "Your Apple Watch is connected and synced %@.";
-"Tvoje Apple Watch jsou připojené." = "Your Apple Watch is connected.";
+"Aurin poslal hodinkám data dnes v %@." = "Aurin sent your Apple Watch its data today at %@.";
+"Aurin poslal hodinkám data %@." = "Aurin sent your Apple Watch its data on %@.";
+"Apple Watch jsou spárované a Aurin v nich je." = "Your Apple Watch is paired and has Aurin.";
 "Otevřít na hodinkách" = "Open on the watch";
 "Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou." = "Training mode on your iPhone starts the gym on your watch too. The watch measures heart rate and calories and saves the workout to Health once.";
 

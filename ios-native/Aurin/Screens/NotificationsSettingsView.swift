@@ -108,8 +108,6 @@ private struct ReminderLine: Identifiable {
     let kind: ReminderKind
     let time: String
     let detail: String
-    /// For sorting by the time of day.
-    let order: Int
 
     var id: String { kind.rawValue }
 }
@@ -238,7 +236,8 @@ struct NotificationsSettingsView: View {
     }
 
     private var lines: [ReminderLine] {
-        ReminderKind.allCases.map { line($0) }.sorted { $0.order < $1.order }
+        // A fixed order (the concept's), so turning one off never moves the rows.
+        ReminderKind.allCases.map { line($0) }
     }
 
     private func line(_ kind: ReminderKind) -> ReminderLine {
@@ -247,40 +246,40 @@ struct NotificationsSettingsView: View {
         let summary = ReminderDays.summary(chosen)
         switch kind {
         case .bedtime:
-            let detail = limited ? summary : L10n.tr(bedtimeMode == "custom" ? "každý den" : "podle spánku")
+            let detail = limited ? summary : bedtimeMode == "custom" ? L10n.tr("každý den") : L10n.f("%@ před spaním", Fmt.duration(bedtimeOffset))
             if let at = bedtimeMinute {
-                return ReminderLine(kind: kind, time: Reminders.clock(at), detail: detail, order: at < 4 * 60 ? at + 1440 : at)
+                return ReminderLine(kind: kind, time: Reminders.clock(at), detail: detail)
             }
-            return ReminderLine(kind: kind, time: Fmt.duration(bedtimeOffset), detail: detail, order: 1440)
+            return ReminderLine(kind: kind, time: "–", detail: detail)
         case .water:
             let detail = limited ? summary : L10n.f("%@× denně", String(waterTimes.count))
-            return ReminderLine(kind: kind, time: hourText(waterFrom) + "–" + hourText(max(waterFrom, waterTo)), detail: detail, order: waterFrom)
+            return ReminderLine(kind: kind, time: hourText(waterFrom) + "–" + hourText(max(waterFrom, waterTo)), detail: detail)
         case .meals:
             let on = mealStates.filter { $0.on }.sorted { $0.time < $1.time }
             guard let first = on.first else {
-                return ReminderLine(kind: kind, time: "–", detail: limited ? summary : "", order: 1441)
+                return ReminderLine(kind: kind, time: "–", detail: limited ? summary : "")
             }
             var parts: [String] = []
             if on.count > 1 {
                 parts.append(L10n.f("a %@", on.dropFirst().map { Reminders.clock($0.time) }.joined(separator: ", ")))
             }
             if limited || on.count == 1 { parts.append(summary) }
-            return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: ", "), order: first.time)
+            return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: ", "))
         case .workout:
             // An hour before a session with a time of its own, the others at the chosen time.
-            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: limited ? summary : L10n.f("nebo v %@", Reminders.clock(workoutTime)), order: workoutTime)
+            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: (limited ? summary + ", " : "") + L10n.f("nebo v %@", Reminders.clock(workoutTime)))
         case .food:
-            return ReminderLine(kind: kind, time: Reminders.clock(foodTime), detail: limited ? summary : L10n.tr("jen když chybí"), order: foodTime)
+            return ReminderLine(kind: kind, time: Reminders.clock(foodTime), detail: limited ? summary : L10n.tr("jen když chybí"))
         case .weight:
-            return ReminderLine(kind: kind, time: Reminders.clock(weightTime), detail: summary, order: weightTime)
+            return ReminderLine(kind: kind, time: Reminders.clock(weightTime), detail: summary)
         case .week:
-            return ReminderLine(kind: kind, time: Reminders.clock(weekTime), detail: summary, order: weekTime)
+            return ReminderLine(kind: kind, time: Reminders.clock(weekTime), detail: summary)
         }
     }
 
-    /// 600 → "10", 630 → "10:30".
+    /// 600 → "10" (or "10 AM"), 630 → "10:30".
     private func hourText(_ minute: Int) -> String {
-        minute % 60 == 0 && !ClockText.isTwelveHour ? String(minute / 60) : Reminders.clock(minute)
+        minute % 60 == 0 ? ClockText.hour(minute / 60) : Reminders.clock(minute)
     }
 
     /// Drinking on the upper lane, the rest below; the ones off first, so the
@@ -329,8 +328,8 @@ struct NotificationsSettingsView: View {
 }
 
 /// The 6:00–23:00 line with the day's reminders, the page's picture (the
-/// concept's day line): small coloured dots, drinking above the line, the
-/// rest below, the hours under it.
+/// concept's day line): small coloured dots on the line, drinking under it,
+/// the hours below.
 private struct ReminderDayOverview: View {
     let marks: [ReminderMark]
     let start = 6 * 60
@@ -346,12 +345,12 @@ private struct ReminderDayOverview: View {
                     .frame(width: width, height: 1)
                     .position(x: width / 2, y: 18)
                 ForEach(marks) { mark in
-                    dot(mark).position(x: xPosition(mark.minute, width), y: mark.kind == .water ? 8 : 28)
+                    dot(mark).position(x: xPosition(mark.minute, width), y: mark.kind == .water ? 30 : 18)
                 }
-                label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 50)
-                label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 50)
-                label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 50)
-                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 50)
+                label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 52)
+                label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 52)
+                label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 52)
+                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 52)
             }
         }
         .frame(height: 60)
@@ -363,6 +362,8 @@ private struct ReminderDayOverview: View {
         Text(verbatim: text)
             .font(Typo.caption)
             .foregroundStyle(Palette.muted)
+            .lineLimit(1)
+            .fixedSize()
             .frame(width: 60, alignment: alignment)
     }
 
@@ -402,7 +403,7 @@ private struct ReminderListRow: View {
                             Text(verbatim: L10n.tr(line.kind.name))
                                 .font(.body)
                                 .foregroundStyle(Palette.ink)
-                                .lineLimit(1)
+                                .lineLimit(2)
                         }
                         if !line.detail.isEmpty {
                             Text(verbatim: line.detail)
@@ -421,6 +422,8 @@ private struct ReminderListRow: View {
             Toggle(isOn: $isOn) { EmptyView() }
                 .toggleStyle(AurinToggleStyle())
                 .fixedSize()
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityLabel(Text(line.kind.name))
         }
         .padding(.horizontal, 16)
