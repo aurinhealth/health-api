@@ -35,7 +35,7 @@ const count = (db, table, id = 3) => db.sqlite.prepare(`SELECT COUNT(*) AS n FRO
 test("every personal table is either kept or deleted on a pause, and health data is deleted", () => {
   for (const table of KEPT_TABLES) assert.ok(PERSONAL_TABLES[table], `${table} is a personal table`);
   for (const table of ["health_datapoints", "health_hour_summary", "food_logs", "strength_sets", "cycle_days", "journal_entries", "morning_checkins", "local_workouts", "assistant_messages", "coach_inbox", "client_requests"]) assert.ok(PAUSE_DELETE_ORDER.includes(table), table);
-  for (const table of ["user_consents", "subscriptions", "connection_credentials", "user_passkeys", "ai_usage", "coach_messages"]) assert.ok(!PAUSE_DELETE_ORDER.includes(table), table);
+  for (const table of ["user_consents", "subscriptions", "connection_credentials", "user_passkeys", "ai_usage", "coach_pack_purchases", "coach_pack_balance", "coach_messages"]) assert.ok(!PAUSE_DELETE_ORDER.includes(table), table);
 });
 
 test("pausing withdraws both consents, deletes this user's health data and keeps the account", async () => {
