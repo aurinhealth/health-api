@@ -4519,6 +4519,8 @@
 "Volno od zítřka do neděle." = "Rest from tomorrow to Sunday.";
 "Vyber den. Kouč přidá jeden trénink (%@), který se k němu hodí." = "Pick the day. The coach adds one %@ workout that suits it.";
 "Vygenerovat tréninky" = "Generate workouts";
+"Nahradit naplánované tréninky?" = "Replace the planned workouts?";
+"Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou." = "Workouts from today to next Sunday are replaced with new ones, your own changes too. Finished ones stay.";
 "Zatím bez plánu" = "No plan yet";
 "Zatím žádné naplánované tréninky" = "No workouts planned yet";
 "Zrušit volné dny" = "Clear rest days";
