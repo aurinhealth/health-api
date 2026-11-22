@@ -119,8 +119,9 @@ struct TodayStepsCard: View {
     }
 }
 
-/// The day's steps adding up from midnight to now, the goal as a dashed line
-/// and the hours 0, 6, 12 and 18 under it.
+/// The day's steps adding up from midnight to now in green, as the steps
+/// page, the goal as a dashed line with its number, half of it as a faint
+/// line, and the hours 0, 6, 12 and 18 under it.
 struct StepsDayLine: View {
     let hourly: [Double]
     let goal: Double
@@ -143,27 +144,40 @@ struct StepsDayLine: View {
                 let x = { (i: Int) in w * CGFloat(i + 1) / 24 }
                 let y = { (v: Double) in h * (1 - CGFloat(v / top)) }
                 ZStack(alignment: .topLeading) {
-                    Path { p in
-                        p.move(to: CGPoint(x: 0, y: y(goal)))
-                        p.addLine(to: CGPoint(x: w, y: y(goal)))
+                    // The goal with its number and one faint line at half of it,
+                    // so the curve can be read (Petr 2026-11-22, build 611).
+                    if goal > 0 {
+                        Path { p in
+                            p.move(to: CGPoint(x: 0, y: y(goal / 2)))
+                            p.addLine(to: CGPoint(x: w, y: y(goal / 2)))
+                        }
+                        .stroke(Palette.hairline, lineWidth: 1)
+                        Text(verbatim: Fmt.int(goal / 2)).font(Typo.tiny).foregroundStyle(Palette.faint)
+                            .fixedSize()
+                            .frame(width: w, alignment: .trailing)
+                            .position(x: w / 2, y: y(goal / 2) - 10)
+                        Path { p in
+                            p.move(to: CGPoint(x: 0, y: y(goal)))
+                            p.addLine(to: CGPoint(x: w, y: y(goal)))
+                        }
+                        .stroke(Palette.muted, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        Text(verbatim: L10n.f("cíl %@", Fmt.int(goal))).font(Typo.tiny).foregroundStyle(Palette.muted)
+                            .fixedSize()
+                            .frame(width: w, alignment: .trailing)
+                            .position(x: w / 2, y: max(8, y(goal) - 10))
                     }
-                    .stroke(Palette.muted, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    Text("cíl").font(Typo.tiny).foregroundStyle(Palette.muted)
-                        .fixedSize()
-                        .frame(width: w, alignment: .trailing)
-                        .position(x: w / 2, y: max(8, y(goal) - 10))
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         for (i, v) in totals.enumerated() { p.addLine(to: CGPoint(x: x(i), y: y(v))) }
                     }
-                    .stroke(Palette.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .stroke(Palette.green, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     Path { p in
                         p.move(to: CGPoint(x: 0, y: h))
                         p.addLine(to: CGPoint(x: w, y: h))
                     }
                     .stroke(Palette.hairline, lineWidth: 1)
                     if let end = totals.last, hour != nil {
-                        Circle().fill(Palette.card).overlay(Circle().strokeBorder(Palette.ink, lineWidth: 2))
+                        Circle().fill(Palette.card).overlay(Circle().strokeBorder(Palette.green, lineWidth: 2))
                             .frame(width: 9, height: 9)
                             .position(x: x(totals.count - 1), y: y(end))
                     }

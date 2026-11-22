@@ -59,7 +59,7 @@ struct DayTimeline: View {
         switch entry {
         case .sleep(let sleep):
             RouteLink(route: .sleep) {
-                DaySpanRow(color: Palette.ink, start: sleep.start.map { ClockText.format($0) }, end: sleep.end.map { ClockText.format($0) }, first: first, last: last) {
+                DaySpanRow(color: Palette.indigo, start: sleep.start.map { ClockText.format($0) }, end: sleep.end.map { ClockText.format($0) }, first: first, last: last) {
                     sleepContent(sleep)
                 }
             }
@@ -67,7 +67,7 @@ struct DayTimeline: View {
             // Not a link: the Sleep page is last night's and says nothing of
             // a nap (device comparison of build 602, point 50).
             Group {
-                DaySpanRow(color: Palette.ink, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
+                DaySpanRow(color: Palette.indigo, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(Fmt.hoursMinutesLong(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
@@ -90,7 +90,9 @@ struct DayTimeline: View {
             workoutRow(item, first: first, last: last).modifier(PlanRowMenu(item: item))
         case .strain(let time, let score, let added):
             RouteLink(route: .strain) {
-                DayPointRow(color: Palette.ink, time: time.map { ClockText.format(minutes: $0) }, first: first, last: last) {
+                // The dot in the strain bars' colour (Training); the number stays ink,
+                // so it never reads as a warning (Petr 2026-11-22, build 611).
+                DayPointRow(color: Palette.amberBar, time: time.map { ClockText.format(minutes: $0) }, first: first, last: last) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text("Námaha").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text(Fmt.decimal(score)).font(Typo.number(22)).foregroundStyle(Palette.ink)
@@ -234,6 +236,8 @@ struct DayTimeline: View {
     private func itemRow(_ item: TodaySnapshot.PlanItem, first: Bool, last: Bool) -> some View {
         let color: Color = switch item.kind {
         case "pill": Palette.pink
+        // The night ahead in sleep's colour, as the night above (Petr 2026-11-22).
+        case "bedtime": Palette.indigo
         default: Palette.ink
         }
         if item.kind == "bedtime" {
@@ -619,7 +623,7 @@ private struct DaySpanRow<Content: View>: View {
                     p.move(to: CGPoint(x: geo.size.width / 2, y: 0))
                     p.addLine(to: CGPoint(x: geo.size.width / 2, y: geo.size.height))
                 }
-                .stroke(Palette.muted, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [4, 4]))
+                .stroke(color == Palette.ink ? Palette.muted : color.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [4, 4]))
             }
         } else {
             Capsule().fill(color).frame(width: 2.5)
