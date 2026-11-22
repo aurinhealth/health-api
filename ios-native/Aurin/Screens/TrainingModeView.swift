@@ -2788,6 +2788,14 @@ struct TrainingModeView: View {
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
+        // The fields go on as typed only from a work set to the next work set
+        // of the same exercise. After a warm-up, before a warm-up or a drop
+        // set, or on another exercise the set at hand starts from its own plan
+        // (608: the first work set showed the last warm-up's 30 × 3).
+        if let exercise = next.exercises[safe: index], let upcoming = nextSet(exercise),
+           !(set.work && upcoming.work && exercise.sets.contains { $0.row == set.row }) {
+            prefill(upcoming, in: exercise)
+        }
         // Before the save: the lock screen may be all that's awake.
         syncActivity()
         guard !model.demo else { return }
