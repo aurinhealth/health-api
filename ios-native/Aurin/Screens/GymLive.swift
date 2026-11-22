@@ -91,9 +91,11 @@ struct LiveGymView: View {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in add(name) }
         }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), inWorkout: true)
+            TechniqueSheet(exercise: item.name, showHistory: true, history: history, inWorkout: true)
         }
-        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) {
+            TechniqueSheet(exercise: $0.name, history: history, inWorkout: true)
+        }
         // After Dokončit, as after a planned session: thumbs for each exercise.
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])

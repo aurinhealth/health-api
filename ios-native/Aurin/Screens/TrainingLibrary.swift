@@ -1691,7 +1691,10 @@ struct ExerciseCatalog: View {
             if model.musclesStale { await model.loadMuscles() }
             await load()
         }
-        .sheet(item: $open) { ex in ExerciseSheet(exercise: ex) }
+        .sheet(item: $open) { ex in
+            // The same exercise sheet as in a workout (concept a-knihovna 039).
+            TechniqueSheet(exercise: ex.name, plan: [ex.sets?.string, ex.reps?.string].compactMap { $0?.nilIfBlank }.joined(separator: " × "))
+        }
     }
 
     private var filtered: [GymCatalogExercise] {
@@ -1779,47 +1782,6 @@ struct ExerciseCatalog: View {
 
     /// A catalog name as a sentence (WatchShared/GymSheet.swift).
     static func shownName(_ name: String) -> String { ExerciseName.shown(name) }
-}
-
-/// One exercise: the muscles on the figure, then its technique.
-struct ExerciseSheet: View {
-    let exercise: GymCatalogExercise
-    @Environment(\.dismiss) private var dismiss
-    @State private var technique = false
-
-    var body: some View {
-        PageScroll {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(exercise.name).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-                }
-                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
-                    .font(Typo.small).foregroundStyle(Palette.muted)
-                BodyMap(load: exercise.muscles ?? [:], height: 280, legend: true)
-                if let note = exercise.note?.nilIfBlank {
-                    Text(note).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 18) {
-                    if let sets = exercise.sets?.string { meta("Série", sets) }
-                    if let reps = exercise.reps?.string { meta("Opakování", reps) }
-                }
-                SecondaryButton(title: "Jak na to", systemImage: "figure.strengthtraining.traditional") { technique = true }
-            }
-            .padding(24)
-        }
-        .presentationDetents([.medium, .large])
-        .glassSheetBackground()
-        .sheet(isPresented: $technique) { TechniqueSheet(exercise: exercise.name) }
-    }
-
-    private func meta(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
-        }
-    }
 }
 
 /// The one length control of the redesign (Petr decision 6, 2026-11-16) for
