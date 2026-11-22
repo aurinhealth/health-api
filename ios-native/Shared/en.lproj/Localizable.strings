@@ -4228,3 +4228,4 @@
 "Na testovacím serveru Aurin do Apple Health nezapisuje." = "On the test server Aurin doesn't write to Apple Health.";
 "Na testovacím serveru Aurin do Apple Health nezapisuje, aby nepřepsal hodnoty z ostrého serveru." = "On the test server Aurin doesn't write to Apple Health, so it can't replace the live server's values.";
 "Podmínky užití" = "Terms of Use";
+"Rozcvička šla jinak než plán. Další %@ %@." = "The warm-up went off the plan. Next %@ %@.";

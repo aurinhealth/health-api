@@ -163,6 +163,16 @@ struct PlanEditorSheet: View {
         }
     }
 
+    /// Odebrat cvik: one already begun keeps its done sets (removeExercise),
+    /// one not begun goes with its superset mark (deleteExercise).
+    private func remove(at offset: Int) {
+        if day.exercises[safe: offset]?.sets.contains(where: \.done) == true {
+            day.removeExercise(at: offset)
+        } else {
+            day.deleteExercise(at: offset)
+        }
+    }
+
     private func row(_ offset: Int, _ exercise: GymExercise) -> some View {
         let work = exercise.sets.filter(\.work)
         let reps = work.first?.plannedReps?.nilIfBlank
@@ -191,7 +201,7 @@ struct PlanEditorSheet: View {
                 } else if left, SupersetPicker.offers(day, offset) {
                     Button { pairing = exercise.id } label: { Label("Supersérie s…", systemImage: "link") }
                 }
-                Button(role: .destructive) { day.deleteExercise(at: offset) } label: { Label("Odebrat cvik", systemImage: "trash") }
+                Button(role: .destructive) { remove(at: offset) } label: { Label("Odebrat cvik", systemImage: "trash") }
             } label: {
                 Image(systemName: "ellipsis").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
             }
@@ -218,7 +228,7 @@ struct PlanEditorSheet: View {
         }
         // A leading swipe action turns off onDelete's own: the delete is here.
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) { day.deleteExercise(at: offset) } label: { Label("Smazat", systemImage: "trash") }
+            Button(role: .destructive) { remove(at: offset) } label: { Label("Smazat", systemImage: "trash") }
         }
     }
 
