@@ -510,8 +510,10 @@ struct TrainingModeView: View {
     /// The exercise or part in serif, its own time under it.
     private func headTitleBlock(_ day: GymDay) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                .lineLimit(2).minimumScaleFactor(0.6)
+            // The whole name on up to two lines (Petr 2026-11-22: always see
+            // which exercise it is); only a name longer still shrinks a little.
+            Text(headTitle(day)).font(Typo.heading(27, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
             HStack(spacing: 8) {
                 if let part = activePart, headTitle(day) != L10n.tr(part.kind.title) {
                     Text(verbatim: L10n.tr(part.kind.title)).font(Typo.small).foregroundStyle(Palette.secondary)
@@ -527,8 +529,8 @@ struct TrainingModeView: View {
     /// Edit warm-up / cardio / stretching, for today only.
     private func editHead(_ draft: LivePartDraft) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: L10n.tr(Self.editTitle(draft.part))).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                .lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: L10n.tr(Self.editTitle(draft.part))).font(Typo.heading(27, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
             Text("Jen dnes").font(Typo.small).foregroundStyle(Palette.secondary)
         }
     }

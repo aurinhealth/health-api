@@ -245,14 +245,15 @@ struct GymSetTableHeader: View {
             unit.frame(width: kgWidth)
             Text("Opak.").lineLimit(1).fixedSize().frame(width: repsWidth)
             if effort {
-                Text("Úsilí").lineLimit(1).fixedSize().frame(width: 44)
+                Text("Úsilí").lineLimit(1).fixedSize().frame(width: 52)
                 Color.clear.frame(width: 44, height: 1)
             } else if !planOnly {
                 Color.clear.frame(width: 40, height: 1)
                 Color.clear.frame(width: 34, height: 1)
             }
         }
-        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+        // Live (effort): brighter, as the 608 test asked for more contrast.
+        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(effort ? Palette.muted : Palette.faint)
         .padding(.horizontal, effort ? 8 : 10).padding(.bottom, 4)
     }
 
@@ -346,9 +347,9 @@ struct GymSetRow: View {
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
             if let onIntensity {
                 Button(action: onIntensity) {
-                    IntensityPill(letter: intensity, planned: planned)
-                        .opacity(state == .next ? 0.6 : 1)
-                        .frame(width: large ? 44 : 40, height: large ? 44 : 40)
+                    IntensityPill(letter: intensity, planned: planned, large: large)
+                        .opacity(state == .next ? 0.75 : 1)
+                        .frame(width: large ? 52 : 40, height: large ? 44 : 40)
                         .tapTarget(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
@@ -360,11 +361,11 @@ struct GymSetRow: View {
                 Group {
                     if state == .done {
                         Image(systemName: "checkmark").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
-                            .frame(width: 30, height: 30).background(Palette.green, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .frame(width: large ? 38 : 30, height: large ? 38 : 30).background(Palette.green, in: RoundedRectangle(cornerRadius: large ? 10 : 8, style: .continuous))
                     } else {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(state == .current ? Palette.amber : Palette.hairline, lineWidth: 1.5)
-                            .frame(width: 30, height: 30)
+                        RoundedRectangle(cornerRadius: large ? 10 : 8, style: .continuous)
+                            .stroke(state == .current ? Palette.amber : large ? Palette.faint : Palette.hairline, lineWidth: large ? 2 : 1.5)
+                            .frame(width: large ? 38 : 30, height: large ? 38 : 30)
                     }
                 }
                 .frame(width: large ? 44 : 34, height: large ? 44 : 40)
@@ -376,7 +377,7 @@ struct GymSetRow: View {
         }
         .padding(.horizontal, large ? 8 : 10)
         .padding(.vertical, large ? 0 : 5)
-        .frame(minHeight: 44)
+        .frame(minHeight: large ? 46 : 44)
         .background(state == .current ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(state == .current ? Palette.amber.opacity(0.55) : .clear, lineWidth: 1.5) }
         .onAppear { editKg = kg; editReps = reps }

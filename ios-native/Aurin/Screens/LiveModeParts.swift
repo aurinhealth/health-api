@@ -142,19 +142,24 @@ struct LiveRestGap: View {
             line(TrainingModeView.clock(seconds), strong: taken, fill: nil)
                 .accessibilityLabel(L10n.f(taken ? "Pauza %@" : "Pauza podle plánu %@", TrainingModeView.clock(seconds)))
         } else {
-            Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6)
+            Rectangle().fill(Palette.cardEdge).frame(height: 1.5).padding(.horizontal, 6)
                 .accessibilityHidden(true)
         }
     }
 
+    /// The time in its own chip (608): the rest running now dark on green,
+    /// a rest taken in ink on grey, a planned one only in grey text.
     private func line(_ text: String, strong: Bool, fill: Double?) -> some View {
-        HStack(spacing: 10) {
+        let running = fill != nil
+        return HStack(spacing: 8) {
             hair(fill: fill.map { min(1, $0 * 2) })
-            Text(verbatim: text).font(Typo.caption.weight(strong ? .semibold : .regular)).monospacedDigit()
-                .foregroundStyle(strong ? Palette.ink : Palette.muted)
+            Text(verbatim: text).font(Typo.small.weight(strong ? .semibold : .medium)).monospacedDigit()
+                .foregroundStyle(running ? Palette.onAccent : strong ? Palette.ink : Palette.muted)
+                .padding(.horizontal, strong ? 10 : 0).padding(.vertical, running ? 3 : 1)
+                .background(running ? Palette.green : strong ? Palette.track : .clear, in: Capsule())
             hair(fill: fill.map { max(0, $0 * 2 - 1) })
         }
-        .frame(height: 18)
+        .frame(height: running ? 34 : 24)
         .padding(.horizontal, 6)
     }
 
@@ -162,12 +167,12 @@ struct LiveRestGap: View {
     private func hair(fill: Double?) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Rectangle().fill(Palette.hairline).frame(height: 1)
-                if let fill { Rectangle().fill(Palette.green).frame(width: geo.size.width * fill, height: 2) }
+                Rectangle().fill(Palette.cardEdge).frame(height: 1.5)
+                if let fill { Rectangle().fill(Palette.green).frame(width: geo.size.width * fill, height: 3) }
             }
             .frame(maxHeight: .infinity)
         }
-        .frame(height: 2)
+        .frame(height: 3)
     }
 }
 
@@ -199,11 +204,12 @@ struct LiveRestButton: View {
                     }
                     .foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 22)
-                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .frame(maxWidth: .infinity).frame(height: 56)
                     .background(alignment: .leading) {
                         GeometryReader { geo in
-                            // Only the fill glides over the second.
-                            Rectangle().fill(Palette.green.opacity(0.45)).frame(width: geo.size.width * share)
+                            // Only the fill glides over the second; the same green
+                            // as the rest's chip between the sets.
+                            Rectangle().fill(Palette.green).frame(width: geo.size.width * share)
                                 .animation(.linear(duration: 1), value: share)
                         }
                     }
@@ -221,8 +227,8 @@ struct LiveRestButton: View {
 
     private func side(_ text: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(verbatim: text).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                .frame(width: 50, height: 50)
+            Text(verbatim: text).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                .frame(width: 56, height: 56)
                 .chromeGlass(in: Circle())
         }
         .buttonStyle(.plain)
@@ -264,9 +270,12 @@ struct LiveSetCard<Table: View>: View {
                 .accessibilityHint(onFold == nil ? "" : L10n.tr("Sbalí cvik"))
             }
             pair(L10n.tr("Historie"), onHistory, L10n.tr("Technika"), onTechnique)
+            // A full line between the buttons and the sets (608: they blended in).
+            Rectangle().fill(Palette.cardEdge).frame(height: 1.5).padding(.bottom, 4)
             table
                 .padding(.vertical, 6).padding(.horizontal, 2)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            Rectangle().fill(Palette.cardEdge).frame(height: 1.5).padding(.top, 4)
             pair(sidesTitle, onSides, "+ " + L10n.tr("Přidat sérii"), onAddSet)
                 .disabled(disabled)
         }
@@ -291,7 +300,7 @@ struct LiveSetCard<Table: View>: View {
     }
 
     private func label(_ text: String) -> some View {
-        Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+        Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
             .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
     }
 }
