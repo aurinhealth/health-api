@@ -370,12 +370,6 @@ struct TrainingModeView: View {
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { techniqueSheet($0, history: true) }
         // Zavřít waits for the sending, at most closeWait.
         .task(id: sendStarted) { await freeCloseLater() }
-        .confirmationDialog(L10n.f("Odebrat %@ z tréninku?", confirmRemove ?? ""),
-                            isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }), titleVisibility: .visible) {
-            Button("Odebrat", role: .destructive) { if let name = confirmRemove { Task { await removeExercise(name) } } }
-        } message: {
-            Text("Hotové série zůstanou uložené.")
-        }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
             // Later: the clock and heart rate stop now and start again on return.
             Button("Pokračovat později") { live.reset(); dismiss() }
@@ -695,6 +689,12 @@ struct TrainingModeView: View {
         .padding(.top, 12)
         .onChange(of: day.exercises.count) { _, count in if let v = viewing, v >= count { viewing = nil } }
         .task(id: exercise.name) { await loadMuscles(day) }
+        .modifier(removeDialog)
+    }
+
+    /// "Odebrat tento cvik" from the menu: the yes, with the done sets kept.
+    private var removeDialog: RemoveExerciseDialog {
+        RemoveExerciseDialog(name: $confirmRemove) { name in Task { await removeExercise(name) } }
     }
 
     /// The exercise of a list row; nil for a warm-up, cardio or stretching.
@@ -3002,4 +3002,20 @@ struct SwapUndo: Equatable {
     let index: Int
     /// The old exercise left the day, so the watch's time went with it.
     let renamed: Bool
+}
+
+/// The yes for "Odebrat tento cvik", apart from the screen's long chain of modifiers.
+struct RemoveExerciseDialog: ViewModifier {
+    @Binding var name: String?
+    let remove: (String) -> Void
+
+    func body(content: Content) -> some View {
+        let title: String = L10n.f("Odebrat %@ z tréninku?", name ?? "")
+        let shown = Binding<Bool>(get: { name != nil }, set: { if !$0 { name = nil } })
+        return content.confirmationDialog(title, isPresented: shown, titleVisibility: .visible) {
+            Button("Odebrat", role: .destructive) { if let name { remove(name) } }
+        } message: {
+            Text("Hotové série zůstanou uložené.")
+        }
+    }
 }
