@@ -103,7 +103,7 @@ export async function pauseHealthData(env, user, { budgetMs = REQUEST_BUDGET_MS,
   await db.batch([
     withdraw('health'),
     withdraw('ai'),
-    db.prepare('INSERT INTO health_pauses (user_id, retry_after, busy_until) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET requested_at = CURRENT_TIMESTAMP, retry_after = excluded.retry_after, busy_until = excluded.busy_until, attempts = 0, last_error = NULL').bind(env.USER_ID, sqlTime(now), later(now, LEASE_SECONDS))
+    db.prepare('INSERT INTO health_pauses (user_id, requested_at, retry_after, busy_until) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET requested_at = excluded.requested_at, retry_after = excluded.retry_after, busy_until = excluded.busy_until, attempts = 0, last_error = NULL').bind(env.USER_ID, sqlTime(now), sqlTime(now), later(now, LEASE_SECONDS))
   ]);
   let purge = { done: false, deleted: {} };
   try {
@@ -146,7 +146,7 @@ const CRON_CHUNKS = 100;
 export async function finishHealthPauses(db, { databaseForUser = null, budgetMs = CRON_BUDGET_MS, chunkRows, maxChunks = CRON_CHUNKS, now = () => new Date() } = {}) {
   const at = now();
   let next;
-  try { next = await db.prepare('SELECT user_id, attempts FROM health_pauses WHERE retry_after <= ? AND (busy_until IS NULL OR busy_until <= ?) ORDER BY retry_after, user_id LIMIT 1').bind(sqlTime(at), sqlTime(at)).first(); }
+  try { next = await db.prepare('SELECT user_id, attempts, requested_at FROM health_pauses WHERE retry_after <= ? AND (busy_until IS NULL OR busy_until <= ?) ORDER BY retry_after, user_id LIMIT 1').bind(sqlTime(at), sqlTime(at)).first(); }
   catch (error) { if (missingTable(error)) return null; throw error; }
   if (!next) return null;
   const userId = Number(next.user_id);
@@ -158,8 +158,12 @@ export async function finishHealthPauses(db, { databaseForUser = null, budgetMs 
     }
     const data = databaseForUser ? await databaseForUser(userId) : db;
     const purge = await deleteHealthData(data, userId, { deadline: Date.now() + budgetMs, chunkRows, maxChunks });
-    if (purge.done) await dropEntry(db, userId);
-    else await release(db, userId, sqlTime(at));
+    // Done before LAST_PASS_MINUTES since the pause (the request had no time for all of it):
+    // the last pass still follows, for what a sync running at the pause writes later.
+    const lastPass = new Date(String(next.requested_at || '').replace(' ', 'T') + 'Z');
+    lastPass.setUTCMinutes(lastPass.getUTCMinutes() + LAST_PASS_MINUTES);
+    if (purge.done && !(lastPass > at)) await dropEntry(db, userId);
+    else await release(db, userId, purge.done ? sqlTime(lastPass) : sqlTime(at));
     return [{ userId, done: purge.done }];
   } catch (error) {
     const attempts = Number(next.attempts || 0) + 1;
