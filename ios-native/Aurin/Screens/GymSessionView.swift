@@ -560,7 +560,21 @@ struct GymSessionView: View {
     /// Start workout (today) or Resume workout (the live workout still running), pinned.
     @ViewBuilder
     private func startPill(_ day: GymDay) -> some View {
-        if date == AppModel.localDate(Date()) {
+        if date < AppModel.localDate(Date()) && day.cancelled != true {
+            // A plan of a past day nothing was done for (missed): its pill moves it (Petr 2026-11-22).
+            Button { changing = true } label: {
+                Text(verbatim: L10n.tr("Přesunout trénink")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Palette.button, in: Capsule())
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("gym.move-missed")
+            .padding(.horizontal, 16)
+            .padding(.top, 28)
+            .padding(.bottom, 12)
+            .background(LinearGradient(colors: [Palette.background.opacity(0), Palette.background], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)))
+        } else if date == AppModel.localDate(Date()) {
             // Resume only while the live workout runs (paused or not), never after it is finished.
             let resume = LiveWorkout.shared.running
             NavigationLink(value: AppRoute.trainingMode(date)) {

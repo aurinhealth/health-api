@@ -1248,7 +1248,8 @@ struct PlannedWorkoutView: View {
                 do {
                     // Back to the day and the time it had here (Čas may have changed it).
                     if let eventId = session.eventId {
-                        let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: time ?? "")
+                        let _: PlannedChange = try await model.api.reschedulePlanned(eventId: eventId, to: session.date, time: time ?? "",
+                                                                                      back: session.status == "missed")
                     } else {
                         try await PlanSessionActions.moveBack(model, session: session, from: date)
                     }
