@@ -217,6 +217,16 @@ export function gymPlanSummary(rows){
 // unpaired: the user unpaired it from that day's lifting session (manual-pairs.js).
 // summary: also each exercise's sets for the Training card (gymPlanSummary), only
 // where it is shown, not for the long reads (milestones) that only count days.
+// The stored day's length as the gym card shows it (GymSessionView): the time
+// chosen for the lifting (row 4) and the warm-up and stretching that are on
+// (row 5); the cardio, which can run without a limit, is not counted.
+export function gymPlanMinutes(values){
+  const limit=values?.[4]?.[0]==='Časový limit (min)'?Number(values[4][1])||0:0;
+  if(!(limit>0))return null;
+  let parts={};try{parts=values[5]?.[0]==='Rozcvička a protažení'?JSON.parse(values[5][1]):{};}catch{}
+  const off=new Set(Array.isArray(parts?.off)?parts.off:[]);
+  return Math.round(limit+['warmup','stretching'].reduce((s,k)=>s+(off.has(k)?0:Number(parts?.[k]?.minutes)||0),0));
+}
 export async function trainingGymPlans(env,from,to,{summary=false}={}){
   await ensureGymPlans(env.DB);
   const [plans,cancelled,unpaired,types]=await Promise.all([
@@ -231,7 +241,7 @@ export async function trainingGymPlans(env,from,to,{summary=false}={}){
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
     // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
     const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],...(summary?gymPlanSummary(rows):{}),sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{}),...(unpaired.has(r.workout_date)?{unpaired:true}:{})};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),minutes:gymPlanMinutes(v),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],...(summary?gymPlanSummary(rows):{}),sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{}),...(unpaired.has(r.workout_date)?{unpaired:true}:{})};
   }
   return out;
 }

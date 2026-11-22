@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { gymPlanSummary } from "../src/plan-context.js";
+import { gymPlanMinutes, gymPlanSummary } from "../src/plan-context.js";
 import { adherenceOf, buildTraining, daySessions, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
 
 const DATE = "2026-10-08"; // Thursday, week 41
@@ -108,6 +108,18 @@ test("A saved gym plan is a session with its exercises", () => {
   assert.equal(t.next.date, day(4));
   assert.equal(t.next.sport, "strength");
   assert.deepEqual(t.next.exercises, ["Dřep", "Tlak na lavici"]);
+});
+
+test("A gym plan alone has its length and a strain estimate (606: the card had neither)", () => {
+  const rideOnly = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [], completed: [], matched: [] } } } : d);
+  const s = buildTraining({ ...input, days: rideOnly, gym: { [DATE]: { name: "Legs", exercises: ["Dřep"], minutes: 66 } } }).todaySessions[0];
+  assert.equal(s.minutes, 66);
+  assert.equal(s.tss, 40);
+  assert.equal(s.strain, plannedStrain(40));
+  // Row 4 is the lifting's limit, row 5 the warm-up and stretching; one turned off is not counted.
+  const head = [[], [], [], [], ["Časový limit (min)", 60, "Odhad (min)", 55], ["Rozcvička a protažení", JSON.stringify({ warmup: { minutes: 6, items: ["a"] }, stretching: { minutes: 5, items: ["b"] }, off: ["stretching"] })]];
+  assert.equal(gymPlanMinutes(head), 66);
+  assert.equal(gymPlanMinutes([[], [], [], [], []]), null);
 });
 
 test("Every workout left today is listed: the gym plan and a ride, each with its own coach", () => {

@@ -90,3 +90,10 @@ test('a 90-minute walk loads the legs far less than a run (Revize 2026-10-16, n√
   const context=base();context.sports={recentActivities:[{id:'walk',date:'2026-10-03',type:'Walk',durationHours:1.5}]};
   assert.ok(!generateStrengthPlan(context,{maxExercises:8}).loadEstimates.some(x=>x.reducedDose||x.moderated));
 });
+test('a split day names the date its part was last trained, never "N days ago" (606)',()=>{
+  const at=(date,list)=>list.map(exercise=>({workout_date:date,exercise,actual_kg:40,actual_reps:10,set_type:'WORK'}));
+  const context=base();context.date='2026-11-21';
+  context.strength={recentCompletedSets:[...at('2026-11-15',['Pivot leg press','Leg extension Prime','Prone leg curl Prime']),...at('2026-11-19',['DB bench press','Lat pulldown','DB shoulder press'])]};
+  const plan=generateStrengthPlan(context,{durationMinutes:60,weeklyGymDays:4});
+  assert.match(plan.rationale,/naposledy ne 15\. 11\. Cviky/);assert.doesNotMatch(plan.rationale,/p≈ôed \d+ dny/);
+});

@@ -110,6 +110,10 @@ export function eventPlan(event, date) {
 // Nothing to compare (a stub without data) counts as good, without a percent.
 const PLAN_MARGIN = 0.15;
 const hm = minutes => minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + String(minutes % 60).padStart(2, "0") : "") : minutes + " min";
+// A gym plan's load before it is done: session RPE of its stored length
+// (strengthLoad), 45 without one as before.
+const gymTss = plan => strengthLoad({ minutes: plan?.minutes }) ?? 45;
+
 export function adherenceOf(done = {}, plan = {}, gym = null) {
   const sets = num(gym?.sets), logged = num(gym?.logged);
   if (sets > 0 && logged > 0) {
@@ -194,7 +198,7 @@ export function daySessions(d, date, training = {}, gymDay = null) {
   const unpaired = completed.filter(a => !pairedIds.has(String(a.id ?? "")));
   const doneLike = w => unpaired.some(a => sportOf(a) === sportOf(w) || sportOf(a) === "other");
   for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && doneLike(w))) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: gymPlan.type ? groupOfType(gymPlan.type) || "other" : "strength", ...(gymPlan.type ? { type: gymPlan.type } : {}), minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
+  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: gymPlan.type ? groupOfType(gymPlan.type) || "other" : "strength", ...(gymPlan.type ? { type: gymPlan.type } : {}), minutes: gymPlan.minutes || null, tss: gymTss(gymPlan), activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
 }
 
@@ -261,7 +265,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d), daySessionList.filter(s => s.status === "done")) : null,
-      planned: plannedStrain(Math.max(pTss, cTss)) ?? (gymOnly ? plannedStrain(45) : null),
+      planned: plannedStrain(Math.max(pTss, cTss)) ?? (gymOnly ? plannedStrain(gymTss(gymPlan)) : null),
       today: d === date
     };
   });
@@ -289,13 +293,14 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     return {
       date: d,
       time: w ? clockOf(w.start) : null,
-      minutes: w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
+      // A gym plan alone has its stored length and the sRPE estimate of it (606 test: the card had no time and no strain).
+      minutes: w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : !w && gymCard ? plan.minutes || null : null,
       // A gym card is named by its gym plan: the calendar event can keep an
       // older plan's name ("Strength — Push") after the plan changed (602 test).
       title: ((gymCard && plan.name) || w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
       sport,
-      tss: round(num(w?.tss)),
-      strain: plannedStrain(num(w?.tss)),
+      tss: round(num(w ? w.tss : gymCard ? gymTss(plan) : null)),
+      strain: plannedStrain(num(w ? w.tss : gymCard ? gymTss(plan) : null)),
       exercises: gymCard ? plan.exercises.slice(0, 12) : [],
       // Each exercise with its sets × reps, weight, and the muscles it works most (gymPlanSummary).
       lines: gymCard && Array.isArray(plan.lines) ? plan.lines.slice(0, 30) : [],
