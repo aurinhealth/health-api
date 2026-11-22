@@ -192,10 +192,10 @@ struct GoalsSettingsView: View {
         return L10n.f("%@ týdně", Fmt.duration(freeTime.reduce(0) { $0 + max(0, $1) }))
     }
 
-    /// "Auto, ≈ 4,5 h" from the last four weeks, or Vlastní.
+    /// "Auto, ≈ 4 h 30" from the last four weeks, or Vlastní.
     private var trainingNowOptions: [(String, String)] {
         let hours = history["weeklyHours"]?.number
-        let auto = L10n.tr("Auto") + (hours.map { ", ≈ " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " h" } ?? "")
+        let auto = L10n.tr("Auto") + (hours.map { ", ≈ " + Fmt.duration(Int(($0 * 60).rounded())) } ?? "")
         return [("auto", auto), ("own", L10n.tr("Vlastní"))]
     }
 
@@ -222,9 +222,9 @@ struct GoalsSettingsView: View {
         return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
-    /// "7:30 h", or "Auto" while the goal follows age and the day.
+    /// "7 h 30", or "Auto" while the goal follows age and the day.
     private var sleepValue: String {
-        store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" } ?? L10n.tr("Auto")
+        store.profile["sleepGoal"]?.number.map { Fmt.duration(Int($0.rounded())) } ?? L10n.tr("Auto")
     }
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]

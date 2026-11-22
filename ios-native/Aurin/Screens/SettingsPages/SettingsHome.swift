@@ -125,10 +125,10 @@ struct SettingsGoalsCard: View {
         let label: String
     }
 
-    /// "7" or "7:30" (hours).
+    /// "7" (with the unit "h" beside it) or "7 h 30", the one way a length is written (D-ZDRAVI-12).
     static func sleepText(_ minutes: Double) -> String {
         let m = Int(minutes.rounded())
-        return m % 60 == 0 ? String(m / 60) : Fmt.hoursMinutes(minutes)
+        return m % 60 == 0 ? String(m / 60) : Fmt.duration(m)
     }
 
     /// "3,2" litres or "108" fl oz.
@@ -155,7 +155,8 @@ struct SettingsGoalsCard: View {
         let water = Self.waterGoal(store, today?.nutrition.water)
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
         return [
-            Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText), unit: "h", label: "Spánek"),
+            Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText),
+                 unit: sleepGoal.map { Int($0.rounded()) % 60 == 0 } == false ? "" : "h", label: "Spánek"),
             Cell(symbol: "flame.fill", color: Palette.amber, number: kcal.map { Fmt.int($0) }, unit: "kcal", label: "Kalorie"),
             Cell(symbol: "drop.fill", color: Palette.blue, number: water.map(Self.drinkText), unit: Units.imperial ? Units.volumeUnit : "l", label: "Pití"),
             Cell(symbol: "scalemass.fill", color: Palette.green, number: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) }, unit: Units.weightUnit, label: "Cílová váha")

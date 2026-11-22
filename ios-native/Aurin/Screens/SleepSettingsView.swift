@@ -117,7 +117,7 @@ struct SleepSettingsForm: View {
                     Spacer(minLength: 8)
                     Picker("Chci spát", selection: $goal) {
                         Text("automaticky").tag(0)
-                        ForEach(Self.goals, id: \.self) { Text(Fmt.hoursMinutes(Double($0)) + " h").tag($0) }
+                        ForEach(Self.goals, id: \.self) { Text(verbatim: Fmt.duration($0)).tag($0) }
                     }
                     .pickerStyle(.menu)
                     .tint(Palette.muted)
