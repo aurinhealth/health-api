@@ -293,6 +293,10 @@ struct TrainingModeView: View {
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
+            // A part on or off, its move or its clock: the lock screen follows
+            // (here, not on the chain below: it is at the type checker's limit).
+            Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
+                .onChange(of: activityPart) { _, _ in syncActivity() }
             // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
             WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch,
                           back: { Task { await catchUpWithWatch() } })
@@ -354,8 +358,6 @@ struct TrainingModeView: View {
         // Each part's and exercise's own time (LiveWorkout.segments).
         // Keyed with the recording too: it starts a moment after Začít trénink.
         .onChange(of: "\(live.running)|\(focusKey ?? "")", initial: true) { _, _ in if let key = focusKey { live.focus(key) } }
-        // A part on or off, its move or its clock: the lock screen follows (after the focus above).
-        .onChange(of: activityPart) { _, _ in syncActivity() }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
