@@ -130,7 +130,9 @@ struct LiveRestGap: View {
 
     var body: some View {
         if let end {
-            TimelineView(.periodic(from: .now, by: 1)) { context in
+            // Ticks on the rest's own seconds, as the pinned button does, so
+            // the two clocks never show 0:55 and 0:56 at once (608).
+            TimelineView(.periodic(from: end.addingTimeInterval(-TimeInterval(total)), by: 1)) { context in
                 let left = max(0, Int(end.timeIntervalSince(context.date).rounded(.up)))
                 let share = total > 0 ? 1 - Double(left) / Double(total) : 1
                 line(TrainingModeView.clock(left), strong: true, fill: share)
@@ -183,7 +185,7 @@ struct LiveRestButton: View {
         HStack(spacing: 10) {
             side("−15 s", label: "Zkrátit pauzu o 15 sekund") { shift(-15) }
             Button(action: start) {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
+                TimelineView(.periodic(from: end.addingTimeInterval(-TimeInterval(total)), by: 1)) { context in
                     let left = max(0, Int(end.timeIntervalSince(context.date).rounded(.up)))
                     let share = total > 0 ? 1 - Double(left) / Double(total) : 1
                     HStack {
