@@ -381,8 +381,9 @@ enum DayTimelineRows {
     }
 
     /// The night and the readiness first, then what was done in the order of
-    /// the day, the strain after the last workout and the steps so far; "teď"
-    /// on today; then what is still planned, bedtime last (src/app-today.js
+    /// the day, the strain after the last workout and the steps so far; then
+    /// what is still planned, bedtime last, with "teď" on today in its place on
+    /// the clock (src/app-today.js
     /// orders the plan the same way).
     static func make(_ today: TodaySnapshot, now: Int?, stepsTime: String? = nil) -> [Entry] {
         var rows: [Entry] = []
@@ -419,8 +420,6 @@ enum DayTimelineRows {
         }
 
         if let steps = today.steps.today, steps > 0 { rows.append(.steps(steps, stepsTime)) }
-        if let now { rows.append(.now(now)) }
-
         // Planned with a time in the order of the clock; bedtime stays last.
         let timed = open.filter { $0.kind != "bedtime" }
         let ordered = timed.enumerated().sorted { a, b in
@@ -428,9 +427,17 @@ enum DayTimelineRows {
             if let ta, let tb, ta != tb { return ta < tb }
             return a.offset < b.offset
         }.map(\.element)
-        for item in ordered + open.filter({ $0.kind == "bedtime" }) {
+        let planned = ordered + open.filter { $0.kind == "bedtime" }
+        // "Teď" before the first planned item that starts later, so a bedtime
+        // already past (in bed by 20:45, now 23:36) stays above it.
+        let nowAt = now.map { now in
+            planned.firstIndex { (minutes($0.time ?? $0.session?.time) ?? Int.max) > now } ?? planned.count
+        }
+        for (index, item) in planned.enumerated() {
+            if let now, index == nowAt { rows.append(.now(now)) }
             rows.append(item.kind == "workout" ? .workout(item) : .item(item))
         }
+        if let now, nowAt == planned.count { rows.append(.now(now)) }
         return rows
     }
 

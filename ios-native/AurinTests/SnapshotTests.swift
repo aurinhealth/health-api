@@ -174,6 +174,8 @@ final class SnapshotTests: XCTestCase {
             XCTFail("the strain follows the workout")
         }
         XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
+        // Past bedtime (22:10) "teď" comes after it, not above it (build 611).
+        XCTAssertEqual(DayTimelineRows.make(today, now: 23 * 60 + 36).suffix(2).map(\.id), [today.plan[2].id, "now"])
         XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Čas", "Energie"])
     }
 
