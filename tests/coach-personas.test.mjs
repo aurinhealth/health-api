@@ -123,7 +123,7 @@ test('checker calibration: every answer builds its persona context, a flag count
     if (item.id === 'F01') assert.equal(r.correct, true);
     if (item.expect === 'ok') assert.equal(r.correct, true, item.id);
   }
-  assert.ok(seen.every(m => m === 'gpt-6-sol'));
+  assert.ok(seen.every(m => m === 'gpt-6.2-sol'));
   // A rest card plus a workout card on one day reach the checker as one replacing workout.
   const { checkerCards } = await import('../src/coach-checker.js');
   assert.deepEqual(checkerCards([{ type: 'rest', date: '2026-10-28', sport: 'run', eventId: 'planned:1' }, { type: 'workout', date: '2026-10-28', sport: 'run', kind: 'vo2max', minutes: 48 }]),
