@@ -23,6 +23,10 @@ struct DetailChart: View {
     var height: CGFloat = 196
     /// Periods offered; one period hides the control.
     var periods: [ChartPeriod] = ChartPeriod.allCases
+    /// The headline's day and value: by week, the bubble over the newest week
+    /// shows it until a finger picks a point, so it reads the same as the
+    /// number on top (Aurin age, 604.1 critic 6).
+    var latest: ChartPoint? = nil
 
     /// How many periods back the arrows went, 0 = the one ending today.
     @State private var page = 0
@@ -175,9 +179,11 @@ struct DetailChart: View {
                     }
                     if let shownPoint, let x = proxy.position(forX: shownPoint.date) {
                         let half = bubbleWidth / 2
-                        DayBubble(date: period.weekly ? L10n.f("%@, týdenní průměr", weekLabel(shownPoint.point.date)) : Fmt.weekdayShort(shownPoint.point.date) + " " + Fmt.dayMonthShort(shownPoint.point.date),
-                                  value: Fmt.decimal(shownPoint.point.value, digits: digits), unit: unit,
-                                  state: MetricState(state: shownPoint.point.state, side: shownPoint.point.side))
+                        let day = selected == nil && page == 0 && period.weekly ? latest.flatMap { ChartBuckets.monday($0.date) == shownPoint.point.date ? $0 : nil } : nil
+                        let bubble = day ?? shownPoint.point
+                        DayBubble(date: period.weekly && day == nil ? L10n.f("%@, týdenní průměr", weekLabel(bubble.date)) : Fmt.weekdayShort(bubble.date) + " " + Fmt.dayMonthShort(bubble.date),
+                                  value: Fmt.decimal(bubble.value, digits: digits), unit: unit,
+                                  state: MetricState(state: bubble.state, side: bubble.side))
                             .fixedSize()
                             .onGeometryChange(for: CGSize.self) { $0.size } action: { bubbleWidth = $0.width; bubbleHeight = $0.height }
                             .position(x: min(max(rect.minX + x, half), max(geo.size.width - half, half)), y: rect.minY - bubbleHeight / 2 - 8)
@@ -227,9 +233,9 @@ struct DetailChart: View {
         return L10n.f("%@ až %@", Fmt.dayMonthShort(start), Fmt.dayMonthShort(end))
     }
 
-    /// "Nov 9 to 15" for a week's point.
+    /// "Nov 9 to 15" for a week's point; the running week ends today, not on its Sunday.
     private func weekLabel(_ monday: String) -> String {
-        L10n.f("%@ až %@", Fmt.dayMonthShort(monday), Fmt.dayMonthShort(ISODay.shift(monday, 6)))
+        L10n.f("%@ až %@", Fmt.dayMonthShort(monday), Fmt.dayMonthShort(min(ISODay.shift(monday, 6), today)))
     }
 }
 
