@@ -252,6 +252,46 @@ struct AurinOrb: View {
     }
 }
 
+/// The orb with the estimate on it, the words against the real age and
+/// "Your age 38." under it: the top of Health and of the Aurin age page
+/// (concepts 1 and 2).
+struct AurinAgeOrbFace: View {
+    let age: HealthAurinAge
+
+    var body: some View {
+        let words = AurinAgeText.versusAge(age)
+        let older = (age.age.map { age.value - $0 } ?? 0) > 0.05
+        VStack(spacing: 8) {
+            ZStack {
+                AurinOrb(mood: older ? .older : .younger)
+                VStack(spacing: 4) {
+                    // Light on the orb's dark body in both modes (concept 1, light concept 1).
+                    Text(verbatim: Fmt.decimal(age.value, digits: 1)).font(Typo.number(76)).foregroundStyle(Color(white: 0.96))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text(verbatim: L10n.tr("Odhad Aurin age").uppercased(with: Fmt.locale))
+                        .font(.caption2.weight(.medium)).tracking(1.4).foregroundStyle(Color(white: 0.72))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    if let words {
+                        Text(verbatim: words).font(Typo.body).foregroundStyle(AurinOrb.wordsColor(older: older))
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                }
+                .padding(.horizontal, 74)
+                .offset(y: -12)
+            }
+            if let real = Self.realAge(age) { Text(verbatim: real).font(Typo.caption).foregroundStyle(Palette.muted) }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), Self.realAge(age)].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// "Your age 38." under the orb; no "Updated …" (design rule).
+    static func realAge(_ age: HealthAurinAge) -> String? {
+        age.age.map { L10n.f("Tvůj věk %@.", Fmt.int($0)) }
+    }
+}
+
 // MARK: - Hero
 
 /// Aurin age on top of Health: the orb with the estimate, the words against
@@ -280,35 +320,7 @@ struct AurinAgeHero: View {
     }
 
     private func estimate(_ age: HealthAurinAge) -> some View {
-        let words = AurinAgeText.versusAge(age)
-        let older = (age.age.map { age.value - $0 } ?? 0) > 0.05
-        return VStack(spacing: 8) {
-            ZStack {
-                AurinOrb(mood: older ? .older : .younger)
-                VStack(spacing: 4) {
-                    // Light on the orb's dark body in both modes (concept 1, light concept 1).
-                    Text(verbatim: Fmt.decimal(age.value, digits: 1)).font(Typo.number(76)).foregroundStyle(Color(white: 0.96))
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(verbatim: L10n.tr("Odhad Aurin age").uppercased(with: Fmt.locale))
-                        .font(.caption2.weight(.medium)).tracking(1.4).foregroundStyle(Color(white: 0.72))
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    if let words {
-                        Text(verbatim: words).font(Typo.body).foregroundStyle(AurinOrb.wordsColor(older: older))
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                    }
-                }
-                .padding(.horizontal, 74)
-                .offset(y: -12)
-            }
-            if let real = realAge(age) { Text(verbatim: real).font(Typo.caption).foregroundStyle(Palette.muted) }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), realAge(age)].compactMap { $0 }.joined(separator: ", "))
-    }
-
-    /// "Your age 38." under the orb; no "Updated …" (design rule).
-    private func realAge(_ age: HealthAurinAge) -> String? {
-        age.age.map { L10n.f("Tvůj věk %@.", Fmt.int($0)) }
+        AurinAgeOrbFace(age: age)
     }
 
     /// Pro concept state 5: the orb with loose dots and one next step.
@@ -1111,7 +1123,8 @@ struct AurinAgeDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let age = health.aurinAge {
-                DetailHeadline(value: Fmt.decimal(age.value, digits: 1), unit: L10n.tr("let"), usual: AurinAgeText.versusAge(age))
+                // The orb as on Health (concept 2), the number without a unit.
+                AurinAgeOrbFace(age: age).padding(.top, 8)
                 // The estimate's day on the chart is the number on top (DES-4 rule).
                 let points = HealthValueContent.withCurrent(loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) },
                                                             today: age.date, current: age.value)

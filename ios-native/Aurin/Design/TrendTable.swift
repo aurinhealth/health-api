@@ -32,6 +32,8 @@ struct TrendRow: Identifiable, Equatable {
 enum TrendLags {
     static let month = [7, 14, 30, 91]
     static let year = [30, 91, 182, 365]
+    /// Weight, body fat and muscle: single measurements (concepts 39 to 41).
+    static let measurements = [14, 30, 91]
 }
 
 enum TrendMath {
@@ -76,6 +78,24 @@ enum TrendMath {
             let count = min(lag, 8)
             let spark = (0...count).compactMap { byDay[ISODay.shift(thenDay, Int((Double(lag) * Double($0) / Double(count)).rounded()))] }
             return TrendRow(lag: lag, then: then, now: last.value, spark: spark)
+        }
+    }
+
+    /// The rows of single measurements (weight, body fat, muscle): now is the
+    /// latest measurement, then the last one taken by the day `lag` days
+    /// back, at most a third of the lag (and a week) before it, so "3 months
+    /// ago" never reads a measurement from half a year back.
+    static func measurementRows(_ points: [ChartPoint], lags: [Int] = TrendLags.measurements) -> [TrendRow] {
+        guard let last = points.last else { return [] }
+        return lags.compactMap { lag in
+            let thenDay = ISODay.shift(last.date, -lag)
+            let oldest = ISODay.shift(thenDay, -max(7, lag / 3))
+            guard let then = points.last(where: { $0.date <= thenDay && $0.date >= oldest }) else { return nil }
+            let between = points.filter { $0.date >= then.date }
+            let count = min(between.count - 1, 8)
+            let spark = count < 1 ? between.map(\.value)
+                : (0...count).map { between[Int((Double(between.count - 1) * Double($0) / Double(count)).rounded())].value }
+            return TrendRow(lag: lag, then: then.value, now: last.value, spark: spark)
         }
     }
 

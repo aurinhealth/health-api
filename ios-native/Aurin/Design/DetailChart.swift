@@ -27,6 +27,10 @@ struct DetailChart: View {
     /// shows it until a finger picks a point, so it reads the same as the
     /// number on top (Aurin age, 604.1 critic 6).
     var latest: ChartPoint? = nil
+    /// Single measurements (weight, body fat, muscle): one line through all
+    /// of them however far apart, and no average line, as they have no usual
+    /// range (concepts 39 to 41).
+    var measurements = false
 
     /// How many periods back the arrows went, 0 = the one ending today.
     @State private var page = 0
@@ -100,9 +104,9 @@ struct DetailChart: View {
     }
 
     private func plot(_ list: [ChartPoint]) -> some View {
-        let segments = ChartBuckets.segments(list, weekly: period.weekly)
+        let segments = measurements ? list.map { _ in 0 } : ChartBuckets.segments(list, weekly: period.weekly)
         let dated = list.enumerated().compactMap { i, p in ISODay.date(p.date).map { Dated(point: p, date: $0, segment: segments[i]) } }
-        let average = ChartBuckets.mean(list.map(\.value))
+        let average = measurements ? nil : ChartBuckets.mean(list.map(\.value))
         let values = list.map(\.value) + list.compactMap(\.low) + list.compactMap(\.high)
         let lo = values.min() ?? 0, hi = values.max() ?? 1
         let pad = max((hi - lo) * 0.18, hi == lo ? max(abs(hi) * 0.1, 1) : 0)
