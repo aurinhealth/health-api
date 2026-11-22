@@ -300,15 +300,15 @@ struct AurinAgeHero: View {
                 .padding(.horizontal, 74)
                 .offset(y: -12)
             }
-            Text(verbatim: updated(age)).font(Typo.caption).foregroundStyle(Palette.muted)
+            if let real = realAge(age) { Text(verbatim: real).font(Typo.caption).foregroundStyle(Palette.muted) }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), updated(age)].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), realAge(age)].compactMap { $0 }.joined(separator: ", "))
     }
 
-    private func updated(_ age: HealthAurinAge) -> String {
-        let real = age.age.map { L10n.f("Tvůj věk %@.", Fmt.int($0)) + " " } ?? ""
-        return real + L10n.f("Aktualizováno %@.", Fmt.dayMonth(age.date))
+    /// "Your age 38." under the orb; no "Updated …" (design rule).
+    private func realAge(_ age: HealthAurinAge) -> String? {
+        age.age.map { L10n.f("Tvůj věk %@.", Fmt.int($0)) }
     }
 
     /// Pro concept state 5: the orb with loose dots and one next step.
@@ -1112,17 +1112,19 @@ struct AurinAgeDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if let age = health.aurinAge {
                 DetailHeadline(value: Fmt.decimal(age.value, digits: 1), unit: L10n.tr("let"), usual: AurinAgeText.versusAge(age))
-                let points = loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) }
+                // The estimate's day on the chart is the number on top (DES-4 rule).
+                let points = HealthValueContent.withCurrent(loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) },
+                                                            today: age.date, current: age.value)
                 Card {
                     if AurinAgeText.isShort(age) {
                         // A few days of estimates: each day as a point over 30 days and
                         // the sentence, not a weekly average with no line (device test
                         // of build 604, DES-2).
-                        DetailChart(points: age.series.map { ChartPoint(date: $0.date, value: $0.value) }, today: health.date,
+                        DetailChart(points: points, today: health.date,
                                     period: .constant(.days30), digits: 1, note: AurinAgeText.shortText(age), periods: [.days30])
                     } else {
                         DetailChart(points: points, today: health.date, period: $period, digits: 1,
-                                    note: "Každý bod je odhad Aurinu z toho dne.")
+                                    note: "Každý bod je odhad Aurinu z toho dne.", latest: ChartPoint(date: age.date, value: age.value))
                     }
                 }
                 .padding(.top, 12)
