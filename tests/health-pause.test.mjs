@@ -217,3 +217,19 @@ test("the server wires the pause: the gate before every route, the route, resumi
   // The same imports as connecting a service (first-imports.js).
   for (const provider of ["ultrahuman", "whoop", "wahoo"]) assert.match(source, new RegExp(`firstImport\\(env,ctx,"${provider}"\\)`));
 });
+
+test("a deletion the cron finishes early still gets its last pass", async () => {
+  const db = database();
+  const now = new Date("2026-10-30T20:00:00Z");
+  const result = await pauseHealthData(envOf(db), user, { budgetMs: -1, now });
+  assert.equal(result.pending, true);
+  const minute = () => new Date(now.getTime() + 60000);
+  assert.deepEqual(await finishHealthPauses(db, { now: minute }), [{ userId: 3, done: true }]);
+  assert.equal(entries(db), 1, "the entry waits for the last pass");
+  late(db);
+  assert.equal(await finishHealthPauses(db, { now: minute }), null, "not before it is due");
+  const due = () => new Date(now.getTime() + (LAST_PASS_MINUTES + 1) * 60000);
+  assert.deepEqual(await finishHealthPauses(db, { now: due }), [{ userId: 3, done: true }]);
+  assert.equal(count(db, "health_datapoints"), 0, "what the sync wrote later is gone");
+  assert.equal(entries(db), 0);
+});
