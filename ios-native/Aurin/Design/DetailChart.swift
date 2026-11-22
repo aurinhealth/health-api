@@ -118,7 +118,7 @@ struct DetailChart: View {
         let pad = max((hi - lo) * 0.18, hi == lo ? max(abs(hi) * 0.1, 1) : 0)
         let domainStart = ISODay.date(weekly ? ChartBuckets.monday(start) : start) ?? Date()
         // A little room after the last day for the Avg pill, so it never covers today's dot.
-        let domainEnd = (ISODay.date(end) ?? Date()).addingTimeInterval(Double(period.days) * 86400 * (measurements ? 0.03 : 0.12))
+        let domainEnd = (ISODay.date(end) ?? Date()).addingTimeInterval(Double(period.days) * 86400 * 0.12)
         let selected = picked.flatMap { date in dated.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
         let shownPoint = selected ?? dated.last
         // Every point gets its dot while they stay apart; a long period dots
