@@ -61,6 +61,32 @@ final class GymLiveActivityTests: XCTestCase {
         XCTAssertNil(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil))
     }
 
+    /// A part of the day on screen: no set to tick and no rest, the set after it on the side.
+    func testAPartTakesTheSetsPlace() throws {
+        let sheet = day()
+        let now = Date()
+        let part = GymLiveActivity.Part(title: "Kardio, Rotoped", detail: "Zóna 2", start: now, end: now.addingTimeInterval(600), done: "Hotovo")
+        let state = try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: now, restEnd: now.addingTimeInterval(60), part: part, title: "Upper body", now: now))
+        XCTAssertEqual(state.part, "Kardio, Rotoped")
+        XCTAssertEqual(state.partDetail, "Zóna 2")
+        XCTAssertEqual(state.partEnd, part.end)
+        XCTAssertEqual(state.title, "Upper body")
+        XCTAssertNil(state.row)
+        XCTAssertNil(state.restEnd)
+        XCTAssertEqual(state.exercise, "Barbell bench press")
+    }
+
+    /// Every set done, the stretching still on: the activity stays with the part alone.
+    func testAPartAfterTheLastSet() throws {
+        var sheet = day()
+        for set in sheet.exercises.flatMap(\.sets) { sheet.complete(row: set.row, kg: "1", reps: "1", rpe: "") }
+        let part = GymLiveActivity.Part(title: "Protažení", detail: nil, start: Date(), end: nil, done: "Hotovo")
+        let state = try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil, part: part))
+        XCTAssertEqual(state.part, "Protažení")
+        XCTAssertEqual(state.exercise, "")
+        XCTAssertNil(state.row)
+    }
+
     func testCzechPreposition() {
         XCTAssertEqual(GymLiveActivity.preposition(4), "ze")
         XCTAssertEqual(GymLiveActivity.preposition(5), "z")

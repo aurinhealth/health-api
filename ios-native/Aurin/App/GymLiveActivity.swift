@@ -17,8 +17,18 @@ enum GymLiveActivity {
     /// The day as it is now. `focus` is the exercise on screen (Režim
     /// tréninku), else the first one with a set left. `quiet` (a new heart
     /// rate) updates at most every 15 s, to stay within iOS's budget.
-    static func sync(day: GymDay?, focus: Int? = nil, restStart: Date?, restEnd: Date?, quiet: Bool = false) {
-        guard let day, let state = state(day, focus: focus, restStart: restStart, restEnd: restEnd) else { end(); return }
+    /// A part of the day on screen (Režim tréninku): its name, what it holds,
+    /// its clock and the button that ends it.
+    struct Part: Equatable {
+        var title: String
+        var detail: String?
+        var start: Date?
+        var end: Date?
+        var done: String
+    }
+
+    static func sync(day: GymDay?, focus: Int? = nil, restStart: Date?, restEnd: Date?, part: Part? = nil, title: String? = nil, quiet: Bool = false) {
+        guard let day, let state = state(day, focus: focus, restStart: restStart, restEnd: restEnd, part: part, title: title) else { end(); return }
         guard state != last else { return }
         // Swiped away on the lock screen: it stays away for this workout.
         if activity?.activityState == .dismissed { dismissed = true; activity = nil }
@@ -27,7 +37,8 @@ enum GymLiveActivity {
         last = state
         lastUpdate = Date()
         GymRestShared.set(state.restEnd)
-        let content = ActivityContent(state: state, staleDate: state.restEnd)
+        // A part counting down turns stale at its end, as a rest does.
+        let content = ActivityContent(state: state, staleDate: state.restEnd ?? state.partEnd)
         // Stale (the rest ran out on the lock screen) is still the same
         // activity: updated, never a second one under it.
         if let activity, activity.activityState == .active || activity.activityState == .stale {
@@ -58,17 +69,29 @@ enum GymLiveActivity {
         }
     }
 
-    static func state(_ day: GymDay, focus: Int?, restStart: Date?, restEnd: Date?, now: Date = Date()) -> GymActivityAttributes.ContentState? {
+    static func state(_ day: GymDay, focus: Int?, restStart: Date?, restEnd: Date?, part: Part? = nil, title: String? = nil,
+                      now: Date = Date()) -> GymActivityAttributes.ContentState? {
         let list = day.exercises
         let open = list.indices.filter { list[$0].sets.contains { !$0.done } }
-        guard let first = open.first else { return nil }
+        let live = LiveWorkout.shared
+        let segments = list.map { e in e.sets.isEmpty ? 0 : Double(e.sets.filter(\.done).count) / Double(e.sets.count) }
+        let heartRate = live.running ? live.heartRate.map { Int($0.rounded()) } : nil
+        let kcal = live.running ? live.kcal.map { Int($0.rounded()) } : nil
+        // Every set done, a part still on (the stretching at the end): the part alone.
+        guard let first = open.first else {
+            guard let part else { return nil }
+            return .init(header: L10n.tr("Posilovna"), exercise: "", setLabel: "", load: "", weight: nil, reps: nil, setShort: nil,
+                         then: nil, row: nil, segments: segments, heartRate: heartRate, kcal: kcal, restStart: nil, restEnd: nil,
+                         part: part.title, partDetail: part.detail, partStart: part.start, partEnd: part.end, partDone: part.done, title: title)
+        }
         let index = focus.flatMap { open.contains($0) ? $0 : nil } ?? first
         let exercise = list[index]
         guard let set = exercise.sets.first(where: { !$0.done }) else { return nil }
-        let following = open.first { $0 > index } ?? open.first { $0 != index }
+        // In a superset its partner comes next, as on the screen (TrainingModeView.supersetTurn).
+        let turn = TrainingModeView.supersetTurn(list, from: index).map(\.index).flatMap { $0 != index && open.contains($0) ? $0 : nil }
+        let following = turn ?? open.first { $0 > index } ?? open.first { $0 != index }
         let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + ", " + load($0, in: list[i]) } }
-        let resting = restEnd.map { $0 > now } ?? false
-        let live = LiveWorkout.shared
+        let resting = part == nil && (restEnd.map { $0 > now } ?? false)
         return .init(
             header: L10n.tr("Posilovna") + ", " + exercisesLine(index + 1, of: list.count),
             exercise: exercise.name,
@@ -78,13 +101,15 @@ enum GymLiveActivity {
             reps: loadParts(set, in: exercise).reps,
             setShort: set.warmup || set.drop ? nil : "\(set.number)/\(exercise.workCount)",
             then: then,
-            row: set.row,
-            segments: list.map { e in e.sets.isEmpty ? 0 : Double(e.sets.filter(\.done).count) / Double(e.sets.count) },
-            heartRate: live.running ? live.heartRate.map { Int($0.rounded()) } : nil,
-            kcal: live.running ? live.kcal.map { Int($0.rounded()) } : nil,
+            row: part == nil ? set.row : nil,
+            segments: segments,
+            heartRate: heartRate,
+            kcal: kcal,
             // The same rest keeps its start, so an unchanged state isn't sent again.
             restStart: resting ? (restStart ?? (last?.restEnd == restEnd ? last?.restStart : nil) ?? now) : nil,
-            restEnd: resting ? restEnd : nil)
+            restEnd: resting ? restEnd : nil,
+            part: part?.title, partDetail: part?.detail, partStart: part?.start, partEnd: part?.end, partDone: part?.done,
+            title: title)
     }
 
     /// "80 kg × 8": what the set before was done with, else the plan.
@@ -109,7 +134,8 @@ enum GymLiveActivity {
 
     /// "série 3 ze 4" (by sides "série 2 ze 4, L"), "set 3 of 4".
     static func setLine(_ set: GymSet, of total: Int) -> String {
-        let side = set.side.map { ", " + $0 } ?? ""
+        // "P" (pravá) reads "R" in English (GymSides.letter).
+        let side = set.side.map { ", " + GymSides.letter($0) } ?? ""
         if L10n.isEnglish { return "set \(set.number) of \(total)" + side }
         return "série \(set.number) \(preposition(total)) \(total)" + side
     }
@@ -128,6 +154,7 @@ enum GymLiveActivity {
               plus: "+30 s",
               skipRest: L10n.tr("Přeskočit pauzu"),
               skip: L10n.tr("Přeskočit"),
-              setDone: L10n.tr("Série hotová"))
+              setDone: L10n.tr("Série hotová"),
+              total: L10n.isEnglish ? "total" : "celkem")
     }
 }
