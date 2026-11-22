@@ -22,6 +22,14 @@ final class GymAdjustmentTests: XCTestCase {
         XCTAssertNil(carry?.reps)
     }
 
+    /// To failure within the reps on a light weight: the estimate rounds back
+    /// to the same 12.5, still one step lighter (608, strength coach).
+    func testFailureWithinTheRepsOnALightWeightTakesOneStep() {
+        let done = set(2, "2", kg: "12.5", reps: "12", done: true, letter: "F")
+        let next = set(3, "3", kg: nil, reps: nil, done: false, letter: "M", planned: "10–12")
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done), GymSessionMath.Adjustment(kg: "10", lighter: true))
+    }
+
     func testKeptWeightIsCopied() {
         let done = set(2, "2", kg: "12.5", reps: "7", done: true, letter: "F")
         let next = set(3, "3", kg: nil, reps: nil, done: false, letter: "M")

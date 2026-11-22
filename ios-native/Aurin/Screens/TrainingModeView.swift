@@ -857,6 +857,9 @@ struct TrainingModeView: View {
                 if s.row == set?.row, let change = adjusted(s, in: exercise) {
                     AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }
                         .padding(.horizontal, 8).padding(.vertical, 2)
+                } else if s.row == set?.row, let change = warmupMoved(s, in: exercise) {
+                    AdjustmentNote(text: change.text, keep: change.keep) { keepPlan(in: exercise) }
+                        .padding(.horizontal, 8).padding(.vertical, 2)
                 }
                 gap(after: s, in: exercise, offset: offset)
             }
@@ -2707,6 +2710,26 @@ struct TrainingModeView: View {
             : GymIntensity.letter(before.intensity) == "F" ? L10n.f("Série %@ do selhání na %@ z %@. Další lehčeji.", before.number, done, goal)
             : L10n.f("Série %@ jen na %@ z %@. Další lehčeji.", before.number, done, goal)
         return (text, L10n.f("Nechat %@", LiftWeight.shown(kg, machineLb: lb(exercise.name)) ?? kg), before.row)
+    }
+
+    /// A first try whose warm-up went well off its plan (GymSessionMath.fromWarmup):
+    /// the ✦ line says why the weight moved and "Nechat 35,5" keeps the plan,
+    /// so a typo or another bar never moves it silently (strength coach, 608).
+    private func warmupMoved(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String)? {
+        guard !set.done, !typed.kg.contains(set.row), history.last(exercise.name, before: date) == nil,
+              GymSessionMath.previous(set, in: exercise) == nil,
+              let kg = GymSessionMath.fromWarmup(set, in: exercise), let plan = set.plannedKg else { return nil }
+        let pounds = lb(exercise.name)
+        return (L10n.f("Rozcvička šla jinak než plán. Další %@ %@.", LiftWeight.shown(kg, machineLb: pounds) ?? kg, LiftWeight.unit(machineLb: pounds)),
+                L10n.f("Nechat %@", LiftWeight.shown(plan, machineLb: pounds) ?? plan))
+    }
+
+    /// "Nechat" under the warm-up's line: the warm-ups still to do and the
+    /// first work set go back to the plan's weight.
+    private func keepPlan(in exercise: GymExercise) {
+        let first = exercise.sets.first { $0.work && !$0.done }?.row
+        typed.kg.formUnion(exercise.sets.filter { !$0.done && ($0.warmup || $0.row == first) }.map(\.row))
+        prefill(exercise.sets.first { !$0.done }, in: exercise)
     }
 
     /// "Nechat": the sets to come go on with the weight of the set before,

@@ -110,7 +110,9 @@ enum GymSessionMath {
         let reserve = rpe.map { 10 - $0 } ?? planned
         if done < Double(range.lo) || reserve + 2 <= planned {
             let best = kg * (1 + (done + reserve) / 30)
-            let fits = GymCoach.roundLoad(best / (1 + (Double(range.lo) + planned) / 30))
+            // At least one step lighter: on a light weight the estimate rounds
+            // back to the same 2.5 kg and failure changed nothing (608, coach).
+            let fits = min(GymCoach.roundLoad(best / (1 + (Double(range.lo) + planned) / 30)), GymCoach.roundLoad(kg - GymCoach.step))
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
