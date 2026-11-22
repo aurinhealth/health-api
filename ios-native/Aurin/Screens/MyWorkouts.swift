@@ -9,7 +9,8 @@ struct MyWorkoutsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @Environment(\.scenePhase) private var phase
-    let friends: Bool
+    /// The tab: Mine or From friends (one page with tabs, 602 point 134).
+    @State private var friends: Bool
     @State private var workouts: [SavedWorkout] = []
     @State private var loaded = false
     @State private var error: String?
@@ -20,6 +21,8 @@ struct MyWorkoutsView: View {
     @State private var note: String?
     @State private var athlete = AthleteThresholds()
     @State private var planning: SavedWorkout?
+
+    init(friends: Bool) { _friends = State(initialValue: friends) }
 
     struct EditorTarget: Identifiable {
         let workout: SavedWorkout?
@@ -32,11 +35,10 @@ struct MyWorkoutsView: View {
     private var shown: [SavedWorkout] { mine.filter { sport == nil || $0.sport == sport } }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: friends ? "Od přátel" : "Moje tréninky") {
+        DetailScreen(glow: Palette.Glow.training, title: "Moje tréninky", pinTitle: true) {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(friends ? "Od přátel" : "Moje tréninky").font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    Spacer()
+                HStack(spacing: 10) {
+                    tabs
                     if !friends {
                         Menu {
                             ForEach(LibrarySport.single) { s in
@@ -44,18 +46,19 @@ struct MyWorkoutsView: View {
                             }
                         } label: {
                             Image(systemName: "plus").scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                                .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+                                .frame(width: 44, height: 44).background(Palette.card, in: Circle())
                         }
                         .disabled(model.demo)
                         .accessibilityLabel("Nový trénink")
                     }
                 }
-                .padding(.top, 24)
+                .padding(.top, 18)
 
+                // The sports as chips, none picked = all of them (no "All", concept a-knihovna/012).
                 if sports.count > 1 {
-                    ChipFlow(items: [""] + sports.map(\.id), label: { $0.isEmpty ? "Vše" : (LibrarySport.find($0)?.label ?? $0) },
-                             isOn: { ($0.isEmpty && sport == nil) || $0 == sport }, toggle: { sport = $0.isEmpty ? nil : $0 })
-                        .padding(.top, 16)
+                    ChipFlow(items: sports.map(\.id), label: { LibrarySport.find($0).map { L10n.tr($0.label) } ?? $0 },
+                             isOn: { $0 == sport }, toggle: { sport = sport == $0 ? nil : $0 })
+                        .padding(.top, 14)
                 }
 
                 if !loaded {
@@ -65,11 +68,8 @@ struct MyWorkoutsView: View {
                         .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
                 } else {
                     ForEach(LibrarySport.all.filter { s in shown.contains { $0.sport == s.id } }) { s in
-                        HStack(spacing: 7) {
-                            Circle().fill(s.color).frame(width: 7, height: 7)
-                            SectionLabel(text: s.label)
-                        }
-                        .padding(.top, 22)
+                        SectionLabel(text: s.label)
+                            .padding(.top, 22)
                         VStack(spacing: 0) {
                             let list = shown.filter { $0.sport == s.id }
                             ForEach(list) { w in
@@ -82,7 +82,7 @@ struct MyWorkoutsView: View {
                         .padding(.top, 10)
                     }
                     if friends {
-                        Text("Uložit k sobě, naplánovat nebo smazat přes ⋯").font(Typo.caption).foregroundStyle(Palette.faint)
+                        Text("Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš").font(Typo.caption).foregroundStyle(Palette.faint)
                             .frame(maxWidth: .infinity).padding(.top, 14)
                     }
                 }
@@ -109,12 +109,43 @@ struct MyWorkoutsView: View {
         }
     }
 
+    /// Mine / From friends, a dot while a friend's workout is new.
+    private var tabs: some View {
+        let unseen = workouts.contains { $0.fromFriend && !$0.seen }
+        return HStack(spacing: 4) {
+            ForEach([false, true], id: \.self) { tab in
+                Button {
+                    withAnimation(.snappy) { friends = tab; sport = nil }
+                    // The dots stay for this visit; the badge in Knihovna goes.
+                    if tab, unseen, !model.demo { Task { try? await model.api.markFriendWorkoutsSeen() } }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(verbatim: L10n.tr(tab ? "Od přátel" : "Moje"))
+                        if tab && unseen { Circle().fill(Palette.amberBar).frame(width: 7, height: 7) }
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(friends == tab ? Palette.card : Color.clear, in: Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(friends == tab ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Palette.ink.opacity(0.06), in: Capsule())
+    }
+
+    /// A tap plans it; slide left to edit or delete, hold for every action
+    /// (no three-dot menu, concept a-knihovna/012).
     private func row(_ w: SavedWorkout, sport: LibrarySport) -> some View {
-        HStack(spacing: 12) {
+        SwipeRow(edit: w.fromFriend || model.demo ? nil : { editing = EditorTarget(workout: w) }, delete: { if !model.demo { deleting = w } }) {
             Button { plan(w) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: sport.symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(sport.color)
                         .frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             if w.fromFriend && !w.seen { Circle().fill(Palette.amberBar).frame(width: 7, height: 7).accessibilityLabel("Nový") }
@@ -124,30 +155,26 @@ struct MyWorkoutsView: View {
                             .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
+                    if busy == w.id { ProgressView() } else {
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                    }
                 }
+                .padding(.vertical, 12)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Menu {
-                Button { plan(w) } label: {
-                    Label("Naplánovat", systemImage: "calendar.badge.plus")
-                }
-                if w.fromFriend {
-                    Button { Task { await copy(w) } } label: { Label("Uložit k sobě", systemImage: "bookmark") }
-                } else {
-                    Button { editing = EditorTarget(workout: w) } label: { Label("Upravit", systemImage: "pencil") }
-                }
-                Button { Task { await share(w) } } label: { Label("Sdílet", systemImage: "square.and.arrow.up") }
-                Button(role: .destructive) { deleting = w } label: { Label("Smazat", systemImage: "trash") }
-            } label: {
-                Group { if busy == w.id { ProgressView() } else { Image(systemName: "ellipsis") } }
-                    .scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                    .frame(width: 32, height: 32)
-            }
-            .disabled(model.demo || busy != nil)
-            .accessibilityLabel(L10n.f("Možnosti: %@", w.name))
         }
-        .padding(.vertical, 12)
+        .contextMenu {
+            Button { plan(w) } label: { Label("Naplánovat", systemImage: "calendar.badge.plus") }
+            if w.fromFriend {
+                Button { Task { await copy(w) } } label: { Label("Uložit k sobě", systemImage: "bookmark") }
+            } else {
+                Button { editing = EditorTarget(workout: w) } label: { Label("Upravit", systemImage: "pencil") }
+            }
+            Button { Task { await share(w) } } label: { Label("Sdílet", systemImage: "square.and.arrow.up") }
+            Button(role: .destructive) { deleting = w } label: { Label("Smazat", systemImage: "trash") }
+        }
+        .disabled(busy != nil)
     }
 
     /// A gym workout is planned in the gym builder, a ride or run in its sheet.

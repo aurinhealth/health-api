@@ -1333,8 +1333,58 @@ final class SnapshotTests: XCTestCase {
             }
             .padding(20)
         }
-        try render("library-choice", glow: Palette.Glow.training, height: 520) {
+        try render("library-choice", glow: Palette.Glow.training, height: 1100) {
             NavigationStack { TrainingLibraryView() }.environment(model)
+        }
+        try render("library-sport-discs", glow: Palette.Glow.training, height: 120) {
+            HStack(spacing: 12) { ForEach(LibrarySport.all) { LibrarySportDisc(sport: $0.id, size: 52) } }.padding(20)
+        }
+        // The week's dots: done wins over planned, a missed one is nothing; tri has none of its own.
+        XCTAssertEqual(LibraryDayMark.of(nil, sport: "ride"), .none)
+        if let day = DemoData.calendarByDate.values.first(where: { $0.activities.contains { $0.sport == "strength" && $0.status == "done" } }) {
+            XCTAssertEqual(LibraryDayMark.of(day, sport: "gym"), .done)
+        }
+        XCTAssertTrue(LibrarySport.matches("gym", "strength"))
+        XCTAssertFalse(LibrarySport.matches("tri", "ride"))
+        let ride = try XCTUnwrap(LibrarySport.find("ride"))
+        XCTAssertEqual(LibrarySportRow.spoken(ride, [.done, .none, .planned, .none, .none, .none, .none]), L10n.f("%@, tento týden hotovo %@, naplánováno %@", L10n.tr("Kolo"), "1", "1"))
+        XCTAssertEqual(LibraryWeekDots.letters.count, 7)
+        // The sport page (602 points 135 to 145): one length format, the name without its length, zones by % FTP.
+        XCTAssertEqual(LengthControl.short(45), "45\u{00A0}min")
+        XCTAssertEqual(LengthControl.short(60), "1\u{00A0}h")
+        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30")
+        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(LibraryWorkoutCard.shownName("Endurance with cadence drills, 60 min"), "Endurance with cadence drills")
+        XCTAssertEqual(LibraryWorkoutCard.shownName("Over-unders 3 × 10"), "Over-unders 3 × 10")
+        XCTAssertEqual(LibraryStepsBar.zone(50), 0)
+        XCTAssertEqual(LibraryStepsBar.zone(100), 3)
+        XCTAssertEqual(LibraryStepsBar.zone(160), 6)
+        let card = Data(#"{"id":"w1","name":"Over-unders 3 × 10, 70 min","primary_system":"threshold","duration_minutes":70,"target_load":62,"intensity_factor":0.9,"difficulty":7,"description":"3 × 10 min switching 229 and 262 W","source_name":null,"environment":"indoor","steps":[{"repeats":1,"steps":[{"durationSeconds":600,"percentLow":50,"percentHigh":65}]},{"repeats":3,"steps":[{"durationSeconds":120,"percentLow":95,"percentHigh":105},{"durationSeconds":60,"percentLow":105,"percentHigh":110},{"durationSeconds":300,"percentLow":50,"percentHigh":55,"rest":true}]},{"repeats":1,"steps":[{"durationSeconds":600,"percentLow":45,"percentHigh":55}]}]}"#.utf8)
+        let workout = try JSONDecoder().decode(LibraryWorkout.self, from: card)
+        try render("library-workout-card", glow: Palette.Glow.training, height: 170) {
+            LibraryWorkoutCard(workout: workout).padding(20)
+        }
+        try render("library-ride", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { TrainingLibraryView(sport: "ride") }.environment(model)
+        }
+        // The gym page (602 points 153 to 158): focus tiles map to the builder's focus, rows don't repeat the name.
+        try render("library-gym", glow: Palette.Glow.training, height: 1200) {
+            NavigationStack { TrainingLibraryView(sport: "gym") }.environment(model)
+        }
+        XCTAssertEqual(GymFocus.allCases.count, 9)
+        XCTAssertEqual(GymFocus.legs.builderFocus, "lower")
+        XCTAssertEqual(GymFocus.push.builderFocus, "muscles")
+        XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.push.ids)), 5, "the builder takes at most five muscles")
+        XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(GymFocus.upper.ids)), 8)
+        for f in GymFocus.allCases where f.builderFocus == "muscles" { XCTAssertLessThanOrEqual(BodyFigure.choiceCount(Set(f.ids)), 5, f.rawValue) }
+        // Tri (602 points 151, 152): a brick's legs read in one line that never breaks a number from its unit.
+        let brick = try JSONDecoder().decode(LibraryBrick.self, from: Data(#"{"id":"b1","name":"Ride to run, race pace","note":"","minutes":80,"legs":[{"sport":"ride","workoutId":"r1","minutes":60,"steps":[{"repeats":1,"steps":[{"durationSeconds":3600,"percentLow":80,"percentHigh":90}]}]},{"sport":"run","workoutId":"u1","minutes":20,"steps":[{"repeats":1,"steps":[{"durationSeconds":1200,"percentLow":95,"percentHigh":100}]}]}]}"#.utf8))
+        XCTAssertEqual(LibraryBrickCard.legsLine(brick), L10n.tr("Kolo") + "\u{00A0}1\u{00A0}h, " + L10n.f("pak %@", L10n.tr("Běh").lowercased(with: Fmt.locale) + "\u{00A0}20\u{00A0}min"))
+        XCTAssertGreaterThan(LibraryBrickCard.strain(brick), 0)
+        XCTAssertEqual(BrickLibrarySection.pair(brick), "ride+run")
+        try render("library-brick-card", glow: Palette.Glow.training, height: 150) { LibraryBrickCard(brick: brick).padding(20) }
+        try render("my-workouts", glow: Palette.Glow.training, height: 600) {
+            NavigationStack { MyWorkoutsView(friends: false) }.environment(model)
         }
     }
 

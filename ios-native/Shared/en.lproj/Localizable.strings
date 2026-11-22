@@ -2009,7 +2009,6 @@
 "Nový trénink" = "New workout";
 "Až ti někdo pošle trénink odkazem, najdeš ho tady." = "When someone sends you a workout link, you'll find it here.";
 "Ulož si trénink, který jezdíš rád, a naplánuj ho jedním klepnutím. Přidáš ho přes + nebo z hotového návrhu." = "Save a workout you like to repeat and plan it with one tap. Add one with + or from a finished proposal.";
-"Uložit k sobě, naplánovat nebo smazat přes ⋯" = "Save, plan or delete with ⋯";
 "Smazat trénink?" = "Delete workout?";
 "Nový" = "New";
 "Uložit k sobě" = "Save to my workouts";
@@ -5079,6 +5078,35 @@
 "%@ odebrán" = "%@ removed";
 "Vynecháno" = "Skipped";
 "Aurin Age" = "Aurin Age";
+"Jiná možnost na dnes" = "Another option for today";
+"Ukázat v Knihovně" = "Show in Library";
+"Skrýt v Knihovně" = "Hide in Library";
+"Skrytý sport zmizí jen z této obrazovky. Plány a historie ho dál mají." = "A hidden sport leaves this screen only. Your plans and history keep it.";
+"Tvoje" = "Yours";
+"Kouč na dnes" = "Coach, for today";
+"%@, tento týden nic" = "%@, nothing this week";
+"%@, tento týden hotovo %@, naplánováno %@" = "%@, this week %@ done, %@ planned";
+"Kde, kdy a jak dlouho" = "Where, when and how long";
+"Pro tebe" = "Made for you";
+"Z knihovny" = "From the library";
+"Napsal ho kouč pro tyto filtry, v knihovně jich je málo." = "Written by the coach for these filters, as the library has few.";
+"%@, na míru tvému FTP %@" = "%@, sized to your FTP %@";
+"Kouč dnes doporučuje %@" = "Coach recommends %@ today";
+"Filtr svalů" = "Muscles";
+"Moje" = "Mine";
+"Upravit místa" = "Edit places";
+"%@, %@ s tvým vybavením" = "%@, %@ with your equipment";
+"Tlaky" = "Push";
+"Tahy" = "Pull";
+"Můj sport" = "My sport";
+"Vybrat svaly" = "Pick muscles";
+"skoro připravené" = "almost ready";
+"Vše odpočaté." = "All rested.";
+"Do 1 h" = "Up to 1 h";
+"1 až 2 h" = "1 to 2 h";
+"Přes 2 h" = "Over 2 h";
+"pak %@" = "then %@";
+"Dva sporty hned po sobě" = "Two sports back to back";
 
 /* Done gym detail as concept wgym (GymLog GymDoneDetail) */
 "Podrobnosti tréninku" = "Workout details";
@@ -5115,4 +5143,11 @@
 "Kuře s rýží" = "Chicken with rice";
 "asi 640 kcal, přidáno k obědu" = "about 640 kcal, added to lunch";
 "Dobré ráno." = "Good morning.";
+"Libovolná délka" = "Any length";
+"Libovolná" = "Any";
+"Obvykle %@" = "Usually %@";
+"námaha odh." = "strain est.";
+"Návrh na dnes" = "A workout for today";
+"Těmto filtrům nic neodpovídá. Zkus jinou délku nebo sporty." = "Nothing fits these filters. Try another length or other sports.";
+"Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš" = "Tap to plan, hold to save it as yours or delete";
 "Zatím jediné měření. Čára se začne kreslit od druhého." = "Only one measurement so far. The line starts with the second.";

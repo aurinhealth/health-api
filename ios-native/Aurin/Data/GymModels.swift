@@ -379,6 +379,8 @@ struct BricksResponse: Decodable {
 struct WorkoutSearchResponse: Decodable {
     let workouts: [LibraryWorkout]
     let total: Int?
+    /// The sport's whole catalogue (src/workout-library.js), for "214 workouts".
+    var catalogSize: Int? = nil
     /// The coach's type and length for the day the list is ranked by.
     let coachPick: CoachLength?
     /// Few workouts of the chosen type: the AI writes its own (/compose).
