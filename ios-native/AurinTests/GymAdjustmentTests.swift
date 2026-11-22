@@ -22,6 +22,33 @@ final class GymAdjustmentTests: XCTestCase {
         XCTAssertNil(carry?.reps)
     }
 
+    /// To failure within the reps on a light weight: the estimate rounds back
+    /// to the same 12.5, still one step lighter (608, strength coach).
+    func testFailureWithinTheRepsOnALightWeightTakesOneStep() {
+        let done = set(2, "2", kg: "12.5", reps: "12", done: true, letter: "F")
+        let next = set(3, "3", kg: nil, reps: nil, done: false, letter: "M", planned: "10–12")
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done), GymSessionMath.Adjustment(kg: "10", lighter: true))
+    }
+
+    /// A machine that goes in fives: the step and the rounding are 5 kg (608).
+    func testMachineInFivesStepsByFive() {
+        let done = GymSet(row: 1, warmup: false, number: "1", plannedKg: "40", plannedReps: "10–12", kg: "40", reps: "12",
+                          rpe: nil, done: true, note: nil, intensity: "F")
+        let next = GymSet(row: 2, warmup: false, number: "2", plannedKg: "40", plannedReps: "10–12", kg: nil, reps: nil,
+                          rpe: nil, done: false, note: nil, intensity: "M")
+        let past = GymHistory.Exercise(name: "Lat pulldown", sessions: [
+            GymHistory.Session(date: "2026-11-15", sets: [GymHistory.Lift(kg: 35, reps: 12, target: 10, rpe: nil)])])
+        let step = GymSessionMath.step(GymExercise(name: "Lat pulldown", superset: nil, sets: [done, next]), history: past)
+        XCTAssertEqual(step, 5)
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done, step: step)?.kg, "35")
+        // A 2.5 kg weight anywhere: the usual step.
+        let barbell = GymHistory.Exercise(name: "Lat pulldown", sessions: [
+            GymHistory.Session(date: "2026-11-15", sets: [GymHistory.Lift(kg: 37.5, reps: 12, target: 10, rpe: nil)])])
+        XCTAssertEqual(GymSessionMath.step(GymExercise(name: "Lat pulldown", superset: nil, sets: [done, next]), history: barbell), 2.5)
+        // No history: no evidence, the usual step.
+        XCTAssertEqual(GymSessionMath.step(GymExercise(name: "Lat pulldown", superset: nil, sets: [done, next]), history: nil), 2.5)
+    }
+
     func testKeptWeightIsCopied() {
         let done = set(2, "2", kg: "12.5", reps: "7", done: true, letter: "F")
         let next = set(3, "3", kg: nil, reps: nil, done: false, letter: "M")
@@ -212,5 +239,14 @@ final class GymAdjustmentTests: XCTestCase {
         let done = set(1, "1", kg: "100", reps: "12", done: true, letter: "M", planned: "8–12")
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "H", planned: "8–12")
         XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+    }
+
+    /// 100 lb on a pound machine saved once as 45.3 kg, today as 45.36 kg: the same lift, no record.
+    func testAPoundMachineRoundingIsNoRecord() {
+        let old = GymSessionMath.shown(GymHistory.Lift(kg: 45.3, reps: 12, target: nil, rpe: nil), machineLb: true)
+        let now = GymSessionMath.shown(GymHistory.Lift(kg: 45.36, reps: 12, target: nil, rpe: nil), machineLb: true)
+        XCTAssertEqual(GymSessionMath.e1rm(now), GymSessionMath.e1rm(old), accuracy: 0.001)
+        let more = GymSessionMath.shown(GymHistory.Lift(kg: 46.49, reps: 12, target: nil, rpe: nil), machineLb: true)
+        XCTAssertGreaterThan(GymSessionMath.e1rm(more), GymSessionMath.e1rm(old) + 0.01)
     }
 }

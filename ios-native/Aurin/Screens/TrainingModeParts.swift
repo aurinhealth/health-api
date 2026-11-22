@@ -23,30 +23,45 @@ enum GymSessionMath {
     /// before the first work set follow a warm-up done well off its plan,
     /// the warm-ups still to come included.
     static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = [], typed: Typed = Typed(),
-                        firstTry: Bool = false) -> (kg: String?, reps: String?)? {
+                        firstTry: Bool = false, step: Double = GymCoach.step) -> (kg: String?, reps: String?)? {
         guard let before = previous(set, in: exercise) else {
-            return firstTry && !typed.kg.contains(set.row) ? fromWarmup(set, in: exercise).map { ($0, nil) } : nil
+            return firstTry && !typed.kg.contains(set.row) ? fromWarmup(set, in: exercise, step: step).map { ($0, nil) } : nil
         }
         let sameKg = !typed.kg.contains(set.row) && set.plannedKg.flatMap(LiftWeight.number) == before.plannedKg.flatMap(LiftWeight.number)
         let sameReps = !typed.reps.contains(set.row)
             && repRange(set.plannedReps).map { [$0.lo, $0.hi] } == repRange(before.plannedReps).map { [$0.lo, $0.hi] }
         guard sameKg || sameReps else { return nil }
-        if sameKg, !keep.contains(before.row), let change = adjustment(set, after: before) { return (change.kg, nil) }
+        if sameKg, !keep.contains(before.row), let change = adjustment(set, after: before, step: step) { return (change.kg, nil) }
         return (sameKg ? before.kg?.nilIfBlank : nil, sameReps ? before.reps?.nilIfBlank : nil)
     }
 
     /// The plan's weight scaled by how far the last warm-up done went off its
     /// own plan (warm-up 35 for 22.5: work 35.5 → 55), when off by 15 % or
-    /// more; at most twice or half the plan, to the nearest 2.5 kg.
-    static func fromWarmup(_ set: GymSet, in exercise: GymExercise) -> String? {
+    /// more; at most twice or half the plan, to the nearest step (2.5 kg, or 5).
+    static func fromWarmup(_ set: GymSet, in exercise: GymExercise, step: Double = GymCoach.step) -> String? {
         guard !set.done, !set.drop, let plan = set.plannedKg.flatMap(LiftWeight.number), plan > 0,
               let warmup = exercise.sets.last(where: { $0.warmup && $0.done && $0.row < set.row && ($0.side == nil || $0.side == set.side) }),
               let done = warmup.kg.flatMap(LiftWeight.number), done > 0,
               let planned = warmup.plannedKg.flatMap(LiftWeight.number), planned > 0 else { return nil }
         let ratio = min(2, max(0.5, done / planned))
         guard abs(ratio - 1) >= 0.15 else { return nil }
-        let kg = GymCoach.roundLoad(plan * ratio)
+        let kg = round(plan * ratio, to: step)
         return kg > 0 ? GymCoach.kgText(kg) : nil
+    }
+
+    /// The weight step of an exercise: 5 kg on a machine that only goes in
+    /// fives (Petr 2026-11-22: never suggest a weight the stack doesn't have),
+    /// as the server's coach learns it (#944): today's work weights and the
+    /// last three sessions all in whole 5 kg. Else 2.5 kg.
+    static func step(_ exercise: GymExercise, history: GymHistory.Exercise?) -> Double {
+        let five: (Double) -> Bool = { $0 > 0 && $0.truncatingRemainder(dividingBy: 5) == 0 }
+        let past = (history?.sessions.prefix(3) ?? []).flatMap { $0.sets.compactMap(\.kg) }
+        let today = exercise.sets.filter(\.work).compactMap { ($0.done ? $0.kg : $0.plannedKg).flatMap(LiftWeight.number) }
+        return !past.isEmpty && (past + today).allSatisfy(five) ? 5 : GymCoach.step
+    }
+
+    static func round(_ kg: Double, to step: Double) -> Double {
+        max(0, (kg / step).rounded() * step)
     }
 
     /// The rows of the sets to come whose weight or reps were typed in ahead.
@@ -99,7 +114,7 @@ enum GymSessionMath {
     /// or H): one 2.5 kg step up (more when far too light), but never when the athlete rated the set harder
     /// than the next one is planned (15 reps at M before an E set): the letter
     /// says more than the reps. Otherwise nil: the next set copies this one.
-    static func adjustment(_ set: GymSet, after before: GymSet) -> Adjustment? {
+    static func adjustment(_ set: GymSet, after before: GymSet, step: Double = GymCoach.step) -> Adjustment? {
         guard set.work, before.work, before.done,
               let kg = before.kg.flatMap(LiftWeight.number), kg > 0,
               let done = before.reps.flatMap(LiftWeight.number), done > 0,
@@ -110,7 +125,9 @@ enum GymSessionMath {
         let reserve = rpe.map { 10 - $0 } ?? planned
         if done < Double(range.lo) || reserve + 2 <= planned {
             let best = kg * (1 + (done + reserve) / 30)
-            let fits = GymCoach.roundLoad(best / (1 + (Double(range.lo) + planned) / 30))
+            // At least one step lighter: on a light weight the estimate rounds
+            // back to the same 2.5 kg and failure changed nothing (608, coach).
+            let fits = min(round(best / (1 + (Double(range.lo) + planned) / 30), to: step), round(kg - step, to: step))
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
@@ -122,8 +139,8 @@ enum GymSessionMath {
             // At least one step; far too light, the weight the estimated max
             // allows for the top of the range, by at most a quarter more.
             let best = kg * (1 + (done + reserve) / 30)
-            let fits = GymCoach.roundLoad(min(best / (1 + (Double(range.hi) + planned) / 30), kg * 1.25))
-            return Adjustment(kg: GymCoach.kgText(max(GymCoach.roundLoad(kg + GymCoach.step), fits)), lighter: false)
+            let fits = round(min(best / (1 + (Double(range.hi) + planned) / 30), kg * 1.25), to: step)
+            return Adjustment(kg: GymCoach.kgText(max(round(kg + step, to: step), fits)), lighter: false)
         }
         return nil
     }
@@ -167,6 +184,14 @@ enum GymSessionMath {
     static func e1rm(_ lift: GymHistory.Lift) -> Double {
         guard let kg = lift.kg, kg > 0, let reps = lift.reps, reps > 0, reps <= 12 else { return 0 }
         return reps == 1 ? kg : kg * (1 + reps / 30)
+    }
+
+    /// A lift's weight as the screen shows it: a machine in pounds to its
+    /// pounds, kilos to 0.1 kg, so a record never rests on a rounding.
+    static func shown(_ lift: GymHistory.Lift, machineLb: Bool) -> GymHistory.Lift {
+        guard let kg = lift.kg else { return lift }
+        let same = machineLb ? Units.kgFromPounds(LiftWeight.machinePounds(kg)) : (kg * 10).rounded() / 10
+        return GymHistory.Lift(kg: same, reps: lift.reps, target: lift.target, rpe: lift.rpe)
     }
 
     static func lifts(_ exercise: GymExercise) -> [GymHistory.Lift] {
