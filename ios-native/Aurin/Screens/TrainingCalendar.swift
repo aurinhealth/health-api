@@ -72,7 +72,7 @@ struct DayJump: Equatable {
     let id = UUID()
 }
 
-/// One day of the strip: "Mo", the day's sport in its disc and "9". A second
+/// One day of the strip: "Mo", "9" and the day's sport in its disc under it. A second
 /// session still ahead that day sits as a small disc on the first one's edge.
 struct DayCircle: View {
     let date: String
@@ -82,30 +82,18 @@ struct DayCircle: View {
 
     var body: some View {
         let mark = Look(day: day, date: date, today: today)
-        VStack(spacing: 7) {
-            Text(Fmt.weekdayShort(date))
-                .scaledFont(12, weight: date == today ? .bold : .medium, cap: .denseCap)
-                .foregroundStyle(date == today ? Palette.ink : Palette.muted)
-            SportDisc(sport: mark.sport, type: mark.type, state: mark.state, size: 44)
+        // The shared cell of every week strip (WeekDayCell, Petr 2026-11-22 variant B):
+        // the sport's disc under the date, as tall as the strip on Dnes and Jídlo.
+        WeekDayCell(day: date, today: today, selected: selected) {
+            SportDisc(sport: mark.sport, type: mark.type, state: mark.state, size: 30)
                 .overlay(alignment: .bottomTrailing) {
                     if let second = mark.second {
-                        SportDisc(sport: second, state: .ahead, size: 17)
-                            .background(Circle().fill(Palette.card).padding(-2))
+                        SportDisc(sport: second, state: .ahead, size: 13)
+                            .background(Circle().fill(Palette.background).padding(-2))
                             .offset(x: 4, y: 3)
                     }
                 }
-            Text(ISODay.day(date))
-                .font(Typo.number(17))
-                .foregroundStyle(selected ? Palette.ink : Palette.muted)
         }
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background {
-            if selected {
-                RoundedRectangle(cornerRadius: 21, style: .continuous).fill(Palette.ink.opacity(0.07)).padding(.horizontal, 2)
-            }
-        }
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date) + ", " + mark.label)
         .accessibilityAddTraits(selected ? .isSelected : [])
