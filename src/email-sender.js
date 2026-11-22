@@ -148,11 +148,11 @@ const PASSKEY_TEXT = {
 const PASSKEY_REMOVED_TEXT = {
   cs: {
     subject: "Z tvého účtu Aurin ubyl přístupový klíč",
-    body: (name, when) => [`Z tvého účtu Aurin byl odebrán přístupový klíč (passkey) „${name}“, ${when}. Zařízení, které se s ním přihlásilo, se odhlásilo.`, "Pokud o tom nevíš, přihlas se znovu, v Nastavení → Účet zmáčkni Odhlásit ostatní zařízení a dej vědět správci aplikace."]
+    body: (name, when) => [`Z tvého účtu Aurin byl odebrán přístupový klíč (passkey) „${name}“, ${when}. Ostatní zařízení přihlášená k tvému účtu se odhlásila.`, "Pokud o tom nevíš, přihlas se znovu, v Nastavení → Účet zmáčkni Odhlásit ostatní zařízení a dej vědět správci aplikace."]
   },
   en: {
     subject: "A passkey was removed from your Aurin account",
-    body: (name, when) => [`The passkey “${name}” was removed from your Aurin account on ${when}. The device that signed in with it was signed out.`, "If this was not you, sign in again, tap Sign out other devices under Settings → Account and tell the app's administrator."]
+    body: (name, when) => [`The passkey “${name}” was removed from your Aurin account on ${when}. Your other signed-in devices were signed out.`, "If this was not you, sign in again, tap Sign out other devices under Settings → Account and tell the app's administrator."]
   }
 };
 
