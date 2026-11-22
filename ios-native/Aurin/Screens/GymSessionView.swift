@@ -910,45 +910,99 @@ struct ExerciseCard: View {
     }
 }
 
+/// The one exercise sheet (concept a-knihovna 039) wherever an exercise opens:
+/// Like, Dislike and Swap, then How to (photos, video, muscles, steps) and
+/// History (records and sessions), and Remove from workout in a workout.
 struct TechniqueSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let exercise: String
     /// "Nahradit": only where the exercise can be swapped (a generated workout,
     /// a plan, Režim tréninku). The sheet closes first, then this runs.
-    var replace: (() -> Void)? = nil
+    var replace: (() -> Void)?
+    /// Under the name: "4 × 6–8, 62.5 kg" of the workout or the library.
+    var plan: String?
+    /// The history when the caller has it; loaded here otherwise.
+    var history: GymHistory?
+    /// In a running workout: History without "Next time".
+    var inWorkout: Bool
+    /// "Odebrat z tréninku": only in a workout, for an exercise with sets left.
+    var remove: (() -> Void)?
     @State private var technique: GymTechnique?
+    @State private var fetched: GymHistory?
     @State private var error: String?
-    /// 0: the photo and how it's done, 1: the video.
-    @State private var page = 0
+    /// 0: how it's done, 1: the history.
+    @State private var page: Int
+    @State private var showVideo = false
+    @State private var confirmRemove = false
     @State private var writingNote = false
     /// The thumb: true, false or nil, saved at once (src/exercise-feedback.js).
     @State private var liked: Bool?
 
+    init(exercise: String, replace: (() -> Void)? = nil, showHistory: Bool = false, plan: String? = nil,
+         history: GymHistory? = nil, inWorkout: Bool = false, remove: (() -> Void)? = nil) {
+        self.exercise = exercise
+        self.replace = replace
+        self.plan = plan
+        self.history = history
+        self.inWorkout = inWorkout
+        self.remove = remove
+        _page = State(initialValue: showHistory ? 1 : 0)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(exercise).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(exercise).font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+                }
+                if let plan = plan?.nilIfBlank {
+                    Text(verbatim: plan).font(Typo.small).foregroundStyle(Palette.muted)
+                }
             }
             .padding(.horizontal, 24).padding(.top, 24)
             taste.padding(.horizontal, 24)
             Picker("Zobrazit", selection: $page) {
                 Text("Jak na to").tag(0)
-                Text("Video").tag(1)
+                Text("Historie").tag(1)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 24)
             TabView(selection: $page) {
                 PageScroll { howTo.padding(.horizontal, 24).padding(.bottom, 24) }.tag(0)
-                PageScroll { videoPage.padding(.horizontal, 24).padding(.bottom, 24) }.tag(1)
+                PageScroll { historyPage.padding(.horizontal, 24).padding(.bottom, 24) }.tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if remove != nil {
+                Button { confirmRemove = true } label: {
+                    Text("Odebrat z tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                        .frame(maxWidth: .infinity).frame(minHeight: 48)
+                        .background(Palette.card, in: Capsule())
+                        .overlay { Capsule().stroke(Palette.cardEdge, lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 8)
+                .background(Palette.background)
+            }
+        }
+        .confirmationDialog(L10n.f("Odebrat %@ z tréninku?", exercise), isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Odebrat", role: .destructive) {
+                dismiss()
+                remove?()
+            }
+        } message: {
+            Text("Hotové série zůstanou uložené.")
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
         .sheet(isPresented: $writingNote) { ExerciseNoteSheet(exercise: exercise) }
+        .task {
+            if history == nil { fetched = await model.gymHistory() }
+        }
         .task {
             await ExerciseNotes.shared.load(api: model.api, demo: model.demo)
             guard !model.demo else { error = "V ukázce se technika nenačítá."; return }
@@ -956,6 +1010,15 @@ struct TechniqueSheet: View {
                 technique = try await model.api.gymTechnique(exercise: exercise)
                 liked = technique?.liked
             } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    /// Historie: the same records and sessions as the history sheet.
+    @ViewBuilder private var historyPage: some View {
+        if let all = history ?? fetched {
+            ExerciseHistorySheet(name: exercise, exercise: all.exercise(exercise), inWorkout: inWorkout, embedded: true)
+        } else {
+            ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
         }
     }
 
@@ -1020,8 +1083,8 @@ struct TechniqueSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             if let t = technique {
                 photo
-                muscleChips("Hlavní svaly", t.primaryMuscles, primary: true)
-                muscleChips("Pomocné svaly", t.secondaryMuscles, primary: false)
+                video
+                muscles(t)
                 ownNote
                 list("Příprava", t.setup)
                 list("Provedení", t.steps)
@@ -1037,7 +1100,43 @@ struct TechniqueSheet: View {
         .padding(.top, 6)
     }
 
-    /// Hlavní svaly as solid green chips, Pomocné svaly outlined; nothing when the exercise has none.
+    /// Svaly: the body map (as in the library) over the chips; nothing when the exercise has none.
+    @ViewBuilder
+    private func muscles(_ t: GymTechnique) -> some View {
+        let primary = t.primaryMuscles ?? [], secondary = t.secondaryMuscles ?? []
+        if !primary.isEmpty || !secondary.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: "Svaly")
+                BodyMap(load: Self.load(primary: primary, secondary: secondary), height: 220)
+                muscleChips("Hlavní svaly", primary, primary: true)
+                muscleChips("Pomocné svaly", secondary, primary: false)
+            }
+            .padding(.top, 6)
+        }
+    }
+
+    static func load(primary: [String], secondary: [String]) -> [String: Double] {
+        var out: [String: Double] = [:]
+        for id in secondary { out[id] = BodyMap.secondary }
+        for id in primary { out[id] = BodyMap.primary }
+        return out
+    }
+
+    /// The video under the photos: a tap opens it in place.
+    @ViewBuilder private var video: some View {
+        if videoId != nil || technique?.searchUrl != nil {
+            if showVideo {
+                videoPage
+            } else {
+                Button { withAnimation(.snappy) { showVideo = true } } label: {
+                    Label(L10n.tr(videoId != nil ? "Video" : "Najít video"), systemImage: "play.rectangle").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Hlavní svaly as solid rust chips (the body map's colour), Pomocné svaly outlined; nothing when the exercise has none.
     @ViewBuilder
     private func muscleChips(_ title: String, _ ids: [String]?, primary: Bool) -> some View {
         if let ids, !ids.isEmpty {
@@ -1046,14 +1145,14 @@ struct TechniqueSheet: View {
                 FlowLayout(spacing: 7) {
                     ForEach(ids, id: \.self) { id in
                         HStack(spacing: 7) {
-                            if primary { Circle().fill(Palette.green).frame(width: 7, height: 7) }
+                            if primary { Circle().fill(Palette.rust).frame(width: 7, height: 7) }
                             Text(BodyFigure.label(id))
                         }
                         .font(Typo.small.weight(primary ? .semibold : .medium))
-                        .foregroundStyle(primary ? Palette.green : Palette.secondary)
+                        .foregroundStyle(primary ? Palette.rust : Palette.secondary)
                         .padding(.horizontal, 13).frame(minHeight: 32)
-                        .background(primary ? Palette.greenSoft : .clear, in: Capsule())
-                        .overlay { if !primary { Capsule().stroke(Palette.green.opacity(0.3), lineWidth: 1.5) } }
+                        .background(primary ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
+                        .overlay { if !primary { Capsule().stroke(Palette.rust.opacity(0.3), lineWidth: 1.5) } }
                     }
                 }
             }

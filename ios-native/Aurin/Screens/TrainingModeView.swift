@@ -56,6 +56,8 @@ struct TrainingModeView: View {
     @State private var zoneLows: [Double] = []
     @State private var technique: String?
     @State private var historyFor: String?
+    /// "Odebrat tento cvik" from the menu, waiting for the yes.
+    @State private var confirmRemove: String?
     /// The exercise to swap ("Nahradit cvik"), its sets still to do.
     @State private var swapping: String?
     /// "Vybrat jiný cvik" for this exercise: the whole catalog.
@@ -65,6 +67,8 @@ struct TrainingModeView: View {
     /// The last swap, undoable at the top of the exercise until its first set
     /// is done (Petr decision 7: never beside Set done).
     @State private var lastSwap: SwapUndo?
+    /// An exercise removed just now: Vrátit at the top while the day is still the one right after.
+    @State private var lastRemoved: (name: String, day: GymDay, after: GymDay)?
     /// The exercise whose Moje poznámka is being written.
     @State private var noteFor: String?
     /// The barbell set whose plates are being loaded.
@@ -363,9 +367,7 @@ struct TrainingModeView: View {
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { techniqueSheet($0) }
-        .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), inWorkout: true)
-        }
+        .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { techniqueSheet($0, history: true) }
         // Zavřít waits for the sending, at most closeWait.
         .task(id: sendStarted) { await freeCloseLater() }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
@@ -603,6 +605,7 @@ struct TrainingModeView: View {
         }
         if nextSet(exercise) != nil {
             Button { swapping = exercise.name } label: { Label("Vyměnit tento cvik", systemImage: "arrow.up.arrow.down") }
+            Button { confirmRemove = exercise.name } label: { Label("Odebrat tento cvik", systemImage: "minus.circle") }
         }
         Button { editing = true } label: { Label("Upravit cviky", systemImage: "list.bullet") }
         Button { sensors = true } label: {
@@ -647,6 +650,7 @@ struct TrainingModeView: View {
         let upcoming = rows.filter { !$0.done && exerciseAt($0) != index && (partner == nil || exerciseAt($0) != partner) }
         VStack(alignment: .leading, spacing: 8) {
             undoSwapRow(day, exercise)
+            undoRemoveRow(day)
             if !doneRows.isEmpty {
                 let seconds = doneRows.reduce(0) { $0 + live.seconds(of: $1.key) }
                 LiveListRow(title: L10n.f("%@ hotovo", String(doneRows.count)), detail: Self.clock(seconds), done: true, open: showDone) {
@@ -685,6 +689,12 @@ struct TrainingModeView: View {
         .padding(.top, 12)
         .onChange(of: day.exercises.count) { _, count in if let v = viewing, v >= count { viewing = nil } }
         .task(id: exercise.name) { await loadMuscles(day) }
+        .modifier(removeDialog)
+    }
+
+    /// "Odebrat tento cvik" from the menu: the yes, with the done sets kept.
+    private var removeDialog: RemoveExerciseDialog {
+        RemoveExerciseDialog(name: $confirmRemove) { name in Task { await removeExercise(name) } }
     }
 
     /// The exercise of a list row; nil for a warm-up, cardio or stretching.
@@ -719,6 +729,9 @@ struct TrainingModeView: View {
             } else {
                 LiveFoldedCard(title: e.name, detail: nextLoad(e),
                                onSwap: { swapping = e.name }, onTechnique: { technique = e.name }) { open(at) }
+                    // Swiped left: Odebrat, only on a tap; Vrátit at the top brings it back.
+                    .modifier(SwipeToDelete(enabled: !saving, exercise: true) { Task { await removeExercise(e.name) } })
+                    .accessibilityAction(named: L10n.tr("Odebrat tento cvik")) { Task { await removeExercise(e.name) } }
             }
         }
     }
@@ -783,6 +796,44 @@ struct TrainingModeView: View {
                 .accessibilityLabel(L10n.f("Vrátit výměnu, zpět na %@", ExerciseCatalog.shownName(undo.from)))
             }
         }
+    }
+
+    @ViewBuilder
+    private func undoRemoveRow(_ day: GymDay) -> some View {
+        if let removed = lastRemoved, removed.after == day {
+            HStack(spacing: 8) {
+                Text(verbatim: L10n.f("Odebráno: %@", ExerciseCatalog.shownName(removed.name)))
+                    .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
+                Spacer(minLength: 8)
+                Button { Task { await undoRemove() } } label: {
+                    Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 14).frame(minHeight: 36)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .tapTarget(width: 44, height: 44)
+                .accessibilityLabel(L10n.f("Vrátit %@ do tréninku", ExerciseCatalog.shownName(removed.name)))
+            }
+        }
+    }
+
+    /// Takes an exercise out of today's workout: the sets done stay recorded
+    /// (removeExercise), one not begun goes with its superset mark (deleteExercise).
+    private func removeExercise(_ name: String) async {
+        guard var next = day, let at = next.exercises.firstIndex(where: { $0.name == name }) else { return }
+        let before = next
+        if next.exercises[at].sets.contains(where: \.done) { next.removeExercise(at: at) } else { next.deleteExercise(at: at) }
+        guard next != before else { return }
+        viewing = nil
+        lastRemoved = (name, before, next)
+        await saveEdited(next)
+    }
+
+    private func undoRemove() async {
+        guard let removed = lastRemoved, removed.after == day else { lastRemoved = nil; return }
+        lastRemoved = nil
+        await saveEdited(removed.day)
     }
 
     /// The pinned button: Start before the start, Set done, the rest's
@@ -1758,9 +1809,13 @@ struct TrainingModeView: View {
 
     // Out of the body's modifier chain, which is too long to type-check with closures inside.
     /// Nahradit: the swap sheet once this one is gone, while the exercise has sets to do (as Vyměnit).
-    private func techniqueSheet(_ item: Named) -> some View {
-        let left = day?.exercises.first(where: { $0.name == item.name })?.sets.contains(where: { !$0.done }) == true
-        return TechniqueSheet(exercise: item.name, replace: left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil)
+    /// The one exercise sheet, on How to (Technika) or History (Historie).
+    private func techniqueSheet(_ item: Named, history showHistory: Bool = false) -> some View {
+        let exercise = day?.exercises.first(where: { $0.name == item.name })
+        let left = exercise?.sets.contains(where: { !$0.done }) == true
+        return TechniqueSheet(exercise: item.name, replace: left ? { Task { try? await Task.sleep(for: .milliseconds(450)); swapping = item.name } } : nil,
+                              showHistory: showHistory, plan: exercise.map { nextLoad($0) }, history: history, inWorkout: true,
+                              remove: left ? { Task { await removeExercise(item.name) } } : nil)
     }
 
     /// Zavřít free at the latest closeWait after the sending started.
@@ -2947,4 +3002,20 @@ struct SwapUndo: Equatable {
     let index: Int
     /// The old exercise left the day, so the watch's time went with it.
     let renamed: Bool
+}
+
+/// The yes for "Odebrat tento cvik", apart from the screen's long chain of modifiers.
+struct RemoveExerciseDialog: ViewModifier {
+    @Binding var name: String?
+    let remove: (String) -> Void
+
+    func body(content: Content) -> some View {
+        let title: String = L10n.f("Odebrat %@ z tréninku?", name ?? "")
+        let shown = Binding<Bool>(get: { name != nil }, set: { if !$0 { name = nil } })
+        return content.confirmationDialog(title, isPresented: shown, titleVisibility: .visible) {
+            Button("Odebrat", role: .destructive) { if let name { remove(name) } }
+        } message: {
+            Text("Hotové série zůstanou uložené.")
+        }
+    }
 }

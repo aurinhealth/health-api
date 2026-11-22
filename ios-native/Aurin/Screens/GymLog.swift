@@ -162,9 +162,9 @@ struct GymDoneDetail: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { opened = nil } } }
             .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-                ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name))
+                TechniqueSheet(exercise: item.name, showHistory: true, history: history)
             }
-            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name, history: history) }
         }
         .presentationDetents([.large])
     }
@@ -782,6 +782,8 @@ struct ExerciseHistorySheet: View {
     var pinned: Binding<Bool>? = nil
     /// Opened in a running workout: its plan is on screen, so no "Next time".
     var inWorkout = false
+    /// Inside the exercise sheet's History tab (TechniqueSheet): no name, Close or own scroll.
+    var embedded = false
     @State private var metric = Metric.heaviest
 
     enum Metric: String, CaseIterable {
@@ -800,6 +802,24 @@ struct ExerciseHistorySheet: View {
     static let listed = 12
 
     var body: some View {
+        if embedded {
+            VStack(alignment: .leading, spacing: 0) { history }
+        } else {
+            sheet
+        }
+    }
+
+    @ViewBuilder
+    private var history: some View {
+        if let exercise, !exercise.sessions.isEmpty {
+            content(exercise)
+        } else {
+            Text("Tenhle cvik zatím nemá žádnou historii. Po prvním tréninku tu uvidíš váhy a vývoj.")
+                .font(Typo.body).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
+        }
+    }
+
+    private var sheet: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
@@ -816,12 +836,7 @@ struct ExerciseHistorySheet: View {
                     }
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
-                if let exercise, !exercise.sessions.isEmpty {
-                    content(exercise)
-                } else {
-                    Text("Tenhle cvik zatím nemá žádnou historii. Po prvním tréninku tu uvidíš váhy a vývoj.")
-                        .font(Typo.body).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
-                }
+                history
             }
             .padding(24)
         }

@@ -5166,5 +5166,11 @@
 "Každý řádek porovnává tvé nejnovější měření s tím tehdejším." = "Each row compares your latest measurement with the one from then.";
 "tepleji" = "warmer";
 "chladněji" = "cooler";
+"Odebrat tento cvik" = "Remove this exercise";
+"Odebrat %@ z tréninku?" = "Remove %@ from the workout?";
+"Hotové série zůstanou uložené." = "Sets already done stay saved.";
+"Odebrat z tréninku" = "Remove from workout";
+"Odebráno: %@" = "Removed: %@";
+"Vrátit %@ do tréninku" = "Put %@ back in the workout";
 "Další: %@" = "Next: %@";
 "jídlo nezapsáno" = "no food logged";

@@ -637,8 +637,10 @@ struct MinimizedGymBar: View {
 }
 
 /// A set row swiped left: Smazat shows behind it, a long swipe deletes at once.
+/// An exercise (`exercise`): Odebrat with a minus, only on a tap, never by a long swipe.
 struct SwipeToDelete: ViewModifier {
     let enabled: Bool
+    var exercise = false
     let onDelete: () -> Void
     @State private var offset: CGFloat = 0
     /// Where the row was when the drag began: closed or open on Smazat.
@@ -652,12 +654,12 @@ struct SwipeToDelete: ViewModifier {
                 if offset < 0 {
                     Button { delete() } label: {
                         VStack(spacing: 2) {
-                            Image(systemName: "trash").scaledFont(15, weight: .semibold)
-                            Text("Smazat").font(Typo.caption.weight(.semibold))
+                            Image(systemName: exercise ? "minus.circle" : "trash").scaledFont(15, weight: .semibold)
+                            Text(exercise ? "Odebrat" : "Smazat").font(Typo.caption.weight(.semibold))
                         }
                         .foregroundStyle(Palette.onAccent)
                         .frame(width: -offset).frame(maxHeight: .infinity)
-                        .background(Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .background(exercise ? Palette.rust : Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 }
@@ -670,13 +672,13 @@ struct SwipeToDelete: ViewModifier {
                     guard abs(dx) > abs(drag.translation.height) else { return }
                     base = offset
                 }
-                offset = min(0, (base ?? 0) + dx)
+                offset = max(exercise ? -width * 1.4 : -.infinity, min(0, (base ?? 0) + dx))
             }.onEnded { drag in
                 let dx = drag.translation.width
                 guard base != nil else { return }
                 base = nil
                 withAnimation(.snappy) {
-                    if offset < -width * 2.4 { offset = 0; onDelete() }
+                    if !exercise, offset < -width * 2.4 { offset = 0; onDelete() }
                     else { offset = offset < -width / 2 && dx < 0 ? -width : 0 }
                 }
             } : nil)
