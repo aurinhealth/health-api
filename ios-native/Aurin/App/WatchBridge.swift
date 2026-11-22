@@ -66,9 +66,13 @@ final class WatchBridge: NSObject {
         healthLoaded = nil
         gymDays = [:]
         lastContext = nil
-        guard let session, session.activationState == .activated else { return }
+        // Not connected yet: the watch hears of the sign-out once it is (activationDidCompleteWith).
+        guard let session, session.activationState == .activated else { clearPending = true; return }
+        clearPending = false
         try? session.updateApplicationContext([:])
     }
+
+    private var clearPending = false
 
     private var watchReady: Bool {
         guard let session, session.activationState == .activated else { return false }
@@ -336,6 +340,8 @@ private extension ISO8601DateFormatter {
 extension WatchBridge: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         Task { @MainActor in
+            // A sign-out before the connection was up reaches the watch now.
+            if clearPending { clear() }
             restore()
             send()
         }
@@ -548,6 +554,10 @@ extension WatchBridge: WCSessionDelegate {
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         Task { @MainActor in
+            // Signed out ("Odhlásit se" forgets the account): it goes nowhere either,
+            // kept it would go to whichever account signs in next. An expired session
+            // keeps the account, so its writes wait for the next sign-in as before.
+            guard Outbox.account != nil || (AppModel.live?.api ?? APIClient()).hasSession else { return }
             if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
