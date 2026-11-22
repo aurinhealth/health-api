@@ -1169,8 +1169,9 @@
 "↑ stoupá" = "↑ rising";
 "↓ klesá" = "↓ falling";
 "✓ Nalezeno" = "✓ Found";
+"Aktualizovat" = "Update";
 "Je potřeba nová verze" = "A new version is needed";
-"Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru." = "The server has changed and this version of the app can no longer read its data correctly. Install the new version with Sideloadly. Your data stays on the server.";
+"Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Aktualizuj Aurin na nejnovější verzi. Data zůstávají uložená na serveru." = "The server has changed and this version of the app can no longer read its data correctly. Update Aurin to the latest version. Your data stays on the server.";
 "Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi." = "This version of Aurin is no longer supported. Install a newer version.";
 "Upravit údaje" = "Edit details";
 "Počet porcí" = "Servings";

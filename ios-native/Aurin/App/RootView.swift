@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 enum AppTab: Hashable {
     case today, training, food, health
@@ -522,20 +523,33 @@ struct RootView: View {
 /// The server no longer serves this build: data would not load or would come
 /// out wrong, so the app asks for the new version instead of the screens.
 struct UpdateRequiredView: View {
+    @Environment(\.openURL) private var openURL
+    /// The app's page in the App Store; TestFlight and Xcode builds have no App Store id, so TestFlight opens.
+    @State private var updateURL = URL(string: "itms-beta://")
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "arrow.down.app")
                 .scaledFont(44, weight: .light)
                 .foregroundStyle(Palette.ink)
             Text(L10n.tr("Je potřeba nová verze")).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-            Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru."))
+            Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Aktualizuj Aurin na nejnovější verzi. Data zůstávají uložená na serveru."))
                 .font(.subheadline)
                 .foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center)
+            if let updateURL {
+                PrimaryButton(title: L10n.tr("Aktualizovat")) { openURL(updateURL) }
+                    .padding(.top, 8)
+            }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Palette.background)
+        .task {
+            if case .verified(let app)? = try? await AppTransaction.shared, let id = app.appID {
+                updateURL = URL(string: "itms-apps://apps.apple.com/app/id\(id)")
+            }
+        }
     }
 }
 
