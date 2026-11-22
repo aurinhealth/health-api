@@ -31,6 +31,9 @@ struct LiveStatsPanel: View {
                     divider
                     cell(L10n.tr("Objem"), Fmt.int(Units.weight(volume)), Units.imperial ? "lb" : "kg")
                 }
+                // The dividers would otherwise take all the height the list
+                // under the panel leaves free (608: a tall empty tile).
+                .fixedSize(horizontal: false, vertical: true)
                 if let bpm = live.heartRate, !zoneLows.isEmpty {
                     let zone = zoneLows.lastIndex { bpm >= $0 } ?? 0
                     HStack(spacing: 3) {
@@ -186,19 +189,24 @@ struct LiveRestButton: View {
                     HStack {
                         Text(verbatim: title).font(Typo.bodyStrong).lineLimit(1).minimumScaleFactor(0.8)
                         Spacer(minLength: 8)
+                        // Each second rolls the digits that change; the old
+                        // number never fades through the new one (608).
                         Text(verbatim: TrainingModeView.clock(left)).font(Typo.number(30)).monospacedDigit()
+                            .contentTransition(.numericText(countsDown: true))
+                            .animation(.snappy(duration: 0.25), value: left)
                     }
                     .foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 22)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(alignment: .leading) {
                         GeometryReader { geo in
+                            // Only the fill glides over the second.
                             Rectangle().fill(Palette.green.opacity(0.45)).frame(width: geo.size.width * share)
+                                .animation(.linear(duration: 1), value: share)
                         }
                     }
                     .background(Palette.button)
                     .clipShape(Capsule())
-                    .animation(.linear(duration: 1), value: share)
                 }
             }
             .buttonStyle(.plain)
