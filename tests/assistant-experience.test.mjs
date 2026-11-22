@@ -64,7 +64,7 @@ test('adjustment requests offer a swap and do not default to cancelling gym',()=
 test('a short exercise adjustment uses Sol with low reasoning and the current plan',async()=>{
   const original=globalThis.fetch,calls=[];globalThis.fetch=async(_,options)=>{calls.push(JSON.parse(options.body));return Response.json({output_text:'Odpověď'});};
   try{await askCoach({OPENAI_API_KEY:'test'},'Změnil bys něco na dnešním cvičení?',{todayGym:todayGymContext(gym,date)});
-    assert.equal(assistantTask('Uprav dnešní cvičení'),'adjustment');assert.equal(calls[0].model,'gpt-6-sol');assert.equal(calls[0].reasoning.effort,'low');assert.match(JSON.stringify(calls[0].input),/DB Arnold press/);
+    assert.equal(assistantTask('Uprav dnešní cvičení'),'adjustment');assert.equal(calls[0].model,'gpt-6.2-sol');assert.equal(calls[0].reasoning.effort,'low');assert.match(JSON.stringify(calls[0].input),/DB Arnold press/);
   }finally{globalThis.fetch=original;}
 });
 test('council hides empty nutrition and boilerplate, and follows the athlete sport',()=>{

@@ -9,7 +9,7 @@ import { assistantStreamResponse } from "../src/assistant-stream.js";
 
 const envFor = db => ({ DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: "k", AI_DAILY_LIMIT_USD: "1" });
 const ask = { feature: "day-review", instructions: "x", input: "y", maxOutputTokens: 6000 };
-const reserved = estimateAiCostUsd("gpt-6-sol", ask);
+const reserved = estimateAiCostUsd("gpt-6.2-sol", ask);
 async function withFetch(fake, fn) {
   const realFetch = globalThis.fetch;
   globalThis.fetch = fake;
@@ -25,7 +25,7 @@ test("a stream that breaks off without usage counts at its reservation", async (
     await assert.rejects(callOpenAI(env, { ...ask, onText: text => seen.push(text) }), /přerušilo|interrupted/);
   });
   assert.equal(seen.length, 50);
-  assert.deepEqual(rows(db), [{ feature: "day-review", model: "gpt-6-sol", cost_usd: reserved }], "before, nothing was recorded");
+  assert.deepEqual(rows(db), [{ feature: "day-review", model: "gpt-6.2-sol", cost_usd: reserved }], "before, nothing was recorded");
   assert.equal(await aiSpentToday(env), reserved);
 });
 
@@ -34,7 +34,7 @@ test("a call that timed out counts at its reservation; one the AI service refuse
   await withFetch(async () => { throw Object.assign(new Error("The operation timed out."), { name: "TimeoutError" }); }, async () => {
     await assert.rejects(callOpenAI(env, ask), /timed out/);
   });
-  assert.deepEqual(rows(db), [{ feature: "day-review", model: "gpt-6-sol", cost_usd: reserved }]);
+  assert.deepEqual(rows(db), [{ feature: "day-review", model: "gpt-6.2-sol", cost_usd: reserved }]);
   db.sqlite.exec("DELETE FROM ai_usage");
   await withFetch(async () => Response.json({ error: { message: "Invalid model" } }, { status: 400 }), async () => {
     await assert.rejects(callOpenAI(env, ask), /400/);

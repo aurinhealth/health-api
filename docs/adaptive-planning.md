@@ -54,9 +54,9 @@ Plovoucí asistent ukládá rozhovory jako chaty (D1, tabulky `assistant_chats` 
 
 ## AI modely a data
 
-`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) odpovídá na rychlé a jednoduché dotazy („Jaké mám FTP?“, „Kolik mám dnes bílkovin?“, „Co mám zítra za trénink?“ – se stejnými daty jako trenér), na small talk, jídlo a stručná hodnocení. `OPENAI_MODEL` (výchozí `gpt-6-sol`) dostane vše, co chce úvahu: plánování, úpravy, revizi týdne, rozhodnutí („Mám dnes jít na intervaly?“), doporučení a analýzu bloku (až 84 dní aktivit). Reasoning je u obou `low`, aby složitá odpověď nebrala zbytečně tokeny; `OPENAI_REASONING_EFFORT` ho pro hlavní model může zvýšit. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
+`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) odpovídá na rychlé a jednoduché dotazy („Jaké mám FTP?“, „Kolik mám dnes bílkovin?“, „Co mám zítra za trénink?“ – se stejnými daty jako trenér), na small talk, jídlo a stručná hodnocení. `OPENAI_MODEL` (výchozí `gpt-6.2-sol`) dostane vše, co chce úvahu: plánování, úpravy, revizi týdne, rozhodnutí („Mám dnes jít na intervaly?“), doporučení a analýzu bloku (až 84 dní aktivit). Reasoning je u obou `low`, aby složitá odpověď nebrala zbytečně tokeny; `OPENAI_REASONING_EFFORT` ho pro hlavní model může zvýšit. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
 
-Oficiální dokumentace: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol).
+Oficiální dokumentace: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6.2 Sol](https://developers.openai.com/api/docs/models/gpt-6.2-sol).
 
 Nové tabulky `week_plan_overrides` a `athlete_state` vznikají při použití funkcí a jsou zahrnuté do ochrany osobních tabulek. Všechny dotazy filtrují `user_id`; změna nevyžaduje převod ani mazání historických dat.
 

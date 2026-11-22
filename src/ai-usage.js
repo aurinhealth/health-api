@@ -36,8 +36,8 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 // callOpenAI cacheBreakpoints).
 // The model of the coach and every complex task (complexModel, coach-assistant.js),
 // and the price an unknown model is counted at.
-export const DEFAULT_MODEL = "gpt-6-sol";
-export const MODEL_PRICES = { "gpt-6-luna": [0.10, 0.01, 0.50], "gpt-6-sol": [2, 0.20, 10], "gpt-6.1-sol": [2, 0.10, 10], "gpt-6-astra": [10, 1, 50], "claude-haiku-5-5": [0.10, 0.01, 0.50], "claude-sonnet-5-5": [2, 0.10, 10] };
+export const DEFAULT_MODEL = "gpt-6.2-sol";
+export const MODEL_PRICES = { "gpt-6-luna": [0.10, 0.01, 0.50], "gpt-6-sol": [2, 0.20, 10], "gpt-6.1-sol": [2, 0.10, 10], "gpt-6.2-sol": [2, 0.10, 10], "gpt-6-astra": [10, 1, 50], "claude-haiku-5-5": [0.10, 0.01, 0.50], "claude-sonnet-5-5": [2, 0.10, 10] };
 export const CACHE_WRITE_FACTOR = 1.25;
 // Each web search the model runs is billed on top of the tokens (10 USD per 1,000 calls).
 export const WEB_SEARCH_USD = 0.01;
@@ -239,7 +239,7 @@ export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800,
 
 // The most a call can cost: its input (about 3 characters a token, an image
 // as IMAGE_TOKENS), all of max_output_tokens and a few web searches, at the
-// model's price (an unknown model at gpt-6-sol's). Held while the call runs.
+// model's price (an unknown model at DEFAULT_MODEL's). Held while the call runs.
 const IMAGE_TOKENS = 1600, RESERVED_WEB_SEARCHES = 3;
 export function estimateAiCostUsd(model, { instructions = "", input = "", maxOutputTokens = 0, tools = null } = {}) {
   let chars = 0, images = 0;

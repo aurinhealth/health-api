@@ -136,9 +136,9 @@ test('simple, planning and block requests route to configurable Luna and Sol',as
     // The effort of complex answers can be raised on the server.
     await askCoach({...env,OPENAI_REASONING_EFFORT:'medium'},'Naplánuj zítřejší posilovnu',{});
     assert.equal(calls.at(-1).reasoning.effort,'medium');
-    // Without OPENAI_MODEL the complex model is Sol.
+    // Without OPENAI_MODEL the complex model is Sol (DEFAULT_MODEL).
     await askCoach({OPENAI_API_KEY:'test'},'Naplánuj zítřejší posilovnu',{});
-    assert.equal(calls.at(-1).model,'gpt-6-sol');
+    assert.equal(calls.at(-1).model,'gpt-6.2-sol');
     assert.equal(assistantTask('Poslední tři týdny a nový plán'),'planning');
   }finally{globalThis.fetch=original;}
 });
