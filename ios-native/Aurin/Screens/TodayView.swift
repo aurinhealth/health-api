@@ -548,8 +548,9 @@ struct WeekStrip: View {
         let color: Color? = switch zone(day) { case "green": Palette.green; case "yellow", "red": Palette.amber; default: nil }
         return WeekDayCell(day: day, today: today, selected: selected, faint: future) {
             if ahead {
-                // Today before a meal and the days ahead stay empty, never "not logged".
-                if !foodDays.isEmpty, day >= foodFirst, day < today || foodDays[day]?.logged == true {
+                // Only days with food logged get a ring: a row of dashed "nothing
+                // logged" rings was noise for someone who does not log (611 test).
+                if day >= foodFirst, foodDays[day]?.logged == true {
                     FoodDayRing(day: foodDays[day], value: .calories, size: 22)
                 }
             } else {
@@ -613,7 +614,8 @@ struct WeekDayCell<Mark: View>: View {
                 .scaledFont(15, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(faint ? Palette.faint : Palette.ink)
                 .frame(width: 34, height: 30)
-            mark.frame(width: 44, height: 30)
+            // The place stays when a day has no mark, so every cell is as tall.
+            Color.clear.frame(width: 44, height: 30).overlay { mark }
         }
         .padding(.vertical, 6)
         .frame(width: 46)
