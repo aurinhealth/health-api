@@ -28,6 +28,21 @@ extension AurinAgeText {
         return L10n.f(diff < 0 ? "−%@ roku od %@" : "+%@ roku od %@", size, Fmt.dayMonth(first.date))
     }
 
+    /// Under two weeks of estimates, or fewer than three: too short for a
+    /// trend. The card and the Aurin age page then say so in a sentence.
+    static func isShort(_ age: HealthAurinAge) -> Bool {
+        let points = twelveWeeks(age)
+        guard points.count >= 3, let first = points.first?.date, let last = points.last?.date,
+              let a = ISODay.date(first), let b = ISODay.date(last) else { return true }
+        return (Calendar(identifier: .gregorian).dateComponents([.day], from: a, to: b).day ?? 0) < 14
+    }
+
+    /// "The line starts after two weeks of estimates. First estimate Nov 17."
+    static func shortText(_ age: HealthAurinAge) -> String {
+        let first = age.series.first.map { " " + L10n.f("První odhad je z %@.", Fmt.dayMonth($0.date)) } ?? ""
+        return L10n.tr("Čára se začne kreslit po dvou týdnech odhadů.") + first
+    }
+
     /// The estimates of the last 12 weeks (84 days up to the newest).
     static func twelveWeeks(_ age: HealthAurinAge) -> [Point] {
         guard let last = age.series.last, let from = AppModel.shift(last.date, by: -84) else { return age.series }
@@ -368,7 +383,7 @@ struct AurinAgeTrendCard: View {
     /// A line needs a few estimates over two weeks at least; before that the
     /// card says so in a sentence, not as a flat line over two days (device
     /// test of build 602, point 43).
-    private var short: Bool { points.count < 3 || span < 14 }
+    private var short: Bool { AurinAgeText.isShort(age) }
 
     var body: some View {
         RouteLink(route: .aurinAge) {
@@ -388,19 +403,13 @@ struct AurinAgeTrendCard: View {
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
                 if short {
-                    Text(verbatim: shortText).font(Typo.body).foregroundStyle(Palette.secondary)
+                    Text(verbatim: AurinAgeText.shortText(age)).font(Typo.body).foregroundStyle(Palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     chart
                 }
             }
         }
-    }
-
-    /// "The line starts once there are two weeks of estimates. First one Nov 17."
-    private var shortText: String {
-        let first = points.first.map { " " + L10n.f("První odhad je z %@.", Fmt.dayMonth($0.date)) } ?? ""
-        return L10n.tr("Čára se začne kreslit po dvou týdnech odhadů.") + first
     }
 
     private var chart: some View {
@@ -755,13 +764,9 @@ struct MiniDial<Center: View>: View {
 
 // MARK: - Sleep
 
-/// Last night as an arc from falling asleep to waking on an evening-to-morning
-/// scale (the shared drawing with Today, evening to morning colours), the
-/// week's nights as dots against the need and tonight's plan in one row.
-struct SleepNightCard: View {
+/// Last night on a 20:00 to 10:00 half circle (Health's sleep card, concept 1).
+struct NightArc: View {
     let sleep: HealthSnapshot.Sleep
-    /// The day Health shows: its week is drawn, with this night circled.
-    var date: String? = nil
 
     private static func minutes(_ clock: String?) -> Double? {
         guard let clock, clock.count >= 4 else { return nil }
@@ -774,12 +779,81 @@ struct SleepNightCard: View {
     private static func onScale(_ m: Double) -> Double { (m - 20 * 60 + 24 * 60).truncatingRemainder(dividingBy: 24 * 60) }
 
     var body: some View {
+        let night = sleep.night
+        let span = 14.0 * 60
+        let to = Self.minutes(night?.end).map(Self.onScale)
+        // Asleep before 20:00: the arc starts at the scale's start, not nowhere.
+        let from = Self.minutes(night?.start).map(Self.onScale).map { $0 > span && (to ?? span) <= span ? 0 : $0 }
+        return GeometryReader { geo in
+            let w = geo.size.width
+            // Room above the arc for a time label at its top (606 retest: 0:30 sat on the arc).
+            let r = min(w / 2 - 28, geo.size.height - 44)
+            let c = CGPoint(x: w / 2, y: geo.size.height - 18)
+            let angle = { (m: Double) in Angle.degrees(180 + 180 * min(1, max(0, m / span))) }
+            ZStack {
+                Path { p in p.addArc(center: c, radius: r, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false) }
+                    .stroke(Palette.track, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                if let from, let to, to > from {
+                    Path { p in p.addArc(center: c, radius: r, startAngle: angle(from), endAngle: angle(to), clockwise: false) }
+                        // Orange through gold to mint as the concept; the gold stop keeps the light middle from going olive (604 retest).
+                        .stroke(LinearGradient(colors: [Color(light: 0xEE8F3A, dark: 0xF2A35A), Color(light: 0xE3BE5C, dark: 0xE3D08A), Color(light: 0x3DBB8C, dark: 0x8FE6C4)],
+                                               startPoint: .leading, endPoint: .trailing),
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .shadow(color: Color(light: 0x2FA57B, dark: 0x8FE6C4).opacity(0.35), radius: 6)
+                }
+                VStack(spacing: 2) {
+                    Text(verbatim: L10n.tr("Minulá noc").uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
+                    Text(verbatim: night?.minutes.map { Fmt.duration(Int($0)) } ?? "–").font(Typo.number(34)).foregroundStyle(Palette.ink)
+                    if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                .position(x: c.x, y: c.y - r * 0.42)
+                // Falling asleep and waking at the ends of the night's arc (concept 1, point 54).
+                if let from, let to, to > from, let start = night?.start, let end = night?.end {
+                    let a = angle(from).radians, b = angle(to).radians
+                    let out = r + 18
+                    Text(verbatim: ClockText.format(start)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
+                        .position(x: c.x + cos(a) * out - 6, y: max(8, c.y + sin(a) * out))
+                    Text(verbatim: ClockText.format(end)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
+                        .position(x: c.x + cos(b) * out + 6, y: max(8, c.y + sin(b) * out))
+                }
+                // The scale ends sit under the arc, clear of its round caps (DES-11),
+                // and give way to a time of the night close to them (606 retest).
+                if (from ?? span) > 75 {
+                    Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 14)
+                }
+                if (to ?? 0) < span - 75 {
+                    Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 14)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([L10n.tr("Minulá noc"), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    /// "6 min short of 7 h 30 min", or "reached your need".
+    private var shortText: String? {
+        guard let m = sleep.night?.minutes else { return nil }
+        let need = Double(sleep.need)
+        if m >= need { return L10n.tr("potřeba splněna") }
+        return L10n.f("%@ méně než %@", Fmt.duration(Int(need - m)), Fmt.duration(sleep.need))
+    }
+}
+
+/// Last night as an arc from falling asleep to waking on an evening-to-morning
+/// scale (the shared drawing with Today, evening to morning colours), the
+/// week's nights as dots against the need and tonight's plan in one row.
+struct SleepNightCard: View {
+    let sleep: HealthSnapshot.Sleep
+    /// The day Health shows: its week is drawn, with this night circled.
+    var date: String? = nil
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Spánek")
             Card {
                 RouteLink(route: .sleep) {
                     VStack(spacing: 6) {
-                        arcView.frame(height: 150)
+                        NightArc(sleep: sleep).frame(height: 156)
                         week
                     }
                     .contentShape(Rectangle())
@@ -806,56 +880,6 @@ struct SleepNightCard: View {
         case let (bed?, nil): return L10n.f("v posteli do %@", ClockText.format(bed))
         default: return L10n.f("potřeba %@", Fmt.duration(t.need))
         }
-    }
-
-    private var arcView: some View {
-        let night = sleep.night
-        let span = 14.0 * 60
-        let from = Self.minutes(night?.start).map(Self.onScale)
-        let to = Self.minutes(night?.end).map(Self.onScale)
-        return GeometryReader { geo in
-            let w = geo.size.width
-            let r = min(w / 2 - 20, geo.size.height - 16)
-            let c = CGPoint(x: w / 2, y: geo.size.height - 4)
-            let angle = { (m: Double) in Angle.degrees(180 + 180 * min(1, max(0, m / span))) }
-            ZStack {
-                Path { p in p.addArc(center: c, radius: r, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false) }
-                    .stroke(Palette.track, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                if let from, let to, to > from {
-                    Path { p in p.addArc(center: c, radius: r, startAngle: angle(from), endAngle: angle(to), clockwise: false) }
-                        .stroke(LinearGradient(colors: [Palette.amber, Palette.Status.good], startPoint: .leading, endPoint: .trailing),
-                                style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                        .shadow(color: Palette.Status.good.opacity(0.35), radius: 6)
-                }
-                VStack(spacing: 2) {
-                    Text(verbatim: L10n.tr("Minulá noc").uppercased(with: Fmt.locale)).font(.caption2.weight(.medium)).tracking(1.6).foregroundStyle(Palette.muted)
-                    Text(verbatim: night?.minutes.map { Fmt.duration(Int($0)) } ?? "–").font(Typo.number(34)).foregroundStyle(Palette.ink)
-                    if let short = shortText { Text(verbatim: short).font(Typo.caption).foregroundStyle(Palette.muted) }
-                }
-                .position(x: c.x, y: c.y - r * 0.42)
-                // Falling asleep and waking at the ends of the night's arc (concept 1, point 54).
-                if let from, let to, to > from, let start = night?.start, let end = night?.end {
-                    let a = angle(from).radians, b = angle(to).radians
-                    let out = r + 18
-                    Text(verbatim: ClockText.format(start)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                        .position(x: c.x + cos(a) * out - 6, y: max(8, c.y + sin(a) * out))
-                    Text(verbatim: ClockText.format(end)).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                        .position(x: c.x + cos(b) * out + 6, y: max(8, c.y + sin(b) * out))
-                }
-                Text(verbatim: ClockText.format(minutes: 20 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x - r, y: c.y + 2)
-                Text(verbatim: ClockText.format(minutes: 10 * 60)).font(.caption2).foregroundStyle(Palette.faint).position(x: c.x + r, y: c.y + 2)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel([L10n.tr("Minulá noc"), night?.minutes.map { Fmt.hoursMinutesSpoken($0) }, shortText].compactMap { $0 }.joined(separator: ", "))
-    }
-
-    /// "6 min short of 7 h 30 min", or "reached your need".
-    private var shortText: String? {
-        guard let m = sleep.night?.minutes else { return nil }
-        let need = Double(sleep.need)
-        if m >= need { return L10n.tr("potřeba splněna") }
-        return L10n.f("%@ méně než %@", Fmt.duration(Int(need - m)), Fmt.duration(sleep.need))
     }
 
     private var week: some View {
@@ -1090,8 +1114,16 @@ struct AurinAgeDetailContent: View {
                 DetailHeadline(value: Fmt.decimal(age.value, digits: 1), unit: L10n.tr("let"), usual: AurinAgeText.versusAge(age))
                 let points = loaded?.shown ?? age.series.map { ChartPoint(date: $0.date, value: $0.value) }
                 Card {
-                    DetailChart(points: points, today: health.date, period: $period, digits: 1,
-                                note: "Každý bod je odhad Aurinu z toho dne.")
+                    if AurinAgeText.isShort(age) {
+                        // A few days of estimates: each day as a point over 30 days and
+                        // the sentence, not a weekly average with no line (device test
+                        // of build 604, DES-2).
+                        DetailChart(points: age.series.map { ChartPoint(date: $0.date, value: $0.value) }, today: health.date,
+                                    period: .constant(.days30), digits: 1, note: AurinAgeText.shortText(age), periods: [.days30])
+                    } else {
+                        DetailChart(points: points, today: health.date, period: $period, digits: 1,
+                                    note: "Každý bod je odhad Aurinu z toho dne.")
+                    }
                 }
                 .padding(.top, 12)
                 AurinAgeShapes(age: age, health: health).padding(.top, 28)

@@ -182,8 +182,7 @@ struct WorkoutDayMark: View {
     /// second workout not missed. A day can never read differently in the two.
     static func marks(_ day: CalendarDay?) -> [CalendarActivity] {
         let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
-        let done = list.filter { $0.status == "done" }
-        guard let first = done.first(where: { $0.sport != "walk" }) ?? done.first ?? list.first else { return [] }
+        guard let first = DayCircle.Look.lead(list) else { return [] }
         let second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }
         return [first] + (second.map { [$0] } ?? [])
     }

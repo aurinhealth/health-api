@@ -81,6 +81,8 @@ struct WeekPlanSettingsView: View {
     @State private var selected: String?
     /// The settings did not load: no cards, Try again (nothing to save over).
     @State private var failed = false
+    /// Generate asks first while planned workouts would go (606: it replaced own changes without a word).
+    @State private var confirmGenerate = false
 
     private var nextMonday: String { ISODay.shift(monday, 7) }
     private var weeks: [String] { [monday, nextMonday] }
@@ -245,9 +247,10 @@ struct WeekPlanSettingsView: View {
                 .overlay { Circle().fill(Palette.faint).frame(width: 5, height: 5) }
         } else if let first = sports.first {
             if sports.count > 1 {
-                HStack(spacing: -size * 0.45) {
-                    WeekPlanSport.disc(first, size: size * 0.75)
-                    WeekPlanSport.disc(sports[1], size: size * 0.75)
+                // Two smaller discs side by side, barely touching (606: overlapping, unreadable).
+                HStack(spacing: -size * 0.08) {
+                    WeekPlanSport.disc(first, size: size * 0.54)
+                    WeekPlanSport.disc(sports[1], size: size * 0.54)
                 }
                 .frame(width: size, height: size)
             } else {
@@ -342,13 +345,21 @@ struct WeekPlanSettingsView: View {
 
     private var generateBar: some View {
         VStack(spacing: 8) {
-            Button { Task { await close(generate: true) } } label: {
+            Button {
+                if plannedAhead { confirmGenerate = true } else { Task { await close(generate: true) } }
+            } label: {
                 Text(verbatim: L10n.tr("Vygenerovat tréninky")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
             .disabled(saving || model.demo || model.offline || failed || !loaded)
+            .confirmationDialog(L10n.tr("Nahradit naplánované tréninky?"), isPresented: $confirmGenerate, titleVisibility: .visible) {
+                Button(L10n.tr("Vygenerovat tréninky"), role: .destructive) { Task { await close(generate: true) } }
+                Button(L10n.tr("Zrušit"), role: .cancel) {}
+            } message: {
+                Text(verbatim: L10n.tr("Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou."))
+            }
             Text(verbatim: model.offline ? L10n.tr("Jsi offline. Připoj se a plán se sestaví.")
                  : WeekPlanText.replans(from: today, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
@@ -356,6 +367,13 @@ struct WeekPlanSettingsView: View {
         }
         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
         .background(Palette.background.opacity(0.94).ignoresSafeArea(edges: .bottom))
+    }
+
+    /// A planned workout from today to next Sunday, which Generate would replace.
+    private var plannedAhead: Bool {
+        ISODay.range(today, ISODay.shift(nextMonday, 6)).contains { date in
+            (calendar[date]?.activities ?? []).contains { $0.status == "planned" }
+        }
     }
 
     // MARK: Data

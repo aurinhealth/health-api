@@ -26,15 +26,6 @@ enum Freshness: Int, CaseIterable, Hashable {
         }
     }
 
-    /// Text in that state's colour, readable on a card.
-    var textColor: Color {
-        switch self {
-        case .fresh: return Palette.green
-        case .recovering: return Palette.amber
-        case .tired: return Palette.red
-        }
-    }
-
     /// A muscle on `day`: fresh once its ready day has come, recovering the day
     /// before it, tired earlier.
     static func of(readyDate: String?, rested: Bool, on day: String) -> Freshness {

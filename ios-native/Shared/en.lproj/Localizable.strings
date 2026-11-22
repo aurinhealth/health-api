@@ -4518,6 +4518,8 @@
 "Volno od zítřka do neděle." = "Rest from tomorrow to Sunday.";
 "Vyber den. Kouč přidá jeden trénink (%@), který se k němu hodí." = "Pick the day. The coach adds one %@ workout that suits it.";
 "Vygenerovat tréninky" = "Generate workouts";
+"Nahradit naplánované tréninky?" = "Replace the planned workouts?";
+"Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou." = "Workouts from today to next Sunday are replaced with new ones, your own changes too. Finished ones stay.";
 "Zatím bez plánu" = "No plan yet";
 "Zatím žádné naplánované tréninky" = "No workouts planned yet";
 "Zrušit volné dny" = "Clear rest days";
@@ -5148,3 +5150,4 @@
 "Návrh na dnes" = "A workout for today";
 "Těmto filtrům nic neodpovídá. Zkus jinou délku nebo sporty." = "Nothing fits these filters. Try another length or other sports.";
 "Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš" = "Tap to plan, hold to save it as yours or delete";
+"Zatím jediné měření. Čára se začne kreslit od druhého." = "Only one measurement so far. The line starts with the second.";
