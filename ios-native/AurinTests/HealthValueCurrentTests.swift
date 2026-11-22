@@ -59,7 +59,7 @@ final class OxygenPointsTests: XCTestCase {
     /// 3 months ago stays out when the nearest measurement is far older.
     func testMeasurementRowsUseTheLatestAgainstThen() {
         let points = [ChartPoint(date: "2026-06-01", value: 80.1), ChartPoint(date: "2026-10-20", value: 78.8),
-                      ChartPoint(date: "2026-11-05", value: 78.6), ChartPoint(date: today, value: 78.4)]
+                      ChartPoint(date: "2026-11-05", value: 78.6), ChartPoint(date: "2026-11-21", value: 78.4)]
         let rows = TrendMath.measurementRows(points, lags: [14, 30, 91])
         XCTAssertEqual(rows.map(\.lag), [14, 30])
         XCTAssertEqual(rows.map(\.then), [78.6, 78.8])
