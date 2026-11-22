@@ -540,10 +540,8 @@ extension WatchBridge: WCSessionDelegate {
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         // Queued on the watch for another account than the one signed in now:
-        // it is that account's, so it goes nowhere. Signed out, it goes nowhere
-        // either: kept, it would go to whichever account signs in next.
-        guard let current = Outbox.account else { return }
-        if let owner = userInfo[WatchSession.accountKey] as? Int, owner != current { return }
+        // it is that account's, so it goes nowhere (unknown on either side counts as the same).
+        if let owner = userInfo[WatchSession.accountKey] as? Int, let current = Outbox.account, owner != current { return }
         let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
         let rated = (userInfo[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let water = userInfo[WatchSnapshot.waterKey] as? Int
@@ -556,6 +554,10 @@ extension WatchBridge: WCSessionDelegate {
         let live = (userInfo[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let partDone = (userInfo[WatchGym.partDoneKey] as? Data).flatMap(WatchGym.PartDone.decode)
         Task { @MainActor in
+            // Signed out ("Odhlásit se" forgets the account): it goes nowhere either,
+            // kept it would go to whichever account signs in next. An expired session
+            // keeps the account, so its writes wait for the next sign-in as before.
+            guard Outbox.account != nil || (AppModel.live?.api ?? APIClient()).hasSession else { return }
             if let partDone { applyGym(partDone) }
             if let live, !gymEnded { LiveWorkout.shared.watch(live) }
             if let done { await applyGym(done) }
