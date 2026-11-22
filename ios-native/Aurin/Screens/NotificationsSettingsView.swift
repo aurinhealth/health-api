@@ -103,7 +103,7 @@ enum ReminderDays {
     }
 }
 
-/// A row of the list: the big time and "Name, detail".
+/// A row of the list: the time, then the name with its dot and the detail.
 private struct ReminderLine: Identifiable {
     let kind: ReminderKind
     let time: String
@@ -162,7 +162,7 @@ struct NotificationsSettingsView: View {
     @State private var editing: ReminderKind?
 
     var body: some View {
-        SettingsPage(title: "Oznámení") {
+        SettingsPage(title: "Oznámení", hero: SettingsHero(text: "Připomínky, které přicházejí během dne.", art: AnyView(ReminderDayOverview(marks: marks)))) {
             if allowed == false {
                 SettingsGroup(footer: "Oznámení pro Aurin jsou v iPhonu vypnutá.") {
                     Button {
@@ -171,7 +171,6 @@ struct NotificationsSettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            ReminderDayOverview(marks: marks)
             SettingsGroup {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
                     if index > 0 { SettingsDivider() }
@@ -269,7 +268,7 @@ struct NotificationsSettingsView: View {
             return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: ", "), order: first.time)
         case .workout:
             // An hour before a session with a time of its own, the others at the chosen time.
-            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: limited ? summary : L10n.f("bez času v %@", Reminders.clock(workoutTime)), order: workoutTime)
+            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: limited ? summary : L10n.f("nebo v %@", Reminders.clock(workoutTime)), order: workoutTime)
         case .food:
             return ReminderLine(kind: kind, time: Reminders.clock(foodTime), detail: limited ? summary : L10n.tr("jen když chybí"), order: foodTime)
         case .weight:
@@ -329,34 +328,34 @@ struct NotificationsSettingsView: View {
     }
 }
 
-/// The 6:00–23:00 line with the day's reminders.
+/// The 6:00–23:00 line with the day's reminders, the page's picture (the
+/// concept's day line): small coloured dots, drinking above the line, the
+/// rest below, the hours under it.
 private struct ReminderDayOverview: View {
     let marks: [ReminderMark]
     let start = 6 * 60
     let end = 23 * 60
-    let size: CGFloat = 28
+    let size: CGFloat = 10
 
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
             ZStack(alignment: .topLeading) {
-                label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 8)
-                label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 8)
-                label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 8)
-                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 8)
                 Rectangle()
                     .fill(Palette.hairline)
                     .frame(width: width, height: 1)
-                    .position(x: width / 2, y: 70)
+                    .position(x: width / 2, y: 18)
                 ForEach(marks) { mark in
-                    dot(mark).position(x: xPosition(mark.minute, width), y: mark.kind == .water ? 44 : 96)
+                    dot(mark).position(x: xPosition(mark.minute, width), y: mark.kind == .water ? 8 : 28)
                 }
+                label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 50)
+                label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 50)
+                label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 50)
+                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 50)
             }
         }
-        .frame(height: 112)
-        .padding(16)
-        .cardSurface(cornerRadius: 18)
-        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .frame(height: 60)
+        .padding(.horizontal, 4)
         .accessibilityHidden(true)
     }
 
@@ -375,15 +374,12 @@ private struct ReminderDayOverview: View {
     }
 
     private func dot(_ mark: ReminderMark) -> some View {
-        Image(systemName: mark.kind.symbol)
-            .scaledFont(12, weight: .semibold, cap: .denseCap)
-            .foregroundStyle(mark.on ? Palette.onAccent : Palette.faint)
+        Circle()
+            .fill(mark.on ? mark.kind.color : Palette.track)
             .frame(width: size, height: size)
-            .background { Circle().fill(mark.on ? mark.kind.color : Palette.track) }
     }
 }
 
-/// "22:10 / Do postele, podle spánku" and the switch; dimmed when off.
 private struct ReminderListRow: View {
     let line: ReminderLine
     @Binding var isOn: Bool
@@ -392,22 +388,36 @@ private struct ReminderListRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Button(action: open) {
-                VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 12) {
+                    // The time in serif in a narrow column, so the names line up.
                     Text(verbatim: line.time)
-                        .font(Typo.number(40))
+                        .font(Typo.number(28))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(verbatim: subtitle)
-                        .font(Typo.small)
-                        .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
+                        .frame(width: 96, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 7) {
+                            Circle().fill(line.kind.color).frame(width: 7, height: 7)
+                            Text(verbatim: L10n.tr(line.kind.name))
+                                .font(.body)
+                                .foregroundStyle(Palette.ink)
+                                .lineLimit(1)
+                        }
+                        if !line.detail.isEmpty {
+                            Text(verbatim: line.detail)
+                                .font(Typo.caption)
+                                .foregroundStyle(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .opacity(isOn ? 1 : 0.45)
+            .accessibilityElement(children: .combine)
             Toggle(isOn: $isOn) { EmptyView() }
                 .toggleStyle(AurinToggleStyle())
                 .fixedSize()
@@ -415,11 +425,7 @@ private struct ReminderListRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-    }
-
-    private var subtitle: String {
-        let name = L10n.tr(line.kind.name)
-        return line.detail.isEmpty ? name : name + ", " + line.detail
+        .frame(minHeight: 64)
     }
 }
 

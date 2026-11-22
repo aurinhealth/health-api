@@ -72,6 +72,11 @@ enum ProContents {
     }
 
     static let pro = [
+        // The ones without items first, so none of them reads as part of the
+        // last group (606 N4).
+        Group(title: "Aurin Age", items: []),
+        Group(title: "Vitamíny a minerály", items: []),
+        Group(title: "Vlastní makra a cíle živin", items: []),
         Group(title: "Aurin Intelligence", items: [
             "Kouč jen pro tebe",
             "Změny plánu vlastními slovy",
@@ -83,10 +88,7 @@ enum ProContents {
             "Plány na závody a cíle",
             "Podle tvé regenerace a pokroku",
             "Podle času, který každý den máš"
-        ]),
-        Group(title: "Aurin Age", items: []),
-        Group(title: "Vitamíny a minerály", items: []),
-        Group(title: "Vlastní makra a cíle živin", items: [])
+        ])
     ]
 }
 
@@ -147,6 +149,8 @@ struct SubscriptionView: View {
     @State private var notice: String?
     @State private var morePacks = false
     @State private var redeemCode = false
+    /// Opened inside Settings: the title in spaced capitals like its other pages (602 point 9).
+    @Environment(\.settingsTitles) private var settingsTitles
     private let store = ProStore.shared
 
     var body: some View {
@@ -156,6 +160,14 @@ struct SubscriptionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(free || loading ? nil : .dark, for: .navigationBar)
             .toolbar {
+                if settingsTitles && !loading {
+                    ToolbarItem(placement: .principal) {
+                        Text(L10n.tr(free ? "Správa předplatného" : "Aurin Pro").uppercased(with: L10n.locale))
+                            .font(.footnote.weight(.semibold)).tracking(2.4).foregroundStyle(free ? Palette.ink : Night.ink)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Uplatnit promo kód") { redeemCode = true }

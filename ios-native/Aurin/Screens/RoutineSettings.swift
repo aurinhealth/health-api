@@ -129,7 +129,8 @@ struct MealSlotsSettingsView: View {
     var title = "Jídla dne"
 
     var body: some View {
-        SettingsPage(title: title) {
+        // Spaced capitals also from Food, like Food's other detail pages (606 point 9).
+        SettingsPage(title: title, spacedTitle: true) {
             SettingsGroup(title: "Jím obvykle") {
                 ForEach(Array(MealSlot.all.enumerated()), id: \.element.id) { index, slot in
                     if index > 0 { SettingsDivider() }

@@ -15,8 +15,7 @@ struct WatchSettingsView: View {
     private static let names = ["readiness": "Připravenost", "training": "Trénink", "food": "Jídlo"]
 
     var body: some View {
-        SettingsPage(title: "Apple Watch") {
-            device
+        SettingsPage(title: "Apple Watch", hero: SettingsHero(text: deviceText, art: AnyView(Self.watch))) {
             SettingsGroup(title: "Stránky", footer: "Mezi stránkami se na hodinkách přechází korunkou. Pořadí změníš přetažením.") {
                 ForEach(Array(order.enumerated()), id: \.element) { i, page in
                     if i > 0 { SettingsDivider() }
@@ -84,32 +83,42 @@ struct WatchSettingsView: View {
         settings.pages = order.filter { settings.pages.contains($0) }
     }
 
-    private var device: some View {
+    /// The page's sentence: paired, installed and when Today last went to the watch.
+    private var deviceText: String {
         let state = WatchBridge.shared.watchState
-        let text: String
-        if !state.paired {
-            text = L10n.tr("Hodinky nejsou spárované s tímto iPhonem.")
-        } else if !state.installed {
-            text = L10n.tr("Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu.")
-        } else if let sent = WatchBridge.shared.lastSent {
-            text = L10n.f("Připojeno, data poslaná %@", sent.formatted(date: .omitted, time: .shortened))
-        } else {
-            text = L10n.tr("Připojeno")
+        if !state.paired { return L10n.tr("Hodinky nejsou spárované s tímto iPhonem.") }
+        if !state.installed { return L10n.tr("Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu.") }
+        if let sent = WatchBridge.shared.lastSent {
+            let time = sent.formatted(date: .omitted, time: .shortened)
+            return Calendar.current.isDateInToday(sent)
+                ? L10n.f("Tvoje Apple Watch jsou připojené, data dostaly dnes v %@.", time)
+                : L10n.f("Tvoje Apple Watch jsou připojené, data dostaly %@.", sent.formatted(date: .abbreviated, time: .shortened))
         }
-        return HStack(spacing: 12) {
-            Image(systemName: "applewatch")
-                .font(.system(size: 22))
-                .foregroundStyle(Palette.ink)
-                .frame(width: 40, height: 40)
-                .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Apple Watch").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(text).font(Typo.small).foregroundStyle(state.installed ? Palette.green : Palette.muted)
+        return L10n.tr("Tvoje Apple Watch jsou připojené.")
+    }
+
+    /// A small watch with Readiness on its face (the concept's drawing).
+    static var watch: some View {
+        let ink = Color(light: 0x2C2D2E, dark: 0x2C2D2E)
+        return VStack(spacing: -2) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ink).frame(width: 40, height: 14)
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(light: 0x15140F, dark: 0x15140F))
+                RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.faint.opacity(0.6), lineWidth: 1.5)
+                VStack(spacing: 3) {
+                    Image(systemName: "heart.fill").font(.system(size: 15)).foregroundStyle(Color(light: 0xECEAE6, dark: 0xECEAE6))
+                    Text(verbatim: L10n.tr("Připravenost")).font(.system(size: 8)).foregroundStyle(Color(light: 0xA3A8A5, dark: 0xA3A8A5))
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .padding(.horizontal, 6)
             }
-            Spacer(minLength: 0)
+            .frame(width: 60, height: 70)
+            .overlay(alignment: .trailing) {
+                RoundedRectangle(cornerRadius: 1.5).fill(ink).frame(width: 4, height: 12).offset(x: 4)
+            }
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(ink).frame(width: 40, height: 14)
         }
-        .padding(.horizontal, 16).padding(.vertical, 14)
-        .cardSurface(cornerRadius: 22)
+        .accessibilityHidden(true)
     }
 
     private func shown(_ page: String) -> Binding<Bool> {
