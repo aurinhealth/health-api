@@ -253,6 +253,18 @@ test("Health: the HRV chart ends on the number above it, the morning's locked on
   assert.equal(t.hrv.value, h.hrv.value);
 });
 
+test("one wake time: Today shows the night as recorded now, as the sleep detail does", () => {
+  // Locked at a first wake-up; the night goes on in bed 27 minutes more
+  // without more sleep, so the lock stays (TestFlight 606: 9:46 vs 10:13).
+  const live = sessions.find(s => s.date === DATE);
+  const early = { ...live, endTime: new Date(Date.parse(live.endTime) - 27 * 60000).toISOString(), timeInBedMin: (live.timeInBedMin || 0) - 27 };
+  const lock = { row: { hrv: 66, restingHR: 47 }, night: early };
+  const both = { ...input, profile: { ...input.profile, readinessLocks: { [DATE]: lock } } };
+  const t = buildToday(both), h = buildHealth(both);
+  assert.equal(t.sleep.end, h.sleep.night.end);
+  assert.equal(t.sleep.minutes, h.sleep.night.minutes);
+});
+
 test("Health: what makes up the sleep index, as values without points", () => {
   const h = buildHealth(input);
   const p = h.sleep.night.parts;

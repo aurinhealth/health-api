@@ -234,6 +234,11 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   // readiness the coaches use (readiness.js); the morning check-in can lower it.
   const readiness = readinessFor({ date, google, intervals: fitness.wellness, sessions, profile, checkin });
   const rows = readiness.rows, night = readiness.night, need = readiness.need.need;
+  // Last night as Today shows it: the night as recorded now, the same as the
+  // Health sleep detail (app-health.js). Readiness may keep the night locked
+  // at the first wake-up; shown, it gave two wake times (TestFlight 606:
+  // 9:46 on Today, 10:13 in the sleep detail).
+  const shown = nights.get(date) || night;
   const week = readinessWeek({ date, readiness, sessions, profile });
   const hrv = readiness.components?.hrv || null;
 
@@ -436,16 +441,16 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
     trainingPlan: trainingPlan || null,
-    sleep: night ? {
-      minutes: num(night.durationMin),
-      inBedMinutes: num(night.timeInBedMin),
-      index: sleepIndexFor(night, need),
+    sleep: shown ? {
+      minutes: num(shown.durationMin),
+      inBedMinutes: num(shown.timeInBedMin),
+      index: sleepIndexFor(shown, need),
       need,
-      start: clockOf(night.startTime),
-      end: clockOf(night.endTime)
+      start: clockOf(shown.startTime),
+      end: clockOf(shown.endTime)
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
-    naps: napsOn(sessions, date, night),
+    naps: napsOn(sessions, date, shown),
     strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: hasPlan && !daySession.length, noPlan: !hasPlan && !daySession.length, usual: usualDay ?? (noWearable ? 8 : null), recover }), rest: hasPlan && !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || (hasPlan || daySession.length ? null : usualDay != null ? L("bez plánu, ne nad obvyklý objem", "no plan, not above your usual volume") : L("bez plánu", "no plan")) } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.

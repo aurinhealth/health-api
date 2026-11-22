@@ -122,7 +122,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     .filter(p => p.value != null);
 
   // Last night, the week of nights and the coming night.
-  const night = nights.get(date) || null;
+  // The same night as Today's sleep (app-today.js): a short night too.
+  const night = nights.get(date) || readiness.night || null;
   const needToday = needOn(date);
   const stages = night?.stages || {};
   const stageMin = key => round(num(stages[key]));
