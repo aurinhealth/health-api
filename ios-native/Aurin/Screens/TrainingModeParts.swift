@@ -539,56 +539,100 @@ struct MinimizedGym {
     var part: GymDayPart? = nil
     /// It waited for its Start ("Na řadě").
     var waiting = false
+    /// The part as the lock screen showed it, so it stays there while hidden.
+    var activity: GymLiveActivity.Part? = nil
 }
 
-/// The bar over the tab bar while the workout is hidden: its time, the rest
-/// and the exercise; a tap opens it again.
+/// The bar over the tab bar while the workout is hidden, as a music app's
+/// mini player (concept 2026-11-22): the gym's disc, what is on, and on the
+/// right the rest in serif amber with Skip, a part's clock, or the workout's
+/// total time; during the rest a thin line runs out under it. A tap opens
+/// the workout; Série hotová stays in the workout (no accidental set from
+/// another tab).
 struct MinimizedGymBar: View {
     let gym: MinimizedGym
     let live: LiveWorkout
     var open: () -> Void
+    var skip: () -> Void = {}
 
     var body: some View {
-        Button(action: open) {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let now = context.date
+            let resting = (gym.restEnd ?? .distantPast) > now
             HStack(spacing: 12) {
-                Image(systemName: "dumbbell.fill").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.rust)
-                    .frame(width: 38, height: 38).background(Palette.track, in: Circle())
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 8) {
-                            Text(verbatim: gym.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                            Text(verbatim: elapsed(at: context.date)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).monospacedDigit()
+                Button(action: open) {
+                    HStack(spacing: 12) {
+                        SportDisc(sport: "gym", size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: lines(resting: resting).title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                            if let sub = lines(resting: resting).sub {
+                                Text(verbatim: sub).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                            }
                         }
-                        if let line = line(at: context.date) {
-                            Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                        }
+                        Spacer(minLength: 8)
+                        clock(resting: resting, at: now)
                     }
+                    .contentShape(Rectangle())
                 }
-                Spacer(minLength: 4)
-                Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.tr("Zpět do tréninku"))
+                if resting {
+                    Button(action: skip) {
+                        Text("Přeskočit").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 14).frame(height: 36)
+                            .background(Palette.ink.opacity(0.10), in: Capsule())
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Přeskočit pauzu"))
+                }
             }
-            .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 9)
-            .cardSurface(cornerRadius: 22)
-            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+            .padding(.leading, 10).padding(.trailing, resting ? 8 : 16).padding(.vertical, 8)
+            .overlay(alignment: .bottom) {
+                if resting, let end = gym.restEnd, gym.restTotal > 0 {
+                    let left = end.timeIntervalSince(now) / Double(gym.restTotal)
+                    GeometryReader { geo in
+                        Capsule().fill(Palette.amber).frame(width: geo.size.width * min(1, max(0, left)))
+                    }
+                    .frame(height: 3).padding(.horizontal, 24)
+                    .accessibilityHidden(true)
+                }
+            }
+            .chromeGlass(in: Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Zpět do tréninku"))
     }
 
-    private func elapsed(at now: Date) -> String {
-        guard live.clockStart != nil else { return "" }
-        let s = Int(live.elapsed(at: now))
-        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    /// During the rest the set that comes ("Squat", "Next, 80 kg × 8"), during
+    /// a part the part, else the set at hand ("Squat, set 3 of 4", "80 kg × 8").
+    private func lines(resting: Bool) -> (title: String, sub: String?) {
+        if let part = gym.activity {
+            return (part.title, part.detail)
+        }
+        guard let state = GymLiveActivity.state(gym.day, focus: gym.index, restStart: nil, restEnd: nil), !state.exercise.isEmpty else {
+            return (gym.title, nil)
+        }
+        if resting { return (state.exercise, L10n.f("Další: %@", state.load)) }
+        return (state.exercise + ", " + state.setLabel, state.load)
     }
 
-    /// "Pauza 0:40, další Dřep", or the exercise.
-    private func line(at now: Date) -> String? {
-        if let end = gym.restEnd, end > now {
-            let s = Int(end.timeIntervalSince(now).rounded(.up))
-            let rest = L10n.f("Pauza %@", String(format: "%d:%02d", s / 60, s % 60))
-            return gym.next.map { rest + ", " + L10n.f("další %@", $0) } ?? rest
+    @ViewBuilder
+    private func clock(resting: Bool, at now: Date) -> some View {
+        if resting, let end = gym.restEnd {
+            Text(verbatim: Self.clock(Int(end.timeIntervalSince(now).rounded(.up))))
+                .font(Typo.number(28)).foregroundStyle(Palette.amber).monospacedDigit()
+        } else if let part = gym.activity, let start = part.start {
+            let seconds = part.end.map { Int($0.timeIntervalSince(now).rounded(.up)) } ?? Int(now.timeIntervalSince(start))
+            Text(verbatim: Self.clock(max(0, seconds))).font(Typo.number(24)).foregroundStyle(Palette.ink).monospacedDigit()
+        } else if live.clockStart != nil {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(verbatim: Self.clock(Int(live.elapsed(at: now)))).font(Typo.number(24)).foregroundStyle(Palette.ink).monospacedDigit()
+                Text(verbatim: L10n.isEnglish ? "total" : "celkem").font(Typo.caption).foregroundStyle(Palette.muted)
+            }
         }
-        return gym.next
+    }
+
+    static func clock(_ s: Int) -> String {
+        s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 

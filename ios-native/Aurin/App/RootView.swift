@@ -252,9 +252,11 @@ struct RootView: View {
                         }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
-                            MinimizedGymBar(gym: gym, live: LiveWorkout.shared) { model.open(.trainingMode(gym.date)) }
+                            MinimizedGymBar(gym: gym, live: LiveWorkout.shared, open: { model.open(.trainingMode(gym.date)) },
+                                            skip: { TrainingModeView.minimizedAction(.skip, model: model) })
                                 .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
-                                .padding(.horizontal, 28)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 4)
                                 .dynamicTypeSize(Self.textSizes)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }

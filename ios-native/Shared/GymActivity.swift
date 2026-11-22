@@ -32,6 +32,17 @@ struct GymActivityAttributes: ActivityAttributes {
         var kcal: Int?
         var restStart: Date?
         var restEnd: Date?
+        /// A part of the day on screen (warm-up, cardio, stretching) in place
+        /// of a set: "Cardio, Exercise bike", what it holds ("Zone 2", the
+        /// move), its clock (counting down to `partEnd`, else up from
+        /// `partStart`) and its button ("Done"). Nil during the exercises.
+        var part: String? = nil
+        var partDetail: String? = nil
+        var partStart: Date? = nil
+        var partEnd: Date? = nil
+        var partDone: String? = nil
+        /// The workout's name ("Upper body strength").
+        var title: String? = nil
     }
 
     /// When the workout started (the running clock).
@@ -47,6 +58,8 @@ struct GymActivityAttributes: ActivityAttributes {
         var skipRest: String
         var skip: String
         var setDone: String
+        /// "total" after the workout's clock ("23:41 total").
+        var total: String = "total"
     }
 }
 
@@ -55,6 +68,8 @@ enum GymActivityAction: Equatable {
     case extend
     case skip
     case complete(row: Int)
+    /// The part of the day on screen is done.
+    case partDone
 }
 
 /// The open workout screen handles the buttons; the intents run in the app's
@@ -110,6 +125,16 @@ struct GymSetDoneIntent: LiveActivityIntent {
     func perform() async throws -> some IntentResult {
         let row = row
         await MainActor.run { GymActivityInbox.send(.complete(row: row)) }
+        return .result()
+    }
+}
+
+struct GymPartDoneIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Část hotová"
+    static let isDiscoverable = false
+
+    func perform() async throws -> some IntentResult {
+        await MainActor.run { GymActivityInbox.send(.partDone) }
         return .result()
     }
 }

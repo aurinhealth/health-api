@@ -139,6 +139,10 @@ struct TrainingModeView: View {
     /// The warm-up's or stretching's move on screen (the header's title) and Next stretch's taps.
     @State private var partMove: String?
     @State private var partNext: UUID?
+    /// The running cardio's start and end (nil: no limit), for the lock screen.
+    @State private var cardioClock: CardioClock?
+    /// The set a lock-screen Série hotová is saving (a second tap waits for it).
+    @State private var completing: Int?
     /// Where the heart rate came from ("Apple Watch"), kept for the summary after the recording ends.
     @State private var heartFrom: String?
     @Environment(\.scenePhase) private var scenePhase
@@ -289,6 +293,10 @@ struct TrainingModeView: View {
             // The Live Activity follows the heart rate from here: read in this
             // screen's body, every beat redrew the whole workout.
             HeartRateWatch(live: live) { syncActivity(quiet: true) }
+            // A part on or off, its move or its clock: the lock screen follows
+            // (here, not on the chain below: it is at the type checker's limit).
+            Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
+                .onChange(of: activityPart) { _, _ in syncActivity() }
             // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
             WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch,
                           back: { Task { await catchUpWithWatch() } })
@@ -1136,6 +1144,7 @@ struct TrainingModeView: View {
         restEnd = nil
         // The new part's runner names its first move when it appears.
         partMove = nil
+        cardioClock = nil
         waiting = !auto && step != nil
         switch step {
         case .part(let part)?:
@@ -1248,7 +1257,8 @@ struct TrainingModeView: View {
                                                                autoStart: partAutoStart, next: stepName(then, day), close: close,
                                                                started: { waiting = false }, zoneLows: zoneLows,
                                                                target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
-                                                               command: cardioCommand))
+                                                               command: cardioCommand,
+                                                               clock: { cardioClock = $0 }))
                     .cardSurface(cornerRadius: 22)
             } else {
                 // Its own cards: the hold, then the steps.
@@ -2031,7 +2041,26 @@ struct TrainingModeView: View {
     /// The lock screen and Dynamic Island follow the exercise on screen (GymLiveActivity).
     private func syncActivity(quiet: Bool = false) {
         // Paused: the lock screen's clock would run on; it comes back with Resume.
-        GymLiveActivity.sync(day: finishedSession || !started || paused ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
+        GymLiveActivity.sync(day: finishedSession || !started || paused ? nil : day, focus: index, restStart: restStart, restEnd: restEnd,
+                             part: activityPart, title: day.map(title), quiet: quiet)
+    }
+
+    /// The part on screen as the lock screen shows it: "Cardio, Exercise
+    /// bike" with its zone and clock, or the warm-up with its move.
+    private var activityPart: GymLiveActivity.Part? {
+        guard let part = activePart, let day else { return nil }
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        let routine = parts.routine(part, day: day)
+        let done = L10n.tr("Hotovo")
+        if part.isCardio {
+            let name = routine?.items.first?.name
+            let zone = parts.choice(part).target.map { L10n.f("Zóna %@", String($0)) }
+            let clock = waiting ? nil : cardioClock
+            return .init(title: [L10n.tr(part.kind.title), name].compactMap { $0 }.joined(separator: ", "), detail: zone,
+                         start: clock?.start, end: clock?.end, done: done)
+        }
+        let since = live.focused.flatMap { $0.key == part.rawValue ? $0.start : nil }
+        return .init(title: L10n.tr(part.kind.title), detail: waiting ? nil : partMove, start: waiting ? nil : since, end: nil, done: done)
     }
 
     /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
@@ -2044,14 +2073,38 @@ struct TrainingModeView: View {
         case .skip:
             restEnd = nil
         case .complete(let row):
-            guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
-                  let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving else { break }
-            index = at
-            restEnd = nil
-            prefill(set, in: list[at])
-            Task { await complete(set) }
+            Task { await completeRow(row) }
+        case .partDone:
+            guard let part = activePart, let day else { break }
+            if part.isCardio {
+                // A moment later: back from the bar, the cardio's card is only now appearing
+                // and takes a command that came with it as its start (GymCardioTimer).
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    cardioCommand = CardioCommand(kind: .done)
+                }
+            } else {
+                // Every move of the warm-up or stretching ticked, then what follows.
+                if let routine = GymDayParts.resolved(day, stored: dayParts, date: date).routine(part, day: day) {
+                    for item in routine.items { tick(part, id: item.id) }
+                }
+                go(step(after: part, day), auto: false)
+            }
         }
         syncActivity()
+    }
+
+    /// Série hotová from the lock screen: the set with what its row shows.
+    /// A second tap on the same set before the first one's save is in: once only.
+    private func completeRow(_ row: Int) async {
+        guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
+              let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving, completing != row else { return }
+        completing = row
+        index = at
+        restEnd = nil
+        prefill(set, in: list[at])
+        await complete(set)
+        completing = nil
     }
 
     // MARK: Server
@@ -2313,7 +2366,7 @@ struct TrainingModeView: View {
     private func keepMinimized(_ day: GymDay) {
         model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
                                           restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped,
-                                          part: activePart, waiting: waiting)
+                                          part: activePart, waiting: waiting, activity: activityPart)
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
@@ -2333,25 +2386,47 @@ struct TrainingModeView: View {
         waiting = gym.waiting
         partAutoStart = !gym.waiting
         activePart = gym.part
-        for action in gym.pending { activityAction(action) }
+        // Each lock-screen tap once, in order (two taps on Série hotová are one).
+        var seen: [GymActivityAction] = []
+        for action in gym.pending where !seen.contains(action) { seen.append(action) }
+        // One after another: each set is saved with its own weight and reps.
+        Task {
+            for action in seen {
+                if case .complete(let row) = action { await completeRow(row) } else { activityAction(action) }
+            }
+        }
     }
 
-    /// +30 s and Přeskočit pauzu from the lock screen while the workout is
-    /// hidden; Série hotová waits until it opens again.
-    private static func minimizedAction(_ action: GymActivityAction, model: AppModel) {
+    /// +30 s and Přeskočit pauzu from the lock screen (or Přeskočit in the bar)
+    /// while the workout is hidden; Série hotová and a part's Hotovo wait until
+    /// it opens again.
+    static func minimizedAction(_ action: GymActivityAction, model: AppModel) {
         guard var gym = model.minimizedGym else { return }
         switch action {
         case .extend:
             if let end = gym.restEnd { gym.restEnd = max(end, Date()).addingTimeInterval(30); gym.restTotal += 30 }
         case .skip:
             gym.restEnd = nil
-        case .complete:
+        case .complete(let row):
+            // Tapped twice before the workout opens again: the set is saved once.
+            guard !gym.pending.contains(action) else { return }
             gym.pending.append(action)
+            // The lock screen moves on to the next set at once (the save waits for the screen).
+            if let at = gym.day.exercises.firstIndex(where: { $0.sets.contains { $0.row == row && !$0.done } }),
+               let set = gym.day.exercises[at].sets.first(where: { $0.row == row }) {
+                gym.day.complete(row: row, kg: set.kg ?? set.plannedKg ?? "", reps: set.reps ?? set.plannedReps ?? "", rpe: "", intensity: nil, keepDrops: [])
+                gym.index = at
+            }
+        case .partDone:
+            guard !gym.pending.contains(action) else { return }
+            gym.pending.append(action)
+            // The lock screen moves on to the set after the part.
+            gym.activity = nil
         }
         model.minimizedGym = gym
         let end = gym.restEnd
         Task { await Reminders.restEnds(at: end) }
-        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd)
+        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd, part: gym.activity, title: gym.title)
     }
 
     /// The cross: a workout changed here can be kept for later or thrown away.
