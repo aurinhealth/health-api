@@ -163,7 +163,7 @@ struct TodayContent: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     VStack(alignment: .leading, spacing: 0) { dayNumbers }
-                        .padding(.top, 40)
+                        .padding(.top, 24)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             } else {
@@ -220,7 +220,8 @@ struct TodayContent: View {
                 .dynamicTypeSize(...DynamicTypeSize.denseCap)
             }
         }
-        .padding(.top, 40)
+        // Close under the week strip, as Food's "Eaten today" (Petr, 611: the gap was too big).
+        .padding(.top, 24)
 
         // No watch or ring: one way to add one (D-DNES-1, "Connect a device").
         if selectedDate == nil && model.noWearable && today.readiness.score == nil && !model.demo {
