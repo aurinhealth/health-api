@@ -33,7 +33,7 @@ import { ownerUnlimited } from "./staging.js";
 import { aiGroup, groupOfSubscription, newAccountSince, AI_GROUPS } from "./ai-limit-share.js";
 import { ensureStoreColumns } from "./app-store.js";
 import { isReviewAccount } from "./app-review.js";
-import { aiSpentUtcDay } from "./ai-usage.js";
+import { aiSpentUtcDay, PACK_NET_USD_PER_MESSAGE } from "./ai-usage.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
@@ -269,11 +269,12 @@ export async function aiSpendingReport(env, now = new Date()) {
   const db = central(env) || env?.DB;
   await ensureAiSpendDays(db);
   const today = utcDay(now), yesterday = utcDay(new Date(now.getTime() - 864e5)), monthStart = `${today.slice(0, 7)}-01`;
-  const [days, groups, monthRows, counts] = await Promise.all([
+  const [days, groups, monthRows, counts, packs] = await Promise.all([
     db.prepare("SELECT day, cost_usd FROM ai_spend_days WHERE day >= ? AND day <= ?").bind(yesterday < monthStart ? yesterday : monthStart, today).all().then(r => r.results || []),
     db.prepare("SELECT grp, cost_usd, brake_usd FROM ai_spend_groups WHERE day = ?").bind(today).all().then(r => r.results || []),
     db.prepare("SELECT grp, SUM(cost_usd) AS cost_usd, SUM(brake_usd IS NOT NULL AND cost_usd >= brake_usd) AS braked FROM ai_spend_groups WHERE day >= ? AND day <= ? GROUP BY grp").bind(monthStart, today).all().then(r => r.results || []),
-    accountsByGroup(db, env, now.getTime()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; })
+    accountsByGroup(db, env, now.getTime()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; }),
+    packsBought(db, monthStart).catch(error => { console.error("Coach packs not read", error?.message || error); return null; })
   ]);
   const spentOn = day => rounded(days.find(row => row.day === day)?.cost_usd);
   const brakes = groupBrakes(env), byGroup = Object.fromEntries(groups.map(row => [row.grp, row])), byMonth = Object.fromEntries(monthRows.map(row => [row.grp, row]));
@@ -287,6 +288,22 @@ export async function aiSpendingReport(env, now = new Date()) {
       return { group, spent: rounded(row?.cost_usd), brake: row?.brake_usd != null ? Number(row.brake_usd) : brakeFor(brake, counts[group] || 0), accounts: growing(brake) ? counts[group] ?? null : null };
     }),
     monthDays: Number(today.slice(8)),
-    monthGroups: AI_GROUPS.filter(group => brakes[group] || byMonth[group]).map(group => ({ group, spent: rounded(byMonth[group]?.cost_usd), braked: Number(byMonth[group]?.braked || 0) }))
+    monthGroups: AI_GROUPS.filter(group => brakes[group] || byMonth[group]).map(group => ({ group, spent: rounded(byMonth[group]?.cost_usd), braked: Number(byMonth[group]?.braked || 0) })),
+    // What the coach packs bought this month bring after Apple and VAT, about
+    // (PACK_NET_USD_PER_MESSAGE a message, the 40 pack nets more), beside their
+    // AI (the group "packs"); null when not read.
+    packsMonth: packs == null ? null : { messages: packs, netUsd: rounded(packs * PACK_NET_USD_PER_MESSAGE) }
   };
+}
+
+// Coach messages bought this month (coach-packs.js): counted, not refunded.
+// One read of coach_pack_purchases (central); 0 when it has no table yet.
+async function packsBought(db, monthStart) {
+  try {
+    const row = await db.prepare("SELECT COALESCE(SUM(messages), 0) AS n FROM coach_pack_purchases WHERE counted = 1 AND refunded_at IS NULL AND purchased_at >= ?").bind(monthStart).first();
+    return Number(row?.n) || 0;
+  } catch (error) {
+    if (/no such table/i.test(String(error?.message || error))) return 0;
+    throw error;
+  }
 }
