@@ -318,3 +318,13 @@ test("a full network gets the same answer for a new and a known address; the lim
   assert.equal(await env.DB.prepare("SELECT id FROM users WHERE email='late@example.com'").first(), null);
   assert.equal((await post("/auth/email/verify", { email: "late@example.com", code }, "198.51.100.7")).status, 200, "the same code signs in from another network");
 });
+
+test("the owner sees what the coach packs bought this month bring, about, beside their AI", async () => {
+  const db = await accounts();
+  assert.deepEqual((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES })).packsMonth, { messages: 0, netUsd: 0 }, "no pack table yet");
+  db.sqlite.exec("CREATE TABLE coach_pack_purchases (transaction_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, product_id TEXT NOT NULL, messages INTEGER NOT NULL, counted INTEGER NOT NULL, store_environment TEXT, price INTEGER, currency TEXT, purchased_at TEXT NOT NULL, refunded_at TEXT)");
+  const now = new Date(), month = now.toISOString().slice(0, 8) + "01T00:00:00.000Z", before = new Date(Date.parse(month) - 864e5).toISOString();
+  const add = (id, messages, counted, at, refunded = null) => db.sqlite.prepare("INSERT INTO coach_pack_purchases VALUES (?, 7, 'p', ?, ?, 'Production', 1, 'CZK', ?, ?)").run(id, messages, counted, at, refunded);
+  add("a", 100, 1, now.toISOString()); add("b", 40, 1, month); add("c", 40, 0, now.toISOString()); add("d", 40, 1, now.toISOString(), now.toISOString()); add("e", 100, 1, before);
+  assert.deepEqual((await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES })).packsMonth, { messages: 140, netUsd: 7 }, "this month's counted, not refunded ones");
+});

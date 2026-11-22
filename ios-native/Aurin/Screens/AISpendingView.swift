@@ -79,6 +79,11 @@ struct AISpendingView: View {
                 monthRow(group, of: spending)
             }
         }
+        if let packs = spending.packsMonth, packs.messages > 0 || groups.contains(where: { $0.group == "packs" }) {
+            let cost = groups.first { $0.group == "packs" }?.spent ?? 0
+            Text(verbatim: L10n.f("Balíčky zpráv: koupeno %@, tržba asi %@, AI %@", L10n.plural("%lld zpráv", packs.messages), Self.usd(packs.netUsd), Self.usd(cost)))
+                .font(Typo.small).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+        }
         Text("Měsíc ve dnech UTC jako pojistky")
             .font(Typo.small).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
     }
@@ -174,6 +179,7 @@ struct AISpendingView: View {
     static func name(_ group: String) -> String {
         switch group {
         case "paid": "Platící"
+        case "packs": "Balíčky zpráv"
         case "gift": "Kódy a dárky"
         case "trial": "Týden zdarma"
         case "testflight": "TestFlight"

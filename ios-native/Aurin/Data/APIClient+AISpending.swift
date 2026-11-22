@@ -15,9 +15,16 @@ struct AISpending: Decodable {
     let monthDays: Int?
     /// Each group's month so far; nil from an older server.
     let monthGroups: [MonthGroup]?
+    /// Coach packs bought this month and what they bring after Apple and VAT, about; nil from an older server.
+    let packsMonth: PacksMonth?
+
+    struct PacksMonth: Decodable, Equatable {
+        let messages: Int
+        let netUsd: Double
+    }
 
     struct Group: Decodable, Identifiable, Equatable {
-        /// paid, gift, trial, testflight, free, owner, new or system.
+        /// paid, packs, gift, trial, testflight, free, owner, new or system.
         let group: String
         let spent: Double
         /// USD; nil when the group has no brake.
