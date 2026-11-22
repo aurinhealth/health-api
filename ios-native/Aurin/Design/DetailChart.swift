@@ -41,7 +41,13 @@ struct DetailChart: View {
 
     private var end: String { ISODay.shift(today, -page * period.days) }
     private var start: String { ISODay.shift(end, 1 - period.days) }
-    private var shown: [ChartPoint] { ChartBuckets.shown(points, period: period, end: end) }
+    private var shown: [ChartPoint] {
+        // Measurements stay single points on every period, never weekly averages.
+        measurements ? points.filter { $0.date >= start && $0.date <= end }.sorted { $0.date < $1.date }
+            : ChartBuckets.shown(points, period: period, end: end)
+    }
+    /// A point is a week's average (from 91 days on, never for measurements).
+    private var weekly: Bool { period.weekly && !measurements }
     private var hasOlder: Bool { points.contains { $0.date < start } }
 
     var body: some View {
@@ -104,15 +110,15 @@ struct DetailChart: View {
     }
 
     private func plot(_ list: [ChartPoint]) -> some View {
-        let segments = measurements ? list.map { _ in 0 } : ChartBuckets.segments(list, weekly: period.weekly)
+        let segments = measurements ? list.map { _ in 0 } : ChartBuckets.segments(list, weekly: weekly)
         let dated = list.enumerated().compactMap { i, p in ISODay.date(p.date).map { Dated(point: p, date: $0, segment: segments[i]) } }
         let average = measurements ? nil : ChartBuckets.mean(list.map(\.value))
         let values = list.map(\.value) + list.compactMap(\.low) + list.compactMap(\.high)
         let lo = values.min() ?? 0, hi = values.max() ?? 1
         let pad = max((hi - lo) * 0.18, hi == lo ? max(abs(hi) * 0.1, 1) : 0)
-        let domainStart = ISODay.date(period.weekly ? ChartBuckets.monday(start) : start) ?? Date()
+        let domainStart = ISODay.date(weekly ? ChartBuckets.monday(start) : start) ?? Date()
         // A little room after the last day for the Avg pill, so it never covers today's dot.
-        let domainEnd = (ISODay.date(end) ?? Date()).addingTimeInterval(Double(period.days) * 86400 * 0.12)
+        let domainEnd = (ISODay.date(end) ?? Date()).addingTimeInterval(Double(period.days) * 86400 * (measurements ? 0.03 : 0.12))
         let selected = picked.flatMap { date in dated.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
         let shownPoint = selected ?? dated.last
         // Every point gets its dot while they stay apart; a long period dots
@@ -156,7 +162,7 @@ struct DetailChart: View {
         .chartXScale(domain: domainStart...max(domainEnd, domainStart))
         .chartYScale(domain: (lo - pad)...(hi + pad))
         .chartXAxis {
-            AxisMarks(values: Self.ticks(start: period.weekly ? ChartBuckets.monday(start) : start, end: end)) { value in
+            AxisMarks(values: Self.ticks(start: weekly ? ChartBuckets.monday(start) : start, end: end)) { value in
                 AxisValueLabel {
                     Text(verbatim: tickLabel(value.as(Date.self)))
                         .font(.caption2).foregroundStyle(Palette.faint)
@@ -183,9 +189,9 @@ struct DetailChart: View {
                     }
                     if let shownPoint, let x = proxy.position(forX: shownPoint.date) {
                         let half = bubbleWidth / 2
-                        let day = selected == nil && page == 0 && period.weekly ? latest.flatMap { ChartBuckets.monday($0.date) == shownPoint.point.date ? $0 : nil } : nil
+                        let day = selected == nil && page == 0 && weekly ? latest.flatMap { ChartBuckets.monday($0.date) == shownPoint.point.date ? $0 : nil } : nil
                         let bubble = day ?? shownPoint.point
-                        DayBubble(date: period.weekly && day == nil ? L10n.f("%@, týdenní průměr", weekLabel(bubble.date)) : Fmt.weekdayShort(bubble.date) + " " + Fmt.dayMonthShort(bubble.date),
+                        DayBubble(date: weekly && day == nil ? L10n.f("%@, týdenní průměr", weekLabel(bubble.date)) : Fmt.weekdayShort(bubble.date) + " " + Fmt.dayMonthShort(bubble.date),
                                   value: Fmt.decimal(bubble.value, digits: digits), unit: unit,
                                   state: MetricState(state: bubble.state, side: bubble.side))
                             .fixedSize()

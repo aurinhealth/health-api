@@ -60,7 +60,7 @@ final class OxygenPointsTests: XCTestCase {
     func testMeasurementRowsUseTheLatestAgainstThen() {
         let points = [ChartPoint(date: "2026-06-01", value: 80.1), ChartPoint(date: "2026-10-20", value: 78.8),
                       ChartPoint(date: "2026-11-05", value: 78.6), ChartPoint(date: today, value: 78.4)]
-        let rows = TrendMath.measurementRows(points)
+        let rows = TrendMath.measurementRows(points, lags: [14, 30, 91])
         XCTAssertEqual(rows.map(\.lag), [14, 30])
         XCTAssertEqual(rows.map(\.then), [78.6, 78.8])
         XCTAssertEqual(rows.first?.now, 78.4)

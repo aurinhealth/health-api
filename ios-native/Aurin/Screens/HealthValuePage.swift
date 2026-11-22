@@ -119,6 +119,8 @@ struct HealthValueReading {
     /// The unit by the headline's number when it says more than the value's
     /// unit ("°C warmer than usual").
     var unit: String? = nil
+    /// The cell's shorter unit with the direction ("°C warmer").
+    var cellUnit: String? = nil
 }
 
 struct HealthValuePage: View {
@@ -177,7 +179,7 @@ struct HealthValueContent: View {
             let cells = value.group.compactMap { v -> SiblingCell? in
                 let r = Self.reading(v, model: model)
                 guard r.value != nil else { return nil }
-                return SiblingCell(id: v.rawValue, title: v.title, value: r.text, unit: v.unit.isEmpty ? nil : v.unit, spokenState: r.state?.words)
+                return SiblingCell(id: v.rawValue, title: v.title, value: r.text, unit: r.cellUnit ?? (v.unit.isEmpty ? nil : v.unit), spokenState: r.state?.words)
             }
             if cells.count > 1 {
                 SiblingCells(cells: cells, selected: value.rawValue) { id in
@@ -196,12 +198,12 @@ struct HealthValueContent: View {
                 Card {
                     DetailChart(points: points, today: today, period: $period, unit: L10n.tr(value.unit), digits: value.digits,
                                 note: note(points.filter { $0.date > ISODay.shift(today, -period.days) }.count), source: source,
-                                measurements: value.measured)
+                                periods: value.measured ? [.days30, .months3] : ChartPeriod.allCases, measurements: value.measured)
                 }
                 .padding(.top, 12)
                 if value.measured {
                     // The latest measurement against the one from then (concepts 39 to 41).
-                    let rows = TrendMath.measurementRows(points)
+                    let rows = TrendMath.measurementRows(points, latest: reading.value)
                     if !rows.isEmpty {
                         SectionLabel(text: "Analýza trendu").padding(.top, 28)
                         Card {
@@ -470,7 +472,8 @@ struct HealthValueContent: View {
             return HealthValueReading(value: shown, text: Fmt.decimal(abs(shown), digits: 1), label: "Minulá noc, teplota kůže",
                                       state: night, usual: L10n.f("Obvyklé rozmezí do %@ %@ na obě strany", Fmt.decimal(half, digits: 1), Units.temperatureUnit),
                                       local: points(list, low: -half, high: half, map: Units.temperatureChange),
-                                      unit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "teplejší než obvykle" : "chladnější než obvykle"))
+                                      unit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "teplejší než obvykle" : "chladnější než obvykle"),
+                                      cellUnit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "tepleji" : "chladněji"))
         case .weight:
             guard let w = health?.weight else { return HealthValueReading(text: "–") }
             let v = Units.weight(w.latest)
