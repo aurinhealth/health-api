@@ -140,6 +140,12 @@ struct CardioTimeSheet: View {
 /// Spustit on the cardio: the machine, no limit or a time (the favourites as
 /// chips), then Start. Without a limit the time runs up until Stop; with one it
 /// counts down to the end (+5 min adds more). Stop keeps the length and the end.
+/// A running cardio's start and, with a set time, its end.
+struct CardioClock: Equatable {
+    var start: Date
+    var end: Date?
+}
+
 struct CardioTimerView: View {
     let item: GymStretching.Item
     let date: String
@@ -176,6 +182,8 @@ struct CardioTimerView: View {
         var target: Int? = nil
         /// −1, Done, +1 pinned under the screen (TrainingModeView) come in here.
         var command: CardioCommand? = nil
+        /// Its start and end as they change, for the lock screen (GymLiveActivity).
+        var clock: (CardioClock?) -> Void = { _ in }
     }
 
     private var isStart: Bool { item.id == "cardio-start" }
@@ -260,6 +268,10 @@ struct CardioTimerView: View {
         // Again when Edit cardio gives it a time.
         .task(id: "\(started?.timeIntervalSince1970 ?? 0) \(minutes)") { await watch() }
         .onChange(of: inline?.command) { _, command in if let command { run(command) } }
+        // The lock screen's clock: down to the end, or up without a limit; gone once stopped.
+        .onChange(of: [started, minutes > 0 ? end : nil, stopped == nil ? nil : Date.distantPast], initial: true) { _, _ in
+            inline?.clock(stopped == nil ? started.map { CardioClock(start: $0, end: minutes > 0 ? end : nil) } : nil)
+        }
         // Edit cardio changed its time: the clock follows (no limit counts up).
         .onChange(of: item.seconds) { _, seconds in
             if let end { GymSignals.stopRest(end) }

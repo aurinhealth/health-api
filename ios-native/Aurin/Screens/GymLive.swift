@@ -431,6 +431,8 @@ struct LiveGymView: View {
             if let set = day?.exercises.flatMap(\.sets).first(where: { $0.row == row && !$0.done }) {
                 toggle(set, kg: "", reps: "")
             }
+        case .partDone:
+            break
         }
         syncActivity()
     }
