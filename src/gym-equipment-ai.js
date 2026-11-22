@@ -114,11 +114,24 @@ export function galleryLink(html, base) {
   return null;
 }
 
+// The first PAGE_BYTES of the page, read in pieces: the Worker unpacks gzip and brotli
+// itself, so a small packed answer can grow far past its memory when read whole.
+const PAGE_BYTES = 1_500_000;
 async function fetchPage(link, fetchImpl) {
   try {
     const r = await fetchPublic(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; AurinBot/1.0; +https://aurin.health)" }, signal: AbortSignal.timeout(8000) }, fetchImpl);
-    if (!r?.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
-    return (await r.text()).slice(0, 1_500_000);
+    if (!r?.ok || !/html/i.test(r.headers.get("content-type") || "") || !r.body) return "";
+    const reader = r.body.getReader(), decoder = new TextDecoder();
+    let text = "", size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const piece = value.subarray(0, PAGE_BYTES - size);
+      size += piece.length;
+      text += decoder.decode(piece, { stream: true });
+      if (size >= PAGE_BYTES) { await reader.cancel().catch(() => {}); break; }
+    }
+    return text + decoder.decode();
   } catch { return ""; }
 }
 

@@ -79,3 +79,16 @@ test("website photos: a redirect to a private address is not followed", async ()
   assert.deepEqual(seen, ["https://gym.cz/"]);
   assert.deepEqual(await websitePhotos("https://ok.cz/", fetchImpl), ["https://ok.cz/a.jpg"]);
 });
+
+test("website photos: a huge page is read only up to its first 1.5 MB", async () => {
+  let pulled = 0, cancelled = false;
+  const chunk = new TextEncoder().encode(`<img src="/a.jpg">` + " ".repeat(65_518));
+  const body = new ReadableStream({
+    pull(controller) { pulled += chunk.length; controller.enqueue(chunk); },
+    cancel() { cancelled = true; }
+  });
+  const fetchImpl = async () => new Response(body, { headers: { "content-type": "text/html" } });
+  assert.deepEqual(await websitePhotos("https://gym.cz/", fetchImpl), ["https://gym.cz/a.jpg"]);
+  assert.ok(cancelled, "the rest of the page is not read");
+  assert.ok(pulled < 2_000_000, `${pulled} bytes read`);
+});
