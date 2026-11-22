@@ -80,15 +80,15 @@ struct LibraryHome: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            let today = model.training.flatMap { LibraryCoachCard.session($0) }
-            if let training = model.training, let session = today {
+            let todays = model.training.flatMap { LibraryCoachCard.session($0) }
+            if let training = model.training, let session = todays {
                 LibraryCoachCard(session: session, route: LibraryCoachCard.route(session, week: training.sessions ?? []))
                     .padding(.top, 14)
             }
             RouteLink(route: .coachPick(false)) {
                 HStack {
                     // Without today's card there is no first option to have another of.
-                    Text(verbatim: L10n.tr(today == nil ? "Návrh na dnes" : "Jiná možnost na dnes")).font(Typo.body).foregroundStyle(Palette.ink)
+                    Text(verbatim: L10n.tr(todays == nil ? "Návrh na dnes" : "Jiná možnost na dnes")).font(Typo.body).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
