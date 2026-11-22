@@ -1475,16 +1475,19 @@ struct TrainingModeView: View {
     /// the exercises and Dokončit trénink. Once finished, doneSummary.
     private func finished(_ day: GymDay) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            // Not done yet: the clock and heart rate run until Finish (records and changes are on the summary).
             VStack(spacing: 8) {
-                SectionLabel(text: "Trénink dokončen")
+                SectionLabel(text: "Všechny série hotové")
                 Text(title(day)).font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(L10n.f("Trénink běží %@", Self.clock(Int(live.elapsed(at: context.date)))))
+                        .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
-            summaryGrid(day).padding(.top, 6)
-            ForEach(newRecords(day)) { record in recordCard(record) }
-            changesCard(day)
-            swapsCard
+            .padding(.bottom, 8)
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             addExerciseButton
             // What comes after the exercises, before the session is closed (GymDayParts).
@@ -1512,6 +1515,8 @@ struct TrainingModeView: View {
             WorkoutRatingCard(date: date, exercises: day.exerciseNames,
                               liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
                 .padding(.top, 10)
+            // Each exercise against last time ("−5 kg", "+2.5 kg").
+            changesCard(day)
             // A swap made today (often on the watch): only today, or from now on.
             swapsCard
             // Only what failed to send: the rest is quiet (Close's line says it goes on).
@@ -1595,26 +1600,6 @@ struct TrainingModeView: View {
                             questions: ["Jak se mi tahle posilovna povedla?", "Kolik mám dát příště?", "Co mám dát zítra?"])
     }
 
-    private func summaryGrid(_ day: GymDay) -> some View {
-        let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
-        let planned: Int = day.exercises.reduce(0) { $0 + $1.workCount }
-        // Finished early: "5 z 7", so the sets left out show.
-        let setsText: String = sets < planned ? L10n.f("%@ z %@", String(sets), String(planned)) : String(sets)
-        let volume: Double = GymSessionMath.volume(day.exercises)
-        let shown = GymSessionMath.volumeText(volume)
-        let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-            if let totals {
-                total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
-                if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
-                if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
-            }
-            total(L10n.tr("Série"), setsText)
-            total(L10n.tr("Objem"), shown.value + " " + shown.unit, change: volumeChange(day, volume), better: volume >= lastVolume(day))
-            if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
-        }
-    }
-
     /// kg × reps of the same exercises last time.
     private func lastVolume(_ day: GymDay) -> Double {
         var sum = 0.0
@@ -1652,20 +1637,6 @@ struct TrainingModeView: View {
             if GymSessionMath.e1rm(shown(best)) > GymSessionMath.e1rm(shown(old)) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
         }
         return out
-    }
-
-    private func recordCard(_ record: NewRecord) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "star").foregroundStyle(Palette.amber)
-                .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Text(record.name + " " + (GymSessionMath.lift(record.lift, machineLb: lb(record.name)) ?? "")).font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            Spacer()
-        }
-        .padding(16)
-        .cardSurface(cornerRadius: 22)
     }
 
     struct ExerciseChange: Identifiable {
@@ -1871,14 +1842,6 @@ struct TrainingModeView: View {
         guard let top = lifts.compactMap(\.kg).max(), top > 0 else { return L10n.f("%@ ×", String(lifts.count)) }
         let pounds = lb(exercise.name)
         return "\(lifts.count) × " + GymCoach.shown(top, machineLb: pounds) + " " + LiftWeight.unit(machineLb: pounds)
-    }
-
-    private func total(_ title: String, _ value: String, change: String? = nil, better: Bool = true) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.small).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-            if let change { Text(change).font(Typo.caption).foregroundStyle(better ? Palette.green : Palette.rust) }
-        }
     }
 
     /// The day didn't load (no signal and no copy on the phone, a server error):

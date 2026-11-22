@@ -1943,6 +1943,8 @@
 "série %@" = "set %@";
 "Minule %@" = "Last time %@";
 "Trénink dokončen" = "Workout done";
+"Všechny série hotové" = "All sets done";
+"Trénink běží %@" = "Workout running %@";
 "Nový rekord" = "New record";
 "%@ op." = "%@ reps";
 "Vrátit sérii" = "Undo set";
