@@ -424,14 +424,23 @@ enum DayTimelineRows {
         let timed = open.filter { $0.kind != "bedtime" }
         let ordered = timed.enumerated().sorted { a, b in
             let ta = minutes(a.element.time ?? a.element.session?.time), tb = minutes(b.element.time ?? b.element.session?.time)
-            if let ta, let tb, ta != tb { return ta < tb }
-            return a.offset < b.offset
+            // Without a time after those with one, so the order is stable.
+            switch (ta, tb) {
+            case let (ta?, tb?) where ta != tb: return ta < tb
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return a.offset < b.offset
+            }
         }.map(\.element)
         let planned = ordered + open.filter { $0.kind == "bedtime" }
         // "Teď" before the first planned item that starts later, so a bedtime
-        // already past (in bed by 20:45, now 23:36) stays above it.
+        // already past (in bed by 20:45, now 23:36) stays above it; a bedtime
+        // after midnight (00:30) is still ahead.
         let nowAt = now.map { now in
-            planned.firstIndex { (minutes($0.time ?? $0.session?.time) ?? Int.max) > now } ?? planned.count
+            planned.firstIndex { item in
+                guard let start = minutes(item.time ?? item.session?.time) else { return true }
+                return (item.kind == "bedtime" && start < 12 * 60 ? start + 24 * 60 : start) > now
+            } ?? planned.count
         }
         for (index, item) in planned.enumerated() {
             if let now, index == nowAt { rows.append(.now(now)) }

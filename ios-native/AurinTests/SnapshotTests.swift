@@ -176,6 +176,10 @@ final class SnapshotTests: XCTestCase {
         XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
         // Past bedtime (22:10) "teď" comes after it, not above it (build 611).
         XCTAssertEqual(DayTimelineRows.make(today, now: 23 * 60 + 36).suffix(2).map(\.id), [today.plan[2].id, "now"])
+        // A bedtime after midnight is still ahead at 23:00.
+        var late = today
+        late.plan[2] = TodaySnapshot.PlanItem(kind: "bedtime", time: "00:30", title: "Do postele", detail: nil, done: false, end: "07:15")
+        XCTAssertEqual(DayTimelineRows.make(late, now: 23 * 60).suffix(2).map(\.id), ["now", late.plan[2].id])
         XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Čas", "Energie"])
     }
 
