@@ -174,6 +174,7 @@ struct AISpendingView: View {
     static func name(_ group: String) -> String {
         switch group {
         case "paid": "Platící"
+        case "packs": "Balíčky zpráv"
         case "gift": "Kódy a dárky"
         case "trial": "Týden zdarma"
         case "testflight": "TestFlight"

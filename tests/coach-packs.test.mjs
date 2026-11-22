@@ -197,3 +197,13 @@ test("an account with bought messages left counts with the paying ones for AI li
   await buy(user(2), pack({ transactionId: "3000000002", originalTransactionId: "3000000002", environment: "Sandbox" }));
   assert.equal(await aiGroup(user(2)), "free", "a Sandbox pack on the live server does not");
 });
+
+test("a coach message paid with a pack counts its AI in the group of the packs, the rest stays paid", async () => {
+  const { raw, user } = setup();
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, created_at TEXT)");
+  raw.sqlite.exec("INSERT INTO users(id, created_at) VALUES (1, '2026-01-01 00:00:00')");
+  await buy(user(1), pack());
+  assert.equal(await aiGroup(user(1)), "paid");
+  assert.equal(await aiGroup({ ...user(1), AI_PACK_MESSAGE: true }), "packs");
+  assert.equal(await aiGroup({ ...user(1), AI_PACK_MESSAGE: true, USER_IS_OWNER: true }), "owner", "the owner stays apart");
+});

@@ -18,6 +18,9 @@ export const unpaidLimitShare = env => {
 // subscription now:
 // - "paid": a paid Production Pro, or bought coach messages still left
 //   (coach-packs.js; a Sandbox pack counts only on the test server);
+// - "packs": a coach message paid with a bought pack (coach-packs.js), the
+//   whole request (env.AI_PACK_MESSAGE, set by the coach chat), so what the
+//   packs cost shows apart from the subscriptions (Petr 2026-11-22);
 // - "gift": Pro through an offer code or a promotional offer (the pilot's
 //   discount, a gift): whole limits, counted apart;
 // - "trial": the free week (Apple's introductory offer, or a free promotional one);
@@ -31,7 +34,7 @@ export const unpaidLimitShare = env => {
 //   sign-up), counted apart, so accounts made in bulk never stop the pilot's AI;
 // - "system": a call of no account (a job of the server) and the coach
 //   evaluation on the test server (env.COACH_EVAL, coach-eval.js).
-export const AI_GROUPS = ["paid", "gift", "trial", "testflight", "free", "owner", "new", "system"];
+export const AI_GROUPS = ["paid", "packs", "gift", "trial", "testflight", "free", "owner", "new", "system"];
 export const NEW_ACCOUNT_DAYS = 7;
 // users.created_at (CURRENT_TIMESTAMP) of an account made NEW_ACCOUNT_DAYS before now.
 export const newAccountSince = (now = Date.now()) => new Date(now - NEW_ACCOUNT_DAYS * 864e5).toISOString().replace("T", " ").slice(0, 19);
@@ -84,6 +87,7 @@ const noAccount = env => !env?.DB || !(Number(env.USER_ID) > 0) || env.COACH_EVA
 export function aiGroup(env) {
   if (noAccount(env)) return Promise.resolve("system");
   if (env.USER_IS_OWNER === true) return Promise.resolve("owner");
+  if (env.AI_PACK_MESSAGE === true) return Promise.resolve("packs");
   return purchaseGroup(env);
 }
 

@@ -6,7 +6,7 @@
 // costs (wrangler.jsonc env.staging).
 //
 // AI_GROUP_BRAKES: each group of accounts (aiGroup, ai-limit-share.js: paid,
-// gift, trial, testflight, free, owner, new, system) has a brake of its own for the
+// packs, gift, trial, testflight, free, owner, new, system) has a brake of its own for the
 // day, so one group (accounts made in bulk, a bug in one feature) never stops
 // the AI of another. A group's brake is a fixed {"usd": 5}, or grows with the
 // accounts in it, {"perAccount": 0.5, "min": 10, "max": 20}: what a usual day costs is a
@@ -40,7 +40,7 @@ const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
 const central = env => env?.RAW_DB || null;
 const rounded = v => Math.round(Number(v || 0) * 1e5) / 1e5;
 
-export const GROUP_NAMES = { paid: "platící", gift: "kódy a dárky", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", owner: "ty", new: "nové účty", system: "úlohy serveru" };
+export const GROUP_NAMES = { paid: "platící", packs: "balíčky zpráv", gift: "kódy a dárky", trial: "týden zdarma", testflight: "TestFlight", free: "bez nákupu", owner: "ty", new: "nové účty", system: "úlohy serveru" };
 
 // The tables are made once per database and isolate, not on every model call.
 const ready = new WeakSet();

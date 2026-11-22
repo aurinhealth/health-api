@@ -2464,6 +2464,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     let claim;
     try{claim=freeKind?await claimFreeReply(env,body.chatId,freeKind):await claimCoachMessage(env,body.chatId);}
     catch(error){if(chip&&error.coachAllowance)await giveChipBack(env.DB,body.chatId,body.reply).catch(()=>null);if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
+    // A message paid with a bought pack: its AI counts in the group "packs" (ai-limit-share.js aiGroup).
+    if(claim?.kind==='pack')env.AI_PACK_MESSAGE=true;
     // What the coach knows beyond this chat's last 60 messages (coach-notes.js):
     // the older part of a long chat, the notes of the last days, the end of
     // another chat today and what no longer holds. Nothing of it with memory off.
