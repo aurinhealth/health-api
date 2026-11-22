@@ -533,19 +533,24 @@ struct WeekStrip: View {
         }
     }
 
-    /// The day's readiness zone: the week Today holds, then the days loaded.
-    private func zone(_ day: String) -> String? {
-        if ahead { return nil }
-        if let week = model.today?.week, let item = week.first(where: { $0.date == day }) { return item.zone }
-        return model.dayValues[day]?.readiness?.zone
+    /// The day's readiness ring: the days loaded (score and zone), today's
+    /// own score before they arrive; the sample week has only zones, so its
+    /// rings are drawn from them.
+    private func readiness(_ day: String) -> DayMark {
+        if let values = model.dayValues[day], values.readiness != nil { return DayMark(metric: .readiness, values: values) }
+        var score: Int?
+        var zone = model.today?.week?.first(where: { $0.date == day })?.zone
+        if let today = model.today, today.date == day, let own = today.readiness.score { score = own; zone = today.readiness.zone }
+        if score == nil, model.demo, let zone { score = zone == "green" ? 78 : 62 }
+        guard let score else { return DayMark(metric: .readiness, values: nil) }
+        return DayMark(metric: .readiness, values: DayValues(date: day, readiness: .init(score: score, zone: zone), sleep: nil, strain: nil, hrv: nil))
     }
 
-    /// The day in the shared cell (WeekDayCell): on Dnes the readiness dot in
-    /// the colours of the month calendar, on Jídlo the ring of the day's
+    /// The day in the shared cell (WeekDayCell): on Dnes the readiness ring of
+    /// the month calendar, on Jídlo the ring of the day's
     /// calories as its month sheet (Petr 2026-11-22, variant B).
     private func cell(_ day: String) -> some View {
         let selected = day == shown, future = day > lastDay
-        let color: Color? = switch zone(day) { case "green": Palette.green; case "yellow", "red": Palette.amber; default: nil }
         return WeekDayCell(day: day, today: today, selected: selected, faint: future) {
             if ahead {
                 // Every day up to today has its ring (Petr, 611 test: Sunday had none).
@@ -556,11 +561,13 @@ struct WeekStrip: View {
                     FoodDayRing(day: foodDays[day], value: .calories, size: 22)
                 }
             } else {
-                Circle().fill(color ?? .clear).frame(width: 6, height: 6)
+                // The month calendar's readiness ring (Petr, 611 test: rings as on Jídlo);
+                // a day without a score is dashed, as in the month.
+                DayRing(mark: readiness(day)).frame(width: 26, height: 26)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ahead ? Self.spokenFood(day, foodDays[day]) : Self.spoken(day, zone: zone(day)))
+        .accessibilityLabel(ahead ? Self.spokenFood(day, foodDays[day]) : Fmt.dayMonth(day) + ", " + readiness(day).spoken)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -583,12 +590,6 @@ struct WeekStrip: View {
             return Fmt.dayMonth(day) + ", " + L10n.f("Snězeno %@ z %@ kcal", Fmt.int(kcal), Fmt.int(target))
         }
         return Fmt.dayMonth(day) + ", " + Fmt.int(kcal) + " kcal"
-    }
-
-    /// "Wednesday 11, readiness below your usual range" (D-DNES-5): the dot said aloud.
-    static func spoken(_ day: String, zone: String?) -> String {
-        guard let word = ReadinessText.pill(zone)?.0 else { return Fmt.dayMonth(day) }
-        return L10n.f("%@, připravenost %@", Fmt.dayMonth(day), word)
     }
 }
 
