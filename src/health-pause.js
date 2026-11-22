@@ -12,13 +12,14 @@ import { purgeUserData } from './account-data.js';
 import { CONSENT_VERSION } from './consent.js';
 
 // What is not health data and stays: the account and sign-in, Pro and the AI
-// allowance (pausing does not start the limits over), the connections and their
+// allowance (pausing does not start the limits over), bought coach messages
+// (a consumable: Apple cannot restore it), the connections and their
 // settings, the app's settings, and what the user made that says nothing about
 // their body (own foods and recipes, own workouts, liked exercises).
 export const KEPT_TABLES = new Set([
   'user_consents', 'user_identities', 'user_passkeys', 'user_language', 'user_time_zone',
   'connection_credentials', 'connection_accounts', 'subscriptions', 'store_originals', 'push_tokens', 'profile_photos',
-  'app_settings', 'user_setup', 'ai_usage', 'coach_messages', 'coach_carryover', 'food_photo_trial',
+  'app_settings', 'user_setup', 'ai_usage', 'coach_pack_purchases', 'coach_pack_balance', 'coach_messages', 'coach_carryover', 'food_photo_trial',
   'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions', 'support_reports',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',
   'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods',
