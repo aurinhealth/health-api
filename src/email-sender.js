@@ -145,6 +145,17 @@ const PASSKEY_TEXT = {
   }
 };
 
+const PASSKEY_REMOVED_TEXT = {
+  cs: {
+    subject: "Z tvého účtu Aurin ubyl přístupový klíč",
+    body: (name, when) => [`Z tvého účtu Aurin byl odebrán přístupový klíč (passkey) „${name}“, ${when}. Zařízení, které se s ním přihlásilo, se odhlásilo.`, "Pokud o tom nevíš, přihlas se znovu, v Nastavení → Účet zmáčkni Odhlásit ostatní zařízení a dej vědět správci aplikace."]
+  },
+  en: {
+    subject: "A passkey was removed from your Aurin account",
+    body: (name, when) => [`The passkey “${name}” was removed from your Aurin account on ${when}. The device that signed in with it was signed out.`, "If this was not you, sign in again, tap Sign out other devices under Settings → Account and tell the app's administrator."]
+  }
+};
+
 const SIGNED_OUT_TEXT = {
   cs: {
     subject: "Ostatní zařízení se odhlásila z tvého účtu Aurin",
@@ -161,6 +172,12 @@ const SIGNED_OUT_TEXT = {
 export function signedOutEverywhereEmail(lang, date = new Date(), zone = timeZone()) {
   const en = lang === "en";
   const t = SIGNED_OUT_TEXT[en ? "en" : "cs"], paragraphs = t.body(noticeTime(en, date, zone));
+  return { subject: t.subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail(en ? "en" : "cs", paragraphs) };
+}
+
+export function passkeyRemovedEmail(lang, name, date = new Date(), zone = timeZone()) {
+  const en = lang === "en";
+  const t = PASSKEY_REMOVED_TEXT[en ? "en" : "cs"], paragraphs = t.body(name, noticeTime(en, date, zone));
   return { subject: t.subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail(en ? "en" : "cs", paragraphs) };
 }
 

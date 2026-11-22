@@ -9,7 +9,7 @@ import { verifyRegistration, verifyAuthentication, clientDataChallenge, randomCh
 import { signedInResponse, sessionSecret, signedOutElsewhere } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";
 import { allowClient } from "./ip-rate-limit.js";
-import { emailConfigured, sendEmail, passkeyAddedEmail } from "./email-sender.js";
+import { emailConfigured, sendEmail, passkeyAddedEmail, passkeyRemovedEmail } from "./email-sender.js";
 import { requestLanguage } from "./email-login.js";
 import { L } from "./lang.js";
 
@@ -165,8 +165,8 @@ export async function verifyStepUpPasskey(request, env, user, credential) {
 }
 
 // Settings → Account. Needs the browser session (an API key cannot add passkeys).
-// stepUp: the "confirm it's you" check (step-up.js) before a passkey is added, asked once the account
-// may add one.
+// stepUp: the "confirm it's you" check (step-up.js) before a passkey is added (asked once the account
+// may add one) or removed.
 export async function handlePasskeyApi(request, env, url, session, ctx, stepUp = null) {
   if (url.pathname !== "/app/api/passkeys" && url.pathname !== "/app/api/passkeys/options") return null;
   if (!session.signedIn || !session.user) return json({ message: L("Přihlášení vypršelo. Přihlas se znovu.", "Your session has expired. Sign in again.") }, 401);
@@ -218,12 +218,20 @@ export async function handlePasskeyApi(request, env, url, session, ctx, stepUp =
     return json({ status: "ok", name, rpId, userHandle: issued.user_handle, passkeys: await listPasskeys(db, user.id) });
   }
   if (request.method === "DELETE" && url.pathname === "/app/api/passkeys") {
+    // Removing a way to confirm it's you needs the same check as adding one: a stolen
+    // session must not take the owner's passkeys away (and sign their devices out) unnoticed.
+    const unconfirmed = stepUp ? await stepUp() : null;
+    if (unconfirmed) return unconfirmed;
     // The handle goes back with the list, so the browser can forget the removed passkey too.
     const userHandle = await handleOf();
-    const removed = await db.prepare("DELETE FROM user_passkeys WHERE id = ? AND user_id = ?").bind(String(url.searchParams.get("id") || ""), user.id).run();
+    const removed = await db.prepare("DELETE FROM user_passkeys WHERE id = ? AND user_id = ? RETURNING name").bind(String(url.searchParams.get("id") || ""), user.id).first();
     const response = json({ status: "ok", rpId, userHandle, passkeys: await listPasskeys(db, user.id) });
+    if (removed && emailConfigured(env)) {
+      const notice = sendEmail(env, { to: user.email, ...passkeyRemovedEmail(requestLanguage(request), removed.name || "Passkey") }).catch(error => console.error("Passkey notice e-mail failed", error?.code || error?.message));
+      if (ctx?.waitUntil) ctx.waitUntil(notice); else await notice;
+    }
     // Whoever signed in with the removed passkey elsewhere is signed out; this device stays.
-    return Number(removed.meta?.changes) > 0 ? signedOutElsewhere(db, user.id, env, response, request) : response;
+    return removed ? signedOutElsewhere(db, user.id, env, response, request) : response;
   }
   return json({ message: L("Nepodporovaná metoda.", "Unsupported method.") }, 405);
 }
