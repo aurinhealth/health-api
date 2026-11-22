@@ -2680,7 +2680,8 @@ struct TrainingModeView: View {
     /// GymSessionMath.carried with this workout's kept and typed sets; a
     /// first try of the exercise also follows its warm-up.
     private func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
-        GymSessionMath.carried(asPlanned(set), in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
+        GymSessionMath.carried(asPlanned(set), in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil,
+                               step: weightStep(exercise))
     }
 
     /// A set still to do with the plan's letter back in place of one chosen
@@ -2701,7 +2702,7 @@ struct TrainingModeView: View {
     /// "Nechat 12,5" (GymSessionMath.adjustment).
     private func adjusted(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String, from: Int)? {
         guard !set.done, let before = GymSessionMath.previous(asPlanned(set), in: exercise), !kept.contains(before.row),
-              let change = GymSessionMath.adjustment(asPlanned(set), after: before),
+              let change = GymSessionMath.adjustment(asPlanned(set), after: before, step: weightStep(exercise)),
               // Not when the set has its own weight (typed in ahead, the plan's own).
               carried(set, in: exercise)?.kg == change.kg,
               let kg = before.kg, let done = before.reps else { return nil }
@@ -2712,13 +2713,18 @@ struct TrainingModeView: View {
         return (text, L10n.f("Nechat %@", LiftWeight.shown(kg, machineLb: lb(exercise.name)) ?? kg), before.row)
     }
 
+    /// 2.5 kg, or 5 on a machine that goes in fives; never on a pound machine.
+    private func weightStep(_ exercise: GymExercise) -> Double {
+        lb(exercise.name) ? GymCoach.step : GymSessionMath.step(exercise, history: history.exercise(exercise.name))
+    }
+
     /// A first try whose warm-up went well off its plan (GymSessionMath.fromWarmup):
     /// the ✦ line says why the weight moved and "Nechat 35,5" keeps the plan,
     /// so a typo or another bar never moves it silently (strength coach, 608).
     private func warmupMoved(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String)? {
         guard !set.done, !typed.kg.contains(set.row), history.last(exercise.name, before: date) == nil,
               GymSessionMath.previous(set, in: exercise) == nil,
-              let kg = GymSessionMath.fromWarmup(set, in: exercise), let plan = set.plannedKg else { return nil }
+              let kg = GymSessionMath.fromWarmup(set, in: exercise, step: weightStep(exercise)), let plan = set.plannedKg else { return nil }
         let pounds = lb(exercise.name)
         return (L10n.f("Rozcvička šla jinak než plán. Další %@ %@.", LiftWeight.shown(kg, machineLb: pounds) ?? kg, LiftWeight.unit(machineLb: pounds)),
                 L10n.f("Nechat %@", LiftWeight.shown(plan, machineLb: pounds) ?? plan))
