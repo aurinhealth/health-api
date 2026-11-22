@@ -72,6 +72,8 @@ enum HealthValue: String, CaseIterable, Identifiable {
     var nightly: Bool { [.hrv, .respiration, .oxygen, .temperature].contains(self) }
     var hasBand: Bool { group.first == .restingHR }
     var partialToday: Bool { self == .steps || self == .activeEnergy }
+    /// Single measurements from a scale or an entry, with no usual range.
+    var measured: Bool { group.first == .weight }
 
     /// The coach about this value (P1 knows the metric keys).
     func coach(line: String?, date: String) -> CoachSubject {
@@ -114,6 +116,11 @@ struct HealthValueReading {
     /// The value measured for the page's day itself (not an older day's
     /// fallback): the chart's point for that day shows this same number.
     var current: Double? = nil
+    /// The unit by the headline's number when it says more than the value's
+    /// unit ("°C warmer than usual").
+    var unit: String? = nil
+    /// The cell's shorter unit with the direction ("°C warmer").
+    var cellUnit: String? = nil
 }
 
 struct HealthValuePage: View {
@@ -130,7 +137,7 @@ struct HealthValuePage: View {
     var body: some View {
         let reading = HealthValueContent.reading(value, model: model)
         DetailTemplate(title: value.title) {
-            CoachEntry(subject: value.coach(line: reading.value == nil ? nil : reading.text + (value.unit.isEmpty ? "" : " " + L10n.tr(value.unit)), date: today),
+            CoachEntry(subject: value.coach(line: reading.value == nil ? nil : reading.text + (reading.unit.map { " " + $0 } ?? (value.unit.isEmpty ? "" : " " + L10n.tr(value.unit))), date: today),
                        view: "health",
                        companion: ChromeAction(systemImage: "info", label: "Jak se to měří") { info = true })
         } content: {
@@ -172,7 +179,7 @@ struct HealthValueContent: View {
             let cells = value.group.compactMap { v -> SiblingCell? in
                 let r = Self.reading(v, model: model)
                 guard r.value != nil else { return nil }
-                return SiblingCell(id: v.rawValue, title: v.title, value: r.text, unit: v.unit.isEmpty ? nil : v.unit, spokenState: r.state?.words)
+                return SiblingCell(id: v.rawValue, title: v.title, value: r.text, unit: r.cellUnit ?? (v.unit.isEmpty ? nil : v.unit), spokenState: r.state?.words)
             }
             if cells.count > 1 {
                 SiblingCells(cells: cells, selected: value.rawValue) { id in
@@ -184,19 +191,33 @@ struct HealthValueContent: View {
                 Card { LearningState(kind: .missing, text: Self.missingText(value)) }.padding(.top, 20)
                 if value == .weight { addEntry.padding(.top, 12) }
             } else {
-                DetailHeadline(label: reading.label, value: reading.text, unit: value.unit.isEmpty ? nil : value.unit,
+                DetailHeadline(label: reading.label, value: reading.text, unit: reading.unit ?? (value.unit.isEmpty ? nil : value.unit),
                                state: reading.state, usual: reading.usual, spoken: reading.spoken)
                 if value == .weight { addEntry }
                 let points = chartPoints(reading)
                 Card {
                     DetailChart(points: points, today: today, period: $period, unit: L10n.tr(value.unit), digits: value.digits,
-                                note: note(points.filter { $0.date > ISODay.shift(today, -period.days) }.count), source: source)
+                                note: note(points.filter { $0.date > ISODay.shift(today, -period.days) }.count), source: source,
+                                periods: value.measured ? [.days30, .months3] : ChartPeriod.allCases, measurements: value.measured)
                 }
                 .padding(.top, 12)
-                let rows = TrendMath.rows(points, today: lastDay(points), lags: period.weekly ? TrendLags.year : TrendLags.month)
-                if !rows.isEmpty {
-                    SectionLabel(text: "Analýza trendu").padding(.top, 28)
-                    Card { TrendTable(rows: rows, unit: L10n.tr(value.unit), digits: value.digits) }.padding(.top, 10)
+                if value.measured {
+                    // The latest measurement against the one from then (concepts 39 to 41).
+                    let rows = TrendMath.measurementRows(points, latest: reading.value)
+                    if !rows.isEmpty {
+                        SectionLabel(text: "Analýza trendu").padding(.top, 28)
+                        Card {
+                            TrendTable(rows: rows, unit: L10n.tr(value.unit), digits: value.digits, nowCaption: "nejnovější",
+                                       footnote: "Každý řádek porovnává tvé nejnovější měření s tím tehdejším.")
+                        }
+                        .padding(.top, 10)
+                    }
+                } else {
+                    let rows = TrendMath.rows(points, today: lastDay(points), lags: period.weekly ? TrendLags.year : TrendLags.month)
+                    if !rows.isEmpty {
+                        SectionLabel(text: "Analýza trendu").padding(.top, 28)
+                        Card { TrendTable(rows: rows, unit: L10n.tr(value.unit), digits: value.digits) }.padding(.top, 10)
+                    }
                 }
                 extraCards
             }
@@ -447,9 +468,12 @@ struct HealthValueContent: View {
             let night: MetricState = elevated ? .off(above: true) : abs(d) <= 0.5 ? .within : .off(above: d > 0)
             let shown = Units.temperatureChange(d)
             let half = Units.temperatureChange(0.5)
-            return HealthValueReading(value: shown, text: Fmt.signed(shown, digits: 1), label: "Minulá noc, teplota kůže proti obvyklé",
+            // "0.1 °C warmer than usual" in words, no sign (concept 38, point 52).
+            return HealthValueReading(value: shown, text: Fmt.decimal(abs(shown), digits: 1), label: "Minulá noc, teplota kůže",
                                       state: night, usual: L10n.f("Obvyklé rozmezí do %@ %@ na obě strany", Fmt.decimal(half, digits: 1), Units.temperatureUnit),
-                                      local: points(list, low: -half, high: half, map: Units.temperatureChange))
+                                      local: points(list, low: -half, high: half, map: Units.temperatureChange),
+                                      unit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "teplejší než obvykle" : "chladnější než obvykle"),
+                                      cellUnit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "tepleji" : "chladněji"))
         case .weight:
             guard let w = health?.weight else { return HealthValueReading(text: "–") }
             let v = Units.weight(w.latest)
