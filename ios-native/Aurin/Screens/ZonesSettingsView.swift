@@ -188,10 +188,10 @@ struct ZonesSettingsView: View {
     static let pools = [("25", "25 m"), ("50", "50 m"), ("22.86", "25 yd"), ("33.33", "33⅓ m")]
     static let openWaterOptions = [("off", "Vypnuto"), ("races", "Před závody"), ("season", "V sezóně")]
 
-    /// "automaticky, 25 m": the pool of the last pool swim until one is picked.
+    /// "Auto, 25 m": the pool of the last pool swim until one is picked.
     private func poolOptions(_ t: TrainingProfileResponse) -> [(String, String)] {
         let last = t.resolved.poolLengthSource == "auto" ? t.resolved.poolLength.flatMap { n in Self.pools.first { Double($0.0) == n }?.1 } : nil
-        return [("", last.map { L10n.tr("automaticky") + ", " + $0 } ?? L10n.tr("automaticky"))] + Self.pools
+        return [("", last.map { L10n.tr("Auto") + ", " + $0 } ?? L10n.tr("Auto"))] + Self.pools
     }
 
     @ViewBuilder

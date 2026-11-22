@@ -179,10 +179,11 @@ final class WatchBridge: NSObject {
         do {
             try session.updateApplicationContext(context)
             lastContext = (sentSnapshot, rest)
+            // Only a context that went out counts as sent (Settings → Apple Watch says when).
+            lastSent = Date()
         } catch {
             lastContext = nil
         }
-        lastSent = Date()
     }
 
     /// What the watch got last (sendContext), to leave out the same again.
