@@ -82,7 +82,7 @@ struct MyWorkoutsView: View {
                         .padding(.top, 10)
                     }
                     if friends {
-                        Text("Uložit k sobě, naplánovat nebo smazat přes ⋯").font(Typo.caption).foregroundStyle(Palette.faint)
+                        Text("Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš").font(Typo.caption).foregroundStyle(Palette.faint)
                             .frame(maxWidth: .infinity).padding(.top, 14)
                     }
                 }
@@ -137,12 +137,15 @@ struct MyWorkoutsView: View {
         .background(Palette.ink.opacity(0.06), in: Capsule())
     }
 
+    /// A tap plans it; slide left to edit or delete, hold for every action
+    /// (no three-dot menu, concept a-knihovna/012).
     private func row(_ w: SavedWorkout, sport: LibrarySport) -> some View {
-        HStack(spacing: 12) {
+        SwipeRow(edit: w.fromFriend || model.demo ? nil : { editing = EditorTarget(workout: w) }, delete: { if !model.demo { deleting = w } }) {
             Button { plan(w) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: sport.symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(sport.color)
                         .frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                        .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             if w.fromFriend && !w.seen { Circle().fill(Palette.amberBar).frame(width: 7, height: 7).accessibilityLabel("Nový") }
@@ -152,30 +155,26 @@ struct MyWorkoutsView: View {
                             .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
+                    if busy == w.id { ProgressView() } else {
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
+                    }
                 }
+                .padding(.vertical, 12)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Menu {
-                Button { plan(w) } label: {
-                    Label("Naplánovat", systemImage: "calendar.badge.plus")
-                }
-                if w.fromFriend {
-                    Button { Task { await copy(w) } } label: { Label("Uložit k sobě", systemImage: "bookmark") }
-                } else {
-                    Button { editing = EditorTarget(workout: w) } label: { Label("Upravit", systemImage: "pencil") }
-                }
-                Button { Task { await share(w) } } label: { Label("Sdílet", systemImage: "square.and.arrow.up") }
-                Button(role: .destructive) { deleting = w } label: { Label("Smazat", systemImage: "trash") }
-            } label: {
-                Group { if busy == w.id { ProgressView() } else { Image(systemName: "ellipsis") } }
-                    .scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                    .frame(width: 32, height: 32)
-            }
-            .disabled(model.demo || busy != nil)
-            .accessibilityLabel(L10n.f("Možnosti: %@", w.name))
         }
-        .padding(.vertical, 12)
+        .contextMenu {
+            Button { plan(w) } label: { Label("Naplánovat", systemImage: "calendar.badge.plus") }
+            if w.fromFriend {
+                Button { Task { await copy(w) } } label: { Label("Uložit k sobě", systemImage: "bookmark") }
+            } else {
+                Button { editing = EditorTarget(workout: w) } label: { Label("Upravit", systemImage: "pencil") }
+            }
+            Button { Task { await share(w) } } label: { Label("Sdílet", systemImage: "square.and.arrow.up") }
+            Button(role: .destructive) { deleting = w } label: { Label("Smazat", systemImage: "trash") }
+        }
+        .disabled(busy != nil)
     }
 
     /// A gym workout is planned in the gym builder, a ride or run in its sheet.

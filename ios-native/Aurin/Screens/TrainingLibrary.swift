@@ -80,13 +80,15 @@ struct LibraryHome: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let training = model.training, let session = LibraryCoachCard.session(training) {
+            let today = model.training.flatMap { LibraryCoachCard.session($0) }
+            if let training = model.training, let session = today {
                 LibraryCoachCard(session: session, route: LibraryCoachCard.route(session, week: training.sessions ?? []))
                     .padding(.top, 14)
             }
             RouteLink(route: .coachPick(false)) {
                 HStack {
-                    Text("Jiná možnost na dnes").font(Typo.body).foregroundStyle(Palette.ink)
+                    // Without today's card there is no first option to have another of.
+                    Text(verbatim: L10n.tr(today == nil ? "Návrh na dnes" : "Jiná možnost na dnes")).font(Typo.body).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
@@ -213,8 +215,8 @@ struct LibraryCoachCard: View {
             WorkoutNumberRow(cells: Self.numbers(session))
             if let advice = session.advice?.nilIfBlank {
                 Rectangle().fill(Palette.hairline).frame(height: 1)
-                Text(verbatim: advice).font(Typo.body).foregroundStyle(Palette.secondary)
-                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: advice).font(Typo.sentenceItalic(17)).foregroundStyle(Palette.green)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
@@ -224,7 +226,7 @@ struct LibraryCoachCard: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var isGym: Bool { session.sport == "strength" || session.sport == "gym" }
+    private var isGym: Bool { LibrarySport.matches("gym", session.sport ?? "") }
 
     /// Time, the gym's exercises and sets, and the strain as an estimate.
     static func numbers(_ session: TrainingSnapshot.Session) -> [WorkoutNumberRow.Cell] {
@@ -250,10 +252,10 @@ struct LibraryCoachCard: View {
     static func route(_ s: TrainingSnapshot.Session, week: [WeekSession]) -> AppRoute? {
         let match = week.first { w in
             if let id = s.eventId { return w.eventId == id }
-            return s.sport == "strength" && w.kind == "gym" && w.date == s.date
+            return LibrarySport.matches("gym", s.sport ?? "") && w.kind == "gym" && w.date == s.date
         }
         if let match { return WeekSessionsList.destination(match) }
-        return s.sport == "strength" ? .gym(s.date) : nil
+        return LibrarySport.matches("gym", s.sport ?? "") ? .gym(s.date) : nil
     }
 }
 
@@ -315,7 +317,7 @@ struct LibraryWeekDots: View {
             ForEach(0..<7, id: \.self) { i in
                 let isToday = ISODay.shift(monday, i) == today
                 VStack(spacing: 4) {
-                    Text(verbatim: letters[i]).font(.system(size: 10, weight: isToday ? .bold : .medium))
+                    Text(verbatim: letters[i]).font(.system(size: 11, weight: isToday ? .bold : .medium))
                         .foregroundStyle(isToday ? Palette.ink : Palette.muted)
                     dot(i < week.count ? week[i] : .none)
                 }
@@ -329,7 +331,7 @@ struct LibraryWeekDots: View {
         switch mark {
         case .done: Circle().fill(color).frame(width: 10, height: 10)
         case .planned: Circle().strokeBorder(color, lineWidth: 1.5).frame(width: 10, height: 10)
-        case .none: Circle().fill(Palette.faint.opacity(0.35)).frame(width: 10, height: 10)
+        case .none: Circle().fill(Palette.faint.opacity(0.5)).frame(width: 10, height: 10)
         }
     }
 
@@ -487,7 +489,7 @@ struct GymLibrarySection: View {
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 LibraryDayRow(day: $day)
                 Rectangle().fill(Palette.hairline).frame(height: 1)
-                LengthControl(minutes: $minutes, recommended: GymLength.usual ?? 60, range: 20...120, step: 5, presets: $presets, fallback: 60)
+                LengthControl(minutes: $minutes, recommended: GymLength.usual, usual: true, range: 20...120, step: 5, presets: $presets, fallback: 60)
             }
             .padding(.top, 10)
 
@@ -496,7 +498,7 @@ struct GymLibrarySection: View {
                 .padding(.top, 10)
 
             SectionLabel(text: "Cviky").padding(.top, 28)
-            ExerciseCatalog()
+            ExerciseCatalog(place: equipment)
         }
         .task {
             if model.musclesStale { await model.loadMuscles() }
@@ -518,7 +520,10 @@ struct GymLibrarySection: View {
     /// "312 exercises, 148 with your equipment".
     private var subtitle: String? {
         guard !catalog.isEmpty else { return nil }
-        let fit = catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) }.count
+        // Without the equipment every exercise would "fit": only the count then.
+        guard equipment != nil else { return L10n.plural("%lld cviků", catalog.count) }
+        // The same rule as the list's "Mine" filter (ExerciseCatalog).
+        let fit = catalog.filter { EquipmentView.fits($0, equipment) }.count
         return L10n.f("%@, %@ s tvým vybavením", L10n.plural("%lld cviků", catalog.count), String(fit))
     }
 
@@ -567,7 +572,7 @@ enum GymFocus: String, CaseIterable, Identifiable {
                  "sport": "Můj sport", "arms": "Paže", "rested": "Odpočaté"][rawValue]!)
     }
 
-    /// The figure's muscles of the tile (BodyFigure ids, at most five choices).
+    /// The figure's muscles of the tile (BodyFigure ids).
     var ids: [String] {
         switch self {
         case .full, .rested: return []
@@ -610,7 +615,7 @@ enum GymFocus: String, CaseIterable, Identifiable {
     func mark(_ data: MuscleFatigue?) -> Mark {
         guard let data else { return .none }
         let list = (self == .full ? BodyFigure.muscles.map(\.id) : ids).compactMap { data.tired(body: $0) }
-        if list.contains(where: { $0.state == "fatigued" }) { return self == .full ? .none : .tired }
+        if list.contains(where: { $0.state == "fatigued" }) { return .tired }
         return list.isEmpty ? .none : .almost
     }
 }
@@ -649,7 +654,7 @@ struct GymFocusCard: View {
                     Spacer()
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
-                .frame(minHeight: 40).contentShape(Rectangle())
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             HStack(spacing: 14) {
@@ -665,7 +670,12 @@ struct GymFocusCard: View {
     /// "All rested. Last trained 5 days ago." or the most tired muscle of the focus.
     private var reason: String? {
         guard let data else { return nil }
-        let tired = (focus.ids.isEmpty ? [] : focus.ids).compactMap { data.tired(body: $0) }.first
+        if focus == .rested {
+            // No big muscle rested: the tile is off and says why (Petr 2026-11-09).
+            if data.restedFocus.isEmpty { return L10n.tr("Velké svaly se ještě zotavují. Zkus krátký trénink středu těla nebo volno.") }
+            return data.lastGymText
+        }
+        let tired = (focus == .full ? BodyFigure.muscles.map(\.id) : focus.ids).compactMap { data.tired(body: $0) }.first
         if let tired { return L10n.f("Ještě unavené: %@, odpočaté %@", L10n.tr(tired.label).lowercased(with: Fmt.locale), tired.readyText(today: data.date)) }
         return [L10n.tr("Vše odpočaté."), data.lastGymText].compactMap { $0 }.joined(separator: " ")
     }
@@ -673,6 +683,7 @@ struct GymFocusCard: View {
     private func tile(_ f: GymFocus) -> some View {
         let on = f == focus
         let mark = f.mark(data)
+        let off = f == .rested && data?.restedFocus.isEmpty == true
         return Button { pick(f) } label: {
             HStack(spacing: 5) {
                 if f == coach { TwoLights(size: 12) }
@@ -684,11 +695,15 @@ struct GymFocusCard: View {
                 }
             }
             .font(.footnote.weight(.medium))
-            .foregroundStyle(on ? Palette.onButton : Palette.ink)
-            .frame(maxWidth: .infinity, minHeight: 40)
+            .foregroundStyle(on ? Palette.onButton : off ? Palette.faint : Palette.ink)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .background(on ? Palette.button : Palette.ink.opacity(0.05), in: Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(off)
+        .accessibilityLabel(Text(verbatim: [f.title, f == coach ? L10n.tr("Kouč na dnes") : nil,
+                                            mark == .tired ? L10n.tr("ještě unavené") : mark == .almost ? L10n.tr("skoro připravené") : nil]
+                                    .compactMap { $0 }.joined(separator: ", ")))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
@@ -750,7 +765,8 @@ struct BrickLibrarySection: View {
             }
             .padding(.top, 12)
             if let error {
-                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
+                // The demo has no library: a plain note, not an error.
+                Text(error).font(Typo.small).foregroundStyle(model.demo ? Palette.muted : Palette.rust).padding(.top, 16)
             } else if loading && bricks.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
             } else {
@@ -760,6 +776,10 @@ struct BrickLibrarySection: View {
                     Text(L10n.plural("%lld bricků", shown.count)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 .padding(.top, 24)
+                if shown.isEmpty {
+                    Text("Těmto filtrům nic neodpovídá. Zkus jinou délku nebo sporty.")
+                        .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+                }
                 VStack(spacing: 10) {
                     ForEach(shown) { brick in
                         Button { open = brick } label: { LibraryBrickCard(brick: brick) }.buttonStyle(PressableCardStyle())
@@ -815,7 +835,7 @@ struct LibraryBrickCard: View {
                     Text(verbatim: LengthControl.short(brick.minutes)).font(Typo.number(22)).foregroundStyle(Palette.ink)
                     let strain = Self.strain(brick)
                     if strain > 0 {
-                        Text(verbatim: Fmt.decimal(strain, digits: 1) + "\u{00A0}" + L10n.tr("odh.")).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(verbatim: Fmt.decimal(strain, digits: 1) + "\u{00A0}" + L10n.tr("námaha odh.")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
             }
@@ -1068,7 +1088,8 @@ struct WorkoutLibrarySection: View {
             if loading && workouts.isEmpty {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
             } else if let error {
-                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
+                // The demo has no library: a plain note, not an error.
+                Text(error).font(Typo.small).foregroundStyle(model.demo ? Palette.muted : Palette.rust).padding(.top, 16)
             } else if workouts.isEmpty {
                 Text("V knihovně tomuto výběru nic neodpovídá.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
@@ -1257,7 +1278,7 @@ struct LibraryWorkoutCard: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     if let d = workout.duration_minutes { Text(verbatim: LengthControl.short(Int(d))).font(Typo.number(22)).foregroundStyle(Palette.ink) }
                     if let load = workout.target_load, load > 0 {
-                        Text(verbatim: Fmt.decimal(StrainDetailContent.strain(tss: load), digits: 1) + "\u{00A0}" + L10n.tr("odh."))
+                        Text(verbatim: Fmt.decimal(StrainDetailContent.strain(tss: load), digits: 1) + "\u{00A0}" + L10n.tr("námaha odh."))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
@@ -1583,7 +1604,12 @@ struct ExerciseLibraryView: View {
 /// Search, the muscle chips, "Jen s mým vybavením" and the list of exercises.
 struct ExerciseCatalog: View {
     @Environment(AppModel.self) private var model
-    init(muscle: String? = nil) { _muscle = State(initialValue: muscle.map(BodyFigure.choice)) }
+    /// The gym page's equipment: the place picked in Where applies to "Mine" at once.
+    let place: GymEquipment?
+    init(muscle: String? = nil, place: GymEquipment? = nil) {
+        _muscle = State(initialValue: muscle.map(BodyFigure.choice))
+        self.place = place
+    }
 
     @State private var exercises: [GymCatalogExercise] = []
     @State private var equipment: GymEquipment?
@@ -1647,7 +1673,8 @@ struct ExerciseCatalog: View {
             if loading {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
             } else if let error {
-                Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
+                // The demo has no library: a plain note, not an error.
+                Text(error).font(Typo.small).foregroundStyle(model.demo ? Palette.muted : Palette.rust).padding(.top, 16)
             } else {
                 Text(L10n.plural("%lld cviků", filtered.count))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 16)
@@ -1673,7 +1700,7 @@ struct ExerciseCatalog: View {
             let text = Self.fold([ex.name, ex.muscle ?? "", ex.station ?? "", ex.note ?? ""].joined(separator: " "))
             guard words.allSatisfy({ text.contains($0) }) else { return false }
             if let muscle, !Self.works(ex, muscle) { return false }
-            if mine, !EquipmentView.fits(ex, equipment) { return false }
+            if mine, !EquipmentView.fits(ex, place ?? equipment) { return false }
             if rested, !Self.ready(ex, model.muscles) { return false }
             return true
         }
@@ -1804,6 +1831,8 @@ struct LengthControl: View {
     /// nil is the coach's length for today.
     @Binding var minutes: Int?
     var recommended: Int?
+    /// Gym: the length the athlete picks most often, not a coach's length.
+    var usual = false
     let range: ClosedRange<Double>
     let step: Double
     /// The own presets, "60,90,120" (kept per sport on the phone).
@@ -1820,11 +1849,12 @@ struct LengthControl: View {
         let own = minutes.flatMap { values.contains($0) ? nil : $0 }
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Text(verbatim: Self.short(shown ?? Int(slider))).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                // Nothing recommended and nothing picked: every length (the search sends none).
+                Text(verbatim: shown.map(Self.short) ?? L10n.tr("Libovolná délka")).font(Typo.number(30)).foregroundStyle(Palette.ink)
                     .contentTransition(.numericText()).animation(.snappy, value: shown)
                 Spacer(minLength: 8)
                 if let recommended {
-                    Text(verbatim: L10n.f("Kouč dnes doporučuje %@", Self.short(recommended)))
+                    Text(verbatim: L10n.f(usual ? "Obvykle %@" : "Kouč dnes doporučuje %@", Self.short(recommended)))
                         .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.trailing)
                 }
             }
@@ -1836,8 +1866,8 @@ struct LengthControl: View {
             .accessibilityLabel(Text(verbatim: L10n.tr("Délka")))
             .accessibilityValue(Self.short(Int(slider)))
             FlowLayout(spacing: 8) {
-                if recommended != nil {
-                    chip(L10n.tr("Doporučená"), on: minutes == nil && !dragging) { minutes = nil; if let recommended { slider = clamp(recommended) } }
+                chip(L10n.tr(recommended == nil ? "Libovolná" : usual ? "Obvyklá" : "Doporučená"), on: minutes == nil && !dragging) {
+                    minutes = nil; if let recommended { slider = clamp(recommended) }
                 }
                 ForEach(values, id: \.self) { value in
                     chip(Self.short(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
@@ -1853,6 +1883,7 @@ struct LengthControl: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(own == nil ? Palette.muted : Palette.ink)
                     .padding(.horizontal, 12).frame(minHeight: 32)
+                    .frame(minHeight: 44).contentShape(Rectangle())
                     .overlay { Capsule().stroke(Palette.ink.opacity(own == nil ? 0.25 : 0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
                 }
                 .buttonStyle(.plain)
@@ -1869,8 +1900,7 @@ struct LengthControl: View {
         }
     }
 
-    /// "45 min", "1 h", "1 h 30" (602 point 139), never broken inside.
-    /// The app's one length format (Fmt.duration, "1 h 05"), with no-break spaces so it never wraps.
+    /// "45 min", "1 h", "1 h 30" (602 point 139): the app's one length format (Fmt.duration, "1 h 05"), with no-break spaces so it never wraps.
     static func short(_ minutes: Int) -> String { Fmt.duration(minutes).replacingOccurrences(of: " ", with: "\u{00A0}") }
 
     private func clamp(_ value: Int) -> Double { min(max(Double(value), range.lowerBound), range.upperBound) }
@@ -1883,6 +1913,7 @@ struct LengthControl: View {
                 .padding(.horizontal, 12).frame(height: 32)
                 .background(on ? Palette.button : Palette.card, in: Capsule())
                 .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1) }
+                .frame(minHeight: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])

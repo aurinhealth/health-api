@@ -2009,7 +2009,6 @@
 "Nový trénink" = "New workout";
 "Až ti někdo pošle trénink odkazem, najdeš ho tady." = "When someone sends you a workout link, you'll find it here.";
 "Ulož si trénink, který jezdíš rád, a naplánuj ho jedním klepnutím. Přidáš ho přes + nebo z hotového návrhu." = "Save a workout you like to repeat and plan it with one tap. Add one with + or from a finished proposal.";
-"Uložit k sobě, naplánovat nebo smazat přes ⋯" = "Save, plan or delete with ⋯";
 "Smazat trénink?" = "Delete workout?";
 "Nový" = "New";
 "Uložit k sobě" = "Save to my workouts";
@@ -5142,3 +5141,10 @@
 "Kuře s rýží" = "Chicken with rice";
 "asi 640 kcal, přidáno k obědu" = "about 640 kcal, added to lunch";
 "Dobré ráno." = "Good morning.";
+"Libovolná délka" = "Any length";
+"Libovolná" = "Any";
+"Obvykle %@" = "Usually %@";
+"námaha odh." = "strain est.";
+"Návrh na dnes" = "A workout for today";
+"Těmto filtrům nic neodpovídá. Zkus jinou délku nebo sporty." = "Nothing fits these filters. Try another length or other sports.";
+"Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš" = "Tap to plan, hold to save it as yours or delete";
