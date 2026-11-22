@@ -186,6 +186,7 @@ import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
 import { pausedRefusal, consentRefusal, finishHealthPauses } from "./health-pause.js";
 import { firstImport } from "./first-imports.js";
+import { connectedTo } from "./connect-return.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
@@ -660,18 +661,18 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/ultrahuman') || url.pathname.startsWith('/oauth/whoop') || url.pathname.startsWith('/oauth/wahoo')) && !signedIn) return new Response(L('Připojení se nepodařilo ověřit. Zavři okno a zkus to v aplikaci znovu.', 'Couldn\'t verify the connection. Close this window and try again in the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
-    if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(googleOAuth);}
+    if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&connectedTo(googleOAuth,"google")){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(googleOAuth);}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
-    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await scheduleIntervalsCatchUp(env).catch(error=>console.error('Intervals.icu catch-up schedule failed',error.message));await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(intervalsOAuth);}
+    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&connectedTo(intervalsOAuth,"intervals")){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await scheduleIntervalsCatchUp(env).catch(error=>console.error('Intervals.icu catch-up schedule failed',error.message));await initialImport(await connectionEnvironment(env),ctx);}return endConnectSession(intervalsOAuth);}
     // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
     const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
-    if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback")firstImport(env,ctx,"ultrahuman");return endConnectSession(ultrahumanOAuth);}
+    if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback"&&connectedTo(ultrahumanOAuth,"ultrahuman"))firstImport(env,ctx,"ultrahuman");return endConnectSession(ultrahumanOAuth);}
     const whoopOAuth = await handleWhoopOAuth(request, env, url.pathname);
-    if (whoopOAuth) {if(url.pathname==="/oauth/whoop/callback")firstImport(env,ctx,"whoop");return endConnectSession(whoopOAuth);}
+    if (whoopOAuth) {if(url.pathname==="/oauth/whoop/callback"&&connectedTo(whoopOAuth,"whoop"))firstImport(env,ctx,"whoop");return endConnectSession(whoopOAuth);}
     // A new Wahoo connection brings its done workouts and sends the plans ahead.
     const wahooOAuth = await handleWahooOAuth(request, env, url.pathname);
-    if (wahooOAuth) {if(url.pathname==="/oauth/wahoo/callback")firstImport(env,ctx,"wahoo");return endConnectSession(wahooOAuth);}
+    if (wahooOAuth) {if(url.pathname==="/oauth/wahoo/callback"&&connectedTo(wahooOAuth,"wahoo"))firstImport(env,ctx,"wahoo");return endConnectSession(wahooOAuth);}
     // Signing out ends every session of the account on the server too (dashboard-auth.js).
     if (url.pathname === "/app/logout" && request.method === "POST") return handleSignOut(request, rawEnv, signedIn ? user : null);
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });

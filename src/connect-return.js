@@ -33,3 +33,12 @@ export function startedBy(uid, env) {
 export function connectReturnUrl(event, env) {
   return appOrigin(env) + APP_CONNECTED_PATH + "?event=" + (EVENTS.has(event) ? event : "unknown");
 }
+
+// A callback that stored the keys sends the app ?event=<provider>; a cancelled or
+// failed one (google-cancelled, intervals-failed…) answers 302 too, and must not
+// clear "reconnect", reset the first sync or start an import (entrypoint.js).
+export function connectedTo(response, provider) {
+  if (response?.status !== 302) return false;
+  try { return new URL(response.headers.get("Location") || "", "https://aurin.health").searchParams.get("event") === provider; }
+  catch { return false; }
+}
