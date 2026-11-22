@@ -233,7 +233,15 @@ struct EditExercisesSheet: View {
 
     private func remove(_ offsets: IndexSet) {
         let list = leftIndices
-        for offset in offsets.sorted(by: >) where list.indices.contains(offset) { day.deleteExercise(at: list[offset]) }
+        // An exercise begun keeps its done sets in the record; only what is
+        // left goes (608: the minus took the done sets with it).
+        for offset in offsets.sorted(by: >) where list.indices.contains(offset) {
+            if day.exercises[safe: list[offset]]?.sets.contains(where: \.done) == true {
+                day.removeExercise(at: list[offset])
+            } else {
+                day.deleteExercise(at: list[offset])
+            }
+        }
     }
 
     /// The still-to-do list's move as a move in the whole day (List.onMove semantics).

@@ -48,19 +48,21 @@ extension GymIntensity {
 struct IntensityPill: View {
     let letter: String?
     var planned = false
+    /// The live workout's bigger pill (608: easier to hit and to read).
+    var large = false
 
     var body: some View {
         let shape = Capsule()
         Group {
             if let letter {
-                Text(verbatim: letter).font(.caption.weight(.bold))
+                Text(verbatim: letter).font((large ? Font.subheadline : .caption).weight(.bold))
                     .foregroundStyle(planned ? Palette.muted : Palette.ink)
-                    .frame(minWidth: 38, minHeight: 24).padding(.horizontal, 2)
+                    .frame(minWidth: large ? 48 : 38, minHeight: large ? 32 : 24).padding(.horizontal, 2)
                     .overlay(shape.strokeBorder(GymIntensity.color(letter).opacity(planned ? 0.75 : 1),
                                                 style: StrokeStyle(lineWidth: 1.5, dash: planned ? [3, 2.5] : [])))
             } else {
                 shape.strokeBorder(Palette.faint, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2.5]))
-                    .frame(width: 38, height: 24)
+                    .frame(width: large ? 48 : 38, height: large ? 32 : 24)
             }
         }
     }
