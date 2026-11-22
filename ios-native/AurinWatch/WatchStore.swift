@@ -302,13 +302,17 @@ extension WatchStore: WCSessionDelegate {
         let data = context[WatchSnapshot.contextKey] as? Data
         let gym = context[WatchGym.replyKey] as? Data
         let settings = context[WatchSettings.contextKey] as? Data
+        let signIn = context[WatchSession.contextKey] as? Data
         let empty = context.isEmpty
         let near = session.isReachable
         Task { @MainActor in
             WatchStore.shared.phoneNear = near
+            // As didReceiveApplicationContext: the iPhone's sign-out (an empty
+            // context) that came while the watch app was closed clears it too.
+            WatchAPI.store(signIn)
             if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
-            if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
+            if data != nil || empty { WatchStore.shared.receive(data) }
             WatchStore.shared.ask()
             GymStore.shared.loadIfWaiting()
             // A gym workout started before the connection was up: the iPhone hears of it now.
