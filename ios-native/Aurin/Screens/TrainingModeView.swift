@@ -2103,18 +2103,16 @@ struct TrainingModeView: View {
         case .skip:
             restEnd = nil
         case .complete(let row):
-            // A second tap on the same set before the first one's save is in: once only.
-            guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
-                  let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving, completing != row else { break }
-            completing = row
-            index = at
-            restEnd = nil
-            prefill(set, in: list[at])
-            Task { await complete(set); completing = nil }
+            Task { await completeRow(row) }
         case .partDone:
             guard let part = activePart, let day else { break }
             if part.isCardio {
-                cardioCommand = CardioCommand(kind: .done)
+                // A moment later: back from the bar, the cardio's card is only now appearing
+                // and takes a command that came with it as its start (GymCardioTimer).
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    cardioCommand = CardioCommand(kind: .done)
+                }
             } else {
                 // Every move of the warm-up or stretching ticked, then what follows.
                 if let routine = GymDayParts.resolved(day, stored: dayParts, date: date).routine(part, day: day) {
@@ -2124,6 +2122,19 @@ struct TrainingModeView: View {
             }
         }
         syncActivity()
+    }
+
+    /// Série hotová from the lock screen: the set with what its row shows.
+    /// A second tap on the same set before the first one's save is in: once only.
+    private func completeRow(_ row: Int) async {
+        guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
+              let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving, completing != row else { return }
+        completing = row
+        index = at
+        restEnd = nil
+        prefill(set, in: list[at])
+        await complete(set)
+        completing = nil
     }
 
     // MARK: Server
@@ -2408,7 +2419,12 @@ struct TrainingModeView: View {
         // Each lock-screen tap once, in order (two taps on Série hotová are one).
         var seen: [GymActivityAction] = []
         for action in gym.pending where !seen.contains(action) { seen.append(action) }
-        for action in seen { activityAction(action) }
+        // One after another: each set is saved with its own weight and reps.
+        Task {
+            for action in seen {
+                if case .complete(let row) = action { await completeRow(row) } else { activityAction(action) }
+            }
+        }
     }
 
     /// +30 s and Přeskočit pauzu from the lock screen (or Přeskočit in the bar)
@@ -2434,6 +2450,8 @@ struct TrainingModeView: View {
         case .partDone:
             guard !gym.pending.contains(action) else { return }
             gym.pending.append(action)
+            // The lock screen moves on to the set after the part.
+            gym.activity = nil
         }
         model.minimizedGym = gym
         let end = gym.restEnd
