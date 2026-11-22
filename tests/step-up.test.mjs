@@ -179,3 +179,23 @@ test("checks that need no confirmation come first", async () => {
   assert.equal((await call("/app/api/account/email/start", { email: "not-an-address" })).status, 400, "not an address");
   assert.equal((await call("/app/api/account/delete", { confirm: "" })).status, 400, "deleting without SMAZAT");
 });
+
+test("removing a passkey asks to confirm it's you first, then e-mails the owner", async () => {
+  const { env, sent } = await setup();
+  const user = await member(env);
+  env.DB.sqlite.exec(`INSERT INTO user_passkeys(id, user_id, user_handle, public_key, alg, sign_count, transports, name, backed_up) VALUES ('k1', ${user.id}, 'h', '{}', -7, 0, '[]', 'iPhone', 1)`);
+  const path = "/app/api/passkeys?id=k1";
+  const refused = await handleAccountApi(request(path, { method: "DELETE" }), env, {}, new URL(ORIGIN + path), session(user));
+  assert.equal(refused.status, 403);
+  assert.equal((await refused.json()).status, "step_up_required");
+  assert.ok(env.DB.sqlite.prepare("SELECT 1 FROM user_passkeys WHERE id = 'k1'").get(), "the passkey stays");
+  const code = codeIn(await stepUp(env, user, "/app/api/account/step-up/start", {}).then(() => sent.at(-1)));
+  const proof = proofOf(await stepUp(env, user, "/app/api/account/step-up/verify", { code }));
+  const before = sent.length;
+  const removed = await handleAccountApi(request(path, { method: "DELETE", cookie: proof }), env, {}, new URL(ORIGIN + path), session(user));
+  assert.equal(removed.status, 200);
+  assert.equal(env.DB.sqlite.prepare("SELECT 1 FROM user_passkeys WHERE id = 'k1'").get(), undefined);
+  assert.equal(sent.length, before + 1);
+  assert.match(sent.at(-1).subject, /ubyl přístupový klíč/);
+  assert.match(sent.at(-1).text, /„iPhone“/);
+});
