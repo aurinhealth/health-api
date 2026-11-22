@@ -440,8 +440,10 @@ struct WeekStrip: View {
     var ahead = false
     /// The Monday of the week in sight, as it scrolls.
     @State private var centered: String?
-    /// The strip grows with the letter and the date.
-    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = 76
+    /// The strip grows with the letter and the date (WeekDayCell, the same on Trénink).
+    @ScaledMetric(relativeTo: .caption) private var height: CGFloat = WeekDayCell<EmptyView>.height
+    /// Food: what was eaten of each day's target, for the rings (the last 30 days).
+    @State private var foodDays: [String: FoodHistory.Day] = [:]
 
     private var today: String { AppModel.localDate(Date()) }
     private var lastDay: String { ahead ? (AppModel.shift(today, by: AppModel.foodDaysAhead) ?? today) : today }
@@ -471,6 +473,11 @@ struct WeekStrip: View {
             }
         }
         .padding(.horizontal, -6)
+        // Food's rings: the last 30 days, again after a meal is logged today.
+        .task(id: ahead ? model.food?.kcal : nil) {
+            guard ahead else { return }
+            await loadFood()
+        }
     }
 
     // Moved only through its scrollPosition, never a ScrollViewProxy (see
@@ -499,7 +506,7 @@ struct WeekStrip: View {
         }
         // The readiness dots of the months in sight, once each (a month a call).
         .task(id: months) {
-            // Food has no readiness dots (concept Jídlo, rule T1).
+            // Food has rings instead (FoodDayRing, as its month sheet).
             guard !ahead else { return }
             let oldest = ISODay.shift(today, -90)
             for month in months { await model.loadDays(from: max(month, oldest), to: ISODay.monthEnd(month)) }
@@ -533,37 +540,88 @@ struct WeekStrip: View {
         return model.dayValues[day]?.readiness?.zone
     }
 
-    /// The day picked sits in a grey pill with its letter and its dot, as the
-    /// week on Training (redesign D, rule T1); today's letter is bold.
-    /// The dot is the day's readiness, in the colours of the month calendar.
+    /// The day in the shared cell (WeekDayCell): on Dnes the readiness dot in
+    /// the colours of the month calendar, on Jídlo the ring of the day's
+    /// calories as its month sheet (Petr 2026-11-22, variant B).
     private func cell(_ day: String) -> some View {
-        let isToday = day == today, selected = day == shown, future = day > lastDay
+        let selected = day == shown, future = day > lastDay
         let color: Color? = switch zone(day) { case "green": Palette.green; case "yellow", "red": Palette.amber; default: nil }
-        return VStack(spacing: 5) {
-            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(isToday ? .bold : selected ? .semibold : .medium))
-                .foregroundStyle(selected || isToday ? Palette.ink : Palette.muted)
-            Text(verbatim: Fmt.dayNumber(day))
-                .scaledFont(15, weight: .semibold, cap: .denseCap)
-                .foregroundStyle(future ? Palette.faint : Palette.ink)
-                .frame(width: 34, height: 34)
-            Circle().fill(color ?? .clear).frame(width: 5, height: 5)
+        return WeekDayCell(day: day, today: today, selected: selected, faint: future) {
+            if ahead {
+                // Today before a meal and the days ahead stay empty, never "not logged".
+                if !foodDays.isEmpty, day >= foodFirst, day < today || foodDays[day]?.logged == true {
+                    FoodDayRing(day: foodDays[day], value: .calories, size: 22)
+                }
+            } else {
+                Circle().fill(color ?? .clear).frame(width: 6, height: 6)
+            }
         }
-        .padding(.vertical, 6)
-        .frame(width: 44)
-        .background {
-            if selected { RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.track) }
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.spoken(day, zone: zone(day)))
+        .accessibilityLabel(ahead ? Self.spokenFood(day, foodDays[day]) : Self.spoken(day, zone: zone(day)))
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// The first day the rings cover (the history's 30 days).
+    private var foodFirst: String { ISODay.shift(today, -29) }
+
+    private func loadFood() async {
+        let history = model.demo
+            ? FoodHistory.demo(today: today, target: model.food?.target ?? 2650)
+            : try? await model.api.foodHistory(days: 30)
+        guard let history else { return }
+        foodDays = Dictionary(history.list.map { ($0.date, $0) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// "Wednesday 11, 1 850 of 2 400 kcal" or "…, nothing logged": the ring said aloud.
+    static func spokenFood(_ day: String, _ food: FoodHistory.Day?) -> String {
+        guard let food else { return Fmt.dayMonth(day) }
+        guard food.logged, let kcal = food.kcal else { return Fmt.dayMonth(day) + ", " + L10n.tr("jídlo nezapsáno") }
+        if let target = food.target, target > 0 {
+            return Fmt.dayMonth(day) + ", " + L10n.f("Snězeno %@ z %@ kcal", Fmt.int(kcal), Fmt.int(target))
+        }
+        return Fmt.dayMonth(day) + ", " + Fmt.int(kcal) + " kcal"
     }
 
     /// "Wednesday 11, readiness below your usual range" (D-DNES-5): the dot said aloud.
     static func spoken(_ day: String, zone: String?) -> String {
         guard let word = ReadinessText.pill(zone)?.0 else { return Fmt.dayMonth(day) }
         return L10n.f("%@, připravenost %@", Fmt.dayMonth(day), word)
+    }
+}
+
+/// One day of every week strip, on Dnes, Trénink and Jídlo (Petr 2026-11-22,
+/// variant B): the weekday, the date in SF and one 30 pt place for the
+/// section's mark, so the strip is as tall on every tab and never jumps
+/// when the tab changes. The day picked sits in the grey pill; today's
+/// letter is bold; days that cannot be picked are faint.
+struct WeekDayCell<Mark: View>: View {
+    /// The strip's height at the default text size.
+    static var height: CGFloat { 97 }
+
+    let day: String
+    let today: String
+    let selected: Bool
+    var faint = false
+    @ViewBuilder var mark: Mark
+
+    var body: some View {
+        let isToday = day == today
+        VStack(spacing: 5) {
+            Text(verbatim: Fmt.weekdayShort(day)).font(Typo.tiny.weight(isToday ? .bold : selected ? .semibold : .medium))
+                .foregroundStyle(selected || isToday ? Palette.ink : Palette.muted)
+            Text(verbatim: Fmt.dayNumber(day))
+                .scaledFont(15, weight: .semibold, cap: .denseCap)
+                .foregroundStyle(faint ? Palette.faint : Palette.ink)
+                .frame(width: 34, height: 30)
+            mark.frame(width: 44, height: 30)
+        }
+        .padding(.vertical, 6)
+        .frame(width: 46)
+        .background {
+            if selected { RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.track) }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
     }
 }
 

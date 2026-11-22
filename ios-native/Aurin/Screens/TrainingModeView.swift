@@ -518,8 +518,10 @@ struct TrainingModeView: View {
     /// The exercise or part in serif, its own time under it.
     private func headTitleBlock(_ day: GymDay) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(headTitle(day)).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                .lineLimit(2).minimumScaleFactor(0.6)
+            // The whole name on up to two lines (Petr 2026-11-22: always see
+            // which exercise it is); only a name longer still shrinks a little.
+            Text(headTitle(day)).font(Typo.heading(27, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
             HStack(spacing: 8) {
                 if let part = activePart, headTitle(day) != L10n.tr(part.kind.title) {
                     Text(verbatim: L10n.tr(part.kind.title)).font(Typo.small).foregroundStyle(Palette.secondary)
@@ -535,8 +537,8 @@ struct TrainingModeView: View {
     /// Edit warm-up / cardio / stretching, for today only.
     private func editHead(_ draft: LivePartDraft) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(verbatim: L10n.tr(Self.editTitle(draft.part))).font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                .lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: L10n.tr(Self.editTitle(draft.part))).font(Typo.heading(27, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
             Text("Jen dnes").font(Typo.small).foregroundStyle(Palette.secondary)
         }
     }
@@ -863,6 +865,9 @@ struct TrainingModeView: View {
                 if s.row == set?.row, let change = adjusted(s, in: exercise) {
                     AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }
                         .padding(.horizontal, 8).padding(.vertical, 2)
+                } else if s.row == set?.row, let change = warmupMoved(s, in: exercise) {
+                    AdjustmentNote(text: change.text, keep: change.keep) { keepPlan(in: exercise) }
+                        .padding(.horizontal, 8).padding(.vertical, 2)
                 }
                 gap(after: s, in: exercise, offset: offset)
             }
@@ -919,7 +924,7 @@ struct TrainingModeView: View {
         let shownReps: String = Fmt.range((s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? "")
         // By sides the number shows on the L row only.
         // A warm-up set done without a letter shows W, as its sheet names the kind of set.
-        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) ?? (s.warmup ? "W" : nil) : carriedLetter(s, in: exercise) ?? s.intensity
+        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) ?? (s.warmup ? "W" : nil) : s.intensity
         var plateTap: (() -> Void)? = nil
         if let target = plateTarget(s, in: exercise, shown: kg.isEmpty ? shownKg : kg) {
             plateTap = { loadingBar = target }
@@ -1480,16 +1485,19 @@ struct TrainingModeView: View {
     /// the exercises and Dokončit trénink. Once finished, doneSummary.
     private func finished(_ day: GymDay) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            // Not done yet: the clock and heart rate run until Finish (records and changes are on the summary).
             VStack(spacing: 8) {
-                SectionLabel(text: "Trénink dokončen")
+                SectionLabel(text: "Všechny série hotové")
                 Text(title(day)).font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(L10n.f("Trénink běží %@", Self.clock(Int(live.elapsed(at: context.date)))))
+                        .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
-            summaryGrid(day).padding(.top, 6)
-            ForEach(newRecords(day)) { record in recordCard(record) }
-            changesCard(day)
-            swapsCard
+            .padding(.bottom, 8)
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             addExerciseButton
             // What comes after the exercises, before the session is closed (GymDayParts).
@@ -1517,6 +1525,8 @@ struct TrainingModeView: View {
             WorkoutRatingCard(date: date, exercises: day.exerciseNames,
                               liked: catalog.reduce(into: [String: Bool]()) { out, item in if let liked = item.liked { out[item.name] = liked } })
                 .padding(.top, 10)
+            // Each exercise against last time ("−5 kg", "+2.5 kg").
+            changesCard(day)
             // A swap made today (often on the watch): only today, or from now on.
             swapsCard
             // Only what failed to send: the rest is quiet (Close's line says it goes on).
@@ -1600,26 +1610,6 @@ struct TrainingModeView: View {
                             questions: ["Jak se mi tahle posilovna povedla?", "Kolik mám dát příště?", "Co mám dát zítra?"])
     }
 
-    private func summaryGrid(_ day: GymDay) -> some View {
-        let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
-        let planned: Int = day.exercises.reduce(0) { $0 + $1.workCount }
-        // Finished early: "5 z 7", so the sets left out show.
-        let setsText: String = sets < planned ? L10n.f("%@ z %@", String(sets), String(planned)) : String(sets)
-        let volume: Double = GymSessionMath.volume(day.exercises)
-        let shown = GymSessionMath.volumeText(volume)
-        let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-            if let totals {
-                total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
-                if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
-                if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
-            }
-            total(L10n.tr("Série"), setsText)
-            total(L10n.tr("Objem"), shown.value + " " + shown.unit, change: volumeChange(day, volume), better: volume >= lastVolume(day))
-            if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
-        }
-    }
-
     /// kg × reps of the same exercises last time.
     private func lastVolume(_ day: GymDay) -> Double {
         var sum = 0.0
@@ -1652,23 +1642,11 @@ struct TrainingModeView: View {
             let lifts = GymSessionMath.lifts(exercise)
             guard let best = lifts.max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
                   let old = GymSessionMath.record(history.exercise(exercise.name), before: date) else { continue }
-            if GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
+            // Compared as shown: 100 lb today (45.36 kg) and 100 lb saved as 45.3 kg are the same lift.
+            let shown = { (lift: GymHistory.Lift) in GymSessionMath.shown(lift, machineLb: lb(exercise.name)) }
+            if GymSessionMath.e1rm(shown(best)) > GymSessionMath.e1rm(shown(old)) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
         }
         return out
-    }
-
-    private func recordCard(_ record: NewRecord) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "sparkles").foregroundStyle(Palette.amber)
-                .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Text(record.name + " " + (GymSessionMath.lift(record.lift, machineLb: lb(record.name)) ?? "")).font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            Spacer()
-        }
-        .padding(16)
-        .cardSurface(cornerRadius: 22)
     }
 
     struct ExerciseChange: Identifiable {
@@ -1874,14 +1852,6 @@ struct TrainingModeView: View {
         guard let top = lifts.compactMap(\.kg).max(), top > 0 else { return L10n.f("%@ ×", String(lifts.count)) }
         let pounds = lb(exercise.name)
         return "\(lifts.count) × " + GymCoach.shown(top, machineLb: pounds) + " " + LiftWeight.unit(machineLb: pounds)
-    }
-
-    private func total(_ title: String, _ value: String, change: String? = nil, better: Bool = true) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.small).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-            if let change { Text(change).font(Typo.caption).foregroundStyle(better ? Palette.green : Palette.rust) }
-        }
     }
 
     /// The day didn't load (no signal and no copy on the phone, a server error):
@@ -2736,6 +2706,8 @@ struct TrainingModeView: View {
         next.undo(row: set.row, keepDrops: typed.kg)
         day = next
         restEnd = nil
+        // The set back to do shows its own weight and reps again.
+        if let exercise = next.exercises[safe: index], let upcoming = nextSet(exercise) { prefill(upcoming, in: exercise) }
         guard !model.demo else { return }
         do {
             try await model.saveGym(next, date: date)
@@ -2748,7 +2720,8 @@ struct TrainingModeView: View {
     /// GymSessionMath.carried with this workout's kept and typed sets; a
     /// first try of the exercise also follows its warm-up.
     private func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
-        GymSessionMath.carried(asPlanned(set), in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil)
+        GymSessionMath.carried(asPlanned(set), in: exercise, keep: kept, typed: typed, firstTry: history.last(exercise.name, before: date) == nil,
+                               step: weightStep(exercise))
     }
 
     /// A set still to do with the plan's letter back in place of one chosen
@@ -2765,20 +2738,11 @@ struct TrainingModeView: View {
         Dictionary(letters.compactMap { row, letter in to(row).map { ($0, letter) } }, uniquingKeysWith: { a, _ in a })
     }
 
-    /// The letter chosen for the set before (not the plan's): the sets to come
-    /// take it too, as they take its weight and reps.
-    private func carriedLetter(_ set: GymSet, in exercise: GymExercise) -> String? {
-        guard set.work, !picked.contains(set.row), adjusted(set, in: exercise) == nil,
-              let before = GymSessionMath.previous(set, in: exercise),
-              picked.contains(before.row) else { return nil }
-        return before.intensity
-    }
-
     /// How the set before moved this one's weight: the ✦ line and its
     /// "Nechat 12,5" (GymSessionMath.adjustment).
     private func adjusted(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String, from: Int)? {
         guard !set.done, let before = GymSessionMath.previous(asPlanned(set), in: exercise), !kept.contains(before.row),
-              let change = GymSessionMath.adjustment(asPlanned(set), after: before),
+              let change = GymSessionMath.adjustment(asPlanned(set), after: before, step: weightStep(exercise)),
               // Not when the set has its own weight (typed in ahead, the plan's own).
               carried(set, in: exercise)?.kg == change.kg,
               let kg = before.kg, let done = before.reps else { return nil }
@@ -2787,6 +2751,31 @@ struct TrainingModeView: View {
             : GymIntensity.letter(before.intensity) == "F" ? L10n.f("Série %@ do selhání na %@ z %@. Další lehčeji.", before.number, done, goal)
             : L10n.f("Série %@ jen na %@ z %@. Další lehčeji.", before.number, done, goal)
         return (text, L10n.f("Nechat %@", LiftWeight.shown(kg, machineLb: lb(exercise.name)) ?? kg), before.row)
+    }
+
+    /// 2.5 kg, or 5 on a machine that goes in fives; never on a pound machine.
+    private func weightStep(_ exercise: GymExercise) -> Double {
+        lb(exercise.name) ? GymCoach.step : GymSessionMath.step(exercise, history: history.exercise(exercise.name))
+    }
+
+    /// A first try whose warm-up went well off its plan (GymSessionMath.fromWarmup):
+    /// the ✦ line says why the weight moved and "Nechat 35,5" keeps the plan,
+    /// so a typo or another bar never moves it silently (strength coach, 608).
+    private func warmupMoved(_ set: GymSet, in exercise: GymExercise) -> (text: String, keep: String)? {
+        guard !set.done, !typed.kg.contains(set.row), history.last(exercise.name, before: date) == nil,
+              GymSessionMath.previous(set, in: exercise) == nil,
+              let kg = GymSessionMath.fromWarmup(set, in: exercise, step: weightStep(exercise)), let plan = set.plannedKg else { return nil }
+        let pounds = lb(exercise.name)
+        return (L10n.f("Rozcvička šla jinak než plán. Další %@ %@.", LiftWeight.shown(kg, machineLb: pounds) ?? kg, LiftWeight.unit(machineLb: pounds)),
+                L10n.f("Nechat %@", LiftWeight.shown(plan, machineLb: pounds) ?? plan))
+    }
+
+    /// "Nechat" under the warm-up's line: the warm-ups still to do and the
+    /// first work set go back to the plan's weight.
+    private func keepPlan(in exercise: GymExercise) {
+        let first = exercise.sets.first { $0.work && !$0.done }?.row
+        typed.kg.formUnion(exercise.sets.filter { !$0.done && ($0.warmup || $0.row == first) }.map(\.row))
+        prefill(exercise.sets.first { !$0.done }, in: exercise)
     }
 
     /// "Nechat": the sets to come go on with the weight of the set before,
@@ -2811,11 +2800,10 @@ struct TrainingModeView: View {
         guard var next = day else { return }
         // A set begun during the rest ends the rest: its length stays between the rows.
         if restEnd != nil { endRest() }
-        let letter = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
-        if letter != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg, machineLb: lb(next.exercises.first { $0.sets.contains { $0.row == set.row } }?.name ?? ""))
         let r = reps.trimmingCharacters(in: .whitespaces)
-        // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
+        // The set keeps its own letter (the plan's or the one chosen for it): an F chosen
+        // for the set before is that set's, never the next ones' (608, strength coach).
         // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
         let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carried(set, in: $0)?.kg }
         // A weight other than the field showed: by sides the other side takes it.
@@ -2824,7 +2812,7 @@ struct TrainingModeView: View {
         if !k.isEmpty, LiftWeight.number(k) != LiftWeight.number(showed) {
             mirrorWeight(set, kg: k, in: &next)
         }
-        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: Self.savedReps(typed: r, planned: set.plannedReps, drop: set.drop), rpe: "", intensity: letter, keepDrops: typed.kg)
+        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: Self.savedReps(typed: r, planned: set.plannedReps, drop: set.drop), rpe: "", intensity: nil, keepDrops: typed.kg)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
@@ -2862,6 +2850,13 @@ struct TrainingModeView: View {
             restTotal = rest
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
+        }
+        // The set at hand shows what its row shows: the weight and reps of the
+        // set before (as typed), the coach's ✦ change, or its own plan after a
+        // warm-up, on the other side or on another exercise (608: the first
+        // work set showed the last warm-up's 30 × 3, the box kept 12,5 under a ✦ 10).
+        if let exercise = next.exercises[safe: index], let upcoming = nextSet(exercise) {
+            prefill(upcoming, in: exercise)
         }
         // Before the save: the lock screen may be all that's awake.
         syncActivity()

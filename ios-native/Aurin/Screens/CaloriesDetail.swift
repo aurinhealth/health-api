@@ -534,6 +534,10 @@ struct FoodDayRing: View {
     let day: FoodHistory.Day?
     let value: FoodValue
     var future = false
+    /// 16 in the month, 22 in the week strip (the line grows with it).
+    var size: CGFloat = 16
+
+    private var line: CGFloat { size > 16 ? 3.5 : 3 }
 
     var body: some View {
         ZStack {
@@ -543,9 +547,9 @@ struct FoodDayRing: View {
                 let target = value.target(day) ?? 0
                 let over = value == .calories && target > 0 && FoodHero.over(eaten: eaten, target: target) >= 1
                 if target > 0 {
-                    Circle().stroke(Palette.track, lineWidth: 3)
+                    Circle().stroke(Palette.track, lineWidth: line)
                     Circle().trim(from: 0, to: min(eaten / target, 1))
-                        .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .stroke(over ? Palette.red : Palette.green, style: StrokeStyle(lineWidth: line, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 } else {
                     // No target: a thin ring, told apart by its shape, not only its colour.
@@ -555,6 +559,6 @@ struct FoodDayRing: View {
                 Circle().stroke(Palette.faint, style: StrokeStyle(lineWidth: 1.2, dash: [2, 3]))
             }
         }
-        .frame(width: 16, height: 16)
+        .frame(width: size, height: size)
     }
 }

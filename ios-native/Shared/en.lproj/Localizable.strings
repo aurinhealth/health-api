@@ -1943,6 +1943,8 @@
 "série %@" = "set %@";
 "Minule %@" = "Last time %@";
 "Trénink dokončen" = "Workout done";
+"Všechny série hotové" = "All sets done";
+"Trénink běží %@" = "Workout running %@";
 "Nový rekord" = "New record";
 "%@ op." = "%@ reps";
 "Vrátit sérii" = "Undo set";
@@ -3291,6 +3293,7 @@
 "Série %@ šla lehce, %@ z %@. Další těžší." = "Set %@ was easy, %@ of %@. The next one heavier.";
 "Série %@ do selhání na %@ z %@. Další lehčeji." = "Set %@ went to failure at %@ of %@. The next one lighter.";
 "Série %@ jen na %@ z %@. Další lehčeji." = "Set %@ only reached %@ of %@. The next one lighter.";
+"Rozcvička šla jinak než plán. Další %@ %@." = "The warm-up went off the plan. Next %@ %@.";
 "Probíhá trénink" = "Workout in progress";
 "%@ z %@ sérií" = "%@ of %@ sets";
 "série %@ z %@" = "set %@ of %@";
@@ -5163,3 +5166,4 @@
 "tepleji" = "warmer";
 "chladněji" = "cooler";
 "Další: %@" = "Next: %@";
+"jídlo nezapsáno" = "no food logged";
