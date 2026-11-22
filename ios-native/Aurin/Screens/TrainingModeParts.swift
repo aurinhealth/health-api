@@ -186,6 +186,14 @@ enum GymSessionMath {
         return reps == 1 ? kg : kg * (1 + reps / 30)
     }
 
+    /// A lift's weight as the screen shows it: a machine in pounds to its
+    /// pounds, kilos to 0.1 kg, so a record never rests on a rounding.
+    static func shown(_ lift: GymHistory.Lift, machineLb: Bool) -> GymHistory.Lift {
+        guard let kg = lift.kg else { return lift }
+        let same = machineLb ? Units.kgFromPounds(LiftWeight.machinePounds(kg)) : (kg * 10).rounded() / 10
+        return GymHistory.Lift(kg: same, reps: lift.reps, target: lift.target, rpe: lift.rpe)
+    }
+
     static func lifts(_ exercise: GymExercise) -> [GymHistory.Lift] {
         exercise.sets.filter { $0.done && $0.work }.map { set in
             GymHistory.Lift(kg: set.kg.flatMap(LiftWeight.number), reps: set.reps.flatMap(LiftWeight.number), target: nil, rpe: nil)

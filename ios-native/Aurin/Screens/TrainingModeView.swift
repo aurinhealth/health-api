@@ -1647,14 +1647,16 @@ struct TrainingModeView: View {
             let lifts = GymSessionMath.lifts(exercise)
             guard let best = lifts.max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
                   let old = GymSessionMath.record(history.exercise(exercise.name), before: date) else { continue }
-            if GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
+            // Compared as shown: 100 lb today (45.36 kg) and 100 lb saved as 45.3 kg are the same lift.
+            let shown = { (lift: GymHistory.Lift) in GymSessionMath.shown(lift, machineLb: lb(exercise.name)) }
+            if GymSessionMath.e1rm(shown(best)) > GymSessionMath.e1rm(shown(old)) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best, old: old)) }
         }
         return out
     }
 
     private func recordCard(_ record: NewRecord) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "sparkles").foregroundStyle(Palette.amber)
+            Image(systemName: "star").foregroundStyle(Palette.amber)
                 .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)

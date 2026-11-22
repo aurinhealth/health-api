@@ -240,4 +240,13 @@ final class GymAdjustmentTests: XCTestCase {
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "H", planned: "8–12")
         XCTAssertNil(GymSessionMath.adjustment(next, after: done))
     }
+
+    /// 100 lb on a pound machine saved once as 45.3 kg, today as 45.36 kg: the same lift, no record.
+    func testAPoundMachineRoundingIsNoRecord() {
+        let old = GymSessionMath.shown(GymHistory.Lift(kg: 45.3, reps: 12, target: nil, rpe: nil), machineLb: true)
+        let now = GymSessionMath.shown(GymHistory.Lift(kg: 45.36, reps: 12, target: nil, rpe: nil), machineLb: true)
+        XCTAssertEqual(GymSessionMath.e1rm(now), GymSessionMath.e1rm(old), accuracy: 0.001)
+        let more = GymSessionMath.shown(GymHistory.Lift(kg: 46.49, reps: 12, target: nil, rpe: nil), machineLb: true)
+        XCTAssertGreaterThan(GymSessionMath.e1rm(more), GymSessionMath.e1rm(old) + 0.01)
+    }
 }
