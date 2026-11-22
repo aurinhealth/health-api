@@ -104,6 +104,14 @@ struct FoodContent: View {
     @Environment(\.dayPage) private var page
     let food: FoodSnapshot
     var add: (String) -> Void = { _ in }
+    /// The coach card's row (concept 02-jidlo/000, point 4): the next meal still
+    /// empty with what is left for it, and "+ Add". The server gives a meal's
+    /// suggestion only while it is still ahead.
+    /// Settings → Coach on screens → Food off: no card, so no row either (the row alone would bring the card back).
+    @AppStorage(CoachTextPlaces.shownKey("food")) private var coachShown = true
+    private var nextMeal: FoodSnapshot.Meal? {
+        food.meals.first { $0.entries.isEmpty && ($0.suggestion?.kcal ?? 0) > 0 }
+    }
     var scan: () -> Void = {}
     @Environment(\.tabActions) private var actions
     @State private var editing = false
@@ -185,7 +193,7 @@ struct FoodContent: View {
             let day = page.map(\.selectedDate) ?? model.selectedDate
             if day.map({ $0 > today }) ?? true {
                 CoachTextCard(screen: "food", fallbackText: food.target == nil ? L10n.tr("Zapiš první jídlo a pomůžu ti s energií na trénink.") : food.sentence,
-                              live: day == nil)
+                              live: day == nil, tip: day == nil && coachShown ? nextMeal.map { meal in AnyView(NextMealRow(meal: meal, add: { add($0.type) })) } : nil)
                     .padding(.top, 14)
             }
         } right: {
@@ -823,5 +831,52 @@ struct MacroBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.tr(title) + " " + FiberRow.text(eaten: eaten, target: target, limit: false))
+    }
+}
+
+/// "Afternoon snack / about 360 kcal, 45 g carbs" and "+ Add" under the coach's
+/// sentence on Food (concept a-jidlo: fork icon, two lines, a dark 44 pt button).
+struct NextMealRow: View {
+    let meal: FoodSnapshot.Meal
+    let add: (FoodSnapshot.Meal) -> Void
+
+    private var detail: String? {
+        guard let s = meal.suggestion else { return nil }
+        var text = L10n.f("kolem %@ kcal", Fmt.int(s.kcal))
+        if let carbs = s.carbs, carbs > 0 { text += L10n.f(", %@ g sacharidů", Fmt.int(carbs)) }
+        return text
+    }
+
+    var body: some View {
+        // Side by side; at the largest text sizes the button goes under the text.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { label; Spacer(minLength: 0); button }
+            VStack(alignment: .leading, spacing: 10) { label; button }
+        }
+    }
+
+    private var label: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "fork.knife").scaledFont(14, weight: .medium).foregroundStyle(Palette.muted)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: meal.label).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                if let detail { Text(verbatim: detail).font(Typo.small).foregroundStyle(Palette.muted) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var button: some View {
+        Button { add(meal) } label: {
+            Label("Přidat", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 18).frame(height: 44)
+                .background(Palette.button, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: MealSlot.addText(meal.type)))
     }
 }
