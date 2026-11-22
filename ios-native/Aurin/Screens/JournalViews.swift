@@ -126,6 +126,8 @@ struct JournalStateMark: View {
 struct JournalHealthCard: View {
     @Environment(AppModel.self) private var model
     @State private var data: JournalToday?
+    /// The first load ended, answered or not: a failed load still shows Log today (606 retest).
+    @State private var loaded = false
 
     /// One finding, the strongest, and no carousel (D-ZDRAVI-20).
     private var strongest: JournalEffect? { data?.top?.max { abs($0.effect) < abs($1.effect) } }
@@ -136,7 +138,7 @@ struct JournalHealthCard: View {
             // "Log today" to "Yesterday is waiting".
             if let card = data?.card {
                 waiting(card)
-            } else if data != nil {
+            } else if loaded, data?.enabled != false {
                 logToday
             }
         }
@@ -227,12 +229,14 @@ struct JournalHealthCard: View {
     private func load() async {
         if model.demo {
             data = DemoJournal.today
+            loaded = true
             return
         }
         if let fresh = try? await model.api.journalToday() {
             data = fresh
             JournalSwitch.remember(fresh.enabled)
         }
+        loaded = true
     }
 }
 

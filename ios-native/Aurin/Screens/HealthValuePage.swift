@@ -111,6 +111,9 @@ struct HealthValueReading {
     var spoken: String?
     /// Points of the snapshot (oldest first) when the series endpoint has none.
     var local: [ChartPoint] = []
+    /// The value measured for the page's day itself (not an older day's
+    /// fallback): the chart's point for that day shows this same number.
+    var current: Double? = nil
 }
 
 struct HealthValuePage: View {
@@ -187,7 +190,7 @@ struct HealthValueContent: View {
                 let points = chartPoints(reading)
                 Card {
                     DetailChart(points: points, today: today, period: $period, unit: L10n.tr(value.unit), digits: value.digits,
-                                note: note, source: source)
+                                note: note(points.filter { $0.date > ISODay.shift(today, -period.days) }.count), source: source)
                 }
                 .padding(.top, 12)
                 let rows = TrendMath.rows(points, today: lastDay(points), lags: period.weekly ? TrendLags.year : TrendLags.month)
@@ -206,8 +209,47 @@ struct HealthValueContent: View {
     /// that is still running (steps, active energy) stays out, so the chart
     /// never shows a drop each morning (D-ZDRAVI-19); the number on top has it.
     private func chartPoints(_ reading: HealthValueReading) -> [ChartPoint] {
-        let points = loaded?.shown ?? reading.local
-        return value.partialToday ? points.filter { $0.date < today } : points
+        var points = loaded?.shown ?? reading.local
+        if value == .oxygen { points = Self.oxygenPoints(points) }
+        if value.partialToday { return points.filter { $0.date < today } }
+        // Weekly points are the server's own weeks: a day's value stays out of them.
+        if period.weekly { return points }
+        return Self.withCurrent(points, today: today, current: reading.current, state: reading.state)
+    }
+
+    /// The headline's number is the chart's point for the day (DES-4, 1 bpm
+    /// apart), and a day the series doesn't have yet is added, so "Last
+    /// night" never selects an older night (DES-11, oxygen).
+    static func withCurrent(_ points: [ChartPoint], today: String, current: Double?, state: MetricState? = nil) -> [ChartPoint] {
+        guard let current else { return points }
+        var points = points.filter { $0.date <= today }
+        let old = points.firstIndex(where: { $0.date == today }).map { points.remove(at: $0) }
+        // The headline's state on the point, so the dot says the same as the words.
+        let words = state.map(Self.stateWords) ?? (old?.state, old?.side)
+        points.append(ChartPoint(date: today, value: current, low: old?.low ?? points.last?.low, high: old?.high ?? points.last?.high,
+                                 state: words.0, side: words.1))
+        return points
+    }
+
+    /// Oxygen's points in the headline's band and words: never "above" (606
+    /// retest: 98 % read "far above" in the bubble under a green headline).
+    static func oxygenPoints(_ points: [ChartPoint]) -> [ChartPoint] {
+        points.map { p in
+            let band = p.low.flatMap { low in p.high.flatMap { HealthMonitorCard.oxygenBand(low: low, high: $0) } }
+            guard let state = HealthMonitorCard.oxygenState(MetricState(state: p.state, side: p.side), value: p.value, band: band) else {
+                return ChartPoint(date: p.date, value: p.value, low: band?.lowerBound ?? p.low, high: band?.upperBound ?? p.high)
+            }
+            let words = stateWords(state)
+            return ChartPoint(date: p.date, value: p.value, low: band?.lowerBound ?? p.low, high: band?.upperBound ?? p.high, state: words.0, side: words.1)
+        }
+    }
+
+    static func stateWords(_ state: MetricState) -> (String?, String?) {
+        switch state {
+        case .within: return ("within", nil)
+        case .off(let above): return ("slightly", above ? "above" : "below")
+        case .far(let above): return ("far", above ? "above" : "below")
+        }
     }
 
     /// The last finished day the Trend rows end on.
@@ -215,9 +257,10 @@ struct HealthValueContent: View {
         value.partialToday ? ISODay.shift(today, -1) : (points.last?.date ?? today)
     }
 
-    private var note: String {
+    private func note(_ count: Int) -> String {
         switch value {
-        case .weight, .bodyFat, .muscle: return "Každý bod je jedno měření."
+        // One measurement says so, the line needs a second (DES-11).
+        case .weight, .bodyFat, .muscle: return count == 1 ? "Zatím jediné měření. Čára se začne kreslit od druhého." : "Každý bod je jedno měření."
         case .steps, .activeEnergy: return period.weekly ? "Každý bod je týdenní průměr. Čárkovaně průměr období." : "Každý bod je jeden celý den. Čárkovaně průměr období."
         case .temperature: return "Každý bod je jedna noc jako rozdíl proti tvé obvyklé noci. Šedý pruh je tvoje obvyklé rozmezí."
         default:
@@ -360,6 +403,12 @@ struct HealthValueContent: View {
         list.map { ChartPoint(date: $0.date, value: map($0.value), low: low, high: high) }
     }
 
+    /// The night's value only when the snapshot's newest point is that day
+    /// (oxygen and the others carry the newest night, which can be older).
+    static func current(_ value: Double?, _ series: [Point], _ day: String?) -> Double? {
+        series.last?.date == day ? value : nil
+    }
+
     static func reading(_ value: HealthValue, model: AppModel) -> HealthValueReading {
         let health = model.health
         let state = health?.states?[value.rawValue]?.metricState
@@ -368,17 +417,18 @@ struct HealthValueContent: View {
         case .restingHR:
             guard let r = health?.restingHR, let v = r.value ?? r.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v), label: "Dnes, nejnižší tep v klidu", state: state,
-                                      usual: usual(r.usual?.lowerBound, r.usual?.upperBound, value), local: points(r.series, low: r.usual?.lowerBound, high: r.usual?.upperBound))
+                                      usual: usual(r.usual?.lowerBound, r.usual?.upperBound, value), local: points(r.series, low: r.usual?.lowerBound, high: r.usual?.upperBound),
+                                      current: Self.current(r.value, r.series, health?.date))
         case .hrv:
             guard let h = health?.hrv, let v = h.value ?? h.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v), label: "Minulá noc, variabilita tepu", state: state,
-                                      usual: usual(h.low, h.high, value), local: points(h.series, low: h.low, high: h.high))
+                                      usual: usual(h.low, h.high, value), local: points(h.series, low: h.low, high: h.high), current: Self.current(h.value, h.series, health?.date))
         case .respiration:
             guard let r = health?.respiration else { return HealthValueReading(text: "–") }
             let low = r.baseline.map { $0 - 0.5 }, high = r.baseline.map { $0 + 0.5 }
             return HealthValueReading(value: r.value, text: text(r.value), label: "Minulá noc, dechů za minutu ve spánku",
                                       state: state ?? (r.elevated ? .off(above: true) : nil),
-                                      usual: usual(low, high, value), local: points(r.series, low: low, high: high))
+                                      usual: usual(low, high, value), local: points(r.series, low: low, high: high), current: Self.current(r.value, r.series, health?.date))
         case .oxygen:
             guard let o = health?.oxygen else { return HealthValueReading(text: "–") }
             // The same band and state as Health monitor (oxygen is never "above").
@@ -387,7 +437,7 @@ struct HealthValueContent: View {
                                       label: "Minulá noc, kyslík v krvi ve spánku",
                                       state: HealthMonitorCard.oxygenState(state, value: o.value, band: band),
                                       usual: band.map { usual($0.lowerBound, $0.upperBound, value) } ?? nil,
-                                      local: points(o.series, low: band?.lowerBound, high: band?.upperBound))
+                                      local: points(o.series, low: band?.lowerBound, high: band?.upperBound), current: Self.current(o.value, o.series, health?.date))
         case .temperature:
             // The night against the athlete's own nights: within half a degree is the usual night.
             let deviation = health?.wristTemp?.deviation ?? health?.skinTemp?.deviation

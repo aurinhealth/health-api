@@ -206,6 +206,11 @@ enum Fmt {
         duration(Int(minutes.rounded()))
     }
 
+    /// A sentence ending in a 12-hour time ("12:17 dop.", "a.m.") keeps one full stop.
+    static func oneStop(_ text: String) -> String {
+        text.hasSuffix("..") ? String(text.dropLast()) : text
+    }
+
     static func capitalized(_ text: String) -> String {
         text.prefix(1).uppercased() + String(text.dropFirst())
     }

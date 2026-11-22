@@ -308,7 +308,7 @@ struct SleepDetailContent: View {
                     let usual = RegularityChart.usual(reg.nights)
                     NavigationLink {
                         DetailScreen(glow: Palette.Glow.today, title: "Pravidelnost") {
-                            Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
+                            Text(Fmt.oneStop(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band))))
                                 .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 24)
                             Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
                         }
@@ -532,7 +532,7 @@ struct SleepIndexParts: View {
                 Text(verbatim: value).font(.body).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             }
             Text(verbatim: note).font(Typo.small).foregroundStyle(Palette.secondary)
-            ProgressLine(fraction: fill, color: Palette.indigo).padding(.top, 8)
+            ProgressLine(fraction: fill, color: Palette.Status.good).padding(.top, 8)
         }
         .padding(.vertical, 12)
         .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
@@ -576,11 +576,11 @@ struct SleepIndexNights: View {
                 ZStack(alignment: .topLeading) {
                     ChartScale(ticks: [50.0, 75, 100].filter { $0 > lo }.map { ScaleTick(value: $0, text: Fmt.int($0)) }, width: w, y: y)
                     if let low = index.low, let high = index.high {
-                        Rectangle().fill(Palette.indigo.opacity(0.2))
+                        Rectangle().fill(Palette.Status.good.opacity(0.2))
                             .frame(width: w, height: max(2, y(low) - y(high)))
                             .offset(y: y(high))
                         ForEach([low, high], id: \.self) { edge in
-                            DashedLine().stroke(Palette.indigo.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                            DashedLine().stroke(Palette.Status.good.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                                 .frame(width: w, height: 1)
                                 .offset(y: y(edge))
                         }
@@ -592,10 +592,10 @@ struct SleepIndexNights: View {
                             p.addLine(to: CGPoint(x: x(b.slot), y: y(b.value)))
                         }
                     }
-                    .stroke(Palette.indigo.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(Palette.Status.good.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     ForEach(marks) { m in
                         let last = m.id == marks.last?.id
-                        Circle().fill(last ? Palette.indigo : Palette.indigo.opacity(0.6))
+                        Circle().fill(last ? Palette.Status.good : Palette.Status.good.opacity(0.6))
                             .frame(width: last ? 11 : 6, height: last ? 11 : 6)
                             .position(x: x(m.slot), y: y(m.value))
                         if last {
@@ -622,12 +622,12 @@ struct SleepIndexNights: View {
             HStack(spacing: 14) {
                 if let low = index.low, let high = index.high {
                     HStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 2).fill(Palette.indigo.opacity(0.3)).frame(width: 14, height: 6)
+                        RoundedRectangle(cornerRadius: 2).fill(Palette.Status.good.opacity(0.3)).frame(width: 14, height: 6)
                         Text(verbatim: L10n.f("obvyklé rozmezí %@–%@", Fmt.int(low), Fmt.int(high))).font(Typo.tiny).foregroundStyle(Palette.muted)
                     }
                 }
                 HStack(spacing: 5) {
-                    Circle().fill(Palette.indigo).frame(width: 7, height: 7)
+                    Circle().fill(Palette.Status.good).frame(width: 7, height: 7)
                     Text("poslední noc").font(Typo.tiny).foregroundStyle(Palette.muted)
                 }
             }
@@ -778,7 +778,7 @@ struct WeightEntrySheet: View {
 
 /// Pravidelnost (Petr's design of 2026-10-17): one row per night with a dot
 /// at the time of falling asleep on an hourly axis; the band is the usual
-/// time ± 30 min. A dot in the band is indigo, outside it amber, earlier or
+/// time ± 30 min. A dot in the band is green, outside it amber, earlier or
 /// later alike. Sliding a finger over the chart shows the exact time there.
 struct RegularityChart: View {
     /// Bedtime as minutes after 18:00 (src/app-health.js regularity).
@@ -823,7 +823,7 @@ struct RegularityChart: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.f("Usínáš obvykle mezi %@ a %@.", Self.clock(usual - Self.band), Self.clock(usual + Self.band)))
+        .accessibilityLabel(Fmt.oneStop(L10n.f("Usínáš obvykle mezi %@ a %@.", Self.clock(usual - Self.band), Self.clock(usual + Self.band))))
     }
 
     private func scale(_ width: CGFloat) -> Scale {
