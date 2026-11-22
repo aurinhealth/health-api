@@ -71,6 +71,11 @@ EXAMPLE = f"""## TestFlight
 # What a build says when the pull requests give nothing to quote: (cs, en).
 OTHERS = {"cs": "Další drobné úpravy.", "en": "Other small improvements."}
 NONE = {"cs": "Drobné úpravy, nic nového k otestování.", "en": "Small fixes, nothing new to test."}
+# The first line of a build's notes, by the branch it was built from.
+BRANCH_LABELS = {
+    "main": {"cs": "VERZE Z APP STORE (main)", "en": "APP STORE VERSION (main)"},
+    "redesign": {"cs": "NOVÝ DESIGN (redesign)", "en": "NEW DESIGN (redesign)"},
+}
 
 
 def git(*args):
@@ -160,6 +165,11 @@ def languages(notes):
         cs, sep, en = notes.partition("\n" + ENGLISH + "\n")
     if not sep:
         cs = en = notes
+    # BRANCH (ios-testflight.yml): the first line says which app this is, so a
+    # main build above a redesign build in TestFlight can't be mistaken for it.
+    label = BRANCH_LABELS.get(os.environ.get("BRANCH", ""))
+    if label:
+        cs, en = label["cs"] + "\n\n" + cs.strip(), label["en"] + "\n\n" + en.strip()
     return {"cs": cs.strip()[:LIMIT], "en": en.strip()[:LIMIT]}
 
 

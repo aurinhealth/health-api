@@ -269,6 +269,8 @@ jobs:
           BUNDLE_ID: health.aurin.app
           MARKETING_VERSION: ${{ needs.testflight.outputs.version }}
           BUILD: ${{ github.run_number }}
+          # The notes' first line names the app (main or redesign), testflight_notes.py.
+          BRANCH: ${{ github.ref_name }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
