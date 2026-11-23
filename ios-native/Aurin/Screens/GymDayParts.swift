@@ -417,13 +417,21 @@ struct GymRoutineSheet: View {
             Group {
                 if draft != nil {
                     LiveRoutineEditor(draft: Binding(get: { draft ?? .start(part, parts: parts, day: day) }, set: { draft = $0 }),
-                                      day: day, date: date, done: [])
+                                      day: day, date: date, done: [], live: false)
                 }
             }
             .background(Palette.background)
-            .navigationTitle(Text(part.kind.title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // "Edit warm-up" over "Today only", as the concept's header.
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(part == .warmup ? "Upravit rozcvičku" : "Upravit protažení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text("Jen pro dnešek").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Hotovo") { save(); dismiss() }.disabled(draft?.canSave == false)
@@ -431,12 +439,16 @@ struct GymRoutineSheet: View {
             }
         }
         .presentationDetents([.large])
+        // A change is not thrown away by a swipe down; Zrušit does that.
+        .interactiveDismissDisabled(changed)
         .onAppear { if draft == nil { draft = .start(part, parts: parts, day: day) } }
     }
 
+    private var changed: Bool { draft.map { $0 != LivePartDraft.start(part, parts: parts, day: day) } ?? false }
+
     /// Hotovo without a change keeps the plan's own (its length, later plan updates).
     private func save() {
-        guard let draft, draft.canSave, draft != LivePartDraft.start(part, parts: parts, day: day) else { return }
+        guard let draft, draft.canSave, changed else { return }
         stored = GymDayParts.saving(draft.applied(to: parts), date: date, into: stored)
     }
 }

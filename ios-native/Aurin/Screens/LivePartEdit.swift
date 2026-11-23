@@ -67,8 +67,10 @@ struct LiveRoutineEditor: View {
     let date: String
     /// Today's ticks (GymRoutineKind.key + a move's id).
     let done: Set<String>
+    /// Now on the first move left: only while the workout runs, not before its start.
+    var live = true
     /// The first move not done yet, marked Now.
-    private var now: String? { leftItems.first?.id }
+    private var now: String? { live ? leftItems.first?.id : nil }
     @Environment(AppModel.self) private var model
     @State private var mine: [GymPreferences.MyRoutine] = []
     /// The own ones loaded: saving one before would replace them all.
