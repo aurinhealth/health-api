@@ -4764,7 +4764,7 @@
 "Aktivní čas" = "Active time";
 "opak." = "reps";
 "před dalším cvikem" = "before the next exercise";
-"%@, %@, hotová" = "%1$@, %2$@, done";
+"Série hotová: %@, %@" = "Set done: %1$@, %2$@";
 "%@ na tomto cviku" = "%@ on this exercise";
 "Trénink se ukončil sám, 30 minut po poslední sérii." = "The workout ended by itself, 30 minutes after the last set.";
 "Upravit rozcvičku" = "Edit warm-up";

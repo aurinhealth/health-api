@@ -806,12 +806,12 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Undo is offered while no set was ticked and no exercise came or went
-    /// since: the watch's echo or the next exercise coming on change the day,
-    /// but not what Undo gives back (it hid the row at once, 617 C7).
+    /// Undo is offered while the exercises and their sets are as the removal
+    /// left them: the watch's echo or the start and end times may change the
+    /// day (it hid the row at once, 617 C7), but nothing Undo would take back.
     static func canUndoRemove(after: GymDay, now: GymDay?) -> Bool {
         guard let now else { return false }
-        return setsDone(now) == setsDone(after) && now.exercises.map(\.name) == after.exercises.map(\.name)
+        return now.exercises == after.exercises
     }
 
     @ViewBuilder
@@ -889,7 +889,7 @@ struct TrainingModeView: View {
                 }
                 .disabled(saving)
                 // VoiceOver hears which set of which exercise (617 C14).
-                .accessibilityLabel(L10n.f("%@, %@, hotová", exercise.name,
+                .accessibilityLabel(L10n.f("Série hotová: %@, %@", exercise.name,
                                            set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : L10n.f("Série %@", set.number)))
             }
         }
@@ -935,7 +935,7 @@ struct TrainingModeView: View {
         let last = history.last(exercise.name, before: date)
         return VStack(spacing: 0) {
             GymSetTableHeader(exercise: exercise.name, pounds: lb(exercise.name), effort: true,
-                              noWeight: GymSessionMath.noWeight(exercise)) { on in setPounds(exercise, on) }
+                              noWeight: noWeight(exercise)) { on in setPounds(exercise, on) }
             ForEach(exercise.sets) { s in
                 // Swiped left: just this set goes away (a done one, a warm-up too).
                 setRow(s, exercise, current: set, last: last, offset: offset)
@@ -981,6 +981,14 @@ struct TrainingModeView: View {
 
     private func lb(_ name: String) -> Bool { pounds.contains(name) }
 
+    /// No kg column: no weight anywhere in the sheet and a bodyweight exercise
+    /// by the catalog (only the floor), so a new lift without a plan keeps it.
+    private func noWeight(_ exercise: GymExercise) -> Bool {
+        guard GymSessionMath.noWeight(exercise),
+              let stations = catalog.first(where: { $0.name == exercise.name })?.stations else { return false }
+        return !stations.isEmpty && Set(stations).isSubset(of: ["floor_mats"])
+    }
+
     /// An exercise switched to pounds or back: the weight typed for the set at
     /// hand stays the same weight, and the watch gets it with the plan.
     private func setPounds(_ exercise: GymExercise, _ on: Bool) {
@@ -1023,7 +1031,7 @@ struct TrainingModeView: View {
                          onIntensity: { intensityFor = SetRef(id: s.row); effortHintSeen = true },
                          onEdit: edit,
                          onKgTap: plateTap,
-                         large: true, noWeight: GymSessionMath.noWeight(exercise)) {
+                         large: true, noWeight: noWeight(exercise)) {
             switch phase {
             case .done: Task { await undo(s) }
             case .current: Task { await complete(s) }
