@@ -103,8 +103,9 @@ struct TodayMorningView: View {
     private let green = Self.color(StatusHex.good.dark)
 
     private var pillColors: (Color, Color) {
-        let tone = StatusHex.zone(zone).map { Self.color($0.dark) } ?? muted
-        return (tone, tone.opacity(0.16))
+        // Below the range: amber text for 4.5:1 on its chip (concept fix 4.6).
+        guard let hex = StatusHex.zone(zone)?.dark else { return (muted, muted.opacity(0.16)) }
+        return (zone == "green" ? green : Self.color(0xFFD08A), Self.color(hex).opacity(0.16))
     }
 
     var body: some View {
@@ -113,11 +114,11 @@ struct TodayMorningView: View {
                 Text(layout.label).font(.subheadline).foregroundStyle(muted)
                 if let score {
                     HStack(alignment: .lastTextBaseline, spacing: 12) {
-                        Text(String(score)).font(MorningFont.number(84)).foregroundStyle(ink).lineLimit(1)
+                        Text(String(score)).font(MorningFont.number(84)).foregroundStyle(ink).lineLimit(1).minimumScaleFactor(0.5)
                         if let pill = layout.pill {
                             Text(pill).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.8)
                                 .foregroundStyle(pillColors.0)
-                                .padding(.horizontal, 10).frame(height: 26)
+                                .padding(.horizontal, 10).padding(.vertical, 5)
                                 .background(pillColors.1, in: Capsule())
                         }
                     }
@@ -147,17 +148,18 @@ struct TodayMorningView: View {
                 }
                 .frame(width: 22, height: 22)
                 .accessibilityHidden(true)
-                Text(layout.coach ?? "").font(.subheadline.weight(.semibold)).foregroundStyle(ink)
+                Text(layout.coach ?? "").font(.subheadline.weight(.semibold)).foregroundStyle(ink).accessibilityAddTraits(.isHeader)
             }
             (Text(layout.night.map { $0 + " " } ?? "").font(MorningFont.number(20)).foregroundColor(ink)
              + Text(layout.advice ?? "").font(MorningFont.italic(20)).foregroundColor(green))
                 .fixedSize(horizontal: false, vertical: true)
             if let workout = layout.workout {
                 HStack(spacing: 12) {
+                    let tint = Self.sportColor(workout.sport) ?? green
                     Image(systemName: Self.symbol(workout.sport))
-                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(green)
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(tint)
                         .frame(width: 34, height: 34)
-                        .background(green.opacity(0.16), in: Circle())
+                        .background(tint.opacity(0.16), in: Circle())
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.title).font(.subheadline.weight(.semibold)).foregroundStyle(ink).lineLimit(2)
@@ -173,12 +175,25 @@ struct TodayMorningView: View {
         .background(card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
+    /// The sports' dark colours (project design rules): Ride, Run, Swim, Gym, Yoga.
+    private static func sportColor(_ sport: String?) -> Color? {
+        switch sport {
+        case "ride": return color(0xB7A0F5)
+        case "run": return color(0xFF9238)
+        case "swim": return color(0x5CC8E8)
+        case "strength": return color(0x8FE6C4)
+        case "yoga": return color(0xF1CA47)
+        default: return nil
+        }
+    }
+
     private static func symbol(_ sport: String?) -> String {
         switch sport {
         case "ride": return "figure.outdoor.cycle"
         case "run": return "figure.run"
         case "swim": return "figure.pool.swim"
         case "strength": return "dumbbell.fill"
+        case "yoga": return "figure.yoga"
         default: return "figure.mixed.cardio"
         }
     }
