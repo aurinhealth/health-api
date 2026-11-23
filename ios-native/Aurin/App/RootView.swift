@@ -320,10 +320,10 @@ struct RootView: View {
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
-                // What "+" adds goes to today, also while the screens show another day.
-                .onAppear { model.writesToday = true }
-                .onDisappear { model.writesToday = false }
             }
+            // What "+" adds goes to today, also while the screens show another day:
+            // set here once, as the card closes before its sheet opens.
+            .onChange(of: showAdd || plusSheet != nil) { _, open in model.writesToday = open }
             .sheet(item: $quickFood) { start in
                 AddFoodSheet(meal: quickMeal ?? MealSlot.now(slots: model.food?.mealSlots), start: start)
                     .dynamicTypeSize(Self.textSizes)

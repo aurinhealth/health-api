@@ -349,7 +349,7 @@ extension AppModel {
         undoToast = PlanToast(title: L10n.f("Přidáno (%2$@): %1$@", names.joined(separator: ", "), mealName),
                               note: day == today ? nil : Fmt.weekdayDayMonthShort(day),
                               cancelled: false, symbol: "checkmark", undo: { [weak self] in
-            for id in ids { await self?.deleteFood(id: id) }
+            for id in ids { await self?.deleteFood(id: id, day: day) }
         })
     }
 
@@ -374,8 +374,9 @@ extension AppModel {
     }
 
     /// true when it was deleted (or waits for signal).
+    /// `day`: the day it was logged to, when not the one shown (the day pill's Undo).
     @discardableResult
-    func deleteFood(id: Int) async -> Bool {
+    func deleteFood(id: Int, day: String? = nil) async -> Bool {
         guard !demo else { return true }
         var id = id
         if id < 0 {
@@ -385,7 +386,7 @@ extension AppModel {
         let entry = food?.meals.flatMap(\.entries).first { $0.id == id }
         let item = OutboxItem(path: "/app/api/food/entry", method: "DELETE", body: OutboxItem.json(["id": JSONValue.number(Double(id))]),
                               label: entry?.name ?? L10n.tr("Jídlo"),
-                              overlay: OutboxOverlay(kind: .removeFood, date: food?.date ?? Self.localDate(Date()), id: id,
+                              overlay: OutboxOverlay(kind: .removeFood, date: day ?? food?.date ?? Self.localDate(Date()), id: id,
                                                      kcal: entry?.kcal, protein: entry?.protein, carbs: entry?.carbs, fat: entry?.fat))
         write(item)
         return true

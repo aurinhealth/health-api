@@ -214,8 +214,9 @@ struct AddFoodSheet: View {
         // The day pill's choice lasts while this sheet is open; a waiting AI
         // food keeps the day it was started for. Picking (a recipe, a photo's
         // item) belongs to an outer flow and leaves its day alone.
-        .onAppear { if pick == nil { model.addDay = pending?.day } }
-        .onDisappear { if pick == nil { model.addDay = nil } }
+        // A full-screen scanner or camera over it hides it too: the choice stays then.
+        .onAppear { if pick == nil, let day = pending?.day { model.addDay = day } }
+        .onDisappear { if pick == nil && !scanning && photoMode == nil && !galleryOpen && consentFor == nil { model.addDay = nil } }
         .onChange(of: model.pendingFoods.first { $0.id == current }?.state) { _, state in
             guard let state, state != .looking, let item = model.pendingFoods.first(where: { $0.id == current }) else { return }
             current = nil

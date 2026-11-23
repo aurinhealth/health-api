@@ -68,10 +68,8 @@ struct PlusCard: View {
         .chromeShadow(0.14, radius: 24, y: 10)
         .sensoryFeedback(.impact(weight: .medium), trigger: editing)
         .accessibilityAction(.escape) { editing ? finishEditing() : close() }
-        // What "+" adds goes to today, also while the screens show another day.
-        .onAppear { model.writesToday = true }
+        // What "+" adds goes to today (RootView sets writesToday while the card or its sheet is open).
         .onDisappear {
-            model.writesToday = false
             // Closed by a tap beside it or the ×: the edit is kept, as on the home screen.
             if editing { save() }
         }
@@ -541,7 +539,6 @@ struct PeriodLogSheet: View {
     }
 }
 
-/// How the food sheet opens from the "+" menu.
 /// A "+" action that opens a sheet (RootView presents it once the card closed).
 enum PlusSheet: Identifiable, Hashable {
     case food(FoodStart), weight, workout, drink, period, status
@@ -557,6 +554,7 @@ enum PlusSheet: Identifiable, Hashable {
     }
 }
 
+/// How the food sheet opens from the "+" menu.
 enum FoodStart: String, Identifiable {
     case search, photo, gallery, scan, label, manual
     var id: String { rawValue }
