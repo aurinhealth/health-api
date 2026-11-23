@@ -239,6 +239,11 @@ test("an upload marked connectedOnly is kept only after the account connected Ap
   assert.equal((await saveAppleHealth(db, 1, body)).code, 409);
   // An older build without the flag is kept as before.
   assert.equal((await saveAppleHealth(db, 1, { records: body.records })).status, "ok");
+  // An account that read Apple Health before this change (its row says ok): the new
+  // build's uploads are kept without a new Connect.
+  const { db: before } = setup();
+  await saveAppleHealth(before, 1, { records: body.records });
+  assert.equal((await saveAppleHealth(before, 1, body)).status, "ok");
 });
 
 test("too many records are refused", async () => {
