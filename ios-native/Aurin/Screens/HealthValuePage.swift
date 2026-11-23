@@ -441,15 +441,15 @@ struct HealthValueContent: View {
 
     /// The state as the page shows it: inside the usual range as written
     /// ("53 to 57 bpm"), the value as written is "in your usual range"
-    /// (retest 611: 57 read "above your usual range of 53 to 57"). Outside it
-    /// never says "in". Far and the side stay the server's.
+    /// (retest 611: 57 read "above your usual range of 53 to 57"). Everything
+    /// else stays the server's: the app never judges a value off on its own.
     static func shownState(_ state: MetricState?, value: Double, low: Double?, high: Double?, digits: Int) -> MetricState? {
         guard let state, let low, let high, high > low else { return state }
         let scale = pow(10, Double(digits))
-        let round = { (v: Double) in (v * scale).rounded() / scale }
+        // Half to even, as the number is written (Fmt.decimal).
+        let round = { (v: Double) in (v * scale).rounded(.toNearestOrEven) / scale }
         let v = round(value)
-        if v >= round(low) && v <= round(high) { return .within }
-        return state == .within ? .off(above: v > round(high)) : state
+        return v >= round(low) && v <= round(high) ? .within : state
     }
 
     /// Every point in the same rule as the headline, so a dot never says
@@ -486,7 +486,7 @@ struct HealthValueContent: View {
             let low = r.baseline.map { $0 - 0.5 }, high = r.baseline.map { $0 + 0.5 }
             return HealthValueReading(value: r.value, text: text(r.value),
                                       label: dayLabel("Minulá noc, dechů za minutu ve spánku", "Dechů za minutu ve spánku %@", measured: r.series.last?.date, day: health?.date),
-                                      state: shownState(state ?? (r.elevated ? .off(above: true) : nil), value: r.value, low: low, high: high, digits: value.digits),
+                                      state: state.map { shownState($0, value: r.value, low: low, high: high, digits: value.digits) } ?? (r.elevated ? .off(above: true) : nil),
                                       usual: usual(low, high, value), local: points(r.series, low: low, high: high), current: Self.current(r.value, r.series, health?.date))
         case .oxygen:
             guard let o = health?.oxygen else { return HealthValueReading(text: "–") }
@@ -509,7 +509,8 @@ struct HealthValueContent: View {
             // "0.1 °C warmer than usual" in words, no sign (concept 38, point 52).
             return HealthValueReading(value: shown, text: Fmt.decimal(abs(shown), digits: 1),
                                       label: dayLabel("Minulá noc, teplota kůže", "Teplota kůže %@", measured: list.last?.date, day: health?.date),
-                                      state: shownState(night, value: shown, low: -half, high: half, digits: 1),
+                                      // A night the server calls elevated stays above.
+                                      state: elevated ? night : shownState(night, value: shown, low: -half, high: half, digits: 1),
                                       usual: L10n.f("Obvyklé rozmezí do %@ %@ na obě strany", Fmt.decimal(half, digits: 1), Units.temperatureUnit),
                                       local: points(list, low: -half, high: half, map: Units.temperatureChange),
                                       unit: abs(shown) < 0.05 ? nil : Units.temperatureUnit + " " + L10n.tr(shown > 0 ? "teplejší než obvykle" : "chladnější než obvykle"),

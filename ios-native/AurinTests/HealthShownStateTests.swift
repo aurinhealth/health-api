@@ -15,8 +15,8 @@ final class HealthShownStateTests: XCTestCase {
         XCTAssertEqual(HealthValueContent.shownState(.off(above: false), value: 52, low: 53, high: 57, digits: 0), .off(above: false))
     }
 
-    func testWithinOutsideTheWrittenRangeNamesTheSide() {
-        XCTAssertEqual(HealthValueContent.shownState(.within, value: 58, low: 53, high: 57, digits: 0), .off(above: true))
+    func testServersWithinOutsideTheWrittenRangeStays() {
+        XCTAssertEqual(HealthValueContent.shownState(.within, value: 58, low: 53, high: 57, digits: 0), .within)
     }
 
     func testNoRangeLeavesTheState() {
@@ -45,6 +45,7 @@ final class HealthShownStateTests: XCTestCase {
     func testNoMinusZero() {
         XCTAssertFalse(Fmt.decimal(-0.04, digits: 1).contains("-"))
         XCTAssertFalse(Fmt.decimal(-0.4, digits: 0).contains("-"))
+        XCTAssertFalse(Fmt.decimal(-0.5, digits: 0).contains("-"))
         XCTAssertTrue(Fmt.decimal(-0.4, digits: 1).contains("4"))
         XCTAssertTrue(Fmt.decimal(-0.4, digits: 1).hasPrefix("-") || Fmt.decimal(-0.4, digits: 1).hasPrefix("−"))
     }

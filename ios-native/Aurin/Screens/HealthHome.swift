@@ -620,7 +620,7 @@ struct HealthMonitorCard: View {
         if let r = h.respiration {
             let low = r.baseline.map { $0 - 0.5 }, high = r.baseline.map { $0 + 0.5 }
             out.append(Dial(id: .respiration, label: "Dech", value: r.value, text: Fmt.decimal(r.value, digits: 1), unit: L10n.tr("za min"), low: low, high: high,
-                            state: HealthValueContent.shownState(st("respiration") ?? (r.elevated ? .off(above: true) : nil), value: r.value, low: low, high: high, digits: 1),
+                            state: st("respiration").map { HealthValueContent.shownState($0, value: r.value, low: low, high: high, digits: 1) } ?? (r.elevated ? .off(above: true) : nil),
                             measured: r.series.last?.date))
         }
         if let d = h.wristTemp?.deviation ?? h.skinTemp?.deviation {
@@ -631,7 +631,7 @@ struct HealthMonitorCard: View {
             let label = abs(change) < 0.05 ? "Teplota kůže" : change > 0 ? "Kůže tepleji" : "Kůže chladněji"
             out.append(Dial(id: .temperature, label: label, value: d, text: Fmt.decimal(abs(change), digits: 1), unit: Units.temperatureUnit,
                             low: -0.5, high: 0.5,
-                            state: HealthValueContent.shownState(elevated ? .off(above: true) : abs(d) <= 0.5 ? .within : .off(above: d > 0), value: d, low: -0.5, high: 0.5, digits: 1),
+                            state: elevated ? .off(above: true) : HealthValueContent.shownState(abs(d) <= 0.5 ? .within : .off(above: d > 0), value: d, low: -0.5, high: 0.5, digits: 1),
                             measured: (h.wristTemp?.deviations ?? h.skinTemp?.series)?.last?.date))
         }
         return out

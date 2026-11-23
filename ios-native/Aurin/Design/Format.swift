@@ -14,7 +14,7 @@ enum Fmt {
         guard let value else { return "–" }
         // A value that rounds to zero is "0.0", never "-0.0" (retest 611, skin temperature).
         let scale = pow(10, Double(max(0, digits)))
-        let shown = (value * scale).rounded() == 0 ? 0 : value
+        let shown = (value * scale).rounded(.toNearestOrEven) == 0 ? 0 : value
         return shown.formatted(.number.precision(.fractionLength(digits)).locale(locale))
     }
 

@@ -27,7 +27,8 @@ import UIKit
     /// the swipe fails at once and they go on.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                            shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        true
+        // At the root there is nothing to go back to: nothing waits for the swipe.
+        Self.navigation(of: gestureRecognizer).map { $0.viewControllers.count > 1 } ?? false
     }
 
     /// The swipe sits on the navigation controller's own view.
