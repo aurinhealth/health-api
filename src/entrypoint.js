@@ -31,7 +31,8 @@ import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday,todayUnavailable,todayWorkouts} from './app-today.js';
 import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
-import {buildCalendar} from './app-calendar.js';
+import {buildCalendar,walkWindows} from './app-calendar.js';
+import {activityTelemetryEnergy} from './activity-energy-check.js';
 import {buildMilestones} from './app-milestones.js';
 import { buildShareWeek, mondayOf } from './share-week.js';
 import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
@@ -222,6 +223,20 @@ const isPro=env=>subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>false)
 // version (api-cache.js). Any write by the user drops it.
 const SCREEN_PATHS = new Set(["/app/api/today", "/app/api/training", "/app/api/food-today"]);
 const recentScreens = new Map();
+// Training's calendar: each walk's measured active energy, as Today counts it
+// (index.js), one ranged read per walk on the active-energy rows of its window.
+async function calendarWalkKcal(env, windows) {
+  const out = new Map();
+  if (!windows.length) return out;
+  try {
+    const sql = "SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time";
+    const shown = windows.slice(-60);
+    const results = await env.DB.batch(shown.map(w => env.DB.prepare(sql).bind(env.USER_ID, new Date(Date.parse(w.start) - 10 * 60000).toISOString(), w.end)));
+    shown.forEach((w, i) => { const measured = activityTelemetryEnergy(w, results[i]?.results || []); if (measured) out.set(w.id, measured.kcal); });
+  } catch (error) { console.error("Calendar walk energy read failed", error.message); }
+  return out;
+}
+
 function rememberScreen(userId, path, json) {
   if (recentScreens.size > 500) recentScreens.clear();
   recentScreens.set(userId + "|" + path, { at: Date.now(), json });
@@ -3292,10 +3307,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('planned-workout','activity','exercise') AND ((source_family IN ('intervals','local','wahoo') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
         // Past gym plans too: one nothing was done for shows as missed.
         const planned=rows.filter(r=>r.data_type==='planned-workout');
-        const [gym,manual]=await Promise.all([trainingGymPlans(env,start,end).catch(()=>({})),manualPairs(env.DB,env.USER_ID,planned.map(r=>r.external_id))]);
-        return buildCalendar({start,end,today,gym,manual,planned,
-          activities:rows.filter(r=>r.data_type==='activity'),
-          google:rows.filter(r=>r.data_type==='exercise')});
+        const activities=rows.filter(r=>r.data_type==='activity'),google=rows.filter(r=>r.data_type==='exercise');
+        const [gym,manual,walkKcal]=await Promise.all([trainingGymPlans(env,start,end).catch(()=>({})),manualPairs(env.DB,env.USER_ID,planned.map(r=>r.external_id)),calendarWalkKcal(env,walkWindows({google}))]);
+        return buildCalendar({start,end,today,gym,manual,planned,activities,google,walkKcal});
       },{ttl:120});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}

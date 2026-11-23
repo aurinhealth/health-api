@@ -160,13 +160,33 @@ export function primarySport(activities) {
   return longest(real.filter(a => a.status === "done")) || longest(real) || longest(activities) || "rest";
 }
 
+// The walks whose calories Today counts from the measured active energy
+// (index.js, activity-energy-check.js activityTelemetryEnergy): their id and
+// window, so the calendar shows the same number (611 retest: Training 166 kcal,
+// Today 92 for one walk). Calories set in Aurin by hand stay as they are.
+// Only the watch's walks: their times are UTC, as the active-energy rows.
+export function walkWindows({ google = [] }) {
+  const out = [];
+  for (const row of google) {
+    const p = parse(row.payload_json);
+    if (mark(p, "Kcal") != null) continue;
+    if (!/^(Walk|Walking)$/i.test(watchType(p.exercise?.exerciseType) || "")) continue;
+    const span = mergedSpan(p);
+    const start = span?.start || row.start_time, end = span?.end || row.end_time;
+    if (start && end) out.push({ id: String(row.external_id), start, end });
+  }
+  return out;
+}
+
 // manual: the pairings made by hand (manual-pairs.js), planned id → activity id.
-export function buildCalendar({ start, end, today, activities = [], google = [], planned = [], gym = {}, manual = new Map() }) {
+// walkKcal: a walk's measured active energy by its id (walkWindows).
+export function buildCalendar({ start, end, today, activities = [], google = [], planned = [], gym = {}, manual = new Map(), walkKcal = new Map() }) {
   const done = activities.map(intervalsActivity);
   const watch = google.map(googleActivity);
   // One workout from both sources counts once (activity-match.js).
   const drop = new Set(pairSessions([...activities, ...google]).map(p => p.drop));
   const kept = [...done, ...watch].filter(a => !drop.has(a.row) && a.date);
+  for (const a of kept) if (walkKcal.has(a.id)) a.kcal = walkKcal.get(a.id);
   const plans = planned.map(plannedWorkout).filter(w => !w.weekly && w.date);
 
   const days = new Map(), merges = new Map();
