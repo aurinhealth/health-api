@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, FOREGROUND_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
+import { screenText, screenFacts, todayFallback, lateAdvice, checkedText, MAX_PER_DAY, SLOT_WAIT_MS, BACKGROUND_SLOT_WAIT_MS, FOREGROUND_WAIT_MS, markScreenTextsStale } from "../src/screen-texts.js";
 import { bumpCacheVersion } from "../src/api-cache.js";
 
 const today = (extra = {}) => ({
@@ -28,8 +28,8 @@ const reply = (text, advice) => async () => ({ text: JSON.stringify({ text, advi
 
 test("facts, chips and the data shown under Proč? come from the screen's numbers", () => {
   const t = screenFacts("today", today());
-  assert.deepEqual(t.chips, ["Spánek 6:40", "HRV 52 ↓", "Tep 49"]);
-  assert.deepEqual(t.basis.find(b => b.label === "Spánek"), { label: "Spánek", value: "6:40 z potřebných 7:30" });
+  assert.deepEqual(t.chips, ["Klidový tep 49"]);
+  assert.deepEqual(t.basis.find(b => b.label === "Spánek"), { label: "Spánek", value: "6 h 40 min z potřebných 7 h 30 min" });
   assert.deepEqual(t.fallback, { text: "Regenerace je střední.", advice: "Drž dnešní jízdu lehce." });
   assert.equal(t.facts.plan.length, 1, "bedtime is not a session");
   const food = screenFacts("food", { kcal: 1660, target: 2600, sentence: "Zbývá 940 kcal.", macros: { protein: { eaten: 92, target: 165 }, carbs: { eaten: 180, target: 210 }, fat: { eaten: 40, target: 80 } }, meals: [] });
@@ -38,7 +38,7 @@ test("facts, chips and the data shown under Proč? come from the screen's number
   // Strain, never TSS, on the card (604 device test).
   assert.deepEqual(training.chips, ["Týden 3/5", "Námaha 8,4", "Forma −18"]);
   assert.deepEqual(screenFacts("training", { thisWeek: { done: 1, planned: 2, doneLoad: 50 }, sessions: [] }).chips, ["Týden 1/2"], "no strain yet, no chip");
-  assert.equal(withLang("en", () => screenFacts("today", today()).chips[0]), "Sleep 6:40");
+  assert.equal(withLang("en", () => screenFacts("today", today()).chips[0]), "RHR 49");
 });
 
 test("the AI is asked once per day state; the same state answers from the cache", async () => {
@@ -50,7 +50,7 @@ test("the AI is asked once per day state; the same state answers from the cache"
   assert.equal(first.source, "ai");
   assert.equal(first.text, "Spal jsi 6 h 40, o 50 minut méně než potřebuješ.");
   assert.equal(first.advice, "Drž tep pod 135.");
-  assert.deepEqual(first.chips, ["Spánek 6:40", "HRV 52 ↓", "Tep 49"]);
+  assert.deepEqual(first.chips, ["Klidový tep 49"]);
   assert.match(first.time, /^\d{2}:\d{2}$/);
   assert.equal(seen.feature, "screen-text");
   assert.match(seen.input, /"sleepMinutes":400/);
@@ -131,7 +131,7 @@ test("an English app gets its own cached text", async () => {
   const en = await withLang("en", () => screenText(env, { screen: "today", load: async () => today(), ask: reply("In English.", "Advice.") }));
   assert.equal(cs.text, "Česky.");
   assert.equal(en.text, "In English.");
-  assert.equal(en.chips[0], "Sleep 6:40");
+  assert.equal(en.chips[0], "RHR 49");
 });
 
 test("a cancelled session writes the text again at once, even right after the last one", async () => {
@@ -458,4 +458,23 @@ test("a red morning arriving by sync right after a text: the rule-based text, no
   assert.equal(shown.source, "rules");
   open();
   await Promise.all(work.splice(0));
+});
+
+// 617 #17 and p6: Today's rule-based card is one reason and one piece of advice, no fact list.
+test("Today's rule-based card: the reason plain, the advice last, numbers only under Proč?", () => {
+  const done = todayFallback({ text: "Sleep 4 h 23 min (127 min less than usual). Yesterday 4 activities, 192 min. Current form 26.",
+    recommendation: "Today's training (Pull: back, biceps) is done. After a short night, don't add anything else: eat enough protein and carbs, drink water and go to bed earlier tonight." });
+  assert.deepEqual(done, { text: "Today's training (Pull: back, biceps) is done.", advice: "After a short night, don't add anything else: eat enough protein and carbs, drink water and go to bed earlier tonight." });
+  assert.deepEqual(todayFallback({ text: "X 4.5 km.", recommendation: "Readiness is low today and your training is done: rest for the rest of the day." }),
+    { text: "Readiness is low today and your training is done.", advice: "Rest for the rest of the day." });
+  assert.deepEqual(todayFallback({ text: "Sleep 6 h 40 min. Yesterday 2 activities.", recommendation: null }), { text: "Sleep 6 h 40 min.", advice: null });
+  assert.equal(todayFallback(null), null);
+});
+
+// 617 C11: Training's strain number is where the plan takes the day, never a second target beside Today's.
+test("Training's coach gets the strain the plan leads to, not a target", () => {
+  const t = screenFacts("training", { strain: { score: 10.5, target: 11.2 }, thisWeek: {}, sessions: [] });
+  assert.equal(t.facts.strainAfterPlan, 11.2);
+  assert.equal("strainTarget" in t.facts, false);
+  assert.deepEqual(t.basis.find(b => b.label === "Námaha dnes"), { label: "Námaha dnes", value: "10,5, s plánem 11,2" });
 });

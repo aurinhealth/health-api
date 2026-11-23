@@ -58,7 +58,7 @@ function morningAdvice({plan,low,heavy,sleepLow,done}){
   // The day's training is behind: the rest of it is for recovery, not for a walk instead of training.
   if(plan.empty&&done.any){
     const did=L('Dnešní trénink ('+done.names.join(', ')+') máš za sebou. ','Today\'s training ('+done.names.join(', ')+') is done. ');
-    if(sleepLow)return did+L('Po kratší noci už nic dalšího nepřidávej: najez se s dostatkem bílkovin a sacharidů, pij a jdi dnes dřív spát.','After a short night, don\'t add anything else: eat enough protein and carbs, drink and go to bed earlier tonight.');
+    if(sleepLow)return did+L('Po kratší noci už nic dalšího nepřidávej: najez se s dostatkem bílkovin a sacharidů, pij a jdi dnes dřív spát.','After a short night, don\'t add anything else: eat enough protein and carbs, drink water and go to bed earlier tonight.');
     if(low)return did+L('Při nízké formě už nic dalšího nepřidávej; tělo potřebuje dohnat únavu, takže jídlo, protažení a spánek.','With your form this low, don\'t add anything else; your body needs to absorb the fatigue, so food, stretching and sleep.');
     if(heavy)return did+L('Po včerejší velké zátěži už nic dalšího nepřidávej: jídlo, protažení a spánek stačí.','After yesterday\'s big load, don\'t add anything else: food, stretching and sleep are enough.');
     return did+L('Zbytek dne patří regeneraci: pořádné jídlo s bílkovinami, pití a spánek.','The rest of the day is for recovery: a proper meal with protein, fluids and sleep.');

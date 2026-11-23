@@ -178,7 +178,11 @@ export function returnAfterBreak(dates, today, { window = 35 } = {}) {
 // was first seen, confirmed or the offer declined). Friel retests every 4–6
 // weeks; 8 weeks is an estimate.
 export const OLD_DAYS = 56;
-export function thresholdOffer({ sport, sessions, current, estimate: found, check = null, today, since = null, back = null }) {
+// sports: the athlete's chosen sports (athlete-focus.js SPORT_KINDS); a sport
+// not among them gets no test, whatever its sessions (617 C10: Run and Swim
+// offered to a Ride and Gym athlete). Null when never chosen: every sport.
+export function thresholdOffer({ sport, sports = null, sessions, current, estimate: found, check = null, today, since = null, back = null }) {
+  if (Array.isArray(sports) && !sports.includes(sport)) return null;
   const recent = (sessions || []).filter(s => s.kind === sport && s.date > shift(today, -42) && s.date <= today);
   if (recent.length < 4) return null;
   if (check && ["scheduled", "measured"].includes(check.status)) return null;

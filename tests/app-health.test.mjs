@@ -133,7 +133,7 @@ test("Health stays usable without data", () => {
 test("The server answers GET /app/api/health with buildHealth", () => {
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /url\.pathname==='\/app\/api\/health'&&request\.method==='GET'/);
-  assert.match(src, /buildHealth\(\{date,hour:date===localToday\(\)\?localHour\(\):null,health,fitness,sleep,weight,profile/);
+  assert.match(src, /buildHealth\(\{date,hour:isToday\?localHour\(\):null,health,fitness,sleep,weight,profile.*daily,gym\}\)/);
 });
 
 test("Health: oxygen from the watch first, Intervals.icu filling the rest; the HRV measure when known", () => {
@@ -302,4 +302,15 @@ test("Today: the device of the latest night for the bedtime reminder", () => {
   const withSource = sessions.map(s => ({ ...s, source: "apple-health" }));
   assert.equal(buildToday({ ...input, sleep: { sessions: withSource } }).tonight.source, "apple-health");
   assert.equal(buildToday({ ...input, sleep: { sessions: [] } }).tonight?.source ?? null, null);
+});
+
+// 617 #3: a done workout counts toward tonight's need on Health as on Today, so the bedtime is one.
+test("Health and Today give tonight the same need and bedtime after a done workout", () => {
+  const daily = { training: { completed: [{ id: "a1", type: "Ride", sport: "ride", tss: 160, durationHours: 2.5, start_date_local: DATE + "T08:00:00" }] } };
+  const today = buildToday({ ...input, hour: 15, daily });
+  const health = buildHealth({ ...input, hour: 15, daily }).sleep.tonight;
+  const zonesOnly = buildHealth({ ...input, hour: 15 }).sleep.tonight;
+  assert.equal(health.bedtime, today.tonight.bedtime);
+  assert.equal(health.sleep, today.tonight.need);
+  assert.ok(health.need > zonesOnly.need, "the ride raises tonight's need");
 });

@@ -37,7 +37,7 @@ test("Food: eaten against the target, macros and meals in their slots", () => {
   assert.equal(f.kcal, 1175);
   assert.equal(f.target, 2650);
   assert.equal(f.trainingBonus, 350);
-  assert.match(f.sentence, /^Tréninkový den: o 350 kcal víc\. Zbývá 1475 kcal/);
+  assert.match(f.sentence, /^Tréninkový den: o 350 kcal víc\. Zbývá 1\u00a0475 kcal, odpolední svačina kolem 270 kcal\./);
   assert.deepEqual(f.macros.protein, { eaten: 59, target: 150 });
   const types = f.meals.map(m => m.type);
   assert.deepEqual(types, ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"], "every slot stays, breakfast included");
@@ -49,8 +49,9 @@ test("Food: eaten against the target, macros and meals in their slots", () => {
   assert.equal(f.meals[2].time, "12:30");
   assert.ok(!f.meals.some(m => m.entries.some(e => e.name === "Plánovaná večeře")), "planned food is not eaten");
   const snack = f.meals[3], dinner = f.meals[4];
-  assert.equal(snack.suggestion.kcal, Math.round(1475 * 0.1 / 0.35 / 10) * 10);
-  assert.equal(dinner.suggestion.kcal, Math.round(1475 * 0.25 / 0.35 / 10) * 10);
+  // 617 #7: never more than the meal's own share of the day, as its row says.
+  assert.equal(snack.suggestion.kcal, Math.min(Math.round(1475 * 0.1 / 0.35 / 10) * 10, snack.target.kcal));
+  assert.equal(dinner.suggestion.kcal, dinner.target.kcal);
   assert.equal(dinner.suggestion.protein, Math.round((150 - 58.8) * 0.25 / 0.35 / 5) * 5, "the protein still to eat");
   assert.equal(dinner.suggestion.carbs, Math.round((330 - 146.9) * 0.25 / 0.35 / 5) * 5);
   assert.equal(dinner.suggestion.fat, Math.round((80 - 29.4) * 0.25 / 0.35 / 5) * 5);

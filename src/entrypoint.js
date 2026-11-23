@@ -3186,7 +3186,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [health,fitness,sleep,weight,profile,checkin,muscle,estimates]=await Promise.all([
+      const isToday=date===localToday();
+      const [health,fitness,sleep,weight,profile,checkin,muscle,estimates,daily,gym]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
@@ -3194,10 +3195,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Muscle mass from a scale through Apple Health (lean body mass).
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[]),
         // Aurin's own VO2max and Aurin age (own-vo2max-store.js): 98 days for the 3-month change, at most 98 rows.
-        fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[])
+        fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[]),
+        // Today's done sessions, so tonight's need and bedtime are Today's (617 #3).
+        isToday?read('/analysis/daily?date='+date):null,isToday?trainingGymPlans(env,date,date).then(g=>g?.[date]||null).catch(()=>null):null
       ]);
-      if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
-      const body=buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle});
+      if(isToday&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
+      const body=buildHealth({date,hour:isToday?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle,daily,gym});
       // Only Aurin's estimate, never the watch's (T-SCI-1); null until the daily job has a row.
       body.vo2max=vo2maxView({rows:estimates,age:profileAge(profile,date),sex:profile?.sex});
       body.aurinAge=aurinAgeView({rows:withNorm(estimates,fitnessNormOf(profile)),age:profileAge(profile,date),norm:fitnessNormOf(profile)});

@@ -4,7 +4,7 @@
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
 import { sleepNeedFor, sleepNeedMinutes, weekSleepDebt, bedtimePlan, hrvMetric, wristTempDeviation, sleepIndexParts } from "./recovery-model.js";
-import { clockOf, minutesOf, dayStrain } from "./app-today.js";
+import { clockOf, minutesOf, dayStrain, dayStrainNow } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { localDate } from "./user-time.js";
@@ -101,7 +101,8 @@ export function sleepNeedParts(n, { age, goal } = {}) {
   return parts.filter((p, i) => i === 0 || p.minutes);
 }
 
-export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
+// daily and gym: the day's analysis and gym plan (as /today reads them), for tonight's need; null in older callers.
+export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [], daily = null, gym = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = readinessRows(google, intervals, date);
@@ -128,7 +129,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const stages = night?.stages || {};
   const stageMin = key => round(num(stages[key]));
   const sleepDay = hour != null && hour < 6 && !night ? shift(date, -1) : date;
-  const tonight = needOn(shift(sleepDay, 1));
+  // Tonight's need from today's strain as Today counts it (done sessions too),
+  // with the day's analysis and gym plan the route reads; else the zones alone.
+  const strainToday = sleepDay === date && daily ? dayStrainNow({ date, hour, daily, google, profile, gym }).strainParts.score : null;
+  const tonight = strainToday != null ? sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: strainToday, rows, sessions }) : needOn(shift(sleepDay, 1));
   const choice = tonightChoice(sleepSet, sleepDay, tonight.need);
   const plan = bedtimePlan({
     date: sleepDay,

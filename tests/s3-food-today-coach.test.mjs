@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { numbersLine, numbersLineText, NUMBERS_LINE_KEYS } from "../src/day-verdict.js";
+import { numbersLine, numbersLineText, numbersOff, NUMBERS_LINE_KEYS } from "../src/day-verdict.js";
 import { strainTarget } from "../src/app-today.js";
 import { buildFoodHistory, saveNutritionDay, loadFoodHistory, nutritionDayOf } from "../src/nutrition-days.js";
 import { carbsPerHour, fuelPlan } from "../src/workout-explanation.js";
@@ -25,6 +25,15 @@ test("the numbers line: one key per day, paused on rest, signs before the zone",
   assert.equal(numbersLine({ zone: "green", rest: true }), "paused");
   assert.equal(numbersLine({ zone: "green", missing: ["sleep"] }), "usual");
   for (const key of NUMBERS_LINE_KEYS) assert.ok(numbersLineText(key), key);
+});
+
+// p7 (Petr 2026-11-23): a yellow or red line names what is off, nothing for the other lines.
+test("numbersOff names the short night, low HRV and high resting heart rate", () => {
+  const components = { sleep: { performance: 49 }, hrv: { value: 86, low: 67, high: 100 }, restingHR: { value: 59, high: 55 } };
+  assert.deepEqual(numbersOff("steady", components, []), ["sleep", "restingHR"]);
+  assert.deepEqual(numbersOff("easy", { hrv: { value: 40, low: 50 } }, ["short_night"]), ["sleep", "hrv"]);
+  assert.deepEqual(numbersOff("hard", components, []), []);
+  assert.deepEqual(numbersOff("steady", {}, []), []);
 });
 
 test("the strain target keeps its range and adds the middle", () => {

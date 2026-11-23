@@ -11,7 +11,7 @@ import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
-import { verdictText, signsAdvice, numbersLine } from "./day-verdict.js";
+import { verdictText, signsAdvice, numbersLine, numbersOff } from "./day-verdict.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
@@ -113,6 +113,18 @@ export function usualStrain(rows, date, intervals = []) {
   const days = Array.from({ length: 28 }, (_, i) => strainOn(shift(date, -(i + 1)))).filter(v => v != null).sort((a, b) => a - b);
   if (days.length < 14) return null;
   return Math.round(days[Math.floor(0.8 * (days.length - 1))] * 10) / 10;
+}
+
+// The day's strain so far as Today shows it: the heart-rate zones or the done
+// sessions' TSS plus the steps (dayStrainParts). Health's bedtime reads it
+// too (app-health.js), so tonight's need and bedtime are one number on both
+// screens (617 #3: Health counted the zones only, so a gym hour moved the bedtime on Today alone).
+export function dayStrainNow({ date, hour = null, daily = {}, google = [], profile = {}, gym = null }) {
+  const training = withHeartRateLoad(daily?.training || {}, google, profile, date);
+  const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
+  const done = daySession.filter(s => s.status === "done");
+  const todayRow = google.find(r => r.id === date) || {};
+  return { training, daySession, done, strainParts: dayStrainParts({ zoneMinutes: todayRow.hrZoneMinutes, steps: num(todayRow.steps), sessions: done }) };
 }
 
 // Planned training on the same 0–21 scale, from TSS (as the web dashboard).
@@ -250,12 +262,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const sleepDay = hour != null && hour < 6 && !nights.get(date) ? shift(date, -1) : date;
   // Training: planned and completed sessions of the day, and the day's strain
   // from the heart-rate zones, the done sessions and the steps (dayStrainParts).
-  const training = withHeartRateLoad(daily.training || {}, google, profile, date);
-  const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
-  const done = daySession.filter(s => s.status === "done");
-  const open = daySession.filter(s => s.status !== "done");
+  const { training, daySession, done, strainParts } = dayStrainNow({ date, hour, daily, google, profile, gym });
   const todayRow = google.find(r => r.id === date) || {};
-  const strainParts = dayStrainParts({ zoneMinutes: todayRow.hrZoneMinutes, steps: num(todayRow.steps), sessions: done });
+  const open = daySession.filter(s => s.status !== "done");
   const strainNow = strainParts.score;
   // The user's own length or wake time for tonight (Spánek) moves the bedtime.
   const choice = tonightChoice(sleepSet, sleepDay, sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: sleepDay === date ? strainNow : dayStrain(google, sleepDay), rows, sessions }).need);
@@ -414,6 +423,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
+  const line = verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest" }) : null;
   return {
     status: "ok",
     date,
@@ -433,7 +443,9 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
       verdict,
       // The redesign's line under the number (AI-2): what the numbers say, a
       // key of day-verdict.js NUMBERS_LINE_KEYS, never advice; null with the verdict.
-      numbersLine: verdict ? numbersLine({ zone: readiness.body?.zone ?? readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], rest: verdict === "rest" }) : null,
+      numbersLine: line,
+      // Which numbers make a yellow or red line (day-verdict.js NUMBERS_OFF_KEYS), so the app names them (p7).
+      numbersOff: numbersOff(line, readiness.body?.components || readiness.components, readiness.body?.flags || readiness.flags),
       // Nights with HRV or resting heart rate in the 30 days before today: an
       // account with the watch's history skips "Wear your watch tonight" (FirstDaysCard).
       pastNights: rows.filter(r => r.id < date && r.id > shift(date, -30) && (num(r.hrv) > 0 || num(r.restingHR) > 0)).length,
