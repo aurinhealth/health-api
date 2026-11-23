@@ -16,7 +16,10 @@ struct AurinWidgetBundle: WidgetBundle {
         WeekWidget()
         FoodWaterWidget()
         SleepWidget()
+        StepsWidget()
         MetricWidget()
+        AurinAgeWidget()
+        NightValuesWidget()
         GymActivityWidget()
         if #available(iOS 18.0, *) {
             WaterControl()
@@ -245,7 +248,7 @@ struct SleepWidget: Widget {
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Spánek")))
         .description(Text(verbatim: L10n.tr("Minulá noc a kdy dnes jít spát")))
-        .supportedFamilies([.systemSmall, .accessoryInline])
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline])
     }
 }
 
@@ -257,6 +260,9 @@ struct SleepWidgetView: View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
                 Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { ", " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
+            } else if family == .systemMedium {
+                // The arc, this week's nights against the need and tonight's bedtime.
+                SleepMediumFace(s: s, h: WidgetHealth.load())
             } else {
                 // The redesign's face: Today's night arc.
                 WidgetFaces.sleep(s)
@@ -264,6 +270,103 @@ struct SleepWidgetView: View {
         } else {
             EmptyWidgetView()
         }
+    }
+}
+
+// MARK: - Steps
+
+/// Steps on their own in the picker (widgets concept v3); "Daily numbers" keeps
+/// Steps as an option for widgets already on a Home Screen.
+struct StepsWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "steps", provider: SnapshotProvider()) { entry in
+            Group {
+                if let s = entry.snapshot { WidgetFaces.steps(s) } else { EmptyWidgetView() }
+            }
+            .privacySensitive()
+            .widgetURL(URL(string: "aurin://open/steps"))
+            .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Kroky")))
+        .description(Text(verbatim: L10n.tr("Dnešní kroky proti tvému cíli")))
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+// MARK: - Aurin Age
+
+struct AurinAgeWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "aurinAge", provider: SnapshotProvider()) { _ in
+            AurinAgeWidgetView(h: WidgetHealth.load())
+                .privacySensitive()
+                .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Aurin Age")))
+        .description(Text(verbatim: L10n.tr("Tvůj odhad Aurin Age, součást Aurin Pro")))
+        .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryCircular])
+    }
+}
+
+struct AurinAgeWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let h: WidgetHealth?
+
+    /// Without Pro the whole widget opens the offer (concept v3), else the Aurin Age page.
+    private var link: URL? {
+        URL(string: h.map { $0.aurinAge == nil && !$0.pro } == true ? "aurin://open/pro" : "aurin://open/aurin-age")
+    }
+
+    var body: some View {
+        Group {
+            switch family {
+            case .accessoryRectangular:
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: L10n.tr("Aurin Age").uppercased(with: L10n.locale)).font(.system(size: 11, weight: .semibold))
+                    if let age = h?.aurinAge {
+                        Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(26)).widgetAccentable()
+                        if let words = h?.aurinAgeWords { Text(verbatim: words).font(.system(size: 12)) }
+                    } else if let h, !h.pro {
+                        Label(L10n.tr("Odemknout s Pro"), systemImage: "lock.fill").font(.system(size: 13, weight: .semibold))
+                    } else {
+                        Text(verbatim: L10n.tr("Zatím málo dat")).font(.system(size: 13))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            case .accessoryCircular:
+                ZStack {
+                    AccessoryWidgetBackground()
+                    if let age = h?.aurinAge {
+                        VStack(spacing: -2) {
+                            Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(20)).minimumScaleFactor(0.6).widgetAccentable()
+                            Text(verbatim: L10n.tr("VĚK")).font(.system(size: 8, weight: .semibold))
+                        }
+                    } else {
+                        // Without Pro or data: the orb's outline, no number (concept v3).
+                        WidgetOrb(locked: true, size: 40)
+                    }
+                }
+            default:
+                AurinAgeSmallFace(h: h)
+            }
+        }
+        .widgetURL(link)
+    }
+}
+
+// MARK: - Night values
+
+struct NightValuesWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "nightValues", provider: SnapshotProvider()) { _ in
+            NightValuesFace(h: WidgetHealth.load())
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/health"))
+                .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Noční hodnoty")))
+        .description(Text(verbatim: L10n.tr("Hodnoty z noci z tvých hodinek nebo prstenu")))
+        .supportedFamilies([.systemMedium])
     }
 }
 

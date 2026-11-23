@@ -41,6 +41,7 @@ final class WidgetFaceTests: XCTestCase {
         s.nextTime = "17:30"
         s.nextSport = "strength"
         s.nextMinutes = 45
+        s.bedtime = "23:10"
         return s
     }
 
@@ -150,6 +151,37 @@ final class WidgetFaceTests: XCTestCase {
         ])
         try render("widgets-large", size: CGSize(width: 364, height: 382), rows: [
             [AnyView(WeekFace(week: week, today: "2026-10-08", large: true))]
+        ])
+    }
+
+    /// Aurin Age (small: Pro, free, collecting, before Health loaded), Night
+    /// values (medium, and without a watch) and Sleep (medium).
+    func testHealthWidgets() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let h = WidgetHealth.sample
+        var free = h
+        free.aurinAge = nil
+        free.aurinAgeWords = nil
+        free.pro = false
+        var collecting = free
+        collecting.pro = true
+        var noWatch = h
+        noWatch.values = []
+        noWatch.nightTitle = nil
+        XCTAssertEqual(WidgetStyle.monday("2026-10-08"), "2026-10-05")
+        XCTAssertEqual(WidgetStyle.monday("2026-10-11"), "2026-10-05")
+        XCTAssertEqual(WidgetStyle.day("2026-10-05", plus: 6), "2026-10-11")
+        try render("widgets-health-small", rows: [
+            [AnyView(AurinAgeSmallFace(h: h)), AnyView(AurinAgeSmallFace(h: free)),
+             AnyView(AurinAgeSmallFace(h: collecting)), AnyView(AurinAgeSmallFace(h: nil))]
+        ])
+        try render("widgets-health-medium", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(NightValuesFace(h: h)), AnyView(NightValuesFace(h: noWatch))],
+            [AnyView(SleepMediumFace(s: day, h: h)), AnyView(SleepMediumFace(s: day, h: nil))]
         ])
     }
 

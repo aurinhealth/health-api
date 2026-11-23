@@ -43,6 +43,10 @@ enum WidgetBridge {
                 coach.free = false
                 update(coach: coach)
             }
+            if ProStore.shared.entitled, var health = WidgetHealth.load(), !health.pro {
+                health.pro = true
+                if health.save() { WidgetCenter.shared.reloadTimelines(ofKind: "aurinAge") }
+            }
             QuickActions.update(today)
             WatchBridge.shared.update(today)
         }
@@ -101,6 +105,25 @@ enum WidgetBridge {
         if coach.save() { WidgetCenter.shared.reloadTimelines(ofKind: "day") }
     }
 
+    /// Health for the Aurin Age, Night values and Sleep (medium) widgets: today's
+    /// Health only, never a day picked in the past.
+    @MainActor
+    static func update(health: HealthSnapshot) {
+        let dials = HealthMonitorCard.dials(health)
+        let monday = AppModel.monday(of: health.date)
+        let nights = health.sleep.week.filter { $0.date >= monday && $0.date <= health.date }
+            .map { WidgetHealth.Night(date: $0.date, reached: $0.value >= Double(health.sleep.need)) }
+        let value = WidgetHealth(date: health.date, aurinAge: health.aurinAge?.value, realAge: health.aurinAge?.age,
+                                 aurinAgeWords: health.aurinAge.flatMap(AurinAgeText.versusAge), pro: ProStore.shared.entitled,
+                                 nightTitle: dials.isEmpty ? nil : HealthMonitorCard.title(dials),
+                                 values: dials.map { WidgetHealth.Value(label: $0.label, text: $0.text, unit: $0.unit,
+                                                                        drawn: HealthMonitorCard.drawn($0), low: $0.low, high: $0.high) },
+                                 nights: nights, need: health.sleep.need)
+        if value.save() {
+            for kind in ["aurinAge", "nightValues", "sleep"] { WidgetCenter.shared.reloadTimelines(ofKind: kind) }
+        }
+    }
+
     /// Redraws the widgets in a new language or new units.
     static func reload() {
         WidgetCenter.shared.reloadAllTimelines()
@@ -110,6 +133,7 @@ enum WidgetBridge {
         WidgetSnapshot.clear()
         WidgetWeek.clear()
         WidgetCoach.clear()
+        WidgetHealth.clear()
         AurinSpotlight.clear()
         WidgetCenter.shared.reloadAllTimelines()
         Task { @MainActor in

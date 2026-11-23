@@ -416,7 +416,10 @@ extension AppModel {
             health = value
             fetched[.health] = (Date(), shownDay)
             // The 90 days of resting HR and HRV for the Apple Watch app.
-            if day == nil { WatchBridge.shared.update(value) }
+            if day == nil {
+                WatchBridge.shared.update(value)
+                WidgetBridge.update(health: value)
+            }
             dataRevision += 1
             healthError = nil
             _ = noteConnection(nil)

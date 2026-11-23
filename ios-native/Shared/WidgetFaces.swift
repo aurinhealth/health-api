@@ -802,3 +802,243 @@ struct FoodMediumFace: View {
         .frame(height: 3)
     }
 }
+
+// MARK: - Health widgets (widgets concept v3, part 4)
+
+/// The Aurin Age orb at widget size: one still frame of Health's orb. On a
+/// tinted or clear Home Screen and the Lock Screen, where the system draws
+/// one colour, an outline of the orb with its inner ring (concept v3).
+struct WidgetOrb: View {
+    var older = false
+    var locked = false
+    var size: CGFloat = 86
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
+
+    var body: some View {
+        Group {
+            if renderingMode == .fullColor {
+                Canvas { context, canvas in
+                    let center = CGPoint(x: canvas.width / 2, y: canvas.height / 2)
+                    let radius = size * 0.41
+                    OrbPainter.lit(&context, center: center, radius: radius, t: 0.8, dark: scheme == .dark,
+                                   glow: older ? OrbPainter.olderGlow : OrbPainter.youngerGlow)
+                    if locked { OrbPainter.dots(&context, center: center, radius: radius, t: 0.8) }
+                }
+                .frame(width: size * 1.3, height: size * 1.3)
+            } else {
+                ZStack {
+                    Circle().strokeBorder(Palette.ink, lineWidth: 1.5)
+                    Circle().strokeBorder(Palette.ink.opacity(0.5), lineWidth: 1).padding(size * 0.12)
+                }
+                .widgetAccentable()
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Aurin Age (small): "AURIN AGE ESTIMATE", the orb with the estimate on it
+/// and "2.4 years younger". Without Pro "AURIN AGE", the locked orb and
+/// "Unlock with Pro" (the whole widget opens the offer); without enough
+/// data an empty circle and "Not enough data yet".
+struct AurinAgeSmallFace: View {
+    var h: WidgetHealth?
+
+    private var older: Bool { (h?.aurinAge).flatMap { a in h?.realAge.map { a - $0 } }.map { $0 > 0.05 } ?? false }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            WidgetLabel(text: L10n.tr(h?.aurinAge != nil ? "Odhad Aurin age" : "Aurin Age"))
+            GeometryReader { geo in
+                let side = max(56, min(86, geo.size.width, geo.size.height))
+                orb(side).frame(width: geo.size.width, height: geo.size.height)
+            }
+            if let h, h.aurinAge == nil, !h.pro {
+                WidgetProPill()
+            } else {
+                Text(verbatim: caption).font(WidgetStyle.caption)
+                    .foregroundStyle(h?.aurinAge != nil && !older ? Palette.green : Palette.muted)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: accessibility))
+    }
+
+    @ViewBuilder private func orb(_ side: CGFloat) -> some View {
+        if let age = h?.aurinAge {
+            ZStack {
+                WidgetOrb(older: older, size: side)
+                // Light on the orb's dark body in both modes, as on Health.
+                Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(side * 0.3)).foregroundStyle(Color(white: 0.96))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .widgetAccentable()
+            }
+        } else if let h, !h.pro {
+            WidgetOrb(locked: true, size: side)
+        } else {
+            ZStack {
+                Circle().stroke(Palette.track, lineWidth: 7).padding(3.5)
+                Text(verbatim: "–").font(WidgetStyle.serif(side * 0.3)).foregroundStyle(Palette.muted)
+            }
+            .frame(width: side, height: side)
+        }
+    }
+
+    private var caption: String {
+        guard let h else { return L10n.tr("Otevři Zdraví v Aurinu") }
+        return h.aurinAge != nil ? (h.aurinAgeWords ?? " ") : L10n.tr("Zatím málo dat")
+    }
+
+    private var accessibility: String {
+        if let h, let age = h.aurinAge {
+            return [L10n.f("Aurin age, odhad %@", WidgetStyle.decimal(age)), h.aurinAgeWords].compactMap { $0 }.joined(separator: ", ")
+        }
+        if let h, !h.pro { return L10n.tr("Aurin Age") + ", " + L10n.tr("Odemknout s Pro") }
+        return L10n.tr("Aurin Age") + ", " + caption
+    }
+}
+
+/// Night values (medium): the Health monitor card at widget size, its
+/// sentence and last night's five values as small dials against the usual
+/// range. Neutral ink throughout, never a warning colour (MDR, concept v3).
+struct NightValuesFace: View {
+    var h: WidgetHealth?
+
+    var body: some View {
+        let values = h?.values ?? []
+        VStack(alignment: .leading, spacing: 8) {
+            WidgetLabel(text: L10n.tr("Noční hodnoty"), alignment: .leading)
+            Text(verbatim: values.isEmpty ? L10n.tr("Potřebuje hodinky nebo prsten v noci") : (h?.nightTitle ?? L10n.tr("Minulá noc")))
+                .font(WidgetStyle.serif(16)).foregroundStyle(values.isEmpty ? Palette.muted : Palette.ink)
+                .lineLimit(2).minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            HStack(alignment: .top, spacing: 4) {
+                if values.isEmpty {
+                    ForEach(["Tep v klidu", "HRV", "Kyslík", "Dech", "Teplota kůže"], id: \.self) { label in
+                        cell(nil, label: label)
+                    }
+                } else {
+                    ForEach(values.indices, id: \.self) { i in cell(values[i], label: values[i].label) }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: ([L10n.tr("Noční hodnoty"), h?.nightTitle].compactMap { $0 }
+            + values.map { L10n.tr($0.label) + " " + $0.text + " " + $0.unit }).joined(separator: ", ")))
+    }
+
+    private func cell(_ v: WidgetHealth.Value?, label: String) -> some View {
+        VStack(spacing: 2) {
+            if let v {
+                let band = v.low.flatMap { low in v.high.map { low...max(low, $0) } }
+                WidgetDial(value: v.drawn, scale: scale(v), band: band, dot: Palette.ink, size: 40, lineWidth: 4) {
+                    Text(verbatim: v.text).font(WidgetStyle.serif(14)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+            } else {
+                WidgetDial(value: nil, size: 40, lineWidth: 4) { EmptyView() }
+            }
+            Text(verbatim: [L10n.tr(label), v.map { $0.unit }].compactMap { $0 }.joined(separator: " "))
+                .font(.system(size: 9)).foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// As Health's MiniDial: the usual range in the middle with as much room on each side.
+    private func scale(_ v: WidgetHealth.Value) -> ClosedRange<Double> {
+        let span = (v.low != nil && v.high != nil && v.high! > v.low!) ? v.high! - v.low! : max(abs(v.drawn) * 0.2, 1)
+        let lo = (v.low ?? v.drawn - span) - span, hi = (v.high ?? v.drawn + span) + span
+        return lo...hi
+    }
+}
+
+/// Sleep (medium): the small widget's night arc, beside it this week's
+/// nights against the need and tonight's bedtime (Today's sleep card).
+struct SleepMediumFace: View {
+    var s: WidgetSnapshot
+    var h: WidgetHealth?
+
+    var body: some View {
+        HStack(spacing: 14) {
+            WidgetFaces.sleep(s)
+            VStack(alignment: .leading, spacing: 6) {
+                if let nights = h?.nights, h?.date == s.date, !nights.isEmpty {
+                    weekDots(nights)
+                    if let need = h?.need {
+                        Text(verbatim: L10n.f("%@ z %@ nocí dosáhlo %@", String(nights.filter(\.reached).count), String(nights.count), WidgetStyle.length(Double(need))))
+                            .font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(2)
+                    }
+                }
+                Spacer(minLength: 0)
+                if let bedtime = s.bedtime {
+                    Text(verbatim: L10n.tr("Dnes večer")).font(WidgetStyle.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.f("v posteli do %@", ClockText.format(bedtime))).font(WidgetStyle.serif(20)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .widgetAccentable()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    /// Monday to Sunday: a full dot for a night that reached the need, a ring
+    /// for one that did not, last night bigger, the nights ahead faint.
+    private func weekDots(_ nights: [WidgetHealth.Night]) -> some View {
+        let monday = WidgetStyle.monday(s.date)
+        let days = (0..<7).map { WidgetStyle.day(monday, plus: $0) }
+        return HStack(spacing: 6) {
+            ForEach(days, id: \.self) { date in
+                let night = nights.first { $0.date == date }
+                let last = date == nights.last?.date
+                VStack(spacing: 3) {
+                    Group {
+                        if let night {
+                            if night.reached { Circle().fill(Palette.ink) } else { Circle().strokeBorder(Palette.ink, lineWidth: 1.2) }
+                        } else {
+                            Circle().fill(Palette.track)
+                        }
+                    }
+                    .frame(width: last ? 10 : 7, height: last ? 10 : 7)
+                    .frame(height: 10)
+                    .widgetAccentable()
+                    Text(verbatim: WeekFace.weekday(date)).font(.system(size: 9)).foregroundStyle(Palette.muted)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+extension WidgetStyle {
+    /// The Monday of `date`'s week (yyyy-MM-dd).
+    static func monday(_ date: String) -> String {
+        var calendar = Calendar(identifier: .iso8601)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let f = DateFormatter()
+        f.calendar = calendar
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = calendar.timeZone
+        f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: date), let start = calendar.dateInterval(of: .weekOfYear, for: d)?.start else { return date }
+        return f.string(from: start)
+    }
+
+    /// yyyy-MM-dd `days` after `date`.
+    static func day(_ date: String, plus days: Int) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: date), let next = f.calendar.date(byAdding: .day, value: days, to: d) else { return date }
+        return f.string(from: next)
+    }
+}

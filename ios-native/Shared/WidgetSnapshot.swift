@@ -239,3 +239,70 @@ struct WidgetWeek: Codable, Equatable {
                Session(title: "Lehká jízda Z2", sport: "ride", date: "2026-10-09", time: nil),
                Session(title: "Dlouhý běh", sport: "run", date: "2026-10-10", time: nil)])
 }
+
+/// Health for the Aurin Age, Night values and Sleep (medium) widgets: written
+/// when Health loads (WidgetBridge.update(health:)), on its own key so
+/// Today's snapshot never overwrites it.
+struct WidgetHealth: Codable, Equatable {
+    static let key = "widgetHealth"
+
+    /// One of last night's values on the Health monitor card, as it drew it.
+    struct Value: Codable, Equatable {
+        /// The app's word for it ("Tep v klidu", "Dech" …), translated when shown.
+        var label: String
+        var text: String
+        var unit: String
+        /// Where the dot sits, and the usual range for the green arc.
+        var drawn: Double
+        var low: Double?
+        var high: Double?
+    }
+
+    /// A night of this week (Monday on), and whether it reached the need.
+    struct Night: Codable, Equatable {
+        var date: String
+        var reached: Bool
+    }
+
+    var date: String
+    /// The estimate and the real age; nil without Pro or while it collects data.
+    var aurinAge: Double?
+    var realAge: Double?
+    /// "2.4 years younger" in the app's words.
+    var aurinAgeWords: String?
+    var pro: Bool
+    /// The Health monitor card's sentence and its five values.
+    var nightTitle: String?
+    var values: [Value]
+    var nights: [Night]
+    var need: Int?
+
+    static func load() -> WidgetHealth? {
+        guard let data = UserDefaults(suiteName: WidgetSnapshot.group)?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetHealth.self, from: data)
+    }
+
+    /// True when it changed (the widgets then reload).
+    @discardableResult
+    func save() -> Bool {
+        guard Self.load() != self, let data = try? JSONEncoder().encode(self) else { return false }
+        UserDefaults(suiteName: WidgetSnapshot.group)?.set(data, forKey: Self.key)
+        return true
+    }
+
+    static func clear() {
+        UserDefaults(suiteName: WidgetSnapshot.group)?.removeObject(forKey: key)
+    }
+
+    static let sample = WidgetHealth(
+        date: "2026-10-08", aurinAge: 29.6, realAge: 32, aurinAgeWords: "2.4 years younger", pro: true,
+        nightTitle: "Breathing above your usual range.",
+        values: [Value(label: "Tep v klidu", text: "53", unit: "bpm", drawn: 53, low: 50, high: 56),
+                 Value(label: "HRV", text: "68", unit: "ms", drawn: 68, low: 60, high: 74),
+                 Value(label: "Kyslík", text: "96", unit: "%", drawn: 96, low: 94, high: 98),
+                 Value(label: "Dech", text: "16.1", unit: "/min", drawn: 16.25, low: 15, high: 16),
+                 Value(label: "Teplota kůže", text: "0.1", unit: "°C", drawn: 0.1, low: -0.5, high: 0.5)],
+        nights: [Night(date: "2026-10-05", reached: true), Night(date: "2026-10-06", reached: false),
+                 Night(date: "2026-10-07", reached: false), Night(date: "2026-10-08", reached: false)],
+        need: 420)
+}
