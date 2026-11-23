@@ -163,7 +163,7 @@ struct TodayContent: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     VStack(alignment: .leading, spacing: 0) { dayNumbers }
-                        .padding(.top, 40)
+                        .padding(.top, 24)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             } else {
@@ -220,7 +220,8 @@ struct TodayContent: View {
                 .dynamicTypeSize(...DynamicTypeSize.denseCap)
             }
         }
-        .padding(.top, 40)
+        // Close under the week strip, as Food's "Eaten today" (Petr, 611: the gap was too big).
+        .padding(.top, 24)
 
         // No watch or ring: one way to add one (D-DNES-1, "Connect a device").
         if selectedDate == nil && model.noWearable && today.readiness.score == nil && !model.demo {
@@ -533,31 +534,42 @@ struct WeekStrip: View {
         }
     }
 
-    /// The day's readiness zone: the week Today holds, then the days loaded.
-    private func zone(_ day: String) -> String? {
-        if ahead { return nil }
-        if let week = model.today?.week, let item = week.first(where: { $0.date == day }) { return item.zone }
-        return model.dayValues[day]?.readiness?.zone
+    /// The day's readiness ring: the days loaded (score and zone), today's
+    /// own score before they arrive; the sample week has only zones, so its
+    /// rings are drawn from them.
+    private func readiness(_ day: String) -> DayMark {
+        if let values = model.dayValues[day], values.readiness != nil { return DayMark(metric: .readiness, values: values) }
+        var score: Int?
+        var zone = model.today?.week?.first(where: { $0.date == day })?.zone
+        if let today = model.today, today.date == day, let own = today.readiness.score { score = own; zone = today.readiness.zone }
+        if score == nil, model.demo, let zone { score = zone == "green" ? 78 : 62 }
+        guard let score else { return DayMark(metric: .readiness, values: nil) }
+        return DayMark(metric: .readiness, values: DayValues(date: day, readiness: .init(score: score, zone: zone), sleep: nil, strain: nil, hrv: nil))
     }
 
-    /// The day in the shared cell (WeekDayCell): on Dnes the readiness dot in
-    /// the colours of the month calendar, on Jídlo the ring of the day's
+    /// The day in the shared cell (WeekDayCell): on Dnes the readiness ring of
+    /// the month calendar, on Jídlo the ring of the day's
     /// calories as its month sheet (Petr 2026-11-22, variant B).
     private func cell(_ day: String) -> some View {
         let selected = day == shown, future = day > lastDay
-        let color: Color? = switch zone(day) { case "green": Palette.green; case "yellow", "red": Palette.amber; default: nil }
         return WeekDayCell(day: day, today: today, selected: selected, faint: future) {
             if ahead {
-                // Today before a meal and the days ahead stay empty, never "not logged".
-                if !foodDays.isEmpty, day >= foodFirst, day < today || foodDays[day]?.logged == true {
+                // Every day up to today has its ring (Petr, 611 test: Sunday had none).
+                // Today before a meal is the empty track, not "nothing logged".
+                // Days ahead get the empty track too (Petr, 611: a ring on every day).
+                if day >= today, foodDays[day]?.logged != true {
+                    Circle().stroke(Palette.track, lineWidth: 3.5).frame(width: 22, height: 22)
+                } else if !foodDays.isEmpty, day >= foodFirst, day < today || foodDays[day]?.logged == true {
                     FoodDayRing(day: foodDays[day], value: .calories, size: 22)
                 }
             } else {
-                Circle().fill(color ?? .clear).frame(width: 6, height: 6)
+                // The month calendar's readiness ring (Petr, 611 test: rings as on Jídlo);
+                // a day without a score is dashed, as in the month.
+                DayRing(mark: readiness(day)).frame(width: 26, height: 26)
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ahead ? Self.spokenFood(day, foodDays[day]) : Self.spoken(day, zone: zone(day)))
+        .accessibilityLabel(ahead ? Self.spokenFood(day, foodDays[day]) : Fmt.dayMonth(day) + ", " + readiness(day).spoken)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -580,12 +592,6 @@ struct WeekStrip: View {
             return Fmt.dayMonth(day) + ", " + L10n.f("Snězeno %@ z %@ kcal", Fmt.int(kcal), Fmt.int(target))
         }
         return Fmt.dayMonth(day) + ", " + Fmt.int(kcal) + " kcal"
-    }
-
-    /// "Wednesday 11, readiness below your usual range" (D-DNES-5): the dot said aloud.
-    static func spoken(_ day: String, zone: String?) -> String {
-        guard let word = ReadinessText.pill(zone)?.0 else { return Fmt.dayMonth(day) }
-        return L10n.f("%@, připravenost %@", Fmt.dayMonth(day), word)
     }
 }
 
@@ -613,7 +619,8 @@ struct WeekDayCell<Mark: View>: View {
                 .scaledFont(15, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(faint ? Palette.faint : Palette.ink)
                 .frame(width: 34, height: 30)
-            mark.frame(width: 44, height: 30)
+            // The place stays when a day has no mark, so every cell is as tall.
+            Color.clear.frame(width: 44, height: 30).overlay { mark }
         }
         .padding(.vertical, 6)
         .frame(width: 46)
