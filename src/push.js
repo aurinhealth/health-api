@@ -147,18 +147,23 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // wake also wakes the app in the background (content-available). hide (a
 // privateAlert kind, when hidesValues) sends privateAlert(hide) and moves the
 // alert and the morning's score into `private`, so no ring is drawn either.
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC, hide = null } = {}) {
+// thread groups the lock screen's stack: the coach's (the morning and his
+// messages) apart from the app's own reminders (Notifications concept v3, N7).
+// data.layout: the morning in the concept's layout for the app's notification
+// extension (readinessMessage); hidden, it waits in `private` with the rest.
+export const COACH_THREAD = "aurin.coach";
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC, hide = null, thread = null } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   if (hide && alert && typeof alert === "object") {
-    const { readiness, ...rest } = data || {};
-    data = { ...rest, private: { ...alert, ...(readiness ? { readiness } : {}) } };
+    const { readiness, layout, ...rest } = data || {};
+    data = { ...rest, private: { ...alert, ...(readiness ? { readiness } : {}), ...(layout ? { layout } : {}) } };
     alert = privateAlert(hide);
   }
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
     headers: { authorization: "bearer " + jwt, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
-    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(mutable ? { "mutable-content": 1 } : {}), ...(wake ? { "content-available": 1 } : {}) } })
+    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(thread ? { "thread-id": thread } : {}), ...(mutable ? { "mutable-content": 1 } : {}), ...(wake ? { "content-available": 1 } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
@@ -208,7 +213,24 @@ export function readinessMessage(input) {
   const remember = body && injury ? L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".") : null;
   // What the days before, the journal, an injury or tomorrow changed: Today's coach card says the same (app-today.js).
   const changed = weighed && (signals.length || saveFor || injury) ? { headline: advice, recommendation: remember ? body + " " + remember : body, ...(remember ? { remember } : {}) } : null;
-  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
+  // The concept's banner (Notifications concept v3, N1): "Readiness 78", the
+  // day's verdict under it, the night in words and the advice. Builds with the
+  // concept rewrite the banner to it (ios-native NotificationService); older
+  // ones keep `alert`, which they parse.
+  const night = nightWords({ sleep, hrv, noSleep });
+  const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" ") };
+  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, layout, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
+}
+
+// "Sleep 6 h 54, HRV in your usual range.": the night in words, HRV against
+// the usual range Today shows (low and high); no number for HRV, no cause (MDR).
+export function nightWords({ sleep = null, hrv = null, noSleep = false } = {}) {
+  const parts = [];
+  const minutes = Math.round(Number(sleep?.minutes));
+  if (minutes > 0 && !noSleep) parts.push(L("Spánek", "Sleep") + " " + Math.floor(minutes / 60) + " h " + String(minutes % 60).padStart(2, "0"));
+  const h = Number(hrv?.value), low = Number(hrv?.low), high = Number(hrv?.high);
+  if (h > 0 && low > 0 && high >= low) parts.push(h < low ? L("HRV pod obvyklým rozmezím", "HRV under your usual range") : h > high ? L("HRV nad obvyklým rozmezím", "HRV above your usual range") : L("HRV v obvyklém rozmezí", "HRV in your usual range"));
+  return parts.length ? parts.join(", ") + "." : "";
 }
 
 // "Sleep 6:40 · HRV −14% · Resting HR +2": the night, and HRV and resting
@@ -279,7 +301,7 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
     // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null } : {};
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout: message.layout }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null, thread: COACH_THREAD } : { thread: COACH_THREAD };
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
