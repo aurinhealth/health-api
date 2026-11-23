@@ -1061,3 +1061,51 @@ extension WidgetStyle {
         return f.string(from: next)
     }
 }
+
+// MARK: - Lock Screen (widgets concept v3, page 2)
+
+/// Readiness on the Lock Screen (circular): the number in the app's serif on
+/// Today's dial with its dot, no label (concept v3).
+struct ReadinessCircleFace: View {
+    var readiness: Int?
+    var zone: String?
+
+    var body: some View {
+        ZStack {
+            AccessoryWidgetBackground()
+            WidgetDial(value: readiness.map(Double.init), scale: 0...100, dot: readiness == nil ? nil : Palette.ink, size: 54, lineWidth: 4) {
+                Text(verbatim: readiness.map(String.init) ?? "–").font(WidgetStyle.serif(22))
+                    .lineLimit(1).minimumScaleFactor(0.6)
+                    .widgetAccentable()
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: [L10n.tr("Připravenost") + " " + (readiness.map(String.init) ?? "–"),
+                                            zone == nil ? nil : L10n.tr(zone == "green" ? "v obvyklém rozmezí" : "pod obvyklým rozmezím")]
+            .compactMap { $0 }.joined(separator: ", ")))
+    }
+}
+
+/// The coach on the Lock Screen (rectangular): "COACH" and the coach's italic
+/// advice. Before the coach has spoken today, or without Pro, the morning's
+/// rule instead: "READINESS 78" and the verdict (concept v3).
+struct CoachRectangleFace: View {
+    var face: CoachMediumFace
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let advice = face.advice, !face.free {
+                Text(verbatim: L10n.tr("Kouč").uppercased(with: L10n.locale)).font(.system(size: 11, weight: .semibold))
+                Text(verbatim: advice).font(WidgetStyle.italic(17)).lineLimit(2).minimumScaleFactor(0.8)
+                    .widgetAccentable()
+            } else {
+                Text(verbatim: L10n.f("Připravenost %@", face.readiness.map(String.init) ?? "–").uppercased(with: L10n.locale))
+                    .font(.system(size: 11, weight: .semibold)).lineLimit(1)
+                Text(verbatim: face.verdict ?? face.text ?? L10n.tr("Otevři Aurin a načti minulou noc"))
+                    .font(WidgetStyle.serif(16)).lineLimit(2).minimumScaleFactor(0.8)
+                    .widgetAccentable()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

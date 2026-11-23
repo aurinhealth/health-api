@@ -204,12 +204,8 @@ struct ReadinessWidgetView: View {
         if let s = entry.snapshot {
             switch family {
             case .accessoryCircular:
-                Gauge(value: Double(s.readiness ?? 0), in: 0...100) {
-                    Text(L10n.tr("PŘ"))
-                } currentValueLabel: {
-                    Text(s.readiness.map(String.init) ?? "–")
-                }
-                .gaugeStyle(.accessoryCircular)
+                // Concept v3: the number on Today's dial, no label.
+                ReadinessCircleFace(readiness: s.readiness, zone: s.zone)
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
@@ -388,17 +384,23 @@ struct DayWidget: Widget {
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Kouč")))
         .description(Text(verbatim: L10n.tr("Tvoje připravenost a jedna věta, co dnes dělat")))
-        .supportedFamilies([.systemMedium])
+        // The Lock Screen's default rectangle is the coach's advice (concept v3).
+        .supportedFamilies([.systemMedium, .accessoryRectangular])
     }
 }
 
 struct DayWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
 
     var body: some View {
         if let s = entry.snapshot {
-            // The redesign's Coach card (widgets concept v3), what Today's coach card says.
-            WidgetFaces.coach(s, WidgetCoach.load())
+            if family == .accessoryRectangular {
+                CoachRectangleFace(face: WidgetFaces.coach(s, WidgetCoach.load()))
+            } else {
+                // The redesign's Coach card (widgets concept v3), what Today's coach card says.
+                WidgetFaces.coach(s, WidgetCoach.load())
+            }
         } else {
             EmptyWidgetView()
         }

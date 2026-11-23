@@ -113,6 +113,11 @@ final class WidgetFaceTests: XCTestCase {
             [AnyView(WidgetFaces.coach(s, coach)), AnyView(WidgetFaces.coach(s, free))],
             [AnyView(WidgetFaces.coach(rest, coach)), AnyView(WidgetFaces.coach(s, yesterday))]
         ])
+        // The Lock Screen: the coach's advice, the free rule, the readiness circle.
+        try render("widgets-lock", size: CGSize(width: 170, height: 76), rows: [
+            [AnyView(CoachRectangleFace(face: WidgetFaces.coach(s, coach))), AnyView(CoachRectangleFace(face: WidgetFaces.coach(s, free))),
+             AnyView(ReadinessCircleFace(readiness: 78, zone: "green").frame(width: 76, height: 76))]
+        ])
     }
 
     /// This week (medium, large) and Food (medium), with their empty states.
