@@ -9,6 +9,7 @@
 import { heartRateZones, heartRateRecovery } from './activity-detail.js';
 import { watchRecorder } from './activity-origin.js';
 import { activityRecoveryHours } from './recovery-hours.js';
+import { ownActiveTime } from './apple-health.js';
 
 const MAX_POINTS = 1500;
 const ROUTE_TYPE = 'exercise-route';
@@ -140,7 +141,7 @@ export async function watchDetail(env, { source, id, hrZones = [], token = null,
   if (!heart.length && route?.some(p => p.hr)) heart.push(...route.filter(p => p.hr && p.t >= 0).map(p => [p.t, p.hr]));
   const elapsed = (Date.parse(end) - Date.parse(start)) / 1000;
   // Under half the span the active time is Google's mistake (index.js googleExerciseActivity).
-  const active = seconds(ex.activeDuration), moving = active && !(elapsed > 0 && active < elapsed / 2) ? active : (elapsed > 0 ? elapsed : null);
+  const active = seconds(ex.activeDuration), moving = active && (ownActiveTime(p) || !(elapsed > 0 && active < elapsed / 2)) ? active : (elapsed > 0 ? elapsed : null);
   const distance = n(m.distanceMeters) ?? (n(m.distanceMillimeters) != null ? n(m.distanceMillimeters) / 1000 : null) ?? (route?.at(-1)?.dist ?? null);
   const hrs = heart.map(x => x[1]);
   const avgHr = metric(m, /^av(era)?g.*heart|heart.*av(era)?g/i) || (hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null);
