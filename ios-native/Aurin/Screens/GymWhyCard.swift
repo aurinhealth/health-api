@@ -117,6 +117,8 @@ enum GymWhy {
 struct GymWhySheet: View {
     let reasons: [GymWhy.Reason]
     @Environment(\.dismiss) private var dismiss
+    /// The rows and the note, measured: the sheet opens as tall as they are.
+    @State private var contentHeight: CGFloat = 560
 
     var body: some View {
         NavigationStack {
@@ -144,7 +146,9 @@ struct GymWhySheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(20)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
+            .scrollBounceBehavior(.basedOnSize)
             .background(Palette.background)
             .navigationTitle(L10n.tr("Proč tenhle trénink"))
             .navigationBarTitleDisplayMode(.inline)
@@ -152,6 +156,9 @@ struct GymWhySheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } }
             }
         }
-        .presentationDetents([.medium, .large])
+        // Opened in full (611 test: half a sheet hid the last reasons); the
+        // title bar is about 64 pt above the rows, a long list goes up to large.
+        .presentationDetents([.height(contentHeight + 64), .large])
+        .presentationDragIndicator(.visible)
     }
 }
