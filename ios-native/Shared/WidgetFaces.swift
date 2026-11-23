@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 // The home-screen widgets' faces in the new design (widgets concept v3,
 // Petr's "Dobrý" 2026-11-19): every small widget is a part of Today or Health
@@ -493,11 +494,13 @@ struct CoachMediumFace: View {
     /// Links of their own (medium widgets): Start opens the gym, the pill the offer.
     var startLink: URL? = URL(string: "aurin://open/gym")
     var proLink: URL? = URL(string: "aurin://open/pro")
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: free ? 6 : 8) {
             HStack(spacing: 6) {
-                WidgetLights()
+                // The free card is Today's, not the coach's: no lights.
+                if !free { WidgetLights() }
                 Text(verbatim: L10n.tr(free ? "Dnes" : "Kouč")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
             }
             HStack(alignment: .top, spacing: 10) {
@@ -506,6 +509,7 @@ struct CoachMediumFace: View {
                         .lineLimit(1).fixedSize()
                         .padding(.top, -6)
                         .widgetAccentable()
+                        .accessibilityLabel(Text(verbatim: L10n.tr("Připravenost") + " " + String(readiness)))
                 }
                 sentence
                     .font(WidgetStyle.serif(16)).foregroundStyle(Palette.ink)
@@ -521,17 +525,12 @@ struct CoachMediumFace: View {
                         Text(verbatim: when).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1)
                     }
                     Spacer(minLength: 6)
-                    if free, let proLink {
-                        Link(destination: proLink) { WidgetProPill() }
-                    } else if WidgetStyle.symbol(nextSport) == "figure.strengthtraining.traditional", let startLink {
-                        Link(destination: startLink) {
-                            Text(verbatim: L10n.tr("Začít")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.onButton)
-                                .padding(.horizontal, 14).frame(height: 30)
-                                .background(Palette.button, in: Capsule())
-                        }
+                    if WidgetStyle.symbol(nextSport) == "figure.strengthtraining.traditional", let startLink {
+                        Link(destination: startLink) { start }
                     }
                 }
-            } else if free, let proLink {
+            }
+            if free, let proLink {
                 HStack {
                     Spacer()
                     Link(destination: proLink) { WidgetProPill() }
@@ -541,10 +540,25 @@ struct CoachMediumFace: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// Start in ink; on a tinted or clear Home Screen an outline, so the word stays readable.
+    @ViewBuilder private var start: some View {
+        let label = Text(verbatim: L10n.tr("Začít")).font(.system(size: 13, weight: .semibold))
+        if renderingMode == .fullColor {
+            label.foregroundStyle(Palette.onButton)
+                .padding(.horizontal, 14).frame(height: 30)
+                .background(Palette.button, in: Capsule())
+        } else {
+            label.foregroundStyle(Palette.ink)
+                .padding(.horizontal, 14).frame(height: 30)
+                .overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 1.5))
+                .widgetAccentable()
+        }
+    }
+
     /// The coach's sentence, then the advice in green italics; free: the numbers' line.
     private var sentence: Text {
-        if free { return Text(verbatim: verdict ?? text ?? "") }
-        var out = Text(verbatim: text ?? "")
+        if free { return Text(verbatim: verdict ?? text ?? (readiness == nil ? L10n.tr("Přidej hodinky nebo prsten a uvidíš připravenost.") : "")) }
+        var out = Text(verbatim: text ?? (advice == nil && readiness == nil ? L10n.tr("Přidej hodinky nebo prsten a uvidíš připravenost.") : ""))
         if let advice {
             out = out + Text(verbatim: text == nil ? "" : " ") + Text(verbatim: advice).font(WidgetStyle.italic(16)).foregroundColor(Palette.green)
         }

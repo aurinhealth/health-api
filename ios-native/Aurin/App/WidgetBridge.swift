@@ -38,6 +38,11 @@ enum WidgetBridge {
             WidgetCenter.shared.reloadAllTimelines()
         }
         Task { @MainActor in
+            // Aurin Pro bought elsewhere (Settings, Family Sharing): the Coach widget leaves the free card.
+            if ProStore.shared.entitled, var coach = WidgetCoach.load(), coach.free {
+                coach.free = false
+                update(coach: coach)
+            }
             QuickActions.update(today)
             WatchBridge.shared.update(today)
         }

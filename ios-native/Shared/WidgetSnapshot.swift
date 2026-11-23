@@ -92,6 +92,7 @@ struct WidgetSnapshot: Codable, Equatable {
         s.sleepEnd = nil
         s.strainLow = nil
         s.strainHigh = nil
+        s.verdict = nil
         s.hrv = nil
         s.strain = nil
         s.kcal = 0

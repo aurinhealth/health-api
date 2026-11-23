@@ -355,6 +355,12 @@ final class AppModel {
     func handle(_ url: URL) {
         // The Coach and Aurin Age widgets without Pro: "Unlock with Pro" opens the offer.
         if AppRoute.schemes.contains(url.scheme ?? ""), url.host() == "open", url.pathComponents.filter({ $0 != "/" }) == ["pro"] {
+            // Pro already: Today, never the offer.
+            guard !ProStore.shared.entitled else {
+                tab = .today
+                paths[.today] = []
+                return
+            }
             // After launch the window may not be up yet.
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(400))
