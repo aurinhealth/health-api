@@ -1635,7 +1635,17 @@ struct TrainingModeView: View {
         }
         guard let added = item?.strain, added > 0 else { return nil }
         let target = today.strain.target.map { (low: $0.low, high: $0.high) }
-        return WorkoutDoneSummary.Strain(workout: added, dayFrom: max(0, score - added), dayTo: score, target: target)
+        return WorkoutDoneSummary.Strain(workout: added, dayFrom: Self.strainBefore(day: score, workout: added), dayTo: score, target: target)
+    }
+
+    /// The day's strain before the workout. Strain sits on a saturating curve
+    /// (src/recovery-model.js strainScore, 21 × (1 − e^(−load/225))), so taking
+    /// the workout's 7.1 off a 13.5 day leaves 9.7, not 6.4 (617 C11): the
+    /// workout's load comes off the load, then back onto the curve.
+    static func strainBefore(day: Double, workout: Double) -> Double {
+        guard day < 21, workout < 21 else { return max(0, day - workout) }
+        let before = 21 * (1 - (1 - day / 21) / (1 - workout / 21))
+        return max(0, (before * 10).rounded() / 10)
     }
 
     private func doneRecord(_ record: NewRecord) -> WorkoutDoneSummary.Record {

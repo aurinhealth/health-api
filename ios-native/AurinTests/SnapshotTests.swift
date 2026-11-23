@@ -193,7 +193,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
         // Today: where it takes the day's strain, as Training's card counts it.
         XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
-        XCTAssertEqual(Fmt.duration(78), "1 h 18")
+        XCTAssertEqual(Fmt.duration(78), "1 h 18 min")
     }
 
     /// A nap sits among what was done in the order of the day.
@@ -657,7 +657,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
         try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
         XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
-        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7 h 30")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7 h 30 min")
         XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
@@ -745,8 +745,8 @@ final class SnapshotTests: XCTestCase {
         // VoiceOver reads the tab header's month with its year and week (Today audit 25).
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
-        XCTAssertEqual(Fmt.duration(75), "1 h 15")
-        XCTAssertEqual(Fmt.duration(125), "2 h 05")
+        XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
+        XCTAssertEqual(Fmt.duration(125), "2 h 5 min")
         XCTAssertEqual(Fmt.duration(120), "2 h")
         XCTAssertEqual(Fmt.duration(42), "42 min")
         XCTAssertEqual(L10n.plural("dní", 24), "dní")
@@ -1158,7 +1158,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30, 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
         // The concept's figures: gym is the lifting figure, not a dumbbell.
         XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
         XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)

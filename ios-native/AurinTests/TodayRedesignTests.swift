@@ -23,6 +23,22 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers are in your usual range or better")
         XCTAssertNil(ReadinessText.numbersLine(nil))
         XCTAssertNil(ReadinessText.numbersLine("legs"))
+        // p7: a yellow or red line names what is off; a green one never does.
+        XCTAssertEqual(ReadinessText.numbersLine("steady", off: ["sleep", "restingHR"]), "Short sleep and a high resting heart rate")
+        XCTAssertEqual(ReadinessText.numbersLine("easy", off: ["sleep", "hrv", "restingHR"]), "Short sleep, a low HRV and a high resting heart rate")
+        XCTAssertEqual(ReadinessText.numbersLine("steady", off: []), "Some of your numbers are below your usual range")
+        XCTAssertEqual(ReadinessText.numbersLine("hard", off: ["sleep"]), "Your numbers are in your usual range or better")
+        // 617 #17, p6: the rule-based card is one reason and one piece of advice, no fact list.
+        let words = TodayCoachWords.split(TodaySnapshot.Summary(headline: nil, text: "Sleep 4 h 23 min (127 min less than usual). Yesterday 4 activities, 192 min.",
+            recommendation: "Today's training (Pull: back, biceps) is done. After a short night, don't add anything else: eat and go to bed earlier."))
+        XCTAssertEqual(words.text, "Today's training (Pull: back, biceps) is done.")
+        XCTAssertEqual(words.advice, "After a short night, don't add anything else: eat and go to bed earlier.")
+        let colon = TodayCoachWords.split(TodaySnapshot.Summary(headline: nil, text: "Ride 4.5 km.", recommendation: "Readiness is low today: rest."))
+        XCTAssertEqual(colon.text, "Readiness is low today.")
+        XCTAssertEqual(colon.advice, "Rest.")
+        // 617 C11: the day before the workout on strain's saturating curve, 9.7 not 6.4.
+        XCTAssertEqual(TrainingModeView.strainBefore(day: 13.5, workout: 7.1), 9.7)
+        XCTAssertEqual(TrainingModeView.strainBefore(day: 5, workout: 7), 0)
     }
 
     /// The old advice key alone (an older server) shows no line: the verdict
@@ -56,9 +72,9 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(TodayDials.length(45), "45\u{00A0}min")
         XCTAssertEqual(TodayDials.length(420), "7\u{00A0}h")
         let dials = TodayDials(today: DemoData.today)
-        // The need in the same "8 h 05" as the dial.
-        XCTAssertEqual(dials.sleep.note, "of 8\u{00A0}h\u{00A0}05 needed")
-        XCTAssertEqual(dials.sleep.spokenNote, "53 min short of 8\u{00A0}h\u{00A0}05")
+        // The need as every length under a dial: "8 h 5 min".
+        XCTAssertEqual(dials.sleep.note, "of 8 h 5 min needed")
+        XCTAssertEqual(dials.sleep.spokenNote, "53 min short of 8 h 5 min")
         XCTAssertNotNil(dials.strain.note)
         XCTAssertTrue(dials.strain.note?.hasPrefix("target ") ?? false)
     }
