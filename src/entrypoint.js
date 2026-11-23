@@ -901,7 +901,8 @@ async function morningPush(env, ctx, options = {}) {
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
   await morningPushNote(env, { reason: 'started' });
-  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })), hide: hidesValues(state) })
+  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })), hide: hidesValues(state),
+    coach: async () => !paywallOn(env) || proActive(env, await subscriptionRow(env)) })
     .catch(async error => { await morningPushNote(env, { reason: 'error', message: String(error?.message || error).slice(0, 200) }); throw error; });
   await morningPushNote(env, result);
   return result;

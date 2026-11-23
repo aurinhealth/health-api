@@ -12,7 +12,7 @@
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
 import { reasonsSentence } from "./morning-advice.js";
-import { dayVerdict, verdictText, signsAdvice, numbersLine } from "./day-verdict.js";
+import { dayVerdict, verdictText, signsAdvice } from "./day-verdict.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -217,13 +217,14 @@ export function readinessMessage(input) {
   // day's verdict under it, the night in words and the advice. Builds with the
   // concept rewrite the banner to it (ios-native NotificationService); older
   // ones keep `alert`, which they parse.
-  // Held down, the parts apart: Today's line under the number (numbers), the
-  // coach card's night and advice, and the first workout still planned.
+  // Held down, the parts apart (ios-native AurinMorning): the label and
+  // Today's pill beside the number, the coach card's night and advice, and
+  // the first workout still planned. sendMorningReadiness adds `coach`.
   const night = nightWords({ sleep, hrv, noSleep });
   const first = v.sessions[0] || null;
-  const numbers = numbersLine({ zone: input.zone, flags: input.flags || [], missing: input.missing || [], rest: v.key === "rest" });
+  const pill = { green: L("v obvyklém rozmezí", "in your usual range"), yellow: L("pod obvyklým rozmezím", "below your usual range"), red: L("pod obvyklým rozmezím", "below your usual range") }[v.shown || input.zone] || null;
   const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" "),
-    ...(numbers ? { numbers } : {}), ...(night ? { night } : {}), ...(body ? { advice: body } : {}),
+    label: L("Připravenost", "Readiness"), ...(pill ? { pill } : {}), ...(night ? { night } : {}), ...(body ? { advice: body } : {}),
     ...(first?.title ? { workout: { title: first.title, ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, layout, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
 }
@@ -267,7 +268,9 @@ export function hasLastNight(records, now = new Date()) {
 // (entrypoint.js: as /app/api/today does) and runs only when everything else
 // allows a push; details(date) the push's numbers and plan, once it goes out.
 // hide: the numbers go in `private`, the banner says only that the morning is in (hidesValues).
-export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch, hide = false } = {}) {
+// coach(): whether the coach is in the account's plan (Aurin Pro or no paywall),
+// asked once the push goes out; held down, the morning then shows his card.
+export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch, hide = false, coach = () => true } = {}) {
   if (!pushConfigured(env) || !env.DB) return { sent: 0, reason: "not-configured" };
   const db = env.DB;
   const [language, zone] = await Promise.all([storedLanguage(db, db.userId ?? env.USER_ID), storedTimeZone(db, db.userId ?? env.USER_ID)]);
@@ -307,7 +310,9 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
     // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout: message.layout }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null, thread: COACH_THREAD } : { thread: COACH_THREAD };
+    const withCoach = message ? await Promise.resolve().then(coach).catch(() => true) : false;
+    const layout = message ? { ...message.layout, ...(withCoach ? { coach: L("Kouč", "Coach") } : {}) } : null;
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null, thread: COACH_THREAD } : { thread: COACH_THREAD };
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
