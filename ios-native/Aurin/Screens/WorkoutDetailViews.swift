@@ -1070,28 +1070,30 @@ struct PlannedWorkoutView: View {
                 Text(session.title).font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.minutes { meta("Délka", Fmt.duration(m)) }
-                    if let t = session.tss { meta("Zátěž", Fmt.int(t) + " TSS") }
-                    if let f = plan?.workout.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
+                    // Missed: only its length; the load and IF of what was not done say nothing.
+                    if !missed, let t = session.tss { meta("Zátěž", Fmt.int(t) + " TSS") }
+                    if !missed, let f = plan?.workout.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
                     if timeEditable { timeMeta }
                 }
                 .padding(.top, 16)
-                if let heat = plan?.heat { HeatLine(text: heat).padding(.top, 14) }
+                if !missed, let heat = plan?.heat { HeatLine(text: heat).padding(.top, 14) }
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
-                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, Self.endurance(session.sport) {
+                if !missed, let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, Self.endurance(session.sport) {
                     Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
                 }
                 if missed {
                     // One coach sentence instead of the plan's text: that is the
                     // event's description for Intervals.icu (src/intervals-strength.js).
-                    (Text("Tenhle trénink nebyl splněn.").foregroundStyle(Palette.ink) + Text(verbatim: " ")
-                     + Text("Přesuň ho na jiný den, nebo ho smaž z plánu.").italic().foregroundStyle(Palette.green))
-                        .font(Typo.sentence(20)).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
+                    // Serif with the green italic key sentence, as every coach card.
+                    (Text("Tenhle trénink nebyl splněn.").font(Typo.coach(20)).foregroundStyle(Palette.ink) + Text(verbatim: " ")
+                     + Text("Přesuň ho na jiný den, nebo ho smaž z plánu.").font(Typo.sentenceItalic(20)).foregroundStyle(Palette.green))
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 16)
                 } else if let description = plan?.workout.description, !description.isEmpty {
                     Text(description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
                 }
-                if let blocks = plan?.workout.steps, !blocks.isEmpty {
+                if !missed, let blocks = plan?.workout.steps, !blocks.isEmpty {
                     SectionLabel(text: "Průběh").padding(.top, 26)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
@@ -1124,13 +1126,12 @@ struct PlannedWorkoutView: View {
                         // The calendar itself, so the first tap already picks the day (611, point 4).
                         DatePicker("Nový den", selection: $moveDate, in: Date()..., displayedComponents: .date)
                             .datePickerStyle(.graphical)
-                            .tint(Palette.amber)
                             .environment(\.locale, Fmt.locale)
                         Button { Task { await move() } } label: { action("Přesunout na tento den", filled: true, busy: working == .move) }
                     } else {
                         Button { moving = true } label: { action("Přesunout na jiný den", filled: false) }
                     }
-                    if Self.endurance(session.sport), session.eventId != nil {
+                    if !missed, Self.endurance(session.sport), session.eventId != nil {
                         // The place it is now is filled with a tick; a tap on the other one moves it there.
                         HStack(spacing: 10) {
                             place(indoor: true, title: session.sport == "swim" ? "Bazén" : "Uvnitř")
