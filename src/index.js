@@ -4,6 +4,7 @@ import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { reconcileCancelledGymPlans } from './planned-events.js';
+import { appGymPlanWorkout } from './gym-plan-store.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
@@ -2113,6 +2114,17 @@ async function energyForDate(env, date) {
       unmatchedPlanned.push(workout);
     }
   }
+  // The gym plan saved in the app (gym_plans) counts toward the target as the
+  // day's strength session when nothing from Intervals.icu stands for it with
+  // a length (its own planned:local-… copy has none, or there is no copy).
+  // Its length is the plan's own estimate. Today and ahead only, while no
+  // strength session of the day is done. Only for energy: the day's planned
+  // list (training.planned) stays as it is, the app shows the gym plan itself.
+  let energyPlanned = unmatchedPlanned;
+  if (date >= localToday() && !completed.some(activityIsStrength) && !unmatchedPlanned.some(w => activityIsStrength(w) && w.durationHours)) {
+    const gym = await appGymPlanWorkout(env.DB, env.USER_ID, date).catch(error => { console.error("Gym plan read failed", error.message); return null; });
+    if (gym) energyPlanned = [...unmatchedPlanned.filter(w => !activityIsStrength(w)), gym];
+  }
 
   // Historical complete days: Fitbit/Google total-calories is authoritative.
   // Today/future: total calories may be incomplete, so project from rest-day
@@ -2132,7 +2144,7 @@ async function energyForDate(env, date) {
     activityAdjustment += kcal;
     workoutCalories.push({ kind: "done", id: a.id ?? null, type: a.type || null, name: a.name || null, minutes: Math.round((a.durationHours || 0) * 60), kcal: Math.round(kcal) });
   }
-  for (const w of unmatchedPlanned) {
+  for (const w of energyPlanned) {
     if (!w.durationHours) continue;
     const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
     const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
@@ -2178,7 +2190,7 @@ async function energyForDate(env, date) {
     ? Math.round(Math.min(1, Math.max(ruleCoverage, (target - everydayTarget) / plannedTrainingCalories)) * 100) / 100
     : ruleCoverage;
   const context = {
-    ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned }),
+    ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: energyPlanned }),
     ...(await nearbyRideContext(env, date))
   };
   const proteinKg = proteinReferenceKg(weight ? Number(weight.value_numeric) : null, profile?.height);

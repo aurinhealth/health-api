@@ -80,3 +80,24 @@ test("the pairing by id wins over the sport for another plan of the day", async 
   assert.deepEqual(t.matched.map(m => m.planned.id), ["planned:2"]);
   assert.deepEqual(t.planned.map(w => w.id), ["planned:1"]);
 });
+
+test("the gym plan saved in the app counts toward the day's energy, not as a second planned session", async () => {
+  const d = db();
+  d.sqlite.exec("CREATE TABLE gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT, PRIMARY KEY (user_id, workout_date)); CREATE TABLE gym_plan_cancellations (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, event_json TEXT, cancelled_at TEXT, PRIMARY KEY (user_id, workout_date));");
+  const head = [["ADAPTIVNÍ SILOVÝ TRÉNINK"], [""], ["Datum", DATE, "", "Pull: back, biceps"], [], [], [], ["Typ", "Cvik", "Série", "Plán kg", "Plán reps"]];
+  const sets = Array.from({ length: 12 }, (_, i) => ["WORK", i < 6 ? "Lat pulldown" : "Barbell curl", (i % 6) + 1, 40, "8-10"]);
+  d.sqlite.prepare("INSERT INTO gym_plans (user_id, workout_date, values_json) VALUES (7, ?, ?)").run(DATE, JSON.stringify([...head, ...sets]));
+  // The app's own Intervals.icu copy without a length is replaced by the plan's estimate.
+  plan(d, "local-gym", { name: "Pull: back, biceps", type: "WeightTraining", moving_time: 0 }, "local");
+  const res = await (await legacy.fetch(new Request("https://internal/analysis/daily?date=" + DATE), { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["intervals"] }, ctx)).json();
+  const planned = res.nutrition.calorieBreakdown.workouts.filter(w => w.kind === "planned");
+  assert.equal(planned.length, 1);
+  assert.equal(planned[0].type, "WeightTraining");
+  assert.ok(planned[0].minutes > 20 && planned[0].kcal > 0);
+  assert.deepEqual(res.training.planned.map(w => w.id), ["planned:local-gym"]);
+
+  // Cancelled, it counts no more.
+  d.sqlite.prepare("INSERT INTO gym_plan_cancellations (user_id, workout_date) VALUES (7, ?)").run(DATE);
+  const after = await (await legacy.fetch(new Request("https://internal/analysis/daily?date=" + DATE), { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["intervals"] }, ctx)).json();
+  assert.equal(after.nutrition.calorieBreakdown.workouts.filter(w => w.kind === "planned").length, 0);
+});

@@ -7,6 +7,8 @@ import { strengthSetOptions } from './gym-set-options.js';
 import { intensityOf } from './gym-intensity.js';
 import { splitSides, sideBalance, lastSideChoice } from './gym-sides.js';
 import { routinesRow } from './stretching.js';
+import { estimateStrengthTiming } from './strength-timing.js';
+import { EXERCISES } from './strength-generator.js';
 
 export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana", "Intenzita"];
 const MAX_ROWS = 100;
@@ -153,4 +155,20 @@ export async function syncGymPlanHistory(db, values) {
   const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset,side:r.side,intensity:r.intensity }));
   if (sets.length) await importStrengthHistory(db, { date: parsed.date, sets });
   return { status: "ok", completedRows: sets.length, parsed };
+}
+
+// The day's gym plan as a planned workout for the energy target (index.js
+// energyForDate): its exercises' estimated length (strength-timing.js), as
+// the workout shows it. Null without a stored plan or when it is cancelled.
+export async function appGymPlanWorkout(db, userId, date) {
+  const [row, cancellation] = await Promise.all([db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(userId, date).first(),
+    db.prepare("SELECT 1 AS x FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(userId, date).first()]);
+  if (!row?.values_json || cancellation) return null;
+  let values = null;
+  try { values = JSON.parse(row.values_json); } catch { return null; }
+  const rows = Array.isArray(values) ? values.slice(7).filter(r => r?.[1]) : [];
+  if (!rows.length) return null;
+  const minutes = estimateStrengthTiming(rows, EXERCISES, 90).estimatedMinutes;
+  if (!(minutes > 0)) return null;
+  return { id: "gym:" + date, type: "WeightTraining", name: String(values[2]?.[3] || "").slice(0, 120) || "Gym", start: date, durationHours: minutes / 60, tss: null, cycling: false };
 }
