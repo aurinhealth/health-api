@@ -127,14 +127,32 @@ struct SmallDialFace: View {
     var empty: String? = nil
     var caption: String?
     var captionColor: Color = Palette.muted
+    /// Green inside the usual range, as the concept's 78, 68 and 53.
+    var numberColor: Color = Palette.ink
 
     var body: some View {
         VStack(spacing: 4) {
             WidgetLabel(text: title)
-            WidgetDial(value: number == nil ? nil : value, scale: scale, band: band, fill: fill, dot: dot) {
+            // As big as the widget allows, up to 86 pt (smaller iPhones have smaller widgets).
+            GeometryReader { geo in
+                let side = max(56, min(86, geo.size.width, geo.size.height))
+                dial(side).frame(width: geo.size.width, height: geo.size.height)
+            }
+            Text(verbatim: caption ?? " ").font(WidgetStyle.caption).foregroundStyle(captionColor)
+                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: [title, number.map { [$0, unit].compactMap { $0 }.joined(separator: " ") } ?? empty, caption]
+            .compactMap { $0 }.joined(separator: ", ")))
+    }
+
+    private func dial(_ side: CGFloat) -> some View {
+            WidgetDial(value: number == nil ? nil : value, scale: scale, band: band, fill: fill, dot: dot, size: side) {
                 if let number {
                     VStack(spacing: 0) {
-                        Text(verbatim: number).font(WidgetStyle.serif(30)).foregroundStyle(Palette.ink)
+                        Text(verbatim: number).font(WidgetStyle.serif(side * 0.35)).foregroundStyle(numberColor)
                             .lineLimit(1).minimumScaleFactor(0.6)
                             .widgetAccentable()
                         if let unit {
@@ -146,15 +164,6 @@ struct SmallDialFace: View {
                         .lineLimit(2).minimumScaleFactor(0.8)
                 }
             }
-            .frame(maxHeight: .infinity)
-            Text(verbatim: caption ?? " ").font(WidgetStyle.caption).foregroundStyle(captionColor)
-                .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: [title, number.map { [$0, unit].compactMap { $0 }.joined(separator: " ") } ?? empty, caption]
-            .compactMap { $0 }.joined(separator: ", ")))
     }
 }
 
@@ -182,47 +191,51 @@ struct SleepArcFace: View {
     /// No watch or ring: the empty state says what it needs.
     var noWearable = false
 
-    private let size: CGFloat = 86
     private let lineWidth: CGFloat = 7
 
     var body: some View {
         VStack(spacing: 4) {
             WidgetLabel(text: L10n.tr("Spánek"))
-            ZStack {
-                Circle().inset(by: lineWidth / 2).trim(from: 0, to: 0.75).rotation(.degrees(135))
-                    .stroke(minutes == nil ? AnyShapeStyle(Palette.track)
-                            : AnyShapeStyle(AngularGradient(colors: [Palette.amberBar, Palette.indigo], center: .center,
-                                                            startAngle: .degrees(135), endAngle: .degrees(405))),
-                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                    .widgetAccentable()
-                if let minutes {
-                    VStack(spacing: 0) {
-                        Text(verbatim: L10n.tr("Minulá noc").uppercased(with: L10n.locale))
-                            .font(WidgetStyle.label).tracking(0.6).foregroundStyle(Palette.muted)
-                            .lineLimit(1).minimumScaleFactor(0.7)
-                        Text(verbatim: WidgetStyle.length(minutes)).font(WidgetStyle.serif(24)).foregroundStyle(Palette.ink)
-                            .lineLimit(1).minimumScaleFactor(0.6)
-                            .widgetAccentable()
-                    }
-                    .frame(maxWidth: (size - 2 * lineWidth) * 0.9)
-                    if let start, let end {
-                        HStack {
-                            Text(verbatim: ClockText.format(start))
-                            Spacer()
-                            Text(verbatim: ClockText.format(end))
+            // Today's night arc: a half circle from falling asleep (left) to waking (right).
+            GeometryReader { geo in
+                let width = min(geo.size.width - 8, geo.size.height * 2 - 8)
+                ZStack(alignment: .bottom) {
+                    Circle().inset(by: lineWidth / 2).trim(from: 0.5, to: 1)
+                        .stroke(minutes == nil ? AnyShapeStyle(Palette.track)
+                                : AnyShapeStyle(LinearGradient(colors: [Palette.amberBar, Palette.indigo], startPoint: .leading, endPoint: .trailing)),
+                                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                        .frame(width: width, height: width)
+                        .offset(y: width / 2)
+                        .frame(width: width, height: width / 2, alignment: .top)
+                        .clipped()
+                        .widgetAccentable()
+                    if let minutes {
+                        VStack(spacing: 0) {
+                            Text(verbatim: L10n.tr("Minulá noc").uppercased(with: L10n.locale))
+                                .font(WidgetStyle.label).tracking(0.6).foregroundStyle(Palette.muted)
+                                .lineLimit(1).fixedSize()
+                            Text(verbatim: WidgetStyle.length(minutes)).font(WidgetStyle.serif(24)).foregroundStyle(Palette.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                                .widgetAccentable()
                         }
-                        .font(WidgetStyle.caption).foregroundStyle(Palette.muted)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(width: size + 34)
-                        .offset(y: size * 0.42)
+                        .frame(maxWidth: width - 2 * lineWidth - 8)
+                    } else {
+                        Text(verbatim: L10n.tr("Bez spánku")).font(WidgetStyle.caption).foregroundStyle(Palette.muted)
+                            .multilineTextAlignment(.center).frame(maxWidth: width * 0.7)
                     }
-                } else {
-                    Text(verbatim: L10n.tr("Bez spánku")).font(WidgetStyle.caption).foregroundStyle(Palette.muted)
-                        .multilineTextAlignment(.center).frame(maxWidth: size * 0.7)
                 }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
             }
-            .frame(width: size, height: size)
-            .frame(maxHeight: .infinity)
+            if let minutes, minutes > 0, let start, let end {
+                // The night's ends under the arc's two ends.
+                HStack {
+                    Text(verbatim: ClockText.format(start))
+                    Spacer(minLength: 4)
+                    Text(verbatim: ClockText.format(end))
+                }
+                .font(WidgetStyle.caption).foregroundStyle(Palette.muted)
+                .lineLimit(1)
+            }
             Text(verbatim: caption ?? " ").font(WidgetStyle.caption).foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
@@ -310,7 +323,8 @@ struct FoodSmallFace: View {
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .widgetAccentable()
             if let target, target > 0 {
-                Text(verbatim: L10n.f("z %@ kcal", WidgetStyle.int(target))).font(.system(size: 12)).foregroundStyle(Palette.muted)
+                Text(verbatim: (kcal ?? 0) > 0 ? L10n.f("z %@ kcal", WidgetStyle.int(target)) : L10n.tr("Zatím nic nezapsáno"))
+                    .font(.system(size: 12)).foregroundStyle(Palette.muted)
                     .lineLimit(1)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -346,10 +360,10 @@ enum WidgetFaces {
             return SmallDialFace(title: title, number: nil, empty: L10n.tr("Bez dat"), caption: L10n.tr("Otevři Aurin a načti minulou noc"))
         }
         let usual = s.zone == "green"
-        return SmallDialFace(title: title, value: Double(score), scale: 0...100, fill: Palette.ink.opacity(0.85),
+        return SmallDialFace(title: title, value: Double(score), scale: 0...100,
                              dot: usual ? Palette.green : Palette.ink.opacity(0.45), number: String(score),
                              caption: s.zone == nil ? nil : L10n.tr(usual ? "v obvyklém rozmezí" : "pod obvyklým rozmezím"),
-                             captionColor: usual ? Palette.green : Palette.muted)
+                             captionColor: usual ? Palette.green : Palette.muted, numberColor: usual ? Palette.green : Palette.ink)
     }
 
     /// The day's strain adding up against today's target: "target 11 to 14".
@@ -385,7 +399,7 @@ enum WidgetFaces {
         return SmallDialFace(title: title, value: value, scale: max(0, min(low - pad, value - 5))...max(high + pad, value + 5), band: low...high,
                              dot: inside ? Palette.green : Palette.ink.opacity(0.45), number: WidgetStyle.int(value), unit: unit,
                              caption: L10n.f("obvykle %@ až %@", WidgetStyle.int(low), WidgetStyle.int(high)),
-                             captionColor: inside ? Palette.green : Palette.muted)
+                             captionColor: inside ? Palette.green : Palette.muted, numberColor: inside ? Palette.green : Palette.ink)
     }
 
     /// Water drunk today against the target: "0,8 l", "of 2,5 l".
@@ -401,8 +415,9 @@ enum WidgetFaces {
     /// Steps against the goal, the usual day under it: "your average 9,212 a day".
     static func steps(_ s: WidgetSnapshot) -> SmallDialFace {
         let goal = s.stepsGoal ?? 0
-        return SmallDialFace(title: L10n.tr("Kroky"), value: goal > 0 ? (s.steps ?? 0) : nil, scale: 0...max(1, goal),
-                             fill: Palette.green, number: s.steps.map { WidgetStyle.int($0) } ?? WidgetStyle.int(0),
+        // No steps yet after midnight are "–", not a real count of 0 (WidgetSnapshot.current).
+        return SmallDialFace(title: L10n.tr("Kroky"), value: goal > 0 ? s.steps : nil, scale: 0...max(1, goal),
+                             fill: Palette.green, number: WidgetStyle.int(s.steps),
                              unit: goal > 0 ? L10n.f("z %@", WidgetStyle.int(goal)) : nil,
                              caption: s.stepsAverage.map { L10n.f("průměr %@ denně", WidgetStyle.int($0)) })
     }

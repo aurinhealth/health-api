@@ -140,7 +140,7 @@ struct WidgetRing: View {
                 .stroke(W.zoneColor(zone), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .widgetAccentable()
-            Text(score.map(String.init) ?? "–").font(W.number(fontSize)).foregroundStyle(ink)
+            Text(score.map(String.init) ?? "–").font(WidgetStyle.serif(fontSize)).foregroundStyle(ink)
                 .minimumScaleFactor(0.5).lineLimit(1).padding(lineWidth)
                 .widgetAccentable()
         }
@@ -227,12 +227,12 @@ struct ReadinessWidgetView: View {
                     // The redesign's face (widgets concept v3): Readiness as its dial.
                     WidgetFaces.readiness(s)
                 } else {
-                    // StandBy: one big ring without the card.
+                    // StandBy: one big ring without the card, green only in the
+                    // usual range, else neutral (MDR: no warning colour).
                     VStack(spacing: 8) {
-                        WidgetRing(score: s.readiness, zone: s.zone, lineWidth: 14, fontSize: 62,
+                        WidgetRing(score: s.readiness, zone: s.zone == "green" ? "green" : nil, lineWidth: 14, fontSize: 62,
                                    track: Color.white.opacity(0.12), ink: .white)
-                        Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { ", " + $0 } ?? ""))
-                            .font(.subheadline.weight(.medium)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
+                        Text(L10n.tr("Připravenost")).font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
