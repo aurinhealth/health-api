@@ -445,3 +445,138 @@ enum WidgetFaces {
         FoodSmallFace(kcal: s.kcal, target: s.kcalTarget)
     }
 }
+
+/// The coach's symbol (Two lights) standing still: an amber and a mint light.
+struct WidgetLights: View {
+    var size: CGFloat = 14
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color(light: 0xE09A55, dark: 0xF2B46B)).frame(width: size * 0.62, height: size * 0.62)
+                .offset(x: -size * 0.16, y: -size * 0.13)
+            Circle().fill(Color(light: 0x3E9C78, dark: 0x8FE6C4)).frame(width: size * 0.62, height: size * 0.62)
+                .offset(x: size * 0.16, y: size * 0.13)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// "Unlock with Pro" (the app's glass pill, UnlockProPill) at widget size; it
+/// opens the offer (aurin://open/pro). Petr's yes 2026-11-19.
+struct WidgetProPill: View {
+    var body: some View {
+        Label { Text(verbatim: L10n.tr("Odemknout s Pro")) } icon: { Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold)) }
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+            .lineLimit(1)
+            .padding(.horizontal, 10).frame(height: 26)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: 1))
+    }
+}
+
+/// The Coach widget (medium): Today's coach card, the readiness beside the
+/// sentence with its green italic advice, and today's workout with Start.
+/// Without Aurin Pro the free Today card: "Today", the readiness and what the
+/// numbers say, and "Unlock with Pro" (widgets concept v3).
+struct CoachMediumFace: View {
+    var readiness: Int?
+    var text: String?
+    var advice: String?
+    var free = false
+    /// The free card's line ("Good day for a hard workout").
+    var verdict: String?
+    var nextTitle: String?
+    var nextSport: String?
+    var nextTime: String?
+    var nextMinutes: Int?
+    /// Links of their own (medium widgets): Start opens the gym, the pill the offer.
+    var startLink: URL? = URL(string: "aurin://open/gym")
+    var proLink: URL? = URL(string: "aurin://open/pro")
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                WidgetLights()
+                Text(verbatim: L10n.tr(free ? "Dnes" : "Kouč")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+            }
+            HStack(alignment: .top, spacing: 10) {
+                if let readiness {
+                    Text(verbatim: String(readiness)).font(WidgetStyle.serif(38)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).fixedSize()
+                        .padding(.top, -6)
+                        .widgetAccentable()
+                }
+                sentence
+                    .font(WidgetStyle.serif(16)).foregroundStyle(Palette.ink)
+                    .lineLimit(3).minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer(minLength: 0)
+            if let nextTitle {
+                HStack(spacing: 10) {
+                    WidgetSportDisc(sport: nextSport, size: 28)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(verbatim: nextTitle).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                        Text(verbatim: when).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    if free, let proLink {
+                        Link(destination: proLink) { WidgetProPill() }
+                    } else if WidgetStyle.symbol(nextSport) == "figure.strengthtraining.traditional", let startLink {
+                        Link(destination: startLink) {
+                            Text(verbatim: L10n.tr("Začít")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.onButton)
+                                .padding(.horizontal, 14).frame(height: 30)
+                                .background(Palette.button, in: Capsule())
+                        }
+                    }
+                }
+            } else if free, let proLink {
+                HStack {
+                    Spacer()
+                    Link(destination: proLink) { WidgetProPill() }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// The coach's sentence, then the advice in green italics; free: the numbers' line.
+    private var sentence: Text {
+        if free { return Text(verbatim: verdict ?? text ?? "") }
+        var out = Text(verbatim: text ?? "")
+        if let advice {
+            out = out + Text(verbatim: text == nil ? "" : " ") + Text(verbatim: advice).font(WidgetStyle.italic(16)).foregroundColor(Palette.green)
+        }
+        return out
+    }
+
+    /// "Today at 17:30, 45 min".
+    private var when: String {
+        [nextTime.map { L10n.f("Dnes v %@", ClockText.format($0)) } ?? L10n.tr("Dnes"),
+         nextMinutes.map { WidgetStyle.length(Double($0)) }].compactMap { $0 }.joined(separator: ", ")
+    }
+}
+
+extension WidgetFaces {
+    /// The free Today card's line, the readiness detail's verdict words (src/day-verdict.js).
+    nonisolated static func verdictLine(_ key: String?) -> String? {
+        switch key {
+        case "hard": return L10n.tr("Dobrý den na tvrdý trénink")
+        case "steady": return L10n.tr("Dnes s mírou")
+        case "easy": return L10n.tr("Dnes v klidu")
+        case "legs": return L10n.tr("Dej nohám pauzu")
+        case "no_intensity": return L10n.tr("Dnes bez intenzity")
+        case "rest": return L10n.tr("Dnes odpočinek")
+        default: return nil
+        }
+    }
+
+    /// The Coach widget from the snapshot and Today's coach card (nil before Today opened today).
+    static func coach(_ s: WidgetSnapshot, _ c: WidgetCoach?) -> CoachMediumFace {
+        let coach = c?.date == s.date ? c : nil
+        return CoachMediumFace(readiness: s.readiness, text: coach?.text ?? (coach == nil ? verdictLine(s.verdict) : nil), advice: coach?.advice,
+                               free: coach?.free ?? false, verdict: verdictLine(s.verdict),
+                               nextTitle: s.nextTitle, nextSport: s.nextSport, nextTime: s.nextTime, nextMinutes: s.nextMinutes)
+    }
+}

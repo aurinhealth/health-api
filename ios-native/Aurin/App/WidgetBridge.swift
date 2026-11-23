@@ -25,7 +25,8 @@ enum WidgetBridge {
                                       sleepStart: today.sleep?.start, sleepEnd: today.sleep?.end, sleepNeed: today.sleep?.need,
                                       strainLow: today.strain.target?.low, strainHigh: today.strain.target?.high,
                                       stepsAverage: stepsAverage(today),
-                                      noWearable: today.readiness.noWearable, learningDays: today.readiness.learningDays)
+                                      noWearable: today.readiness.noWearable, learningDays: today.readiness.learningDays,
+                                      verdict: today.readiness.verdict)
         // The same day again (a refresh with nothing new) keeps the new time,
         // but redraws the widgets only when they may show "před 3 h" by now:
         // reloads are budgeted.
@@ -85,6 +86,11 @@ enum WidgetBridge {
     }
     @MainActor private static var followed: String?
 
+    /// Today's coach card for the Coach widget (CoachTextCard on Today).
+    static func update(coach: WidgetCoach) {
+        if coach.save() { WidgetCenter.shared.reloadTimelines(ofKind: "day") }
+    }
+
     /// Redraws the widgets in a new language or new units.
     static func reload() {
         WidgetCenter.shared.reloadAllTimelines()
@@ -93,6 +99,7 @@ enum WidgetBridge {
     static func clear() {
         WidgetSnapshot.clear()
         WidgetWeek.clear()
+        WidgetCoach.clear()
         AurinSpotlight.clear()
         WidgetCenter.shared.reloadAllTimelines()
         Task { @MainActor in

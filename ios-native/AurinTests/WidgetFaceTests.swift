@@ -87,6 +87,33 @@ final class WidgetFaceTests: XCTestCase {
         ])
     }
 
+    /// The Coach widget (medium): the coach's card, the free Today card with
+    /// "Unlock with Pro", a rest day, and before Today opened today.
+    func testCoachWidget() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        var s = day
+        s.verdict = "hard"
+        let coach = WidgetCoach(date: s.date, text: "Sleep was 6 minutes short, HRV is in your usual range.",
+                                advice: "Go all in on strength tonight.", free: false)
+        var free = coach
+        free.free = true
+        var rest = s
+        rest.nextTitle = nil
+        var yesterday = coach
+        yesterday.date = "2026-10-07"
+        XCTAssertEqual(WidgetFaces.coach(s, free).verdict, "Good day for a hard workout")
+        // Yesterday's words never show on today's card.
+        XCTAssertNil(WidgetFaces.coach(s, yesterday).advice)
+        try render("widgets-coach", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(WidgetFaces.coach(s, coach)), AnyView(WidgetFaces.coach(s, free))],
+            [AnyView(WidgetFaces.coach(rest, coach)), AnyView(WidgetFaces.coach(s, yesterday))]
+        ])
+    }
+
     /// A snapshot saved by an older build (no redesign fields) still loads.
     func testOlderSnapshotDecodes() throws {
         let json = #"{"date":"2026-11-20","updated":1795000000,"readiness":70,"zone":"green"}"#
@@ -106,8 +133,8 @@ final class WidgetFaceTests: XCTestCase {
         XCTAssertEqual(WidgetBridge.stepsAverage(today) ?? 0, earlier.map(\.value).reduce(0, +) / Double(earlier.count), accuracy: 0.001)
     }
 
-    /// Each face on a small widget's card (170 pt, the 6.3" iPhone), five to a row.
-    private func render(_ name: String, rows: [[AnyView]]) throws {
+    /// Each face on a widget's card (small 170 pt, medium 364 x 170, the 6.3" iPhone).
+    private func render(_ name: String, size: CGSize = CGSize(width: 170, height: 170), rows: [[AnyView]]) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let board = VStack(spacing: 16) {
@@ -116,7 +143,7 @@ final class WidgetFaceTests: XCTestCase {
                         ForEach(rows[r].indices, id: \.self) { c in
                             rows[r][c]
                                 .padding(16)
-                                .frame(width: 170, height: 170)
+                                .frame(width: size.width, height: size.height)
                                 .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Palette.card))
                         }
                     }

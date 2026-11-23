@@ -9,14 +9,15 @@ import WidgetKit
 @main
 struct AurinWidgetBundle: WidgetBundle {
     var body: some Widget {
-        ReadinessWidget()
-        SleepWidget()
+        // The picker's order (widgets concept v3): the coach first.
         DayWidget()
-        FoodWaterWidget()
-        GymActivityWidget()
-        MetricWidget()
-        WeekWidget()
+        ReadinessWidget()
         NextWorkoutWidget()
+        WeekWidget()
+        FoodWaterWidget()
+        SleepWidget()
+        MetricWidget()
+        GymActivityWidget()
         if #available(iOS 18.0, *) {
             WaterControl()
             StartGymControl()
@@ -195,7 +196,7 @@ struct ReadinessWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
-        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a námaha.")))
+        .description(Text(verbatim: L10n.tr("Připravenost proti tvému obvyklému rozmezí")))
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -255,7 +256,7 @@ struct SleepWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Spánek")))
-        .description(Text(verbatim: L10n.tr("Poslední noc a kdy dnes jít spát.")))
+        .description(Text(verbatim: L10n.tr("Minulá noc a kdy dnes jít spát")))
         .supportedFamilies([.systemSmall, .accessoryInline])
     }
 }
@@ -289,8 +290,8 @@ struct DayWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/today"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
-        .description(Text(verbatim: L10n.tr("Připravenost, spánek, námaha, jídlo, pití a další trénink.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Kouč")))
+        .description(Text(verbatim: L10n.tr("Tvoje připravenost a jedna věta, co dnes dělat")))
         .supportedFamilies([.systemMedium])
     }
 }
@@ -300,48 +301,10 @@ struct DayWidgetView: View {
 
     var body: some View {
         if let s = entry.snapshot {
-            // Steps and strain from hours ago would read as now (Background App Refresh off).
-            let age = W.age(s, at: entry.date)
-            HStack(alignment: .top, spacing: 14) {
-                Link(destination: URL(string: "aurin://open/readiness")!) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                        Text(s.readiness.map(String.init) ?? "–").font(W.number(50)).foregroundStyle(W.ink)
-                        // The zone in a word, not only a coloured dot: readable
-                        // without colour and on a tinted Home Screen.
-                        if let word = W.zoneWord(s.zone) {
-                            Text(word.capitalized(with: L10n.locale)).font(.caption2.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
-                        }
-                        Spacer(minLength: 0)
-                        if let title = s.nextTitle {
-                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber)
-                                .lineLimit(age == nil ? 2 : 1)
-                        }
-                        if let age { Text(age).font(.caption2).foregroundStyle(W.muted).lineLimit(1) }
-                    }
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    Link(destination: URL(string: "aurin://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "aurin://open/strain")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
-                    Link(destination: URL(string: "aurin://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
-                    Link(destination: URL(string: "aurin://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
-                    if let bed = s.bedtime {
-                        Link(destination: URL(string: "aurin://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
+            // The redesign's Coach card (widgets concept v3), what Today's coach card says.
+            WidgetFaces.coach(s, WidgetCoach.load())
         } else {
             EmptyWidgetView()
-        }
-    }
-
-    private func row(_ symbol: String, _ color: Color, _ title: String, _ value: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol).font(.caption2).foregroundStyle(color).frame(width: 14)
-            Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
-            Spacer(minLength: 4)
-            Text(value).font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 }
@@ -357,8 +320,8 @@ struct FoodWaterWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/food"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo a pití")))
-        .description(Text(verbatim: L10n.tr("Kalorie, živiny a pití. Vodu přidáš jedním klepnutím.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo")))
+        .description(Text(verbatim: L10n.tr("Snědené kalorie proti dnešnímu cíli")))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

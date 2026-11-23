@@ -90,6 +90,10 @@ struct CoachTextCard: View {
             }
         }
         .task(id: live && shown ? memoryKey + "|" + String(model.dataRevision) : "") { await load() }
+        // What Today's card says goes to the Coach widget too (widgets concept v3).
+        .onChange(of: widgetCoach, initial: true) { _, coach in
+            if let coach { WidgetBridge.update(coach: coach) }
+        }
     }
 
     private var card: some View {
@@ -243,6 +247,14 @@ struct CoachTextCard: View {
             out = out + Text(verbatim: text == nil ? "" : " ") + Text(verbatim: advice).font(Typo.sentenceItalic(folded ? 17 : 21)).foregroundColor(Palette.green)
         }
         return out
+    }
+
+    /// Today's card for the Coach widget: the same sentence and advice; without
+    /// Aurin Pro (the paywall on) the widget shows the free Today card.
+    private var widgetCoach: WidgetCoach? {
+        guard screen == "today", live, !model.demo, text != nil || advice != nil || loaded?.reason == "pro" else { return nil }
+        return WidgetCoach(date: AppModel.localDate(Date()), text: text, advice: advice,
+                           free: loaded?.reason == "pro" && !ProStore.shared.entitled)
     }
 
     private var memoryKey: String { screen + "|" + AppModel.localDate(Date()) }

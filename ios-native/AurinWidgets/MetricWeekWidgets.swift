@@ -66,8 +66,8 @@ struct MetricWidget: Widget {
                 .widgetURL(URL(string: entry.metric.link))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Jedno číslo")))
-        .description(Text(verbatim: L10n.tr("Číslo, které si vybereš: HRV, klidový tep, kroky a další.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Denní čísla")))
+        .description(Text(verbatim: L10n.tr("Námaha, HRV, voda, kroky nebo klidový tep na první pohled")))
         .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -235,8 +235,8 @@ struct WeekWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Týden")))
-        .description(Text(verbatim: L10n.tr("Trénink po dnech, splněné tréninky a co tě čeká.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Tento týden")))
+        .description(Text(verbatim: L10n.tr("Splněné a naplánované tréninky po dnech")))
         .supportedFamilies([.systemLarge])
     }
 }
@@ -391,7 +391,7 @@ struct NextWorkoutWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Další trénink")))
-        .description(Text(verbatim: L10n.tr("Dnešní trénink, jeho čas a délka. Hodí se i do StandBy.")))
+        .description(Text(verbatim: L10n.tr("Tvoje další jízda, běh, plavání nebo posilovna")))
         .supportedFamilies([.systemSmall])
     }
 }

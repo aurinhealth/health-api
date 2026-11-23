@@ -56,6 +56,9 @@ struct WidgetSnapshot: Codable, Equatable {
     var stepsAverage: Double? = nil
     var noWearable: Bool? = nil
     var learningDays: Int? = nil
+    /// What the day's numbers say, a key of src/day-verdict.js ("hard"): the
+    /// free Today card's line (the free morning push says the same).
+    var verdict: String? = nil
 
     static func load() -> WidgetSnapshot? {
         guard let data = UserDefaults(suiteName: group)?.data(forKey: key) else { return nil }
@@ -124,6 +127,36 @@ struct WidgetSnapshot: Codable, Equatable {
                                        hrvLow: 48, hrvHigh: 66, restingHR: 52, restingLow: 49, restingHigh: 56, nextSport: "strength", nextMinutes: 60,
                                        hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52],
                                        sleepStart: "23:36", sleepEnd: "06:42", sleepNeed: 420, strainLow: 11, strainHigh: 14, stepsAverage: 9212)
+}
+
+/// The coach's word on Today for the Coach widget: what the card on Today
+/// shows (the AI's sentence or the rule-based one, the advice in green), saved
+/// by CoachTextCard. `free`: the account has the paywall on without Aurin Pro,
+/// so the widget shows the free Today card (concept v3) instead.
+struct WidgetCoach: Codable, Equatable {
+    static let key = "widgetCoach"
+
+    var date: String
+    var text: String?
+    var advice: String?
+    var free: Bool
+
+    static func load() -> WidgetCoach? {
+        guard let data = UserDefaults(suiteName: WidgetSnapshot.group)?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetCoach.self, from: data)
+    }
+
+    /// True when it changed (the Coach widget then reloads).
+    @discardableResult
+    func save() -> Bool {
+        guard Self.load() != self, let data = try? JSONEncoder().encode(self) else { return false }
+        UserDefaults(suiteName: WidgetSnapshot.group)?.set(data, forKey: Self.key)
+        return true
+    }
+
+    static func clear() {
+        UserDefaults(suiteName: WidgetSnapshot.group)?.removeObject(forKey: key)
+    }
 }
 
 /// The week for the large widget: Monday to Sunday's training time, how many
