@@ -1,3 +1,4 @@
+import LocalAuthentication
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -128,19 +129,20 @@ struct NotificationsSettingsView: View {
     /// the days, read straight from UserDefaults, are shown anew).
     @State private var revision = 0
     @State private var editing: ReminderKind?
+    @Environment(\.scenePhase) private var scenePhase
 
     /// The concept's order (Settings → Notifications, 2026-11-19): the week
     /// plan's evening reminder of the day ("Zapsat den") lives in the meals' sheet.
     private static let rows: [ReminderKind] = [.workout, .meals, .water, .bedtime, .weight, .week]
 
     var body: some View {
-        SettingsPage(title: "Oznámení", hero: allowed == false ? nil : SettingsHero(systemImage: "bell", color: Palette.rust, text: heroText)) {
+        SettingsPage(title: "Oznámení", hero: allowed == true ? SettingsHero(systemImage: "bell", color: Palette.rust, text: heroText) : nil) {
             if allowed == false { NotificationsOffCard() }
             SettingsGroup(title: "Od kouče") {
                 SettingsToggle(title: "Ranní připravenost", subtitle: "Po probuzení, až se data synchronizují", isOn: $morning)
                 SettingsDivider()
                 if coachLocked {
-                    // Without Pro the coach sends nothing of his own (src/entrypoint.js coachPush).
+                    // Without Pro the coach's own messages are not for this account (the server stops them too).
                     SettingsToggle(title: "Zprávy kouče", subtitle: "Součást Aurin Pro", isOn: .constant(false), disabled: true)
                 } else {
                     SettingsToggle(title: "Zprávy kouče", subtitle: "Tipy od kouče, nejvýš jednou denně. Odpovědi přijdou vždy.", isOn: $coach)
@@ -164,7 +166,7 @@ struct NotificationsSettingsView: View {
             }
             .opacity(allowed == false ? 0.5 : 1)
             SettingsGroup(title: "Soukromí") {
-                SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: "Widgety na zamčené obrazovce ukážou čísla po odemknutí Face ID.", isOn: $hideValues)
+                SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: privacyCaption, isOn: $hideValues)
             }
         }
         .sheet(item: $editing) { kind in
@@ -173,6 +175,8 @@ struct NotificationsSettingsView: View {
         // Skrýt zdravotní údaje as another iPhone of the account set it.
         .task { await PushRegistration.adoptAccountChoice(api: model.api) }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
+        // Back from iPhone Settings: the off card goes once notifications are on.
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await check() } } }
         .task(id: revision) {
             if revision > 0 {
                 try? await Task.sleep(for: .milliseconds(400))
@@ -180,6 +184,15 @@ struct NotificationsSettingsView: View {
             }
             await check()
             if revision > 0, let today = model.today { await Reminders.reschedule(from: today) }
+        }
+    }
+
+    /// The lock screen widgets ask for the phone's own unlock (the concept names Face ID).
+    private var privacyCaption: String {
+        switch LAContext().biometryType {
+        case .faceID: return L10n.tr("Widgety na zamčené obrazovce ukážou čísla po odemknutí Face ID.")
+        case .touchID: return L10n.tr("Widgety na zamčené obrazovce ukážou čísla po odemknutí Touch ID.")
+        default: return L10n.tr("Widgety na zamčené obrazovce ukážou čísla po odemknutí.")
         }
     }
 
@@ -217,15 +230,26 @@ struct NotificationsSettingsView: View {
         case .water:
             return limited ? summary : nil
         case .bedtime:
-            if bedtimeMode == "custom" { return (limited ? summary + ", " : "") + Reminders.clock(bedtimeTime) }
+            if bedtimeMode == "custom" { return (limited ? summary + ", " : "") + L10n.f("V %@", Reminders.clock(bedtimeTime)) }
             return (limited ? summary + ", " : "") + L10n.f("%@ před spaním", Fmt.duration(bedtimeOffset))
         case .weight:
-            return summary + ", " + Reminders.clock(weightTime)
+            return dayPart(chosen, at: weightTime) ?? summary + ", " + Reminders.clock(weightTime)
         case .week:
-            return summary + ", " + Reminders.clock(weekTime)
+            return dayPart(chosen, at: weekTime) ?? summary + ", " + Reminders.clock(weekTime)
         case .food:
             return nil
         }
+    }
+
+    /// One day: "Monday morning", "Sunday evening" (the concept's words); the time is in the sheet.
+    private func dayPart(_ days: Int, at minute: Int) -> String? {
+        let chosen = ReminderDays.order.filter { Reminders.has(days, $0) }
+        guard chosen.count == 1 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = L10n.locale
+        let name = Fmt.capitalized(calendar.standaloneWeekdaySymbols[chosen[0] - 1])
+        let part = minute < 12 * 60 ? L10n.tr("ráno") : minute < 17 * 60 ? L10n.tr("odpoledne") : L10n.tr("večer")
+        return name + " " + part
     }
 
     private func isOn(_ kind: ReminderKind) -> Binding<Bool> {
@@ -257,24 +281,42 @@ struct NotificationsSettingsView: View {
 /// dark button that opens them (the concept's S2, no warning colour).
 private struct NotificationsOffCard: View {
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Oznámení jsou vypnutá").font(.headline).foregroundStyle(Palette.ink)
-                Text("Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče.").font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
+        // Side by side as drawn; text over the button at large text sizes.
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 14) {
+                text
+                Spacer(minLength: 8)
+                button
             }
-            Spacer(minLength: 8)
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            } label: {
-                Text("Otevřít Nastavení").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
-                    .padding(.horizontal, 16).frame(minHeight: 44)
-                    .background(Palette.button, in: Capsule())
+            VStack(alignment: .leading, spacing: 12) {
+                text
+                button
             }
-            .buttonStyle(.plain)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 22)
+    }
+
+    private var text: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Oznámení jsou vypnutá").font(.headline).foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
+            Text("Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče.").font(Typo.caption).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var button: some View {
+        Button {
+            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+        } label: {
+            Text("Otevřít Nastavení").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 16).frame(minHeight: 44)
+                .background(Palette.button, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -300,7 +342,7 @@ private struct ReminderListRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityHint(Text("Čas a dny"))
+            .accessibilityHint(Text("Otevře čas a dny."))
             Toggle(isOn: $isOn) { EmptyView() }
                 .toggleStyle(AurinToggleStyle())
                 .fixedSize()
@@ -497,7 +539,7 @@ private struct MealReminderRow: View {
         SettingsToggle(title: meal.title, isOn: $on)
         if on {
             SettingsDivider()
-            ReminderTimeRow(title: "Připomenout v", minutes: $time)
+            ReminderTimeRow(title: "Obvykle v", minutes: $time)
         }
     }
 }

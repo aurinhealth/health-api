@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + [CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
+        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + Reminders.mealNotificationCategories + [Reminders.workoutNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
                                                                                     MorningPush.category, IdleWorkout.category]))
         center.delegate = self
         return true
@@ -126,6 +126,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         if content.categoryIdentifier == IdleWorkout.categoryID {
             IdleWorkout.answer(response)
+            return
+        }
+        // "Open workout" and "Reschedule" on the workout reminder, "Log lunch" on a meal's.
+        if content.categoryIdentifier == Reminders.workoutCategory {
+            if response.actionIdentifier == Reminders.workoutOpenAction { QuickActions.shared.pick = QuickActions.Pick(id: "today") }
+            if response.actionIdentifier == Reminders.workoutMoveAction { QuickActions.shared.pick = QuickActions.Pick(id: "weekPlan") }
+            return
+        }
+        if content.categoryIdentifier.hasPrefix(Reminders.mealCategoryPrefix) {
+            if response.actionIdentifier == Reminders.mealLogAction, let meal = content.userInfo["meal"] as? String {
+                QuickActions.shared.pick = QuickActions.Pick(id: "meal." + meal)
+            }
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {
