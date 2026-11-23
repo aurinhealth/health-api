@@ -26,6 +26,8 @@ test('account setup works without providers, persists per account and allows ski
  await assert.rejects(completeOnboarding(env,{weightKg:500}),/hmotnost/);
  const result=await completeOnboarding(env,input());assert.equal(result.baseline.ready,true);assert.ok(result.baseline.sportDaily>0);
  assert.equal((await onboardingStatus(env)).completed,true);assert.equal((await onboardingStatus({...env,DB:b,USER_ID:2})).completed,false);
+ // The weight says where it came from, so the setup never names a service it did not come from.
+ assert.equal((await onboardingStatus(env)).weightSource,'manual');assert.equal((await onboardingStatus({...env,DB:b,USER_ID:2})).weightSource,null);
  await completeOnboarding(env,input());assert.equal((await a.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=? AND source_family='manual'").bind(1).first()).n,1);
  assert.equal(await hasRecentActivityData(a),false);
 });

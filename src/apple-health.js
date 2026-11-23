@@ -409,6 +409,10 @@ export const deleteSexualActivity = (db, userId) =>
 export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() } = {}) {
   const input = Array.isArray(body.records) ? body.records : [];
   if (input.length > MAX_RECORDS) return { status: "error", code: 413, message: "Too many records in one request." };
+  // The app sends connectedOnly since the 617 review: its uploads are kept only for an
+  // account that connected Apple Health itself (PUT), so a first upload never connects
+  // it. Older builds do not send it and are kept as before.
+  if (body.connectedOnly === true && !(await appleHealthStatus(db, userId)).connected) return { status: "error", code: 409, message: "Apple Health is not connected for this account." };
   // Sexual activity only with its own consent in Nastavení → Deník, as the
   // server stored it (not what the app says); otherwise it is not kept and
   // what came before goes.
@@ -510,6 +514,15 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
     status: "ok", saved, changed, skipped: input.length - sent.length, removed, replaced, ...(body.food ? { food: food.saved } : {}),
     meaningful, foodChanged: Number(food.changed || 0) > 0, workouts: [...written, ...deleted].some(r => r.data_type === "exercise")
   };
+}
+
+// Connecting (the user's Connect in the app): the account's record that it reads
+// Apple Health, before the first upload. One already connected stays as it is.
+export async function connectAppleHealth(db, userId) {
+  await db.prepare("CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))").run();
+  await db.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,?,'connected','{}',datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='connected',finished_at=NULL,details_json='{}',updated_at=excluded.updated_at WHERE sync_status.status='disconnected'")
+    .bind(userId, STATUS).run();
+  return { status: "ok" };
 }
 
 // Disconnecting: like the other services, the data Aurin already has stays
