@@ -4455,6 +4455,7 @@
 "Snězeno dnes" = "Eaten today";
 "%@ navíc" = "%@ over";
 "Otevře, z čeho se cíl skládá" = "Opens where the target comes from";
+"Otevře kalorie po dnech" = "Opens your calories day by day";
 "Nastav si denní cíl" = "Set your daily target";
 "Cíl se řídí tvou váhou, výškou, tréninkem a cílem." = "Your target follows your weight, height, training and goal.";
 "Nastavit cíl" = "Set target";

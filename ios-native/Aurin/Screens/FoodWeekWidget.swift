@@ -59,7 +59,18 @@ struct FoodWeekWidget: View {
                 }
             }
             .padding(.horizontal, 4)
-            card(week)
+            // The card opens the Calories detail, its days against their targets
+            // (611 point 6: every card on Food has its detail).
+            if let food = model.food, week?.target != nil {
+                NavigationLink { CaloriesDetailView(food: food) } label: { card(week) }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.tr("Týdenní kalorie") + ", " + L10n.f("Snězeno %@ z %@ kcal", Fmt.int(week?.eaten), Fmt.int(week?.target)))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(L10n.tr("Otevře kalorie po dnech"))
+            } else {
+                card(week)
+            }
         }
         // Again when the day's food changes (a meal added on Jídlo).
         // Not for a day drawn beside during a swipe (DayPager): no request for it.
@@ -91,11 +102,20 @@ struct FoodWeekWidget: View {
         HStack(alignment: .lastTextBaseline, spacing: 6) {
             Text(Fmt.int(week.eaten)).font(Typo.number(38)).foregroundStyle(over ? Palette.red : Palette.ink)
             Text(L10n.f("z %@ kcal snědeno", Fmt.int(target))).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                .minimumScaleFactor(0.8).layoutPriority(1)
+            Spacer(minLength: 0)
+            if model.food != nil {
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
+                    .accessibilityHidden(true)
+            }
         }
         WeekCaloriesBar(base: week.base ?? target, exercise: week.exercise ?? 0, eaten: week.eaten, byToday: week.byToday)
         LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 10) {
             legend(Circle().strokeBorder(Palette.ink, lineWidth: 1.5), "Celkem na týden", Fmt.int(target))
-            legend(Circle().fill(Palette.gold), "Denní příjem", Fmt.int(week.base ?? target))
+            // Base as the day's row under the bar on Food, here the week's sum
+            // (611 point 6: "Daily intake" showed the week's). Exercise holds the
+            // plans ahead too, so not the day's "Workouts".
+            legend(Circle().fill(Palette.gold), "Základ", Fmt.int(week.base ?? target))
             legend(Circle().fill(Palette.rust), "Cvičení", "+" + Fmt.int(week.exercise ?? 0))
             legend(Circle().fill(over ? Palette.red : Palette.ink), "Snězeno", Fmt.int(week.eaten))
         }
@@ -123,7 +143,8 @@ struct FoodWeekWidget: View {
         if let perDay = week.perDay {
             left = left + Text(verbatim: ", " + L10n.f("zhruba %@ na den", Fmt.int(perDay)))
             // Today's part of it: "1 150 kcal more today", or past it the rest is the days ahead's.
-            if let today = week.todayLeft {
+            // Not when today's part is the same as every day's: it would say it twice (611 point 6).
+            if let today = week.todayLeft, today <= 0 || abs(today - perDay) >= 50 {
                 left = left + Text(verbatim: "\n") + (today > 0
                     ? Text(L10n.f("Dnes ještě %@ kcal", Fmt.int(today))).foregroundColor(Palette.ink) + Text(verbatim: L10n.f(", pak zhruba %@ na den", Fmt.int(perDay)))
                     : Text(L10n.tr("Dnešek má svůj díl, zbytek patří dalším dnům")))

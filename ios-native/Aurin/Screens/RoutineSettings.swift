@@ -142,6 +142,8 @@ struct MealSlotsSettingsView: View {
                         }))
                 }
             }
+            // Taps before the profile is in would be overwritten by it.
+            .disabled(store == nil)
             if saved {
                 Label("Uloženo. Cíle jídel se přepočítaly.", systemImage: "checkmark.circle.fill")
                     .font(Typo.small).foregroundStyle(Palette.green)
@@ -153,6 +155,9 @@ struct MealSlotsSettingsView: View {
         .settingsSaveBar(enabled: store != nil && chosen != original, saving: store?.saving == true) { Task { await save() } }
         .task {
             guard store == nil else { return }
+            // The meals Food shows straight away, not the usual five while the
+            // profile loads (611 point 5: Morning snack on here, not on Food).
+            if let slots = model.food?.mealSlots, !slots.isEmpty { chosen = Set(slots); original = chosen }
             let s = SettingsStore(api: model.api, demo: model.demo)
             await s.load()
             store = s
