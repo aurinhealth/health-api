@@ -101,3 +101,15 @@ test("the gym plan saved in the app counts toward the day's energy, not as a sec
   const after = await (await legacy.fetch(new Request("https://internal/analysis/daily?date=" + DATE), { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["intervals"] }, ctx)).json();
   assert.equal(after.nutrition.calorieBreakdown.workouts.filter(w => w.kind === "planned").length, 0);
 });
+
+test("the gym plan counts once when its copy is paired with a watch workout", async () => {
+  const d = db();
+  d.sqlite.exec("CREATE TABLE gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT, PRIMARY KEY (user_id, workout_date)); CREATE TABLE gym_plan_cancellations (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, event_json TEXT, cancelled_at TEXT, PRIMARY KEY (user_id, workout_date));");
+  const head = [["ADAPTIVNÍ SILOVÝ TRÉNINK"], [""], ["Datum", DATE], [], [], [], ["Typ", "Cvik", "Série", "Plán kg", "Plán reps"]];
+  d.sqlite.prepare("INSERT INTO gym_plans (user_id, workout_date, values_json) VALUES (7, ?, ?)").run(DATE, JSON.stringify([...head, ["WORK", "Lat pulldown", 1, 40, "8"]]));
+  plan(d, "9100", { name: "Pull", type: "WeightTraining", moving_time: 0 });
+  activity(d, "i9", { name: "Evening session", type: "Workout", moving_time: 3600, calories: 300, paired_event_id: 9100 });
+  const res = await (await legacy.fetch(new Request("https://internal/analysis/daily?date=" + DATE), { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["intervals"] }, ctx)).json();
+  assert.deepEqual(res.training.matched.map(m => m.actualId), ["activity:i9"]);
+  assert.equal(res.nutrition.calorieBreakdown.workouts.filter(w => w.kind === "planned").length, 0);
+});

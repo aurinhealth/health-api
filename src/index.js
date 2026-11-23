@@ -2118,10 +2118,10 @@ async function energyForDate(env, date) {
   // day's strength session when nothing from Intervals.icu stands for it with
   // a length (its own planned:local-… copy has none, or there is no copy).
   // Its length is the plan's own estimate. Today and ahead only, while no
-  // strength session of the day is done. Only for energy: the day's planned
+  // strength session of the day is done or its plan paired. Only for energy: the day's planned
   // list (training.planned) stays as it is, the app shows the gym plan itself.
   let energyPlanned = unmatchedPlanned;
-  if (date >= localToday() && !completed.some(activityIsStrength) && !unmatchedPlanned.some(w => activityIsStrength(w) && w.durationHours)) {
+  if (date >= localToday() && !completed.some(activityIsStrength) && !matchedPlannedWorkouts.some(m => activityIsStrength(m.planned)) && !unmatchedPlanned.some(w => activityIsStrength(w) && w.durationHours)) {
     const gym = await appGymPlanWorkout(env.DB, env.USER_ID, date).catch(error => { console.error("Gym plan read failed", error.message); return null; });
     if (gym) energyPlanned = [...unmatchedPlanned.filter(w => !activityIsStrength(w)), gym];
   }
