@@ -39,7 +39,7 @@ struct SettingsProfileCard: View {
         var parts: [String] = []
         if let years, years > 0 { parts.append(L10n.f("%@ let", String(years))) }
         if let height = p["height"]?.number, height > 0 { parts.append(Units.lengthText(height)) }
-        if let weight = model.today?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
+        if let weight = model.settingsToday?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
@@ -63,6 +63,19 @@ struct SettingsProfileCard: View {
         }
         .buttonStyle(PressableCardStyle())
         .accessibilityLabel([L10n.tr("Účet"), name, details ?? ""].filter { !$0.isEmpty }.joined(separator: ", "))
+    }
+}
+
+extension AppModel {
+    /// Today's data for Nastavení, whichever day Today or Food shows: the goals,
+    /// the weight and the drinks sheet are today's, never the chosen day's
+    /// (Tapwright 611, bod 10: calories and drinks changed with the day). While
+    /// another day is chosen, today's copy saved on the phone (SnapshotCache).
+    var settingsToday: TodaySnapshot? {
+        guard selectedDate != nil else { return today }
+        guard let saved = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value,
+              saved.date == Self.localDate(Date()) else { return nil }
+        return saved
     }
 }
 
@@ -149,7 +162,7 @@ struct SettingsGoalsCard: View {
     }
 
     var cells: [Cell] {
-        let today = model.today
+        let today = model.settingsToday
         let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
         let kcal = today?.nutrition.target
         let water = Self.waterGoal(store, today?.nutrition.water)
