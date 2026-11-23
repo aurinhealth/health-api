@@ -81,7 +81,7 @@ struct RootView: View {
         switch tab {
         case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true }).environment(\.tabActions, tabActions)
             .environment(\.tabGlow, Palette.Glow.today)
-        case .training: TrainingView().environment(\.tabActions, tabActions).environment(\.compactTabBar, compactBar)
+        case .training: TrainingView().environment(\.tabActions, tabActions)
             .environment(\.tabGlow, Palette.Glow.training)
         case .food: FoodView().environment(\.tabActions, tabActions).environment(\.tabGlow, Palette.Glow.food)
         case .health: HealthView().environment(\.tabActions, tabActions).environment(\.tabGlow, Palette.Glow.health)

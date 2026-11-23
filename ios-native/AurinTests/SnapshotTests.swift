@@ -183,6 +183,19 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Čas", "Energie"])
     }
 
+    /// A workout still to come reads as its card on Training: "1 h 18", Strain,
+    /// never "78 min, 47 TSS" (611 retest, point 3).
+    func testDayTimelinePlannedLine() {
+        let today = DemoData.today
+        XCTAssertEqual(DayTimelineRows.plannedLine(today.plan[1], strainNow: nil), "45 min")
+        let ride = TodaySnapshot.PlanItem(kind: "workout", time: nil, title: "Tempo", detail: "78 min, 47 TSS", done: false, status: "planned",
+                                          session: today.plan[0].session)
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
+        // Today: where it takes the day's strain, as Training's card counts it.
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
+        XCTAssertEqual(Fmt.duration(78), "1 h 18")
+    }
+
     /// A nap sits among what was done in the order of the day.
     func testDayTimelineNap() {
         var today = DemoData.today
