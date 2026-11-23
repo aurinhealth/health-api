@@ -151,3 +151,16 @@ test("a ride only from Wahoo tires the legs, and its Apple Health or Intervals.i
   assert.equal(both.recent.length, 1);
   assert.equal(muscle(both, "quads").hours, muscle(alone, "quads").hours);
 });
+
+test("each muscle has its own last training day, not its body part's (617 review #8)", () => {
+  const history = [...sets("Barbell back squat", 3, { date: "2026-10-01" }), ...sets("Leg extension Prime", 3, { date: "2026-10-06" }), ...sets("DB curl", 2, { date: "2026-10-03" })];
+  const r = muscleFatigue({ sets: [], history, now, today });
+  // Legs were last trained on the 6th, but only the quads: the adductors' own day is the squats on the 1st.
+  assert.equal(r.groups.find(g => g.id === "legs").lastDate, "2026-10-06");
+  assert.equal(muscle(r, "quads").lastDate, "2026-10-06");
+  assert.equal(muscle(r, "adductors").lastDate, "2026-10-01");
+  assert.equal(muscle(r, "biceps").lastDate, "2026-10-03");
+  assert.equal(muscle(r, "calves").lastDate, null);
+  // A day after today does not count.
+  assert.equal(muscle(muscleFatigue({ sets: [], history: sets("DB curl", 2, { date: "2026-10-09" }), now, today }), "biceps").lastDate, null);
+});

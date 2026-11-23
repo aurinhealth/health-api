@@ -313,8 +313,8 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při stahování, nádech při povolování.",
   "video": {
-   "id": "EfvPfLOuC3Y",
-   "title": "LAT PULLDOWN PROPER FORM 🔥 Build WIDER LATS FAST"
+   "id": "xyoFXl-k644",
+   "title": "Wide Grip Pulldown"
   },
   "query": "lat pulldown proper form"
  },
