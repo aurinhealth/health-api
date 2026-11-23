@@ -784,7 +784,18 @@ struct ExerciseHistorySheet: View {
     var inWorkout = false
     /// Inside the exercise sheet's History tab (TechniqueSheet): no name, Close or own scroll.
     var embedded = false
+    /// The plan's sets and reps ("4", "5-8") for Next time, when the sheet has a plan.
+    var planSets: Int? = nil
+    var planReps: String? = nil
     @State private var metric = Metric.heaviest
+
+    /// A machine in pounds: its weights, steps and records in pounds (611.1:
+    /// Pec deck 100 lb was 45.36 kg, "PR +0.36 kg").
+    private var lb: Bool { LiftUnits.pounds(exercise?.name ?? name) }
+    private var unit: String { LiftWeight.unit(machineLb: lb) }
+    private func weight(_ kg: Double) -> String { GymCoach.shown(kg, machineLb: lb) }
+    /// A volume (kg × reps) in the screen's unit, unrounded to a machine step.
+    private func volumeValue(_ kg: Double) -> Double { lb ? Units.pounds(kg) : LiftWeight.shownValue(kg) }
 
     enum Metric: String, CaseIterable {
         case heaviest, oneRepMax, volume
@@ -845,7 +856,8 @@ struct ExerciseHistorySheet: View {
     }
 
     @ViewBuilder
-    private func content(_ exercise: GymHistory.Exercise) -> some View {
+    private func content(_ raw: GymHistory.Exercise) -> some View {
+        let exercise = GymCoach.shown(raw, machineLb: lb)
         if !inWorkout { nextTime(exercise) }
         records(exercise)
         sessions(exercise)
@@ -854,24 +866,26 @@ struct ExerciseHistorySheet: View {
 
     // MARK: Next time
 
-    /// The coach's suggestion as Training mode would make it tomorrow.
+    /// The last session one step on: the machine's step and the plan's sets
+    /// and reps (611.1: "47.86 kg × 8" against 3 × 10–15, 2 sets against 4).
     @ViewBuilder
     private func nextTime(_ exercise: GymHistory.Exercise) -> some View {
-        let history = GymHistory(exercises: [exercise])
-        let s = GymCoach.suggest(exercise.name, history: history, before: ISODay.shift(APIClient.localToday(), 1), catalog: nil)
-        if let first = s.work.first {
+        if let last = exercise.sessions.first {
+            let range = GymSessionMath.repRange(planReps)
+            let next = GymCoach.nextTime(last, step: GymSessionMath.step(exercise, machineLb: lb), sets: planSets, reps: range)
+            let reps = range != nil ? Fmt.range(planReps ?? "") : String(next.reps)
             VStack(alignment: .leading, spacing: 4) {
                 SectionLabel(text: "Příště")
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if let kg = first.kg {
-                        NumberText(value: GymCoach.shown(kg), unit: Units.weightUnit, size: 28)
-                        Text(verbatim: "× \(first.reps), " + L10n.plural("%lld sérií", s.work.count))
+                    if let kg = next.kg {
+                        NumberText(value: weight(kg), unit: unit, size: 28)
+                        Text(verbatim: "× \(reps), " + L10n.plural("%lld sérií", next.sets))
                     } else {
-                        Text(verbatim: L10n.plural("%lld opakování", first.reps) + ", " + L10n.plural("%lld sérií", s.work.count))
+                        Text(verbatim: (range != nil ? reps + " " + L10n.tr("opakování") : L10n.plural("%lld opakování", next.reps)) + ", " + L10n.plural("%lld sérií", next.sets))
                     }
                 }
                 .font(.body).foregroundStyle(Palette.secondary)
-                Text(verbatim: Self.nextLine(exercise.sessions[0], next: first)).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: nextLine(last, kg: next.kg, hit: next.hit)).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
@@ -883,12 +897,12 @@ struct ExerciseHistorySheet: View {
 
     /// "Minule 38 × 9, 9, 7. Příště zůstaň na 38 kg a dotáhni všechna opakování.":
     /// Training mode's line (GymCoach.suggest), for next time instead of today.
-    static func nextLine(_ last: GymHistory.Session, next: GymSuggestion.Planned) -> String {
-        let hit = GymCoach.allHit(last), reps = GymCoach.repsList(last)
-        if let top = GymCoach.topKg(last), let kg = next.kg {
+    private func nextLine(_ last: GymHistory.Session, kg: Double?, hit: Bool) -> String {
+        let reps = GymCoach.repsList(last)
+        if let top = GymCoach.topKg(last), let kg {
             return hit
-                ? L10n.f("Minule %@ × %@ a šlo to. Příště zkus %@ %@.", GymCoach.shown(top), reps, GymCoach.shown(kg), Units.weightUnit)
-                : L10n.f("Minule %@ × %@. Příště zůstaň na %@ %@ a dotáhni všechna opakování.", GymCoach.shown(top), reps, GymCoach.shown(kg), Units.weightUnit)
+                ? L10n.f("Minule %@ × %@ a šlo to. Příště zkus %@ %@.", weight(top), reps, weight(kg), unit)
+                : L10n.f("Minule %@ × %@. Příště zůstaň na %@ %@ a dotáhni všechna opakování.", weight(top), reps, weight(kg), unit)
         }
         return hit ? L10n.f("Minule %@ opakování a šlo to. Příště zkus o jedno víc.", reps)
                    : L10n.f("Minule %@ opakování. Příště je zkus dotáhnout.", reps)
@@ -898,15 +912,14 @@ struct ExerciseHistorySheet: View {
 
     @ViewBuilder
     private func records(_ exercise: GymHistory.Exercise) -> some View {
-        let unit = Units.weightUnit
         HStack(alignment: .top, spacing: 8) {
             if let heaviest = GymCoach.heaviestSet(exercise), let kg = heaviest.lift.kg {
-                record("Nejtěžší série", GymCoach.shown(kg), unit + " × " + Fmt.int(heaviest.lift.reps ?? 0), Fmt.dayMonthShort(heaviest.date))
+                record("Nejtěžší série", weight(kg), unit + " × " + Fmt.int(heaviest.lift.reps ?? 0), Fmt.dayMonthShort(heaviest.date))
                 if let max = GymCoach.oneRepMax(exercise) {
-                    record("Odhad 1RM", GymCoach.shown(max.kg), unit, L10n.tr("odhad") + ", " + Fmt.dayMonthShort(max.date))
+                    record("Odhad 1RM", weight(max.kg), unit, L10n.tr("odhad") + ", " + Fmt.dayMonthShort(max.date))
                 }
                 if let volume = GymCoach.bestVolume(exercise) {
-                    record("Nejvyšší objem", Fmt.int(LiftWeight.shownValue(volume.kg)), unit, L10n.tr("jeden trénink") + ", " + Fmt.dayMonthShort(volume.date))
+                    record("Nejvyšší objem", Fmt.int(volumeValue(volume.kg)), unit, L10n.tr("jeden trénink") + ", " + Fmt.dayMonthShort(volume.date))
                 }
             } else {
                 // Body weight: reps instead of kilos.
@@ -944,11 +957,11 @@ struct ExerciseHistorySheet: View {
                         Text(verbatim: session.date == realToday ? L10n.tr("Dnes") : Fmt.weekdayShort(session.date) + " " + Fmt.dayMonthShort(session.date))
                             .font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                         Spacer()
-                        if let change = GymCoach.change(session, from: previous) {
+                        if let change = GymCoach.change(session, from: previous, machineLb: lb) {
                             Text(verbatim: change).font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
                         }
                     }
-                    SetChips(sets: session.sets, record: prs[session.date])
+                    SetChips(sets: session.sets, record: prs[session.date], machineLb: lb)
                     Text(verbatim: meta(session)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -964,22 +977,21 @@ struct ExerciseHistorySheet: View {
     private func meta(_ session: GymHistory.Session) -> String {
         let volume = GymCoach.volume(session)
         let sets = L10n.plural("%lld sérií", session.sets.count)
-        return volume > 0 ? sets + ", " + Fmt.int(LiftWeight.shownValue(volume)) + " " + Units.weightUnit : sets
+        return volume > 0 ? sets + ", " + Fmt.int(volumeValue(volume)) + " " + unit : sets
     }
 
     // MARK: Progress
 
     @ViewBuilder
     private func progress(_ exercise: GymHistory.Exercise) -> some View {
-        let unit = Units.weightUnit
         let points: [(date: String, value: Double)] = exercise.sessions.reversed().compactMap { session in
             guard let v = value(session) else { return nil }
             return (session.date, v)
         }
         if points.count >= 3, let first = points.first, let last = points.last,
            let lo = points.map(\.value).min(), let hi = points.map(\.value).max() {
-            let shown = { (v: Double) in LiftWeight.shownValue(v) }
-            let text = { (v: Double) in metric == .volume ? Fmt.int(shown(v)) + " " + unit : GymCoach.shown(v) + " " + unit }
+            let shown = { (v: Double) in volumeValue(v) }
+            let text = { (v: Double) in metric == .volume ? Fmt.int(shown(v)) + " " + unit : weight(v) + " " + unit }
             let change = last.value - first.value
             HStack(alignment: .firstTextBaseline) {
                 Text("Vývoj").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
@@ -1025,28 +1037,29 @@ struct ExerciseHistorySheet: View {
 private struct SetChips: View {
     let sets: [GymHistory.Lift]
     let record: Int?
+    var machineLb = false
 
     var body: some View {
         FlowLayout(spacing: 6) {
             ForEach(Array(sets.enumerated()), id: \.offset) { i, lift in
                 let pr = i == record
                 HStack(spacing: 4) {
-                    Text(verbatim: Self.text(lift)).font(Typo.small.weight(.medium))
+                    Text(verbatim: Self.text(lift, machineLb: machineLb)).font(Typo.small.weight(.medium))
                     if pr { Text("PR").font(Typo.tiny.weight(.bold)) }
                 }
                 .foregroundStyle(pr ? Palette.amber : Palette.ink)
                 .padding(.horizontal, 9).padding(.vertical, 4)
                 .background(pr ? Palette.amberSoft : Palette.track, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .accessibilityLabel(Self.text(lift) + (pr ? ", " + L10n.tr("Nový rekord") : ""))
+                .accessibilityLabel(Self.text(lift, machineLb: machineLb) + (pr ? ", " + L10n.tr("Nový rekord") : ""))
             }
         }
     }
 
     /// "38 × 9", "12" with body weight.
-    static func text(_ lift: GymHistory.Lift) -> String {
+    static func text(_ lift: GymHistory.Lift, machineLb: Bool = false) -> String {
         let reps = Fmt.int(lift.reps ?? 0)
         guard let kg = lift.kg, kg > 0 else { return reps }
-        return GymCoach.shown(kg) + " × " + reps
+        return GymCoach.shown(kg, machineLb: machineLb) + " × " + reps
     }
 }
 

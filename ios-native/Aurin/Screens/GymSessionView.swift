@@ -144,7 +144,7 @@ struct GymSessionView: View {
             }
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-            TechniqueSheet(exercise: item.name, replace: { Task { try? await Task.sleep(for: .milliseconds(450)); alternativesFor = item.name } })
+            techniqueSheet(item.name)
         }
         .sheet(item: Binding(get: { alternativesFor.map { Named(name: $0) } }, set: { alternativesFor = $0?.name })) { item in
             AlternativesSheet(date: date, exercise: item.name, choose: { _ in },
@@ -763,6 +763,18 @@ struct Named: Identifiable {
     var id: String { name }
 }
 
+extension GymSessionView {
+    /// The exercise sheet with this workout's plan: "4 × 5–8, 52.5 kg", and its
+    /// sets and reps for History's Next time (611.1: 2 sets against the plan's 4).
+    fileprivate func techniqueSheet(_ name: String) -> some View {
+        let planned = day?.exercises.first { $0.name == name }
+        let work = planned?.sets.filter(\.work) ?? []
+        return TechniqueSheet(exercise: name, replace: { Task { try? await Task.sleep(for: .milliseconds(450)); alternativesFor = name } },
+                              plan: planned.map(ExerciseCard.summary), planSets: work.isEmpty ? nil : work.count,
+                              planReps: work.first?.plannedReps)
+    }
+}
+
 struct ExerciseCard: View {
     let exercise: GymExercise
     /// The rows of the sets that go to failure.
@@ -797,7 +809,9 @@ struct ExerciseCard: View {
         let reps = Fmt.range(first.plannedReps ?? first.reps ?? "")
         let count = reps.isEmpty ? L10n.plural("%lld sérií", work.count) : "\(work.count) × " + reps
         let pounds = LiftUnits.pounds(exercise.name)
-        let weight = LiftWeight.shown(first.plannedKg ?? first.kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) }
+        // 0 kg is body weight ("Decline Sit-Up 3 × 10–15, 0 kg", 611.1).
+        let kg = (first.plannedKg ?? first.kg).flatMap { (LiftWeight.number($0) ?? 0) > 0 ? $0 : nil }
+        let weight = LiftWeight.shown(kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) }
         return count + ", " + (weight ?? L10n.tr("vlastní váha"))
     }
 
@@ -922,6 +936,9 @@ struct TechniqueSheet: View {
     var replace: (() -> Void)?
     /// Under the name: "4 × 6–8, 62.5 kg" of the workout or the library.
     var plan: String?
+    /// The same plan's work sets and reps ("6-8") for History's Next time.
+    var planSets: Int?
+    var planReps: String?
     /// The history when the caller has it; loaded here otherwise.
     var history: GymHistory?
     /// In a running workout: History without "Next time".
@@ -940,10 +957,13 @@ struct TechniqueSheet: View {
     @State private var liked: Bool?
 
     init(exercise: String, replace: (() -> Void)? = nil, showHistory: Bool = false, plan: String? = nil,
+         planSets: Int? = nil, planReps: String? = nil,
          history: GymHistory? = nil, inWorkout: Bool = false, remove: (() -> Void)? = nil) {
         self.exercise = exercise
         self.replace = replace
         self.plan = plan
+        self.planSets = planSets
+        self.planReps = planReps
         self.history = history
         self.inWorkout = inWorkout
         self.remove = remove
@@ -1016,7 +1036,8 @@ struct TechniqueSheet: View {
     /// Historie: the same records and sessions as the history sheet.
     @ViewBuilder private var historyPage: some View {
         if let all = history ?? fetched {
-            ExerciseHistorySheet(name: exercise, exercise: all.exercise(exercise), inWorkout: inWorkout, embedded: true)
+            ExerciseHistorySheet(name: exercise, exercise: all.exercise(exercise), inWorkout: inWorkout, embedded: true,
+                                 planSets: planSets, planReps: planReps)
         } else {
             ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
         }
@@ -1509,12 +1530,16 @@ struct ExercisePhotos: View {
         VStack(spacing: 10) {
             TabView(selection: $page) {
                 ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Rectangle().fill(Palette.track)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // The photo fills a fixed frame: on its own, scaledToFill grows past the
+                    // page and the label slid off its left edge ("art" for Start, 611.1).
+                    Color.clear
+                        .overlay {
+                            AsyncImage(url: url) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Rectangle().fill(Palette.track)
+                            }
+                        }
                     .clipped()
                     .overlay(alignment: .bottomLeading) {
                         if labeled {

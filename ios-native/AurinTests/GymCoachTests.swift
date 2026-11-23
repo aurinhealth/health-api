@@ -118,4 +118,57 @@ final class GymCoachTests: XCTestCase {
         XCTAssertEqual(GymCoach.change(a, from: b), "+1 opakování")
         XCTAssertNil(GymCoach.change(b, from: b))
     }
+
+    /// 611.1: Pec deck in pounds. 100 lb after 45 kg (99.2 lb, the same plate)
+    /// is no record, and Next time is 105 lb for the plan's 3 sets.
+    func testAPoundMachineInItsOwnUnitAndStep() {
+        let raw = GymHistory.Exercise(name: "Pec deck", sessions: [
+            GymHistory.Session(date: "2026-11-22", sets: [lift(45.36, 15), lift(45.36, 15), lift(45.36, 15)]),
+            GymHistory.Session(date: "2026-11-15", sets: [lift(45, 12), lift(45, 12), lift(45, 12)])
+        ])
+        let shown = GymCoach.shown(raw, machineLb: true)
+        let same = GymHistory.Exercise(name: "Pec deck", sessions: [
+            GymHistory.Session(date: "2026-11-22", sets: [lift(45.36, 12)]),
+            GymHistory.Session(date: "2026-11-15", sets: [lift(45, 12)])
+        ])
+        XCTAssertEqual(GymCoach.recordSets(same), ["2026-11-22": 0], "unconverted, the conversion was a record")
+        XCTAssertEqual(GymCoach.recordSets(GymCoach.shown(same, machineLb: true)), [:])
+        XCTAssertNil(GymCoach.change(GymCoach.shown(same, machineLb: true).sessions[0], from: GymCoach.shown(same, machineLb: true).sessions[1], machineLb: true))
+        let heavier = GymHistory.Exercise(name: "Pec deck", sessions: [
+            GymHistory.Session(date: "2026-11-29", sets: [lift(Units.kgFromPounds(105), 12)])
+        ] + same.sessions)
+        XCTAssertEqual(GymCoach.recordSets(GymCoach.shown(heavier, machineLb: true)), ["2026-11-29": 0])
+        let step = GymSessionMath.step(shown, machineLb: true)
+        let next = GymCoach.nextTime(shown.sessions[0], step: step, sets: 3, reps: (10, 15))
+        XCTAssertEqual(next.sets, 3)
+        XCTAssertTrue(next.hit)
+        XCTAssertEqual(LiftWeight.machinePounds(next.kg ?? 0), 105)
+        // Short of the plan's top reps: the same 100 lb again.
+        let short = GymCoach.nextTime(GymCoach.shown(same, machineLb: true).sessions[0], step: step, sets: 3, reps: (10, 15))
+        XCTAssertFalse(short.hit)
+        XCTAssertEqual(LiftWeight.machinePounds(short.kg ?? 0), 100)
+    }
+
+    /// 611.1: Low row, plan 4 × 5–8, last time 2 sets in fives: 4 sets, 5 kg step.
+    func testNextTimeTakesThePlanAndTheMachineStep() {
+        let row = GymHistory.Exercise(name: "Low row", sessions: [
+            GymHistory.Session(date: "2026-11-22", sets: [lift(55, 8), lift(55, 8)]),
+            GymHistory.Session(date: "2026-11-15", sets: [lift(50, 8), lift(50, 8), lift(50, 8)])
+        ])
+        let next = GymCoach.nextTime(row.sessions[0], step: GymSessionMath.step(row), sets: 4, reps: (5, 8))
+        XCTAssertEqual(next.sets, 4)
+        XCTAssertEqual(next.kg, 60)
+        XCTAssertEqual(next.reps, 5)
+        // Without a plan: the last session's sets (at least 2) and the 2.5 kg step.
+        let free = GymCoach.nextTime(GymHistory.Session(date: "2026-11-22", sets: [lift(52.5, 8, 8)]), step: GymSessionMath.step(nil))
+        XCTAssertEqual(free.sets, 2)
+        XCTAssertEqual(free.kg, 55)
+    }
+
+    /// At the same weight the best set's reps, not the sum over different numbers of sets.
+    func testChangeAtTheSameWeightIgnoresTheNumberOfSets() {
+        let three = GymHistory.Session(date: "2026-11-22", sets: [lift(40, 12), lift(40, 12), lift(40, 12)])
+        let six = GymHistory.Session(date: "2026-11-15", sets: Array(repeating: lift(40, 11), count: 6))
+        XCTAssertEqual(GymCoach.change(three, from: six), "+1 opakování")
+    }
 }

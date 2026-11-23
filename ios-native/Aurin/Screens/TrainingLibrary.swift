@@ -1693,7 +1693,8 @@ struct ExerciseCatalog: View {
         }
         .sheet(item: $open) { ex in
             // The same exercise sheet as in a workout (concept a-knihovna 039).
-            TechniqueSheet(exercise: ex.name, plan: [ex.sets?.string, ex.reps?.string].compactMap { $0?.nilIfBlank }.joined(separator: " × "))
+            TechniqueSheet(exercise: ex.name, plan: [ex.sets?.string, ex.reps?.string].compactMap { $0?.nilIfBlank }.joined(separator: " × "),
+                           planSets: GymCoach.firstNumber(ex.sets), planReps: ex.reps?.string ?? GymCoach.firstNumber(ex.reps).map(String.init))
         }
     }
 
