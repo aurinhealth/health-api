@@ -340,11 +340,16 @@ extension View {
 extension View {
     /// The navigation bar shown or hidden: `toolbarVisibility` from iOS 18,
     /// before it the older `toolbar(_:for:)`, which the iOS 27 SDK deprecates.
+    /// Hidden, the page keeps the swipe from the left edge back (SwipeBack);
+    /// not in the unit tests' renders, where ImageRenderer draws a UIKit view
+    /// as a placeholder box.
     @ViewBuilder func navBarVisibility(_ visibility: Visibility) -> some View {
         if #available(iOS 18, *) {
             toolbarVisibility(visibility, for: .navigationBar)
+                .background { if visibility == .hidden && !ProStore.hostsUnitTests { SwipeBackEnabler() } }
         } else {
             toolbar(visibility, for: .navigationBar)
+                .background { if visibility == .hidden && !ProStore.hostsUnitTests { SwipeBackEnabler() } }
         }
     }
 }

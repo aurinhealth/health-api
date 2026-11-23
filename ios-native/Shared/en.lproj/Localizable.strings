@@ -4380,6 +4380,7 @@
 "Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna." = "Next step to your Aurin age: a week of sleep with your watch, or regular strength training.";
 "Sbírám tvoje data." = "Collecting your data.";
 "Posledních 12 týdnů" = "Last 12 weeks";
+"Posledních 30 dní" = "Last 30 days";
 "Spánek je tvoje největší šance." = "Sleep is your biggest chance.";
 "Posilovna je tvoje největší šance." = "Strength training is your biggest chance.";
 "Pohyb přes den je tvoje největší šance." = "Moving through the day is your biggest chance.";
@@ -5007,6 +5008,7 @@
 "Kůže chladněji" = "Skin cooler";
 "průměr %@ za týden" = "avg %@ this week";
 "Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is last night. Green arc is your usual 30-day range.";
+"Tečka je poslední noc s měřením. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní." = "Dot is the latest night with a measurement. Green arc is your usual 30-day range.";
 "roku mladší" = "years younger";
 "roku starší" = "years older";
 "Čára se začne kreslit po dvou týdnech odhadů." = "The line starts after two weeks of estimates.";
@@ -5162,6 +5164,11 @@
 "Klepnutím naplánuješ, podržením uložíš k sobě nebo smažeš" = "Tap to plan, hold to save it as yours or delete";
 "Zatím jediné měření. Čára se začne kreslit od druhého." = "Only one measurement so far. The line starts with the second.";
 "Minulá noc, teplota kůže" = "Last night, skin temperature";
+"%@, teplota kůže" = "%@, skin temperature";
+"%@, nejnižší tep v klidu" = "%@, lowest heart rate at rest";
+"%@, variabilita tepu" = "%@, heart rate variability";
+"%@, dechů za minutu ve spánku" = "%@, breaths a minute in sleep";
+"%@, kyslík v krvi ve spánku" = "%@, blood oxygen in sleep";
 "nejnovější" = "latest";
 "Každý řádek porovnává tvé nejnovější měření s tím tehdejším." = "Each row compares your latest measurement with the one from then.";
 "tepleji" = "warmer";
