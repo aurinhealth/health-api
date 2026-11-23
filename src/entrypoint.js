@@ -144,7 +144,7 @@ import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { scheduleIntervalsCatchUp, runIntervalsCatchUp } from "./intervals-catchup.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
-import { handleAppStoreNotification, forgetEndedPurchases } from "./app-store.js";
+import { handleAppStoreNotification, forgetEndedPurchases, proActive, subscriptionRow } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop } from "./whoop.js";
@@ -163,7 +163,7 @@ import { needsAIAccess, aiRouteFeature } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
-import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues } from "./push.js";
+import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
 import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
@@ -901,7 +901,8 @@ async function morningPush(env, ctx, options = {}) {
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
   await morningPushNote(env, { reason: 'started' });
-  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })), hide: hidesValues(state) })
+  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })), hide: hidesValues(state),
+    coach: async () => !paywallOn(env) || proActive(env, await subscriptionRow(env)) })
     .catch(async error => { await morningPushNote(env, { reason: 'error', message: String(error?.message || error).slice(0, 200) }); throw error; });
   await morningPushNote(env, result);
   return result;
@@ -941,6 +942,10 @@ async function coachPush(env, ctx) {
   if (zoneDue) await claim('coach-zone', state.zone.changed);
   if (morningDue) await claim('coach-am', date);
   if (eveningDue) await claim('coach-pm', date);
+  // The coach's own messages are part of Aurin Pro (Notifications concept v3: "Part of Aurin Pro");
+  // the morning readiness stays free. Answers to the athlete's own replies still come.
+  // Read only when a check is due and after it is claimed, so it runs once, not every 5 minutes.
+  if (paywallOn(env) && !proActive(env, await subscriptionRow(env).catch(() => null))) return { sent: 0, reason: 'no-pro' };
   let nudge = zoneDue ? coachNudge({ date, hour, zone: state.zone }) : null;
   if (!nudge && (morningDue || eveningDue) && state.status === 'active') {
     // The coach's inputs when a card has just made them, else only what the push reads.
@@ -965,7 +970,7 @@ async function coachPush(env, ctx) {
   const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date, account: db.userId } }, hide }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date, account: db.userId } }, hide, thread: COACH_THREAD }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -2717,7 +2722,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;
     for(const device of await listPushTokens(env.DB)){
-      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data,hide}).catch(error=>({ok:false,error:error.message}));
+      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data,hide,thread:COACH_THREAD}).catch(error=>({ok:false,error:error.message}));
       if(r.ok)sent++;else if(r.gone)await deletePushToken(env.DB,device.token);else console.error('Coach reply push not delivered',r.status||'',r.reason||r.error||'');
     }
     return Response.json({status:answered?'ok':'error',chatId,sent},{headers:{'Cache-Control':'no-store'}});

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest, hidesValues, privateAlert } from "../src/push.js";
+import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest, hidesValues, privateAlert, nightWords } from "../src/push.js";
 import { withLang } from "../src/lang.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -166,8 +166,11 @@ test("hidden values: the banner says only that the morning is in, the numbers wa
   assert.doesNotMatch(JSON.stringify(body.aps), /72/);
   // No ring on the banner: the service extension draws it only from a top-level readiness.
   assert.equal(body.readiness, undefined);
-  assert.deepEqual(body.private, { title: "Připravenost 72 · Dobrý den na tvrdý trénink", body: "Nic naplánováno. Dobrý den na těžší trénink.", readiness: { score: 72, zone: "green" } });
+  assert.deepEqual(body.private, { title: "Připravenost 72 · Dobrý den na tvrdý trénink", body: "Nic naplánováno. Dobrý den na těžší trénink.", readiness: { score: 72, zone: "green" },
+    layout: { title: "Připravenost 72", subtitle: "Dobrý den na tvrdý trénink", body: "Nic naplánováno. Dobrý den na těžší trénink.", label: "Připravenost", pill: "v obvyklém rozmezí", advice: "Nic naplánováno. Dobrý den na těžší trénink.", coach: "Kouč" } });
+  assert.equal(body.layout, undefined);
   assert.equal(body.aps.category, "MORNING_READINESS");
+  assert.equal(body.aps["thread-id"], "aurin.coach");
   assert.equal(body.aps["content-available"], 1);
 });
 
@@ -298,6 +301,8 @@ test("the subtitle shows the night and the baselines, the body today's plan", ()
   const ride = [{ title: "Threshold 4×8 min", sport: "ride" }];
   assert.deepEqual(withLang("en", () => readinessMessage({ score: 66, zone: "yellow", ...night, planned: ride })), {
     alert: { title: "Readiness 66 · Keep it steady today", subtitle: "Sleep 6:40 · HRV −14% · Resting HR +2", body: "Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day." },
+    layout: { title: "Readiness 66", subtitle: "Keep it steady today", body: "Sleep 6 h 40. Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day.",
+      label: "Readiness", pill: "below your usual range", night: "Sleep 6 h 40.", advice: "Keep it easy in Z2 instead, intervals another day.", workout: { title: "Threshold 4×8 min", sport: "ride" } },
     zone: "yellow", verdict: "steady"
   });
   assert.deepEqual(readinessMessage({ score: 66, zone: "yellow", ...night, planned: ride }).alert.subtitle, "Spánek 6:40 · HRV −14 % · Klidový tep +2");
@@ -358,7 +363,7 @@ test("the morning push waits for last night and never says 'intervals' to a sick
   for (const lang of ["cs", "en"]) assert.doesNotMatch(withLang(lang, () => readinessMessage({ score: 80, zone: "green", flags: ["wrist_temp_elevated"] })).alert.body, /nemoc|sick|ill\b|infek|infect|fever|horečk|doctor|lékař|\brest\b|odpočív/i, lang);
   // A green score with a sign of illness gets an amber ring, never a green one.
   assert.equal(signs.zone, "yellow");
-  assert.deepEqual(readinessMessage({ score: 80, zone: "green", flags: ["checkin_sick"] }), { alert: { title: "Připravenost 80 · Dnes odpočinek", body: "Dej tělu klid." }, zone: "red", verdict: "rest" });
+  assert.deepEqual(readinessMessage({ score: 80, zone: "green", flags: ["checkin_sick"] }), { alert: { title: "Připravenost 80 · Dnes odpočinek", body: "Dej tělu klid." }, layout: { title: "Připravenost 80", subtitle: "Dnes odpočinek", body: "Dej tělu klid.", label: "Připravenost", pill: "pod obvyklým rozmezím", advice: "Dej tělu klid." }, zone: "red", verdict: "rest" });
   assert.equal(readinessMessage({ score: 80, zone: "green", athleteState: "injured", planned: [{ title: "Intervaly", sport: "ride" }] }).alert.body, "Intervaly dnes vynech a dej tělu klid.");
   _resetPushForTest();
   const { env } = setup();
@@ -421,3 +426,51 @@ test("a night under 3 hours waits for the other device's upload like a missing n
   assert.equal((await sendMorningReadiness(env, { readiness, now: MORNING, fetchImpl })).reason, "waiting-for-sleep");
   assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T08:30:00Z"), fetchImpl })).sent, 1);
 });
+
+test("the concept's morning banner: Readiness 78, the verdict, the night in words and the advice (no dots)", () => {
+  const m = withLang("en", () => readinessMessage({ score: 78, zone: "green", sleep: { minutes: 414 }, hrv: { value: 68, baseline: 66, low: 60, high: 74 },
+    planned: [{ title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 }] }));
+  assert.deepEqual(m.layout, { title: "Readiness 78", subtitle: "Good day for a hard workout", body: "Sleep 6 h 54, HRV in your usual range. Today's plan: Upper body strength. Your body is ready, go for it.",
+    label: "Readiness", pill: "in your usual range", night: "Sleep 6 h 54, HRV in your usual range.", advice: "Your body is ready, go for it.",
+    workout: { title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 } });
+  assert.doesNotMatch(JSON.stringify(m.layout), /·/);
+  // Older builds keep parsing the old alert.
+  assert.match(m.alert.title, /^Readiness 78 · /);
+});
+
+test("the night in words: HRV under, in or above the usual range, never a cause", () => {
+  withLang("en", () => {
+    assert.equal(nightWords({ sleep: { minutes: 340 }, hrv: { value: 52, low: 60, high: 74 } }), "Sleep 5 h 40, HRV under your usual range.");
+    assert.equal(nightWords({ hrv: { value: 80, low: 60, high: 74 } }), "HRV above your usual range.");
+    assert.equal(nightWords({ sleep: { minutes: 420 }, hrv: { value: 70 } }), "Sleep 7 h 00.");
+    assert.equal(nightWords({ sleep: { minutes: 420 }, noSleep: true }), "");
+  });
+  assert.equal(withLang("cs", () => nightWords({ sleep: { minutes: 414 }, hrv: { value: 68, low: 60, high: 74 } })), "Spánek 6 h 54, HRV v obvyklém rozmezí.");
+});
+
+test("today's workouts carry their start time and length for the morning held down", async () => {
+  const { todayWorkouts } = await import("../src/app-today.js");
+  assert.deepEqual(todayWorkouts([{ kind: "workout", status: "planned", title: "Upper body strength", sport: "strength", session: { time: "17:30", minutes: 45 } },
+    { kind: "workout", status: "done", title: "Easy ride", sport: "ride" }]), [{ title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 }]);
+});
+
+test("held down, the morning shows the coach's card only when the coach is in the plan", async () => {
+  _resetPushForTest();
+  for (const coach of [true, false]) {
+    const { env } = setup();
+    await savePushToken(env.DB, TOKEN_A);
+    const { calls, fetchImpl } = fakeApns();
+    await sendMorningReadiness(env, { readiness: () => ({ score: 72, zone: "green" }), now: MORNING, fetchImpl, coach: () => coach });
+    assert.equal(calls[0].body.layout.coach, coach ? "Kouč" : undefined);
+    assert.equal(calls[0].body.layout.title, "Připravenost 72");
+  }
+});
+
+test("long workout names are cut to 60 characters, signs get one card sentence", () => withLang("en", () => {
+  const long = "Very long workout name ".repeat(10).trim();
+  const m = readinessMessage({ score: 80, zone: "green", planned: [{ title: long, sport: "ride" }, { title: long, sport: "run" }] });
+  assert.ok(m.layout.workout.title.length <= 60);
+  assert.ok(m.alert.body.length < 220);
+  const s = readinessMessage({ score: 80, zone: "green", flags: ["respiration_elevated"] });
+  assert.equal(s.layout.advice, "No intensity today, easy training only.");
+}));
