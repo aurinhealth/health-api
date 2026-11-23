@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildCalendar, primarySport, sportOf } from "../src/app-calendar.js";
+import { buildCalendar, primarySport, sportOf, walkWindows } from "../src/app-calendar.js";
 
 const row = (data_type, source_family, external_id, start_time, end_time, payload) =>
   ({ data_type, source_family, external_id, start_time, end_time, value_numeric: null, payload_json: JSON.stringify(payload) });
@@ -122,4 +122,16 @@ test("a watch session carries its summary for the app's detail", () => {
   assert.deepEqual(a.summary, { source: "google", start: "10:00", end: "11:10", avgHr: 119, maxHr: 152, steps: 8123, elevationM: 312 });
   // Intervals.icu activities have their own detail and no summary.
   assert.equal(day("2026-10-07").activities[0].summary, undefined);
+});
+
+// Today counts a walk's measured active energy (index.js); Training's calendar
+// shows the same number, not the watch summary's total (611 retest: 166 against 92).
+test("a walk shows its measured active energy, a hand-set number stays", () => {
+  const edited = row("exercise", "google-wearables", "g3", "2026-10-08T15:00:00Z", "2026-10-08T15:30:00Z",
+    { aurinKcal: 120, exercise: { exerciseType: "WALKING", activeDuration: "1800s", metricsSummary: { caloriesKcal: 120 } } });
+  const windows = walkWindows({ google: [rideCopy, walk, edited] });
+  assert.deepEqual(windows, [{ id: "g2", start: "2026-10-07T15:00:00Z", end: "2026-10-07T15:35:00Z" }]);
+  const shown = buildCalendar({ start: "2026-10-07", end: "2026-10-07", today: "2026-10-09", google: [walk], walkKcal: new Map([["g2", 92]]) }).days[0];
+  assert.equal(shown.activities[0].kcal, 92);
+  assert.equal(shown.kcal, 92);
 });
