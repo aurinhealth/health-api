@@ -5184,3 +5184,31 @@
 "Vrátit %@ do tréninku" = "Put %@ back in the workout";
 "Další: %@" = "Next: %@";
 "jídlo nezapsáno" = "no food logged";
+
+/* Settings → Notifications (concept v3, 2026-11-19) */
+"Trénink v plánu" = "Workout";
+"Od kouče" = "From Coach";
+"Po probuzení, až se data synchronizují" = "After you wake and your data syncs";
+"Zprávy kouče" = "Coach messages";
+"Součást Aurin Pro" = "Part of Aurin Pro";
+"Tipy od kouče, nejvýš jednou denně. Odpovědi přijdou vždy." = "Tips from Coach, at most once a day. Replies always arrive.";
+"Připomínka prášku" = "Pill reminder";
+"Na zamčené obrazovce jako Denní připomínka" = "Shows as Daily reminder on the lock screen";
+"Skrýt zdravotní údaje v oznámeních" = "Hide health values in notifications";
+"Widgety na zamčené obrazovce ukážou čísla po odemknutí Face ID." = "Lock screen widgets show numbers after Face ID.";
+"Kouč i připomínky jsou zapnuté." = "Coach and reminders are on.";
+"Kouč je zapnutý, připomínky vypnuté." = "Coach is on, reminders are off.";
+"Připomínky jsou zapnuté, kouč vypnutý." = "Reminders are on, Coach is off.";
+"Kouč i připomínky jsou vypnuté." = "Coach and reminders are off.";
+"Oznámení neukazují čísla." = "Notifications show no numbers.";
+"Oznámení ukazují tvoje čísla." = "Notifications show your numbers.";
+"Nejvýš 2 připomenutí, když jídlo chybí" = "Up to 2 nudges if a meal isn't logged";
+"Oznámení jsou vypnutá" = "Notifications are off";
+"Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče." = "Turn them on in iPhone Settings to get reminders and coach messages.";
+"Čas a dny" = "Time and days";
+"Večer zapsat den" = "Log the day in the evening";
+"Jen když ještě nic není zapsané" = "Only when nothing is logged yet";
+"Denní připomínka" = "Daily reminder";
+"Označ, až to bude hotové" = "Mark as done when ready";
+"Za 30 min" = "In 30 min";
+"Připomínky" = "Reminders";

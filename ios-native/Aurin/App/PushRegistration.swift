@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private let api = APIClient()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Water off for a new install only (before anything reads the switches).
+        Reminders.adoptNewDefaults()
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
         // Health data paused (also on another device) answers 403 health_paused:

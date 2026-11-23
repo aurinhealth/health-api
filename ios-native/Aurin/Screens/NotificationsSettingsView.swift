@@ -2,9 +2,10 @@ import SwiftUI
 import UIKit
 import UserNotifications
 
-// Settings → Oznámení: a day overview on top (the reminders on a 6:00–23:00
-// line), then one row per reminder like the Clock app's alarms. A row opens a
-// sheet with its time and days. Everything is stored in UserDefaults under the
+// Settings → Oznámení in the Settings concept's look (widgets and
+// notifications concept v3, 2026-11-19): a bell and one sentence on how it is
+// set, then From Coach, Reminders and Privacy. A reminder's row opens a sheet
+// with its time and days. Everything is stored in UserDefaults under the
 // Reminders keys, and the reminders are planned again after every change.
 
 /// One reminder of the list.
@@ -16,12 +17,12 @@ enum ReminderKind: String, CaseIterable, Identifiable {
     var name: String {
         switch self {
         case .bedtime: return "Do postele"
-        case .water: return "Pití"
-        case .meals: return "Jídlo"
-        case .workout: return "Trénink"
+        case .water: return "Voda"
+        case .meals: return "Jídla"
+        case .workout: return "Trénink v plánu"
         case .food: return "Zapsat den"
         case .weight: return "Vážení"
-        case .week: return "Plán na příští týden"
+        case .week: return "Plán týdne"
         }
     }
 
@@ -103,29 +104,6 @@ enum ReminderDays {
     }
 }
 
-/// A row of the list: the time, then the name with its dot and the detail.
-private struct ReminderLine: Identifiable {
-    let kind: ReminderKind
-    let time: String
-    let detail: String
-
-    var id: String { kind.rawValue }
-}
-
-/// A circle on the day overview.
-private struct ReminderMark: Identifiable {
-    let id: String
-    let minute: Int
-    let kind: ReminderKind
-    let on: Bool
-}
-
-private struct MealState {
-    let id: String
-    let time: Int
-    let on: Bool
-}
-
 struct NotificationsSettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Reminders.bedtimeKey) private var bedtime = true
@@ -133,16 +111,8 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.bedtimeOffsetKey) private var bedtimeOffset = 30
     @AppStorage(Reminders.bedtimeTimeKey) private var bedtimeTime = 22 * 60
     @AppStorage(Reminders.workoutKey) private var workout = true
-    @AppStorage(Reminders.workoutTimeKey) private var workoutTime = 16 * 60
-    @AppStorage(Reminders.waterKey) private var water = true
-    @AppStorage(Reminders.waterFromKey) private var waterFrom = 10 * 60
-    @AppStorage(Reminders.waterToKey) private var waterTo = 16 * 60
-    @AppStorage(Reminders.waterEveryKey) private var waterEvery = 3 * 60
-    @AppStorage(Reminders.waterModeKey) private var waterMode = "every"
-    @AppStorage(Reminders.waterCountKey) private var waterCount = 4
+    @AppStorage(Reminders.waterKey) private var water = Reminders.isOn(Reminders.waterKey)
     @AppStorage(Reminders.mealsKey) private var meals = true
-    @AppStorage(Reminders.foodKey) private var food = true
-    @AppStorage(Reminders.foodTimeKey) private var foodTime = 20 * 60 + 30
     @AppStorage(Reminders.weightKey) private var weight = false
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
     @AppStorage(Reminders.weekKey) private var week = false
@@ -155,42 +125,46 @@ struct NotificationsSettingsView: View {
     @AppStorage(PushRegistration.hideValuesKey) private var hideValues = true
     @State private var allowed: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
-    /// the meals and days, read straight from UserDefaults, are shown anew).
+    /// the days, read straight from UserDefaults, are shown anew).
     @State private var revision = 0
     @State private var editing: ReminderKind?
 
+    /// The concept's order (Settings → Notifications, 2026-11-19): the week
+    /// plan's evening reminder of the day ("Zapsat den") lives in the meals' sheet.
+    private static let rows: [ReminderKind] = [.workout, .meals, .water, .bedtime, .weight, .week]
+
     var body: some View {
-        SettingsPage(title: "Oznámení", hero: SettingsHero(text: "Připomínky, které přicházejí během dne.", art: AnyView(ReminderDayOverview(marks: marks)))) {
-            if allowed == false {
-                SettingsGroup(footer: "Oznámení pro Aurin jsou v iPhonu vypnutá.") {
-                    Button {
-                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-                    } label: { SettingsRow(title: "Otevřít nastavení iPhonu", titleColor: Palette.blue) }
-                    .buttonStyle(.plain)
+        SettingsPage(title: "Oznámení", hero: allowed == false ? nil : SettingsHero(systemImage: "bell", color: Palette.rust, text: heroText)) {
+            if allowed == false { NotificationsOffCard() }
+            SettingsGroup(title: "Od kouče") {
+                SettingsToggle(title: "Ranní připravenost", subtitle: "Po probuzení, až se data synchronizují", isOn: $morning)
+                SettingsDivider()
+                if coachLocked {
+                    // Without Pro the coach sends nothing of his own (src/entrypoint.js coachPush).
+                    SettingsToggle(title: "Zprávy kouče", subtitle: "Součást Aurin Pro", isOn: .constant(false), disabled: true)
+                } else {
+                    SettingsToggle(title: "Zprávy kouče", subtitle: "Tipy od kouče, nejvýš jednou denně. Odpovědi přijdou vždy.", isOn: $coach)
                 }
             }
-            SettingsGroup {
-                ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
+            .opacity(allowed == false ? 0.5 : 1)
+            SettingsGroup(title: "Připomínky") {
+                ForEach(Array(Self.rows.enumerated()), id: \.element.id) { index, kind in
                     if index > 0 { SettingsDivider() }
-                    ReminderListRow(line: line, isOn: isOn(line.kind)) { editing = line.kind }
+                    ReminderListRow(title: kind.name, detail: detail(kind), isOn: isOn(kind)) { editing = kind }
                 }
-            }
-            SettingsGroup {
-                SettingsToggle(title: "Ranní připravenost", isOn: $morning)
-                SettingsDivider()
-                SettingsToggle(title: "Kouč", subtitle: "Ozve se sám, nejvýš 1× denně", isOn: $coach)
-                SettingsDivider()
-                SettingsToggle(title: "Skrýt zdravotní údaje", subtitle: "Celé oznámení uvidíš po otevření", isOn: $hideValues)
-            }
-            // The pill: only with cycle tracking on and the pill chosen.
-            if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {
-                SettingsGroup {
+                // The pill: only with cycle tracking on and the pill chosen.
+                if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {
+                    SettingsDivider()
                     NavigationLink { PillReminderView() } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "pills.fill", color: Palette.indigo), title: "Antikoncepce",
+                        SettingsRow(title: L10n.tr("Připomínka prášku"), subtitle: L10n.tr("Na zamčené obrazovce jako Denní připomínka"),
                                     value: settings.pillReminder ? ClockText.format(settings.pillReminderTime) : (settings.pillMissed ?? true) ? L10n.tr("jen vynechaný") : L10n.tr("vypnuto"))
                     }
                     .buttonStyle(.plain)
                 }
+            }
+            .opacity(allowed == false ? 0.5 : 1)
+            SettingsGroup(title: "Soukromí") {
+                SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: "Widgety na zamčené obrazovce ukážou čísla po odemknutí Face ID.", isOn: $hideValues)
             }
         }
         .sheet(item: $editing) { kind in
@@ -209,13 +183,20 @@ struct NotificationsSettingsView: View {
         }
     }
 
+    /// Without Pro (the paywall on), the coach's messages are not sent.
+    private var coachLocked: Bool { model.coachLocked && !ProStore.shared.entitled }
+
     // MARK: The values shown
 
-    private var mealStates: [MealState] {
-        _ = revision
-        return Reminders.meals.map { meal in
-            MealState(id: meal.id, time: Reminders.minute(Reminders.mealTimeKey(meal.id), meal.time), on: Reminders.isOn(Reminders.mealKey(meal.id)))
-        }
+    /// "Coach and reminders are on. Notifications show no numbers.": how the page is set now.
+    private var heroText: String {
+        let fromCoach = morning || (coach && !coachLocked)
+        let reminders = Self.rows.contains { isOn($0).wrappedValue }
+        let first = fromCoach && reminders ? L10n.tr("Kouč i připomínky jsou zapnuté.")
+            : fromCoach ? L10n.tr("Kouč je zapnutý, připomínky vypnuté.")
+            : reminders ? L10n.tr("Připomínky jsou zapnuté, kouč vypnutý.")
+            : L10n.tr("Kouč i připomínky jsou vypnuté.")
+        return first + "\n" + (hideValues ? L10n.tr("Oznámení neukazují čísla.") : L10n.tr("Oznámení ukazují tvoje čísla."))
     }
 
     private func days(_ kind: ReminderKind) -> Int {
@@ -223,83 +204,28 @@ struct NotificationsSettingsView: View {
         return Reminders.days(kind.key)
     }
 
-    private var waterTimes: [Int] {
-        Reminders.waterTimes(from: waterFrom, to: waterTo, mode: waterMode, every: waterEvery, count: waterCount)
-    }
-
-    /// The bedtime reminder's time: the chosen one, or tonight's bedtime minus
-    /// the chosen minutes (nil while the night is not known).
-    private var bedtimeMinute: Int? {
-        if bedtimeMode == "custom" { return bedtimeTime }
-        guard let bed = model.today?.tonight?.bedtime, let at = Reminders.minutes(bed) else { return nil }
-        return (at - bedtimeOffset + 1440) % 1440
-    }
-
-    private var lines: [ReminderLine] {
-        // A fixed order (the concept's), so turning one off never moves the rows.
-        ReminderKind.allCases.map { line($0) }
-    }
-
-    private func line(_ kind: ReminderKind) -> ReminderLine {
+    /// The line under a reminder's name: what it does, in the concept's words.
+    private func detail(_ kind: ReminderKind) -> String? {
         let chosen = days(kind)
+        let summary = Fmt.capitalized(ReminderDays.summary(chosen))
         let limited = chosen & Reminders.everyDay != Reminders.everyDay
-        let summary = ReminderDays.summary(chosen)
         switch kind {
-        case .bedtime:
-            let detail = limited ? summary : bedtimeMode == "custom" ? L10n.tr("každý den") : L10n.f("%@ před spaním", Fmt.duration(bedtimeOffset))
-            if let at = bedtimeMinute {
-                return ReminderLine(kind: kind, time: Reminders.clock(at), detail: detail)
-            }
-            return ReminderLine(kind: kind, time: "–", detail: detail)
-        case .water:
-            let detail = limited ? summary : L10n.f("%@× denně", String(waterTimes.count))
-            return ReminderLine(kind: kind, time: hourText(waterFrom) + "–" + hourText(max(waterFrom, waterTo)), detail: detail)
-        case .meals:
-            let on = mealStates.filter { $0.on }.sorted { $0.time < $1.time }
-            guard let first = on.first else {
-                return ReminderLine(kind: kind, time: "–", detail: limited ? summary : "")
-            }
-            var parts: [String] = []
-            if on.count > 1 {
-                parts.append(L10n.f("a %@", on.dropFirst().map { Reminders.clock($0.time) }.joined(separator: ", ")))
-            }
-            if limited || on.count == 1 { parts.append(summary) }
-            return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: ", "))
         case .workout:
-            // An hour before a session with a time of its own, the others at the chosen time.
-            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: (limited ? summary + ", " : "") + L10n.f("nebo v %@", Reminders.clock(workoutTime)))
-        case .food:
-            return ReminderLine(kind: kind, time: Reminders.clock(foodTime), detail: limited ? summary : L10n.tr("jen když chybí"))
+            return limited ? L10n.tr("1 h předem") + ", " + ReminderDays.summary(chosen) : L10n.tr("1 h předem")
+        case .meals:
+            return L10n.tr("Nejvýš 2 připomenutí, když jídlo chybí")
+        case .water:
+            return limited ? summary : nil
+        case .bedtime:
+            if bedtimeMode == "custom" { return (limited ? summary + ", " : "") + Reminders.clock(bedtimeTime) }
+            return (limited ? summary + ", " : "") + L10n.f("%@ před spaním", Fmt.duration(bedtimeOffset))
         case .weight:
-            return ReminderLine(kind: kind, time: Reminders.clock(weightTime), detail: summary)
+            return summary + ", " + Reminders.clock(weightTime)
         case .week:
-            return ReminderLine(kind: kind, time: Reminders.clock(weekTime), detail: summary)
+            return summary + ", " + Reminders.clock(weekTime)
+        case .food:
+            return nil
         }
-    }
-
-    /// 600 → "10" (or "10 AM"), 630 → "10:30".
-    private func hourText(_ minute: Int) -> String {
-        minute % 60 == 0 ? ClockText.hour(minute / 60) : Reminders.clock(minute)
-    }
-
-    /// Drinking on the upper lane, the rest below; the ones off first, so the
-    /// coloured ones lie on top.
-    private var marks: [ReminderMark] {
-        var list: [ReminderMark] = []
-        for (index, at) in waterTimes.enumerated() {
-            list.append(ReminderMark(id: "water.\(index)", minute: at, kind: .water, on: water))
-        }
-        for meal in mealStates where meal.on {
-            list.append(ReminderMark(id: "meal." + meal.id, minute: meal.time, kind: .meals, on: meals))
-        }
-        list.append(ReminderMark(id: "workout", minute: workoutTime, kind: .workout, on: workout))
-        list.append(ReminderMark(id: "food", minute: foodTime, kind: .food, on: food))
-        list.append(ReminderMark(id: "weight", minute: weightTime, kind: .weight, on: weight))
-        list.append(ReminderMark(id: "week", minute: weekTime, kind: .week, on: week))
-        if let at = bedtimeMinute {
-            list.append(ReminderMark(id: "bedtime", minute: at, kind: .bedtime, on: bedtime))
-        }
-        return list.filter { !$0.on } + list.filter { $0.on }
     }
 
     private func isOn(_ kind: ReminderKind) -> Binding<Bool> {
@@ -308,15 +234,15 @@ struct NotificationsSettingsView: View {
         case .water: return $water
         case .meals: return $meals
         case .workout: return $workout
-        case .food: return $food
         case .weight: return $weight
         case .week: return $week
+        case .food: return .constant(Reminders.isOn(Reminders.foodKey))
         }
     }
 
     private func check() async {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .notDetermined, bedtime || workout || water || meals || food || weight || week || morning || coach {
+        if status == .notDetermined, bedtime || workout || water || meals || weight || week || morning || coach {
             allowed = await Reminders.requestPermission()
         } else {
             allowed = status == .authorized || status == .provisional
@@ -327,108 +253,64 @@ struct NotificationsSettingsView: View {
     }
 }
 
-/// The 6:00–23:00 line with the day's reminders, the page's picture (the
-/// concept's day line): small coloured dots on the line, drinking under it,
-/// the hours below.
-private struct ReminderDayOverview: View {
-    let marks: [ReminderMark]
-    let start = 6 * 60
-    let end = 23 * 60
-    let size: CGFloat = 10
-
+/// Notifications turned off for Aurin in iPhone Settings: a plain card with a
+/// dark button that opens them (the concept's S2, no warning colour).
+private struct NotificationsOffCard: View {
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            ZStack(alignment: .topLeading) {
-                Rectangle()
-                    .fill(Palette.hairline)
-                    .frame(width: width, height: 1)
-                    .position(x: width / 2, y: 18)
-                ForEach(marks) { mark in
-                    dot(mark).position(x: xPosition(mark.minute, width), y: mark.kind == .water ? 30 : 18)
-                }
-                label(ClockText.format(minutes: 6 * 60), alignment: .leading).position(x: 30, y: 52)
-                label(ClockText.format(minutes: 12 * 60), alignment: .center).position(x: xPosition(12 * 60, width), y: 52)
-                label(ClockText.format(minutes: 18 * 60), alignment: .center).position(x: xPosition(18 * 60, width), y: 52)
-                label(ClockText.format(minutes: 23 * 60), alignment: .trailing).position(x: width - 30, y: 52)
+        HStack(alignment: .center, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Oznámení jsou vypnutá").font(.headline).foregroundStyle(Palette.ink)
+                Text("Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče.").font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 8)
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            } label: {
+                Text("Otevřít Nastavení").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+                    .background(Palette.button, in: Capsule())
+            }
+            .buttonStyle(.plain)
         }
-        .frame(height: 60)
-        .padding(.horizontal, 4)
-        .accessibilityHidden(true)
-    }
-
-    private func label(_ text: String, alignment: Alignment) -> some View {
-        Text(verbatim: text)
-            .font(Typo.caption)
-            .foregroundStyle(Palette.muted)
-            .lineLimit(1)
-            .fixedSize()
-            .frame(width: 60, alignment: alignment)
-    }
-
-    /// A time after midnight (the bedtime reminder) sits at the end.
-    private func xPosition(_ minute: Int, _ width: CGFloat) -> CGFloat {
-        let clamped = minute < 3 * 60 ? end : min(max(minute, start), end)
-        let fraction = CGFloat(clamped - start) / CGFloat(end - start)
-        return size / 2 + fraction * max(0, width - size)
-    }
-
-    private func dot(_ mark: ReminderMark) -> some View {
-        Circle()
-            .fill(mark.on ? mark.kind.color : Palette.track)
-            .frame(width: size, height: size)
+        .padding(16)
+        .cardSurface(cornerRadius: 22)
     }
 }
 
+/// A reminder: its name and what it does; a tap opens its time and days, the switch turns it on or off.
 private struct ReminderListRow: View {
-    let line: ReminderLine
+    let title: String
+    let detail: String?
     @Binding var isOn: Bool
     let open: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             Button(action: open) {
-                HStack(alignment: .center, spacing: 12) {
-                    // The time in serif in a narrow column, so the names line up.
-                    Text(verbatim: line.time)
-                        .font(Typo.number(28))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.55)
-                        .frame(width: 96, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 7) {
-                            Circle().fill(line.kind.color).frame(width: 7, height: 7)
-                            Text(verbatim: L10n.tr(line.kind.name))
-                                .font(.body)
-                                .foregroundStyle(Palette.ink)
-                                .lineLimit(2)
-                        }
-                        if !line.detail.isEmpty {
-                            Text(verbatim: line.detail)
-                                .font(Typo.caption)
-                                .foregroundStyle(Palette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.tr(title)).font(.body).foregroundStyle(Palette.ink)
+                    if let detail {
+                        Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .opacity(isOn ? 1 : 0.45)
             .accessibilityElement(children: .combine)
+            .accessibilityHint(Text("Čas a dny"))
             Toggle(isOn: $isOn) { EmptyView() }
                 .toggleStyle(AurinToggleStyle())
                 .fixedSize()
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
-                .accessibilityLabel(Text(line.kind.name))
+                .accessibilityLabel(Text(L10n.tr(title)))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .frame(minHeight: 64)
+        .frame(minHeight: 50)
     }
 }
 
@@ -446,6 +328,7 @@ private struct ReminderEditSheet: View {
     @AppStorage(Reminders.waterModeKey) private var waterMode = "every"
     @AppStorage(Reminders.waterCountKey) private var waterCount = 4
     @AppStorage(Reminders.foodTimeKey) private var foodTime = 20 * 60 + 30
+    @AppStorage(Reminders.foodKey) private var food = true
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
     @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
     @AppStorage private var days: Int
@@ -544,6 +427,15 @@ private struct ReminderEditSheet: View {
                 ForEach(Array(Reminders.meals.enumerated()), id: \.offset) { index, meal in
                     if index > 0 { SettingsDivider() }
                     MealReminderRow(meal: meal)
+                }
+            }
+            .background(Palette.settingsBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            // The evening's "log what you ate", only while the day is still empty.
+            VStack(spacing: 0) {
+                SettingsToggle(title: "Večer zapsat den", subtitle: "Jen když ještě nic není zapsané", isOn: $food)
+                if food {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $foodTime)
                 }
             }
             .background(Palette.settingsBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

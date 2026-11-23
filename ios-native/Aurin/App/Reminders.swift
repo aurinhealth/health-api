@@ -36,8 +36,9 @@ enum Reminders {
     /// weekday (bit 0 Sunday … bit 6 Saturday), stored under "<key>.days".
     static func daysKey(_ key: String) -> String { key + ".days" }
     static let everyDay = 127
-    /// Every day, except the week plan on Sunday as before.
-    static func defaultDays(_ key: String) -> Int { key == weekKey ? 1 : everyDay }
+    /// Every day, except the week plan on Sunday and the weigh-in on Monday
+    /// (Notifications concept v3, "Monday morning").
+    static func defaultDays(_ key: String) -> Int { key == weekKey ? 1 : key == weightKey ? 2 : everyDay }
     static func days(_ key: String) -> Int {
         let value = UserDefaults.standard.object(forKey: daysKey(key)) as? Int ?? defaultDays(key)
         return value & everyDay == 0 ? defaultDays(key) : value & everyDay
@@ -70,8 +71,21 @@ enum Reminders {
     static func mealKey(_ id: String) -> String { "remind.meal." + id }
     static func mealTimeKey(_ id: String) -> String { "remind.meal." + id + ".time" }
 
-    /// Off by default: the reminders added later that nobody asked for yet.
-    private static let offByDefault = Set([weightKey, weekKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+    /// Off by default: the reminders added later that nobody asked for yet, and
+    /// water for a new install (Notifications concept v3: water has its own
+    /// widget and control; adoptNewDefaults keeps it on where it already was).
+    private static let offByDefault = Set([weightKey, weekKey, waterKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+
+    /// Once, at launch: a phone that already used Aurin before water went off
+    /// by default keeps its water reminders on (and the server's water push),
+    /// unless it turned them off itself.
+    static func adoptNewDefaults(_ defaults: UserDefaults = .standard) {
+        let done = "remind.defaults.v3"
+        guard !defaults.bool(forKey: done) else { return }
+        defaults.set(true, forKey: done)
+        let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
+        if usedBefore, defaults.object(forKey: waterKey) == nil { defaults.set(true, forKey: waterKey) }
+    }
 
     private static let prefix = "aurin."
     /// Reminders planned by a version from before 2026-11, taken away and planned again under the new prefix.
@@ -182,7 +196,7 @@ enum Reminders {
         // The evening: log what was eaten, only while the day is still empty.
         // Planned a week ahead (so also on days the app is not opened), today
         // left out once something is logged.
-        if isOn(foodKey) {
+        if isOn(mealsKey), isOn(foodKey) {
             let at = minute(foodTimeKey, 20 * 60 + 30), foodDays = days(foodKey)
             let logged = (today.nutrition.kcal ?? 0) > 0
             let calendar = Calendar.current
@@ -202,7 +216,8 @@ enum Reminders {
         }
         // The pill (Settings → Oznámení → Antikoncepce): the coming 8 days of
         // the pack at the chosen time, pause days only when asked, today left
-        // out once taken. "Vzato" and "Za 30 minut" right on the notification.
+        // out once taken. "Hotovo" and "Za 30 min" right on the notification; the lock
+        // screen says only "Denní připomínka" (Notifications concept v3, N6).
         if let pill = storedPill(), pill.on {
             let calendar = Calendar.current
             let start = calendar.startOfDay(for: Date())
@@ -213,9 +228,8 @@ enum Reminders {
                 let date = AppModel.localDate(day)
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
-                addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
-                        body: hidesValues ? "" : number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
-                        category: pillCategory, info: ["date": date])
+                addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Denní připomínka"),
+                        body: L10n.tr("Označ, až to bude hotové"), category: pillCategory, info: ["date": date])
             }
         }
         // The missed pill (same screen, Vynechaný prášek): an hour after the
@@ -234,10 +248,8 @@ enum Reminders {
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active), number > 0 else { continue }
                 // Past midnight (a pill usually logged at 23:30): the next day's early hours.
                 guard let fireDay = calendar.date(byAdding: .day, value: at / 1440, to: day) else { continue }
-                addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Už máš dnešní prášek?"),
-                        body: hidesValues ? L10n.tr("Ještě není zapsaný.")
-                            : L10n.f("Ještě není zapsaný. Obvykle ho bereš kolem %@.", clock(usual)) + ", " + L10n.f("%@. prášek z %@", String(number), String(pill.active)),
-                        category: pillCategory, info: ["date": date])
+                addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Denní připomínka"),
+                        body: L10n.tr("Označ, až to bude hotové"), category: pillCategory, info: ["date": date])
             }
         }
         // Sunday evening (or the chosen days): a look at the coming week's plan.
@@ -351,7 +363,7 @@ enum Reminders {
 
     // MARK: - The pill
 
-    /// The notification's category with "Vzato" and "Za 30 minut"
+    /// The notification's category with "Hotovo" and "Za 30 min"
     /// (AppDelegate registers it and handles the answer).
     static let pillCategory = "aurin.pill"
     static let pillTakenAction = "aurin.pill.taken"
@@ -363,8 +375,8 @@ enum Reminders {
     static var pillNotificationCategories: [UNNotificationCategory] {
         [prefix, legacyPrefix].map { at in
             UNNotificationCategory(identifier: at + "pill", actions: [
-                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Vzato"), options: [.authenticationRequired]),
-                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 minut"), options: [])
+                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Hotovo"), options: [.authenticationRequired]),
+                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 min"), options: [])
             ], intentIdentifiers: [], options: [])
         }
     }
