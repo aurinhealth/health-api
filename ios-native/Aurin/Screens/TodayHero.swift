@@ -219,7 +219,7 @@ struct TodayDials: View {
         return m % 60 == 0 ? "\(m / 60)\u{00A0}h" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
     }
 
-    /// The night against its need: "need 7 h", amber below the need,
+    /// The night against its need: "of 7 h needed", amber below the need,
     /// red under three quarters of it (as on the watch).
     var sleep: Cell {
         let minutes = sleepFailed ? nil : today.sleep?.minutes
@@ -230,14 +230,14 @@ struct TodayDials: View {
         }
         let n = Double(need), gap = Int((n - minutes).rounded())
         let needText = Self.length(n)
-        // "need 8 h 58" as Strain's "target" and HRV's "usual" (Petr 2026-11-23: a gap
-        // and a need in one line read as two lengths); the colour shows the gap,
-        // VoiceOver says it.
+        // Under the need "of 8 h 58 needed", read with the dial as "4 h 23 of 8 h 58"
+        // like Strain's "1.6 of 21" (Petr 2026-11-23: a gap and a need in one line
+        // read as two lengths); over it the gap stays. VoiceOver says the gap.
         let gapText = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
             : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), needText)
             : L10n.f("přesně %@", needText)
         return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: Self.length(minutes),
-                    note: L10n.f("potřeba %@", needText), color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red,
+                    note: gap > 0 ? L10n.f("z potřebných %@", needText) : gapText, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red,
                     spokenValue: spoken, spokenNote: gapText)
     }
 

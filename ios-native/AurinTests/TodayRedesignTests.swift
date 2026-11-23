@@ -57,7 +57,7 @@ final class TodayRedesignTests: XCTestCase {
         XCTAssertEqual(TodayDials.length(420), "7\u{00A0}h")
         let dials = TodayDials(today: DemoData.today)
         // The need in the same "8 h 05" as the dial.
-        XCTAssertEqual(dials.sleep.note, "need 8\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(dials.sleep.note, "of 8\u{00A0}h\u{00A0}05 needed")
         XCTAssertEqual(dials.sleep.spokenNote, "53 min short of 8\u{00A0}h\u{00A0}05")
         XCTAssertNotNil(dials.strain.note)
         XCTAssertTrue(dials.strain.note?.hasPrefix("target ") ?? false)

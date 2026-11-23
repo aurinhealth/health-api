@@ -4557,6 +4557,7 @@
 "Připojit zařízení" = "Connect a device";
 "Otevře Nastavení, kde připojíš hodinky nebo prsten" = "Opens Settings, where you connect a watch or ring";
 "o %@ méně než %@" = "%1$@ short of %2$@";
+"z potřebných %@" = "of %@ needed";
 "o %@ víc než %@" = "%1$@ over %2$@";
 "přesně %@" = "right on %@";
 "z 21" = "of 21";
