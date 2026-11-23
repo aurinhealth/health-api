@@ -1047,7 +1047,11 @@ struct PlannedWorkoutView: View {
     private var libraryId: String? { plan?.source == "library" ? plan?.workout.id?.string : nil }
 
     /// Today's or a past session can be rated: it may be done without being paired yet.
-    private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo }
+    /// Not one missed: nothing was done to ask about (611 retest, point 4).
+    private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo && !missed }
+
+    /// A past day's plan nothing was done for.
+    private var missed: Bool { session.status == "missed" }
 
     private var shownTime: String? { timeSet ?? session.time }
 
@@ -1078,7 +1082,13 @@ struct PlannedWorkoutView: View {
                 if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, Self.endurance(session.sport) {
                     Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
                 }
-                if let description = plan?.workout.description, !description.isEmpty {
+                if missed {
+                    // One coach sentence instead of the plan's text: that is the
+                    // event's description for Intervals.icu (src/intervals-strength.js).
+                    (Text("Tenhle trénink nebyl splněn.").foregroundStyle(Palette.ink) + Text(verbatim: " ")
+                     + Text("Přesuň ho na jiný den, nebo ho smaž z plánu.").italic().foregroundStyle(Palette.green))
+                        .font(Typo.sentence(20)).fixedSize(horizontal: false, vertical: true).padding(.top, 16)
+                } else if let description = plan?.workout.description, !description.isEmpty {
                     Text(description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
                 }
                 if let blocks = plan?.workout.steps, !blocks.isEmpty {
@@ -1111,7 +1121,10 @@ struct PlannedWorkoutView: View {
                 SectionLabel(text: "Změnit").padding(.top, 30)
                 VStack(spacing: 10) {
                     if moving {
+                        // The calendar itself, so the first tap already picks the day (611, point 4).
                         DatePicker("Nový den", selection: $moveDate, in: Date()..., displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .tint(Palette.amber)
                             .environment(\.locale, Fmt.locale)
                         Button { Task { await move() } } label: { action("Přesunout na tento den", filled: true, busy: working == .move) }
                     } else {

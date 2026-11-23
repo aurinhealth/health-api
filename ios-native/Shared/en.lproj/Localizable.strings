@@ -931,6 +931,9 @@
 "Volný den" = "Rest day";
 "Nic v plánu" = "Nothing planned";
 "Námaha %@" = "Strain %@";
+"Námaha %@ odh." = "Strain %@ est.";
+"Tenhle trénink nebyl splněn." = "You missed this workout.";
+"Přesuň ho na jiný den, nebo ho smaž z plánu." = "Move it to another day or remove it from the plan.";
 "Námaha po dnech tohoto týdne" = "Strain by day this week";
 "Zátěž po týdnech" = "Weekly load";
 "Zátěž týdne %@ z %@" = "Week load %@ of %@";

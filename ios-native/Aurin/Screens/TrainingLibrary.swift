@@ -231,7 +231,11 @@ struct LibraryCoachCard: View {
     /// Time, the gym's exercises and sets, and the strain as an estimate.
     static func numbers(_ session: TrainingSnapshot.Session) -> [WorkoutNumberRow.Cell] {
         var cells: [WorkoutNumberRow.Cell] = []
-        if let m = session.minutes { cells.append(.init(label: L10n.tr("Čas"), value: String(m), unit: "min")) }
+        // "1 h 18", the one length rule (Fmt.duration), "45 min" under an hour.
+        if let m = session.minutes {
+            let clock = GymCoach.clock(m)
+            cells.append(.init(label: L10n.tr("Čas"), value: clock.value, unit: clock.unit))
+        }
         if let lines = session.lines, !lines.isEmpty {
             cells.append(.init(label: L10n.tr("Cviky"), value: String(lines.count)))
             cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + $1.sets })))

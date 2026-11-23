@@ -96,17 +96,21 @@ struct GymDoneDetail: View {
         return dayText + ", " + L10n.f("%@ až %@", span.start, span.end)
     }
 
-    /// When it began and ended: the app's own clock of the workout, else the
-    /// session's start and its minutes.
+    /// When it began and ended: the session's start and its minutes, the same
+    /// start the Day and Training show and the same length as Duration (611:
+    /// 1:16 here against 1:20 there), else the app's own clock of the workout.
     static func span(day: GymDay, session: WeekSession?) -> (start: String, end: String)? {
+        if let time = session?.time, let minutes = session?.minutes, minutes > 0 {
+            let parts = time.split(separator: ":").compactMap { Int($0) }
+            if parts.count >= 2 {
+                let end = (parts[0] * 60 + parts[1] + minutes) % 1440
+                return (ClockText.format(time), ClockText.format(minutes: end))
+            }
+        }
         if let start = day.startedAt, let end = day.finishedAt, end > start {
             return (ClockText.format(start), ClockText.format(end))
         }
-        guard let time = session?.time, let minutes = session?.minutes, minutes > 0 else { return nil }
-        let parts = time.split(separator: ":").compactMap { Int($0) }
-        guard parts.count >= 2 else { return nil }
-        let end = (parts[0] * 60 + parts[1] + minutes) % 1440
-        return (ClockText.format(time), ClockText.format(minutes: end))
+        return nil
     }
 
     /// One exercise as a row: its name, "3 × 8" and the top weight, the arrow.

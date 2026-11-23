@@ -197,7 +197,7 @@ struct DayTimeline: View {
                         Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.status == "missed" ? Palette.muted : Palette.ink).lineLimit(2)
                         if let eased = item.eased {
                             Text(eased.title).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
-                        } else if let detail = item.detail {
+                        } else if let detail = DayTimelineRows.plannedLine(item, strainNow: day == today.date ? today.strain.score : nil) ?? item.detail {
                             Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                     }
@@ -470,6 +470,20 @@ enum DayTimelineRows {
 
     /// Vzdálenost, Výkon and Čas of a done workout, as many as it has; the
     /// calories make up the third when one is missing.
+    /// A workout still to come: "1 h 18, Strain 8.5 est.", as its card on
+    /// Training says it (the server's line still says "78 min, 47 TSS").
+    /// Today: where it takes the day's strain, as the card counts it.
+    static func plannedLine(_ item: TodaySnapshot.PlanItem, strainNow: Double?) -> String? {
+        guard let session = item.session, let minutes = session.minutes, minutes > 0 else { return nil }
+        var parts = [Fmt.duration(minutes)]
+        if let tss = session.tss, tss > 0 {
+            let own = (21 * (1 - exp(-tss / 90)) * 10).rounded() / 10
+            let strain = item.status == "planned" && (strainNow ?? 0) > 0 ? NextSession.dayStrain(strainNow ?? 0, adding: own) : own
+            parts.append(L10n.f("Námaha %@ odh.", Fmt.decimal(strain, digits: 1)))
+        }
+        return parts.joined(separator: ", ")
+    }
+
     static func stats(_ session: WeekSession?) -> [Stat] {
         guard let session else { return [] }
         var out: [Stat] = []
