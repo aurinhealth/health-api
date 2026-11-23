@@ -42,8 +42,9 @@ file with Czech first and "--- English ---" still reads.
       and, only with EXTERNAL=true (Vydat's "external" ticked), adds it to the
       external testers' group (EXTERNAL_GROUP, or the only external group) and
       sends it to Apple's beta review. Its twin with the Apple Watch app
-      (BUILD_NUMBER.1, ios-testflight.yml) gets the same notes and goes to
-      WATCH_GROUP (default "Close testers"). Same environment
+      (BUILD_NUMBER.1, ios-testflight.yml) gets the same notes, and goes to
+      WATCH_GROUP (default "Close testers") only with CLOSE_TESTERS=true
+      (Vydat's "close_testers" ticked). Same environment
       as upload, without MARKETING_VERSION. With RELEASE_ALL=1, write takes
       every pull request since BASE_SHA, not only the ones touching ios-native/.
 
@@ -310,6 +311,9 @@ def release_watch(app, notes):
         print(f"::warning::Build {number} s hodinkami v TestFlightu není připravený; testeři dostanou build {env['BUILD_NUMBER']} bez hodinek.")
         return
     set_notes(app, builds[0]["id"], notes)
+    if env.get("CLOSE_TESTERS") != "true":
+        print(f"Build {number}: not added to the owner's group (Vydat's \"close_testers\" not ticked)")
+        return
     add_to_group(app, builds[0], number, env.get("WATCH_GROUP") or "Close testers")
 
 

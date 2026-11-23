@@ -13,7 +13,10 @@ name: Vydat
 #    TestFlight group and sends it to Apple's beta review. Otherwise the owner
 #    adds builds to the external groups by hand in App Store Connect.
 #    The build's twin with the Apple Watch app (number.1, ios-testflight.yml)
-#    goes to the owner's group (WATCH_GROUP, default "Close testers").
+#    gets the same notes; it goes to the owner's group (WATCH_GROUP, default
+#    "Close testers") only when "close_testers" is ticked. Until the new design
+#    reaches main, a main build there would push the old design over the
+#    owner's redesign builds (613.1, 2026-11-23).
 # The previous release is the main commit of the newest Vydat run whose
 # production deploy went through.
 #
@@ -43,6 +46,11 @@ on:
         default: ""
       external:
         description: "Also send the build to the external testers (EXTERNAL_GROUP) and to Apple's beta review"
+        type: boolean
+        required: false
+        default: false
+      close_testers:
+        description: "Also add the build with the Apple Watch app (number.1) to the owner's group (WATCH_GROUP); leave off while the owner tests the new design"
         type: boolean
         required: false
         default: false
@@ -202,6 +210,7 @@ jobs:
           EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
           WATCH_GROUP: ${{ vars.WATCH_GROUP }}
           EXTERNAL: ${{ inputs.external }}
+          CLOSE_TESTERS: ${{ inputs.close_testers }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
