@@ -116,7 +116,7 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.mealsKey) private var meals = true
     @AppStorage(Reminders.weightKey) private var weight = false
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
-    @AppStorage(Reminders.weekKey) private var week = false
+    @AppStorage(Reminders.weekKey) private var week = true
     @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
     /// The morning readiness push from the server (PushRegistration.swift).
     @AppStorage(PushRegistration.morningKey) private var morning = true

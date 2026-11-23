@@ -74,7 +74,7 @@ enum Reminders {
     /// Off by default: the reminders added later that nobody asked for yet, and
     /// water for a new install (Notifications concept v3: water has its own
     /// widget and control; adoptNewDefaults keeps it on where it already was).
-    private static let offByDefault = Set([weightKey, weekKey, waterKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+    private static let offByDefault = Set([weightKey, waterKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
 
     /// Once, at launch: a phone that already used Aurin before water went off
     /// by default keeps its water reminders on (and the server's water push),
@@ -85,6 +85,8 @@ enum Reminders {
         defaults.set(true, forKey: done)
         let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
         if usedBefore, defaults.object(forKey: waterKey) == nil { defaults.set(true, forKey: waterKey) }
+        // The week plan comes on for new installs only (concept v3); a phone that used Aurin keeps it off.
+        if usedBefore, defaults.object(forKey: weekKey) == nil { defaults.set(false, forKey: weekKey) }
         // A weigh-in already on (it was off by default, so an older version's
         // choice: this runs before anything else) keeps its every day; Monday is for new ones.
         if defaults.object(forKey: weightKey) as? Bool == true, defaults.object(forKey: daysKey(weightKey)) == nil {

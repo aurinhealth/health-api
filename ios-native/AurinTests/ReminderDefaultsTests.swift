@@ -22,6 +22,7 @@ final class ReminderDefaultsTests: XCTestCase {
         defaults.set("true,true,true,true", forKey: "push.sentChoices")
         Reminders.adoptNewDefaults(defaults)
         XCTAssertEqual(defaults.object(forKey: Reminders.waterKey) as? Bool, true)
+        XCTAssertEqual(defaults.object(forKey: Reminders.weekKey) as? Bool, false, "the week plan stays off where it was")
     }
 
     func testOwnChoiceStaysAndRunsOnce() {
