@@ -76,7 +76,7 @@ struct AddFoodSheet: View {
                         }
                         .accessibilityLabel(L10n.tr("Zavřít"))
                     }
-                    if pick == nil { MealMenu(selection: $meal).padding(.top, 6) }
+                    if pick == nil { MealDayRow(selection: $meal).padding(.top, 6) }
 
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
@@ -211,6 +211,11 @@ struct AddFoodSheet: View {
             photoTrial = (try? await model.api.subscription())?.photoTrial
         }
         .onAppear(perform: begin)
+        // The day pill's choice lasts while this sheet is open; a waiting AI
+        // food keeps the day it was started for. Picking (a recipe, a photo's
+        // item) belongs to an outer flow and leaves its day alone.
+        .onAppear { if pick == nil { model.addDay = pending?.day } }
+        .onDisappear { if pick == nil { model.addDay = nil } }
         .onChange(of: model.pendingFoods.first { $0.id == current }?.state) { _, state in
             guard let state, state != .looking, let item = model.pendingFoods.first(where: { $0.id == current }) else { return }
             current = nil
@@ -730,7 +735,7 @@ struct FoodAmountView: View {
                 if product.canSuggestNew && !model.demo && pick == nil {
                     SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                 }
-                if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
+                if pick == nil { MealDayRow(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                 Button { Task { await save() } } label: {
                     Text(saving ? L10n.tr("Ukládám…") : pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
@@ -820,7 +825,7 @@ struct FoodAmountView: View {
         // values as the user fixed them go as the new food (suggestNewFood).
         let changed = product.canSuggest && !product.canSuggestNew && corrected.values != product.values
         if changed { corrected.origin = "edited" }
-        if let message = await model.logFood(product: corrected, amount: value, meal: target) {
+        if let message = await model.logFood(product: corrected, amount: value, meal: target, confirm: true) {
             error = message
         } else {
             if changed { sendCorrection(corrected) } else if suggestNew { model.suggestNewFood(corrected) }
@@ -847,8 +852,9 @@ struct NutritionCells: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
                 cell(Fmt.int(product.kcal(for: amount)), "kcal", first: true)
-                cell(Fmt.int(product.grams(product.protein_100g, for: amount)) + " g", "bílkoviny")
+                // Carbs, protein, fat: the order of every macro row in the app (617 #33).
                 cell(Fmt.int(product.grams(product.carbs_100g, for: amount)) + " g", "sacharidy")
+                cell(Fmt.int(product.grams(product.protein_100g, for: amount)) + " g", "bílkoviny")
                 cell(Fmt.int(product.grams(product.fat_100g, for: amount)) + " g", "tuky")
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -929,7 +935,7 @@ struct ManualFoodView: View {
                     SettingsField(title: "Tuky", text: $fat, unit: "g")
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
+                if pick == nil { MealDayRow(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                 Button { Task { await save() } } label: {
                     Text(saving ? L10n.tr("Ukládám…") : pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
@@ -951,7 +957,7 @@ struct ManualFoodView: View {
         if let pick { pick(product, 1); return }
         saving = true
         defer { saving = false }
-        if let message = await model.logFood(product: product, amount: 1, meal: target) { error = message } else { done() }
+        if let message = await model.logFood(product: product, amount: 1, meal: target, confirm: true) { error = message } else { done() }
     }
 }
 

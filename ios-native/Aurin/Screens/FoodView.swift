@@ -15,7 +15,10 @@ struct FoodView: View {
         }
         .task { await model.refreshIfStale(.food) }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
-        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots)) }
+        .fullScreenCover(isPresented: $scanning) {
+            BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots))
+                .onDisappear { model.addDay = nil }
+        }
     }
 
     private var screen: some View {
@@ -226,16 +229,19 @@ struct FoodContent: View {
             .cardSurface(cornerRadius: 22)
             .sheet(item: $adding) { item in AddFoodSheet(meal: item.meal, pending: item) }
 
-            // Also on a day gone by: it is added to the day shown (D-JIDLO-5).
-            Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : (food.mealSlots?.last ?? "dinner")) } label: {
-                Label("Přidat jídlo", systemImage: "plus")
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Palette.track, in: Capsule())
-                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+            // Every meal has its own +, so "Add food" under them only on a day
+            // without meal rows (617 p8). Also on a day gone by: it is added to the day shown (D-JIDLO-5).
+            if food.meals.isEmpty {
+                Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : (food.mealSlots?.last ?? "dinner")) } label: {
+                    Label("Přidat jídlo", systemImage: "plus")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(Palette.track, in: Capsule())
+                        .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 14)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 14)
 
             // The drinks and anything added under Edit overview.
             board.environment(\.wideLayout, false).padding(.top, 24)
@@ -688,8 +694,8 @@ struct PendingFoodRow: View {
 
 /// One meal of the day (redesign J): "Breakfast 07:40", its foods, "520 of
 /// 600 kcal" and +, and under it the carbs, protein and fat against the meal's
-/// targets in three columns. An empty meal shows its target ("630 kcal", Petr
-/// 2026-11-16) and "Nothing yet". A tap opens the meal with every food.
+/// targets in three columns. An empty meal shows its target ("0 / 630 kcal", Petr
+/// 2026-11-16, 617 p8) and "Nothing yet". A tap opens the meal with every food.
 struct MealRow: View {
     let meal: FoodSnapshot.Meal
     /// false without a day's target: only the name, the time and +.
@@ -745,7 +751,8 @@ struct MealRow: View {
             }
             Spacer(minLength: 6)
             if empty {
-                if showTargets, let goal { Text(verbatim: Fmt.int(goal.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted) }
+                // "0 / 670 kcal": the meal's goal, read as nothing of it eaten yet (617 p8).
+                if showTargets, let goal { Text(verbatim: "0 / " + Fmt.int(goal.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize() }
             } else {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(verbatim: Fmt.int(meal.kcal ?? 0)).font(Typo.number(26)).foregroundStyle(Palette.ink)

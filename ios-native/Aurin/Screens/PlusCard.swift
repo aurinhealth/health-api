@@ -12,6 +12,9 @@ struct PlusCard: View {
     @Environment(\.dynamicTypeSize) private var textSize
     var close: () -> Void
     var openCoach: () -> Void
+    /// A sheet of an action: the card closes first and the sheet opens over
+    /// the tab, never over the open card (617 C8, Log weight over the black card).
+    var present: (PlusSheet) -> Void
     /// The user's actions in order, without the coach (PlusItem.storageKey);
     /// empty until the first save, then the defaults apply.
     @AppStorage(PlusItem.storageKey) private var stored = ""
@@ -21,12 +24,6 @@ struct PlusCard: View {
     @State private var dragging: String?
     @State private var pouring: String?
     @State private var poured: Poured?
-    @State private var food: FoodStart?
-    @State private var weight = false
-    @State private var workout = false
-    @State private var drink = false
-    @State private var period = false
-    @State private var status = false
     /// An AI tile tapped without the AI consent: the consent card, then that tile.
     @State private var consentFor: String?
 
@@ -78,12 +75,6 @@ struct PlusCard: View {
             // Closed by a tap beside it or the ×: the edit is kept, as on the home screen.
             if editing { save() }
         }
-        .sheet(item: $food, onDismiss: close) { start in AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start) }
-        .sheet(isPresented: $weight, onDismiss: close) { WeightEntrySheet() }
-        .sheet(isPresented: $workout, onDismiss: close) { ManualWorkoutSheet() }
-        .sheet(isPresented: $drink, onDismiss: close) { DrinkSheet(kind: "water") { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
-        .sheet(isPresented: $period, onDismiss: close) { PeriodLogSheet() }
-        .sheet(isPresented: $status, onDismiss: close) { AthleteStatusSheet(current: model.athleteStatus ?? .active) }
         .sheet(item: Binding(get: { consentFor.map(ConsentTile.init) }, set: { consentFor = $0?.id })) { tile in
             AIConsentAsk { run(tile.id) }
         }
@@ -92,9 +83,10 @@ struct PlusCard: View {
     private struct ConsentTile: Identifiable { let id: String }
 
     /// `editing`: opens straight in the edit (the snapshot tests).
-    init(close: @escaping () -> Void, openCoach: @escaping () -> Void, editing: Bool = false) {
+    init(close: @escaping () -> Void, openCoach: @escaping () -> Void, present: @escaping (PlusSheet) -> Void = { _ in }, editing: Bool = false) {
         self.close = close
         self.openCoach = openCoach
+        self.present = present
         _editing = State(initialValue: editing)
         let defaults = UserDefaults.standard
         _draft = State(initialValue: editing ? PlusItem.card(stored: defaults.string(forKey: PlusItem.storageKey) ?? "") : [])
@@ -264,7 +256,7 @@ struct PlusCard: View {
     @ViewBuilder private var slot: some View {
         if let pouring {
             HStack(spacing: 8) {
-                ForEach(Array(DrinkPrefs.amounts(pouring).prefix(3)), id: \.self) { ml in
+                ForEach(DrinkPrefs.glasses(pouring), id: \.self) { ml in
                     Button { pour(ml, pouring) } label: {
                         Text(Units.volumeText(Double(ml))).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onAccent)
                             .padding(.horizontal, 16).frame(minHeight: 44).background(Palette.blue, in: Capsule())
@@ -333,21 +325,21 @@ struct PlusCard: View {
         let today = AppModel.localDate(Date())
         switch id {
         case "start": open(.trainingMode(today))
-        case "log": workout = true
+        case "log": present(.workout)
         case "aotd": open(.coachPick(true))
         case "library": open(.library)
         case "build": open(.gymBuilder)
-        case "photo": food = .photo
-        case "search": food = .search
-        case "barcode": food = .scan
-        case "gallery": food = .gallery
-        case "label": food = .label
-        case "manual": food = .manual
-        case "other": drink = true
+        case "photo": present(.food(.photo))
+        case "search": present(.food(.search))
+        case "barcode": present(.food(.scan))
+        case "gallery": present(.food(.gallery))
+        case "label": present(.food(.label))
+        case "manual": present(.food(.manual))
+        case "other": present(.drink)
         case "journal": open(.journal(today))
-        case "status": status = true
-        case "period": period = true
-        case "weight": weight = true
+        case "status": present(.status)
+        case "period": present(.period)
+        case "weight": present(.weight)
         case PlusItem.coach: openCoach()
         default: break
         }
@@ -550,6 +542,21 @@ struct PeriodLogSheet: View {
 }
 
 /// How the food sheet opens from the "+" menu.
+/// A "+" action that opens a sheet (RootView presents it once the card closed).
+enum PlusSheet: Identifiable, Hashable {
+    case food(FoodStart), weight, workout, drink, period, status
+    var id: String {
+        switch self {
+        case .food(let start): "food." + start.rawValue
+        case .weight: "weight"
+        case .workout: "workout"
+        case .drink: "drink"
+        case .period: "period"
+        case .status: "status"
+        }
+    }
+}
+
 enum FoodStart: String, Identifiable {
     case search, photo, gallery, scan, label, manual
     var id: String { rawValue }

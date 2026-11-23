@@ -606,11 +606,13 @@ struct PanelWidget: View {
             if let value = data.training?.zones { ZonesWidget(zones: value, size: item.size) }
         case .food:
             if let t = data.today {
+                // The day's one set of goals (617 #3), the same numbers as Food and Settings.
+                let nutrition = t.nutrition.with(model.goals(on: t.date))
                 // Redesign D: the concept's FOOD card on Today; the gallery sizes elsewhere.
                 if data.panel == .today && item.size == .medium {
-                    TodayFoodCard(nutrition: t.nutrition, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
+                    TodayFoodCard(nutrition: nutrition, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
                 } else {
-                    FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
+                    FoodWidget(nutrition: nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true, foodFailed: t.unavailable?.contains("food") == true)
                 }
             }
         case .drinks:

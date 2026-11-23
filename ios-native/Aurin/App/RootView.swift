@@ -17,6 +17,8 @@ struct RootView: View {
     @State private var quickFood: FoodStart?
     /// The meal a meal reminder's "Log lunch" adds to (Reminders); nil: the one of now.
     @State private var quickMeal: String?
+    /// A "+" action's sheet, opened here once the card closed (PlusCard.present).
+    @State private var plusSheet: PlusSheet?
     @State private var quickActions = QuickActions.shared
     /// A food the owner fixed, opened from its push (FoodPush).
     @State private var foodPush = FoodPush.shared
@@ -245,6 +247,9 @@ struct RootView: View {
                             PlusCard(close: closeAdd, openCoach: {
                                 closeAdd()
                                 showCoach = true
+                            }, present: { sheet in
+                                closeAdd()
+                                plusSheet = sheet
                             })
                             .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                             .padding(.horizontal, 16)
@@ -303,6 +308,22 @@ struct RootView: View {
             }
             .sheet(item: $coachChat) { ref in CoachView(openChat: ref.id).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
+            .sheet(item: $plusSheet) { sheet in
+                Group {
+                    switch sheet {
+                    case .food(let start): AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
+                    case .weight: WeightEntrySheet()
+                    case .workout: ManualWorkoutSheet()
+                    case .drink: DrinkSheet(kind: "water") { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) }
+                    case .period: PeriodLogSheet()
+                    case .status: AthleteStatusSheet(current: model.athleteStatus ?? .active)
+                    }
+                }
+                .dynamicTypeSize(Self.textSizes)
+                // What "+" adds goes to today, also while the screens show another day.
+                .onAppear { model.writesToday = true }
+                .onDisappear { model.writesToday = false }
+            }
             .sheet(item: $quickFood) { start in
                 AddFoodSheet(meal: quickMeal ?? MealSlot.now(slots: model.food?.mealSlots), start: start)
                     .dynamicTypeSize(Self.textSizes)
@@ -323,7 +344,7 @@ struct RootView: View {
                 .presentationBackground(Palette.background)
                 // Added from the push goes to today, like "+".
                 .onAppear { model.writesToday = true }
-                .onDisappear { model.writesToday = false }
+                .onDisappear { model.writesToday = false; model.addDay = nil }
             }
             .onChange(of: coachPush.chat, initial: true) { _, chat in
                 guard let chat else { return }
@@ -458,19 +479,21 @@ struct RootView: View {
         if showShare { return "share" }
         if showSyncStatus { return "syncStatus" }
         if quickFood != nil { return "addFood" }
+        if let plusSheet { return plusSheet.id.hasPrefix("food") ? "addFood" : plusSheet.id }
         if fixedFood != nil { return "foodAmount" }
         return nil
     }
 
     /// Closes whatever sheet was open, then opens the next thing.
     private func closeSheets(then next: @escaping () -> Void) {
-        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || fixedFood != nil || coachChat != nil
+        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || plusSheet != nil || fixedFood != nil || coachChat != nil
         showAdd = false
         showSettings = false
         showCoach = false
         showSyncStatus = false
         quickFood = nil
         quickMeal = nil
+        plusSheet = nil
         fixedFood = nil
         coachChat = nil
         // One sheet at a time: the new one opens once the old has closed.

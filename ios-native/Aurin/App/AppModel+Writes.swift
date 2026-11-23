@@ -330,10 +330,27 @@ extension AppModel {
     /// refusal comes later as the outbox note).
     /// `day`: another day than the one shown (a food the coach drafted from a sentence);
     /// `refreshAfter: false` when several are logged at once and sent after the last.
-    func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true) async -> String? {
+    /// `confirm`: the sheet closes after it, so the tab says what was added, with Undo.
+    func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true, confirm: Bool = false) async -> String? {
         guard !demo else { return nil }
-        loggedFood(product: product, amount: amount, meal: meal, day: day, send: refreshAfter)
+        let date = day ?? writeDay
+        let id = loggedFood(product: product, amount: amount, meal: meal, day: date, send: refreshAfter)
+        if confirm { confirmFood([product.name], meal: meal, day: date, ids: [id]) }
         return nil
+    }
+
+    /// "Banana added to dinner" with Undo above the tab bar once a food sheet
+    /// closed, on whichever tab it returns to, as a drink from "+" says it
+    /// (617 C8: a food said nothing). Another day than today is named under it.
+    func confirmFood(_ names: [String], meal: String, day: String, ids: [Int]) {
+        guard !demo, !ids.isEmpty else { return }
+        let mealName = L10n.tr(MealSlot.labels[meal] ?? "Jídlo").lowercased(with: L10n.locale)
+        let today = Self.localDate(Date())
+        undoToast = PlanToast(title: L10n.f("Přidáno (%2$@): %1$@", names.joined(separator: ", "), mealName),
+                              note: day == today ? nil : Fmt.weekdayDayMonthShort(day),
+                              cancelled: false, symbol: "checkmark", undo: { [weak self] in
+            for id in ids { await self?.deleteFood(id: id) }
+        })
     }
 
     /// logFood that gives the id the meal shows under until the server's;
