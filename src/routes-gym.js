@@ -26,6 +26,7 @@ import { L } from "./lang.js";
 import { effortScale } from "./gym-intensity.js";
 import { sideBalance, lastSideChoice } from "./gym-sides.js";
 import { localToday } from "./user-time.js";
+import { markGymForMorning } from "./gym-morning.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
 import { syncGymActivity, removeGymActivity } from "./gym-session-activity.js";
@@ -368,6 +369,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(row.status==='confirmed')return Response.json({status:'ok',message:L('Návrh už je uložený.', 'The proposal is already saved.')});
       const draft=JSON.parse(row.draft_json),plan=draft.plan;
       if(draft.kind!=='gym_preview'||!plan||plan.date<localToday())throw new Error(L('Neplatný nebo starý návrh.', 'Invalid or outdated proposal.'));
+      // A week day saved as the rules built it gets the coach on its morning (gym-morning.js).
+      const exercisesOf=rows=>(rows||[]).map(r=>String(r?.[0]||'').toUpperCase()+':'+(r?.[1]||'')).join('|'),asBuilt=exercisesOf(plan.rows);
       // The proposal as changed in its preview (exercises from the catalog or the proposal itself).
       if(Array.isArray(body.rows))plan.rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(plan.rows||[]).map(r=>r?.[1]).filter(Boolean)]));
       // Stretching follows the exercises as changed in the preview.
@@ -395,6 +398,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
         const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
         if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
+        if(exercisesOf(plan.rows)===asBuilt)await markGymForMorning(env,plan.date).catch(error=>console.error('Gym morning mark failed',error.message));
       }
       const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime}).catch(error=>({status:'error',message:error.message}));
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();

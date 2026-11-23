@@ -29,6 +29,7 @@ export const PERSONAL_TABLES = {
   food_google_exports: { pk: ["user_id", "entry_id"] },
   strength_sets: { unique: [["user_id", "source_key"]] },
   gym_plans: { pk: ["user_id", "workout_date"] },
+  gym_coach_pending: { pk: ["user_id", "workout_date"] },
   gym_plan_cancellations: { pk: ["user_id", "workout_date"] },
   week_revisions: { pk: ["user_id", "date"] },
   week_checks: { pk: ["user_id", "date"] },
