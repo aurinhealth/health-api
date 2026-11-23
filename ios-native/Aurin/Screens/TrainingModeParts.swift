@@ -54,9 +54,15 @@ enum GymSessionMath {
     /// as the server's coach learns it (#944): today's work weights and the
     /// last three sessions all in whole 5 kg. Else 2.5 kg.
     static func step(_ exercise: GymExercise, history: GymHistory.Exercise?) -> Double {
+        let today = exercise.sets.filter(\.work).compactMap { ($0.done ? $0.kg : $0.plannedKg).flatMap(LiftWeight.number) }
+        return step(history, today: today)
+    }
+
+    /// The same from the history alone; a machine in pounds goes in 5 lb.
+    static func step(_ history: GymHistory.Exercise?, today: [Double] = [], machineLb: Bool = false) -> Double {
+        if machineLb { return Units.kgFromPounds(5) }
         let five: (Double) -> Bool = { $0 > 0 && $0.truncatingRemainder(dividingBy: 5) == 0 }
         let past = (history?.sessions.prefix(3) ?? []).flatMap { $0.sets.compactMap(\.kg) }
-        let today = exercise.sets.filter(\.work).compactMap { ($0.done ? $0.kg : $0.plannedKg).flatMap(LiftWeight.number) }
         return !past.isEmpty && (past + today).allSatisfy(five) ? 5 : GymCoach.step
     }
 

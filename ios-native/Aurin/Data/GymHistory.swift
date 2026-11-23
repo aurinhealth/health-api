@@ -329,6 +329,28 @@ enum GymCoach {
         return GymSuggestion(warmups: [], work: work, line: line)
     }
 
+    /// Next time from the history sheet (ExerciseHistorySheet): the last
+    /// session's top weight one machine step up once every set reached the
+    /// plan's top reps (else the same weight), as many sets as the plan.
+    /// Without a plan, the last session's target and its number of sets.
+    static func nextTime(_ last: GymHistory.Session, step: Double, sets: Int? = nil,
+                         reps: (lo: Int, hi: Int)? = nil) -> (kg: Double?, reps: Int, sets: Int, hit: Bool) {
+        let goal = reps?.hi ?? target(last)
+        let hit = !last.sets.isEmpty && last.sets.allSatisfy { Int($0.reps ?? 0) >= goal }
+        let count = sets.map { min(max($0, 1), 10) } ?? min(max(last.sets.count, 2), 5)
+        let kg = topKg(last).map { hit ? $0 + step : $0 }
+        return (kg, kg == nil && hit ? goal + 1 : reps?.lo ?? goal, count, hit)
+    }
+
+    /// The exercise as its screen shows it (GymSessionMath.shown): a machine
+    /// in pounds to its whole pounds, so 45 kg and 100 lb are the same plate
+    /// and no record or change rests on a conversion.
+    static func shown(_ exercise: GymHistory.Exercise, machineLb: Bool) -> GymHistory.Exercise {
+        GymHistory.Exercise(name: exercise.name, sessions: exercise.sessions.map { session in
+            GymHistory.Session(date: session.date, sets: session.sets.map { GymSessionMath.shown($0, machineLb: machineLb) })
+        })
+    }
+
     /// "návrh 72,5 kg × 8, 3 série".
     static func proposal(_ s: GymSuggestion) -> String {
         guard let first = s.work.first else { return "" }
@@ -515,12 +537,16 @@ enum GymCoach {
 
     /// Against the session before: the heaviest set's weight ("+6,3 kg"), at
     /// the same weight the reps ("+2 op."); nil when nothing changed.
-    static func change(_ session: GymHistory.Session, from previous: GymHistory.Session?) -> String? {
+    static func change(_ session: GymHistory.Session, from previous: GymHistory.Session?, machineLb: Bool = false) -> String? {
         guard let previous else { return nil }
-        if let now = topKg(session), let then = topKg(previous), abs(now - then) >= 0.05 {
-            return (now > then ? "+" : "−") + shown(abs(now - then)) + " " + Units.weightUnit
+        let now = topKg(session), then = topKg(previous)
+        if let now, let then, abs(now - then) >= 0.05 {
+            return (now > then ? "+" : "−") + shown(abs(now - then), machineLb: machineLb) + " " + LiftWeight.unit(machineLb: machineLb)
         }
-        let diff = reps(session) - reps(previous)
+        // At the same weight the best set's reps, not all the reps: 3 sets
+        // against 6 are not "−32 opakování" (611.1).
+        let best = { (s: GymHistory.Session, kg: Double?) in Int(s.sets.filter { $0.kg == kg }.compactMap(\.reps).max() ?? 0) }
+        let diff = best(session, now) - best(previous, then)
         guard diff != 0 else { return nil }
         return (diff > 0 ? "+" : "−") + L10n.plural("%lld opakování", abs(diff))
     }
