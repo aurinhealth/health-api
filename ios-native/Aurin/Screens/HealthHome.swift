@@ -401,7 +401,9 @@ struct AurinAgeTrendCard: View {
         RouteLink(route: .aurinAge) {
             Card {
                 HStack {
-                    SectionLabel(text: "Posledních 12 týdnů")
+                    // A few days of estimates have no line yet, so no span either
+                    // (retest 611: "12 weeks" over a sentence and a 30-day detail).
+                    SectionLabel(text: short ? "Vývoj" : "Posledních 12 týdnů")
                     Spacer()
                     if !short {
                         let diff = (points.last?.value ?? 0) - (points.first?.value ?? 0)
@@ -590,16 +592,21 @@ struct HealthMonitorCard: View {
         let low: Double?
         let high: Double?
         let state: MetricState?
+        /// The day of the newest point, to tell last night from an older one.
+        var measured: String? = nil
     }
 
     static func dials(_ h: HealthSnapshot) -> [Dial] {
         var out: [Dial] = []
         let st = { (k: String) in h.states?[k]?.metricState }
         if let r = h.restingHR, let v = r.value {
-            out.append(Dial(id: .restingHR, label: "Tep v klidu", value: v, text: Fmt.int(v), unit: L10n.tr("bpm"), low: r.usual?.lowerBound, high: r.usual?.upperBound, state: st("restingHR")))
+            out.append(Dial(id: .restingHR, label: "Tep v klidu", value: v, text: Fmt.int(v), unit: L10n.tr("bpm"), low: r.usual?.lowerBound, high: r.usual?.upperBound,
+                            state: HealthValueContent.shownState(st("restingHR"), value: v, low: r.usual?.lowerBound, high: r.usual?.upperBound, digits: 0),
+                            measured: r.series.last?.date))
         }
         if let x = h.hrv, let v = x.value {
-            out.append(Dial(id: .hrv, label: "HRV", value: v, text: Fmt.int(v), unit: L10n.tr("ms"), low: x.low, high: x.high, state: st("hrv")))
+            out.append(Dial(id: .hrv, label: "HRV", value: v, text: Fmt.int(v), unit: L10n.tr("ms"), low: x.low, high: x.high,
+                            state: HealthValueContent.shownState(st("hrv"), value: v, low: x.low, high: x.high, digits: 0), measured: x.series.last?.date))
         }
         if let o = h.oxygen {
             // Oxygen tops out at 100 %: a night above the usual range is not
@@ -608,11 +615,13 @@ struct HealthMonitorCard: View {
             // and only below it counts.
             let band = Self.oxygenBand(low: o.low, high: o.high)
             out.append(Dial(id: .oxygen, label: "Kyslík", value: o.value, text: Fmt.int(o.value), unit: "%", low: band?.lowerBound, high: band?.upperBound,
-                            state: Self.oxygenState(st("oxygen"), value: o.value, band: band)))
+                            state: Self.oxygenState(st("oxygen"), value: o.value, band: band), measured: o.series.last?.date))
         }
         if let r = h.respiration {
-            out.append(Dial(id: .respiration, label: "Dech", value: r.value, text: Fmt.decimal(r.value, digits: 1), unit: L10n.tr("za min"),
-                            low: r.baseline.map { $0 - 0.5 }, high: r.baseline.map { $0 + 0.5 }, state: st("respiration") ?? (r.elevated ? .off(above: true) : nil)))
+            let low = r.baseline.map { $0 - 0.5 }, high = r.baseline.map { $0 + 0.5 }
+            out.append(Dial(id: .respiration, label: "Dech", value: r.value, text: Fmt.decimal(r.value, digits: 1), unit: L10n.tr("za min"), low: low, high: high,
+                            state: st("respiration").map { HealthValueContent.shownState($0, value: r.value, low: low, high: high, digits: 1) } ?? (r.elevated ? .off(above: true) : nil),
+                            measured: r.series.last?.date))
         }
         if let d = h.wristTemp?.deviation ?? h.skinTemp?.deviation {
             let elevated = h.skinTemp?.elevated == true
@@ -621,7 +630,9 @@ struct HealthMonitorCard: View {
             // The direction under the dial, the dial keeps the unit (Czech did not fit).
             let label = abs(change) < 0.05 ? "Teplota kůže" : change > 0 ? "Kůže tepleji" : "Kůže chladněji"
             out.append(Dial(id: .temperature, label: label, value: d, text: Fmt.decimal(abs(change), digits: 1), unit: Units.temperatureUnit,
-                            low: -0.5, high: 0.5, state: elevated ? .off(above: true) : abs(d) <= 0.5 ? .within : .off(above: d > 0)))
+                            low: -0.5, high: 0.5,
+                            state: elevated ? .off(above: true) : HealthValueContent.shownState(abs(d) <= 0.5 ? .within : .off(above: d > 0), value: d, low: -0.5, high: 0.5, digits: 1),
+                            measured: (h.wristTemp?.deviations ?? h.skinTemp?.series)?.last?.date))
         }
         return out
     }
@@ -683,7 +694,12 @@ struct HealthMonitorCard: View {
                 } else {
                     HStack(alignment: .top, spacing: 2) { ForEach(dials) { dialLink($0) } }
                 }
-                Text("Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní.").font(Typo.caption).foregroundStyle(Palette.muted)
+                // "Last night" only when every dot is last night's (retest 611:
+                // Saturday's skin temperature under "Dot is last night" on Monday).
+                Text(verbatim: L10n.tr(dials.allSatisfy { $0.measured == nil || $0.measured == health.date }
+                                       ? "Tečka je minulá noc. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní."
+                                       : "Tečka je poslední noc s měřením. Zelený oblouk je tvoje obvyklé rozmezí za 30 dní."))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 if let shown = readinessText {
                     Rectangle().fill(Palette.hairline).frame(height: 1)
