@@ -144,6 +144,11 @@ extension AppModel {
                 // the day): loaded shortly after Today, so its tab opens without
                 // a spinner (device test 604: 0.8 s on the first visit).
                 if training == nil { scope.task(priority: .utility) { try? await Task.sleep(for: .seconds(2)); await self.refreshIfStale(.training) } }
+                // Food and Health the same way: their copy from yesterday goes at
+                // midnight (dropPastDay), so the first visit of the day waited on
+                // a spinner (device test 611: 0.5 s from Training to Food and on to Health).
+                if food == nil { scope.task(priority: .utility) { try? await Task.sleep(for: .seconds(3)); await self.refreshIfStale(.food) } }
+                if health == nil { scope.task(priority: .utility) { try? await Task.sleep(for: .seconds(4)); await self.refreshIfStale(.health) } }
                 await cycle
             }
             if let status = await status, stillSignedIn(account) { athleteStatus = status }
