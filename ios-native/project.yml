@@ -161,6 +161,11 @@ targets:
           - "en.lproj/AppShortcuts.strings"
       - path: Privacy/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
+      # The redesign's numbers and coach sentence (WidgetStyle.serif / italic).
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Italic.ttf
+        buildPhase: resources
     entitlements:
       path: AurinWidgets/AurinWidgets.entitlements
       properties:
@@ -178,6 +183,9 @@ targets:
         CFBundleDisplayName: Aurin
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts:
+          - InstrumentSerif-Regular.ttf
+          - InstrumentSerif-Italic.ttf
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
   # The morning readiness push gets its coloured ring before iOS shows it

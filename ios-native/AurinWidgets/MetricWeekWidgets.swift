@@ -8,7 +8,7 @@ import WidgetKit
 // MARK: - One number
 
 enum WidgetMetric: String, AppEnum {
-    case readiness, sleep, hrv, restingHR, steps, kcalLeft, water
+    case readiness, sleep, hrv, restingHR, steps, kcalLeft, water, strain
 
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: LocalizedStringResource("Údaj", table: "Controls"))
     static let caseDisplayRepresentations: [WidgetMetric: DisplayRepresentation] = [
@@ -19,6 +19,7 @@ enum WidgetMetric: String, AppEnum {
         .steps: DisplayRepresentation(title: LocalizedStringResource("Kroky", table: "Controls")),
         .kcalLeft: DisplayRepresentation(title: LocalizedStringResource("Zbývá kalorií", table: "Controls")),
         .water: DisplayRepresentation(title: LocalizedStringResource("Pití", table: "Controls")),
+        .strain: DisplayRepresentation(title: LocalizedStringResource("Námaha", table: "Controls")),
     ]
 }
 
@@ -81,6 +82,7 @@ extension WidgetMetric {
         case .steps: return L10n.tr("Kroky")
         case .kcalLeft: return L10n.tr("Zbývá kalorií")
         case .water: return L10n.tr("Pití")
+        case .strain: return L10n.tr("Námaha")
         }
     }
 
@@ -92,6 +94,7 @@ extension WidgetMetric {
         case .restingHR, .kcalLeft: return W.rust
         case .steps: return W.amber
         case .water: return W.blue
+        case .strain: return W.amber
         }
     }
 
@@ -103,19 +106,8 @@ extension WidgetMetric {
         case .restingHR: return "aurin://open/metric/restingHR"
         case .steps: return "aurin://open/steps"
         case .kcalLeft, .water: return "aurin://open/food"
+        case .strain: return "aurin://open/strain"
         }
-    }
-
-    /// The last seven days and the usual range, for HRV and resting heart rate.
-    func trend(_ s: WidgetSnapshot) -> (values: [Double], low: Double?, high: Double?)? {
-        let picked: (series: [Double]?, low: Double?, high: Double?)
-        switch self {
-        case .hrv: picked = (s.hrvSeries, s.hrvLow, s.hrvHigh)
-        case .restingHR: picked = (s.restingSeries, s.restingLow, s.restingHigh)
-        default: return nil
-        }
-        guard let values = picked.series, values.count >= 2 else { return nil }
-        return (values, picked.low, picked.high)
     }
 
     /// The number, its unit and the line under it.
@@ -139,6 +131,22 @@ extension WidgetMetric {
             let litres = !Units.imperial
             let shown: (Double?) -> String = { ml in litres ? W.decimal((ml ?? 0) / 1000) : W.int(Units.volume(ml ?? 0)) }
             return (shown(s.waterMl), litres ? "l" : Units.volumeUnit, s.waterTarget.map { L10n.f("cíl %@", shown($0)) })
+        case .strain:
+            return (W.decimal(s.strain), "", s.strainLow.flatMap { low in s.strainHigh.map { L10n.f("cíl %@ až %@", W.int(low), W.int($0)) } })
+        }
+    }
+
+    /// The small widget: the same dial as Today and Health.
+    @MainActor @ViewBuilder func face(_ s: WidgetSnapshot) -> some View {
+        switch self {
+        case .readiness: WidgetFaces.readiness(s)
+        case .sleep: WidgetFaces.sleep(s)
+        case .hrv: WidgetFaces.hrv(s)
+        case .restingHR: WidgetFaces.restingHR(s)
+        case .steps: WidgetFaces.steps(s)
+        case .kcalLeft: WidgetFaces.kcalLeft(s)
+        case .water: WidgetFaces.water(s)
+        case .strain: WidgetFaces.strain(s)
         }
     }
 
@@ -170,29 +178,8 @@ struct MetricWidgetView: View {
                     if let note { Text(note).font(.caption) }
                 }
             default:
-                let trend = entry.metric.trend(s)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(entry.metric.color).frame(width: 7, height: 7)
-                        Text(entry.metric.title).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                    }
-                    if trend == nil { Spacer(minLength: 0) }
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(v.number).font(W.number(trend == nil ? 50 : 42)).foregroundStyle(W.ink).minimumScaleFactor(0.5).lineLimit(1)
-                            .widgetAccentable()
-                        if !v.unit.isEmpty { Text(v.unit).font(.caption).foregroundStyle(W.muted) }
-                    }
-                    // HRV and resting heart rate: the week's line over the usual range.
-                    if let trend {
-                        Spacer(minLength: 4)
-                        WidgetTrend(values: trend.values, low: trend.low, high: trend.high, color: entry.metric.color)
-                            .frame(height: 30)
-                        if let note = v.note { Text(note + ", " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
-                    } else if let note {
-                        Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                // The redesign's faces (widgets concept v3): Today's dials.
+                entry.metric.face(s)
             }
         } else {
             EmptyWidgetView()
@@ -423,20 +410,8 @@ struct NextWorkoutWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         } else if let s = entry.snapshot {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Image(systemName: WeekWidgetView.symbol(s.nextSport)).font(.caption2).foregroundStyle(W.amber)
-                    Text(L10n.tr("Další trénink")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                }
-                Spacer(minLength: 0)
-                if let title = s.nextTitle {
-                    Text(title).font(W.number(24)).foregroundStyle(W.amber).lineLimit(3).minimumScaleFactor(0.7)
-                    Text(detail(s)).font(.caption2).foregroundStyle(W.muted).lineLimit(2)
-                } else {
-                    Text(L10n.tr("Dnes už nic")).font(W.number(24)).foregroundStyle(W.ink)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            // The redesign's face: a Training row (sport disc, name, when, how long).
+            WidgetFaces.next(s)
         } else {
             EmptyWidgetView()
         }

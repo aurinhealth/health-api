@@ -148,44 +148,6 @@ struct WidgetRing: View {
     }
 }
 
-/// The last days as a line over the usual range (a soft band), the newest
-/// day as a dot.
-struct WidgetTrend: View {
-    let values: [Double]
-    var low: Double? = nil
-    var high: Double? = nil
-    var color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            let all = values + [low, high].compactMap { $0 }
-            let lo = (all.min() ?? 0) - 2, hi = (all.max() ?? 1) + 2
-            let y: (Double) -> CGFloat = { geo.size.height * CGFloat(1 - ($0 - lo) / max(1, hi - lo)) }
-            let x: (Int) -> CGFloat = { geo.size.width * CGFloat($0) / CGFloat(max(1, values.count - 1)) }
-            ZStack(alignment: .topLeading) {
-                if let low, let high {
-                    RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.12))
-                        .frame(width: geo.size.width, height: max(2, y(low) - y(high)))
-                        .offset(y: y(high))
-                }
-                Path { path in
-                    for (i, v) in values.enumerated() {
-                        let point = CGPoint(x: x(i), y: y(v))
-                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                    }
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                .widgetAccentable()
-                if let last = values.last {
-                    Circle().fill(color).frame(width: 7, height: 7)
-                        .position(x: x(values.count - 1), y: y(last))
-                        .widgetAccentable()
-                }
-            }
-        }
-    }
-}
-
 /// Without a saved snapshot (not signed in yet, or the App Group is missing).
 /// The Lock Screen's round and one-line spaces get the "open the app" symbol
 /// and a short line: the sentence did not fit there.
@@ -261,22 +223,19 @@ struct ReadinessWidgetView: View {
                     if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
-                // Today's dial (Petr's yes on the mockup, 2026-10-30): the ring, its word and the night.
-                VStack(spacing: card ? 4 : 8) {
-                    WidgetRing(score: s.readiness, zone: s.zone, lineWidth: card ? 9 : 14, fontSize: card ? 40 : 62,
-                               track: card ? W.muted.opacity(0.18) : Color.white.opacity(0.12), ink: card ? W.ink : .white)
-                    if card {
-                        if let word = W.zoneWord(s.zone) {
-                            Text(word.capitalized(with: L10n.locale)).font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
-                        }
-                        Text(L10n.f("Spánek %@, námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain)))
-                            .font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
-                    } else {
+                if card {
+                    // The redesign's face (widgets concept v3): Readiness as its dial.
+                    WidgetFaces.readiness(s)
+                } else {
+                    // StandBy: one big ring without the card.
+                    VStack(spacing: 8) {
+                        WidgetRing(score: s.readiness, zone: s.zone, lineWidth: 14, fontSize: 62,
+                                   track: Color.white.opacity(0.12), ink: .white)
                         Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { ", " + $0 } ?? ""))
                             .font(.subheadline.weight(.medium)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             EmptyWidgetView()
@@ -310,18 +269,8 @@ struct SleepWidgetView: View {
             if family == .accessoryInline {
                 Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { ", " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
             } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(W.indigo).frame(width: 7, height: 7)
-                        Text(L10n.tr("Spánek")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                    }
-                    Text(W.hm(s.sleepMinutes)).font(W.number(46)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                    if let index = s.sleepIndex { Text(L10n.f("index %@", String(index))).font(.caption2).foregroundStyle(W.indigo) }
-                    Spacer(minLength: 0)
-                    if let bed = s.bedtime {
-                        Label(L10n.f("postel %@", ClockText.format(bed)), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
-                    }
-                }
+                // The redesign's face: Today's night arc.
+                WidgetFaces.sleep(s)
             }
         } else {
             EmptyWidgetView()
@@ -442,12 +391,8 @@ struct FoodWaterWidgetView: View {
                     .frame(maxWidth: .infinity)
                 }
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    kcal(s)
-                    Spacer(minLength: 0)
-                    water(s)
-                    add(W.glass)
-                }
+                // The redesign's face: Food's hero; water has its own widget and control.
+                WidgetFaces.food(s)
             }
         } else {
             EmptyWidgetView()

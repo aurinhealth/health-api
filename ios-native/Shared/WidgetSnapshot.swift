@@ -45,6 +45,17 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The last seven days of HRV and resting heart rate, oldest first (the trend line).
     var hrvSeries: [Double]? = nil
     var restingSeries: [Double]? = nil
+    /// The redesign's widgets (concept v3): the night's ends and need (the
+    /// night arc), today's strain target, the usual steps a day, and why
+    /// readiness has no number yet (no watch or ring, still learning).
+    var sleepStart: String? = nil
+    var sleepEnd: String? = nil
+    var sleepNeed: Int? = nil
+    var strainLow: Double? = nil
+    var strainHigh: Double? = nil
+    var stepsAverage: Double? = nil
+    var noWearable: Bool? = nil
+    var learningDays: Int? = nil
 
     static func load() -> WidgetSnapshot? {
         guard let data = UserDefaults(suiteName: group)?.data(forKey: key) else { return nil }
@@ -74,6 +85,10 @@ struct WidgetSnapshot: Codable, Equatable {
         s.zone = nil
         s.sleepMinutes = nil
         s.sleepIndex = nil
+        s.sleepStart = nil
+        s.sleepEnd = nil
+        s.strainLow = nil
+        s.strainHigh = nil
         s.hrv = nil
         s.strain = nil
         s.kcal = 0
@@ -107,7 +122,8 @@ struct WidgetSnapshot: Codable, Equatable {
                                        protein: 64, proteinTarget: 150, carbs: 140, carbsTarget: 320, fat: 38, fatTarget: 80,
                                        steps: 6400, stepsGoal: 10000, bedtime: "22:45", nextTitle: "Celé tělo", nextTime: "17:30",
                                        hrvLow: 48, hrvHigh: 66, restingHR: 52, restingLow: 49, restingHigh: 56, nextSport: "strength", nextMinutes: 60,
-                                       hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52])
+                                       hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52],
+                                       sleepStart: "23:36", sleepEnd: "06:42", sleepNeed: 420, strainLow: 11, strainHigh: 14, stepsAverage: 9212)
 }
 
 /// The week for the large widget: Monday to Sunday's training time, how many

@@ -21,7 +21,11 @@ enum WidgetBridge {
                                       nextSport: next?.sport, nextMinutes: next?.session?.minutes,
                                       weekZones: today.week.map { days in Dictionary(days.compactMap { d in d.zone.map { (d.date, $0) } }, uniquingKeysWith: { a, _ in a }) },
                                       hrvSeries: today.hrv.map { Array($0.series.suffix(7).map(\.value)) },
-                                      restingSeries: today.restingHR.map { Array($0.series.suffix(7).map(\.value)) })
+                                      restingSeries: today.restingHR.map { Array($0.series.suffix(7).map(\.value)) },
+                                      sleepStart: today.sleep?.start, sleepEnd: today.sleep?.end, sleepNeed: today.sleep?.need,
+                                      strainLow: today.strain.target?.low, strainHigh: today.strain.target?.high,
+                                      stepsAverage: stepsAverage(today),
+                                      noWearable: today.readiness.noWearable, learningDays: today.readiness.learningDays)
         // The same day again (a refresh with nothing new) keeps the new time,
         // but redraws the widgets only when they may show "před 3 h" by now:
         // reloads are budgeted.
@@ -36,6 +40,13 @@ enum WidgetBridge {
             QuickActions.update(today)
             WatchBridge.shared.update(today)
         }
+    }
+
+    /// The usual steps a day for the Steps widget: the week's earlier days with steps.
+    static func stepsAverage(_ today: TodaySnapshot) -> Double? {
+        let days = today.steps.week.filter { $0.date != today.date && $0.value > 0 }
+        guard !days.isEmpty else { return nil }
+        return days.map(\.value).reduce(0, +) / Double(days.count)
     }
 
     /// Training's week for the large widget, and its sessions ahead for
