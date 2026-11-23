@@ -22,6 +22,8 @@ import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { dayVerdict } from './day-verdict.js';
+import { coachMorningGym } from './gym-morning.js';
+import { buildStrengthContext } from './strength-context.js';
 import { cached, cachedOnly, keepCached, forgetCached, bumpCacheVersion, cacheVersion, FOOD_WRITE, UNCHANGED_HEADER, closedDay, CLOSED_DAY_TTL_SECONDS } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
@@ -3026,6 +3028,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const from=shiftDate(date,-30),to=shiftDate(date,1),isToday=date===localToday();
       // The active training plan, today's plan proposal and the connection check start with the rest.
       const syncing=syncedPlans(env).catch(()=>({}));
+      // A gym day of the week plan gets the coach on its morning, in the background (gym-morning.js).
+      if(isToday&&ctx?.waitUntil)ctx.waitUntil(coachMorningGym(env,{build:buildStrengthContext}).then(r=>{if(r.result!=='none'&&r.result!=='off')console.log(JSON.stringify({gym_morning:r.result}));if(r.plan)return Promise.all([...SCREEN_PATHS].map(path=>forgetCached(env,'screen:'+path)));}).catch(error=>console.error('Gym morning failed',error.message)));
       const planWeekLeft={};
       const proposing=syncing.then(p=>isToday&&p.active?planProposal(env,ctx,planWeekLeft).catch(()=>null):null);
       // A key workout of the calendar missed this week (missed-workout.js): this week's calendar and what was let go.
