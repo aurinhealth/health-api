@@ -12,7 +12,7 @@
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
 import { reasonsSentence } from "./morning-advice.js";
-import { dayVerdict, verdictText, signsAdvice } from "./day-verdict.js";
+import { dayVerdict, verdictText, signsAdvice, numbersLine } from "./day-verdict.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -217,8 +217,14 @@ export function readinessMessage(input) {
   // day's verdict under it, the night in words and the advice. Builds with the
   // concept rewrite the banner to it (ios-native NotificationService); older
   // ones keep `alert`, which they parse.
+  // Held down, the parts apart: Today's line under the number (numbers), the
+  // coach card's night and advice, and the first workout still planned.
   const night = nightWords({ sleep, hrv, noSleep });
-  const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" ") };
+  const first = v.sessions[0] || null;
+  const numbers = numbersLine({ zone: input.zone, flags: input.flags || [], missing: input.missing || [], rest: v.key === "rest" });
+  const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" "),
+    ...(numbers ? { numbers } : {}), ...(night ? { night } : {}), ...(body ? { advice: body } : {}),
+    ...(first?.title ? { workout: { title: first.title, ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, layout, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
 }
 

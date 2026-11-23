@@ -191,7 +191,9 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
 
 // The sessions still to do today in Today's plan, as the morning push names them.
 export function todayWorkouts(plan) {
-  return (plan || []).filter(i => i && i.kind === "workout" && i.status === "planned" && i.title).map(i => ({ title: i.title, sport: i.sport }));
+  // The start time and length for the morning push held down (push.js layout).
+  return (plan || []).filter(i => i && i.kind === "workout" && i.status === "planned" && i.title)
+    .map(i => ({ title: i.title, sport: i.sport, ...(i.session?.time ? { time: i.session.time } : {}), ...(Number(i.session?.minutes) > 0 ? { minutes: Number(i.session.minutes) } : {}) }));
 }
 
 // Sleep that began on `date` other than the night, in the order of the day.
