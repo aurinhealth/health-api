@@ -35,11 +35,11 @@ final class HealthShownStateTests: XCTestCase {
 
     func testOlderMeasurementIsNamedByItsDate() {
         let fresh = "Minulá noc, teplota kůže"
-        XCTAssertEqual(HealthValueContent.dayLabel(fresh, "%@, teplota kůže", measured: "2026-11-23", day: "2026-11-23"), fresh)
-        XCTAssertEqual(HealthValueContent.dayLabel(fresh, "%@, teplota kůže", measured: nil, day: "2026-11-23"), fresh)
-        let older = HealthValueContent.dayLabel(fresh, "%@, teplota kůže", measured: "2026-11-21", day: "2026-11-23")
+        XCTAssertEqual(HealthValueContent.dayLabel(fresh, "Teplota kůže %@", measured: "2026-11-23", day: "2026-11-23"), fresh)
+        XCTAssertEqual(HealthValueContent.dayLabel(fresh, "Teplota kůže %@", measured: nil, day: "2026-11-23"), fresh)
+        let older = HealthValueContent.dayLabel(fresh, "Teplota kůže %@", measured: "2026-11-21", day: "2026-11-23")
         XCTAssertNotEqual(older, fresh)
-        XCTAssertTrue(older.hasPrefix(Fmt.dayMonthShort("2026-11-21")))
+        XCTAssertTrue(older.contains(Fmt.dayMonthShort("2026-11-21")))
     }
 
     func testNoMinusZero() {

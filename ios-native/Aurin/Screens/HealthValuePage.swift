@@ -431,11 +431,12 @@ struct HealthValueContent: View {
     }
 
     /// "Last night, …" or "Today, …" only over the day's own measurement; an
-    /// older one is named by its date ("Nov 21, skin temperature"; retest 611:
-    /// Saturday's night read "Last night" on Monday).
+    /// older one is named by its day as in the chart's bubble ("Sa Nov 21,
+    /// skin temperature", "Teplota kůže so 21. 11."; retest 611: Saturday's
+    /// night read "Last night" on Monday).
     static func dayLabel(_ fresh: String, _ dated: String, measured: String?, day: String?) -> String {
         guard let measured, let day, measured != day else { return fresh }
-        return L10n.f(dated, Fmt.dayMonthShort(measured))
+        return L10n.f(dated, Fmt.weekdayShort(measured) + " " + Fmt.dayMonthShort(measured))
     }
 
     /// The state as the page shows it: inside the usual range as written
@@ -470,21 +471,21 @@ struct HealthValueContent: View {
         case .restingHR:
             guard let r = health?.restingHR, let v = r.value ?? r.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v),
-                                      label: dayLabel("Dnes, nejnižší tep v klidu", "%@, nejnižší tep v klidu", measured: r.series.last?.date, day: health?.date),
+                                      label: dayLabel("Dnes, nejnižší tep v klidu", "Nejnižší tep v klidu %@", measured: r.series.last?.date, day: health?.date),
                                       state: shownState(state, value: v, low: r.usual?.lowerBound, high: r.usual?.upperBound, digits: value.digits),
                                       usual: usual(r.usual?.lowerBound, r.usual?.upperBound, value), local: points(r.series, low: r.usual?.lowerBound, high: r.usual?.upperBound),
                                       current: Self.current(r.value, r.series, health?.date))
         case .hrv:
             guard let h = health?.hrv, let v = h.value ?? h.series.last?.value else { return HealthValueReading(text: "–") }
             return HealthValueReading(value: v, text: text(v),
-                                      label: dayLabel("Minulá noc, variabilita tepu", "%@, variabilita tepu", measured: h.series.last?.date, day: health?.date),
+                                      label: dayLabel("Minulá noc, variabilita tepu", "Variabilita tepu %@", measured: h.series.last?.date, day: health?.date),
                                       state: shownState(state, value: v, low: h.low, high: h.high, digits: value.digits),
                                       usual: usual(h.low, h.high, value), local: points(h.series, low: h.low, high: h.high), current: Self.current(h.value, h.series, health?.date))
         case .respiration:
             guard let r = health?.respiration else { return HealthValueReading(text: "–") }
             let low = r.baseline.map { $0 - 0.5 }, high = r.baseline.map { $0 + 0.5 }
             return HealthValueReading(value: r.value, text: text(r.value),
-                                      label: dayLabel("Minulá noc, dechů za minutu ve spánku", "%@, dechů za minutu ve spánku", measured: r.series.last?.date, day: health?.date),
+                                      label: dayLabel("Minulá noc, dechů za minutu ve spánku", "Dechů za minutu ve spánku %@", measured: r.series.last?.date, day: health?.date),
                                       state: shownState(state ?? (r.elevated ? .off(above: true) : nil), value: r.value, low: low, high: high, digits: value.digits),
                                       usual: usual(low, high, value), local: points(r.series, low: low, high: high), current: Self.current(r.value, r.series, health?.date))
         case .oxygen:
@@ -492,7 +493,7 @@ struct HealthValueContent: View {
             // The same band and state as Health monitor (oxygen is never "above").
             let band = HealthMonitorCard.oxygenBand(low: o.low, high: o.high)
             return HealthValueReading(value: o.value, text: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1),
-                                      label: dayLabel("Minulá noc, kyslík v krvi ve spánku", "%@, kyslík v krvi ve spánku", measured: o.series.last?.date, day: health?.date),
+                                      label: dayLabel("Minulá noc, kyslík v krvi ve spánku", "Kyslík v krvi ve spánku %@", measured: o.series.last?.date, day: health?.date),
                                       state: HealthMonitorCard.oxygenState(state, value: o.value, band: band),
                                       usual: band.map { usual($0.lowerBound, $0.upperBound, value) } ?? nil,
                                       local: points(o.series, low: band?.lowerBound, high: band?.upperBound), current: Self.current(o.value, o.series, health?.date))
@@ -507,7 +508,7 @@ struct HealthValueContent: View {
             let half = Units.temperatureChange(0.5)
             // "0.1 °C warmer than usual" in words, no sign (concept 38, point 52).
             return HealthValueReading(value: shown, text: Fmt.decimal(abs(shown), digits: 1),
-                                      label: dayLabel("Minulá noc, teplota kůže", "%@, teplota kůže", measured: list.last?.date, day: health?.date),
+                                      label: dayLabel("Minulá noc, teplota kůže", "Teplota kůže %@", measured: list.last?.date, day: health?.date),
                                       state: shownState(night, value: shown, low: -half, high: half, digits: 1),
                                       usual: L10n.f("Obvyklé rozmezí do %@ %@ na obě strany", Fmt.decimal(half, digits: 1), Units.temperatureUnit),
                                       local: points(list, low: -half, high: half, map: Units.temperatureChange),

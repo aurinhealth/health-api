@@ -401,9 +401,9 @@ struct AurinAgeTrendCard: View {
         RouteLink(route: .aurinAge) {
             Card {
                 HStack {
-                    // A few days of estimates: the detail draws them over 30 days, so
-                    // the card names the same span (retest 611: "12 weeks" over 30 days).
-                    SectionLabel(text: short ? "Posledních 30 dní" : "Posledních 12 týdnů")
+                    // A few days of estimates have no line yet, so no span either
+                    // (retest 611: "12 weeks" over a sentence and a 30-day detail).
+                    SectionLabel(text: short ? "Vývoj" : "Posledních 12 týdnů")
                     Spacer()
                     if !short {
                         let diff = (points.last?.value ?? 0) - (points.first?.value ?? 0)
