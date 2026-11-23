@@ -39,7 +39,7 @@ struct SettingsProfileCard: View {
         var parts: [String] = []
         if let years, years > 0 { parts.append(L10n.f("%@ let", String(years))) }
         if let height = p["height"]?.number, height > 0 { parts.append(Units.lengthText(height)) }
-        if let weight = model.today?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
+        if let weight = model.settingsToday?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
@@ -66,17 +66,31 @@ struct SettingsProfileCard: View {
     }
 }
 
+extension AppModel {
+    /// Today's data for Nastavení, whichever day Today or Food shows: the goals,
+    /// the weight and the drinks sheet are today's, never the chosen day's
+    /// (Tapwright 611, bod 10: calories and drinks changed with the day). While
+    /// another day is chosen, today's copy saved on the phone (SnapshotCache).
+    var settingsToday: TodaySnapshot? {
+        guard selectedDate != nil else { return today }
+        guard let saved = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value,
+              saved.date == Self.localDate(Date()) else { return nil }
+        return saved
+    }
+}
+
 /// Cíle on one card: sleep, calories, drinks and the target weight, each its
 /// symbol on a disc with the goal and its unit under it. No rings: a part-filled
-/// ring reads as today's progress, and these are goals (D-NAST-5). Opens Cíle.
+/// ring reads as today's progress, and these are goals (D-NAST-5). The title
+/// opens Cíle; a goal opens its own small sheet.
 struct SettingsGoalsCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var textSize
     let store: SettingsStore
 
     var body: some View {
-        NavigationLink { GoalsSettingsView(store: store) } label: {
-            VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            NavigationLink { GoalsSettingsView(store: store) } label: {
                 HStack {
                     Text("Cíle").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                     Spacer()
@@ -84,11 +98,16 @@ struct SettingsGoalsCard: View {
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 6)
-                Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6)
-                // Four in a row; two by two at the accessibility text sizes.
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 4),
-                          spacing: 14) {
-                    ForEach(cells, id: \.label) { cell in
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 6)
+            // Four in a row; two by two at the accessibility text sizes.
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 4),
+                      spacing: 14) {
+                ForEach(cells, id: \.label) { cell in
+                    Button { before = store.profile; editing = cell.goal } label: {
                         VStack(spacing: 7) {
                             SettingsDisc(systemImage: cell.symbol, color: cell.color, size: 40)
                             // The number always 20 pt; the unit small beside it, so the row stays even.
@@ -104,19 +123,41 @@ struct SettingsGoalsCard: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(L10n.tr(cell.label) + ", " + (cell.number.map { $0 + " " + cell.unit } ?? L10n.tr("nenastaveno")))
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(PressableCardStyle())
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10n.tr(cell.label) + ", " + (cell.number.map { $0 + " " + cell.unit } ?? L10n.tr("nenastaveno")))
+                    .accessibilityAddTraits(.isButton)
                 }
             }
-            .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 16)
-            .cardSurface(cornerRadius: 22)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(PressableCardStyle())
+        .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 16)
+        .cardSurface(cornerRadius: 22)
+        // A goal saved in a sheet shows on Today and on the card, as from Cíle.
+        .sheet(item: $editing, onDismiss: {
+            if ["kcalGoal", "waterMode", "waterGoal", "waterStart", "targetWeight"].contains(where: { before[$0] != store.profile[$0] }) {
+                Task { await model.reloadToday() }
+            }
+        }) { goal in
+            let today = model.settingsToday
+            switch goal {
+            case .sleep: SleepGoalSheet(store: store)
+            case .kcal: CalorieGoalSheet(store: store, auto: today?.nutrition.autoTarget ?? today?.nutrition.target)
+            case .water: WaterGoalSheet(store: store, water: today?.nutrition.water, today: AppModel.localDate(Date()))
+            case .weight: TargetWeightSheet(store: store, latest: today?.weight?.latest)
+            }
+        }
     }
 
+    /// A tap on one goal opens only that goal (Petr 2026-11-23); the title opens Cíle.
+    enum Goal: String, Identifiable { case sleep, kcal, water, weight; var id: String { rawValue } }
+    @State private var editing: Goal?
+    /// The profile when the sheet opened.
+    @State private var before: JSONObject = [:]
+
     struct Cell {
+        let goal: Goal
         let symbol: String
         let color: Color
         /// Nil while the goal is not set: a dash, and "nenastaveno" for VoiceOver.
@@ -149,17 +190,17 @@ struct SettingsGoalsCard: View {
     }
 
     var cells: [Cell] {
-        let today = model.today
+        let today = model.settingsToday
         let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
         let kcal = today?.nutrition.target
         let water = Self.waterGoal(store, today?.nutrition.water)
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
         return [
-            Cell(symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText),
+            Cell(goal: .sleep, symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText),
                  unit: sleepGoal.map { Int($0.rounded()) % 60 == 0 } == false ? "" : "h", label: "Spánek"),
-            Cell(symbol: "flame.fill", color: Palette.amber, number: kcal.map { Fmt.int($0) }, unit: "kcal", label: "Kalorie"),
-            Cell(symbol: "drop.fill", color: Palette.blue, number: water.map(Self.drinkText), unit: Units.imperial ? Units.volumeUnit : "l", label: "Pití"),
-            Cell(symbol: "scalemass.fill", color: Palette.green, number: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) }, unit: Units.weightUnit, label: "Cílová váha")
+            Cell(goal: .kcal, symbol: "flame.fill", color: Palette.amber, number: kcal.map { Fmt.int($0) }, unit: "kcal", label: "Kalorie"),
+            Cell(goal: .water, symbol: "drop.fill", color: Palette.blue, number: water.map(Self.drinkText), unit: Units.imperial ? Units.volumeUnit : "l", label: "Pití"),
+            Cell(goal: .weight, symbol: "scalemass.fill", color: Palette.green, number: weightGoal.map { Fmt.decimal(Units.weight($0), digits: 0) }, unit: Units.weightUnit, label: "Cílová váha")
         ]
     }
 }
