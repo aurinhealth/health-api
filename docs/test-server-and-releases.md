@@ -49,7 +49,9 @@ server. `vydat.yml`, run by hand:
    (`EXTERNAL_GROUP` repository variable when there is more than one) and submits it to Apple's
    beta review; otherwise the owner adds builds to the external groups by hand in App Store
    Connect (TestFlight → the group → Builds → +): build N for the testers. Build N.1, the same app
-   with the Apple Watch app, always goes to `WATCH_GROUP` with the same notes.
+   with the Apple Watch app, gets the same notes and goes to `WATCH_GROUP` only when "close_testers"
+   is ticked: while the owner tests the new design (branch `redesign`), a main build there would put
+   the old design on top of his redesign builds.
 
 A server-only fix goes live with `deploy-worker.yml`, target production, without a release.
 
