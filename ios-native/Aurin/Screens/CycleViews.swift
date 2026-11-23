@@ -288,10 +288,10 @@ struct MissedPillCard: View {
 
     private func snooze() {
         snoozedUntil = Date().addingTimeInterval(30 * 60).timeIntervalSince1970
-        guard let pill, let number = pill.number else { return }
+        guard pill?.number != nil else { return }
         Task {
-            await Reminders.snoozePill(date: date, title: L10n.tr("Už máš dnešní prášek?"),
-                                       body: PushRegistration.hideValuesOn ? L10n.tr("Ještě není zapsaný.") : L10n.f("%@. prášek z %@", String(number), String(pill.of)))
+            // Neutral on the lock screen, like the reminder itself (Notifications concept v3, N6).
+            await Reminders.snoozePill(date: date, title: L10n.tr("Denní připomínka"), body: L10n.tr("Označ, až to bude hotové"))
         }
     }
 }

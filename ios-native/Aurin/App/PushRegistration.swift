@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private let api = APIClient()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Water off for a new install only (before anything reads the switches).
+        Reminders.adoptNewDefaults()
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
         // Health data paused (also on another device) answers 403 health_paused:
@@ -50,7 +52,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + [CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
+        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + Reminders.mealNotificationCategories + [Reminders.workoutNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
                                                                                     MorningPush.category, IdleWorkout.category]))
         center.delegate = self
         return true
@@ -124,6 +126,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         if content.categoryIdentifier == IdleWorkout.categoryID {
             IdleWorkout.answer(response)
+            return
+        }
+        // "Open workout" and "Reschedule" on the workout reminder, "Log lunch" on a meal's.
+        if content.categoryIdentifier == Reminders.workoutCategory {
+            if response.actionIdentifier == Reminders.workoutOpenAction { QuickActions.shared.pick = QuickActions.Pick(id: "today") }
+            if response.actionIdentifier == Reminders.workoutMoveAction { QuickActions.shared.pick = QuickActions.Pick(id: "weekPlan") }
+            return
+        }
+        if content.categoryIdentifier.hasPrefix(Reminders.mealCategoryPrefix) {
+            if response.actionIdentifier == Reminders.mealLogAction, let meal = content.userInfo["meal"] as? String {
+                QuickActions.shared.pick = QuickActions.Pick(id: "meal." + meal)
+            }
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {

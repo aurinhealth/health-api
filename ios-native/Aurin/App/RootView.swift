@@ -15,6 +15,8 @@ struct RootView: View {
     @State private var showSyncStatus = false
     /// Přidat jídlo and Vyfotit jídlo from the icon's menu.
     @State private var quickFood: FoodStart?
+    /// The meal a meal reminder's "Log lunch" adds to (Reminders); nil: the one of now.
+    @State private var quickMeal: String?
     @State private var quickActions = QuickActions.shared
     /// A food the owner fixed, opened from its push (FoodPush).
     @State private var foodPush = FoodPush.shared
@@ -302,7 +304,7 @@ struct RootView: View {
             .sheet(item: $coachChat) { ref in CoachView(openChat: ref.id).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .sheet(item: $quickFood) { start in
-                AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
+                AddFoodSheet(meal: quickMeal ?? MealSlot.now(slots: model.food?.mealSlots), start: start)
                     .dynamicTypeSize(Self.textSizes)
                     // Food from the icon goes to today, like "+".
                     .onAppear { model.writesToday = true }
@@ -468,6 +470,7 @@ struct RootView: View {
         showCoach = false
         showSyncStatus = false
         quickFood = nil
+        quickMeal = nil
         fixedFood = nil
         coachChat = nil
         // One sheet at a time: the new one opens once the old has closed.
@@ -499,6 +502,9 @@ struct RootView: View {
         case "liveGym": model.open(.liveGym(today, false))
         case "weekPlan": model.open(.weekPlan)
         case "sleep": model.open(.sleep)
+        case let meal where meal.hasPrefix("meal."):
+            quickMeal = String(meal.dropFirst(5))
+            quickFood = .search
         default: break
         }
     }

@@ -36,8 +36,9 @@ enum Reminders {
     /// weekday (bit 0 Sunday … bit 6 Saturday), stored under "<key>.days".
     static func daysKey(_ key: String) -> String { key + ".days" }
     static let everyDay = 127
-    /// Every day, except the week plan on Sunday as before.
-    static func defaultDays(_ key: String) -> Int { key == weekKey ? 1 : everyDay }
+    /// Every day, except the week plan on Sunday and the weigh-in on Monday
+    /// (Notifications concept v3, "Monday morning").
+    static func defaultDays(_ key: String) -> Int { key == weekKey ? 1 : key == weightKey ? 2 : everyDay }
     static func days(_ key: String) -> Int {
         let value = UserDefaults.standard.object(forKey: daysKey(key)) as? Int ?? defaultDays(key)
         return value & everyDay == 0 ? defaultDays(key) : value & everyDay
@@ -70,8 +71,28 @@ enum Reminders {
     static func mealKey(_ id: String) -> String { "remind.meal." + id }
     static func mealTimeKey(_ id: String) -> String { "remind.meal." + id + ".time" }
 
-    /// Off by default: the reminders added later that nobody asked for yet.
-    private static let offByDefault = Set([weightKey, weekKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+    /// Off by default: the reminders added later that nobody asked for yet, and
+    /// water for a new install (Notifications concept v3: water has its own
+    /// widget and control; adoptNewDefaults keeps it on where it already was).
+    private static let offByDefault = Set([weightKey, waterKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+
+    /// Once, at launch: a phone that already used Aurin before water went off
+    /// by default keeps its water reminders on (and the server's water push),
+    /// unless it turned them off itself.
+    static func adoptNewDefaults(_ defaults: UserDefaults = .standard) {
+        let done = "remind.defaults.v3"
+        guard !defaults.bool(forKey: done) else { return }
+        defaults.set(true, forKey: done)
+        let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
+        if usedBefore, defaults.object(forKey: waterKey) == nil { defaults.set(true, forKey: waterKey) }
+        // The week plan comes on for new installs only (concept v3); a phone that used Aurin keeps it off.
+        if usedBefore, defaults.object(forKey: weekKey) == nil { defaults.set(false, forKey: weekKey) }
+        // A weigh-in already on (it was off by default, so an older version's
+        // choice: this runs before anything else) keeps its every day; Monday is for new ones.
+        if defaults.object(forKey: weightKey) as? Bool == true, defaults.object(forKey: daysKey(weightKey)) == nil {
+            defaults.set(everyDay, forKey: daysKey(weightKey))
+        }
+    }
 
     private static let prefix = "aurin."
     /// Reminders planned by a version from before 2026-11, taken away and planned again under the new prefix.
@@ -120,7 +141,7 @@ enum Reminders {
         let pending = all.filter { ours($0) && !lastNight.contains($0) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
         var planned: [UNNotificationRequest] = []
-        defer { addSoonest(planned, room: limit - (all.count - pending.count), to: center) }
+        defer { addSoonest(capped(planned), room: limit - (all.count - pending.count), to: center) }
 
         let weekday = Calendar.current.component(.weekday, from: Date())
         // Bedtime: a fixed time on the chosen days, or the chosen time before
@@ -150,15 +171,19 @@ enum Reminders {
         if isOn(workoutKey), has(days(workoutKey), weekday) {
             let open = today.plan.filter { $0.kind == "workout" && !$0.done && $0.status != "missed" }
             let timeOf = { (item: TodaySnapshot.PlanItem) in item.time ?? item.session?.time }
+            // Notifications concept v3, N4: "Upper body strength at 17:30" /
+            // "45 min. Starts in an hour.", with Open workout and Reschedule.
             for item in open {
                 guard let time = timeOf(item), let at = minutes(time), at >= 60 else { continue }
-                add(&planned, "workout." + time, at: at - 60, title: L10n.f("Za hodinu: %@", item.title),
-                    body: item.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
+                add(&planned, "workout." + time, at: at - 60, title: workoutTitle(item.title, at: ClockText.format(time)),
+                    body: item.session?.minutes.map { L10n.f("%@ min. Začíná za hodinu.", String($0)) } ?? L10n.tr("Začíná za hodinu."),
+                    category: workoutCategory)
             }
             let untimed = open.filter { timeOf($0) == nil }
             if !untimed.isEmpty {
                 add(&planned, "workout.day", at: minute(workoutTimeKey, 16 * 60), title: L10n.f("Dnes v plánu: %@", untimed.map(\.title).joined(separator: ", ")),
-                    body: untimed.first?.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
+                    body: untimed.first?.session?.minutes.map { L10n.f("%@ min.", String($0)) } ?? L10n.tr("Ještě není hotový."),
+                    category: workoutCategory)
             }
         }
         // Water through the chosen part of the day while below the day's target.
@@ -172,27 +197,37 @@ enum Reminders {
                     body: hidesValues ? L10n.tr("Dej si sklenici vody.") : L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
-        // Each chosen meal at its time, on the chosen days.
+        // Meals (Notifications concept v3, N5): at most two nudges a day, each
+        // for a chosen meal not logged yet, two hours after its usual time.
+        // The evening "log the day" is one of the two and comes only while the
+        // day is still empty. Planned a week ahead (so also on days the app is
+        // not opened); today counts the nudges already shown.
         if isOn(mealsKey) {
-            for meal in meals where isOn(mealKey(meal.id)) {
-                addRepeating(&planned, "meal." + meal.id, at: minute(mealTimeKey(meal.id), meal.time), days: days(mealsKey),
-                             title: L10n.tr(meal.title), body: L10n.tr("Zapiš, co jíš, ať sedí dnešní příjem."))
-            }
-        }
-        // The evening: log what was eaten, only while the day is still empty.
-        // Planned a week ahead (so also on days the app is not opened), today
-        // left out once something is logged.
-        if isOn(foodKey) {
-            let at = minute(foodTimeKey, 20 * 60 + 30), foodDays = days(foodKey)
-            let logged = (today.nutrition.kcal ?? 0) > 0
             let calendar = Calendar.current
             let start = calendar.startOfDay(for: Date())
+            let chosen = meals.filter { isOn(mealKey($0.id)) }.sorted { nudgeRank($0.id) < nudgeRank($1.id) }
+            let logged = loggedMeals(on: todayDate)
+            let emptyToday = (today.nutrition.kcal ?? 0) <= 0 && logged.isEmpty
+            let shownToday = await center.deliveredNotifications().filter {
+                isMealNudge($0.request.identifier) && $0.request.content.userInfo["date"] as? String == todayDate
+            }.count
             for offset in 0..<8 {
-                if offset == 0 && logged { continue }
                 guard let day = calendar.date(byAdding: .day, value: offset, to: start),
-                      has(foodDays, calendar.component(.weekday, from: day)) else { continue }
-                addOnce(&planned, "food.\(offset)", day: day, at: at, title: L10n.tr("Zapiš jídlo"),
-                        body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."))
+                      has(days(mealsKey), calendar.component(.weekday, from: day)) else { continue }
+                let date = AppModel.localDate(day)
+                var room = maxMealNudges - (offset == 0 ? shownToday : 0)
+                for meal in chosen where room > 0 {
+                    if offset == 0 && logged.contains(meal.id) { continue }
+                    let before = planned.count
+                    addOnce(&planned, "meal.\(meal.id).\(offset)", day: day, at: min(23 * 60 + 30, minute(mealTimeKey(meal.id), meal.time) + mealNudgeDelay),
+                            title: mealNudgeTitle(meal.id), body: L10n.tr("Zápis zabere pár klepnutí."),
+                            category: mealCategoryPrefix + meal.id, info: ["date": date, "meal": meal.id])
+                    if planned.count > before { room -= 1 }
+                }
+                if room > 0, isOn(foodKey), offset > 0 || emptyToday {
+                    addOnce(&planned, "food.\(offset)", day: day, at: minute(foodTimeKey, 20 * 60 + 30), title: L10n.tr("Zapiš jídlo"),
+                            body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."), info: ["date": date])
+                }
             }
         }
         // Weighing in the morning, before breakfast.
@@ -202,7 +237,8 @@ enum Reminders {
         }
         // The pill (Settings → Oznámení → Antikoncepce): the coming 8 days of
         // the pack at the chosen time, pause days only when asked, today left
-        // out once taken. "Vzato" and "Za 30 minut" right on the notification.
+        // out once taken. "Hotovo" and "Za 30 min" right on the notification; the lock
+        // screen says only "Denní připomínka" (Notifications concept v3, N6).
         if let pill = storedPill(), pill.on {
             let calendar = Calendar.current
             let start = calendar.startOfDay(for: Date())
@@ -213,9 +249,8 @@ enum Reminders {
                 let date = AppModel.localDate(day)
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
-                addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
-                        body: hidesValues ? "" : number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
-                        category: pillCategory, info: ["date": date])
+                addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Denní připomínka"),
+                        body: L10n.tr("Označ, až to bude hotové"), category: pillCategory, info: ["date": date])
             }
         }
         // The missed pill (same screen, Vynechaný prášek): an hour after the
@@ -234,10 +269,8 @@ enum Reminders {
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active), number > 0 else { continue }
                 // Past midnight (a pill usually logged at 23:30): the next day's early hours.
                 guard let fireDay = calendar.date(byAdding: .day, value: at / 1440, to: day) else { continue }
-                addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Už máš dnešní prášek?"),
-                        body: hidesValues ? L10n.tr("Ještě není zapsaný.")
-                            : L10n.f("Ještě není zapsaný. Obvykle ho bereš kolem %@.", clock(usual)) + ", " + L10n.f("%@. prášek z %@", String(number), String(pill.active)),
-                        category: pillCategory, info: ["date": date])
+                addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Denní připomínka"),
+                        body: L10n.tr("Ještě není označeno"), category: pillCategory, info: ["date": date])
             }
         }
         // Sunday evening (or the chosen days): a look at the coming week's plan.
@@ -281,6 +314,128 @@ enum Reminders {
         }
     }
 
+    // MARK: - Notifications concept v3 (2026-11-19)
+
+    /// The app's own reminders stack as one group on the lock screen,
+    /// apart from the coach's (Notifications concept v3, N7).
+    static let threadID = "aurin.reminders"
+
+    /// At most this many of the app's reminders a day; with the morning
+    /// readiness and one coach message that is about six. The pill never
+    /// counts and is never left out.
+    static let dailyCap = 4
+    /// Which go first when a day is full: lower stays.
+    static func priority(_ id: String) -> Int {
+        let kind = id.hasPrefix(prefix) ? String(id.dropFirst(prefix.count)) : id
+        let order = ["workout", "bedtime", "meal", "food", "weight", "week", "water"]
+        return order.firstIndex { kind.hasPrefix($0) } ?? order.count
+    }
+
+    /// The planned reminders with each day kept to the daily cap (the pill aside):
+    /// the lower priority ones of a full day go. A repeating reminder counts
+    /// on every day it sounds in the coming week.
+    static func capped(_ planned: [UNNotificationRequest], perDay: Int = dailyCap, now: Date = Date()) -> [UNNotificationRequest] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        func days(_ request: UNNotificationRequest) -> [Int] {
+            guard let trigger = request.trigger as? UNCalendarNotificationTrigger else { return [] }
+            if trigger.repeats {
+                return (0..<8).filter { offset in
+                    guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return false }
+                    return trigger.dateComponents.weekday.map { $0 == calendar.component(.weekday, from: day) } ?? true
+                }
+            }
+            guard let next = trigger.nextTriggerDate() else { return [] }
+            return [calendar.dateComponents([.day], from: start, to: calendar.startOfDay(for: next)).day ?? 0]
+        }
+        var count: [Int: Int] = [:]
+        var kept: Set<String> = []
+        let ranked = planned.enumerated().sorted { (priority($0.element.identifier), $0.offset) < (priority($1.element.identifier), $1.offset) }
+        for (_, request) in ranked {
+            if isPill(request.content.categoryIdentifier) {
+                kept.insert(request.identifier)
+                continue
+            }
+            let on = days(request)
+            let room = on.filter { count[$0, default: 0] < perDay }
+            // A one-off needs room on its day; a repeating one on at least one of its days.
+            let repeating = (request.trigger as? UNCalendarNotificationTrigger)?.repeats == true
+            if !on.isEmpty && (repeating ? room.isEmpty : room.count < on.count) { continue }
+            for day in on { count[day, default: 0] += 1 }
+            kept.insert(request.identifier)
+        }
+        return planned.filter { kept.contains($0.identifier) }
+    }
+
+    /// "Upper body strength at 17:30" (Czech "Posilování horní části těla, 17:30").
+    static func workoutTitle(_ name: String, at clock: String) -> String {
+        L10n.isEnglish ? name + " at " + clock : name + ", " + clock
+    }
+
+    /// The workout reminder's buttons: Open workout and Reschedule (AppDelegate).
+    static let workoutCategory = "aurin.workout"
+    static let workoutOpenAction = "aurin.workout.open"
+    static let workoutMoveAction = "aurin.workout.move"
+
+    static let maxMealNudges = 2
+    /// "Lunch not logged" two hours after lunch's usual time.
+    static let mealNudgeDelay = 120
+    /// Lunch and dinner first, then breakfast and the snacks.
+    static func nudgeRank(_ id: String) -> Int {
+        ["lunch", "dinner", "breakfast", "snack_pm", "snack_am", "snack_late"].firstIndex(of: id) ?? 9
+    }
+    static func isMealNudge(_ id: String) -> Bool { id.hasPrefix(prefix + "meal.") || id.hasPrefix(prefix + "food.") }
+
+    static func mealNudgeTitle(_ id: String) -> String {
+        switch id {
+        case "breakfast": return L10n.tr("Snídaně není zapsaná")
+        case "snack_am": return L10n.tr("Dopolední svačina není zapsaná")
+        case "lunch": return L10n.tr("Oběd není zapsaný")
+        case "snack_pm": return L10n.tr("Odpolední svačina není zapsaná")
+        case "dinner": return L10n.tr("Večeře není zapsaná")
+        default: return L10n.tr("Druhá večeře není zapsaná")
+        }
+    }
+
+    /// One category per meal, so the button names it ("Log lunch"); it opens adding food to that meal.
+    static let mealCategoryPrefix = "aurin.meal."
+    static let mealLogAction = "aurin.meal.log"
+    static var mealNotificationCategories: [UNNotificationCategory] {
+        let titles = ["breakfast": "Zapsat snídani", "snack_am": "Zapsat svačinu", "lunch": "Zapsat oběd",
+                      "snack_pm": "Zapsat svačinu", "dinner": "Zapsat večeři", "snack_late": "Zapsat druhou večeři"]
+        return meals.map { meal in
+            UNNotificationCategory(identifier: mealCategoryPrefix + meal.id, actions: [
+                UNNotificationAction(identifier: mealLogAction, title: L10n.tr(titles[meal.id] ?? "Zapsat jídlo"), options: [.foreground])
+            ], intentIdentifiers: [], options: [])
+        }
+    }
+
+    static var workoutNotificationCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: workoutCategory, actions: [
+            UNNotificationAction(identifier: workoutOpenAction, title: L10n.tr("Otevřít trénink"), options: [.foreground]),
+            UNNotificationAction(identifier: workoutMoveAction, title: L10n.tr("Naplánovat jinak"), options: [.foreground])
+        ], intentIdentifiers: [], options: [])
+    }
+
+    private static let loggedMealsKey = "remind.loggedMeals"
+
+    /// The meals with something logged on `date` ("2026-11-23"), as the Food screen last showed them.
+    static func loggedMeals(on date: String, _ defaults: UserDefaults = .standard) -> Set<String> {
+        guard let stored = defaults.string(forKey: loggedMealsKey), stored.hasPrefix(date + "|") else { return [] }
+        return Set(stored.dropFirst(date.count + 1).split(separator: ",").map(String.init).filter { !$0.isEmpty })
+    }
+
+    /// The Food screen of today loaded: its logged meals are kept, and their
+    /// nudges (and the evening one, once anything is logged) are taken back.
+    static func noteLoggedMeals(_ food: FoodSnapshot?, _ defaults: UserDefaults = .standard) {
+        guard let food, food.date == AppModel.localDate(Date()) else { return }
+        let logged = food.meals.filter { !$0.entries.isEmpty }.map(\.type)
+        defaults.set(food.date + "|" + logged.joined(separator: ","), forKey: loggedMealsKey)
+        guard !logged.isEmpty else { return }
+        let ids = logged.map { prefix + "meal.\($0).0" } + [prefix + "food.0"]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
     /// iOS keeps 64 pending notifications per app and silently drops the rest.
     static let limit = 64
 
@@ -300,7 +455,7 @@ enum Reminders {
     /// Only times still ahead today are planned, unless the reminder repeats
     /// daily or belongs to the coming night (afterMidnight: the next 00:10).
     private static func add(_ planned: inout [UNNotificationRequest], _ id: String, at minute: Int, title: String, body: String,
-                            repeats: Bool = false, afterMidnight: Bool = false, weekday: Int? = nil) {
+                            repeats: Bool = false, afterMidnight: Bool = false, weekday: Int? = nil, category: String? = nil) {
         let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let nowMinute = (now.hour ?? 0) * 60 + (now.minute ?? 0)
         // After midnight but before 6:00 the "coming night" reminder is the one ahead, not yesterday's.
@@ -309,6 +464,8 @@ enum Reminders {
         content.title = title
         content.body = body
         content.sound = .default
+        content.threadIdentifier = threadID
+        if let category { content.categoryIdentifier = category }
         var when = DateComponents()
         when.hour = minute / 60
         when.minute = minute % 60
@@ -338,6 +495,7 @@ enum Reminders {
         content.title = title
         content.body = body
         content.sound = .default
+        content.threadIdentifier = threadID
         if let category { content.categoryIdentifier = category }
         if !info.isEmpty { content.userInfo = info }
         let when = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
@@ -351,7 +509,7 @@ enum Reminders {
 
     // MARK: - The pill
 
-    /// The notification's category with "Vzato" and "Za 30 minut"
+    /// The notification's category with "Hotovo" and "Za 30 min"
     /// (AppDelegate registers it and handles the answer).
     static let pillCategory = "aurin.pill"
     static let pillTakenAction = "aurin.pill.taken"
@@ -363,8 +521,8 @@ enum Reminders {
     static var pillNotificationCategories: [UNNotificationCategory] {
         [prefix, legacyPrefix].map { at in
             UNNotificationCategory(identifier: at + "pill", actions: [
-                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Vzato"), options: [.authenticationRequired]),
-                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 minut"), options: [])
+                UNNotificationAction(identifier: at + "pill.taken", title: L10n.tr("Hotovo"), options: [.authenticationRequired]),
+                UNNotificationAction(identifier: at + "pill.snooze", title: L10n.tr("Za 30 min"), options: [])
             ], intentIdentifiers: [], options: [])
         }
     }
@@ -424,6 +582,7 @@ enum Reminders {
         content.body = body
         content.sound = .default
         content.categoryIdentifier = pillCategory
+        content.threadIdentifier = threadID
         content.userInfo = ["date": date]
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 30 * 60, repeats: false)
         try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: pillSnoozeId, content: content, trigger: trigger))

@@ -439,6 +439,8 @@ extension AppModel {
             let (snapshot, data) = try await api.foodData(date: day)
             guard stillSignedIn(account), selectedDate == day else { return }
             foodScreen.show(snapshot, data: data, settled: settled)
+            // The meal nudges ask only about meals not logged yet (Reminders).
+            Reminders.noteLoggedMeals(snapshot)
             // The day's food and water to Apple Health when switched on in Zdroje dat (Aurin posílá).
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
@@ -559,6 +561,7 @@ extension AppModel {
         }
         if case .success(let (snapshot, data))? = f {
             foodScreen.show(snapshot, data: data, settled: settledFood)
+            Reminders.noteLoggedMeals(snapshot)
             fetched[.food] = (Date(), date)
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
         }
