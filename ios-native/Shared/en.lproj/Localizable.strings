@@ -5213,9 +5213,9 @@
 "Noční hodnoty" = "Night values";
 "Otevři Zdraví v Aurinu" = "Open Health in Aurin";
 "Zatím málo dat" = "Not enough data yet";
-"%@ z %@ nocí dosáhlo %@" = "%1$@ of %2$@ nights reached %3$@";
 "Dnes večer" = "Tonight";
 "Dnešní kroky proti tvému cíli" = "Steps today against your goal";
 "Tvůj odhad Aurin Age, součást Aurin Pro" = "Your Aurin Age estimate, part of Aurin Pro";
 "Hodnoty z noci z tvých hodinek nebo prstenu" = "Overnight values from your watch or ring";
 "VĚK" = "AGE";
+"Teplota ve spánku" = "Sleep temp";

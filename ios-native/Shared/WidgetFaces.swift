@@ -850,7 +850,8 @@ struct AurinAgeSmallFace: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            WidgetLabel(text: L10n.tr(h?.aurinAge != nil ? "Odhad Aurin age" : "Aurin Age"))
+            // "AURIN AGE" only on the free card; with Pro the estimate is labelled as one (MDR).
+            WidgetLabel(text: L10n.tr(h.map { $0.aurinAge == nil && !$0.pro } == true ? "Aurin Age" : "Odhad Aurin age"))
             GeometryReader { geo in
                 let side = max(56, min(86, geo.size.width, geo.size.height))
                 orb(side).frame(width: geo.size.width, height: geo.size.height)
@@ -908,23 +909,25 @@ struct AurinAgeSmallFace: View {
 /// range. Neutral ink throughout, never a warning colour (MDR, concept v3).
 struct NightValuesFace: View {
     var h: WidgetHealth?
+    /// Today (yyyy-MM-dd): an older Health's values never read as last night.
+    var today: String?
 
     var body: some View {
-        let values = h?.values ?? []
+        let values = h == nil || (today != nil && h?.date != today) ? [] : h?.values ?? []
         VStack(alignment: .leading, spacing: 8) {
             WidgetLabel(text: L10n.tr("Noční hodnoty"), alignment: .leading)
-            Text(verbatim: values.isEmpty ? L10n.tr("Potřebuje hodinky nebo prsten v noci") : (h?.nightTitle ?? L10n.tr("Minulá noc")))
+            Text(verbatim: values.isEmpty ? emptyText : (h?.nightTitle ?? L10n.tr("Minulá noc")))
                 .font(WidgetStyle.serif(16)).foregroundStyle(values.isEmpty ? Palette.muted : Palette.ink)
                 .lineLimit(2).minimumScaleFactor(0.8)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             HStack(alignment: .top, spacing: 4) {
                 if values.isEmpty {
-                    ForEach(["Tep v klidu", "HRV", "Kyslík", "Dech", "Teplota kůže"], id: \.self) { label in
-                        cell(nil, label: label)
-                    }
+                    let empty = [Self.caption("Tep v klidu", unit: ""), Self.caption("HRV", unit: "ms"), Self.caption("Kyslík", unit: "%"),
+                                 Self.caption("Dech", unit: ""), Self.caption("Teplota kůže", unit: Units.temperatureUnit)]
+                    ForEach(empty, id: \.self) { label in cell(nil, label: label) }
                 } else {
-                    ForEach(values.indices, id: \.self) { i in cell(values[i], label: values[i].label) }
+                    ForEach(values.indices, id: \.self) { i in cell(values[i], label: Self.caption(values[i].label, unit: values[i].unit)) }
                 }
             }
         }
@@ -932,6 +935,22 @@ struct NightValuesFace: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: ([L10n.tr("Noční hodnoty"), h?.nightTitle].compactMap { $0 }
             + values.map { L10n.tr($0.label) + " " + $0.text + " " + $0.unit }).joined(separator: ", ")))
+    }
+
+    /// The concept's words under the dials: "Resting HR", "HRV ms", "Oxygen %",
+    /// "Breathing", "Sleep temp °C" (the night's temperature, whichever device).
+    static func caption(_ label: String, unit: String) -> String {
+        switch label {
+        case "HRV", "Kyslík": return L10n.tr(label) + " " + unit
+        case "Teplota kůže", "Kůže tepleji", "Kůže chladněji": return L10n.tr("Teplota ve spánku") + " " + unit
+        default: return L10n.tr(label)
+        }
+    }
+
+    /// No watch or ring, or Health not loaded today yet.
+    private var emptyText: String {
+        guard let h, h.date == today || today == nil, h.values.isEmpty else { return L10n.tr("Otevři Zdraví v Aurinu") }
+        return L10n.tr("Potřebuje hodinky nebo prsten v noci")
     }
 
     private func cell(_ v: WidgetHealth.Value?, label: String) -> some View {
@@ -945,7 +964,7 @@ struct NightValuesFace: View {
             } else {
                 WidgetDial(value: nil, size: 40, lineWidth: 4) { EmptyView() }
             }
-            Text(verbatim: [L10n.tr(label), v.map { $0.unit }].compactMap { $0 }.joined(separator: " "))
+            Text(verbatim: label)
                 .font(.system(size: 9)).foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
         }
@@ -972,8 +991,8 @@ struct SleepMediumFace: View {
             VStack(alignment: .leading, spacing: 6) {
                 if let nights = h?.nights, h?.date == s.date, !nights.isEmpty {
                     weekDots(nights)
-                    if let need = h?.need {
-                        Text(verbatim: L10n.f("%@ z %@ nocí dosáhlo %@", String(nights.filter(\.reached).count), String(nights.count), WidgetStyle.length(Double(need))))
+                    if h?.need != nil {
+                        Text(verbatim: L10n.f("%@ ze %@ nocí s plnou potřebou", String(nights.filter(\.reached).count), String(nights.count)))
                             .font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(2)
                     }
                 }

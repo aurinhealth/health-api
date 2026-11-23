@@ -181,7 +181,9 @@ final class WidgetFaceTests: XCTestCase {
         ])
         try render("widgets-health-medium", size: CGSize(width: 364, height: 170), rows: [
             [AnyView(NightValuesFace(h: h)), AnyView(NightValuesFace(h: noWatch))],
-            [AnyView(SleepMediumFace(s: day, h: h)), AnyView(SleepMediumFace(s: day, h: nil))]
+            [AnyView(SleepMediumFace(s: day, h: h)), AnyView(SleepMediumFace(s: day, h: nil))],
+            // Health from an earlier day: never shown as last night.
+            [AnyView(NightValuesFace(h: h, today: "2026-10-09")), AnyView(NightValuesFace(h: h, today: h.date))]
         ])
     }
 

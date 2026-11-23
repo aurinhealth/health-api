@@ -1,12 +1,13 @@
 import SwiftUI
+import UIKit
 
 /// How the Aurin Age orb is drawn, shared by Health (AurinOrb, which moves
 /// it) and the Aurin Age widget (WidgetOrb, which draws one still frame).
 enum OrbPainter {
     /// The glow from below: the dark-mode status colours, since the orb is dark in both modes.
-    static let youngerGlow = Color(hex: 0x8FE6C4)
-    static let olderGlow = Color(hex: 0xFF9238)
-    static let rim = Color(hex: 0xE9B970)
+    static let youngerGlow = Color(uiColor: UIColor(hex: 0x8FE6C4))
+    static let olderGlow = Color(uiColor: UIColor(hex: 0xFF9238))
+    static let rim = Color(uiColor: UIColor(hex: 0xE9B970))
 
     /// The estimate: dark body, gold rim with its glow, the glow from below, specks.
     static func lit(_ context: inout GraphicsContext, center: CGPoint, radius: CGFloat, t: Double, dark: Bool, glow: Color) {

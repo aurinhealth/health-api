@@ -109,12 +109,14 @@ enum WidgetBridge {
     /// Health only, never a day picked in the past.
     @MainActor
     static func update(health: HealthSnapshot) {
+        // Pro as Health's Aurin Age decides it: the pilot and AI accounts too.
+        let pro = ProStore.shared.entitled || AppModel.live.map { !$0.coachLocked } == true
         let dials = HealthMonitorCard.dials(health)
         let monday = AppModel.monday(of: health.date)
         let nights = health.sleep.week.filter { $0.date >= monday && $0.date <= health.date }
             .map { WidgetHealth.Night(date: $0.date, reached: $0.value >= Double(health.sleep.need)) }
         let value = WidgetHealth(date: health.date, aurinAge: health.aurinAge?.value, realAge: health.aurinAge?.age,
-                                 aurinAgeWords: health.aurinAge.flatMap(AurinAgeText.versusAge), pro: ProStore.shared.entitled,
+                                 aurinAgeWords: health.aurinAge.flatMap(AurinAgeText.versusAge), pro: pro,
                                  nightTitle: dials.isEmpty ? nil : HealthMonitorCard.title(dials),
                                  values: dials.map { WidgetHealth.Value(label: $0.label, text: $0.text, unit: $0.unit,
                                                                         drawn: HealthMonitorCard.drawn($0), low: $0.low, high: $0.high) },

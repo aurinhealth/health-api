@@ -38,14 +38,16 @@ struct AurinWidgetBundle: WidgetBundle {
 struct SnapshotEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
+    /// The widget gallery or a placeholder: Health widgets show the sample too.
+    var preview = false
 }
 
 struct SnapshotProvider: TimelineProvider {
-    func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .sample) }
+    func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .sample, preview: true) }
 
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
         let saved = context.isPreview ? (WidgetSnapshot.load() ?? .sample) : WidgetSnapshot.load()
-        completion(SnapshotEntry(date: Date(), snapshot: saved?.current(today: PendingDrinks.localDate())))
+        completion(SnapshotEntry(date: Date(), snapshot: saved?.current(today: PendingDrinks.localDate()), preview: context.isPreview))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
@@ -262,7 +264,7 @@ struct SleepWidgetView: View {
                 Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { ", " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
             } else if family == .systemMedium {
                 // The arc, this week's nights against the need and tonight's bedtime.
-                SleepMediumFace(s: s, h: WidgetHealth.load())
+                SleepMediumFace(s: s, h: WidgetHealth.load() ?? (entry.preview ? .sample : nil))
             } else {
                 // The redesign's face: Today's night arc.
                 WidgetFaces.sleep(s)
@@ -297,8 +299,9 @@ struct StepsWidget: Widget {
 
 struct AurinAgeWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "aurinAge", provider: SnapshotProvider()) { _ in
-            AurinAgeWidgetView(h: WidgetHealth.load())
+        StaticConfiguration(kind: "aurinAge", provider: SnapshotProvider()) { entry in
+            // The gallery shows the sample day, as the other widgets.
+            AurinAgeWidgetView(h: WidgetHealth.load() ?? (entry.preview ? .sample : nil))
                 .privacySensitive()
                 .widgetCard()
         }
@@ -322,7 +325,8 @@ struct AurinAgeWidgetView: View {
             switch family {
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(verbatim: L10n.tr("Aurin Age").uppercased(with: L10n.locale)).font(.system(size: 11, weight: .semibold))
+                    Text(verbatim: L10n.tr(h.map { $0.aurinAge == nil && !$0.pro } == true ? "Aurin Age" : "Odhad Aurin age").uppercased(with: L10n.locale))
+                        .font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                     if let age = h?.aurinAge {
                         Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(26)).widgetAccentable()
                         if let words = h?.aurinAgeWords { Text(verbatim: words).font(.system(size: 12)) }
@@ -358,8 +362,9 @@ struct AurinAgeWidgetView: View {
 
 struct NightValuesWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "nightValues", provider: SnapshotProvider()) { _ in
-            NightValuesFace(h: WidgetHealth.load())
+        StaticConfiguration(kind: "nightValues", provider: SnapshotProvider()) { entry in
+            NightValuesFace(h: WidgetHealth.load() ?? (entry.preview ? .sample : nil),
+                            today: entry.preview ? nil : PendingDrinks.localDate(entry.date))
                 .privacySensitive()
                 .widgetURL(URL(string: "aurin://open/health"))
                 .widgetCard()
