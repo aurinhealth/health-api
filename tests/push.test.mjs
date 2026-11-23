@@ -302,7 +302,7 @@ test("the subtitle shows the night and the baselines, the body today's plan", ()
   assert.deepEqual(withLang("en", () => readinessMessage({ score: 66, zone: "yellow", ...night, planned: ride })), {
     alert: { title: "Readiness 66 · Keep it steady today", subtitle: "Sleep 6:40 · HRV −14% · Resting HR +2", body: "Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day." },
     layout: { title: "Readiness 66", subtitle: "Keep it steady today", body: "Sleep 6 h 40. Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day.",
-      label: "Readiness", pill: "below your usual range", night: "Sleep 6 h 40.", advice: "Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day.", workout: { title: "Threshold 4×8 min", sport: "ride" } },
+      label: "Readiness", pill: "below your usual range", night: "Sleep 6 h 40.", advice: "Keep it easy in Z2 instead, intervals another day.", workout: { title: "Threshold 4×8 min", sport: "ride" } },
     zone: "yellow", verdict: "steady"
   });
   assert.deepEqual(readinessMessage({ score: 66, zone: "yellow", ...night, planned: ride }).alert.subtitle, "Spánek 6:40 · HRV −14 % · Klidový tep +2");
@@ -431,7 +431,7 @@ test("the concept's morning banner: Readiness 78, the verdict, the night in word
   const m = withLang("en", () => readinessMessage({ score: 78, zone: "green", sleep: { minutes: 414 }, hrv: { value: 68, baseline: 66, low: 60, high: 74 },
     planned: [{ title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 }] }));
   assert.deepEqual(m.layout, { title: "Readiness 78", subtitle: "Good day for a hard workout", body: "Sleep 6 h 54, HRV in your usual range. Today's plan: Upper body strength. Your body is ready, go for it.",
-    label: "Readiness", pill: "in your usual range", night: "Sleep 6 h 54, HRV in your usual range.", advice: "Today's plan: Upper body strength. Your body is ready, go for it.",
+    label: "Readiness", pill: "in your usual range", night: "Sleep 6 h 54, HRV in your usual range.", advice: "Your body is ready, go for it.",
     workout: { title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 } });
   assert.doesNotMatch(JSON.stringify(m.layout), /·/);
   // Older builds keep parsing the old alert.
@@ -465,3 +465,12 @@ test("held down, the morning shows the coach's card only when the coach is in th
     assert.equal(calls[0].body.layout.title, "Připravenost 72");
   }
 });
+
+test("long workout names are cut to 60 characters, signs get one card sentence", () => withLang("en", () => {
+  const long = "Very long workout name ".repeat(10).trim();
+  const m = readinessMessage({ score: 80, zone: "green", planned: [{ title: long, sport: "ride" }, { title: long, sport: "run" }] });
+  assert.ok(m.layout.workout.title.length <= 60);
+  assert.ok(m.alert.body.length < 220);
+  const s = readinessMessage({ score: 80, zone: "green", flags: ["respiration_elevated"] });
+  assert.equal(s.layout.advice, "No intensity today, easy training only.");
+}));

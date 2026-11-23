@@ -187,7 +187,9 @@ export function readinessMessage(input) {
   const { score, sleep = null, hrv = null, restingHR = null } = input;
   const v = dayVerdict(input) || { key: null, level: input.zone, shown: input.zone, sessions: [], signals: [] };
   const { level, rest, signs, noSleep, signals, injury, legs, saveFor, weighed } = v;
-  const names = v.sessions.map(s => s.title).join(", ");
+  // At most two sessions (dayVerdict), each name cut to 60 characters: the
+  // names ride in the alert and the layout, under APNs' 4 KB.
+  const names = v.sessions.map(s => short(s.title)).join(", ");
   const sport = v.sessions.length === 1 ? v.sessions[0].sport : null;
   const advice = verdictText(v.key);
   const title = L("Připravenost", "Readiness") + " " + Math.round(Number(score)) + (advice ? " · " + advice : "");
@@ -205,6 +207,11 @@ export function readinessMessage(input) {
     : sport === "ride" || sport === "run" ? L(`Dnešní plán: ${names}. Raději lehce v Z2, intervaly jindy.`, `Today's plan: ${names}. Keep it easy in Z2 instead, intervals another day.`)
     : L(`Dnešní plán: ${names}. Dnes v klidnějším tempu.`, `Today's plan: ${names}. Take it easier than usual.`);
   else if (level === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
+  // The coach card's one green sentence (concept N1, at most 2 sentences with
+  // the night): the advice without the plan's names, which its workout row
+  // shows, and without the reasons.
+  const tip = signs ? L("Dnes bez intenzity, jen lehce.", "No intensity today, easy training only.")
+    : body && names ? body.replace(L(`Dnešní plán: ${names}. `, `Today's plan: ${names}. `), "") : body;
   if (body && !saveFor && signals.length) body = reasonsSentence(signals) + " " + body;
   // The words of an injury the coach was told about are never on the lock
   // screen, not even in the hidden part (an APNs payload travels readable):
@@ -224,10 +231,12 @@ export function readinessMessage(input) {
   const first = v.sessions[0] || null;
   const pill = { green: L("v obvyklém rozmezí", "in your usual range"), yellow: L("pod obvyklým rozmezím", "below your usual range"), red: L("pod obvyklým rozmezím", "below your usual range") }[v.shown || input.zone] || null;
   const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" "),
-    label: L("Připravenost", "Readiness"), ...(pill ? { pill } : {}), ...(night ? { night } : {}), ...(body ? { advice: body } : {}),
-    ...(first?.title ? { workout: { title: first.title, ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
+    label: L("Připravenost", "Readiness"), ...(pill ? { pill } : {}), ...(night ? { night } : {}), ...(tip ? { advice: tip } : {}),
+    ...(first?.title ? { workout: { title: short(first.title), ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, layout, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
 }
+
+const short = text => (String(text).length > 60 ? String(text).slice(0, 59).trimEnd() + "…" : String(text));
 
 // "Sleep 6 h 54, HRV in your usual range.": the night in words, HRV against
 // the usual range Today shows (low and high); no number for HRV, no cause (MDR).
@@ -310,7 +319,7 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
     // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
-    const withCoach = message ? await Promise.resolve().then(coach).catch(() => true) : false;
+    const withCoach = message ? await Promise.resolve().then(coach).catch(() => false) : false;
     const layout = message ? { ...message.layout, ...(withCoach ? { coach: L("Kouč", "Coach") } : {}) } : null;
     const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null, thread: COACH_THREAD } : { thread: COACH_THREAD };
     let sent = 0, removed = 0;
