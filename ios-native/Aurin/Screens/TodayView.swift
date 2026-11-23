@@ -556,7 +556,8 @@ struct WeekStrip: View {
             if ahead {
                 // Every day up to today has its ring (Petr, 611 test: Sunday had none).
                 // Today before a meal is the empty track, not "nothing logged".
-                if day == today, foodDays[day]?.logged != true {
+                // Days ahead get the empty track too (Petr, 611: a ring on every day).
+                if day >= today, foodDays[day]?.logged != true {
                     Circle().stroke(Palette.track, lineWidth: 3.5).frame(width: 22, height: 22)
                 } else if !foodDays.isEmpty, day >= foodFirst, day < today || foodDays[day]?.logged == true {
                     FoodDayRing(day: foodDays[day], value: .calories, size: 22)
