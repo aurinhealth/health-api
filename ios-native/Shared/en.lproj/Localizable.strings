@@ -311,7 +311,6 @@
 "Nahlásit problém" = "Report a problem";
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
-"Najít video" = "Find a video";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
 "Napij se" = "Time for a drink";
 "Napiš kouči…" = "Message the coach…";
@@ -1442,10 +1441,6 @@
 "udržování" = "maintaining";
 "budování" = "building";
 "hluboká únava" = "deep fatigue";
-"Video" = "Video";
-"Otevřít v YouTube" = "Open in YouTube";
-"Podobný cvik" = "Similar exercise";
-"K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
 "Odebrat cvik" = "Remove exercise";
 "Dokončit trénink" = "Finish workout";
@@ -4379,8 +4374,8 @@
 "Aurin age se počítá z kondice, síly a spánku." = "Aurin age comes from your fitness, strength and sleep.";
 "Co ho tvoří" = "What shapes it";
 "Pas" = "Waist";
-"Další krok k odhadu Aurin age: jeden odhad VO2max. Dej si 20 minut běhu venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. Run outdoors for 20 minutes with your watch.";
-"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut běhu venku." = "Next step to your Aurin age: connect a watch or ring and run outdoors for 20 minutes.";
+"Další krok k odhadu Aurin age: jeden odhad VO2max. Stačí 20 minut v kuse na kole s wattmetrem a tepem, nebo běh venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. A steady 20-minute ride with power and heart rate, or an outdoor run with your watch.";
+"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut v kuse na kole s wattmetrem nebo běhu venku." = "Next step to your Aurin age: connect a watch or ring, then a steady 20-minute ride with power or an outdoor run.";
 "Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna." = "Next step to your Aurin age: a week of sleep with your watch, or regular strength training.";
 "Sbírám tvoje data." = "Collecting your data.";
 "Posledních 12 týdnů" = "Last 12 weeks";
@@ -5239,3 +5234,6 @@
 "Zapsat večeři" = "Log dinner";
 "Zapsat druhou večeři" = "Log late snack";
 "Zapsat jídlo" = "Log food";
+"Video techniky" = "Technique video";
+"YouTube, podobný cvik" = "YouTube, similar exercise";
+"Přehraje video" = "Plays the video";
