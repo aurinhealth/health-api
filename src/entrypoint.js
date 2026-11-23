@@ -3496,7 +3496,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const body=await request.json().catch(()=>null);
         if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
         const result=await saveAppleHealth(env.DB,env.USER_ID,body);
-        if(result.code)return Response.json({message:result.message},{status:result.code});
+        if(result.code)return Response.json({status:result.status,message:result.message},{status:result.code});
         // The phone sends the last days again on every sync. A workout, a night,
         // the morning's first values or an earlier day make the cached screens and
         // the coach's texts outdated at once; today's running totals (steps, energy,

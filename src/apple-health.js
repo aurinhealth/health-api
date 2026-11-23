@@ -412,7 +412,7 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // The app sends connectedOnly since the 617 review: its uploads are kept only for an
   // account that connected Apple Health itself (PUT), so a first upload never connects
   // it. Older builds do not send it and are kept as before.
-  if (body.connectedOnly === true && !(await appleHealthStatus(db, userId)).connected) return { status: "error", code: 409, message: "Apple Health is not connected for this account." };
+  if (body.connectedOnly === true && !(await appleHealthStatus(db, userId)).connected) return { status: "apple_health_not_connected", code: 409, message: "Apple Health is not connected for this account." };
   // Sexual activity only with its own consent in Nastavení → Deník, as the
   // server stored it (not what the app says); otherwise it is not kept and
   // what came before goes.
