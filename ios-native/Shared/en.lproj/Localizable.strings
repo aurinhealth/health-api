@@ -2506,7 +2506,6 @@
 "Rozdělení" = "Split";
 "Oblouk" = "Dial";
 "Skóre" = "Score";
-"%@ %% potřeby" = "%@%% of need";
 "krok" = "step";
 "Tmavé" = "Dark";
 "Světlé" = "Light";
@@ -2941,7 +2940,6 @@
 "Porce" = "Servings";
 "Gramy" = "Grams";
 "Mililitry" = "Millilitres";
-"1 %@ = %@ %@, %@ kcal" = "1 %@ = %@ %@, %@ kcal";
 "1 porce = %@ %@" = "1 serving = %@ %@";
 "Nastavit porci" = "Set a serving";
 "Název porce" = "Serving name";
@@ -3389,7 +3387,6 @@
 "Tvoje data pracují jen pro tebe." = "Your data works only for you.";
 "Nikdy je neprodáváme ani nepoužíváme k reklamě." = "We never sell it or use it for ads.";
 "Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs)." = "By continuing you agree to the [Terms](https://aurin.health/terms) and [Privacy Policy](https://aurin.health/privacy).";
-"Výživa" = "Nutrition";
 "Z fotky" = "From a photo";
 "Aurin na hodinkách" = "Aurin on the watch";
 "Režim tréninku otevře posilovnu na hodinkách. Hodinky posílají tep každých 5 sekund a do Zdraví uloží jeden trénink." = "Training mode opens the gym on the watch. The watch sends heart rate every 5 seconds and saves one workout to Health.";
@@ -3680,7 +3677,6 @@
 "Apple Watch (multisport)" = "Apple Watch (multisport)";
 "S intervaly: dva tréninky hned po sobě" = "With intervals: two workouts back to back";
 "Jeden trénink: %@" = "One workout: %@";
-"přes Apple Health" = "via Apple Health";
 "Brick: běh hned po kole, do hodinek jako jeden trénink." = "Brick: a run right after the ride, sent as one workout.";
 "Odebrat brick" = "Remove brick";
 "Bricky" = "Bricks";
@@ -4041,7 +4037,6 @@
 "%@ z %@ kcal snědeno, tohle jídlo %@ kcal" = "%@ of %@ kcal eaten, this food %@ kcal";
 
 /* Food → photo with several foods on the plate (PhotoItemsView) */
-"Z fotky" = "From your photo";
 "Přidat položku" = "Add an item";
 "%@ g bílkovin, %@ g sacharidů, %@ g tuků" = "%@ g protein, %@ g carbs, %@ g fat";
 "Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné." = "Amounts are estimated from the photo. Sauces and oil are the least precise.";
@@ -4485,7 +4480,6 @@
 "Výrazně pod cílem" = "Well below";
 "Nad cílem už od první jednotky navíc. Výrazně pod cílem znamená o víc než 8 % méně než cíl toho dne." = "Over target counts from the first unit over. Well below means more than 8% under that day's target.";
 "Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat." = "No logged day with a target yet. Log your food and the days start to count here.";
-"Analýza trendu" = "Trend analysis";
 "Z čeho je dnešní cíl" = "Where today's target comes from";
 "Z čeho byl cíl dne" = "Where the day's target came from";
 "co tělo spálí v klidu" = "what your body uses at rest";
@@ -4554,7 +4548,6 @@
 "Trénink je dnes pozastavený" = "Training is paused today";
 "Vybere místo pro počasí" = "Picks a place for the weather";
 "Otevře předpověď" = "Opens the forecast";
-"Připojit zařízení" = "Connect a device";
 "Otevře Nastavení, kde připojíš hodinky nebo prsten" = "Opens Settings, where you connect a watch or ring";
 "o %@ méně než %@" = "%1$@ short of %2$@";
 "o %@ víc než %@" = "%1$@ over %2$@";
@@ -5205,3 +5198,8 @@
 "Splněné a naplánované tréninky po dnech" = "Sessions done and planned, day by day";
 "Tvoje další jízda, běh, plavání nebo posilovna" = "Your next ride, run, swim or gym session";
 "Přidej hodinky nebo prsten a uvidíš připravenost." = "Add a watch or ring for readiness.";
+"%@ z %@ tréninků splněno" = "%1$@ of %2$@ sessions done";
+"zatím, v plánu ještě %@" = "so far, %@ planned";
+"zatím" = "so far";
+"Nadcházející" = "Upcoming";
+"Zahrnuje %@ kcal na dnešní trénink" = "Includes %@ kcal for today's training";

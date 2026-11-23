@@ -110,18 +110,6 @@ enum W {
         guard let v else { return "–" }
         return v.formatted(.number.precision(.fractionLength(1)).locale(L10n.locale))
     }
-
-    /// "1,2 / 2,8 l" or "41 / 95 fl oz".
-    static func water(_ ml: Double?, _ target: Double?) -> String {
-        if Units.imperial {
-            return int(Units.volume(ml ?? 0)) + (target.map { " / " + int(Units.volume($0)) } ?? "") + " " + Units.volumeUnit
-        }
-        return decimal((ml ?? 0) / 1000) + (target.map { " / " + decimal($0 / 1000) } ?? "") + " l"
-    }
-
-    /// The widget's water buttons: a glass and a bottle, 250/500 ml or 8/16 fl oz.
-    static var glass: Int { Units.imperial ? Units.roundedMl(fluidOunces: 8) : 250 }
-    static var bottle: Int { Units.imperial ? Units.roundedMl(fluidOunces: 16) : 500 }
 }
 
 /// Today's dial in small: the zone's ring and the number in the app's serif.
@@ -330,29 +318,11 @@ struct FoodWaterWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
 
-    static let protein = Palette.protein
-    static let carbs = Palette.carbs
-    static let fat = Palette.fat
-
     var body: some View {
         if let s = entry.snapshot {
             if family == .systemMedium {
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        kcal(s)
-                        macro("Sacharidy", s.carbs, s.carbsTarget, Self.carbs)
-                        macro("Bílkoviny", s.protein, s.proteinTarget, Self.protein)
-                        macro("Tuky", s.fat, s.fatTarget, Self.fat)
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        water(s)
-                        HStack(spacing: 6) {
-                            add(W.glass)
-                            add(W.bottle)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                // The redesign's Food card: hero, training's share, macros and water.
+                FoodMediumFace(s: s)
             } else {
                 // The redesign's face: Food's hero; water has its own widget and control.
                 WidgetFaces.food(s)
@@ -360,61 +330,5 @@ struct FoodWaterWidgetView: View {
         } else {
             EmptyWidgetView()
         }
-    }
-
-    private func kcal(_ s: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.tr("Jídlo")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(W.int(s.kcal)).font(W.number(30)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                if let target = s.kcalTarget { Text("/ " + W.int(target)).font(.caption2).foregroundStyle(W.muted) }
-            }
-        }
-    }
-
-    private func water(_ s: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: "drop.fill").font(.caption2).foregroundStyle(W.blue)
-                Text(W.water(s.waterMl, s.waterTarget))
-                    .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            // Without a goal a full bar would read as "goal reached".
-            if s.waterTarget ?? 0 > 0 {
-                bar(s.waterMl, s.waterTarget, W.blue)
-            } else {
-                Text(L10n.tr("bez cíle")).font(.caption2).foregroundStyle(W.muted)
-            }
-        }
-    }
-
-    private func macro(_ title: String, _ eaten: Double?, _ target: Double?, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
-                Spacer(minLength: 2)
-                Text(W.int(eaten) + (target.map { "/" + W.int($0) } ?? "") + " g").font(.caption2.weight(.semibold)).foregroundStyle(W.ink)
-            }
-            bar(eaten, target, color)
-        }
-    }
-
-    private func bar(_ value: Double?, _ target: Double?, _ color: Color) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(color.opacity(0.18))
-                Capsule().fill(color).frame(width: geo.size.width * min(1, max(0, (value ?? 0) / max(1, target ?? 1))))
-            }
-        }
-        .frame(height: 4)
-    }
-
-    private func add(_ ml: Int) -> some View {
-        Button(intent: AddWaterIntent(ml: ml)) {
-            Label(Units.imperial ? W.int(Units.volume(Double(ml))) + " " + Units.volumeUnit : Units.volumeText(Double(ml)), systemImage: "plus")
-                .font(.caption.weight(.semibold))
-                .frame(maxWidth: .infinity)
-        }
-        .tint(W.blue)
     }
 }

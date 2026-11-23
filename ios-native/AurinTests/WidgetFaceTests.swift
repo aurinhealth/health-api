@@ -114,6 +114,45 @@ final class WidgetFaceTests: XCTestCase {
         ])
     }
 
+    /// This week (medium, large) and Food (medium), with their empty states.
+    func testWeekAndFoodWidgets() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let days: [(String, Double, Double, String?)] = [
+            ("2026-10-05", 92, 0, "ride"), ("2026-10-06", 55, 0, "strength"), ("2026-10-07", 35, 0, "run"),
+            ("2026-10-08", 42, 45, "run"), ("2026-10-09", 0, 0, nil), ("2026-10-10", 0, 180, "ride"), ("2026-10-11", 0, 50, "run")
+        ]
+        let week = WidgetWeek(days: days.map { WidgetWeek.Day(date: $0.0, minutes: $0.1, planned: $0.2, sport: $0.3) },
+                              minutes: 224, done: 4, planned: 7,
+                              next: [WidgetWeek.Session(title: "Upper body strength", sport: "strength", date: "2026-10-08", time: "17:30", minutes: 45),
+                                     WidgetWeek.Session(title: "Long ride", sport: "ride", date: "2026-10-10", time: "09:00", minutes: 180),
+                                     WidgetWeek.Session(title: "Easy run", sport: "run", date: "2026-10-11", time: "08:30", minutes: 50)])
+        var s = day
+        s.protein = 62
+        s.proteinTarget = 140
+        s.carbs = 205
+        s.carbsTarget = 350
+        s.fat = 37
+        s.fatTarget = 85
+        s.trainingKcal = 350
+        var empty = s
+        empty.kcal = 0
+        empty.protein = 0
+        empty.carbs = 0
+        empty.fat = 0
+        empty.waterMl = 0
+        try render("widgets-medium", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(WeekFace(week: week, today: "2026-10-08")), AnyView(FoodMediumFace(s: s))],
+            [AnyView(WeekFace(week: nil, today: "2026-10-08")), AnyView(FoodMediumFace(s: empty))]
+        ])
+        try render("widgets-large", size: CGSize(width: 364, height: 382), rows: [
+            [AnyView(WeekFace(week: week, today: "2026-10-08", large: true))]
+        ])
+    }
+
     /// A snapshot saved by an older build (no redesign fields) still loads.
     func testOlderSnapshotDecodes() throws {
         let json = #"{"date":"2026-11-20","updated":1795000000,"readiness":70,"zone":"green"}"#

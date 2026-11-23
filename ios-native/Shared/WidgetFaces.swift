@@ -265,15 +265,19 @@ struct SleepArcFace: View {
 struct WidgetSportDisc: View {
     let sport: String?
     var size: CGFloat = 30
+    /// Still ahead: paler, as Training draws a planned session.
+    var ahead = false
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let color = Palette.Sport.color(sport ?? "")
+        let dark = scheme == .dark
         ZStack {
-            Circle().fill(color.opacity(scheme == .dark ? 0.24 : 0.15))
+            Circle().fill(color.opacity(ahead ? (dark ? 0.08 : 0.07) : (dark ? 0.24 : 0.15)))
             Image(systemName: WidgetStyle.symbol(sport))
                 .font(.system(size: size * 0.5, weight: .medium))
                 .foregroundStyle(color)
+                .opacity(ahead ? (dark ? 0.74 : 0.62) : 1)
                 .widgetAccentable()
         }
         .frame(width: size, height: size)
@@ -592,5 +596,193 @@ extension WidgetFaces {
         return CoachMediumFace(readiness: s.readiness, text: coach?.text ?? (coach == nil ? verdictLine(s.verdict) : nil), advice: coach?.advice,
                                free: coach?.free ?? false, verdict: verdictLine(s.verdict),
                                nextTitle: s.nextTitle, nextSport: s.nextSport, nextTime: s.nextTime, nextMinutes: s.nextMinutes)
+    }
+}
+
+/// This week (medium and large): Today's week, the training time so far and
+/// planned, a disc for each day (done full, ahead pale, rest a dot) and, in
+/// large, the sessions ahead as Training's rows.
+struct WeekFace: View {
+    var week: WidgetWeek?
+    /// yyyy-MM-dd, for today's letter and "Today" in the rows.
+    var today: String
+    var large = false
+    var planLink: URL? = URL(string: "aurin://open/week-plan")
+
+    var body: some View {
+        if let week, week.planned > 0 || week.minutes > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    WidgetLabel(text: L10n.tr("Tento týden"), alignment: .leading)
+                    if week.planned > 0 {
+                        Text(verbatim: L10n.f("%@ z %@ tréninků splněno", String(week.done), String(week.planned)))
+                            .font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
+                    }
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(verbatim: WidgetStyle.length(week.minutes)).font(WidgetStyle.serif(26)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).fixedSize().widgetAccentable()
+                    let ahead = week.days.reduce(0) { $0 + $1.planned }
+                    Text(verbatim: ahead > 0 ? L10n.f("zatím, v plánu ještě %@", WidgetStyle.length(ahead)) : L10n.tr("zatím"))
+                        .font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+                }
+                HStack(spacing: 2) {
+                    ForEach(week.days, id: \.date) { day in dayCell(day) }
+                }
+                if large {
+                    Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 6)
+                    WidgetLabel(text: L10n.tr("Nadcházející"), alignment: .leading)
+                    if week.next.isEmpty {
+                        Text(verbatim: L10n.tr("Na zbytek týdne nic naplánovaného.")).font(.system(size: 13)).foregroundStyle(Palette.muted)
+                    } else {
+                        VStack(spacing: 10) {
+                            ForEach(Array(week.next.enumerated()), id: \.offset) { _, session in row(session) }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                WidgetLabel(text: L10n.tr("Tento týden"), alignment: .leading)
+                Text(verbatim: L10n.tr("Zatím bez plánu")).font(WidgetStyle.serif(26)).foregroundStyle(Palette.ink)
+                Spacer(minLength: 0)
+                if let planLink {
+                    Link(destination: planLink) {
+                        Text(verbatim: L10n.tr("Naplánovat týden")).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.onButton)
+                            .padding(.horizontal, 16).frame(height: 34)
+                            .background(Palette.button, in: Capsule())
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func dayCell(_ day: WidgetWeek.Day) -> some View {
+        let isToday = day.date == today
+        return VStack(spacing: 3) {
+            Text(verbatim: Self.weekday(day.date)).font(.system(size: 11, weight: isToday ? .bold : .medium))
+                .foregroundStyle(isToday ? Palette.ink : Palette.muted)
+            if let sport = day.sport {
+                WidgetSportDisc(sport: sport, size: 26, ahead: day.minutes == 0)
+            } else {
+                ZStack {
+                    Circle().fill(Palette.ink.opacity(0.045))
+                    Circle().fill(Palette.muted.opacity(0.55)).frame(width: 5, height: 5)
+                }
+                .frame(width: 26, height: 26)
+            }
+            Text(verbatim: day.sport == nil ? L10n.tr("volno") : WidgetStyle.length(day.minutes > 0 ? day.minutes : day.planned))
+                .font(.system(size: 11)).foregroundStyle(Palette.muted)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func row(_ session: WidgetWeek.Session) -> some View {
+        HStack(spacing: 10) {
+            WidgetSportDisc(sport: session.sport, size: 32, ahead: true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: session.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(verbatim: when(session)).font(.system(size: 12)).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            if let minutes = session.minutes {
+                Text(verbatim: WidgetStyle.length(Double(minutes))).font(WidgetStyle.serif(18)).foregroundStyle(Palette.ink).lineLimit(1)
+            }
+        }
+    }
+
+    /// "Today 17:30", "Saturday 09:00".
+    private func when(_ session: WidgetWeek.Session) -> String {
+        let day = session.date == today ? L10n.tr("Dnes") : Self.weekday(session.date, long: true)
+        return day + (session.time.map { " " + ClockText.format($0) } ?? "")
+    }
+
+    static func weekday(_ date: String, long: Bool = false) -> String {
+        let parse = DateFormatter()
+        parse.calendar = Calendar(identifier: .gregorian)
+        parse.locale = Locale(identifier: "en_US_POSIX")
+        parse.dateFormat = "yyyy-MM-dd"
+        guard let d = parse.date(from: date) else { return "" }
+        let f = DateFormatter()
+        f.locale = L10n.locale
+        f.dateFormat = long ? "EEEE" : "EEEEE"
+        return f.string(from: d).capitalized(with: L10n.locale)
+    }
+}
+
+/// Food (medium): Food's hero, what today's training adds, and the
+/// macros and water in the order of the concept, each with its target.
+struct FoodMediumFace: View {
+    var s: WidgetSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            WidgetLabel(text: L10n.tr("Jídlo"), alignment: .leading)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(verbatim: WidgetStyle.int(s.kcal ?? 0)).font(WidgetStyle.serif(30)).foregroundStyle(Palette.ink)
+                    .lineLimit(1).fixedSize().widgetAccentable()
+                if let target = s.kcalTarget, target > 0 {
+                    Text(verbatim: L10n.f("z %@ kcal", WidgetStyle.int(target))).font(.system(size: 12)).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+            }
+            bar(s.kcal, s.kcalTarget, Palette.ink)
+            Text(verbatim: line ?? " ").font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Spacer(minLength: 0)
+            HStack(alignment: .top, spacing: 10) {
+                macro(L10n.tr("Bílkoviny"), s.protein, s.proteinTarget, unit: "g", color: Palette.protein)
+                macro(L10n.tr("Sacharidy"), s.carbs, s.carbsTarget, unit: "g", color: Palette.carbs)
+                macro(L10n.tr("Tuky"), s.fat, s.fatTarget, unit: "g", color: Palette.fat)
+                water
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    /// "Includes 350 kcal for today's training", or that nothing is logged yet.
+    private var line: String? {
+        if (s.kcal ?? 0) <= 0 { return L10n.tr("Zatím nic nezapsáno") }
+        guard let bonus = s.trainingKcal, bonus > 0 else { return nil }
+        return L10n.f("Zahrnuje %@ kcal na dnešní trénink", WidgetStyle.int(bonus))
+    }
+
+    private func macro(_ title: String, _ eaten: Double?, _ target: Double?, unit: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: title).font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(verbatim: WidgetStyle.int(eaten ?? 0)).font(WidgetStyle.serif(18)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(verbatim: unit).font(WidgetStyle.caption).foregroundStyle(Palette.muted)
+            }
+            bar(eaten, target, color)
+            if let target { Text(verbatim: L10n.f("z %@ g", WidgetStyle.int(target))).font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8) }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var water: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: L10n.tr("Voda")).font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Text(verbatim: WidgetStyle.water(s.waterMl)).font(WidgetStyle.serif(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            bar(s.waterMl, s.waterTarget, Palette.blue)
+            if let target = s.waterTarget, target > 0 {
+                Text(verbatim: L10n.f("z %@", WidgetStyle.water(target))).font(WidgetStyle.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func bar(_ value: Double?, _ target: Double?, _ color: Color) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.track)
+                Capsule().fill(color)
+                    .frame(width: geo.size.width * min(1, max(0, (value ?? 0) / max(1, target ?? 1))))
+                    .widgetAccentable()
+            }
+        }
+        .frame(height: 3)
     }
 }

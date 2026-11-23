@@ -59,6 +59,8 @@ struct WidgetSnapshot: Codable, Equatable {
     /// What the day's numbers say, a key of src/day-verdict.js ("hard"): the
     /// free Today card's line (the free morning push says the same).
     var verdict: String? = nil
+    /// The calories today's training adds to the target ("Includes 350 kcal for today's training").
+    var trainingKcal: Double? = nil
 
     static func load() -> WidgetSnapshot? {
         guard let data = UserDefaults(suiteName: group)?.data(forKey: key) else { return nil }
@@ -171,11 +173,15 @@ struct WidgetWeek: Codable, Equatable {
         var minutes: Double
         /// What the plan still has that day (a dashed bar).
         var planned: Double = 0
+        /// The day's sport for its disc (This week widget): the first done
+        /// session's, else the first planned one's; nil on a rest day.
+        var sport: String? = nil
 
-        init(date: String, minutes: Double, planned: Double = 0) {
+        init(date: String, minutes: Double, planned: Double = 0, sport: String? = nil) {
             self.date = date
             self.minutes = minutes
             self.planned = planned
+            self.sport = sport
         }
 
         init(from decoder: Decoder) throws {
@@ -183,6 +189,7 @@ struct WidgetWeek: Codable, Equatable {
             date = try c.decode(String.self, forKey: .date)
             minutes = try c.decode(Double.self, forKey: .minutes)
             planned = try c.decodeIfPresent(Double.self, forKey: .planned) ?? 0
+            sport = try c.decodeIfPresent(String.self, forKey: .sport)
         }
     }
 
@@ -191,6 +198,7 @@ struct WidgetWeek: Codable, Equatable {
         var sport: String
         var date: String
         var time: String?
+        var minutes: Int? = nil
     }
 
     var days: [Day]

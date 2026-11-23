@@ -86,18 +86,6 @@ extension WidgetMetric {
         }
     }
 
-    var color: Color {
-        switch self {
-        // HRV green like in the app (Today, HRV detail).
-        case .readiness, .hrv: return W.green
-        case .sleep: return W.indigo
-        case .restingHR, .kcalLeft: return W.rust
-        case .steps: return W.amber
-        case .water: return W.blue
-        case .strain: return W.amber
-        }
-    }
-
     var link: String {
         switch self {
         case .readiness: return "aurin://open/readiness"
@@ -237,145 +225,17 @@ struct WeekWidget: Widget {
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Tento týden")))
         .description(Text(verbatim: L10n.tr("Splněné a naplánované tréninky po dnech")))
-        .supportedFamilies([.systemLarge])
+        .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
 
 struct WeekWidgetView: View {
-    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.widgetFamily) private var family
     let entry: WeekEntry
 
     var body: some View {
-        if let week = entry.week {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(L10n.tr("Tento týden")).font(.subheadline.weight(.semibold)).foregroundStyle(W.ink)
-                        Text(summary(week)).font(.caption).foregroundStyle(W.muted)
-                    }
-                    Spacer()
-                    // Today's readiness as a word and number, not a second ring
-                    // beside the small Připravenost widget.
-                    if let score = entry.readiness {
-                        Text((W.zoneWord(entry.zone).map { $0.capitalized(with: L10n.locale) + ", " } ?? "") + String(score))
-                            .font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(entry.zone))
-                            .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(W.zoneColor(entry.zone).opacity(0.14), in: Capsule())
-                            .widgetAccentable()
-                    }
-                }
-                bars(week).padding(.top, 14)
-                if week.days.contains(where: { $0.minutes > 0 && entry.zones[$0.date] != nil }) {
-                    Text(L10n.tr("barva = tvoje připravenost ten den")).font(.caption2).foregroundStyle(W.muted).padding(.top, 6)
-                }
-                Divider().padding(.top, 12).padding(.bottom, 4)
-                if week.next.isEmpty {
-                    Text(L10n.tr("Na zbytek týdne nic naplánovaného.")).font(.caption).foregroundStyle(W.muted)
-                } else {
-                    VStack(spacing: 7) {
-                        ForEach(Array(week.next.enumerated()), id: \.offset) { _, session in row(session) }
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        } else {
-            EmptyWidgetView()
-        }
-    }
-
-    private func summary(_ week: WidgetWeek) -> String {
-        let time = W.hm(week.minutes) + " h"
-        guard week.planned > 0 else { return time }
-        return time + ", " + L10n.f("%@ z %@ splněno", String(week.done), String(week.planned))
-    }
-
-    /// Done training as solid bars in the day's readiness colour, what the
-    /// plan still has as dashed ones (on a day with both, the done part solid
-    /// inside the dashed whole); today's letter in a dark dot, or in a ring on
-    /// a tinted Home Screen, where the dot and the letter get one colour.
-    private func bars(_ week: WidgetWeek) -> some View {
-        let most = max(60, week.days.map { $0.minutes + $0.planned }.max() ?? 0)
-        return HStack(alignment: .bottom, spacing: 8) {
-            ForEach(week.days, id: \.date) { day in
-                VStack(spacing: 5) {
-                    if day.planned > 0 {
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(W.amber.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            .background(RoundedRectangle(cornerRadius: 5).fill(W.amber.opacity(0.07)))
-                            .frame(height: 112 * (day.minutes + day.planned) / most)
-                            .overlay(alignment: .bottom) {
-                                if day.minutes > 0 {
-                                    RoundedRectangle(cornerRadius: 5).fill(color(day))
-                                        .frame(height: max(5, 112 * day.minutes / most))
-                                        .widgetAccentable()
-                                }
-                            }
-                    } else if day.minutes > 0 {
-                        RoundedRectangle(cornerRadius: 5).fill(color(day))
-                            .frame(height: max(5, 112 * day.minutes / most))
-                            .widgetAccentable()
-                    } else {
-                        RoundedRectangle(cornerRadius: 3).fill(W.muted.opacity(0.18)).frame(height: 5)
-                    }
-                    let today = day.date == entry.today
-                    let filled = renderingMode == .fullColor
-                    Text(weekday(day.date)).font(.caption2.weight(today ? .bold : .medium))
-                        .foregroundStyle(today ? (filled ? Palette.onButton : W.ink) : W.muted)
-                        .frame(width: 20, height: 20)
-                        .background {
-                            if today {
-                                if filled { Circle().fill(Palette.button) } else { Circle().strokeBorder(W.ink, lineWidth: 1.5) }
-                            }
-                        }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: 140, alignment: .bottom)
-    }
-
-    /// The day's readiness zone, else the training colour.
-    private func color(_ day: WidgetWeek.Day) -> Color {
-        entry.zones[day.date].map { W.zoneColor($0) } ?? W.amber
-    }
-
-    private func row(_ session: WidgetWeek.Session) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: Self.symbol(session.sport)).font(.caption).foregroundStyle(W.amber)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.amberSoft))
-            Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(W.ink).lineLimit(1)
-            Spacer(minLength: 6)
-            Text(when(session)).font(.caption).foregroundStyle(W.muted).lineLimit(1)
-        }
-    }
-
-    private func when(_ session: WidgetWeek.Session) -> String {
-        let day = session.date == entry.today ? L10n.tr("Dnes") : weekday(session.date, short: false)
-        return day + (session.time.map { " " + ClockText.format($0) } ?? "")
-    }
-
-    private func weekday(_ date: String, short: Bool = true) -> String {
-        let parse = DateFormatter()
-        parse.calendar = Calendar(identifier: .gregorian)
-        parse.locale = Locale(identifier: "en_US_POSIX")
-        parse.dateFormat = "yyyy-MM-dd"
-        guard let d = parse.date(from: date) else { return "" }
-        let f = DateFormatter()
-        f.locale = L10n.locale
-        f.dateFormat = short ? "EEEEE" : "EEE"
-        return f.string(from: d).capitalized(with: L10n.locale)
-    }
-
-    static func symbol(_ sport: String?) -> String {
-        switch sport {
-        case "ride": return "figure.outdoor.cycle"
-        case "run": return "figure.run"
-        case "strength": return "dumbbell.fill"
-        case "swim": return "figure.pool.swim"
-        case "walk": return "figure.walk"
-        default: return "figure.mixed.cardio"
-        }
+        // The redesign's This week (widgets concept v3): Today's week strip, in large with what comes next.
+        WeekFace(week: entry.week, today: entry.today, large: family == .systemLarge)
     }
 }
 

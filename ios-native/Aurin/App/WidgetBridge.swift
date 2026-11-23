@@ -26,7 +26,7 @@ enum WidgetBridge {
                                       strainLow: today.strain.target?.low, strainHigh: today.strain.target?.high,
                                       stepsAverage: stepsAverage(today),
                                       noWearable: today.readiness.noWearable, learningDays: today.readiness.learningDays,
-                                      verdict: today.readiness.verdict)
+                                      verdict: today.readiness.verdict, trainingKcal: today.nutrition.trainingBonus)
         // The same day again (a refresh with nothing new) keeps the new time,
         // but redraws the widgets only when they may show "před 3 h" by now:
         // reloads are budgeted.
@@ -61,15 +61,18 @@ enum WidgetBridge {
         let sessions = training.sessions ?? []
         let monday = AppModel.monday(of: training.date)
         let days = (0..<7).compactMap { AppModel.shift(monday, by: $0) }.map { date in
-            WidgetWeek.Day(date: date, minutes: Double(sessions.filter { $0.date == date && $0.status == "done" }.compactMap(\.minutes).reduce(0, +)),
-                           planned: Double(sessions.filter { $0.date == date && $0.status == "planned" }.compactMap(\.minutes).reduce(0, +)))
+            let done = sessions.filter { $0.date == date && $0.status == "done" }
+            let planned = sessions.filter { $0.date == date && $0.status == "planned" }
+            return WidgetWeek.Day(date: date, minutes: Double(done.compactMap(\.minutes).reduce(0, +)),
+                                  planned: Double(planned.compactMap(\.minutes).reduce(0, +)),
+                                  sport: (done.first ?? planned.first)?.sport)
         }
         let ahead = sessions.filter { $0.status == "planned" && $0.date >= training.date }
             .sorted { ($0.date, $0.time ?? "99") < ($1.date, $1.time ?? "99") }
         let done = sessions.filter { $0.status == "done" && $0.plannedId != nil }.count
         let week = WidgetWeek(days: days, minutes: days.reduce(0) { $0 + $1.minutes }, done: done,
                               planned: done + sessions.filter { $0.status == "planned" || $0.status == "missed" }.count,
-                              next: ahead.prefix(3).map { WidgetWeek.Session(title: $0.title, sport: $0.sport, date: $0.date, time: $0.time) })
+                              next: ahead.prefix(3).map { WidgetWeek.Session(title: $0.title, sport: $0.sport, date: $0.date, time: $0.time, minutes: $0.minutes) })
         if week.save() { WidgetCenter.shared.reloadTimelines(ofKind: "week") }
         AurinSpotlight.index(ahead)
     }
