@@ -159,6 +159,17 @@ enum GymSessionMath {
     }
 
     /// "8,4" (tonnes) or "18,5" (thousands of pounds), with its unit.
+    /// An exercise without any weight, planned or done (a push-up, a plank):
+    /// no kg column and no volume, its reps count instead (617 C15).
+    static func noWeight(_ exercise: GymExercise) -> Bool {
+        exercise.sets.allSatisfy { s in (LiftWeight.number(s.kg ?? s.plannedKg ?? "") ?? 0) == 0 }
+    }
+
+    /// The reps of the done work sets.
+    static func doneReps(_ exercises: [GymExercise]) -> Int {
+        exercises.flatMap(\.sets).filter { $0.done && !$0.warmup }.reduce(0) { $0 + (GymDay.firstNumber($1.reps) ?? 0) }
+    }
+
     static func volumeText(_ kg: Double) -> (value: String, unit: String) {
         Units.imperial ? (Fmt.decimal(Units.weight(kg) / 1000), "k lb") : (Fmt.decimal(kg / 1000), "t")
     }
@@ -265,6 +276,8 @@ struct GymSetTableHeader: View {
     var effort = false
     /// The planned detail before the start: the plan to look at, no effort and tick columns.
     var planOnly = false
+    /// No weight in any set (GymSessionMath.noWeight): no kg column.
+    var noWeight = false
     var onPounds: (Bool) -> Void = { _ in }
 
     var body: some View {
@@ -273,7 +286,7 @@ struct GymSetTableHeader: View {
             // In the live table "SÉRIE" may be wider than the set numbers: it takes what it needs.
             Text("Série").lineLimit(1).fixedSize().frame(minWidth: labelWidth, alignment: .leading)
             Text("Minule").lineLimit(1).minimumScaleFactor(0.8).frame(maxWidth: .infinity, alignment: .leading)
-            unit.frame(width: kgWidth)
+            if !noWeight { unit.frame(width: kgWidth) }
             Text("Opak.").lineLimit(1).fixedSize().frame(width: repsWidth)
             if effort {
                 Text("Úsilí").lineLimit(1).fixedSize().frame(width: 52)
@@ -349,6 +362,8 @@ struct GymSetRow: View {
     var large = false
     /// The planned detail before the start: no tick to tap (GymSetTableHeader(planOnly:)).
     var planOnly = false
+    /// No weight in the exercise: no kg cell (its header has none either).
+    var noWeight = false
     var toggle: () -> Void = {}
 
     private enum Field { case kg, reps }
@@ -360,6 +375,8 @@ struct GymSetRow: View {
     @ScaledMetric(relativeTo: .largeTitle) private var fieldHeight: CGFloat = 34
     @State private var editKg = ""
     @State private var editReps = ""
+    /// Live (large): SF Pro with tabular digits, read from afar; the gym day keeps the serif.
+    private var numberFont: Font { large ? Typo.tabular(.title2) : Typo.number(22) }
 
     var body: some View {
         HStack(spacing: large ? 6 : 8) {
@@ -372,9 +389,9 @@ struct GymSetRow: View {
                     Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted).frame(width: 12)
                 }
             }
-            Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
+            Text(lastTime ?? "—").font(large ? Font.footnote.monospacedDigit() : .footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint)
+            if !noWeight { field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint) }
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
             if let onIntensity {
                 Button(action: onIntensity) {
@@ -429,7 +446,7 @@ struct GymSetRow: View {
             TextField("–", text: edit)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(Typo.number(22))
+                .font(numberFont)
                 .foregroundStyle(state == .next && focus != field ? Palette.faint : Palette.ink)
                 .focused($focus, equals: field)
                 .frame(width: kgWidth, height: fieldHeight)
@@ -442,7 +459,7 @@ struct GymSetRow: View {
         } else if field == .kg, state == .current, let onKgTap {
             Button(action: onKgTap) {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
-                    .font(Typo.number(22))
+                    .font(numberFont)
                     .foregroundStyle(Palette.ink)
                     .frame(width: kgWidth, height: fieldHeight)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -453,12 +470,12 @@ struct GymSetRow: View {
             TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(Typo.number(22))
+                .font(numberFont)
                 .foregroundStyle(Palette.ink)
                 .frame(width: kgWidth, height: fieldHeight)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
-            Text(value.isEmpty ? "–" : value).font(Typo.number(22))
+            Text(value.isEmpty ? "–" : value).font(numberFont)
                 .foregroundStyle(state == .next ? Palette.faint : Palette.ink)
                 .frame(width: kgWidth)
         }
@@ -625,7 +642,7 @@ struct MinimizedGymBar: View {
     private func clock(resting: Bool, at now: Date) -> some View {
         if resting, let end = gym.restEnd {
             Text(verbatim: Self.clock(Int(end.timeIntervalSince(now).rounded(.up))))
-                .font(Typo.number(28)).foregroundStyle(Palette.amber).monospacedDigit()
+                .font(Typo.tabular(.title)).foregroundStyle(Palette.amber)
         } else if let part = gym.activity, let start = part.start {
             let seconds = part.end.map { Int($0.timeIntervalSince(now).rounded(.up)) } ?? Int(now.timeIntervalSince(start))
             Text(verbatim: Self.clock(max(0, seconds))).font(Typo.number(24)).foregroundStyle(Palette.ink).monospacedDigit()

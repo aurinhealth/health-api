@@ -112,10 +112,12 @@ enum GymLiveActivity {
             title: title)
     }
 
-    /// "80 kg × 8": what the set before was done with, else the plan.
+    /// "80 kg × 8": what the set before was done with, else the plan. Without
+    /// a weight "10 reps", never a bare "10" (617 C14).
     static func load(_ set: GymSet, in exercise: GymExercise) -> String {
         let parts = loadParts(set, in: exercise)
-        return (parts.weight.map { $0 + " × " } ?? "") + (parts.reps ?? "")
+        guard let weight = parts.weight else { return parts.reps.map { L10n.f("%@ opak.", $0) } ?? "" }
+        return weight + " × " + (parts.reps ?? "")
     }
 
     /// "80 kg" and "8" of "80 kg × 8".

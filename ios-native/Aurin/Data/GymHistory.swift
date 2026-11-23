@@ -566,8 +566,10 @@ extension GymDay {
         set(row: 2, column: 3, name)
     }
 
-    /// Minutes from the start to the end of a workout logged in the app.
+    /// Minutes of a workout logged in the app: without its pauses when
+    /// Dokončit saved them, else from the start to the end.
     var loggedMinutes: Int? {
+        if let active = activeMinutes, active > 0, finishedAt != nil { return active }
         guard let start = startedAt, let end = finishedAt, end > start else { return nil }
         return Int((end.timeIntervalSince(start) / 60).rounded())
     }

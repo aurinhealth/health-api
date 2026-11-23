@@ -63,6 +63,13 @@ struct IntensityPill: View {
             } else {
                 shape.strokeBorder(Palette.faint, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2.5]))
                     .frame(width: large ? 48 : 38, height: large ? 32 : 24)
+                    // Live: the empty oval says what goes in it (617 C14).
+                    .overlay {
+                        if large {
+                            Text(verbatim: "RPE").font(.caption2.weight(.semibold)).foregroundStyle(Palette.faint)
+                                .accessibilityHidden(true)
+                        }
+                    }
             }
         }
     }
