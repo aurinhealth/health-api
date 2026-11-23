@@ -9,6 +9,8 @@ import UserNotifications
 /// right (and large when opened). Any other push, or a failed drawing, passes
 /// through unchanged. With the values hidden (Settings → Oznámení → Skrýt
 /// zdravotní údaje) the score comes only in `private`, so no ring is drawn.
+/// A current server adds `layout` (Notifications concept v3, N1): the banner
+/// takes its title, subtitle and body and no ring is drawn beside it.
 final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var content: UNMutableNotificationContent?

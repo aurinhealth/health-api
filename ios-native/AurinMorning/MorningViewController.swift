@@ -26,7 +26,9 @@ final class MorningViewController: UIViewController, UNNotificationContentExtens
                               title: text.title, subtitle: text.subtitle, body: text.body)
         let view = AnyView(layout.map { TodayMorningView(score: morning.score, zone: morning.zone, layout: $0) } ?? AnyView(MorningView(morning: morning)))
         // Without the coach in the plan (no Aurin Pro), no "Ask Coach" under it (concept N1, free).
-        if let layout, layout.coach == nil {
+        // Hidden values keep the layout in `private`: the plan still decides the button.
+        let planned = layout ?? ((content.userInfo["private"] as? [String: Any])?["layout"] as? [String: Any]).map(MorningLayout.init)
+        if let planned, planned.coach == nil {
             extensionContext?.notificationActions = extensionContext?.notificationActions.filter { $0.identifier != "MORNING_ASK_COACH" } ?? []
         }
         if let host {
@@ -56,8 +58,10 @@ final class MorningViewController: UIViewController, UNNotificationContentExtens
 struct MorningLayout {
     var label: String
     var pill: String?
+    /// The day's verdict under the number (the server's `subtitle`, the banner's subtitle).
     var verdict: String?
     var night: String?
+    /// The coach card's green sentence (the server's `advice`, not the verdict).
     var advice: String?
     /// "Coach" while the coach is in the plan; nil: no coach card.
     var coach: String?
@@ -99,7 +103,7 @@ struct TodayMorningView: View {
     private let green = Self.color(StatusHex.good.dark)
 
     private var pillColors: (Color, Color) {
-        let tone = Self.color((StatusHex.zone(zone) ?? StatusHex.warn).dark)
+        let tone = StatusHex.zone(zone).map { Self.color($0.dark) } ?? muted
         return (tone, tone.opacity(0.16))
     }
 
