@@ -268,11 +268,16 @@ struct WidgetSportDisc: View {
     /// Still ahead: paler, as Training draws a planned session.
     var ahead = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
         let color = Palette.Sport.color(sport ?? "")
         let dark = scheme == .dark
         ZStack {
+            if ahead && renderingMode != .fullColor {
+                // Tinted or clear: one colour, so ahead is an outline and done a fill.
+                Circle().strokeBorder(Palette.ink.opacity(0.5), lineWidth: 1.2)
+            }
             Circle().fill(color.opacity(ahead ? (dark ? 0.08 : 0.07) : (dark ? 0.24 : 0.15)))
             Image(systemName: WidgetStyle.symbol(sport))
                 .font(.system(size: size * 0.5, weight: .medium))
@@ -674,11 +679,21 @@ struct WeekFace: View {
                 }
                 .frame(width: 26, height: 26)
             }
-            Text(verbatim: day.sport == nil ? L10n.tr("volno") : WidgetStyle.length(day.minutes > 0 ? day.minutes : day.planned))
+            Text(verbatim: label(day))
                 .font(.system(size: 11)).foregroundStyle(Palette.muted)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// "rest", "55 min", today with more still planned "42 + 45 min", a missed day "–".
+    private func label(_ day: WidgetWeek.Day) -> String {
+        guard day.sport != nil else { return L10n.tr("volno") }
+        if day.minutes > 0, day.planned > 0 {
+            return WidgetStyle.length(day.minutes).replacingOccurrences(of: "\u{00A0}min", with: "") + " + " + WidgetStyle.length(day.planned)
+        }
+        if day.minutes > 0 { return WidgetStyle.length(day.minutes) }
+        return day.planned > 0 ? WidgetStyle.length(day.planned) : "–"
     }
 
     private func row(_ session: WidgetWeek.Session) -> some View {
@@ -779,7 +794,8 @@ struct FoodMediumFace: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.track)
                 Capsule().fill(color)
-                    .frame(width: geo.size.width * min(1, max(0, (value ?? 0) / max(1, target ?? 1))))
+                    // Without a target nothing to fill: a full bar would read as "reached".
+                    .frame(width: (target ?? 0) > 0 ? geo.size.width * min(1, max(0, (value ?? 0) / (target ?? 1))) : 0)
                     .widgetAccentable()
             }
         }

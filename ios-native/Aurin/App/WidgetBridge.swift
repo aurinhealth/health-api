@@ -63,9 +63,11 @@ enum WidgetBridge {
         let days = (0..<7).compactMap { AppModel.shift(monday, by: $0) }.map { date in
             let done = sessions.filter { $0.date == date && $0.status == "done" }
             let planned = sessions.filter { $0.date == date && $0.status == "planned" }
+            // A missed session still marks its day (pale), never "rest".
+            let missed = sessions.first { $0.date == date && $0.status == "missed" }
             return WidgetWeek.Day(date: date, minutes: Double(done.compactMap(\.minutes).reduce(0, +)),
                                   planned: Double(planned.compactMap(\.minutes).reduce(0, +)),
-                                  sport: (done.first ?? planned.first)?.sport)
+                                  sport: (done.first ?? planned.first ?? missed)?.sport)
         }
         let ahead = sessions.filter { $0.status == "planned" && $0.date >= training.date }
             .sorted { ($0.date, $0.time ?? "99") < ($1.date, $1.time ?? "99") }
