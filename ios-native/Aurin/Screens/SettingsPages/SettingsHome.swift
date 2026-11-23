@@ -191,7 +191,8 @@ struct SettingsGoalsCard: View {
 
     var cells: [Cell] {
         let today = model.settingsToday
-        let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
+        // Tonight's need, as the Sleep planner shows it, not last night's (617 #3).
+        let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.tonight?.need.map(Double.init)
         // The day's one set of goals, the numbers Today and Food show (617 #3).
         let kcal = model.todayGoals?.kcal
         let water = Self.waterGoal(store, model.todayGoals?.waterMl)
