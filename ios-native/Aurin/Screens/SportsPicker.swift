@@ -89,7 +89,7 @@ struct SportsPicker: View {
             ForEach(SportsChoice.all, id: \.0) { item in
                 row(item.0)
             }
-            Text("Bez hlavního sportu plánuje Aurin obecnou kondici. Když jsou hlavní kolo, běh i plavání, připravuje tě na triatlon.")
+            Text("Bez hlavního sportu plánuje Aurin obecnou kondici, s hlavním kolem, během i plaváním přípravu na triatlon.")
                 .font(Typo.caption).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -132,7 +132,7 @@ struct SportsPicker: View {
             .buttonStyle(.plain)
             // Only on a ticked sport (617 test, C18); kept in place unseen, so the row does not jump.
             .opacity(on ? 1 : 0)
-            .disabled(!on)
+            .allowsHitTesting(on)
             .accessibilityHidden(!on)
             .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
             .accessibilityAddTraits(main ? .isSelected : [])

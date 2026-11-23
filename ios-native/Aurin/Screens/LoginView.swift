@@ -42,10 +42,13 @@ struct LoginView: View {
                             .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(Palette.amber.opacity(0.14), in: Capsule())
+                    }
+                    if server == .staging && page == Self.signIn {
                         // The way back to the live server, also signed out (after deleting
                         // a test account the app stayed on the test server, 617 test).
                         Button("Přepnout na Live") { Task { await switchToLive() } }
                             .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.secondary)
+                            .lineLimit(1).fixedSize()
                             .frame(minHeight: 44)
                     }
                     Spacer()

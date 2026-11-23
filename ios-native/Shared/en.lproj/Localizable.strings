@@ -3883,7 +3883,7 @@
 /* Sports to suggest: the sports picker, Settings → Goals → Sports, ⋯ on Activity of the day, the coach chat */
 "Jaké sporty děláš?" = "Which sports do you do?";
 "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle." = "Tick all you do and tap Main on what you train for most. The coach only suggests these.";
-"Bez hlavního sportu plánuje Aurin obecnou kondici. Když jsou hlavní kolo, běh i plavání, připravuje tě na triatlon." = "Without a main sport, Aurin plans for general fitness. With Ride, Run and Swim all set as Main, it trains you for a triathlon.";
+"Bez hlavního sportu plánuje Aurin obecnou kondici, s hlavním kolem, během i plaváním přípravu na triatlon." = "Without a main sport Aurin plans for general fitness, and with Ride, Run and Swim all as Main it plans for a triathlon.";
 "Hlavní sport: %@" = "Main sport: %@";
 "Sporty k navrhování" = "Sports to suggest";
 "Kouč navrhuje" = "The coach suggests";

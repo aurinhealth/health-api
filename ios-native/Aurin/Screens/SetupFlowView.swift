@@ -179,6 +179,7 @@ struct SetupFlowView: View {
             // skipped (p2); "O tobě" still follows, as without age, height and
             // weight nothing (calories, strain, recovery) can be worked out.
             SecondaryButton(title: "Později") { Task { await next() } }
+                .frame(minHeight: 50)
                 .disabled(!ready || appleWorking || turning)
         } else {
             PrimaryButton(title: buttonTitle, busy: saving || appleWorking || building) { Task { await next() } }
