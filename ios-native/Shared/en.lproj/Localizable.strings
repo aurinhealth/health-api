@@ -1709,10 +1709,10 @@
 /* Sign-in and the first-run setup (LoginView, SetupFlowView, Passkeys) */
 "Pokračovat přes Apple" = "Continue with Apple";
 "Pokračovat přes Google" = "Continue with Google";
-"Pokračovat e-mailem" = "Continue with e-mail";
+"Pokračovat e-mailem" = "Continue with email";
 "Přihlásit přes passkey" = "Sign in with a passkey";
 "Příště přes Face ID" = "Next time with Face ID";
-"Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Aurin saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no e-mail code.";
+"Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Aurin saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no email code.";
 "Zapnout" = "Turn on";
 "Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
 "Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
@@ -3883,7 +3883,7 @@
 /* Sports to suggest: the sports picker, Settings → Goals → Sports, ⋯ on Activity of the day, the coach chat */
 "Jaké sporty děláš?" = "Which sports do you do?";
 "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle." = "Tick all you do and tap Main on what you train for most. The coach only suggests these.";
-"Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli." = "No Main = general fitness. Main on Ride, Run and Swim = triathlon training. A race (duathlon, triathlon, marathon) goes in your goal.";
+"Bez hlavního sportu plánuje Aurin obecnou kondici. Když jsou hlavní kolo, běh i plavání, připravuje tě na triatlon." = "Without a main sport, Aurin plans for general fitness. With Ride, Run and Swim all set as Main, it trains you for a triathlon.";
 "Hlavní sport: %@" = "Main sport: %@";
 "Sporty k navrhování" = "Sports to suggest";
 "Kouč navrhuje" = "The coach suggests";
@@ -5239,3 +5239,10 @@
 "Zapsat večeři" = "Log dinner";
 "Zapsat druhou večeři" = "Log late snack";
 "Zapsat jídlo" = "Log food";
+"pohlaví" = "sex";
+"rok narození" = "year of birth";
+"výška" = "height";
+"Ještě chybí: %@." = "Still missing: %@.";
+"I tréninky z Garminu a COROSu" = "Also Garmin and COROS workouts";
+"Přepnout na Live" = "Switch to Live";
+"Kód z e-mailu" = "Code from the email";
