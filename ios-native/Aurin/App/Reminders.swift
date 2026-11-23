@@ -85,8 +85,9 @@ enum Reminders {
         defaults.set(true, forKey: done)
         let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
         if usedBefore, defaults.object(forKey: waterKey) == nil { defaults.set(true, forKey: waterKey) }
-        // A weigh-in already on keeps its every day; Monday is for new ones.
-        if usedBefore, defaults.object(forKey: weightKey) as? Bool == true, defaults.object(forKey: daysKey(weightKey)) == nil {
+        // A weigh-in already on (it was off by default, so an older version's
+        // choice: this runs before anything else) keeps its every day; Monday is for new ones.
+        if defaults.object(forKey: weightKey) as? Bool == true, defaults.object(forKey: daysKey(weightKey)) == nil {
             defaults.set(everyDay, forKey: daysKey(weightKey))
         }
     }
