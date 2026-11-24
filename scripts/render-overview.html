@@ -217,7 +217,7 @@ const chips = list => list.map(([v, t]) => `<span class="chip">${v ? `<b>${v}</b
 
 // One card per area of the app: [file, eyebrow, headline, line, tone, glow, phones, chips].
 const AREAS = [
-  ['03-readiness', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal. The journal shows what a sauna, a late meal or alcohol does to your mornings.', 'green', 'glow-today', ['readiness-parts', 'journal-impact'], [['78', 'readiness, high'], ['−4', 'points from sleep'], ['+9', 'points from HRV'], ['', 'what affects you']]],
+  ['03-readiness', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own usual range. The journal shows how a sauna, a late meal or alcohol go with your mornings.', 'green', 'glow-today', ['readiness-parts', 'journal-impact'], [['78', 'readiness, usual range'], ['−4', 'points from sleep'], ['+9', 'points from HRV'], ['', 'what affects you']]],
   ['04-sleep', 'Sleep', 'Every night, in detail.', 'Deep, REM and light sleep, when you fell asleep and when you woke up. Your sleep need grows with a hard day and the debt from the week, and the dial says when to go to bed.', 'indigo', 'glow-health', ['sleep', 'bedtime'], [['7:12', 'last night, score 82'], ['8:30', 'need tonight'], ['4:51', 'debt over 7 days'], ['', 'bedtime on a dial']]],
   ['05-strain', 'Strain', 'Know when to push.', 'Every workout and every step adds up. Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 'amber', 'glow-training', ['strain-target'], [['8.4', 'of 21 today'], ['11–14', 'today’s target'], ['', 'workout and movement apart']]],
   ['06-training', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered. Follow a plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.', 'green', 'glow-today', ['training'], [['', 'week and month'], ['', 'AI plans the week'], ['', 'Intervals.icu sync']]],
@@ -241,7 +241,7 @@ document.getElementById('cards').innerHTML = AREAS.map(([file, eyebrow, h, p, to
 const TILES = [
   ['today', 'h2', 'Today', 'green', 'glow-today', 'Your morning on one screen.', 'Readiness, how you feel, the weather, sleep, strain and HRV.'],
   ['sleep', '', 'Sleep', 'indigo', 'glow-health', 'Every night, in detail.', 'Stages, need and debt, a bedtime dial.'],
-  ['readiness-parts', '', 'Readiness', 'green', 'glow-today', 'One number every morning.', 'Against your own normal.'],
+  ['readiness-parts', '', 'Readiness', 'green', 'glow-today', 'One number every morning.', 'Against your own usual range.'],
   ['strain-target', '', 'Strain', 'amber', 'glow-training', 'Know when to push.', 'A target for today and what fills it.'],
   ['training', '', 'Training', 'green', 'glow-today', 'A plan that adapts.', 'Plan it, let the AI do it, sync Intervals.icu.'],
   ['builder', '', 'Gym', 'amber', 'glow-training', 'A workout made for today.', 'Rested muscles, your time, your gym.'],
