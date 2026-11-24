@@ -25,7 +25,7 @@ test('a confirmed proposal keeps only planning columns of known exercises', () =
 
 test('the week proposal comes back without the chat and confirmed gym rows are cleaned', () => {
   const server = serverSource();
-  assert.match(server, /return Response\.json\(\{status:'ok',start,proposal\}/);
+  assert.match(server, /return Response\.json\(\{status:'ok',start,proposal(,\.\.\.\(body\.replan===true\?\{replan:true\}:\{\}\))?\}/);
   assert.doesNotMatch(server, /WEEK_REVIEW_REQUEST/);
   assert.match(server, /if\(Array\.isArray\(body\.rows\)\)plan\.rows=cleanGymRows/);
 });

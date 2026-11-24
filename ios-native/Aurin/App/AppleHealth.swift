@@ -233,8 +233,17 @@ final class AppleHealth {
         }
         setCategories(chosen)
         // The account's Connect, on the server too: uploads are kept only after it (src/apple-health.js).
-        // An older server does not know it and keeps them anyway.
-        _ = try? await api.send("/app/api/health/apple", method: "PUT", body: [String: String]()) as JSONValue
+        // A failed one fails the Connect with its reason, instead of a first sync the server
+        // refuses (409) and that quietly switches reading off again (redesign review point 7).
+        do {
+            let _: JSONValue = try await api.send("/app/api/health/apple", method: "PUT", body: [String: String]())
+        } catch APIError.message("Method not allowed") {
+            // A server from before the Connect (#1256 not yet released there) keeps the uploads anyway.
+        } catch {
+            message = error.localizedDescription
+            ErrorLog.add(path: "Apple Health connect", status: nil, message: error.localizedDescription)
+            return false
+        }
         UserDefaults.standard.set(account, forKey: Self.ownerKey)
         enabled = true
         // A new category needs its history, not just the last days.
@@ -439,10 +448,7 @@ final class AppleHealth {
                     if let api = AppleHealth.shared.api {
                         // Woken in the background: the widgets follow the new data,
                         // after HealthKit heard back (BackgroundRefresh.healthWake).
-                        if UIApplication.shared.applicationState == .active {
-                            // HealthKit says something new came: no 10-minute wait.
-                            if await AppleHealth.shared.run(api: api, force: true).changed { AppleHealth.shared.newInApp += 1 }
-                        }
+                        if UIApplication.shared.applicationState == .active { AppleHealth.shared.followInApp(api: api) }
                         else { await BackgroundRefresh.healthWake(api: api) }
                     }
                     completion()
@@ -457,6 +463,34 @@ final class AppleHealth {
             reader.store.enableBackgroundDelivery(for: type, frequency: often) { _, _ in }
         }
     }
+
+    /// HealthKit says something new came while the app is open (review 2026-11-24
+    /// point 4): at most one sync every 2 minutes instead of one per wake, and
+    /// without force, so a wake with nothing new sends nothing. Wakes during a
+    /// sync or inside the 2 minutes wait for one sync after them, so a workout
+    /// saved meanwhile is not left until the next open. The tabs follow once
+    /// per sync that brought something new.
+    func followInApp(api: APIClient) {
+        // A wake while this one's sync reads and sends: one more round after it,
+        // as the sync may have read before the new data was there.
+        guard followUp == nil else { wokenAgain = true; return }
+        followUp = Task { @MainActor in
+            defer { followUp = nil }
+            repeat {
+                wokenAgain = false
+                while running != nil || lastSync.map({ Date().timeIntervalSince($0) < Self.inAppGap }) == true {
+                    let wait = running != nil ? 5 : max(5, Self.inAppGap - Date().timeIntervalSince(lastSync ?? .distantPast))
+                    try? await Task.sleep(for: .seconds(wait))
+                    if Task.isCancelled { return }
+                }
+                guard UIApplication.shared.applicationState == .active else { return }
+                if await run(api: api, within: Self.inAppGap).changed { newInApp += 1 }
+            } while wokenAgain
+        }
+    }
+    @ObservationIgnored private var followUp: Task<Void, Never>?
+    @ObservationIgnored private var wokenAgain = false
+    private static let inAppGap: TimeInterval = 120
 
     private func stopObservers() {
         for query in observers { reader.store.stop(query) }
@@ -482,7 +516,7 @@ final class AppleHealth {
     }
 
     /// The sync with what it did; one already running is awaited, not skipped.
-    func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
+    func run(api: APIClient, force: Bool = false, within gap: TimeInterval = 600) async -> SyncOutcome {
         if let running { return await running.value }
         guard enabled, Self.readsForAccount, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
         // No health data leaves the phone before the account's consent to it.
@@ -490,7 +524,7 @@ final class AppleHealth {
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
-        if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
+        if !force, let lastSync, Date().timeIntervalSince(lastSync) < gap { return SyncOutcome(ok: true, changed: false) }
         let task = Task { await perform(api: api, force: force) }
         running = task
         runningSince = Date()

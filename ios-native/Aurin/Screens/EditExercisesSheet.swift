@@ -4,21 +4,23 @@ import SwiftUI
 /// those still to do to drag into another order (the handle) or take out (the
 /// minus); Add exercise, and Make superset, which picks the exercises that go
 /// together (not started or the one under way, not paired yet) and puts them next to each other.
-/// A superset's Unpair takes it apart. Done hands the changed day back.
+/// A superset's Unpair takes it apart. Done hands the changed day back with
+/// the day as it came (the caller keeps sets ticked meanwhile); unchanged it
+/// only closes.
 struct EditExercisesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var day: GymDay
     let catalog: [GymCatalogExercise]
     /// The exercise under way ("Now"), by name: its place changes as the list is edited.
     let currentName: String?
-    let save: (GymDay) -> Void
+    let save: (_ edited: GymDay, _ original: GymDay) -> Void
     /// The day as it came: Cancel shows once something changed.
     private let original: GymDay
     @State private var adding = false
     /// Make superset: the exercises picked so far (by id); nil while editing.
     @State private var picking: Set<String>?
 
-    init(day: GymDay, catalog: [GymCatalogExercise], current: Int? = nil, save: @escaping (GymDay) -> Void) {
+    init(day: GymDay, catalog: [GymCatalogExercise], current: Int? = nil, save: @escaping (_ edited: GymDay, _ original: GymDay) -> Void) {
         _day = State(initialValue: day)
         original = day
         self.catalog = catalog
@@ -103,7 +105,10 @@ struct EditExercisesSheet: View {
                         ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button { save(day); dismiss() } label: { Text("Hotovo").fontWeight(.semibold).foregroundStyle(Palette.green) }
+                        Button {
+                            if day.values != original.values { save(day, original) }
+                            dismiss()
+                        } label: { Text("Hotovo").fontWeight(.semibold).foregroundStyle(Palette.green) }
                     }
                 }
             }

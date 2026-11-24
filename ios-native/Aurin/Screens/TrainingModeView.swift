@@ -452,7 +452,11 @@ struct TrainingModeView: View {
         }
         .sheet(isPresented: $editing) {
             if let day {
-                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited in Task { await saveEdited(edited) } }
+                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited, original in
+                    // Sets ticked on the watch while the sheet was open stay ticked.
+                    let merged = self.day.map { edited.carryingProgress(from: $0, since: original) } ?? edited
+                    Task { await saveEdited(merged) }
+                }
             }
         }
     }
