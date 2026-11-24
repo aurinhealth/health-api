@@ -37,49 +37,65 @@ struct ReadinessHome: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            NavigationLink(value: Page.why) { hero }
-                .buttonStyle(.plain)
-                // One element, not "78", "Readiness", "in your usual range" (watch audit G1).
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(title + " " + (s.readiness.map { String($0) } ?? "–") + (pill.map { ", " + $0.text } ?? ""))
-                .accessibilityValue(sentence ?? "")
-                .accessibilityAddTraits(.isButton)
-                // An older day's details would read as today's.
-                .disabled(stale != nil)
-            if stale == .failed {
-                Text(W.tr("Bez spojení. Otevři Aurin v iPhonu a aktualizuj.", "No connection. Open Aurin on your iPhone to update."))
-                    .watchFont(12, .semibold)
-                    .foregroundStyle(W.amber)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
-            } else if older {
-                Text(dayLabel)
-                    .watchFont(12, .medium)
-                    .foregroundStyle(W.secondary)
-                    .padding(.top, 2)
-            }
+            heroLink
+            staleLine
             Spacer(minLength: W.small ? 4 : 8)
             if !dimmed {
                 dials.disabled(older)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                NavigationLink(value: Page.alarm) {
-                    Image(systemName: "alarm").foregroundStyle(W.ink)
-                }
-                .accessibilityLabel(W.tr("Budík", "Alarm"))
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(value: Page.coach) { WatchCoachLights() }
-                    .accessibilityLabel(W.tr("Kouč", "Coach"))
-            }
-        }
+        .toolbar { corners }
         .containerBackground(background, for: .navigation)
         .containerBackground(background, for: .tabView)
+    }
+
+    private var heroLink: some View {
+        NavigationLink(value: Page.why) { hero }
+            .buttonStyle(.plain)
+            // One element, not "78", "Readiness", "in your usual range" (watch audit G1).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spokenTitle)
+            .accessibilityValue(sentence ?? "")
+            .accessibilityAddTraits(.isButton)
+            // An older day's details would read as today's.
+            .disabled(stale != nil)
+    }
+
+    private var spokenTitle: String {
+        let number: String = s.readiness.map { String($0) } ?? "–"
+        let word: String = pill.map { ", " + $0.text } ?? ""
+        return title + " " + number + word
+    }
+
+    @ToolbarContentBuilder private var corners: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            NavigationLink(value: Page.alarm) {
+                Image(systemName: "alarm").foregroundStyle(W.ink)
+            }
+            .accessibilityLabel(W.tr("Budík", "Alarm"))
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            NavigationLink(value: Page.coach) { WatchCoachLights() }
+                .accessibilityLabel(W.tr("Kouč", "Coach"))
+        }
+    }
+
+    @ViewBuilder private var staleLine: some View {
+        if stale == .failed {
+            Text(W.tr("Bez spojení. Otevři Aurin v iPhonu a aktualizuj.", "No connection. Open Aurin on your iPhone to update."))
+                .watchFont(12, .semibold)
+                .foregroundStyle(W.amber)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        } else if older {
+            Text(dayLabel)
+                .watchFont(12, .medium)
+                .foregroundStyle(W.secondary)
+                .padding(.top, 2)
+        }
     }
 
     /// The page's green glow; plain black on Always-On.
