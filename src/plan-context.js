@@ -120,26 +120,42 @@ export async function planKeyDates(env,plan,monday){
   return roles.map((d,i)=>d.items.some(x=>planSports(plan).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 
-// The weather place of the week plan and today's forecast for Today (app-today.js
-// todayWeather). The forecast is cached for 30 minutes per place and week; a
-// failed fetch is not cached. Only for today: past days show no weather.
-// Today, the pick, Food and the heat advice wait at most WEATHER_WAIT_MS for it
-// (morning report 2026-11-21: Today 12.7 s, 12.1 s of it the three weather reads
-// one after another, each allowed 6 s). The reads go side by side, and one that
-// answers later still fills the cache for the next open.
+// The weather is cached for 30 minutes per place (the week per week, the
+// hours and the detail per day); a failed fetch is not cached. A request waits
+// at most WEATHER_WAIT_MS for it (morning report 2026-11-21: Today 12.7 s, 12.1 s
+// of it the three weather reads one after another, each allowed 6 s; 2026-11-24:
+// the week plan 6.5 s on the week's read). One that answers later still fills
+// the cache for the next request (waitUntil).
 export const WEATHER_WAIT_MS=2500;
+const LATE={};
+async function inTime(ctx,reading,waitMs){
+  ctx?.waitUntil?.(reading);
+  let timer;
+  return Promise.race([reading,new Promise(resolve=>{timer=setTimeout(()=>resolve(LATE),waitMs);})]).finally(()=>clearTimeout(timer));
+}
+const weekRead=(env,ctx,location,monday)=>cached(env,ctx,'weather:'+location.latitude+','+location.longitude+':'+monday,async()=>{
+  const w=await weekWeather(location,monday,env);
+  if(!Object.keys(w).length)throw new Error('no forecast');
+  return w;
+},{ttl:1800}).catch(()=>({}));
+// The week's forecast as weekWeather gives it, {} without a place or in time.
+export async function weekForecast(env,ctx,location,monday,{waitMs=WEATHER_WAIT_MS}={}){
+  if(!location)return {};
+  const week=await inTime(ctx,weekRead(env,ctx,location,monday),waitMs);
+  return week===LATE?{}:week;
+}
+
+// The weather place of the week plan and today's forecast for Today (app-today.js
+// todayWeather), the pick, Food and the heat advice. Only for today: past days
+// show no weather. The three reads go side by side.
 export async function todayPlace(env,ctx,date,{waitMs=WEATHER_WAIT_MS}={}){
   try{
     if(date!==localToday())return {location:null,forecast:null};
     const location=(await getWeekPlan(env.DB,date).catch(()=>null))?.location||null;
     if(!location)return {location:null,forecast:null};
-    const monday=mondayOfDate(date),place=location.latitude+','+location.longitude;
+    const place=location.latitude+','+location.longitude;
     const forecast=Promise.all([
-      cached(env,ctx,'weather:'+place+':'+monday,async()=>{
-        const w=await weekWeather(location,monday,env);
-        if(!Object.keys(w).length)throw new Error('no forecast');
-        return w;
-      },{ttl:1800}).catch(()=>({})),
+      weekRead(env,ctx,location,mondayOfDate(date)),
       cached(env,ctx,'weather-hours:'+place+':'+date,async()=>{
         const h=await dayHours(location,date,env);
         if(!h.length)throw new Error('no forecast');
@@ -152,10 +168,8 @@ export async function todayPlace(env,ctx,date,{waitMs=WEATHER_WAIT_MS}={}){
         return d;
       },{ttl:1800}).catch(()=>null):null
     ]).then(([week,hours,detail])=>week?.[date]?{...week[date],hours,...(detail||{})}:null).catch(()=>null);
-    ctx?.waitUntil?.(forecast);
     // late: the answer went without waiting for the forecast, so a cached pick leaves it out (pickBase degraded).
-    let timer;const LATE={};
-    const first=await Promise.race([forecast,new Promise(resolve=>{timer=setTimeout(()=>resolve(LATE),waitMs);})]).finally(()=>clearTimeout(timer));
+    const first=await inTime(ctx,forecast,waitMs);
     return first===LATE?{location,forecast:null,late:true}:{location,forecast:first};
   }catch{return {location:null,forecast:null};}
 }

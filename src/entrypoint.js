@@ -96,7 +96,7 @@ import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck, heartSince, pausedSports } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
-import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
+import { capWeekTargets, estimatedTargets, weekProposal, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
@@ -178,7 +178,7 @@ import { shiftDate, googleHealthFor, weekHealthDate, dashboardProfile, mondayOfD
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraftsOfLastAnswer, confirmInChat, notConfirmedAgain, answerAsks } from "./coach-chat-confirm.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
-import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
+import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { stepList, bodySteps, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
@@ -1156,7 +1156,7 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   for(const d of days)if(gymDays.has(d.date))d.sports.push('gym');
   const runCommitted=days.reduce((n,d)=>n+committedRunMinutes(d.date,today,runOn[d.date]?.planned,runOn[d.date]?.done),0);
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
-  const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
+  const weather=await weekForecast(env,ctx,prefs.location,start).catch(()=>({}));
   const history=await planningHistory(env,start,30).catch(()=>[]),runCap=weeklyRunCap(history,start);
   const plan=await planForWeek(env,ctx,start);
   const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),event=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event,eventDate=event?.date||null,taperDays=event?.taperDays??7;
@@ -1710,7 +1710,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const plan=await planForWeek(env,ctx,start);
-      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const [weather,history,triathlon,openWater]=await Promise.all([weekForecast(env,ctx,prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
@@ -1728,7 +1728,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const previous=correction&&Array.isArray(body.previous)?body.previous.slice(0,28).filter(x=>validTrainingDay(x?.date)&&WEEK_SPORTS.includes(x?.sport)).map(x=>({date:x.date,sport:x.sport,minutes:Number(x.minutes)||null,environment:x.environment==='indoor'?'indoor':x.sport==='gym'?null:'outdoor',kind:KINDS.includes(x.kind)?x.kind:null})):[];
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today,{performance:true})]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
-      const [weather,history,plan,triathlon,openWaterOf]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,30),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus)]);
+      const [weather,history,plan,triathlon,openWaterOf]=await Promise.all([weekForecast(env,ctx,prefs.location,start),planningHistory(env,start<today?start:today,30),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus)]);
       // A plan with swimming (an open-water race, an aquabike) reads the open-water setting too.
       const openWater=openWaterOf??(planSports(plan.plan||{}).includes('swim')?await swimOpenWater(env,inputs.focus,plan.plan):null);
       // The rules see an empty week, so they propose every day the athlete has time for.
@@ -2541,7 +2541,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
         const [loaded,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
           loadCoachInputs(env,ctx,internalAuth,date,{performance:true}),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
-          getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekWeather(prefs.location,mondayOfDate(date),env)})),
+          getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekForecast(env,ctx,prefs.location,mondayOfDate(date))})),
           task==='block'?planningHistory(env,date,84):null,
           cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),
           recentCoachProposals(env).catch(()=>[])
@@ -2558,7 +2558,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const plans=new Map(planList);
         const safety=actionSafetyContext(selected.week.days,date,day=>plans.get(mondayOfDate(day)));
         // The forecast for the open week too, when it is not this one.
-        const openWeekWeather=task!=='adjustment'&&selected.appContext.weekStart!==thisWeek?await weekWeather(prefs.location,selected.appContext.weekStart,env).catch(()=>({})):{};
+        const openWeekWeather=task!=='adjustment'&&selected.appContext.weekStart!==thisWeek?await weekForecast(env,ctx,prefs.location,selected.appContext.weekStart).catch(()=>({})):{};
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
         for(const s of bodySteps({date,inputs}))step(s);
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,experienceLevels,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
@@ -3931,7 +3931,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       availabilityMinutes=trainingBudget(prefs,date,availabilityMinutes,{userInitiated});
       if(availabilityMinutes!=null&&availabilityMinutes<minSport)throw new Error(L('V tento den nemáš dost času na tento trénink.', 'You don\'t have enough time for this workout on this day.'));
       // The chip's place (the athlete's choice or the forecast) first, then the forecast.
-      const weather=weekTarget?.environment||genSport==='swim'?{}:await weekWeather(prefs.location,mondayOfDate(date),env),suggestedEnvironment=weekTarget?.environment?{environment:weekTarget.environment,reason:weekTarget.reason}:genSport==='swim'?{environment:'indoor',reason:''}:environmentFor(date,genSport,weather[date]);
+      const weather=weekTarget?.environment||genSport==='swim'?{}:await weekForecast(env,ctx,prefs.location,mondayOfDate(date)),suggestedEnvironment=weekTarget?.environment?{environment:weekTarget.environment,reason:weekTarget.reason}:genSport==='swim'?{environment:'indoor',reason:''}:environmentFor(date,genSport,weather[date]);
       const environment=body.environment==='auto'||!body.environment?suggestedEnvironment.environment:body.environment;
       // Indoor is shorter (the chip already is when it says indoor).
       if(!userInitiated&&genSport!=='swim'&&environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
