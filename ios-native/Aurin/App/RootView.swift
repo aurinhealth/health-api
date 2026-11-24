@@ -162,6 +162,8 @@ struct RootView: View {
                     ScreenTrail.visit(model.tab, paths[model.tab]?.last)
                 }
                 .onChange(of: model.tab) { old, tab in
+                    // Tabs stay built when switched, so a tab left mid-edit does not hide "Synced" elsewhere.
+                    editingWidgets = false
                     ScreenTrail.visit(tab, model.paths[tab]?.last)
                     visited.insert(old)
                     // A tab built earlier: only its data is checked, like on its first visit.

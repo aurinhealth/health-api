@@ -17,6 +17,7 @@ struct SheetFrame<Accessory: View, Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     @State private var headerHeight: CGFloat = 0
     @State private var contentHeight: CGFloat = 0
+    @State private var bottomInset: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,15 +40,16 @@ struct SheetFrame<Accessory: View, Content: View>: View {
             }
             .scrollBounceBehavior(.basedOnSize)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { bottomInset = $0 }
         .presentationDetents(detents)
         .presentationDragIndicator(.visible)
     }
 
-    /// Fitted: the header and the content, the system keeps it under the top.
+    /// Fitted: the header, the content and the home indicator's room; the system keeps it under the top.
     private var detents: Set<PresentationDetent> {
         guard fitted else { return [.large] }
         guard contentHeight > 0 else { return [.medium] }
-        return [.height(headerHeight + contentHeight)]
+        return [.height(headerHeight + contentHeight + bottomInset)]
     }
 }
 

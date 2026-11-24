@@ -458,7 +458,7 @@ struct StageTotals: View {
                 }
             }
             .frame(height: 10)
-            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8).frame(width: 62, alignment: .trailing)
+            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7).frame(width: 84, alignment: .trailing)
             Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: 40, alignment: .trailing)
         }

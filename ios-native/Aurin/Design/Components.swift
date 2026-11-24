@@ -590,8 +590,8 @@ private struct PageHeader: ViewModifier {
     private func pinned(_ page: some View) -> some View {
         page.overlay(alignment: .top) {
             bar
-                // On the line of the page's own title row (24 pt down, 36 pt high).
-                .padding(.top, 22)
+                // On the line of the page's own title row (24 pt down, 36 pt high); the row is 44 pt.
+                .padding(.top, 20)
                 .padding(.bottom, 10)
                 .background {
                     PinnedBarBackground()
