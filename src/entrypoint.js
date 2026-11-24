@@ -102,7 +102,7 @@ import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_O
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
-import { easierDayCard } from './night-check.js';
+import { easierDayCard, trainedOut } from './night-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -953,7 +953,7 @@ async function coachPush(env, ctx) {
     const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)), ALL_SPORTS);
     const readinessOn = day => readinessFor({ date: day, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile });
     const readiness = morningDue ? readinessOn(date) : null;
-    const easier = morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state }) : null;
+    const easier = morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state, trained: trainedOut((inputs.week?.days || []).find(d => d.date === date)) }) : null;
     const recovery = morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null;
     // The morning verdict only when the coach has something to say (25.1).
     const verdict = easier || recovery ? await todayVerdict(env, ctx, date, state) : null;
@@ -1656,17 +1656,20 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const readinessOn=day=>readinessFor({date:day,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
       const readiness=readinessOn(date),yesterday=readinessOn(shiftDate(date,-1));
       // One verdict a morning (audit 25.1): the verdict read only when a card has something to say.
-      const verdict=easierDayCard({date,readiness,yesterday,state})||proactiveAdvice({...inputs,state,readiness})?await todayVerdict(env,ctx,date,state):null;
-      let easier=easierDayCard({date,readiness,yesterday,state,verdict});
+      // Today's training done: no "an easier day fits today" under "Today's training is done" (Petr 2026-11-24).
+      const trained=trainedOut((inputs.week?.days||[]).find(d=>d.date===date));
+      const verdict=easierDayCard({date,readiness,yesterday,state,trained})||proactiveAdvice({...inputs,state,readiness})?await todayVerdict(env,ctx,date,state):null;
+      let easier=easierDayCard({date,readiness,yesterday,state,verdict,trained});
       if(easier){
         // The swap waits in the athlete's state, so Ulehčit dnešek answers it as the push's Vyměnit does
         // (/app/api/coach/nudge); a swap already offered for today stays. Today's sessions only, read only now.
         if(!(state.nudge?.day===date&&state.nudge.status==='pending')){
-          const hard=hardSession(await upcomingSessions(env,(inputs.week?.days||[]).filter(d=>d.date===date),ALL_SPORTS),[date]);
+          // A session already done is not offered for a swap.
+          const hard=hardSession((await upcomingSessions(env,(inputs.week?.days||[]).filter(d=>d.date===date),ALL_SPORTS)).filter(u=>!u.done),[date]);
           if(hard){state.nudge={...easierSwap(hard),title:easier.headline,day:date,status:'pending'};await updateAthleteState(env.DB,{nudge:state.nudge});}
         }
         const offer=state.nudge?.date===date?swapOffer(state,date):null;
-        easier=offer?easierDayCard({date,readiness,yesterday,state,offer,verdict}):easier;
+        easier=offer?easierDayCard({date,readiness,yesterday,state,offer,verdict,trained}):easier;
       }
       // The push's swap of tomorrow's session stays first until it is answered.
       const swap=swapOffer(state,date);
