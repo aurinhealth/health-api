@@ -86,7 +86,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-checkin.js';
@@ -3092,6 +3092,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const missedOne=missedWorkoutView(missedWorkout({days:missedRead[0].days,today:date,decided:missedRead[1],red}),date);
         if(missedOne)body.missedWorkout=missedOne;
       }
+      // "Did you play?": yesterday's practice or match of the week plan that nothing recorded (only for an athlete with other sports).
+      if(isToday&&profile?.otherSports?.length){const day=shiftDate(date,-1),played=playedCheck((await getWeekPlan(env.DB,day,{calendar:false}).catch(()=>null))?.events,day,yesterday?.training?.completed||[]);if(played)body.played=played;}
       keepUsualWake(env,ctx,date,profile,body.tonight);
       // Today's row of the food history (nutrition-days.js), after the answer.
       if(isToday&&body.nutrition?.target!=null)ctx.waitUntil(saveNutritionDay(env.DB,nutritionDayOfToday(date,body.nutrition),date).catch(error=>console.error('Nutrition day save failed',error.message)));

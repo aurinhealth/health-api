@@ -4,7 +4,7 @@ import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } fro
 import {trainingHistory,starterPlan,experienceChoices} from './training-history.js';
 import { weekFree, withCalendarFree, ensureCalendarFree } from './calendar-free.js';
 import { MAX_MINUTES } from './workout-model.js';
-import { isOtherSport } from './activity-type.js';
+import { isOtherSport, typeName } from './activity-type.js';
 import { otherSportKind } from './strength-balance.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -75,6 +75,16 @@ export function sanitizeWeekPlan(input = {}) {
     bricks: sanitizeBricks(input.bricks, days),
     // The athlete's other sports per weekday (football training, a match…): the plan works around them.
     events: sanitizeEvents(input.events) };
+}
+// Today's "Did you play?" card: the first of the day's other sports that no
+// activity of that day records (the same type or the same kind: a watch's
+// "Soccer" for a planned "Soccer", "Hockey" for "IceSkate"). Saved through Log
+// workout it is recorded, and "Didn't play" takes it out of that week's plan.
+export function playedCheck(events, date, completed = []) {
+  if (!validDay(date)) return null;
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7, kinds = new Set(completed.map(a => otherSportKind(a?.type)).filter(Boolean));
+  const left = (events?.[weekday] || []).find(e => !completed.some(a => a?.type === e.type) && !kinds.has(otherSportKind(e.type)));
+  return left ? { date, type: left.type, name: typeName(left.type), kind: left.kind, minutes: left.minutes } : null;
 }
 // Up to two a day: a Log workout type of the athlete's other sports, training or
 // match, and its length (15 min to 5 h, by 5 min; none: the usual for the kind).

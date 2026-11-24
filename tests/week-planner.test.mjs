@@ -179,3 +179,16 @@ test("a week with two matches keeps the gym to the upper body", () => {
   assert.equal(planWeekRoles(days)[0].items[0].role, "gym_full");
   for (const i of [0, 3]) assert.equal(planWeekRoles(days, { events })[i].items[0].role, "gym_upper");
 });
+
+test("Did you play?: yesterday's practice or match that nothing recorded", async () => {
+  const { playedCheck } = await import("../src/week-planner.js");
+  const events = [[], [], [], [], [], [{ type: "Soccer", kind: "match", minutes: 90 }], []];
+  // 2026-11-21 is a Saturday.
+  assert.deepEqual(playedCheck(events, "2026-11-21", []), { date: "2026-11-21", type: "Soccer", name: "Fotbal", kind: "match", minutes: 90 });
+  assert.equal(playedCheck(events, "2026-11-21", [{ type: "Soccer" }]), null);
+  // A watch that calls it another team sport records it too.
+  assert.equal(playedCheck(events, "2026-11-21", [{ type: "Rugby" }]), null);
+  assert.notEqual(playedCheck(events, "2026-11-21", [{ type: "Run" }]), null);
+  assert.equal(playedCheck(events, "2026-11-20", []), null);
+  assert.equal(playedCheck(null, "2026-11-21", []), null);
+});
