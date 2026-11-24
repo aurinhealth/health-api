@@ -38,7 +38,7 @@ final class ExerciseOrderTests: XCTestCase {
                             rows: [row("Squat"), row("Bench", superset: "A"), row("Row", superset: "A")], muscles: ["Squat": ["quads": 1], "Bench": ["chest": 1]])
         var day = p.day
         XCTAssertEqual(day.exercises.map(\.name), ["Squat", "Bench", "Row"])
-        XCTAssertEqual(day.exercises.map(\.superset), ["", "A", "A"])
+        XCTAssertEqual(day.exercises.map(\.superset), [nil, "A", "A"])
         day.deleteExercise(at: 1)
         p.take(day, catalog: catalog)
         XCTAssertEqual(p.exercises.map { $0.name }, ["Squat", "Row"])
