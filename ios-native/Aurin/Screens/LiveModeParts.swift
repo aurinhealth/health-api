@@ -13,6 +13,8 @@ struct LiveStatsPanel: View {
     let live: LiveWorkout
     /// kg × reps of the done sets.
     var volume: Double = 0
+    /// Reps of the done work sets: shown instead of the volume while it is 0 (bodyweight, 617 C15).
+    var reps = 0
     /// The heart rate zones' lower bounds, zone 1 first (empty: no bar).
     var zoneLows: [Double] = []
 
@@ -29,7 +31,11 @@ struct LiveStatsPanel: View {
                     divider
                     cell(L10n.tr("Kalorie"), live.kcal.map { Fmt.int($0) } ?? "–", "kcal")
                     divider
-                    cell(L10n.tr("Objem"), Fmt.int(Units.weight(volume)), Units.imperial ? "lb" : "kg")
+                    if volume == 0, reps > 0 {
+                        cell(L10n.tr("Opakování"), String(reps), nil)
+                    } else {
+                        cell(L10n.tr("Objem"), Fmt.int(Units.weight(volume)), Units.imperial ? "lb" : "kg")
+                    }
                 }
                 // The dividers would otherwise take all the height the list
                 // under the panel leaves free (608: a tall empty tile).
@@ -127,6 +133,8 @@ struct LiveRestGap: View {
     /// The rest running here: its end and length.
     var end: Date? = nil
     var total: Int = 0
+    /// After the planned time: "before the next exercise".
+    var note: String? = nil
 
     var body: some View {
         if let end {
@@ -139,7 +147,7 @@ struct LiveRestGap: View {
             }
             .accessibilityLabel(L10n.f("Pauza, zbývá %@", TrainingModeView.clock(max(0, Int(end.timeIntervalSinceNow)))))
         } else if let seconds, seconds > 0 {
-            line(TrainingModeView.clock(seconds), strong: taken, fill: nil)
+            line(TrainingModeView.clock(seconds) + (note.map { " " + $0 } ?? ""), strong: taken, fill: nil)
                 .accessibilityLabel(L10n.f(taken ? "Pauza %@" : "Pauza podle plánu %@", TrainingModeView.clock(seconds)))
         } else {
             Rectangle().fill(Palette.cardEdge).frame(height: 1.5).padding(.horizontal, 6)
@@ -198,7 +206,7 @@ struct LiveRestButton: View {
                         Spacer(minLength: 8)
                         // Each second rolls the digits that change; the old
                         // number never fades through the new one (608).
-                        Text(verbatim: TrainingModeView.clock(left)).font(Typo.number(30)).monospacedDigit()
+                        Text(verbatim: TrainingModeView.clock(left)).font(Typo.tabular(.title))
                             .contentTransition(.numericText(countsDown: true))
                             .animation(.snappy(duration: 0.25), value: left)
                     }
@@ -454,12 +462,15 @@ struct LiveSupersetClasp<First: View, Second: View>: View {
 struct HeadClock: View {
     let live: LiveWorkout
     let key: String
+    /// An exercise's own time says so: the workout's total is in the panel
+    /// under it, and two bare clocks read as the same one twice (617 C14).
+    var exercise = false
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let time = TrainingModeView.clock(live.seconds(of: key, at: context.date))
             // Paused (concept 08): the time stands, in amber.
-            Text(verbatim: live.pausedAt == nil ? time : L10n.f("Pozastaveno na %@", time))
+            Text(verbatim: live.pausedAt != nil ? L10n.f("Pozastaveno na %@", time) : exercise ? L10n.f("%@ na tomto cviku", time) : time)
                 .font(Typo.small.weight(.medium)).monospacedDigit()
                 .foregroundStyle(live.pausedAt == nil ? Palette.secondary : Palette.amber)
         }
@@ -524,5 +535,23 @@ struct StartCountdown: View {
                 withAnimation(.snappy) { left -= 1 }
             }
         }
+    }
+}
+
+/// Under the live workout's pinned buttons (Set done, the rest with ±15 s,
+/// Resume): the list ends above them and fades out behind them, so a card
+/// under the buttons never reads as part of them (617 C6). The last card
+/// scrolls up clear of them (safeAreaInset keeps its height).
+struct LivePinnedBackground: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Palette.background.opacity(0.75)
+        }
+        .padding(.top, -18)
+        .mask(LinearGradient(stops: [.init(color: .black.opacity(0), location: 0), .init(color: .black, location: 0.3), .init(color: .black, location: 1)],
+                             startPoint: .top, endPoint: .bottom))
+        .ignoresSafeArea(edges: .bottom)
+        .accessibilityHidden(true)
     }
 }

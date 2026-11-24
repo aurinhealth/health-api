@@ -50,9 +50,10 @@ struct GymActivityWidget: Widget {
                 }
             } compactLeading: {
                 // During the set the reps sit by the dumbbell ("×8"), the weight on the right.
+                // The dumbbell in the gym's mint, as everywhere else in the app (617 C20).
                 if !resting, context.state.part == nil, let reps = context.state.reps {
                     HStack(spacing: 4) {
-                        Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.amberBar)
+                        Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.Sport.gym).environment(\.colorScheme, .dark)
                         Text("×" + reps).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
                             .lineLimit(1).minimumScaleFactor(0.6)
                     }
@@ -63,7 +64,7 @@ struct GymActivityWidget: Widget {
                         Text("\(bpm)").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
                     }
                 } else {
-                    Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.amberBar)
+                    Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.Sport.gym).environment(\.colorScheme, .dark)
                 }
             } compactTrailing: {
                 if resting, let start = context.state.restStart, let end = context.state.restEnd {
