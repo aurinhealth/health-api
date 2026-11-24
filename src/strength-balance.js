@@ -8,7 +8,10 @@ const OTHER_SPORTS = [
   [/hockey|skat/, 'skate'],
   [/ski|snowboard/, 'ski'],
   [/boxing|kickbox|martial|wrestl|judo|karate|taekwondo|mma|fencing/, 'combat'],
-  [/equestrian|horse/, 'riding']
+  [/equestrian|horse/, 'riding'],
+  [/row|kayak|canoe|paddl|surf/, 'paddle'],
+  [/climb|boulder/, 'climb'],
+  [/hiit|highintensity|crossfit|dance|gymnastic|barre|jumprope|steptraining|aerobic/, 'fitness']
 ];
 export function otherSportKind(type) {
   const t = String(type || '').toLowerCase().replace(/[^a-z]/g, '');

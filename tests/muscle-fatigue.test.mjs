@@ -173,6 +173,8 @@ test("a match or another sport tires the legs (football, hockey, tennis, skiing)
     assert.ok(muscle(r, "quads").state !== "rested", type);
     assert.equal(muscle(r, "chest").state, "rested", type);
   }
+  // Rowing and climbing tire the back, not the legs first.
+  for (const type of ["Rowing", "RockClimbing"]) assert.notEqual(muscle(of(type), "back").state, "rested", type);
   // Horse riding holds the hips and trunk lightly: rested by the next morning.
   assert.equal(muscle(of("equestrianSports"), "glutes").state, "rested");
   // Listed by the name it was logged with.

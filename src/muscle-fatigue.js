@@ -128,7 +128,7 @@ function gymEnds(sets, strengthWorkouts) {
 }
 
 // The sports besides the gym that tire muscles (fitness-insights.js CARDIO).
-export const SPORT_KINDS = ["ride", "run", "swim", "walk", "team", "racket", "skate", "ski", "combat", "riding"];
+export const SPORT_KINDS = ["ride", "run", "swim", "walk", "team", "racket", "skate", "ski", "combat", "riding", "paddle", "climb", "fitness"];
 // Doses of fatigue: {at, muscle, dose, failure, estimated, source}.
 export function fatigueDoses({ sets = [], activities = [], now }) {
   const doses = [], sources = new Map();
