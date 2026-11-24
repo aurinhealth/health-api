@@ -86,7 +86,7 @@ struct LiveStatsPanel: View {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value).font(Typo.number(25)).monospacedDigit().foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-                if let unit { Text(unit).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1) }
+                if let unit { Text(unit).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
