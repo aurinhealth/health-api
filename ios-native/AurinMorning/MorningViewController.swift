@@ -98,12 +98,12 @@ struct TodayMorningView: View {
         return Color(red: c.red, green: c.green, blue: c.blue)
     }
     // Today's dark tokens (Shared/Palette.swift): Glow.today, card, ink, muted, green.
-    private let glow = Self.color(0x19322B)
-    private let page = Self.color(0x0A0B0C)
-    private let card = Self.color(0x1C1E1F)
-    private let ink = Self.color(0xECEAE6)
-    private let muted = Self.color(0xA3A8A5)
-    private let green = Self.color(StatusHex.good.dark)
+    private let glow = TodayMorningView.color(0x19322B)
+    private let page = TodayMorningView.color(0x0A0B0C)
+    private let card = TodayMorningView.color(0x1C1E1F)
+    private let ink = TodayMorningView.color(0xECEAE6)
+    private let muted = TodayMorningView.color(0xA3A8A5)
+    private let green = TodayMorningView.color(StatusHex.good.dark)
 
     private var pillColors: (Color, Color) {
         // Today's pill (HealthView ReadinessText.pill, dark): green, amber, rust.
