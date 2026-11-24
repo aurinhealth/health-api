@@ -124,6 +124,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13", partOfDay: true), "ve čtvrtek večer")
         XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13"), "ve čtvrtek")
         XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-14", partOfDay: true), "zítra večer")
+        parts.hour = 14
         // A yellow or red morning: hard training waits for a greener one.
         let time = DemoData.today.recoveryTime
         XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
