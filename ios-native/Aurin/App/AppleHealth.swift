@@ -1144,11 +1144,33 @@ final class HealthReader: @unchecked Sendable {
         }
     }
 
-    /// The day's average (resting heart rate, VO2max, breathing, oxygen).
+    /// One device per day (617 review #12): Apple Health's own day average mixes
+    /// every app that writes the value (an Apple Watch and a Fitbit synced into
+    /// Health), and each device measures it its own way. As src/source-priority.js
+    /// does between services: the "home" source, the one with the most days in the
+    /// window, holds; another fills only the days it has nothing.
+    static func oneSource<T>(_ items: [T], day: (T) -> String, source: (T) -> String) -> [String: [T]] {
+        var byDay: [String: [String: [T]]] = [:]
+        for item in items { byDay[day(item), default: [:]][source(item), default: []].append(item) }
+        var days: [String: Int] = [:]
+        for sources in byDay.values { for key in sources.keys { days[key, default: 0] += 1 } }
+        // Ties by name, so the choice never changes between two syncs.
+        let home = days.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }?.key
+        return byDay.compactMapValues { sources in
+            if let home, let own = sources[home] { return own }
+            return sources.max { a, b in a.value.count != b.value.count ? a.value.count < b.value.count : a.key > b.key }?.value
+        }
+    }
+
+    private static func sourceOf(_ sample: HKSample) -> String { sample.sourceRevision.source.bundleIdentifier }
+
+    /// The day's average (resting heart rate, VO2max, walking heart rate), from one device.
     private func daily(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
-        await statistics(HKQuantityType(id), options: .discreteAverage, from: from, to: to, step: DateComponents(day: 1)).compactMap { s -> AppleRecord? in
-            guard let value = s.averageQuantity()?.doubleValue(for: unit) else { return nil }
-            let date = day(s.startDate)
+        let list = await samples(HKQuantityType(id), from: from, to: to).compactMap { $0 as? HKQuantitySample }
+        let byDay = Self.oneSource(list, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) })
+        return byDay.keys.sorted().compactMap { date -> AppleRecord? in
+            guard let values = byDay[date]?.map({ $0.quantity.doubleValue(for: unit) }), !values.isEmpty else { return nil }
+            let value = values.reduce(0, +) / Double(values.count)
             return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
         }
     }
@@ -1161,10 +1183,9 @@ final class HealthReader: @unchecked Sendable {
     /// evening's samples) waits for the morning.
     private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, precision: Double = 10, from: Date, to: Date) async -> [AppleRecord] {
         let list = await samples(HKQuantityType(id), from: from.addingTimeInterval(-9 * 3600), to: to).compactMap { $0 as? HKQuantitySample }
-        var byDay: [String: [Double]] = [:]
-        for q in list {
-            byDay[wakeDay(q.startDate), default: []].append(q.quantity.doubleValue(for: unit))
-        }
+        // One device a night (617 review #12).
+        let byDay = Self.oneSource(list, day: { self.wakeDay($0.startDate) }, source: { Self.sourceOf($0) })
+            .mapValues { $0.map { $0.quantity.doubleValue(for: unit) } }
         let last = day(to)
         return byDay.keys.sorted().compactMap { date -> AppleRecord? in
             guard date <= last, let values = byDay[date], !values.isEmpty else { return nil }
@@ -1195,7 +1216,9 @@ final class HealthReader: @unchecked Sendable {
         let unit = HKUnit.secondUnit(with: .milli)
         async let sdnnRead = samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to)
         async let beatsRead = samples(HKSeriesType.heartbeat(), from: from, to: to)
-        let sdnn = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        // One device a day (617 review #12): an Apple Watch and a Fitbit synced into Health never averaged.
+        let sdnnAll = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        let sdnn = Self.oneSource(sdnnAll, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) }).values.flatMap { $0 }
         let beats = await beatsRead.compactMap { $0 as? HKHeartbeatSeriesSample }.filter { calendar.component(.hour, from: $0.startDate) < 10 }
         var rmssd: [String: [Double]] = [:]
         let values = await concurrently(beats) { await self.rmssdOf($0) }

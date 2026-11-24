@@ -322,7 +322,7 @@ struct MusclesView: View {
             .padding(.vertical, 10)
             ForEach(groups.filter { filter == nil || $0.state(on: data.date) == filter }) { group in
                 Rectangle().fill(Palette.hairline).frame(height: 1)
-                Button { model.push(.muscle(group.open)) } label: { FreshnessRow(group: group, today: data.date) }
+                Button { model.push(group.route) } label: { FreshnessRow(group: group, today: data.date) }
                     .buttonStyle(.plain)
             }
         }
