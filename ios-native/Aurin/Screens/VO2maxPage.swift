@@ -36,7 +36,7 @@ struct VO2maxPage: View {
 
     private func load() async {
         guard loaded[period] == nil, !model.demo else { return }
-        if let series = try? await model.api.healthSeries(metric: "vo2max", period: period) { loaded[period] = series }
+        if let series = await model.healthSeries(metric: "vo2max", period: period) { loaded[period] = series }
     }
 
     static func sources(_ list: [String]?) -> String? {

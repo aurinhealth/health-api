@@ -36,7 +36,7 @@ struct GymPlaceView: View {
             if scrolls {
                 DetailScreen(glow: Palette.Glow.training, title: place.name, showsCoach: false) { page }
             } else {
-                page.padding(.horizontal, 24).padding(.top, 30)
+                page.padding(.horizontal, PageGrid.margin).padding(.top, 30)
             }
         }
         .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
@@ -139,7 +139,7 @@ struct GymPlaceView: View {
                     }
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
         }
         .padding(.horizontal, -24)
     }

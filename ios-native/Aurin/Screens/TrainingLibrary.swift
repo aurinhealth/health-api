@@ -1868,7 +1868,7 @@ struct LengthControl: View {
     }
 
     /// "45 min", "1 h", "1 h 30" (602 point 139): the app's one length format (Fmt.duration, "1 h 05"), with no-break spaces so it never wraps.
-    static func short(_ minutes: Int) -> String { Fmt.duration(minutes).replacingOccurrences(of: " ", with: "\u{00A0}") }
+    static func short(_ minutes: Int) -> String { Fmt.duration(minutes) }
 
     private func clamp(_ value: Int) -> Double { min(max(Double(value), range.lowerBound), range.upperBound) }
 

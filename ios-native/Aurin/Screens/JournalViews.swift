@@ -84,7 +84,8 @@ struct JournalAnswerButtons: View {
     let choose: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        // 12 pt apart and 44 pt to tap each (Petr 2026-11-23, 617 #35).
+        HStack(spacing: 12) {
             button(0, symbol: "xmark", label: "Ne")
             button(1, symbol: "checkmark", label: "Ano")
         }
@@ -94,6 +95,7 @@ struct JournalAnswerButtons: View {
         Button { choose(value) } label: {
             Image(systemName: symbol).scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.secondary)
                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                .tapTarget(width: 34, height: 34)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
@@ -845,7 +847,7 @@ struct JournalValueSheet: View {
                 }
                 .disabled(busy)
             }
-            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 8)
         }
         .presentationDetents([.medium, .large], selection: $detent)
         .glassSheetBackground()

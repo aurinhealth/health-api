@@ -157,6 +157,9 @@ struct TodaySnapshot: Decodable, Equatable {
         /// The redesign's line under the number (D-DNES-2): what the numbers say,
         /// a key of src/day-verdict.js NUMBERS_LINE_KEYS, never advice; nil on an earlier day.
         var numbersLine: String? = nil
+        /// What makes a yellow or red line, keys of src/day-verdict.js
+        /// NUMBERS_OFF_KEYS ("sleep", "hrv", "restingHR"); nil from an older server.
+        var numbersOff: [String]? = nil
         /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
         /// capped at yellow), "no_night" (no number without the night), etc.
         var flags: [String]? = nil

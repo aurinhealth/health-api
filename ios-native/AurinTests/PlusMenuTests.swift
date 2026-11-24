@@ -37,8 +37,8 @@ final class PlusMenuTests: XCTestCase {
     }
 
     func testWorkoutLength() {
-        XCTAssertEqual(ManualWorkoutSheet.length(55), "55 min")
-        XCTAssertEqual(ManualWorkoutSheet.length(90), "1 h 30")
-        XCTAssertEqual(ManualWorkoutSheet.length(240), "4 h")
+        XCTAssertEqual(ManualWorkoutSheet.length(55), "55\u{00A0}min")
+        XCTAssertEqual(ManualWorkoutSheet.length(90), "1\u{00A0}h\u{00A0}30\u{00A0}min")
+        XCTAssertEqual(ManualWorkoutSheet.length(240), "4\u{00A0}h")
     }
 }
