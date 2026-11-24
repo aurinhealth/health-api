@@ -292,7 +292,7 @@ struct SettingsPage<Content: View>: View {
                 if let hero { hero }
                 content
             }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 12)
                 .padding(.bottom, 48)
         }
@@ -318,8 +318,9 @@ struct SettingsPage<Content: View>: View {
 }
 
 /// The switch of the design, in the shape of the iOS 26 switch (64 × 28 with a
-/// long knob): green with a white knob when on, only a thin outline with a small
-/// knob when off, so an off switch is never a grey block on the card.
+/// long knob): green with a white knob when on, a thin outline with the same long
+/// knob in grey when off (617 #40: one knob shape in both states), so an off switch
+/// is never a grey block on the card. Disabled at 60 %, still readable.
 struct AurinToggleStyle: ToggleStyle {
     @Environment(\.isEnabled) private var isEnabled
     private static let outline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.28)
@@ -340,20 +341,13 @@ struct AurinToggleStyle: ToggleStyle {
                                 .opacity(configuration.isOn ? 0 : 1)
                         }
                         .frame(width: 64, height: 28)
-                    if configuration.isOn {
-                        Capsule()
-                            .fill(Color.white)
-                            .frame(width: 38, height: 24)
-                            .shadow(color: .black.opacity(0.14), radius: 2.5, y: 1.5)
-                            .padding(2)
-                    } else {
-                        Circle()
-                            .fill(Self.offKnob)
-                            .frame(width: 14, height: 14)
-                            .padding(7)
-                    }
+                    Capsule()
+                        .fill(configuration.isOn ? Color.white : Self.offKnob)
+                        .frame(width: 38, height: 24)
+                        .shadow(color: .black.opacity(configuration.isOn ? 0.14 : 0), radius: 2.5, y: 1.5)
+                        .padding(2)
                 }
-                .opacity(isEnabled ? 1 : 0.45)
+                .opacity(isEnabled ? 1 : 0.6)
             }
             .contentShape(Rectangle())
         }

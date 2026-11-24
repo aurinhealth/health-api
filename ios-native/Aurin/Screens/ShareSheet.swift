@@ -102,7 +102,7 @@ struct ShareSheet: View {
                             .padding(.top, 10)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.bottom, 28)
             }
             .background { Palette.background.ignoresSafeArea() }
@@ -420,7 +420,7 @@ struct ShareEditView: View {
                     rows.padding(.top, 10)
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             .padding(.bottom, 30)
         }
         .background { Palette.background.ignoresSafeArea() }

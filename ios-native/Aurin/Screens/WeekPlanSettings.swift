@@ -446,7 +446,7 @@ enum WeekPlanSettingsText {
         return planDuration(minutes) + (minutes >= 360 ? "+" : "")
     }
 
-    /// "8 h 15 a week".
+    /// "8 h 15 min a week".
     static func total(_ minutes: [Int]) -> String {
         L10n.f("%@ týdně", planDuration(minutes.reduce(0) { $0 + max(0, $1) }))
     }
@@ -462,8 +462,10 @@ enum WeekPlanSettingsText {
 // MARK: - Generate, add and change a workout
 
 /// The client side of the plan's changes; the server has no replan of its own:
-/// the planned workouts ahead go, the week's proposal (rules, no AI cost) is
-/// built and saved as the old week planner saved it.
+/// the week's proposal (rules, no AI cost) is built as if the planned workouts
+/// ahead were gone, and only once every workout of it is built do they go and
+/// the new ones get saved as the old week planner saved them (review
+/// 2026-11-24 point 1: offline or a server error leaves the week as it was).
 enum WeekPlanGenerator {
     /// Replans each week from today on; finished workouts stay. False when a week failed.
     @MainActor
@@ -471,16 +473,13 @@ enum WeekPlanGenerator {
         var ok = true
         for week in weeks {
             do {
-                for date in ISODay.range(max(week, today), ISODay.shift(week, 6)) {
-                    for a in calendar[date]?.activities ?? [] where a.status == "planned" {
-                        if let eventId = a.eventId {
-                            try await model.api.deletePlanned(eventId: eventId)
-                        } else if a.sport == "strength" {
-                            try await model.api.cancelGym(date: date)
-                        }
-                    }
+                var r = try await model.api.weekProposal(start: week, replan: true)
+                let replanned = r.replan == true
+                if !replanned {
+                    // A server without replan counts the planned workouts in: they go first, as before.
+                    try await deletePlanned(model, week: week, today: today, calendar: calendar)
+                    r = try await model.api.weekProposal(start: week)
                 }
-                let r = try await model.api.weekProposal(start: week)
                 let bricks = WeekPlanPrefs.bricks(r.proposal?.prefs)
                 var drafts = (r.proposal?.items ?? []).filter { $0.date >= today }.map { item -> WeekSessionDraft in
                     let sport = item.sport == "strength" ? "gym" : item.sport
@@ -498,12 +497,31 @@ enum WeekPlanGenerator {
                     let built = await drafts[i].building(model.api, others: drafts.filter { $0.id != id })
                     drafts[i] = built
                 }
+                if replanned {
+                    // A workout that did not build: the week stays as it was.
+                    guard drafts.allSatisfy({ $0.status == .ready }) else { ok = false; continue }
+                    try await deletePlanned(model, week: week, today: today, calendar: calendar)
+                }
                 if try await save(model, drafts) == false { ok = false }
             } catch {
                 ok = false
             }
         }
         return ok
+    }
+
+    /// The week's planned workouts from today on go; the finished ones stay.
+    @MainActor
+    private static func deletePlanned(_ model: AppModel, week: String, today: String, calendar: [String: CalendarDay]) async throws {
+        for date in ISODay.range(max(week, today), ISODay.shift(week, 6)) {
+            for a in calendar[date]?.activities ?? [] where a.status == "planned" {
+                if let eventId = a.eventId {
+                    try await model.api.deletePlanned(eventId: eventId)
+                } else if a.sport == "strength" {
+                    try await model.api.cancelGym(date: date)
+                }
+            }
+        }
     }
 
     /// Saves the built workouts in order: a brick run joins the day's ride, a

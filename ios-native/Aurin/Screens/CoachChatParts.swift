@@ -115,9 +115,16 @@ struct CoachTodayCard: View {
             }
             Spacer(minLength: 8)
             if let minutes, minutes > 0 {
+                // "1 h 7 min", never "67 min" (Petr 2026-11-23: one length format everywhere).
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(verbatim: "\(minutes)").font(Typo.number(20)).foregroundStyle(Palette.ink)
-                    Text("min").font(Typo.caption).foregroundStyle(Palette.muted)
+                    if minutes >= 60 {
+                        Text(verbatim: "\(minutes / 60)").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text(verbatim: "h").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    if minutes % 60 > 0 {
+                        Text(verbatim: "\(minutes % 60)").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text("min").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
                 }
                 .dynamicTypeSize(...DynamicTypeSize.denseCap)
             }

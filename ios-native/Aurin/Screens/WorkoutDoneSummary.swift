@@ -126,7 +126,7 @@ struct WorkoutDoneSummary: View {
     }
 
     private func strainLine(_ strain: Strain) -> String {
-        let day = L10n.f("Zátěž dne %@ až %@", Fmt.decimal(strain.dayFrom, digits: 1), Fmt.decimal(strain.dayTo, digits: 1))
+        let day = L10n.f("Zátěž dne z %@ na %@", Fmt.decimal(strain.dayFrom, digits: 1), Fmt.decimal(strain.dayTo, digits: 1))
         guard let target = strain.target else { return day }
         return day + ", " + L10n.f("cíl %@ až %@", Fmt.decimal(target.low, digits: 0), Fmt.decimal(target.high, digits: 0))
     }

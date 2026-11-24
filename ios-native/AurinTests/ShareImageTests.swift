@@ -207,8 +207,8 @@ final class ShareImageTests: XCTestCase {
 
     func testWeekAndMilestoneData() throws {
         let week = ShareWeek.sample
-        XCTAssertEqual(ShareWeek.value("Trénink", week.week)?.value, "7:40")
-        XCTAssertEqual(ShareWeek.delta("Trénink", now: 460, before: 395), "+1:05 h")
+        XCTAssertEqual(ShareWeek.value("Trénink", week.week)?.value, "7\u{00A0}h\u{00A0}40")
+        XCTAssertEqual(ShareWeek.delta("Trénink", now: 460, before: 395), "+1\u{00A0}h\u{00A0}5\u{00A0}min")
         XCTAssertEqual(ShareWeek.delta("Běh", now: 18, before: 22), "−4")
         XCTAssertEqual(ShareWeek.delta("Zátěž", now: 486, before: 412), "+74")
         XCTAssertNil(ShareWeek.value("Kolo", ShareWeek.Totals()))

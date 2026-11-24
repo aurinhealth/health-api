@@ -24,7 +24,7 @@ enum HealthValue: String, CaseIterable, Identifiable {
         case .temperature: return "Teplota kůže"
         case .weight: return "Váha"
         case .bodyFat: return "Tělesný tuk"
-        case .muscle: return "Svaly"
+        case .muscle: return "Beztuková hmota"
         case .steps: return "Kroky"
         case .activeEnergy: return "Aktivní energie"
         }
@@ -96,7 +96,9 @@ enum HealthValue: String, CaseIterable, Identifiable {
         case .respiration: return "Počet dechů za minutu ve spánku, odhad hodinek nebo prstenu."
         case .oxygen: return "Kyslík v krvi ve spánku, odhad hodinek nebo prstenu. Není to lékařské měření."
         case .temperature: return "Teplota kůže ve spánku jako rozdíl proti tvým obvyklým nocím. Hodinky ani prsten neměří teplotu těla."
-        case .weight, .bodyFat, .muscle: return "Hodnoty z chytré váhy nebo z tvých zápisů. Tuk a svaly jsou odhad váhy."
+        case .weight, .bodyFat: return "Hodnoty z chytré váhy nebo z tvých zápisů. Tuk je odhad váhy."
+        // Apple Health has lean body mass only, no muscle mass: everything but fat.
+        case .muscle: return "Odhad chytré váhy: všechno kromě tuku, tedy svaly, kosti, voda a orgány. Samotné svaly to nejsou."
         case .steps: return "Kroky za den z telefonu, hodinek nebo prstenu."
         case .activeEnergy: return "Energie spálená pohybem nad klidovým výdejem, odhad hodinek nebo telefonu."
         }
@@ -156,7 +158,7 @@ struct HealthValuePage: View {
     private func load() async {
         guard let key = value.seriesKey, loaded[seriesId] == nil, !model.demo else { return }
         let id = seriesId
-        if let series = try? await model.api.healthSeries(metric: key, period: period) { loaded[id] = series }
+        if let series = await model.healthSeries(metric: key, period: period) { loaded[id] = series }
     }
 }
 
@@ -627,21 +629,10 @@ struct StepsThroughDay: View {
 /// not a medical assessment (plan, Health law).
 struct HealthValueInfo: View {
     let value: HealthValue
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
+        SheetFrame(title: value.title) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(verbatim: L10n.tr(value.title)).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.tr("Zavřít"))
-                }
                 HowMeasuredCard(text: value.howMeasured)
                 if value.hasBand {
                     Text(verbatim: L10n.tr("Obvyklé rozmezí počítá Aurin z tvých posledních 60 dní. Hodnota mimo ně jen říká, že se liší od tvých obvyklých dní."))
@@ -650,9 +641,7 @@ struct HealthValueInfo: View {
                 Text(verbatim: L10n.tr("Nejde o lékařské hodnocení."))
                     .font(Typo.body).foregroundStyle(Palette.muted)
             }
-            .padding(24)
         }
-        .presentationDetents([.medium, .large])
         .presentationBackground(Palette.background)
     }
 }

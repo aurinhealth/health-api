@@ -166,7 +166,7 @@ struct AddFoodSheet: View {
                         .padding(.top, 14)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }

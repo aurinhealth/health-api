@@ -166,38 +166,25 @@ struct MonthSheet<Content: View>: View {
     let options: [(String, String)]
     @Binding var selection: String
     @ViewBuilder var content: Content
-    @Environment(\.dismiss) private var dismiss
 
     private var thisMonth: String { ISODay.monthStart(AppModel.localDate(Date())) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // The month and its buttons stay put while the days scroll.
-            HStack(spacing: 8) {
-                Text(verbatim: ISODay.monthTitle(month)).font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.7)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
-                ChromeButton(systemImage: "chevron.left", label: "Předchozí měsíc", enabled: month > first) { move(-1) }
-                ChromeButton(systemImage: "chevron.right", label: "Další měsíc", enabled: month < last) { move(1) }
-                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
-            }
-            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 12)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switcher
-                    content
-                    if month != thisMonth {
-                        ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = thisMonth } }
-                            .frame(maxWidth: .infinity)
-                    }
+        // The month and its buttons stay put while the days scroll (SheetFrame).
+        SheetFrame(title: ISODay.monthTitle(month), fitted: false) {
+            ChromeButton(systemImage: "chevron.left", label: "Předchozí měsíc", enabled: month > first) { move(-1) }
+            ChromeButton(systemImage: "chevron.right", label: "Další měsíc", enabled: month < last) { move(1) }
+        } content: {
+            VStack(alignment: .leading, spacing: 16) {
+                switcher
+                content
+                if month != thisMonth {
+                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = thisMonth } }
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 32)
             }
         }
         .background { Palette.background.ignoresSafeArea() }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
     }
 
     /// A soft track with the chosen one lifted, as under the charts.

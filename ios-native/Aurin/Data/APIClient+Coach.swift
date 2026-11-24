@@ -50,6 +50,8 @@ private struct CoachMemoriesResponse: Decodable {
 struct WeekProposalResponse: Decodable {
     let start: String?
     let proposal: Proposal?
+    /// The server took `replan` (an older one leaves it out).
+    var replan: Bool? = nil
 
     struct Proposal: Decodable {
         let prefs: JSONValue?
@@ -358,8 +360,12 @@ extension APIClient {
     }
 
     /// The sessions the coach would put into the rest of the week.
-    func weekProposal(start: String) async throws -> WeekProposalResponse {
-        try await send("/app/api/coach/week", method: "POST", body: ["start": JSONValue.string(start)])
+    /// With `replan` the proposal counts the planned workouts from today on as
+    /// gone (Vygenerovat plán deletes them only once it has the new ones).
+    func weekProposal(start: String, replan: Bool = false) async throws -> WeekProposalResponse {
+        var body: JSONObject = ["start": .string(start)]
+        if replan { body["replan"] = .bool(true) }
+        return try await send("/app/api/coach/week", method: "POST", body: body)
     }
 
     /// The usual week's plan, or with `start` the plan of that one week.
