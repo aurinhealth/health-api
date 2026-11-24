@@ -5257,3 +5257,6 @@
 "Zavře kolečko množství" = "Closes the amount wheel";
 "Otevře kolečko množství" = "Opens the amount wheel";
 "%@ + %@ za trénink" = "%@ + %@ for training";
+"Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
+"Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
+"Jídlo se tu ukazuje od %@." = "Food shows here from %@.";

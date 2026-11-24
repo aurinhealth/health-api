@@ -619,7 +619,7 @@ struct ShareMilestoneCard: View {
             VStack(alignment: .leading, spacing: u * 1) {
                 Text(verbatim: item.number + (item.isDistance ? " " + Units.distanceUnit : "")).font(s.serif(17)).foregroundStyle(s.t.amber)
                     .lineLimit(1).minimumScaleFactor(0.5)
-                Text(verbatim: item.pathText).font(s.news(6.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+                Text(verbatim: item.pathText).font(s.serif(6.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
             }
             .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
