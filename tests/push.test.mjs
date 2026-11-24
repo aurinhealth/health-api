@@ -154,21 +154,21 @@ test("the token endpoint wants a signed-in user, the site's origin and a real to
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM push_tokens").get().n, 0);
 });
 
-test("hidden values: the banner says only that the morning is in, the numbers wait in private", async () => {
+test("hidden values: the banner says only that the morning is in, and no health value travels in the push", async () => {
   _resetPushForTest();
   const { env } = setup();
   await savePushToken(env.DB, TOKEN_A);
   const { calls, fetchImpl } = fakeApns();
-  const result = await sendMorningReadiness(env, { readiness: () => ({ score: 72, zone: "green" }), now: MORNING, fetchImpl, hide: true });
+  const result = await sendMorningReadiness(env, { readiness: () => ({ score: 72, zone: "green" }), details: () => ({ sleep: { minutes: 400 }, hrv: { value: 50, baseline: 58 }, restingHR: { value: 52, baseline: 50 } }), now: MORNING, fetchImpl, hide: true });
   assert.equal(result.sent, 1);
   const body = calls[0].body;
   assert.deepEqual(body.aps.alert, privateAlert("morning"));
-  assert.doesNotMatch(JSON.stringify(body.aps), /72/);
-  // No ring on the banner: the service extension draws it only from a top-level readiness.
+  // Nothing of the morning in the whole payload: no score, zone, night or advice.
+  assert.doesNotMatch(JSON.stringify(body), /72|green|HRV|Spánek|tep|layout/);
+  // The empty readiness only marks the morning, so the app still wakes for the widgets.
+  assert.deepEqual(body.private, { readiness: {} });
   assert.equal(body.readiness, undefined);
-  assert.deepEqual(body.private, { title: "Připravenost 72 · Dobrý den na tvrdý trénink", body: "Nic naplánováno. Dobrý den na těžší trénink.", readiness: { score: 72, zone: "green" },
-    layout: { title: "Připravenost 72", subtitle: "Dobrý den na tvrdý trénink", body: "Nic naplánováno. Dobrý den na těžší trénink.", label: "Připravenost", pill: "v obvyklém rozmezí", advice: "Nic naplánováno. Dobrý den na těžší trénink.", coach: "Kouč" } });
-  assert.equal(body.layout, undefined);
+  assert.equal(body.aps["mutable-content"], undefined);
   assert.equal(body.aps.category, "MORNING_READINESS");
   assert.equal(body.aps["thread-id"], "aurin.coach");
   assert.equal(body.aps["content-available"], 1);

@@ -4,6 +4,7 @@
 // gym's web page (web search). The athlete checks the list before saving.
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
+import { assertAiAllowance } from "./ai-usage.js";
 import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS, stationPicker } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
 import { fetchPublic, publicUrl } from "./public-fetch.js";
@@ -152,6 +153,8 @@ export async function detectGymEquipment(env, { images = [], url = "" } = {}, fe
   if (!pictures.length && !/^https?:\/\/\S+$/i.test(link)) throw new Error(L("Pošli fotku posilovny nebo odkaz na její web.", "Send a photo of the gym or a link to its website."));
   if (pictures.some(p => !validFoodImage(p))) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
   // A web page: its text through web search, and its photos as pictures.
+  // The AI limits first: an account past them makes the Worker fetch no page (audit 2026-11-24 point 8).
+  if (link) await assertAiAllowance(env, "gym-equipment");
   const sitePhotos = link ? await websitePhotos(link, fetchImpl) : [];
   const content = [
     { type: "input_text", text: link ? "Web posilovny: " + link + (sitePhotos.length ? `\nFotky z webu posilovny (${sitePhotos.length}): poznej z nich stroje.` : "") : "Fotky posilovny." },

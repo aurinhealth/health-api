@@ -556,6 +556,21 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   assert.ok(!bare.headers.getSetCookie().some(c => c.startsWith("aurin_known=")));
 });
 
+test("with STAGING_TEST_TAG set, only name+tag addresses are test addresses; a stranger spends none of the day's test codes", async () => {
+  const tagged = { ENVIRONMENT: "staging", STAGING_TEST_CODE: "246810", STAGING_TEST_TAG: "Qx7k", OPEN_SIGNUP: "true", EMAIL: undefined, EMAIL_FROM: "" };
+  assert.equal(testLoginCode(tagged, "a@test.aurin.health"), null);
+  assert.equal(testLoginCode(tagged, "a+nope@test.aurin.health"), null);
+  assert.equal(testLoginCode(tagged, "a+qx7k@test.aurin.health"), "246810");
+  assert.equal(testLoginCode(tagged, "sample1+qx7k@test.aurin.health"), "246810");
+  const { env } = await setup(tagged);
+  await start(env, "stranger@test.aurin.health");
+  const spent = env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM request_limits WHERE key='email-codes:test:day'").get().n;
+  assert.equal(spent, 0);
+  assert.equal((await verify(env, "stranger@test.aurin.health", "246810")).status, 400);
+  assert.equal((await start(env, "a+qx7k@test.aurin.health")).status, 200);
+  assert.equal((await verify(env, "a+qx7k@test.aurin.health", "246810")).status, 200);
+});
+
 test("test addresses sign in with the fixed code on the test server only, with no e-mail", async () => {
   const staging = { ENVIRONMENT: "staging", STAGING_TEST_CODE: "246810", OPEN_SIGNUP: "true", EMAIL: undefined, EMAIL_FROM: "" };
   // Fail closed: the live server's settings (no ENVIRONMENT, or "production"), a bad code, another domain.

@@ -126,12 +126,16 @@ export function reviewCode(env, email, now = Date.now()) {
 // server has neither. Every limit of the e-mail sign-in still applies (as for the App Review code).
 // The owner never gets it. All test addresses together get TEST_CODES_PER_DAY codes a day, so the
 // one shared code cannot be guessed by cycling through addresses (security review 2026-11-19).
+// With the secret STAGING_TEST_TAG set, only "name+<tag>@test.aurin.health" is a test address, so a
+// stranger cannot use up those codes or guess at the code (audit 2026-11-24 point 9); unset, any name.
 const TEST_DOMAIN = "@test.aurin.health";
 const TEST_CODES_PER_DAY = 100;
 export function testLoginCode(env, email = null) {
   const code = String(env?.STAGING_TEST_CODE || "").trim();
   if (!isStaging(env) || !/^\d{6}$/.test(code)) return null;
   if (email !== null && !(email.endsWith(TEST_DOMAIN) && email.length > TEST_DOMAIN.length && email !== ownerEmail(env))) return null;
+  const tag = String(env?.STAGING_TEST_TAG || "").trim().toLowerCase();
+  if (email !== null && tag && !email.slice(0, -TEST_DOMAIN.length).toLowerCase().endsWith("+" + tag)) return null;
   return code;
 }
 

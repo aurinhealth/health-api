@@ -25,3 +25,9 @@ test("a local address written as a number, in octal or hex is still local", asyn
     assert.equal(publicUrl(link), null, link);
   }
 });
+
+test("reserved ranges, a trailing dot and Aurin's own sites do not pass (audit 2026-11-24)", () => {
+  for (const link of ["http://198.18.0.1/", "http://198.19.255.1/", "http://192.0.0.8/", "http://a.local./", "http://x.internal./", "http://localhost./",
+    "https://aurin.health/app", "https://staging.aurin.health/", "https://AURIN.HEALTH./", "https://petrfitnessdata.eu/"]) assert.equal(publicUrl(link), null, link);
+  for (const link of ["https://www.gym.cz/", "https://example.com./", "https://notaurin.health.example.com/"]) assert.ok(publicUrl(link), link);
+});

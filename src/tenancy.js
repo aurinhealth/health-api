@@ -340,10 +340,14 @@ function memoStatement(statement, sql, memo, values = []) {
 // switched on. Checking costs no database read.
 const ID_GUARD_LOGGED = new Set();
 const ID_GUARD_LOG_LIMIT = 200;
-const boundToUser = (values, id) => values.some(v => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id);
+// A value bound to LIMIT or OFFSET is a count, not the user's id, even when it equals it (audit
+// 2026-11-24 point 10); the ?s are counted in order, so this holds for plain ? placeholders only.
+const isId = (v, id) => (typeof v === "number" || typeof v === "bigint" || (typeof v === "string" && /^\d+$/.test(v))) && Number(v) === id;
+const countSlots = sql => /\?\d/.test(sql) || !/\b(LIMIT|OFFSET)\b/i.test(sql) ? new Set() : new Set([...sql.matchAll(/\?/g)].map((m, i) => /\b(LIMIT|OFFSET)\s*$|\bLIMIT\s*\?\s*,\s*$/i.test(sql.slice(0, m.index)) ? i : -1).filter(i => i >= 0));
+const boundToUser = (values, id, sql = "") => { const counts = countSlots(sql); return values.some((v, i) => !counts.has(i) && isId(v, id)); };
 export function unboundUserQuery(sql, values, id) {
   if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql) || !PERSONAL_TABLE_PATTERN.test(sql)) return false;
-  return !boundToUser(values || [], id);
+  return !boundToUser(values || [], id, sql);
 }
 function noteUnboundUser(sql, values, id) {
   if (!unboundUserQuery(sql, values, id)) return;

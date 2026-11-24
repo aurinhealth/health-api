@@ -146,7 +146,8 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // mutable lets the app's notification extension add an image (the ring);
 // wake also wakes the app in the background (content-available). hide (a
 // privateAlert kind, when hidesValues) sends privateAlert(hide) and moves the
-// alert and the morning's score into `private`, so no ring is drawn either.
+// alert into `private`, so no ring is drawn either. The hidden morning never
+// comes here with hide: sendMorningReadiness sends it with no values at all.
 // thread groups the lock screen's stack: the coach's (the morning and his
 // messages) apart from the app's own reminders (Notifications concept v3, N7).
 // data.layout: the morning in the concept's layout for the app's notification
@@ -276,7 +277,7 @@ export function hasLastNight(records, now = new Date()) {
 // the night hasn't arrived when yesterday had one). readiness(date) computes it
 // (entrypoint.js: as /app/api/today does) and runs only when everything else
 // allows a push; details(date) the push's numbers and plan, once it goes out.
-// hide: the numbers go in `private`, the banner says only that the morning is in (hidesValues).
+// hide: no numbers in the push at all, the banner says only that the morning is in (hidesValues).
 // coach(): whether the coach is in the account's plan (Aurin Pro or no paywall),
 // asked once the push goes out; held down, the morning then shows his card.
 export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch, hide = false, coach = () => true } = {}) {
@@ -311,20 +312,25 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     // notification extension (mutable-content lets it add the ring).
     // details(date) adds the night, the baselines, today's and tomorrow's plan and what else the
     // advice weighs (entrypoint.js todayReadiness, morning-advice.js).
-    const more = text || typeof details !== "function" ? null : await Promise.resolve().then(() => details(date)).catch(() => null);
+    const more = text || hide || typeof details !== "function" ? null : await Promise.resolve().then(() => details(date)).catch(() => null);
     const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [], tomorrow: more.tomorrow || [], context: more.context || null, date } : value;
     const message = text ? null : readinessMessage(full);
     const alert = text || message.alert;
     // It also wakes the app, which loads Today for the widgets, so they show
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
-    // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
-    const withCoach = message ? await Promise.resolve().then(coach).catch(() => false) : false;
+    // Hidden, no health value travels at all (an APNs payload is readable by
+    // Apple; audit 2026-11-24 point 2): the stock banner and an empty
+    // `readiness` that only tells the app it is the morning, so it still
+    // wakes for the widgets; the app and the watch load the rest themselves.
+    const withCoach = message && !hide ? await Promise.resolve().then(coach).catch(() => false) : false;
     const layout = message ? { ...message.layout, ...(withCoach ? { coach: L("Kouč", "Coach") } : {}) } : null;
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null, thread: COACH_THREAD } : { thread: COACH_THREAD };
+    const extra = message && hide ? { data: { private: { readiness: {} } }, wake: true, category: "MORNING_READINESS", thread: COACH_THREAD }
+      : message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone }, layout }, mutable: true, wake: true, category: "MORNING_READINESS", thread: COACH_THREAD } : { thread: COACH_THREAD };
+    const shown = message && hide ? privateAlert("morning") : alert;
     let sent = 0, removed = 0;
     for (const device of devices) {
-      const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
+      const result = await sendPush(env, device, shown, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
       if (result.ok) sent++;
       else if (result.gone) removed += await deletePushToken(db, device.token);
       else console.error("Push not delivered", result.status || "", result.reason || result.error || "");

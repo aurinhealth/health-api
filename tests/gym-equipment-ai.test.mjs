@@ -92,3 +92,13 @@ test("website photos: a huge page is read only up to its first 1.5 MB", async ()
   assert.ok(cancelled, "the rest of the page is not read");
   assert.ok(pulled < 2_000_000, `${pulled} bytes read`);
 });
+
+test("an account past its AI limits makes the Worker fetch no gym page (audit 2026-11-24)", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { detectGymEquipment } = await import("../src/gym-equipment-ai.js");
+  let fetched = 0;
+  const fetchImpl = async () => { fetched++; return new Response("<img src='/a.jpg'>", { headers: { "content-type": "text/html" } }); };
+  const env = { DB: createD1(), USER_ID: 5, AI_DAILY_LIMIT_USD: "0" };
+  await assert.rejects(detectGymEquipment(env, { url: "https://gym.cz/" }, fetchImpl));
+  assert.equal(fetched, 0);
+});
