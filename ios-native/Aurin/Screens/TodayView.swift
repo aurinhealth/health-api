@@ -327,7 +327,7 @@ struct TodayContent: View {
     }
 }
 
-extension TodayView {
+extension TodayContent {
     /// What the coach asks today: plain inside the Coach card, or its own card.
     func coachThings(plain: Bool) -> some View {
         CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
