@@ -256,6 +256,8 @@ struct GymBuilderView: View {
     @State private var reasonsOpen = false
     /// The exercise just swiped away, for Undo.
     @State private var lastRemoved: RemovedExercise?
+    /// Just saved: "Saved to your plan and Intervals.icu" over the detail for a moment.
+    @State private var savedNote = false
     /// Typing the own words: the pinned Save to plan steps aside for the keyboard.
     @FocusState private var wishFocused: Bool
     /// "Kde budeš cvičit?" before the first workout of an account without places.
@@ -296,6 +298,20 @@ struct GymBuilderView: View {
         ZStack {
             // Saved: the page is the day's gym detail (Start workout, Reorder, parts).
             if saved { GymSessionView(date: isoDay) } else { builder }
+        }
+        .overlay(alignment: .top) {
+            if savedNote {
+                Label("Uloženo do plánu i do Intervals.icu.", systemImage: "checkmark.circle.fill")
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+                    .cardSurface(cornerRadius: 22)
+                    .padding(.top, 64)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(.snappy) { savedNote = false }
+                    }
+            }
         }
         .task {
             // The sample day keeps its own date; the real one opens on the day picked.
@@ -392,13 +408,13 @@ struct GymBuilderView: View {
                     if let template { templateForm(template) }
                     else if quick && !showForm && error == nil { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 18) }
                     else { form }
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
                 }
-                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
         }
         // Save to plan pinned at the bottom, as Start workout on the detail.
         .overlay(alignment: .bottom) {
-            if let proposal, !wishFocused { savePill(proposal) }
+            if let proposal, !wishFocused { pinned(proposal) }
         }
         .sheet(isPresented: $reordering) {
             if let proposal {
@@ -643,7 +659,6 @@ struct GymBuilderView: View {
             .padding(.top, 18)
             GymExerciseCards(day: day) { card(p, day, $0) }
                 .padding(.top, 4)
-            if let lastRemoved, lastRemoved.after == p { undoRow(lastRemoved).padding(.top, 12) }
             Button { adding = true } label: {
                 Text(verbatim: "+ " + L10n.tr("Přidat cvik")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
@@ -770,16 +785,24 @@ struct GymBuilderView: View {
         }
     }
 
-    /// Save to plan, pinned as an ink pill over a fade, as Start workout on the detail.
-    private func savePill(_ p: GymProposal) -> some View {
-        Button { Task { await confirm() } } label: {
-            Text(verbatim: L10n.tr(busy == "confirm" ? "Ukládám…" : "Uložit do plánu")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                .frame(maxWidth: .infinity).frame(height: 52)
-                .background(Palette.button, in: Capsule())
-                .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+    /// Save to plan, pinned as an ink pill over a fade, as Start workout on the detail;
+    /// Undo of a removed exercise and an error right above it, where they are seen.
+    private func pinned(_ p: GymProposal) -> some View {
+        VStack(spacing: 10) {
+            if let lastRemoved, lastRemoved.after == p { undoRow(lastRemoved) }
+            if let error {
+                Text(error).font(Typo.small).foregroundStyle(Palette.rust)
+                    .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            }
+            Button { Task { await confirm() } } label: {
+                Text(verbatim: L10n.tr(busy == "confirm" ? "Ukládám…" : "Uložit do plánu")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Palette.button, in: Capsule())
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy != nil || p.draftId == nil)
         }
-        .buttonStyle(.plain)
-        .disabled(busy != nil || p.draftId == nil)
         .padding(.horizontal, 16)
         .padding(.top, 28)
         .padding(.bottom, 12)
@@ -941,6 +964,7 @@ struct GymBuilderView: View {
         await run("confirm") {
             try await model.api.confirmGym(draftId: id, rows: p.rows)
             saved = true
+            withAnimation(.snappy) { savedNote = true }
             if template == nil { GymLength.remember(minutes); GymKeptProposal.clear() }
             async let training: Void = model.refreshTraining()
             await model.refresh()

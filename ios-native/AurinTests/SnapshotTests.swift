@@ -693,7 +693,7 @@ final class SnapshotTests: XCTestCase {
         // The builder's proposal in the planned detail's look: hero "Not saved yet", chips,
         // the coach's reasons, the same exercise cards, What you'll work, pinned Save to plan.
         let proposal = GymProposal(draftId: 1, planName: plan.planName ?? "Upper body",
-                                   rationale: "Heavier main lifts, accessories in the middle range. Legs rest today, two days before the long ride.",
+                                   rationale: "Těžší hlavní cviky, doplňky ve středním rozsahu. Nohy dnes odpočívají, dva dny před dlouhou jízdou.",
                                    rows: Array(plan.values.dropFirst(GymDay.firstSetRow)), muscles: worked)
         try render("gym-builder-proposal", glow: Palette.Glow.gym, height: 2200, window: true) {
             NavigationStack { GymBuilderView(date: AppModel.localDate(Date()), preview: proposal) }.environment(AppModel(demo: true))
