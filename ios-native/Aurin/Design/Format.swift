@@ -118,6 +118,13 @@ enum Fmt {
         return DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: locale, timeZone: utc, template: L10n.isEnglish).string(from: date)
     }
 
+    /// "Ne 22. 11.", "Sun, Nov 22": a day in a pill, short enough never to cut (617 #20).
+    static func weekdayDayMonthShort(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return isoDate }
+        let text = DateFormatters.make(L10n.isEnglish ? "EEE, MMM d" : "EEE d. M.", locale: locale, timeZone: utc, template: L10n.isEnglish).string(from: date)
+        return text.prefix(1).uppercased(with: locale) + text.dropFirst()
+    }
+
     /// "Říjen", "October": the month of Today's week strip.
     static func monthTitle(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }

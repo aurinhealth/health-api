@@ -39,11 +39,16 @@ enum DrinkPrefs {
     /// they are usually drunk in (the amounts saved for a drink win), at most 8.
     static func presets(favorites: [String], saved: (String) -> [Int]? = DrinkPrefs.savedAmounts) -> [DrinkPreset] {
         let all = favorites.flatMap { kind -> [DrinkPreset] in
-            let own = saved(kind) ?? []
-            let amounts = own.isEmpty ? quick[kind] ?? [250] : Array(own.prefix(2))
-            return amounts.map { DrinkPreset(kind: kind, ml: $0) }
+            glasses(kind, saved: saved).map { DrinkPreset(kind: kind, ml: $0) }
         }
         return Array(all.prefix(8))
+    }
+
+    /// A drink's one-tap amounts, the same in Jídlo → Pití and over its "+"
+    /// tile (617 C8: 250/330/500 there, 250/500 here).
+    static func glasses(_ kind: String, saved: (String) -> [Int]? = DrinkPrefs.savedAmounts) -> [Int] {
+        let own = saved(kind) ?? []
+        return own.isEmpty ? quick[kind] ?? [250] : Array(own.prefix(2))
     }
 
     static func savedAmounts(_ kind: String) -> [Int]? {

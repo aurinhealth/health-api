@@ -72,9 +72,12 @@ struct FoodWeekWidget: View {
                 card(week)
             }
         }
-        // Again when the day's food changes (a meal added on Jídlo).
+        // Again when the day's food changes (a meal added on Jídlo), and once
+        // more when that write has left the phone: the meal shows at once, but
+        // the server counts it only after the send, so a load at the tap said
+        // "Eaten 0" beside "Eaten today 105" (617 C9).
         // Not for a day drawn beside during a swipe (DayPager): no request for it.
-        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal) + "|" + String(attempt)) {
+        .task(id: page != nil ? "" : (date ?? "") + "|" + Fmt.int(model.food?.kcal) + "|" + String(model.writes.items.count) + "|" + String(attempt)) {
             if page == nil { await load() }
         }
     }

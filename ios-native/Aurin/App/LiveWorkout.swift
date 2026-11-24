@@ -113,6 +113,9 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var session: AnyObject?
     @ObservationIgnored private var builder: AnyObject?
     @ObservationIgnored private var liveKcal = false
+    /// The calories as they stood every 15 s, so a workout ended at its last
+    /// set (left idle) counts them to there, not to when it was noticed (617 C3).
+    @ObservationIgnored private var kcalTrail: [(at: Date, kcal: Double)] = []
     /// The workout last saved to Apple Health, for Zahodit trénink after Dokončit.
     @ObservationIgnored private var savedWorkout: HKWorkout?
     /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
@@ -260,6 +263,7 @@ final class LiveWorkout: NSObject {
         sensorBeats = []
         trail = []
         segments = []
+        kcalTrail = []
         paused = carried?.pause.duration ?? 0
         pausedAt = nil; pauses = []
         let unit = HKUnit.count().unitDivided(by: .minute())
@@ -482,6 +486,7 @@ final class LiveWorkout: NSObject {
         openFromWatch = nil
         start = nil
         segments = []
+        kcalTrail = []
         paused = 0
         pausedAt = nil; pauses = []; keyBeforePause = nil
         carried = nil
@@ -494,6 +499,14 @@ final class LiveWorkout: NSObject {
     }
 
     var minutes: Int { minutes(at: Date()) }
+
+    /// The calories by `end`: an idle workout ends at its last set while the
+    /// counter went on to when that was noticed.
+    func kcal(at end: Date) -> Double? {
+        guard let kcal else { return nil }
+        if !liveKcal, clockStart != nil { return 4.0 * weightKg * elapsed(at: end) / 3600 }
+        return kcalTrail.last(where: { $0.at <= end })?.kcal ?? kcal
+    }
 
     /// The minutes until `end` (an idle workout ends at its last set).
     func minutes(at end: Date) -> Int { clockStart.map { max(1, Int((end.timeIntervalSince($0) / 60).rounded())) } ?? 0 }
@@ -587,7 +600,8 @@ final class LiveWorkout: NSObject {
 
     /// Every 15 s while the workout runs: 30 min without a set and no answer ends it.
     private func checkIdle() {
-        guard running, !onWatch, idleEnd == nil, pausedAt == nil, openParts.isEmpty, let last = lastWork ?? start else { return }
+        guard running, !onWatch, idleEnd == nil, pausedAt == nil, openParts.isEmpty, IdleWorkout.canAsk,
+              let last = lastWork ?? start else { return }
         if Date().timeIntervalSince(last) >= IdleWorkout.endAfter {
             idleEnd = last
             openFromWatch = AppModel.localDate(last)
@@ -618,6 +632,7 @@ final class LiveWorkout: NSObject {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * elapsed() / 3600
         }
+        if let kcal { kcalTrail.append((Date(), kcal)) }
         if sensor.liveBpm == nil {
             let latest = await latestHeartRate(since: Date().addingTimeInterval(-120))
             // Also with the live session when it brings no beat (AirPods without
@@ -708,7 +723,7 @@ final class LiveWorkout: NSObject {
             builder.beginCollection(withStart: begun) { ok, _ in continuation.resume(returning: ok) }
         }
         guard began else { return false }
-        if let kcal, kcal > 0, store.authorizationStatus(for: HKQuantityType(.activeEnergyBurned)) == .sharingAuthorized {
+        if let kcal = kcal(at: end), kcal > 0, store.authorizationStatus(for: HKQuantityType(.activeEnergyBurned)) == .sharingAuthorized {
             let sample = HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kcal), start: begun, end: end)
             await add([sample], to: builder)
         }

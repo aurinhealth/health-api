@@ -557,17 +557,27 @@ extension GymDay {
         set(row: Self.timeRow, column: base + 1, Self.iso.string(from: date))
     }
 
-    mutating func markFinished(_ date: Date) {
+    /// `activeMinutes`: the time without its pauses, kept beside the end (617 C3).
+    mutating func markFinished(_ date: Date, activeMinutes: Int? = nil) {
         guard values.count > Self.timeRow else { return }
         let base = timeColumn
         if base == 0 { set(row: Self.timeRow, column: 0, "Odcvičeno") }
         set(row: Self.timeRow, column: base + 2, Self.iso.string(from: date))
+        if let activeMinutes {
+            set(row: Self.timeRow, column: base + 3, String(activeMinutes))
+        } else if text(Self.timeRow, base + 3) != nil {
+            set(row: Self.timeRow, column: base + 3, "")
+        }
     }
+
+    /// The minutes without the pauses, as Dokončit saved them.
+    var activeMinutes: Int? { text(Self.timeRow, timeColumn + 3).flatMap { Int($0) } }
 
     /// Pokračovat v tréninku: the workout is under way again.
     mutating func clearFinished() {
         guard values.count > Self.timeRow else { return }
         set(row: Self.timeRow, column: timeColumn + 2, "")
+        if text(Self.timeRow, timeColumn + 3) != nil { set(row: Self.timeRow, column: timeColumn + 3, "") }
     }
 }
 

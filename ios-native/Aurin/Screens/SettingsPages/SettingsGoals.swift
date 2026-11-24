@@ -134,8 +134,8 @@ struct GoalsSettingsView: View {
         .settingsSaveBar(enabled: changes != original, saving: store.saving) { Task { await save() } }
         .sheet(item: $editing) { goal in
             switch goal {
-            case .kcal: CalorieGoalSheet(store: store, auto: model.settingsToday?.nutrition.autoTarget ?? model.settingsToday?.nutrition.target)
-            case .water: WaterGoalSheet(store: store, water: model.settingsToday?.nutrition.water, today: AppModel.localDate(Date()))
+            case .kcal: CalorieGoalSheet(store: store, auto: model.settingsToday?.nutrition.autoTarget ?? model.todayGoals?.kcal)
+            case .water: WaterGoalSheet(store: store, water: model.settingsToday?.nutrition.water, goalMl: model.todayGoals?.waterMl, today: AppModel.localDate(Date()))
             }
         }
         // The one screen of the time by weekday: Plan settings (week plan), here as there.
@@ -210,7 +210,7 @@ struct GoalsSettingsView: View {
     /// "Auto, 2 450 kcal" or "Vlastní, 2 200 kcal".
     private var kcalValue: String {
         let own = store.profile["kcalGoal"]?.number
-        let value = own ?? model.settingsToday?.nutrition.target
+        let value = own ?? model.todayGoals?.kcal
         return L10n.tr(own != nil ? "Vlastní" : "Auto") + (value.map { ", " + Fmt.int($0) + " kcal" } ?? "")
     }
 
@@ -218,7 +218,7 @@ struct GoalsSettingsView: View {
     private var waterValue: String {
         let mode = store.profile["waterMode"]?.string ?? ""
         let word = mode == "custom" ? "Vlastní" : mode == "build" ? "Postupně" : "Auto"
-        let ml = SettingsGoalsCard.waterGoal(store, model.settingsToday?.nutrition.water)
+        let ml = SettingsGoalsCard.waterGoal(store, model.todayGoals?.waterMl)
         return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
