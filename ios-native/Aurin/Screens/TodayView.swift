@@ -283,7 +283,7 @@ struct TodayContent: View {
                     .padding(.top, 12)
             } else if coachShown, let missed = today.missedWorkout {
                 // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
-                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
                               tip: AnyView(VStack(alignment: .leading, spacing: 0) {
                                   MissedWorkoutBlock(missed: missed)
                                   // Today's own workouts keep their Start under it.
@@ -294,7 +294,7 @@ struct TodayContent: View {
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
             } else if coachShown {
-                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
                               tip: AnyView(TodayCoachAction(today: today)))
                     .padding(.top, 12)
             } else {
@@ -933,7 +933,7 @@ struct ReadinessHero: View {
                 }
                 // What the numbers say (D-DNES-2), only for today; what to do
                 // is the coach card's alone.
-                if let line = ReadinessText.numbersLine(readiness.numbersLine) {
+                if let line = ReadinessText.numbersLine(readiness.numbersLine, off: readiness.numbersOff) {
                     Text(line)
                         .font(Typo.heading(24, relativeTo: .title2))
                         .foregroundStyle(Palette.ink)

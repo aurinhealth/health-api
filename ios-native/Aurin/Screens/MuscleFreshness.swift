@@ -41,15 +41,19 @@ struct FreshnessGroup: Identifiable, Hashable {
     let label: String
     /// The muscles of /app/api/muscles in it.
     let members: [String]
-    /// The most tired of them: a tap on the row opens it.
+    /// The most tired of them, first on the group's page.
     let open: String
     let lower: Bool
     let readyDate: String?
     let rested: Bool
-    /// Its body part's last training day; nil without one in 4 weeks.
+    /// The last day one of its muscles was trained; nil without one in 4 weeks.
     let lastDate: String?
 
     func state(on day: String) -> Freshness { Freshness.of(readyDate: readyDate, rested: rested, on: day) }
+
+    /// Where a tap on the row goes: the muscle itself, or the group's page
+    /// when it has more (617 review #8: Shoulders opened "Rear shoulders").
+    var route: AppRoute { members.count == 1 ? .muscle(members[0]) : .muscleGroup(id) }
 
     /// The concept's eleven groups from the server's seventeen muscles.
     static let layout: [(id: String, label: String, members: [String], lower: Bool, part: String)] = [
@@ -77,14 +81,27 @@ extension MuscleFatigue {
             let tired = found.filter { $0.state != "rested" && ($0.readyDate ?? "") > date }
             let latest = tired.compactMap(\.readyDate).max()
             let open = tired.max { ($0.readyDate ?? "") < ($1.readyDate ?? "") }?.id ?? found[0].id
+            // The group's own muscles (Hips: adductors, abductors), not its body part
+            // (Legs) as before the 617 review; an older server has only the part.
             let part = groups?.first { $0.id == row.part }
-            return FreshnessGroup(id: row.id, label: L10n.tr(row.label), members: row.members, open: open, lower: row.lower,
-                                  readyDate: latest, rested: tired.isEmpty, lastDate: part?.lastDate)
+            let last = perMuscleDates ? found.compactMap(\.lastDate).max() : part?.lastDate
+            return FreshnessGroup(id: row.id, label: L10n.tr(row.label), members: found.map(\.id), open: open, lower: row.lower,
+                                  readyDate: latest, rested: tired.isEmpty, lastDate: last)
         }
         return list.enumerated().sorted { a, b in
             let sa = a.element.state(on: date), sb = b.element.state(on: date)
             return sa != sb ? sa.rawValue > sb.rawValue : a.offset < b.offset
         }.map(\.element)
+    }
+
+    /// The server sends each muscle's last training day (617 review on).
+    private var perMuscleDates: Bool { (muscles ?? []).contains { $0.lastDate != nil } }
+
+    /// One muscle as a row of a group's page.
+    func freshnessRow(_ m: Muscle) -> FreshnessGroup {
+        let tired = m.state != "rested" && (m.readyDate ?? "") > date
+        return FreshnessGroup(id: m.id, label: L10n.tr(m.label), members: [m.id], open: m.id, lower: false,
+                              readyDate: tired ? m.readyDate : nil, rested: !tired, lastDate: m.lastDate)
     }
 
     /// How many groups are in each state today.
@@ -188,5 +205,48 @@ struct FreshnessRow: View {
     private var last: String {
         guard let date = group.lastDate else { return L10n.tr("4 týdny bez tréninku") }
         return L10n.f("Naposledy %@", Fmt.relativeDay(date, today: today))
+    }
+}
+
+/// A group with more muscles (Shoulders, Arms, Hips, Upper back): each of its
+/// muscles as on Svaly, the most tired first, each opening its own page.
+struct MuscleGroupView: View {
+    @Environment(AppModel.self) private var model
+    let id: String
+
+    private var group: FreshnessGroup? { model.muscles?.freshnessGroups.first { $0.id == id } }
+
+    var body: some View {
+        DetailScreen(glow: Palette.Glow.training, title: group?.label ?? MuscleFatigue.title, coach: .muscles(date: model.selectedDate)) {
+            VStack(alignment: .leading, spacing: 0) {
+                if let data = model.muscles, let group {
+                    Text(verbatim: group.label).font(Typo.heading(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                    Text(verbatim: group.state(on: data.date).title).font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 4)
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows(data, group).enumerated()), id: \.element.id) { index, row in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                            Button { model.push(.muscle(row.id)) } label: { FreshnessRow(group: row, today: data.date) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 18).padding(.vertical, 4)
+                    .cardSurface()
+                    .padding(.top, 16)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                }
+            }
+        }
+        .task { if model.musclesStale { await model.loadMuscles() } }
+    }
+
+    /// The group's muscles, the most tired first, then in the catalogue's order.
+    private func rows(_ data: MuscleFatigue, _ group: FreshnessGroup) -> [FreshnessGroup] {
+        group.members.compactMap { data.muscle($0) }.map(data.freshnessRow).enumerated().sorted { a, b in
+            let sa = a.element.state(on: data.date), sb = b.element.state(on: data.date)
+            if sa != sb { return sa.rawValue > sb.rawValue }
+            if (a.element.readyDate ?? "") != (b.element.readyDate ?? "") { return (a.element.readyDate ?? "") > (b.element.readyDate ?? "") }
+            return a.offset < b.offset
+        }.map(\.element)
     }
 }

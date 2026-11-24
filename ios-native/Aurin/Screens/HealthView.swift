@@ -293,7 +293,7 @@ struct ReadinessDetailContent: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 20)
-                if let line = ReadinessText.numbersLine(model.today?.readiness.numbersLine) {
+                if let line = ReadinessText.numbersLine(model.today?.readiness.numbersLine, off: model.today?.readiness.numbersOff) {
                     Text(verbatim: line + ".").font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
                         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
                         .padding(.top, 12)

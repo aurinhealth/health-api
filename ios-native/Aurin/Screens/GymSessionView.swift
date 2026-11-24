@@ -950,7 +950,8 @@ struct TechniqueSheet: View {
     @State private var error: String?
     /// 0: how it's done, 1: the history.
     @State private var page: Int
-    @State private var showVideo = false
+    /// The technique video playing over the card (617 review p9).
+    @State private var playing = false
     @State private var confirmRemove = false
     @State private var writingNote = false
     /// The thumb: true, false or nil, saved at once (src/exercise-feedback.js).
@@ -1020,6 +1021,9 @@ struct TechniqueSheet: View {
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
         .sheet(isPresented: $writingNote) { ExerciseNoteSheet(exercise: exercise) }
+        .fullScreenCover(isPresented: $playing) {
+            if let id = videoId { ExerciseVideoPlayer(id: id) }
+        }
         .task {
             if history == nil { fetched = await model.gymHistory() }
         }
@@ -1143,17 +1147,44 @@ struct TechniqueSheet: View {
         return out
     }
 
-    /// The video under the photos: a tap opens it in place.
+    /// The video under the photos (617 review p9, Petr 2026-11-23): one block
+    /// with the video's frame and a play mark, "Technique video" and its source;
+    /// a tap plays it over the card. An exercise without a video has no block.
     @ViewBuilder private var video: some View {
-        if videoId != nil || technique?.searchUrl != nil {
-            if showVideo {
-                videoPage
-            } else {
-                Button { withAnimation(.snappy) { showVideo = true } } label: {
-                    Label(L10n.tr(videoId != nil ? "Video" : "Najít video"), systemImage: "play.rectangle").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+        if let id = videoId {
+            Button { playing = true } label: {
+                HStack(spacing: 14) {
+                    AsyncImage(url: URL(string: "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg")) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(Palette.track)
+                    }
+                    .frame(width: 96, height: 54)
+                    .overlay(Color.black.opacity(0.25))
+                    .overlay {
+                        Image(systemName: "play.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Color.black.opacity(0.55), in: Circle())
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Video techniky").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: technique?.video?.similar == true ? L10n.tr("YouTube, podobný cvik") : "YouTube")
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.tr("Video techniky"))
+            .accessibilityValue(technique?.video?.similar == true ? L10n.tr("YouTube, podobný cvik") : "YouTube")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(L10n.tr("Přehraje video"))
         }
     }
 
@@ -1222,33 +1253,6 @@ struct TechniqueSheet: View {
             ExercisePhotos(urls: ["hq1", "hq3"].compactMap { URL(string: "https://i.ytimg.com/vi/" + id + "/" + $0 + ".jpg") },
                            labeled: false, aspect: 16 / 9)
         }
-    }
-
-    @ViewBuilder private var videoPage: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let id = videoId {
-                YouTubePlayer(id: id)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                if technique?.video?.similar == true {
-                    Text("Podobný cvik").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.muted)
-                }
-                if let title = technique?.video?.title, !title.isEmpty {
-                    Text(verbatim: title).font(Typo.small).foregroundStyle(Palette.muted)
-                }
-                if let url = URL(string: "https://www.youtube.com/watch?v=" + id) {
-                    Link(destination: url) { Label("Otevřít v YouTube", systemImage: "arrow.up.right.square").font(Typo.bodyStrong) }
-                }
-            } else if technique != nil {
-                Text("K tomuhle cviku zatím video nemáme.").font(Typo.body).foregroundStyle(Palette.muted)
-                if let s = technique?.searchUrl, let url = URL(string: s) {
-                    Link(destination: url) { Label("Najít video", systemImage: "play.rectangle").font(Typo.bodyStrong) }
-                }
-            } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-            }
-        }
-        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -1461,6 +1465,25 @@ struct SupersetGroup<Content: View>: View {
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Palette.indigo).frame(width: 4)
         }
+    }
+}
+
+/// The technique video over the whole screen on black, so a tall video and a
+/// wide one both fit (617: a tall one played in a 16:9 frame with bars), with
+/// the X in a circle top right as the other sheets close (617 review p9).
+struct ExerciseVideoPlayer: View {
+    let id: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            YouTubePlayer(id: id).padding(.top, 56)
+            ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                .frame(width: 44, height: 44)
+                .padding(.trailing, 16).padding(.top, 6)
+        }
+        .preferredColorScheme(.dark)
     }
 }
 

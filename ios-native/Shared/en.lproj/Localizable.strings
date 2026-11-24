@@ -311,9 +311,7 @@
 "Nahlásit problém" = "Report a problem";
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
-"Najít video" = "Find a video";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
-"Napij se" = "Time for a drink";
 "Napiš kouči…" = "Message the coach…";
 "Naplánovat" = "Schedule";
 "Naplánovat týden" = "Plan the week";
@@ -1392,7 +1390,6 @@
 "Zapiš, co jíš, ať sedí dnešní příjem." = "Log what you eat so today's intake is right.";
 "Zvaž se" = "Weigh yourself";
 "Ráno nalačno, ať je trend váhy přesný." = "In the morning before eating, so the weight trend is accurate.";
-"Zkontroluj tréninky a volný čas na další týden." = "Check the workouts and free time for next week.";
 "Prům. tep" = "Avg HR";
 "Max. tep" = "Max HR";
 "Čas ve výkonových zónách" = "Time in power zones";
@@ -1443,10 +1440,6 @@
 "udržování" = "maintaining";
 "budování" = "building";
 "hluboká únava" = "deep fatigue";
-"Video" = "Video";
-"Otevřít v YouTube" = "Open in YouTube";
-"Podobný cvik" = "Similar exercise";
-"K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
 "Odebrat cvik" = "Remove exercise";
 "Dokončit trénink" = "Finish workout";
@@ -1667,7 +1660,7 @@
 "Jak dopadl test %@?" = "How did the test on %@ go?";
 "Naplánovat test" = "Plan the test";
 "Neukládat" = "Don't save";
-"Ověř to testem: %@ (%@)." = "Check it with a test: %@ (%@).";
+"Ověř to testem: %@ (celkem %@)." = "Check it with a test: %@ (%@ in all).";
 "Podle tréninků se ti %@ zlepšilo na %@ (nastaveno %@)." = "Your training suggests your %@ has improved to %@ (set to %@).";
 "Podle tréninků je %@ nižší, %@ (nastaveno %@)." = "Your training suggests your %@ is lower, %@ (set to %@).";
 "Průměrný tep posledních 20 min" = "Average heart rate of the last 20 min";
@@ -4381,8 +4374,8 @@
 "Aurin age se počítá z kondice, síly a spánku." = "Aurin age comes from your fitness, strength and sleep.";
 "Co ho tvoří" = "What shapes it";
 "Pas" = "Waist";
-"Další krok k odhadu Aurin age: jeden odhad VO2max. Dej si 20 minut běhu venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. Run outdoors for 20 minutes with your watch.";
-"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut běhu venku." = "Next step to your Aurin age: connect a watch or ring and run outdoors for 20 minutes.";
+"Další krok k odhadu Aurin age: jeden odhad VO2max. Stačí 20 minut v kuse na kole s wattmetrem a tepem, nebo běh venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. A steady 20-minute ride with power and heart rate, or an outdoor run with your watch.";
+"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut v kuse na kole s wattmetrem nebo běhu venku." = "Next step to your Aurin age: connect a watch or ring, then a steady 20-minute ride with power or an outdoor run.";
 "Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna." = "Next step to your Aurin age: a week of sleep with your watch, or regular strength training.";
 "Sbírám tvoje data." = "Collecting your data.";
 "Posledních 12 týdnů" = "Last 12 weeks";
@@ -4759,7 +4752,7 @@
 "Začít hned" = "Start now";
 "Detaily tréninku" = "Workout details";
 "Zátěž tréninku" = "Workout strain";
-"Zátěž dne %@ až %@" = "Day strain %1$@ to %2$@";
+"Zátěž dne z %@ na %@" = "Day strain from %1$@ to %2$@";
 "%@, předtím %@" = "%1$@, was %2$@";
 "Trvání" = "Duration";
 "Aktivní čas" = "Active time";
@@ -5219,7 +5212,11 @@
 "Večer zapsat den" = "Log the day in the evening";
 "Jen když ještě nic není zapsané" = "Only when nothing is logged yet";
 "Denní připomínka" = "Daily reminder";
-"Označ, až to bude hotové" = "Mark as done when ready";
+"Otevřít Dnes" = "Open Today";
+"Označ, až to bude hotové." = "Mark as done when ready.";
+"Ještě není označeno." = "Not marked yet.";
+"Zkontroluj tréninky a volný čas." = "Check your workouts and free time.";
+"Čas na vodu" = "Time for water";
 "Za 30 min" = "In 30 min";
 "Připomínky" = "Reminders";
 "Widgety na zamčené obrazovce ukážou čísla po odemknutí Touch ID." = "Lock screen widgets show numbers after Touch ID.";
@@ -5227,7 +5224,6 @@
 "Otevře čas a dny." = "Opens time and days.";
 "ráno" = "morning";
 "Obvykle v" = "Usually at";
-"Ještě není označeno" = "Not marked yet";
 "%@ min. Začíná za hodinu." = "%@ min. Starts in an hour.";
 "Začíná za hodinu." = "Starts in an hour.";
 "%@ min." = "%@ min.";
@@ -5247,6 +5243,14 @@
 "Zapsat večeři" = "Log dinner";
 "Zapsat druhou večeři" = "Log late snack";
 "Zapsat jídlo" = "Log food";
+"krátký spánek" = "short sleep";
+"nízká HRV" = "a low HRV";
+"vysoký klidový tep" = "a high resting heart rate";
+"a" = "and";
+"Odpověď trvala moc dlouho. Zkus to znovu." = "The answer took too long. Try again.";
+"Video techniky" = "Technique video";
+"YouTube, podobný cvik" = "YouTube, similar exercise";
+"Přehraje video" = "Plays the video";
 "pohlaví" = "sex";
 "rok narození" = "year of birth";
 "výška" = "height";
