@@ -27,12 +27,30 @@ import UIKit
         return begin
     }
 
-    /// The UI test's "-swipeBackLog": what the swipe was asked and answered, in
-    /// the test log, to find why a first swipe now and then did nothing.
+    /// The UI test's "-swipeBackLog": what the swipe was asked and answered,
+    /// to find why a first swipe now and then did nothing. The app's own log
+    /// does not reach the test's, so the last lines also sit on an invisible
+    /// element "swipeBackLog" that the test reads when a swipe fails.
     static let logging = ProcessInfo.processInfo.arguments.contains("-swipeBackLog")
+    private static var lines: [String] = []
+    private static var board: UIView?
 
     static func log(_ message: @autoclosure () -> String) {
-        if logging { NSLog("SwipeBack: %@", message()) }
+        guard logging else { return }
+        let line = message()
+        NSLog("SwipeBack: %@", line)
+        lines = Array((lines + [line]).suffix(12))
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
+        let view = board ?? UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        if view.superview !== window {
+            view.isUserInteractionEnabled = false
+            view.isAccessibilityElement = true
+            view.accessibilityIdentifier = "swipeBackLog"
+            window.addSubview(view)
+            board = view
+        }
+        view.accessibilityLabel = lines.joined(separator: " | ")
     }
 
     /// A touch at the left edge goes back before a chart's scrub or a row of

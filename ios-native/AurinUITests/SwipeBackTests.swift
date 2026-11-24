@@ -35,27 +35,31 @@ final class SwipeBackTests: XCTestCase {
         // On iOS 26 the other tabs stay in the tree: take the card on screen.
         let cards = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", identifier))
         XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 10), "\(identifier) is missing on Dnes")
-        var card = onScreen(cards)
-        for _ in 0..<3 where card == nil { app.swipeUp(); card = onScreen(cards) }
-        guard let card else { return XCTFail("\(identifier) is not on screen") }
-        card.tap()
-        // The detail's "Zpět" tells it opened: the card itself, bound by index,
-        // can lose its activation point under the pushed page (CI, #1259).
         let back = app.buttons.matching(identifier: "Zpět")
-        XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
-        wait(1.5)
-        edgeSwipe()
-        // One swipe has to do it: a dropped first swipe was a real bug (CI and
-        // TestFlight 602 to 611). With "-swipeBackLog" the app writes what the
-        // swipe was asked into the log.
-        let wentBack = waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }
-        if !wentBack {
-            for element in back.allElementsBoundByIndex where element.isHittable {
-                print("SwipeBack: hittable Zpět at \(element.frame), label \(element.label)")
+        // Five times over: the dropped swipe came now and then, not every time.
+        for round in 1...5 {
+            var card = onScreen(cards)
+            for _ in 0..<3 where card == nil { app.swipeUp(); card = onScreen(cards) }
+            guard let card else { return XCTFail("\(identifier) is not on screen") }
+            card.tap()
+            // The detail's "Zpět" tells it opened: the card itself, bound by index,
+            // can lose its activation point under the pushed page (CI, #1259).
+            XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
+            wait(1.5)
+            edgeSwipe()
+            // One swipe has to do it: a dropped first swipe was a real bug (CI and
+            // TestFlight 602 to 611). With "-swipeBackLog" the app keeps what the
+            // swipe was asked on an invisible element, printed here when it fails.
+            let wentBack = waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }
+            if !wentBack {
+                print("SwipeBack: round \(round), app log: \(app.descendants(matching: .any)["swipeBackLog"].label)")
+                for element in back.allElementsBoundByIndex where element.isHittable {
+                    print("SwipeBack: hittable Zpět at \(element.frame), label \(element.label)")
+                }
             }
-            print("SwipeBack: card on screen: \(onScreen(cards) != nil)")
+            expect(wentBack, "the edge swipe did not go back from \(identifier) (round \(round))")
+            wait(1)
         }
-        expect(wentBack, "the edge swipe did not go back from \(identifier)")
     }
 
     /// A finger from the very left edge to two thirds across.
