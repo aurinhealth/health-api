@@ -304,22 +304,29 @@ extension AppModel {
     /// Apple Health loaded all three (review 2026-11-24 point 4).
     private func followOtherTabs() {
         for tab in [AppTab.health, .training, .food] { fetched[tab] = nil }
-        seriesCache = [:]
+        dropSeries()
         let shown = Set([tab] + (paths[tab] ?? []).map(\.tab))
         if shown.contains(.health), health != nil { scope.task { await self.refreshHealth() } }
         if shown.contains(.training), training != nil { scope.task { await self.refreshTraining() } }
         if shown.contains(.food), food != nil { scope.task { await self.refreshFood() } }
     }
 
+    /// The kept detail charts go; a series on its way is not kept either.
+    func dropSeries() {
+        seriesCache = [:]
+        seriesRound += 1
+    }
+
     /// A Health detail's chart series. Opening the same detail again (or another
     /// period and back) within 10 minutes of the same day takes the copy from
     /// memory instead of asking the server each time (review 2026-11-24 point 20);
-    /// new data from Apple Health drops the copies (followOtherTabs).
+    /// new data (followOtherTabs) and every Health load drop the copies.
     func healthSeries(metric: String, period: ChartPeriod) async -> HealthSeries? {
-        let key = metric + ":" + period.key, day = Self.localDate(Date()), account = scope
+        let key = metric + ":" + period.key, day = Self.localDate(Date()), account = scope, round = seriesRound
         if let kept = seriesCache[key], kept.scope === account, kept.day == day, Date().timeIntervalSince(kept.at) < 600 { return kept.series }
         guard let series = try? await api.healthSeries(metric: metric, period: period), stillSignedIn(account) else { return nil }
-        seriesCache[key] = (Date(), day, account, series)
+        // Dropped meanwhile (new data): this answer is shown but not kept.
+        if round == seriesRound { seriesCache[key] = (Date(), day, account, series) }
         return series
     }
 
@@ -434,6 +441,8 @@ extension AppModel {
             guard stillSignedIn(account), selectedDate == day else { return }
             health = value
             fetched[.health] = (Date(), shownDay)
+            // The detail charts follow the screen's data (pull to refresh, a new sync).
+            dropSeries()
             // The 90 days of resting HR and HRV for the Apple Watch app.
             if day == nil { WatchBridge.shared.update(value) }
             dataRevision += 1

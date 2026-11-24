@@ -462,19 +462,25 @@ final class AppleHealth {
     /// saved meanwhile is not left until the next open. The tabs follow once
     /// per sync that brought something new.
     func followInApp(api: APIClient) {
-        guard followUp == nil else { return }
+        // A wake while this one's sync reads and sends: one more round after it,
+        // as the sync may have read before the new data was there.
+        guard followUp == nil else { wokenAgain = true; return }
         followUp = Task { @MainActor in
             defer { followUp = nil }
-            while running != nil || lastSync.map({ Date().timeIntervalSince($0) < Self.inAppGap }) == true {
-                let wait = running != nil ? 5 : max(5, Self.inAppGap - Date().timeIntervalSince(lastSync ?? .distantPast))
-                try? await Task.sleep(for: .seconds(wait))
-                if Task.isCancelled { return }
-            }
-            guard UIApplication.shared.applicationState == .active else { return }
-            if await run(api: api, within: Self.inAppGap).changed { newInApp += 1 }
+            repeat {
+                wokenAgain = false
+                while running != nil || lastSync.map({ Date().timeIntervalSince($0) < Self.inAppGap }) == true {
+                    let wait = running != nil ? 5 : max(5, Self.inAppGap - Date().timeIntervalSince(lastSync ?? .distantPast))
+                    try? await Task.sleep(for: .seconds(wait))
+                    if Task.isCancelled { return }
+                }
+                guard UIApplication.shared.applicationState == .active else { return }
+                if await run(api: api, within: Self.inAppGap).changed { newInApp += 1 }
+            } while wokenAgain
         }
     }
     @ObservationIgnored private var followUp: Task<Void, Never>?
+    @ObservationIgnored private var wokenAgain = false
     private static let inAppGap: TimeInterval = 120
 
     private func stopObservers() {

@@ -122,6 +122,7 @@ final class AppModel {
     @ObservationIgnored var foodLoad: Task<Void, Never>?
     /// Health detail charts (GET /app/api/health/series) kept for the session; see healthSeries(metric:period:).
     @ObservationIgnored var seriesCache: [String: (at: Date, day: String, scope: AccountScope, series: HealthSeries)] = [:]
+    @ObservationIgnored var seriesRound = 0
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
     var dataRevision = 0
