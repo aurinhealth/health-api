@@ -134,6 +134,8 @@ test('no easier-day card once today\'s training is done (Petr 2026-11-24)', asyn
   assert.equal(trainedOut(day([], [{ id: 'planned:1', type: 'Ride' }])), false);
   assert.equal(trainedOut(day([{ type: 'WeightTraining' }], [{ id: 'planned:1', type: 'WeightTraining' }, { id: 'planned:2', type: 'Ride' }])), false);
   assert.equal(trainedOut(undefined), false);
+  // A walk alone with nothing planned is not training.
+  assert.equal(trainedOut(day([{ type: 'Walk' }])), false);
   assert.equal(easierDayCard({ date, readiness: off, trained: true }), null);
   assert.ok(easierDayCard({ date, readiness: off, trained: false }));
 });

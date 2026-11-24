@@ -49,14 +49,15 @@ export function restingHRAbove(readiness, yesterday = null) {
   return (ownRange(yesterday) && yesterday.components?.restingHR?.z >= 2) || hrvLow(c);
 }
 
-// Today's training is done (Petr 2026-11-24): something was done and every
+// Today's training is done (Petr 2026-11-24): a ride, run, swim or gym done and every
 // session planned for the day has a done one of its sport. Then "an easier day
 // fits today" is too late; the coach's own sentence already says the day is
 // done. day: an /app/api/week day.
 const kindOf = a => sportOf(a) ?? String(a.type || '').toLowerCase();
 export function trainedOut(day) {
   const completed = day?.daily?.training?.completed || [];
-  if (!completed.length) return false;
+  // A walk or yoga alone is not the day's training.
+  if (!completed.some(a => sportOf(a))) return false;
   const doneKinds = new Set(completed.map(kindOf));
   return (day.daily.training.planned || []).filter(p => String(p.id || '').startsWith('planned:')).every(p => doneKinds.has(kindOf(p)));
 }

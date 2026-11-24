@@ -953,7 +953,7 @@ async function coachPush(env, ctx) {
     const upcoming = await upcomingSessions(env, (inputs.week?.days || []).filter(d => d.date >= date && d.date <= shiftDate(date, 1)), ALL_SPORTS);
     const readinessOn = day => readinessFor({ date: day, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile });
     const readiness = morningDue ? readinessOn(date) : null;
-    const easier = morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state }) : null;
+    const easier = morningDue ? easierDayCard({ date, readiness, yesterday: readinessOn(shiftDate(date, -1)), state, trained: trainedOut((inputs.week?.days || []).find(d => d.date === date)) }) : null;
     const recovery = morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null;
     // The morning verdict only when the coach has something to say (25.1).
     const verdict = easier || recovery ? await todayVerdict(env, ctx, date, state) : null;
