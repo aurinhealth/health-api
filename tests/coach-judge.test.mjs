@@ -51,7 +51,7 @@ test('the eval runs the judge on Today texts and chat answers as quality checks'
   const screen = await runScreenScenario({}, scenarioById('S67'), { ask: today, rate });
   // The judge reads the screen's own instructions (the Today one-number rule) and the screen's data.
   assert.ok(seen.rules.includes('nejvýš jedním číslem'));assert.equal(seen.data.readiness, 69);
-  assert.ok(seen.answer.startsWith('Připravenost 69') && seen.answer.endsWith('jdi spát.'));
+  assert.deepEqual(JSON.parse(seen.answer), { text: 'Připravenost 69 a spánek 5 h 31 min z potřebných 7 h 24 min.', advice: 'Už netrénuj a jdi spát.' });
   const check = screen.checks.find(c => c.name === 'pravidlo: počet čísel');
   assert.equal(check.ok, false);assert.equal(screen.passed, true);assert.equal(screen.judge.usd, 0.001);
 

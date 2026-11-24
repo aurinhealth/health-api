@@ -1202,7 +1202,7 @@ export async function runScreenScenario(env, scenario, { ask = callOpenAI, rate 
   const answer = ['**Text:** ' + (raw.text || ''), '**Rada od AI:** ' + (raw.advice || ''), ...(r.advice !== r.rawAdvice ? ['**Rada v aplikaci:** ' + r.advice] : [])].join('\n\n');
   const message = `Dnes v ${scenario.screen.clock}, večerka ${scenario.screen.bedtime}`;
   // The rule judge reads what the AI wrote (text, then advice) against the screen's own instructions.
-  const rated = await runJudge(env, rate, { rules: request.instructions, data: { date, ...info.facts }, message: 'Today screen (text, then advice)', answer: r.raw });
+  const rated = await runJudge(env, rate, { rules: request.instructions, data: { date, ...info.facts }, message: 'Today screen', answer: screenAnswer(raw.text, raw.advice) });
   if (rated) checks.push(...judgeChecks(rated));
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'screen-text', message, model: reply.model || lightModel(env), ms: Date.now() - started,
     answer, proposed: [], kept: [], ...(rated ? { judge: judgeSummary(rated) } : {}), checks, passed: checks.every(c => c.ok || c.severity !== 'safety') };
@@ -1223,6 +1223,10 @@ export async function judge(env, input, check = checkCoachAnswer) {
   }
   return check(env, input, { model: lightModel(env) });
 }
+
+// A Today text as the judge reads it: text and advice apart, each with its own limits
+// (calibration run 105: run together, one sentence of text plus one of advice read as two of text).
+const screenAnswer = (text, advice) => JSON.stringify({ text: String(text || ''), advice: String(advice || '') });
 
 // The rule judge (coach-judge.js) runs where Anthropic's key is (staging); the unit tests pass their own.
 async function runJudge(env, rate, input) {
@@ -1344,7 +1348,7 @@ export const JUDGE_CALIBRATION = [
 // The rule judge on one calibration text: did the expected rule fail, or none when it is right?
 export async function runJudgeCalibration(env, item, { rate = judgeAnswer, date = COACH_EVAL_DATE } = {}) {
   const info = screenFacts('today', screenDay(date, scenarioById(item.screen).screen));
-  const j = await rate(env, { rules: screenRequest(env, 'today', date, info.facts).instructions, data: { date, ...info.facts }, message: 'Today screen (text, then advice)', answer: item.text + ' ' + item.advice });
+  const j = await rate(env, { rules: screenRequest(env, 'today', date, info.facts).instructions, data: { date, ...info.facts }, message: 'Today screen', answer: screenAnswer(item.text, item.advice) });
   const failed = j.rules.filter(r => r.verdict === 'fail');
   return { id: item.id, status: 'ok', screen: item.screen, expect: item.expect, text: item.text, advice: item.advice, model: j.model, ms: j.ms, usd: j.usd, failed,
     correct: item.expect.length ? failed.some(r => item.expect.includes(r.rule)) : !failed.length };
