@@ -120,3 +120,17 @@ test("a merge mark that is not an object does not stop the sync", async () => {
   await upsert(DB, { ...run, exercise: { ...run.exercise, metricsSummary: { caloriesKcal: 255 } } });
   assert.equal(JSON.parse(DB.sqlite.prepare("SELECT payload_json FROM health_datapoints").get().payload_json).exercise.metricsSummary.caloriesKcal, 255);
 });
+
+test("other sports carry the category they count as; ride, run, gym and Other are not other sports", async () => {
+  const { isOtherSport, categoryOf } = await import("../src/activity-type.js");
+  const types = Object.fromEntries(activityTypes().map(t => [t.type, t]));
+  assert.equal(types.Soccer.category.kind, "team");
+  assert.equal(types.Boxing.category.kind, "combat");
+  assert.equal(types.EquestrianSports.category.kind, "riding");
+  assert.equal(types.Hockey.category.kind, "skate");
+  assert.equal(categoryOf("Hockey").name, categoryOf("Soccer").name);
+  assert.equal(types.Golf.category, null);
+  assert.equal("category" in types.Run, false);
+  for (const type of ["Soccer", "Boxing", "EquestrianSports", "Tennis", "Yoga"]) assert.equal(isOtherSport(type), true, type);
+  for (const type of ["Run", "Ride", "Swim", "WeightTraining", "Walk", "Workout", "Nonsense", undefined]) assert.equal(isOtherSport(type), false, String(type));
+});

@@ -15,6 +15,7 @@
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { sendActivity } from './sync-destinations.js';
+import { otherSportKind } from './strength-balance.js';
 
 // [Intervals.icu type, Czech, English, group]
 export const ACTIVITY_TYPES = [
@@ -140,7 +141,14 @@ export function manualWorkoutType(sport, type = null) {
 }
 
 /** GET /app/api/activity/types: the list in the user's language. */
-export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
+// category: how an other sport counts (strength-balance.js otherSportKind), for
+// Settings → Sports → Your other sports; null for one with no known muscle load.
+const CATEGORY = () => ({ team: L('Týmový sport', 'Team sport'), racket: L('Raketový sport', 'Racket sport'), skate: L('Bruslení', 'Skating'), ski: L('Zimní sport', 'Snow sport'), combat: L('Bojový sport', 'Combat sport'), riding: L('Jezdectví', 'Riding'), paddle: L('Vodní sport', 'Paddle sport'), climb: L('Lezení', 'Climbing'), fitness: L('Kondiční trénink', 'Fitness') });
+// Hockey counts like skating but reads as the team sport it is.
+export const categoryOf = type => { const kind = otherSportKind(type); return kind ? { kind, name: CATEGORY()[/hockey/i.test(type) ? 'team' : kind] } : null; };
+export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group, ...(group === 'other' ? { category: categoryOf(type) } : {}) }));
+/** A type an athlete can keep as one of their other sports (not ride, run, swim, gym or "Other"). */
+export const isOtherSport = type => type !== 'Workout' && BY_TYPE.get(String(type || ''))?.[3] === 'other';
 
 // Aurin's marks on a stored activity: aurinType, aurinKcal, aurinKcalDevice and
 // aurinMerge. Rows from before 2026-11 were renamed from loadwise… (migration

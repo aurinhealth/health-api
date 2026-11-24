@@ -132,3 +132,21 @@ test("own bricks: kept only on days with a ride and a run, and they travel with 
   assert.deepEqual(own.bricks, [5]);
   assert.deepEqual(own.days, usual.days, "the bricks go with the days they are keyed by");
 });
+
+test("other sports in the week: real types only, two a day, a usual length for each kind, and a week keeps its own", async () => {
+  const { weekOverride } = await import("../src/week-planner.js");
+  const plan = sanitizeWeekPlan({ events: [[{ type: "Soccer", kind: "match", minutes: 95 }, { type: "Run" }, { type: "Boxing", minutes: 7 }, { type: "Tennis" }], null, [], [], [], [{ type: "EquestrianSports", kind: "training", minutes: 400 }]] });
+  assert.deepEqual(plan.events[0], [{ type: "Soccer", kind: "match", minutes: 95 }, { type: "Boxing", kind: "training", minutes: 75 }]);
+  assert.deepEqual(plan.events[5], [{ type: "EquestrianSports", kind: "training", minutes: 75 }]);
+  assert.equal(plan.events.length, 7);
+  assert.deepEqual(sanitizeWeekPlan({}).events, [[], [], [], [], [], [], []]);
+  assert.deepEqual(Object.keys(weekOverride(plan, sanitizeWeekPlan({}))), ["events"]);
+  assert.deepEqual(weekOverride(plan, plan), {});
+});
+
+test("a match saved for one week stays in that week; the usual week keeps its own", async () => {
+  const db = scopedDb(createD1(), 1);
+  await saveWeekPlan(db, { events: [[], [], [], [], [], [{ type: "Soccer", kind: "match" }], []] }, "2026-11-25");
+  assert.deepEqual((await getWeekPlan(db, "2026-11-25", { calendar: false })).events[5], [{ type: "Soccer", kind: "match", minutes: 90 }]);
+  assert.deepEqual((await getWeekPlan(db, "2026-12-02", { calendar: false })).events[5], []);
+});

@@ -4,6 +4,7 @@ import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } fro
 import {trainingHistory,starterPlan,experienceChoices} from './training-history.js';
 import { weekFree, withCalendarFree, ensureCalendarFree } from './calendar-free.js';
 import { MAX_MINUTES } from './workout-model.js';
+import { isOtherSport } from './activity-type.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -70,7 +71,19 @@ export function sanitizeWeekPlan(input = {}) {
     // longDay: the athlete's own long ride or run day; null (kept, so a week can hold "none") for the plan's pick.
     longDay: Number.isInteger(input.longDay) && input.longDay >= 0 && input.longDay <= 6 ? input.longDay : null,
     // The athlete's own bricks: weekdays whose run goes right after the ride (chip "Brick").
-    bricks: sanitizeBricks(input.bricks, days) };
+    bricks: sanitizeBricks(input.bricks, days),
+    // The athlete's other sports per weekday (football training, a match…): the plan works around them.
+    events: sanitizeEvents(input.events) };
+}
+// Up to two a day: a Log workout type of the athlete's other sports, training or
+// match, and its length (15 min to 5 h, by 5 min; none: the usual for the kind).
+export const MAX_EVENTS_PER_DAY = 2;
+export const EVENT_MINUTES = { match: 90, training: 75 };
+export function sanitizeEvents(raw) {
+  return Array.from({ length: 7 }, (_, i) => (Array.isArray(raw?.[i]) ? raw[i] : []).filter(e => isOtherSport(e?.type)).slice(0, MAX_EVENTS_PER_DAY).map(e => {
+    const kind = e.kind === 'match' ? 'match' : 'training', minutes = Number(e.minutes);
+    return { type: e.type, kind, minutes: Number.isInteger(minutes) && minutes >= 15 && minutes <= 300 && minutes % 5 === 0 ? minutes : EVENT_MINUTES[kind] };
+  }));
 }
 export function sanitizeBricks(raw, days) {
   return [...new Set(Array.isArray(raw) ? raw : [])].filter(i => Number.isInteger(i) && i >= 0 && i <= 6 && days[i].includes("ride") && days[i].includes("run")).sort((a, b) => a - b);
@@ -159,7 +172,7 @@ export async function saveWeekPlan(db, input, date = null) {
 export function weekOverride(prefs, defaults = {}) {
   const same = key => JSON.stringify(prefs[key] ?? null) === JSON.stringify(defaults[key] ?? null);
   const own = {};
-  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'bricks', 'availabilityMode', 'longDay']) if (key in prefs && !same(key)) own[key] = prefs[key];
+  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'bricks', 'availabilityMode', 'longDay', 'events']) if (key in prefs && !same(key)) own[key] = prefs[key];
   if ('days' in own || 'sessions' in own || 'bricks' in own) Object.assign(own, { days: prefs.days, sessions: prefs.sessions, bricks: prefs.bricks });
   // Time for a weekday set by hand is the athlete's, not the starting template's.
   if ('availability' in own && prefs.availabilityMode) own.availabilityMode = prefs.availabilityMode;
