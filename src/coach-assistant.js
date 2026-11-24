@@ -29,6 +29,8 @@ export { coachInstructionsFor, safetyNote };
 export const focusSportKey=focus=>{const key=({cycling:'ride',triathlon:'ride',running:'run',swimming:'swim',strength:'strength',general:'general'})[focus?.sport]||'ride';return SPORT_RULES[key]?key:'general';};
 // The default (Czech, cycling) prompt; askCoach builds the athlete's own.
 export const coachInstructions = coachInstructionsFor();
+// The chat's instructions as askCoach sends them (the eval's rule judge reads the same words).
+export const coachChatInstructions = (focus, actions) => withFocus(coachInstructionsFor(focus), focus) + (actions ? '\n\n' + actionInstructions() : '');
 
 // "2026-10-05 19:09" in the user's zone: the coach knows what is left of the day.
 export { localNow } from "./user-time.js";
@@ -607,7 +609,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const input=[{role:'user',content:cache?[cachedText(dataText)]:dataText},...(Object.keys(remembered).length?[{role:'user',content:dataNote+JSON.stringify(remembered)}]:[]),...turns,...(Object.keys(moment).length?[{role:'user',content:dataNote+JSON.stringify(moment)}]:[]),...(brief?[{role:'developer',content:L('Tento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','Handle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.')}]:[]),{role:'user',content:image?[{type:'input_text',text:L('Požadavek (s fotkou): ','Request (with a photo): ')+message},{type:'input_image',image_url:image,detail:'high'}]:L('Požadavek: ','Request: ')+message}];
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():''), input,cacheBreakpoints:cache, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {feature:COACH_CHAT_FEATURE,instructions:coachChatInstructions(focus, actions), input,cacheBreakpoints:cache, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,memory:reply.memory,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }

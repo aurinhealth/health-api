@@ -40,18 +40,21 @@ export const checkerCards = actions => {
 // Its price per million tokens (input, output) is counted here, not in ai-usage.js.
 export const CLAUDE_JUDGE_MODEL = 'claude-haiku-5-5';
 const CLAUDE_PRICES = { 'claude-haiku-5-5': [0.10, 0.50] };
-export async function callClaude(env, { instructions, input, format, maxOutputTokens = 2000, model = CLAUDE_JUDGE_MODEL }) {
+// instructions: one text, or a list of texts whose last one is cached (the rule
+// judge's long rules, coach-judge.js); cache writes cost 1.25x, reads 0.1x the input price.
+export async function callClaude(env, { instructions, input, format, maxOutputTokens = 2000, model = CLAUDE_JUDGE_MODEL, effort = 'low' }) {
   if (!env.ANTHROPIC_API_KEY) throw new Error('Chybí ANTHROPIC_API_KEY.');
+  const system = Array.isArray(instructions) ? instructions.map((text, i) => ({ type: 'text', text, ...(i === instructions.length - 1 ? { cache_control: { type: 'ephemeral' } } : {}) })) : instructions;
   const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST',
     headers: { 'x-api-key': env.ANTHROPIC_API_KEY, 'anthropic-version': '2026-10-21', 'content-type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: maxOutputTokens, system: instructions, messages: [{ role: 'user', content: input }],
-      output_config: { effort: 'low', ...(format ? { format: { type: 'json_schema', schema: format.schema } } : {}) } }) });
+    body: JSON.stringify({ model, max_tokens: maxOutputTokens, system, messages: [{ role: 'user', content: input }],
+      output_config: { effort, ...(format ? { format: { type: 'json_schema', schema: format.schema } } : {}) } }) });
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error(`Claude ${response.status}: ${data?.error?.message || ''}`);
   if (data.stop_reason === 'refusal') throw new Error('Claude odmítl odpovědět.');
-  const [i, o] = CLAUDE_PRICES[data.model] || CLAUDE_PRICES[model] || [0, 0];
+  const [i, o] = CLAUDE_PRICES[data.model] || CLAUDE_PRICES[model] || [0, 0], u = data.usage || {};
   return { text: (data.content || []).filter(b => b.type === 'text').map(b => b.text).join(''), model: data.model || model,
-    usd: Math.round(((data.usage?.input_tokens || 0) * i + (data.usage?.output_tokens || 0) * o) / 1e6 * 1e5) / 1e5 };
+    usd: Math.round(((u.input_tokens || 0) * i + (u.cache_creation_input_tokens || 0) * i * 1.25 + (u.cache_read_input_tokens || 0) * i * 0.1 + (u.output_tokens || 0) * o) / 1e6 * 1e5) / 1e5 };
 }
 
 // model: another model than the light one (the calibration compares them).
