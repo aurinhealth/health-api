@@ -156,7 +156,7 @@ struct HealthValuePage: View {
     private func load() async {
         guard let key = value.seriesKey, loaded[seriesId] == nil, !model.demo else { return }
         let id = seriesId
-        if let series = try? await model.api.healthSeries(metric: key, period: period) { loaded[id] = series }
+        if let series = await model.healthSeries(metric: key, period: period) { loaded[id] = series }
     }
 }
 
