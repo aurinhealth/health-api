@@ -5,7 +5,8 @@ import UserNotifications
 /// (the watch asks on the wrist itself, GymWorkout): 10 min after the last
 /// set a notification asks "Still working out?" with End workout and Keep
 /// going; with no answer the workout ends 30 min after the last set, saved
-/// with its end there (LiveWorkout.checkIdle). A workout nobody ended kept
+/// with its end there (LiveWorkout.checkIdle). Without notifications allowed
+/// nothing asks, so nothing ends it either. A workout nobody ended kept
 /// the screen, the heart rate and the HealthKit session going for hours.
 ///
 /// The question is planned ahead with each set, so it comes with the app asleep too.
@@ -38,7 +39,8 @@ enum IdleWorkout {
         let wait = last.addingTimeInterval(askAfter).timeIntervalSinceNow
         guard wait > 1 else { return }
         let status = await center.notificationSettings().authorizationStatus
-        guard status == .authorized || status == .provisional, mine == call else { return }
+        canAsk = status == .authorized || status == .provisional
+        guard canAsk, mine == call else { return }
         let content = UNMutableNotificationContent()
         content.title = L10n.tr("Pořád cvičíš?")
         content.body = L10n.tr("Žádná série 10 minut. Ukonči trénink, nebo pokračuj.")
@@ -49,6 +51,9 @@ enum IdleWorkout {
     }
 
     @MainActor private static var call = 0
+    /// Notifications are allowed, so "Still working out?" can come first. Without
+    /// them the workout never ends by itself: nobody was asked (617 C4).
+    @MainActor private(set) static var canAsk = false
 
     /// A tap on End workout or Keep going (AppDelegate).
     @MainActor static func answer(_ response: UNNotificationResponse) {

@@ -37,7 +37,13 @@ struct WorkoutDoneSummary: View {
     var strain: Strain? = nil
     var records: [Record] = []
     let minutes: Int?
+    /// The workout stood a while (a pause, Finish and Resume, left idle): the
+    /// minutes are the time without it, said as "Active time" (617 C3).
+    var paused = false
     let volume: (value: String, unit: String)
+    /// Reps of the done work sets, given only for a workout without weights
+    /// (bodyweight): its tile instead of "0.0 t" volume (617 C15).
+    var reps = 0
     var volumeChange: String? = nil
     var volumeBetter = true
     let exercises: Int
@@ -152,19 +158,44 @@ struct WorkoutDoneSummary: View {
 
     // MARK: Workout details
 
+    /// Two tiles a row; an odd last one takes the whole row, never alone in a half (617 C16).
     private var details: some View {
-        let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-            if let minutes { detail(String(minutes), "min", "Trvání") }
-            detail(String(doneSets), nil, "Série")
-            detail(volume.value, volume.unit, "Objem", change: volumeChange)
-            detail(String(exercises), nil, "Cviky")
-            if let avgHr { detail(Fmt.int(avgHr), "bpm", "Průměrný tep") }
-            if let kcal { detail(Fmt.int(kcal), "kcal", "Aktivní energie") }
+        var tiles: [Tile] = []
+        if let minutes {
+            let clock = GymCoach.clock(minutes)
+            tiles.append(Tile(value: clock.value, unit: clock.unit, label: paused ? "Aktivní čas" : "Trvání"))
+        }
+        tiles.append(Tile(value: String(doneSets), unit: nil, label: "Série"))
+        if reps > 0 {
+            tiles.append(Tile(value: String(reps), unit: nil, label: "Opakování"))
+        } else {
+            tiles.append(Tile(value: volume.value, unit: volume.unit, label: "Objem", change: volumeChange))
+        }
+        tiles.append(Tile(value: String(exercises), unit: nil, label: "Cviky"))
+        if let avgHr { tiles.append(Tile(value: Fmt.int(avgHr), unit: "bpm", label: "Průměrný tep")) }
+        if let kcal { tiles.append(Tile(value: Fmt.int(kcal), unit: "kcal", label: "Aktivní energie")) }
+        let rows = stride(from: 0, to: tiles.count, by: 2).map { Array(tiles[$0..<min($0 + 2, tiles.count)]) }
+        return VStack(alignment: .leading, spacing: 18) {
+            ForEach(rows.indices, id: \.self) { r in
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(rows[r]) { tile in
+                        detail(tile.value, tile.unit, tile.label, change: tile.change)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 22)
+    }
+
+    private struct Tile: Identifiable {
+        let value: String
+        let unit: String?
+        let label: String
+        var change: String? = nil
+        var id: String { label }
     }
 
     private func detail(_ value: String, _ unit: String?, _ label: String, change: String? = nil) -> some View {

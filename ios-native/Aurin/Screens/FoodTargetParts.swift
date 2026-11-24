@@ -36,7 +36,7 @@ struct TargetPartsRow: View {
             if parts.workouts <= 0 && parts.planned <= 0 {
                 Text(verbatim: L10n.tr("Den volna, žádný trénink navíc")).foregroundStyle(Palette.muted).lineLimit(1)
             } else if parts.workouts > 0 {
-                part("Tréninky", "+" + Fmt.int(parts.workouts), dot: AnyView(Circle().fill(Palette.green)))
+                part("Tréninky", "+" + Fmt.int(parts.workouts), dot: AnyView(Circle().fill(Palette.green)), note: burned(parts))
             }
         } else {
             part("Vlastní cíl", Fmt.int(target), dot: nil)
@@ -49,11 +49,21 @@ struct TargetPartsRow: View {
         }
     }
 
-    private func part(_ title: String, _ value: String, dot: AnyView?) -> some View {
+    /// "(of 244 burned)": the target counts only part of a workout's burn, on
+    /// purpose (about 70 %), so "+171" next to a 244 kcal ride doesn't read as a
+    /// mistake (617 p1 v4, the sentence under the row is gone). Only when it is
+    /// part: a target held up by the safe minimum counts the whole burn.
+    private func burned(_ parts: FoodSnapshot.TargetParts) -> String? {
+        guard let burned = parts.burnedDone, burned.rounded() > parts.workouts.rounded() else { return nil }
+        return L10n.f("(ze spálených %@)", Fmt.int(burned))
+    }
+
+    private func part(_ title: String, _ value: String, dot: AnyView?, note: String? = nil) -> some View {
         HStack(spacing: 5) {
             if let dot { dot.frame(width: 7, height: 7) }
             Text(verbatim: L10n.tr(title)).foregroundStyle(Palette.muted)
             Text(verbatim: value).fontWeight(.semibold).monospacedDigit().foregroundStyle(Palette.ink)
+            if let note { Text(verbatim: note).monospacedDigit().foregroundStyle(Palette.muted) }
         }
         .lineLimit(1)
         .fixedSize()
@@ -64,7 +74,7 @@ struct TargetPartsRow: View {
         guard let parts else { return L10n.tr("Vlastní cíl") + " " + Fmt.int(target) }
         var list = [L10n.tr("Základ") + " " + Fmt.int(parts.base)]
         if parts.workouts <= 0 && parts.planned <= 0 { list.append(L10n.tr("Den volna, žádný trénink navíc")) }
-        if parts.workouts > 0 { list.append(L10n.tr("Tréninky") + " +" + Fmt.int(parts.workouts)) }
+        if parts.workouts > 0 { list.append(([L10n.tr("Tréninky") + " +" + Fmt.int(parts.workouts), burned(parts)].compactMap { $0 }).joined(separator: " ")) }
         if parts.planned > 0 { list.append(L10n.tr("Naplánováno") + " +" + Fmt.int(parts.planned)) }
         return list.joined(separator: ", ")
     }

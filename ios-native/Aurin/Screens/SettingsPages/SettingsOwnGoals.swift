@@ -119,6 +119,8 @@ struct CalorieGoalSheet: View {
 struct WaterGoalSheet: View {
     let store: SettingsStore
     let water: TodaySnapshot.Water?
+    /// Today's goal as every screen shows it, the workout's extra included (617 #3).
+    var goalMl: Double? = nil
     let today: String
     @Environment(\.dismiss) private var dismiss
     @State private var mode = "auto"
@@ -139,7 +141,8 @@ struct WaterGoalSheet: View {
                 default:
                     EmptyView()
                 }
-                if let auto = water?.autoTarget {
+                // Build-up has its own goal for today: Auto's recommendation beside it read as a third number (617 #3).
+                if mode != "build", let auto = water?.autoTarget {
                     Text(L10n.f("Aurin dnes doporučuje %@", waterText(auto))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 SaveSheetButton(saving: store.saving) {
@@ -165,9 +168,13 @@ struct WaterGoalSheet: View {
             }
             if let build = water?.build, water?.mode == "build" {
                 SettingsGroup(title: "Jak to šlo", footer: "Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění.") {
+                    // "Today 1.6 L" with "1.0 L + 0.6 L for training" under it: the number Today and Food show.
+                    let goal = max(goalMl ?? build.baseMl, build.baseMl)
+                    let extra = (goal - build.baseMl).rounded()
                     SettingsRow(title: build.done ? "Hotovo" : "Dnes",
-                                subtitle: build.done ? L10n.tr("Došel jsi na doporučený cíl.") : nil,
-                                value: waterText(build.baseMl), chevron: false)
+                                subtitle: build.done ? L10n.tr("Došel jsi na doporučený cíl.")
+                                    : extra >= 50 ? L10n.f("%@ + %@ za trénink", waterText(build.baseMl), waterText(extra)) : nil,
+                                value: waterText(goal), chevron: false)
                     ForEach(Array(build.days.enumerated()), id: \.element.date) { index, day in
                         SettingsDivider()
                         SettingsRow(title: index == 0 ? "Včera" : "Předevčírem",

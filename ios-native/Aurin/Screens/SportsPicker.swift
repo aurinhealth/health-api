@@ -78,8 +78,8 @@ struct SportsChoice: Equatable {
     static func color(_ kind: String) -> Color { Palette.Sport.color(kind) }
 }
 
-/// "Which sports do you do?": one row per sport with its icon, a tick and a
-/// "Main" pill (several may be main). The first-run setup, Zaměření and
+/// "Which sports do you do?": one row per sport with its icon, a tick and,
+/// once ticked, a "Main" pill (several may be main). The first-run setup, Zaměření and
 /// Settings → Goals show the same rows.
 struct SportsPicker: View {
     @Binding var choice: SportsChoice
@@ -89,7 +89,7 @@ struct SportsPicker: View {
             ForEach(SportsChoice.all, id: \.0) { item in
                 row(item.0)
             }
-            Text("Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli.")
+            Text("Bez hlavního sportu plánuje Aurin obecnou kondici, s hlavním kolem, během i plaváním přípravu na triatlon.")
                 .font(Typo.caption).foregroundStyle(Palette.muted)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -130,6 +130,10 @@ struct SportsPicker: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // Only on a ticked sport (617 test, C18); kept in place unseen, so the row does not jump.
+            .opacity(on ? 1 : 0)
+            .allowsHitTesting(on)
+            .accessibilityHidden(!on)
             .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
             .accessibilityAddTraits(main ? .isSelected : [])
 
