@@ -50,7 +50,7 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertTrue(WeekPlanText.replans(from: "2026-11-12", to: "2026-11-22").hasSuffix("Finished workouts stay."))
         XCTAssertEqual(WeekPlanSettingsText.day(-1), "–")
         XCTAssertEqual(WeekPlanSettingsText.day(0), "Day off")
-        XCTAssertEqual(WeekPlanSettingsText.day(360), "6 h+")
+        XCTAssertEqual(WeekPlanSettingsText.day(360), "6\u{00A0}h+")
         XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8\u{00A0}h\u{00A0}15\u{00A0}min a week")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-08", today: "2026-10-08"), "Rest from today to Sunday.")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-09", today: "2026-10-08"), "Rest from tomorrow to Sunday.")

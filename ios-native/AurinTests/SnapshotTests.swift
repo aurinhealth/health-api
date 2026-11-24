@@ -463,7 +463,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(result.chatId, 12)
         XCTAssertEqual(result.actions?.count, 2)
         XCTAssertEqual(result.actions?[0].title, "Přesunout „Dlouhý běh“ na So 10. října")
-        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1 h, Pá 9. října")
+        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1\u{00A0}h, Pá 9. října")
         try render("coach-action", height: 300) {
             VStack { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
         }
@@ -1256,7 +1256,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
         XCTAssertEqual(DrinkFigureKind.from("dragon"), .whale, "an unknown figure falls back to the whale")
-        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3 l do cíle")
+        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3\u{00A0}l do cíle")
         XCTAssertEqual(DrinksCard.remaining(ml: 2600, target: 2500), "cíl splněn")
     }
 
