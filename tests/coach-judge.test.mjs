@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { judgeAnswer, judgeChecks, JUDGE_RULES } from '../src/coach-judge.js';
 import { callClaude } from '../src/coach-checker.js';
-import { runScenario, runScreenScenario, scenarioById, scenarioContext, handleCoachEval, JUDGE_CALIBRATION, runJudgeCalibration } from '../src/coach-eval.js';
+import { runScenario, runScreenScenario, scenarioById, scenarioContext, handleCoachEval, JUDGE_CALIBRATION, runJudgeCalibration, screenDay, COACH_EVAL_DATE } from '../src/coach-eval.js';
+import { screenFacts, screenRequest } from '../src/screen-texts.js';
+
+// The Today screen's own instructions for a situation, word for word (the private prompt
+// text itself is never matched here: a prompt change must not break these tests).
+const todayRules = id => screenRequest({}, 'today', COACH_EVAL_DATE, screenFacts('today', screenDay(COACH_EVAL_DATE, scenarioById(id).screen)).facts).instructions;
 import { coachChatInstructions } from '../src/coach-assistant.js';
 import { withLang } from '../src/lang.js';
 
@@ -50,7 +55,7 @@ test('the eval runs the judge on Today texts and chat answers as quality checks'
   const today = async () => ({ text: JSON.stringify({ text: 'Připravenost 69 a spánek 5 h 31 min z potřebných 7 h 24 min.', advice: 'Už netrénuj a jdi spát.' }), model: 'gpt-6-luna' });
   const screen = await runScreenScenario({}, scenarioById('S67'), { ask: today, rate });
   // The judge reads the screen's own instructions (the Today one-number rule) and the screen's data.
-  assert.ok(seen.rules.includes('nejvýš jedním číslem'));assert.equal(seen.data.readiness, 69);
+  assert.equal(seen.rules, todayRules('S67'));assert.equal(seen.data.readiness, 69);
   assert.deepEqual(JSON.parse(seen.answer), { text: 'Připravenost 69 a spánek 5 h 31 min z potřebných 7 h 24 min.', advice: 'Už netrénuj a jdi spát.' });
   const check = screen.checks.find(c => c.name === 'pravidlo: počet čísel');
   assert.equal(check.ok, false);assert.equal(screen.passed, true);assert.equal(screen.judge.usd, 0.001);
@@ -79,7 +84,7 @@ test('the judge calibration knows which rule each Today text breaks', async () =
   // The English one reads the English instructions.
   let rules = null;
   await withLang('en', () => runJudgeCalibration({}, JUDGE_CALIBRATION.find(c => c.id === 'J02'), { rate: async (env, input) => { rules = input.rules; return { rules: [] }; } }));
-  assert.ok(rules.includes('at most one number'));
+  assert.equal(rules, await withLang('en', () => todayRules('S66')));assert.notEqual(rules, todayRules('S66'));
 
   // The list names the items; an unknown one is a 404.
   const post = body => handleCoachEval(new Request('https://staging.aurin.health/automation/coach-eval', { method: 'POST', body: JSON.stringify(body) }), { ENVIRONMENT: 'staging' }, { kind: 'coach-eval' });
