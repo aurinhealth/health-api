@@ -48,3 +48,13 @@ test("a changed day, no mark or the flag off keep the week's session", async () 
   assert.equal(await markGymForMorning(other.env, localToday()), false, "only a later day");
   assert.ok(week.rows.length);
 });
+
+test("two requests at the same moment run the coach once (audit 2026-11-24)", async () => {
+  const { env } = await setup();
+  await markGymForMorning(env, date);
+  let asked = 0;
+  const once = async (e, req) => { asked++; return ask(e, req); };
+  const results = await Promise.all([1, 2, 3].map(() => coachMorningGym(env, { build: async () => context(), ask: once, date })));
+  assert.equal(results.filter(r => r.result === "none").length, 2);
+  assert.equal(asked, 1);
+});

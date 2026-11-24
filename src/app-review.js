@@ -21,12 +21,12 @@ export function isReviewAccount(env, user = null) {
 }
 
 // A test account on the test server that gets the same sample athlete
-// (review-sample.js): sample…@test.aurin.health, for the device tests that
+// (review-sample.js): sample…@test.aurin.health (also sample…+tag@, email-login.js testLoginCode), for the device tests that
 // compare screens with the concepts on real-looking data. Never on the live
 // server, never the owner.
 export function isStagingSampleAccount(env, user) {
   if (!isStaging(env) || !user || user.isOwner === true) return false;
-  return /^sample[a-z0-9._-]*@test\.aurin\.health$/.test(normalized(user.email));
+  return /^sample[a-z0-9._-]*(\+[a-z0-9._-]+)?@test\.aurin\.health$/.test(normalized(user.email));
 }
 
 // Whether the fixed review code still works at `now`: up to the end of the

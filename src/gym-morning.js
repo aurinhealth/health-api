@@ -29,9 +29,10 @@ export async function markGymForMorning(env, date) {
 export async function coachMorningGym(env, { build, ask, date = localToday() } = {}) {
   if (!coachFirstGymOn(env)) return { result: "off" };
   // No table yet: nobody has saved a week day since this came out (made at marking).
-  const mark = await env.DB.prepare("SELECT source_json FROM gym_coach_pending WHERE user_id=? AND workout_date=?").bind(env.USER_ID, date).first().catch(() => null);
+  // The mark is taken and removed in one statement, so two requests at once run the coach once (audit 2026-11-24 point 12).
+  const mark = await env.DB.prepare("DELETE FROM gym_coach_pending WHERE user_id=? AND workout_date=? RETURNING source_json").bind(env.USER_ID, date).first().catch(() => null);
   if (!mark) return { result: "none" };
-  await env.DB.prepare("DELETE FROM gym_coach_pending WHERE user_id=? AND workout_date<=?").bind(env.USER_ID, date).run();
+  await env.DB.prepare("DELETE FROM gym_coach_pending WHERE user_id=? AND workout_date<?").bind(env.USER_ID, date).run();
   const source = JSON.parse(mark.source_json), current = await readGymPlan(env.DB, date);
   if (!current.stored || JSON.stringify(current.values) !== mark.source_json) return { result: "changed" };
   const context = await build(env, date);

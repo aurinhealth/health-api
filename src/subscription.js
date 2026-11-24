@@ -54,8 +54,7 @@ export async function subscriptionStatus(env) {
   // with a database is a user's, whether or not userEnv marked CONSENT_REQUIRED.
   // Only a bare env without a database (local tools, tests) skips the check.
   const aiConsent=env.DB||env.RAW_DB||env.CONSENT_REQUIRED||env.USER_ID!=null?(await consentStatus(env)).aiAllowed:true;
-  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:enforced&&storeConfigured(env),features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
-    terms:L('Zatím jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'For now, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
+  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:enforced&&storeConfigured(env),features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)}))};
 }
 // Training plans beyond the free starter ones (training-plans.js FREE_PLANS)
 // need Pro once the paywall is on (paywallOn). No AI consent here: a plan sends

@@ -99,6 +99,11 @@ test("a personal-data query not bound to the user's id is only logged, once (N7)
     assert.match(warned[0], /not bound to the user's id \(log only\)/);
   } finally { console.warn = warn; }
   assert.equal(unboundUserQuery("SELECT * FROM food_products WHERE barcode=?", ["1"], 5), false);
+  // A LIMIT or OFFSET equal to the id is a count, not the id (audit 2026-11-24 point 10).
+  assert.equal(unboundUserQuery("SELECT * FROM food_logs ORDER BY id LIMIT ?", [5], 5), true);
+  assert.equal(unboundUserQuery("SELECT * FROM food_logs ORDER BY id LIMIT ? OFFSET ?", [10, 5], 5), true);
+  assert.equal(unboundUserQuery("SELECT * FROM food_logs ORDER BY id LIMIT ?, ?", [0, 5], 5), true);
+  assert.equal(unboundUserQuery("SELECT * FROM food_logs WHERE user_id=? ORDER BY id LIMIT ?", [5, 5], 5), false);
   assert.equal(unboundUserQuery("CREATE TABLE IF NOT EXISTS food_logs (user_id INTEGER)", [], 5), false);
 });
 
