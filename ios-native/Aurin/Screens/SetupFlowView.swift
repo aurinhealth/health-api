@@ -55,6 +55,9 @@ struct SetupFlowView: View {
     /// A page is turning: a second tap on "Pokračovat" meanwhile goes nowhere
     /// (a double tap skipped "Připoj svoje data", Tapwright 2026-11-19).
     @State private var turning = false
+    /// The keyboard is up (height and weight): "Pokračovat" waits under it, so
+    /// the keyboard's Done never lies over it (617 test, C5).
+    @State private var keyboardUp = false
 
     private enum Page: Equatable { case consent, sources, about }
 
@@ -83,8 +86,10 @@ struct SetupFlowView: View {
                     }
                     // How far along: shown once the page count is known (whether the
                     // consent is owed), so it never jumps; not for the consent alone.
+                    // The welcome's own progress line, so the app has one (617 test, C17).
                     if ready && pages.count > 1 {
-                        SetupSteps(done: index + 1, total: pages.count)
+                        WelcomeProgress(count: pages.count, index: min(index, pages.count - 1))
+                            .padding(.horizontal, 18)
                     } else {
                         Spacer()
                     }
@@ -107,29 +112,21 @@ struct SetupFlowView: View {
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 14) { content }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 8)
+                        .padding(.top, 12)
                         .padding(.bottom, 20)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                // The page fades out at both edges instead of a hard cut under the
+                // progress line and over the button (617 test, C17).
+                .mask {
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 12)
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 24)
+                    }
+                }
 
-                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
-                if page == .consent && ready && !agree {
-                    // Why "Pokračovat" is grey, right above it.
-                    Label("Zaškrtni první políčko, ať můžeš pokračovat.", systemImage: "info.circle")
-                        .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
-                        .padding(.bottom, 10)
-                }
-                if appleOffered {
-                    // Skips connecting, not "O tobě": without age, height and
-                    // weight nothing (calories, strain, recovery) can be worked out.
-                    Button("Pokračovat") { Task { await next() } }
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .disabled(!ready || appleWorking || turning)
-                } else {
-                    PrimaryButton(title: buttonTitle, busy: saving || appleWorking || building) { Task { await next() } }
-                        .disabled(saving || appleWorking || building || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
-                }
+                if !keyboardUp { bottomBar }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
@@ -158,6 +155,56 @@ struct SetupFlowView: View {
             }
         }
         .interactiveDismissDisabled()
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
+    }
+
+    /// Under the page: an error, why "Pokračovat" is grey, and the button.
+    @ViewBuilder
+    private var bottomBar: some View {
+        if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
+        if let hint = disabledHint {
+            // Why "Pokračovat" is grey, right above it, on its own ground so it
+            // never reads as part of the card over it (617 test, C17 and C18).
+            Label(hint, systemImage: "info.circle")
+                .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Palette.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.bottom, 10)
+        }
+        if page == .sources && !sourceConnected {
+            // Nothing connected yet: an outlined "Později" says the step is
+            // skipped (p2); "O tobě" still follows, as without age, height and
+            // weight nothing (calories, strain, recovery) can be worked out.
+            SecondaryButton(title: "Později") { Task { await next() } }
+                .frame(minHeight: 50)
+                .disabled(!ready || appleWorking || turning)
+        } else {
+            PrimaryButton(title: buttonTitle, busy: saving || appleWorking || building) { Task { await next() } }
+                .disabled(saving || appleWorking || building || turning || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
+        }
+    }
+
+    /// Apple Health or any other source is connected: "Pokračovat" instead of "Později".
+    private var sourceConnected: Bool {
+        health.enabled || providers.contains { $0.connected == true }
+    }
+
+    /// What a grey "Pokračovat" still waits for.
+    private var disabledHint: String? {
+        guard ready else { return nil }
+        if page == .consent && !agree { return L10n.tr("Zaškrtni první políčko, ať můžeš pokračovat.") }
+        if page == .about && !aboutComplete {
+            var missing: [String] = []
+            if sex.isEmpty { missing.append(L10n.tr("pohlaví")) }
+            if !(Int(birthYear).map { Self.birthYears.contains($0) } ?? false) { missing.append(L10n.tr("rok narození")) }
+            if heightText.isEmpty || heightHint != nil { missing.append(L10n.tr("výška")) }
+            if weightText.isEmpty || weightHint != nil { missing.append(L10n.tr("váha")) }
+            return missing.isEmpty ? nil : L10n.f("Ještě chybí: %@.", missing.joined(separator: ", "))
+        }
+        return nil
     }
 
     private var buttonTitle: String {
@@ -190,6 +237,7 @@ struct SetupFlowView: View {
     @ViewBuilder
     private var consentPage: some View {
         title("Tvoje data o zdraví")
+        // Each box inside its card, so both sit on the same edge (617 test, C17).
         Card {
             ForEach(Self.consentPoints, id: \.0) { point in
                 VStack(alignment: .leading, spacing: 3) {
@@ -197,9 +245,9 @@ struct SetupFlowView: View {
                     Text(point.1).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
+                .padding(.top, 4)
         }
-        checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
-            .padding(.top, 4)
         Card {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 5) {
@@ -291,14 +339,18 @@ struct SetupFlowView: View {
         }
     }
 
-    /// Apple Health still waits for its button on its card: that is the main
-    /// step, so "Pokračovat" under the page is a quiet text button.
-    private var appleOffered: Bool { page == .sources && health.isAvailable && !health.enabled }
-
     private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
         HStack(spacing: 12) {
             IntegrationIcon(id: provider.id, size: 30)
-            Text(provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
+                // Garmin and COROS come through Intervals.icu (p2): through Apple
+                // Health Garmin sends no HRV.
+                if provider.id == "intervals" {
+                    Text("I tréninky z Garminu a COROSu").font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Spacer()
             if provider.connected == true {
                 Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
@@ -817,27 +869,6 @@ struct SetupFlowView: View {
     private var buildChips: [String] {
         [sex == "female" ? L10n.tr("Žena") : L10n.tr("Muž"), birthYear,
          heightText + " " + Units.lengthUnit, weightText + " " + Units.weightUnit]
-    }
-}
-
-/// How far the setup is: a thin bar of one piece a page, the ones done and
-/// the one open in ink (point 6 of the competitor comparison, 4 Nov 2026).
-struct SetupSteps: View {
-    let done: Int
-    let total: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<total, id: \.self) { i in
-                Capsule().fill(i < done ? Palette.ink : Palette.track).frame(height: 4)
-            }
-        }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: done)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 12)
-        .accessibilityElement()
-        .accessibilityLabel(L10n.f("Krok %lld z %lld", done, total))
     }
 }
 
