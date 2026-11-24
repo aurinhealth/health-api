@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { saveWeekPlan } from "../src/week-planner.js";
-import { todayPlace } from "../src/plan-context.js";
+import { todayPlace, weekForecast } from "../src/plan-context.js";
 import { localToday } from "../src/user-time.js";
 
 // Open-Meteo (no WeatherKit key): the week and the day's hours, two reads.
@@ -46,4 +46,14 @@ test("the weather reads go side by side, not one after another", async () => {
   assert.equal(place.late, undefined);
   assert.equal(place.forecast.max, 9);
   assert.deepEqual(place.forecast.hours, [{ hour: 8, temp: 7, code: 3 }]);
+});
+
+test("the week plan does not wait for a weather service that does not answer either", async () => {
+  const kept = [], place = { name: "Praha", latitude: 50.08, longitude: 14.42, source: "search" };
+  const started = Date.now();
+  const week = await withPlace(() => new Promise(() => {}), env => weekForecast(env, { waitUntil: p => kept.push(p) }, place, "2026-11-23", { waitMs: 50 }));
+  assert.ok(Date.now() - started < 1000);
+  assert.deepEqual(week, {});
+  assert.equal(kept.length, 1);
+  assert.deepEqual(await weekForecast({}, null, null, "2026-11-23"), {});
 });
