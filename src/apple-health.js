@@ -24,6 +24,12 @@ import { overlapShare, sessionGap } from "./activity-match.js";
 import { localDate, localToday } from "./user-time.js";
 
 export const SOURCE = "apple-health";
+
+// A workout Aurin itself recorded and saved to Apple Health: its active time
+// (HKWorkout.duration) leaves out the pauses for real, so a long pause or a
+// workout finished and resumed is never read as Google's short-active mistake
+// (617 C3: 6 min worked showed as 1 h 02 with the pause).
+export const ownActiveTime = payload => payload?.source === SOURCE && /^aurin\b/i.test(String(payload?.sourceName || ""));
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
 const STATUS = "apple_health";
 const REPLACED = "apple-health";

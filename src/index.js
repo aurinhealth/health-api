@@ -20,7 +20,7 @@ import { readReadOff } from "./source-reading.js";
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
-import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
+import { afterGoogleSync, flushGoogleSync, ownActiveTime } from "./apple-health.js";
 import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { bumpCacheVersion, closedDay } from "./api-cache.js";
@@ -1889,7 +1889,7 @@ export function googleExerciseActivity(row) {
   // active (15 s of a 20 min loop, Petr 2026-10-23): under half the session's
   // span the active time is not believed, and the span stands.
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
-  const durationHours = activeHours && !(spanHours > 0 && activeHours < spanHours / 2) ? activeHours : spanHours;
+  const durationHours = activeHours && (ownActiveTime(payload) || !(spanHours > 0 && activeHours < spanHours / 2)) ? activeHours : spanHours;
   // Apple Health workouts written by another app (Google Health) carry the
   // heart rate only as samples ([seconds, bpm]): their mean, so the workout
   // gets a TSS (app-training.js withHeartRateLoad).
