@@ -125,8 +125,8 @@ struct GymSessionView: View {
         .sheet(isPresented: $whyOpen) { GymWhySheet(reasons: GymWhy.reasons(day?.note)) }
         .sheet(isPresented: $reordering) {
             if let day {
-                EditExercisesSheet(day: day, catalog: catalog, current: nil) { edited in
-                    self.day = edited
+                EditExercisesSheet(day: day, catalog: catalog, current: nil) { edited, original in
+                    self.day = self.day.map { edited.carryingProgress(from: $0, since: original) } ?? edited
                     Task { await save() }
                 }
             }

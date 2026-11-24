@@ -326,6 +326,42 @@ extension GymDay {
         guard exercises.count == list.count + 1 else { return }
         moveExercise(from: list.count, to: at)
     }
+
+    /// Edit exercises worked on a copy of the day: the sets ticked (or changed)
+    /// meanwhile, on the watch or by the lock screen, go into the edited day
+    /// instead of being saved over (review 2026-11-24 point 2). A set is found
+    /// by its exercise, side, number and whether it is a drop set, as the
+    /// order of the rows may have changed.
+    func carryingProgress(from current: GymDay, since original: GymDay) -> GymDay {
+        let result = [5, 6, 7, 8, 11, 14]
+        let before = Self.setRows(original), now = Self.setRows(current)
+        var out = self
+        let mine = Self.setRows(out)
+        for (key, row) in now {
+            guard let mineRow = mine[key] else { continue }
+            let was = before[key].map { original.values[$0] } ?? []
+            let cells = current.values[row]
+            guard result.contains(where: { Self.cell(cells, $0) != Self.cell(was, $0) }) else { continue }
+            for column in result { out.set(row: mineRow, column: column, Self.cell(cells, column)) }
+        }
+        return out
+    }
+
+    /// The set rows by "exercise|side|number|drop|n", n counting rows alike.
+    private static func setRows(_ day: GymDay) -> [String: Int] {
+        var out: [String: Int] = [:], seen: [String: Int] = [:]
+        for index in day.values.indices where index >= firstSetRow {
+            let row = day.values[index]
+            guard !cell(row, 1).isEmpty else { continue }
+            let base = [cell(row, 1), cell(row, 13), cell(row, 2), cell(row, 0).uppercased() == "DROP" ? "D" : ""].joined(separator: "|")
+            let n = seen[base, default: 0]
+            seen[base] = n + 1
+            out[base + "|" + String(n)] = index
+        }
+        return out
+    }
+
+    private static func cell(_ row: [JSONValue], _ column: Int) -> String { column < row.count ? row[column].string ?? "" : "" }
 }
 
 extension JSONValue {
