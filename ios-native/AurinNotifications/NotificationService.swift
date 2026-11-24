@@ -2,13 +2,15 @@ import CoreText
 import UIKit
 import UserNotifications
 
-/// The morning readiness push (src/push.js readinessMessage) comes with
+/// A server from before the concept's layout: the morning readiness push (src/push.js readinessMessage) comes with
 /// mutable-content and `readiness: {score, zone}`: before iOS shows it, this
 /// extension draws the readiness ring with its score, coloured by the zone
 /// like Today's dial, on the welcome screen's sunrise, and attaches it, so the notification shows it on the
 /// right (and large when opened). Any other push, or a failed drawing, passes
 /// through unchanged. With the values hidden (Settings → Oznámení → Skrýt
 /// zdravotní údaje) the score comes only in `private`, so no ring is drawn.
+/// A current server adds `layout` (Notifications concept v3, N1): the banner
+/// takes its title, subtitle and body and no ring is drawn beside it.
 final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var content: UNMutableNotificationContent?
@@ -20,6 +22,16 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         self.content = content
+        // The morning in the concept's banner (Notifications concept v3, N1):
+        // "Readiness 78", the verdict, the night in words and the advice; no
+        // ring beside it. Hidden values send no layout outside `private`.
+        if let layout = request.content.userInfo["layout"] as? [String: Any], let title = layout["title"] as? String {
+            content.title = title
+            content.subtitle = layout["subtitle"] as? String ?? ""
+            content.body = layout["body"] as? String ?? content.body
+            contentHandler(content)
+            return
+        }
         if let readiness = request.content.userInfo["readiness"] as? [String: Any],
            let score = (readiness["score"] as? NSNumber)?.intValue,
            let url = ReadinessRing.file(score: score, zone: readiness["zone"] as? String),

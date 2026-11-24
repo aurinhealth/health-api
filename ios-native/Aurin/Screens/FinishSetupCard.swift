@@ -140,7 +140,7 @@ struct FinishSetupCard: View {
             ScrollView {
                 SetupGoalPage(focus: $focus).padding(24)
                 if let goalError {
-                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, 24)
+                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, PageGrid.margin)
                 }
             }
             .background { ScreenBackground(glow: Palette.Glow.today) }

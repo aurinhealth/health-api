@@ -263,9 +263,7 @@ enum JournalText {
         guard let value else { return "–" }
         switch metric {
         case "hrv": return "\(Int(value.rounded())) ms"
-        case "sleep":
-            let m = Int(value.rounded())
-            return "\(m / 60) h " + String(format: "%02d", m % 60)
+        case "sleep": return Fmt.duration(Int(value.rounded()))
         case "deep": return "\(Int(value.rounded())) min"
         default: return "\(Int(value.rounded()))"
         }

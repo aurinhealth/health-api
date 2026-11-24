@@ -126,7 +126,7 @@ struct AnswerFeedbackSheet: View {
             .buttonStyle(.plain)
             .padding(.top, 4)
         }
-        .padding(.horizontal, 24).padding(.top, 28).padding(.bottom, 12)
+        .padding(.horizontal, PageGrid.margin).padding(.top, 28).padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { Palette.card.ignoresSafeArea() }
     }

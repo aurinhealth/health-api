@@ -130,7 +130,7 @@ struct SetupFlowView: View {
 
                 if !keyboardUp { bottomBar }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             .padding(.vertical, 16)
             // Under the animation the page is gone for VoiceOver too.
             .accessibilityHidden(building)

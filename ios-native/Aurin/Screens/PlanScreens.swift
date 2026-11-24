@@ -568,7 +568,7 @@ struct ActivePlanView: View {
                                           choose: { choosing = true }, stop: { confirmStop = true }) { await reload() }
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }
@@ -1500,7 +1500,7 @@ struct PlanResultView: View {
                     BackSlot { dismiss() }
                     PlanResultContent(result: result, plans: plans) { await close() }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }

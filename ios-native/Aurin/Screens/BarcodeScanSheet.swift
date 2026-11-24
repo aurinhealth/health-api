@@ -94,7 +94,7 @@ struct BarcodeScanSheet: View {
                     Color.clear.frame(width: 40, height: 40)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 12)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12)
 
             ScrollView {
                 VStack(spacing: 20) {

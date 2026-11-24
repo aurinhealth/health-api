@@ -455,7 +455,7 @@ enum WeekPlanSettingsText {
         return planDuration(minutes) + (minutes >= 360 ? "+" : "")
     }
 
-    /// "8 h 15 a week".
+    /// "8 h 15 min a week".
     static func total(_ minutes: [Int]) -> String {
         L10n.f("%@ týdně", planDuration(minutes.reduce(0) { $0 + max(0, $1) }))
     }

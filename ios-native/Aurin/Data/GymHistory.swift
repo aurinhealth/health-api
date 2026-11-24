@@ -551,10 +551,10 @@ enum GymCoach {
         return (diff > 0 ? "+" : "−") + L10n.plural("%lld opakování", abs(diff))
     }
 
-    /// A workout's length as a big number: "52" min, or "1 h 02" (Fmt.duration).
+    /// A workout's length as a big number: "52" min, or "1 h 2" min (Fmt.durationParts).
     static func clock(_ minutes: Int) -> (value: String, unit: String?) {
-        if minutes < 60 { return (String(minutes), "min") }
-        return (Fmt.duration(minutes), nil)
+        let parts = Fmt.durationParts(minutes)
+        return (parts.number, parts.unit)
     }
 }
 

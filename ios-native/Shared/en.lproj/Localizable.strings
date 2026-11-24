@@ -312,7 +312,6 @@
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
-"Napij se" = "Time for a drink";
 "Napiš kouči…" = "Message the coach…";
 "Naplánovat" = "Schedule";
 "Naplánovat týden" = "Plan the week";
@@ -705,7 +704,6 @@
 "Stáhnout moje data" = "Download my data";
 "Střední" = "Moderate";
 "Suroviny" = "Ingredients";
-"Svalová hmota" = "Muscle mass";
 "Sweet spot" = "Sweet spot";
 "Synchronizuji…" = "Syncing…";
 "Série" = "Sets";
@@ -1391,7 +1389,6 @@
 "Zapiš, co jíš, ať sedí dnešní příjem." = "Log what you eat so today's intake is right.";
 "Zvaž se" = "Weigh yourself";
 "Ráno nalačno, ať je trend váhy přesný." = "In the morning before eating, so the weight trend is accurate.";
-"Zkontroluj tréninky a volný čas na další týden." = "Check the workouts and free time for next week.";
 "Prům. tep" = "Avg HR";
 "Max. tep" = "Max HR";
 "Čas ve výkonových zónách" = "Time in power zones";
@@ -1662,7 +1659,7 @@
 "Jak dopadl test %@?" = "How did the test on %@ go?";
 "Naplánovat test" = "Plan the test";
 "Neukládat" = "Don't save";
-"Ověř to testem: %@ (%@)." = "Check it with a test: %@ (%@).";
+"Ověř to testem: %@ (celkem %@)." = "Check it with a test: %@ (%@ in all).";
 "Podle tréninků se ti %@ zlepšilo na %@ (nastaveno %@)." = "Your training suggests your %@ has improved to %@ (set to %@).";
 "Podle tréninků je %@ nižší, %@ (nastaveno %@)." = "Your training suggests your %@ is lower, %@ (set to %@).";
 "Průměrný tep posledních 20 min" = "Average heart rate of the last 20 min";
@@ -3232,7 +3229,7 @@
 "Jak se mi vyvíjí tělesný tuk?" = "How is my body fat changing?";
 "Jak upravit jídlo?" = "How should I change my food?";
 "Jak upravit trénink?" = "How should I change my training?";
-"Jak se mi vyvíjí svalová hmota?" = "How is my muscle mass changing?";
+"Jak se mi vyvíjí beztuková hmota?" = "How is my lean mass changing?";
 "Mám jíst víc bílkovin?" = "Should I eat more protein?";
 "Jak upravit posilovnu?" = "How should I change my gym training?";
 "Jak jsem se vyspal?" = "How did I sleep?";
@@ -4290,7 +4287,9 @@
 "Další data srdce" = "More heart data";
 "Dnes %@ kroků z cíle %@" = "%1$@ steps today of your %2$@ goal";
 "Energie spálená pohybem nad klidovým výdejem, odhad hodinek nebo telefonu." = "Energy burned by moving, above what you burn at rest. An estimate from your watch or phone.";
-"Hodnoty z chytré váhy nebo z tvých zápisů. Tuk a svaly jsou odhad váhy." = "Values from your smart scale or from your own entries. Body fat and muscle are the scale's estimates.";
+"Hodnoty z chytré váhy nebo z tvých zápisů. Tuk je odhad váhy." = "Values from your smart scale or from your own entries. Body fat is the scale's estimate.";
+"Beztuková hmota" = "Lean mass";
+"Odhad chytré váhy: všechno kromě tuku, tedy svaly, kosti, voda a orgány. Samotné svaly to nejsou." = "Your smart scale's estimate of everything except fat: muscle, bones, water and organs. It is not muscle alone.";
 "Jak se mi daří s kroky?" = "How am I doing with my steps?";
 "Jak se mi vyvíjí VO2max?" = "How is my VO2max changing?";
 "Jak se mi vyvíjí aktivní energie?" = "How is my active energy changing?";
@@ -4755,7 +4754,7 @@
 "Začít hned" = "Start now";
 "Detaily tréninku" = "Workout details";
 "Zátěž tréninku" = "Workout strain";
-"Zátěž dne %@ až %@" = "Day strain %1$@ to %2$@";
+"Zátěž dne z %@ na %@" = "Day strain from %1$@ to %2$@";
 "%@, předtím %@" = "%1$@, was %2$@";
 "Trvání" = "Duration";
 "Aktivní čas" = "Active time";
@@ -5215,7 +5214,11 @@
 "Večer zapsat den" = "Log the day in the evening";
 "Jen když ještě nic není zapsané" = "Only when nothing is logged yet";
 "Denní připomínka" = "Daily reminder";
-"Označ, až to bude hotové" = "Mark as done when ready";
+"Otevřít Dnes" = "Open Today";
+"Označ, až to bude hotové." = "Mark as done when ready.";
+"Ještě není označeno." = "Not marked yet.";
+"Zkontroluj tréninky a volný čas." = "Check your workouts and free time.";
+"Čas na vodu" = "Time for water";
 "Za 30 min" = "In 30 min";
 "Připomínky" = "Reminders";
 "Widgety na zamčené obrazovce ukážou čísla po odemknutí Touch ID." = "Lock screen widgets show numbers after Touch ID.";
@@ -5223,7 +5226,6 @@
 "Otevře čas a dny." = "Opens time and days.";
 "ráno" = "morning";
 "Obvykle v" = "Usually at";
-"Ještě není označeno" = "Not marked yet";
 "%@ min. Začíná za hodinu." = "%@ min. Starts in an hour.";
 "Začíná za hodinu." = "Starts in an hour.";
 "%@ min." = "%@ min.";
@@ -5243,6 +5245,11 @@
 "Zapsat večeři" = "Log dinner";
 "Zapsat druhou večeři" = "Log late snack";
 "Zapsat jídlo" = "Log food";
+"krátký spánek" = "short sleep";
+"nízká HRV" = "a low HRV";
+"vysoký klidový tep" = "a high resting heart rate";
+"a" = "and";
+"Odpověď trvala moc dlouho. Zkus to znovu." = "The answer took too long. Try again.";
 "Video techniky" = "Technique video";
 "YouTube, podobný cvik" = "YouTube, similar exercise";
 "Přehraje video" = "Plays the video";
@@ -5258,3 +5265,6 @@
 "Zavře kolečko množství" = "Closes the amount wheel";
 "Otevře kolečko množství" = "Opens the amount wheel";
 "%@ + %@ za trénink" = "%@ + %@ for training";
+"Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
+"Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
+"Jídlo se tu ukazuje od %@." = "Food shows here from %@.";

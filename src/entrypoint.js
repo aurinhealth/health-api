@@ -3166,7 +3166,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
         read('/health/weight'),dashboardProfile(env).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
-        // Muscle mass from a scale through Apple Health (lean body mass).
+        // Lean body mass (not muscle alone) from a scale through Apple Health.
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[]),
         // Aurin's own VO2max and Aurin age (own-vo2max-store.js): 98 days for the 3-month change, at most 98 rows.
         fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[])
