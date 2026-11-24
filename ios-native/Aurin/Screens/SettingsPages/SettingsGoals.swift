@@ -4,7 +4,7 @@ import UserNotifications
 // MARK: - Goals
 
 /// Cíle: every goal in one place (concept 10, D-NAST-1). The main goal is the
-/// onboarding's choice (Get fitter, Race, Lose weight); a race takes its name,
+/// onboarding's choice (Get fitter, Race, Lose weight, Strength and muscle); a race takes its name,
 /// sport, day and distance, losing weight its pace and target weight. Training
 /// has one time to train (the week plan's free time, Plan settings) and what
 /// the athlete trains now (Auto from the records, or own hours), which sets
@@ -33,7 +33,7 @@ struct GoalsSettingsView: View {
     var body: some View {
         SettingsPage(title: "Cíle", hero: SettingsHero(text: "Tvoje cíle pro spánek, jídlo, váhu a trénink.", art: AnyView(GoalsHeroArt()))) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            SettingsGroup(title: "Hlavní cíl") {
+            SettingsGroup(title: "Hlavní cíl", footer: goalType == "muscle" ? FocusChoice.muscleNote : nil) {
                 ForEach(FocusChoice.goals.indices, id: \.self) { i in
                     let item = FocusChoice.goals[i]
                     if i > 0 { SettingsDivider() }
@@ -163,15 +163,22 @@ struct GoalsSettingsView: View {
     }
 
     /// The main goal: losing weight starts at a pace (half a kilo, or a quarter
-    /// under 50 kg); away from it a losing pace becomes maintain.
+    /// under 50 kg); away from it a losing pace becomes maintain. Strength and
+    /// muscle gains a quarter kilo a week; away from it gaining becomes maintain.
     private func pick(_ type: String) {
         withAnimation(.snappy) {
+            let before = goalType
             goalType = type
             if type == "lose", !goal.hasPrefix("lose_") {
                 // Back to the saved pace, else half a kilo.
                 let saved = original["goal"]?.string ?? ""
                 goal = saved.hasPrefix("lose_") ? saved : goalOptions.contains { $0.0 == "lose_0.5" } ? "lose_0.5" : "lose_0.25"
             } else if type != "lose", goal.hasPrefix("lose_") {
+                goal = "maintain"
+            }
+            if type == "muscle", !goal.hasPrefix("gain_") {
+                goal = "gain_0.25"
+            } else if before == "muscle", type != "muscle", goal.hasPrefix("gain_") {
                 goal = "maintain"
             }
         }
