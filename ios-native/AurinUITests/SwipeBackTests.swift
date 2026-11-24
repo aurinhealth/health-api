@@ -18,7 +18,7 @@ final class SwipeBackTests: XCTestCase {
     /// Resting HR opened as its link would (-open), on top of Zdraví: back
     /// is the page's "Zpět", gone once the swipe went back.
     func testEdgeSwipeBackFromRestingHR() {
-        app.launchArguments = ["-demo", "-open", "metric/restingHR", "-AppleLanguages", "(cs)", "-AppleLocale", "cs_CZ"]
+        app.launchArguments = ["-demo", "-swipeBackLog", "-open", "metric/restingHR", "-AppleLanguages", "(cs)", "-AppleLocale", "cs_CZ"]
         app.launch()
         let back = app.buttons.matching(identifier: "Zpět")
         XCTAssertTrue(waitUntil(20) { self.onScreen(back) != nil }, "Resting HR did not open")
@@ -28,7 +28,7 @@ final class SwipeBackTests: XCTestCase {
     }
 
     private func swipeBack(from identifier: String) {
-        app.launchArguments = ["-demo", "-AppleLanguages", "(cs)", "-AppleLocale", "cs_CZ"]
+        app.launchArguments = ["-demo", "-swipeBackLog", "-AppleLanguages", "(cs)", "-AppleLocale", "cs_CZ"]
         app.launch()
         XCTAssertTrue(app.buttons.matching(identifier: "Dnes").firstMatch.waitForExistence(timeout: 20), "Dnes did not appear")
 
@@ -45,22 +45,15 @@ final class SwipeBackTests: XCTestCase {
         XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
         wait(1.5)
         edgeSwipe()
-        // One more swipe if the first did not take: on CI the simulator now and
-        // then drops a synthesized edge drag right after the push (redesign run
-        // 45391506777; the same page passed on its own PR). A swipe that never
-        // goes back, the bug of builds 602 to 611, still fails here.
-        if !waitUntil(3, { self.onScreen(back) == nil }) {
-            wait(1)
-            edgeSwipe()
-        }
+        // One swipe has to do it: a dropped first swipe was a real bug (CI and
+        // TestFlight 602 to 611). With "-swipeBackLog" the app writes what the
+        // swipe was asked into the log.
         let wentBack = waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }
         if !wentBack {
-            // What is still on screen, in the log: which "Zpět" is hittable and where.
             for element in back.allElementsBoundByIndex where element.isHittable {
                 print("SwipeBack: hittable Zpět at \(element.frame), label \(element.label)")
             }
             print("SwipeBack: card on screen: \(onScreen(cards) != nil)")
-            print(app.debugDescription)
         }
         expect(wentBack, "the edge swipe did not go back from \(identifier)")
     }

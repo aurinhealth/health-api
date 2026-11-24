@@ -16,10 +16,23 @@ import UIKit
     static let shared = SwipeBack()
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard let navigation = Self.navigation(of: gestureRecognizer) else { return false }
+        guard let navigation = Self.navigation(of: gestureRecognizer) else {
+            Self.log("shouldBegin: no navigation controller")
+            return false
+        }
         // Not while a push or pop still animates: a swipe then left the stack
         // half popped and the screen frozen.
-        return navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
+        let begin = navigation.viewControllers.count > 1 && navigation.transitionCoordinator == nil
+        Self.log("shouldBegin \(begin): \(navigation.viewControllers.count) pages, animating \(navigation.transitionCoordinator != nil), at \(gestureRecognizer.location(in: gestureRecognizer.view))")
+        return begin
+    }
+
+    /// The UI test's "-swipeBackLog": what the swipe was asked and answered, in
+    /// the test log, to find why a first swipe now and then did nothing.
+    static let logging = ProcessInfo.processInfo.arguments.contains("-swipeBackLog")
+
+    static func log(_ message: @autoclosure () -> String) {
+        if logging { NSLog("SwipeBack: %@", message()) }
     }
 
     /// A touch at the left edge goes back before a chart's scrub or a row of
@@ -41,10 +54,21 @@ import UIKit
         return nil
     }
 
+    @objc private func changed(_ pop: UIGestureRecognizer) {
+        Self.log("state \(pop.state.rawValue) at \(pop.location(in: pop.view))")
+    }
+
     /// Switches the swipe on for the stack that shows `controller`.
     func enable(for controller: UIViewController) {
-        guard let pop = controller.navigationController?.interactivePopGestureRecognizer else { return }
-        if pop.delegate !== self { pop.delegate = self }
+        guard let pop = controller.navigationController?.interactivePopGestureRecognizer else {
+            Self.log("enable: no pop gesture")
+            return
+        }
+        Self.log("enable: delegate was ours \(pop.delegate === self), enabled \(pop.isEnabled), \(controller.navigationController?.viewControllers.count ?? 0) pages")
+        if pop.delegate !== self {
+            pop.delegate = self
+            if Self.logging { pop.addTarget(self, action: #selector(changed)) }
+        }
         pop.isEnabled = true
     }
 }
