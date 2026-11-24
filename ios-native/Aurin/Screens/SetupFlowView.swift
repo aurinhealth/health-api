@@ -46,6 +46,8 @@ struct SetupFlowView: View {
     @State private var suggested: [String: String] = [:]
     /// The weight as prefilled; unchanged it is not saved again as today's.
     @State private var prefilledWeight: String?
+    /// Where the server's weight came from (GET /app/api/onboarding weightSource).
+    @State private var weightSource: String?
     // The sports on "O tobě" (SportsPicker): what was chosen against what the
     // server had, and the saved profile they go into.
     @State private var focus = SetupFocus()
@@ -368,7 +370,21 @@ struct SetupFlowView: View {
     /// Where the prefilled values came from, for the line above the fields.
     private var prefillSource: String? {
         if appleFilled { return "apple" }
-        if !suggested.isEmpty || prefilledWeight != nil { return "google" }
+        // Height and birth date come from Google Health (src/profile-suggestions.js);
+        // the weight says its own source. A service is named only when everything
+        // shown came from it (617 review: "Google Health" over Apple's weight).
+        var sources = Set<String>()
+        if !suggested.isEmpty { sources.insert("google") }
+        if prefilledWeight != nil { sources.insert(Self.service(weightSource) ?? "own") }
+        guard sources.count == 1, let only = sources.first, only != "own" else { return nil }
+        return only
+    }
+
+    /// The service a stored weight came from, by its source_family.
+    private static func service(_ family: String?) -> String? {
+        guard let family else { return nil }
+        if family == "apple-health" { return "apple" }
+        if family.hasPrefix("google") { return "google" }
         return nil
     }
 
@@ -677,9 +693,11 @@ struct SetupFlowView: View {
             birthYear = String(Self.currentYear - Int(v))
             suggested["age"] = birthYear
         }
-        if weightText.isEmpty || weightText == prefilledWeight, let v = s.weightKg {
+        // A weight with no known source is not filled in (an older server does not say).
+        if weightText.isEmpty || weightText == prefilledWeight, let v = s.weightKg, let source = s.weightSource {
             weightText = Self.weightTextOf((v * 2).rounded() / 2)
             prefilledWeight = weightText
+            weightSource = source
         }
     }
 
@@ -734,6 +752,10 @@ struct SetupFlowView: View {
             try await model.api.giveHealthConsent(ai: agreeAI)
             // Apple Health may send from now on (AppleHealth.run).
             AppModel.healthConsentGiven = true
+            // The coach and the AI parts of the screens follow the choice the server
+            // now holds (617 review C1: the coach asked again after onboarding).
+            model.setAIOff(!agreeAI)
+            model.aiConsentLoaded = true
             if consentOnly { await model.finishSetup() }
             return true
         } catch {
