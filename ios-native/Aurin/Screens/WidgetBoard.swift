@@ -110,6 +110,7 @@ struct WidgetBoard: View {
                         .frame(width: 36, height: 36)
                         .background(Palette.card, in: Circle())
                         .overlay { Circle().stroke(Palette.hairline, lineWidth: 1) }
+                        .tapTarget(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Přidat widget")
@@ -122,9 +123,18 @@ struct WidgetBoard: View {
                         .padding(.horizontal, 16)
                         .frame(height: 34)
                         .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 60, height: 34)
                 }
                 .buttonStyle(.plain)
             }
+            // Pinned over the cards they get a glass behind, so they never float
+            // bare over a card's text (617 #22).
+            .padding(4)
+            .background {
+                Capsule().fill(.clear).chromeGlass(in: Capsule(), interactive: false)
+                    .opacity(pinned > 0 ? 1 : 0)
+            }
+            .padding(-4)
             .offset(y: pinned)
         }
         .frame(height: 36)
@@ -280,8 +290,9 @@ struct EditableWidget: View {
 
     var body: some View {
         WidgetPreview(item: item, data: data)
-            // The minus stands above the card, not over its title (device
-            // test of build 602: "OOD", "AY", "CTIVITY").
+            // The minus sits on the card's top left corner, not over its title
+            // (device test of build 602: "OOD", "AY", "CTIVITY"; 617 #22), 44 pt
+            // to tap (617 #35).
             .padding(.top, 12)
             .overlay(alignment: .topLeading) {
                 Button(action: remove) {
@@ -290,11 +301,11 @@ struct EditableWidget: View {
                         .foregroundStyle(Palette.onButton)
                         .frame(width: 24, height: 24)
                         .background(Palette.muted, in: Circle())
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .offset(x: -16, y: -20)
+                .offset(x: -12, y: -10)
                 .accessibilityLabel(L10n.f("Odebrat %@", L10n.tr(item.kind.title)))
             }
             .modifier(Wiggle(amplitude: item.size == .small ? 1.4 : 0.6, seed: item.kind.rawValue.count))

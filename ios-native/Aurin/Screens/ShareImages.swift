@@ -363,7 +363,7 @@ struct ShareWorkout: Equatable {
             return (Fmt.decimal(Units.distance(km), digits: km < 100 ? 1 : 0), Units.distanceUnit)
         case "Čas", "Délka":
             guard let minutes, minutes > 0 else { return nil }
-            return (Fmt.hoursMinutes(minutes), "h")
+            return shareLength(minutes)
         case "Výkon":
             guard let watts else { return nil }
             return (Fmt.int(watts), "W")
