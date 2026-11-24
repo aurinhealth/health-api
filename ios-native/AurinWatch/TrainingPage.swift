@@ -635,7 +635,7 @@ struct TrainingPage: View {
     /// A number with its label over it, as on the iPhone's workout card.
     private func stat(_ label: String, _ value: String, unit: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).watchFont(12, .medium).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
+            Text(label).watchFont(12, .medium).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.6)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(value).font(W.serif(19)).foregroundStyle(W.num)
                 if let unit { Text(unit).font(.system(size: 12, weight: .medium)).foregroundStyle(W.muted) }
@@ -643,6 +643,8 @@ struct TrainingPage: View {
             .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Room between the labels: "Exercises" ran into "Sets" (CI shot).
+        .padding(.trailing, 6)
         .accessibilityElement(children: .combine)
     }
 
