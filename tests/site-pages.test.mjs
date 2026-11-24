@@ -389,6 +389,9 @@ test('the terms say what Aurin Pro adds, its plans and that extras can be bought
   for(const x of ['Aurin Intelligence','adaptivní tréninkové plány','vitamíny a minerály','vlastní makra a cíle živin','12měsíčního tarifu placeného měsíčně','Některé doplňky jde v aplikaci i dokoupit'])assert.ok(cs.includes(x),x);
   for(const t of [en,cs])assert.doesNotMatch(t,/Aurin Pro, (the coach|tedy kouč)/,'the old short list is gone');
   for(const t of [en,cs])assert.doesNotMatch(t,/coach messages|zprávy koučovi|one-time purchase|jednorázov/i,'no message packs or limits in the terms');
+  // An extra bought in the app ends with its account (security audit 2026-11-24, point 3), said without naming the packs.
+  assert.ok(en.includes('ends, used or not, when the account is deleted'));
+  assert.ok(cs.includes('Smazáním účtu ale zanikne, využitý i nevyužitý'));
 });
 
 // Launch terms (legal review 5 Nov 2026, points 1-3): the launch version drops only the
@@ -422,4 +425,14 @@ test('the launch terms drop only the testing sentences and keep the change rules
     assert.match(t,/reportaproblem\.apple\.com/);
     assert.doesNotMatch(t,/unlimited|neomezen|Kč|USD|\$\d/i,'no prices or unlimited in the terms');
   }
+});
+
+// Security audit 2026-11-24, points 2 and 5: a ceiling for the logs, the deadline for a request,
+// the authority where the user lives and the morning push through Apple, in English and Czech.
+test('the privacy policy gives the log ceiling, the answer deadline, the home authority and the hidden push',async()=>{
+  const en=await (await privacyPage(new Request('https://aurin.health/privacy'))).text();
+  const cs=await (await privacyPage(new Request('https://aurin.health/cs/privacy'))).text();
+  for(const x of ['kept for at most 7 days','within one month, free of charge','the EU country where you live or work','carries no health values at all','through Apple’s push service'])assert.ok(en.includes(x),x);
+  for(const x of ['uchovávají nejvýš 7 dní','do jednoho měsíce a zdarma','země EU, kde žiješ nebo pracuješ','nenese ranní oznámení žádné zdravotní hodnoty','přes Applovu službu pro oznámení'])assert.ok(cs.includes(x),x);
+  for(const t of [en,cs])assert.doesNotMatch(t,/a few days|několik dní/);
 });
