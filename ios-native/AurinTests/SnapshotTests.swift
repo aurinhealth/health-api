@@ -1130,7 +1130,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundTwoScreens() throws {
-        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _ in }) }
+        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _, _ in }) }
         try render("body-map-legend", height: 360) {
             BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
         }
