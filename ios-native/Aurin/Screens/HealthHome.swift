@@ -462,7 +462,8 @@ struct AurinAgeTrendCard: View {
         .chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
                 AxisGridLine().foregroundStyle(Palette.hairline)
-                AxisValueLabel().foregroundStyle(Palette.faint)
+                // "36,0" in Czech, never the system's "36.0" (618).
+                AxisValueLabel(format: FloatingPointFormatStyle<Double>(locale: Fmt.locale).precision(.fractionLength(1))).foregroundStyle(Palette.faint)
             }
         }
         .frame(height: 130)
@@ -1067,7 +1068,8 @@ struct BodyCard: View {
         .chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
                 AxisGridLine().foregroundStyle(Palette.hairline)
-                AxisValueLabel().foregroundStyle(Palette.faint)
+                // "36,0" in Czech, never the system's "36.0" (618).
+                AxisValueLabel(format: FloatingPointFormatStyle<Double>(locale: Fmt.locale).precision(.fractionLength(1))).foregroundStyle(Palette.faint)
             }
         }
         .accessibilityHidden(true)

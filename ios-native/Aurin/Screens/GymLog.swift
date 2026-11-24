@@ -37,7 +37,8 @@ struct GymDoneDetail: View {
             // Concept wgym (trenink-koncept): the header, Workout details, the
             // exercises as rows (a tap shows and fixes each set), then the
             // muscles (GymSessionView) under it.
-            WorkoutHero(sport: "strength", kind: L10n.tr("Posilovna"), title: title, line: when) {
+            // The pinned bar already says "POSILOVNA": no second kind over the name (617 #49).
+            WorkoutHero(sport: "strength", title: title, line: when) {
                 // Who recorded it, and after a merge whose heart rate and calories count.
                 if let line = SourceLine.gym(session) { line.padding(.top, 6) }
             }

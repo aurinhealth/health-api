@@ -334,7 +334,8 @@ struct ActivityDetailView: View {
                      info: session.status == "done" && detail != nil ? ChromeAction(systemImage: "square.and.arrow.up", label: "Sdílet", action: { sharing = true }) : nil) {
             VStack(alignment: .leading, spacing: 0) {
                 // The concept's header (wdone): the sport's disc, its kind over the name, when and who recorded it.
-                WorkoutHero(sport: session.sport, type: detail?.activity.type, kind: Self.kind(session.sport),
+                // The pinned bar already names the kind ("RIDE"): not again over the name (617 #49).
+                WorkoutHero(sport: session.sport, type: detail?.activity.type,
                             title: detail?.activity.name ?? session.title, line: whenLine) {
                     if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 4) }
                 }
