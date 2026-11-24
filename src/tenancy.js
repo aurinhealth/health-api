@@ -350,7 +350,7 @@ const CROSS_USER_STATEMENTS = new Set([
 export function unboundUserQuery(sql, values, id) {
   const text = String(sql).replace(/\s+/g, " ").trim();
   if (CROSS_USER_STATEMENTS.has(text)) return false;
-  if (/^(CREATE|ALTER|DROP|PRAGMA)\b/i.test(text) || !PERSONAL_TABLE_PATTERN.test(text.replace(CROSS_USER_PARTS, ""))) return false;
+  if (/^(CREATE|ALTER|DROP|PRAGMA)\b/i.test(text) || !PERSONAL_TABLE_PATTERN.test(text.replace(CROSS_USER_PARTS, " "))) return false;
   return !boundToUser(values || [], id);
 }
 function noteUnboundUser(sql, values, id) {

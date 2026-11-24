@@ -116,6 +116,8 @@ test("queries that read across accounts on purpose are not logged (N7)", () => {
   // The same pieces next to another account's personal data are still logged.
   assert.equal(unboundUserQuery("SELECT f.*,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=f.food_key) AS reports FROM personal_foods f WHERE user_id=?", [7], 5), true);
   assert.equal(unboundUserQuery("SELECT * FROM food_reports WHERE user_id IS NOT NULL", [], 5), true);
+  // A removed piece leaves a space, so a table name right beside it keeps its word boundary (audit 2026-11-24 point 11).
+  assert.equal(unboundUserQuery("SELECT * FROM personal_foods(SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)AS t", ["x"], 5), true);
   assert.equal(unboundUserQuery("INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?)", ["t", 7, 1], 5), true);
 });
 
