@@ -164,3 +164,21 @@ test("each muscle has its own last training day, not its body part's (617 review
   // A day after today does not count.
   assert.equal(muscle(muscleFatigue({ sets: [], history: sets("DB curl", 2, { date: "2026-10-09" }), now, today }), "biceps").lastDate, null);
 });
+
+test("a match or another sport tires the legs (football, hockey, tennis, skiing)", () => {
+  const end = hours(14);
+  const of = (type, rpe = 8) => muscleFatigue({ activities: [{ type, name: "Match", minutes: 90, durationHours: 1.5, rpe, end }], now, today });
+  for (const type of ["Soccer", "Hockey", "basketball", "Tennis", "AlpineSki", "ICE_SKATING", "Boxing", "MartialArts"]) {
+    const r = of(type);
+    assert.ok(muscle(r, "quads").state !== "rested", type);
+    assert.equal(muscle(r, "chest").state, "rested", type);
+  }
+  // Rowing and climbing tire the back, not the legs first.
+  for (const type of ["Rowing", "RockClimbing"]) assert.notEqual(muscle(of(type), "back").state, "rested", type);
+  // Horse riding holds the hips and trunk lightly: rested by the next morning.
+  assert.equal(muscle(of("equestrianSports"), "glutes").state, "rested");
+  // Listed by the name it was logged with.
+  assert.equal(of("Soccer").recent[0].title, "Match 1 h 30 min");
+  // A sport the model doesn't know still tires nothing.
+  assert.equal(muscle(of("Golf"), "quads").state, "rested");
+});

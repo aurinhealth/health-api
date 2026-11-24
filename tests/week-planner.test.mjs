@@ -132,3 +132,63 @@ test("own bricks: kept only on days with a ride and a run, and they travel with 
   assert.deepEqual(own.bricks, [5]);
   assert.deepEqual(own.days, usual.days, "the bricks go with the days they are keyed by");
 });
+
+test("other sports in the week: real types only, two a day, a usual length for each kind, and a week keeps its own", async () => {
+  const { weekOverride } = await import("../src/week-planner.js");
+  const plan = sanitizeWeekPlan({ events: [[{ type: "Soccer", kind: "match", minutes: 95 }, { type: "Run" }, { type: "Boxing", minutes: 7 }, { type: "Tennis" }], null, [], [], [], [{ type: "EquestrianSports", kind: "training", minutes: 400 }]] });
+  assert.deepEqual(plan.events[0], [{ type: "Soccer", kind: "match", minutes: 95 }, { type: "Boxing", kind: "training", minutes: 75 }]);
+  assert.deepEqual(plan.events[5], [{ type: "EquestrianSports", kind: "training", minutes: 75 }]);
+  assert.equal(plan.events.length, 7);
+  assert.deepEqual(sanitizeWeekPlan({}).events, [[], [], [], [], [], [], []]);
+  assert.deepEqual(Object.keys(weekOverride(plan, sanitizeWeekPlan({}))), ["events"]);
+  assert.deepEqual(weekOverride(plan, plan), {});
+});
+
+test("a match saved for one week stays in that week; the usual week keeps its own", async () => {
+  const db = scopedDb(createD1(), 1);
+  await saveWeekPlan(db, { events: [[], [], [], [], [], [{ type: "Soccer", kind: "match" }], []] }, "2026-11-25");
+  assert.deepEqual((await getWeekPlan(db, "2026-11-25", { calendar: false })).events[5], [{ type: "Soccer", kind: "match", minutes: 90 }]);
+  assert.deepEqual((await getWeekPlan(db, "2026-12-02", { calendar: false })).events[5], []);
+});
+
+test("a match is the week's hard day: no key session or heavy legs the day before, of and after it; practice spares the legs too", async () => {
+  const { roleTime } = await import("../src/week-planner.js");
+  const days = [["gym"], ["run"], ["gym", "ride"], ["run"], ["ride", "gym"], [], ["ride", "run"]];
+  const events = [[], [{ type: "Soccer", kind: "training", minutes: 75 }], [], [], [], [{ type: "Soccer", kind: "match", minutes: 90 }], []];
+  const roles = planWeekRoles(days, { events });
+  const of = (i, sport) => roles[i].items.find(x => x.sport === sport).role;
+  // Friday (the day before) and Sunday (the day after) stay easy, gym upper body only.
+  assert.equal(of(4, "ride"), "recovery");
+  assert.equal(of(4, "gym"), "gym_upper");
+  assert.equal(of(6, "ride"), "recovery");
+  // Monday is the day before practice: no heavy legs.
+  assert.equal(of(0, "gym"), "gym_upper");
+  // The match takes one of the usual two quality sessions.
+  assert.equal(roles.flatMap(d => d.items).filter(x => x.role === "quality").length, 1);
+  assert.equal(roles[1].items[0].role === "quality", false);
+  // The same events come from the saved week through roleTime.
+  assert.deepEqual(planWeekRoles(days, roleTime(sanitizeWeekPlan({ days, events }))), roles);
+  // Riding loads the legs little: the week stays as it was without it.
+  const riding = events.map(d => d.map(e => ({ ...e, type: "EquestrianSports" })));
+  assert.deepEqual(planWeekRoles(days, { events: riding }), planWeekRoles(days));
+});
+
+test("a week with two matches keeps the gym to the upper body", () => {
+  const days = [["gym"], ["ride"], [], ["gym"], [], [], []];
+  const events = [[], [], [{ type: "Hockey", kind: "match" }], [], [], [{ type: "Hockey", kind: "match" }], []];
+  assert.equal(planWeekRoles(days)[0].items[0].role, "gym_full");
+  for (const i of [0, 3]) assert.equal(planWeekRoles(days, { events })[i].items[0].role, "gym_upper");
+});
+
+test("Did you play?: yesterday's practice or match that nothing recorded", async () => {
+  const { playedCheck } = await import("../src/week-planner.js");
+  const events = [[], [], [], [], [], [{ type: "Soccer", kind: "match", minutes: 90 }], []];
+  // 2026-11-21 is a Saturday.
+  assert.deepEqual(playedCheck(events, "2026-11-21", []), { date: "2026-11-21", type: "Soccer", name: "Fotbal", kind: "match", minutes: 90 });
+  assert.equal(playedCheck(events, "2026-11-21", [{ type: "Soccer" }]), null);
+  // A watch that calls it another team sport records it too.
+  assert.equal(playedCheck(events, "2026-11-21", [{ type: "Rugby" }]), null);
+  assert.notEqual(playedCheck(events, "2026-11-21", [{ type: "Run" }]), null);
+  assert.equal(playedCheck(events, "2026-11-20", []), null);
+  assert.equal(playedCheck(null, "2026-11-21", []), null);
+});

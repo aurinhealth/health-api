@@ -38,7 +38,7 @@
 import { L, num, isImperial, M_PER_MILE } from "./lang.js";
 import { EXERCISES } from "./strength-generator.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
-import { RECOVERY_DAYS, FAILURE_RECOVERY, SET_LOAD, setEffort, isFailure, muscleEvents, activityKind, storedActivities } from "./fitness-insights.js";
+import { RECOVERY_DAYS, FAILURE_RECOVERY, SET_LOAD, setEffort, isFailure, muscleEvents, muscleKind, storedActivities } from "./fitness-insights.js";
 import { muscleLabel } from "./gym-catalog.js";
 import { sessionOf } from "./activity-match.js";
 import { localDate, zonedTime } from "./user-time.js";
@@ -127,6 +127,8 @@ function gymEnds(sets, strengthWorkouts) {
   return date => recorded.get(date) ?? saved.get(date) ?? zonedTime(date + GYM_HOUR);
 }
 
+// The sports besides the gym that tire muscles (fitness-insights.js CARDIO).
+export const SPORT_KINDS = ["ride", "run", "swim", "walk", "team", "racket", "skate", "ski", "combat", "riding", "paddle", "climb", "fitness"];
 // Doses of fatigue: {at, muscle, dose, failure, estimated, source}.
 export function fatigueDoses({ sets = [], activities = [], now }) {
   const doses = [], sources = new Map();
@@ -146,9 +148,9 @@ export function fatigueDoses({ sets = [], activities = [], now }) {
     }
   }
   activities.forEach((a, i) => {
-    const kind = a.kind || activityKind(a);
-    if (!["ride", "run", "swim", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now) return;
-    const key = "activity:" + i, source = { key, kind, date: localDate(new Date(a.end)), at: a.end, distance: a.distance, minutes: a.minutes, muscles: {} };
+    const kind = a.kind || muscleKind(a);
+    if (!SPORT_KINDS.includes(kind) || !Number.isFinite(a.end) || a.end > now) return;
+    const key = "activity:" + i, source = { key, kind, date: localDate(new Date(a.end)), at: a.end, distance: a.distance, minutes: a.minutes, name: a.name, muscles: {} };
     for (const e of muscleEvents({ activities: [{ ...a, date: source.date }] })) {
       const muscle = FROM_BODY_MAP[e.muscle] || e.muscle, dose = e.load / SET_LOAD * (kind === "ride" ? RIDE_SHARE : kind === "swim" ? SWIM_SHARE : 1);
       doses.push({ at: a.end, muscle, dose, failure: false, estimated: true, source: key });
@@ -181,7 +183,8 @@ function dayText(date, today) {
 const LEGS = new Set(["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"]);
 export function sourceTitle(s) {
   if (s.kind === "gym") return L("Posilovna, ", "Gym, ") + gymPart(s);
-  const name = { ride: L("Jízda", "Ride"), run: L("Běh", "Run"), swim: L("Plavání", "Swim"), walk: L("Chůze", "Walk") }[s.kind];
+  // Another sport by the name it was logged with (Football, Hockey).
+  const name = { ride: L("Jízda", "Ride"), run: L("Běh", "Run"), swim: L("Plavání", "Swim"), walk: L("Chůze", "Walk") }[s.kind] || String(s.name || "").trim() || L("Aktivita", "Activity");
   const km = Number(s.distance) / 1000;
   if (km >= 0.5) {
     const value = isImperial() ? Number(s.distance) / M_PER_MILE : km;
@@ -368,7 +371,7 @@ export async function loadTrainingDoses(db, { now = Date.now() } = {}) {
   ]);
   const activities = storedActivities(activityRows.results || [], { keepRow: true }).map(({ row, ...a }) => {
     const s = sessionOf(row), minutes = s?.minutes || Number(a.moving_time) / 60 || 0;
-    return { ...a, kind: activityKind(a), minutes, durationHours: minutes / 60, end: s ? s.at + minutes * 60000 : NaN };
+    return { ...a, kind: muscleKind(a), minutes, durationHours: minutes / 60, end: s ? s.at + minutes * 60000 : NaN };
   });
   const all = setRows.results || [];
   return { sets: all.filter(s => dateOnly(s.workout_date) >= since), history: all, activities, today };

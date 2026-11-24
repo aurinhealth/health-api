@@ -45,7 +45,7 @@ import {vo2maxView,aurinAgeView,estimateSeries,profileAge,withNorm,fitnessNormOf
 import {buildDays,DAYS_MAX} from './app-days.js';
 import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
-import {normalizeProfile,effectiveProfile} from './energy-profile.js';
+import {normalizeProfile,effectiveProfile,keptOtherSports} from './energy-profile.js';
 import {withoutProDiet} from './diet.js';
 import {athleteFocus,mainKindsOf,SPORT_KINDS,normalizeFocus,withGoalType} from './athlete-focus.js';
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
@@ -63,7 +63,7 @@ import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-re
 import { trendFacts } from "./trend-facts.js";
 import { workloadMetrics, loadBalance, LOAD_HISTORY_DAYS } from "./workload-ratio.js";
 import { planOverview } from "./plan-overview.js";
-import { MANUAL_SPORTS, manualWorkoutType } from "./activity-type.js";
+import { MANUAL_SPORTS, manualWorkoutType, isOtherSport, typeName } from "./activity-type.js";
 import { illnessReturn } from "./illness-return.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities, fillWellness } from "./coach-reflection.js";
 import { addLoads } from "./training-load.js";
@@ -86,7 +86,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-checkin.js';
@@ -1745,6 +1745,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       delete coach.methodology;delete coach.cyclingCoachV2;
       const weekdayNames=L(['pondělí','úterý','středa','čtvrtek','pátek','sobota','neděle'],['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']);
       const facts={start,today,note:note||null,...(correction?{correction,previousProposal:previous}:{}),weekDays:dates.map((d,i)=>({date:d,weekday:weekdayNames[i]})),availabilityByDate:Object.fromEntries(dates.map(d=>[d,availabilityOn(prefs,d).minutes??null])),existingSessions,
+        // The athlete's other sports this week (football training, a match): the plan works around them.
+        ...(prefs.events?.some(d=>d.length)?{otherSports:dates.flatMap((date,i)=>(prefs.events[i]||[]).map(e=>({date,sport:typeName(e.type),kind:e.kind,minutes:e.minutes})))}:{}),
         rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label,...(x.brick?{brick:true}:{}),...(x.plan?{planSession:x.plan.kind}:{})})),...(rules.split?{triathlonSplit:splitFacts(rules.split)}:{}),...(openWater&&openWater!=='off'?{swimOpenWater:{setting:openWater,dueThisWeek:openWaterDue(start,openWater,inputs.focus?.event?.daysLeft??null)}}:{}),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
         ...(strain?.level?{recentState:{level:strain.level,signs:strain.chips}}:{}),
         weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
@@ -2015,8 +2017,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
   if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const sent=await request.json().catch(()=>({}));let profile=normalizeProfile(sent);
+    const before=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first().then(r=>r?JSON.parse(r.profile_json):{}).catch(()=>({}));
+    profile.otherSports=keptOtherSports(sent,before).filter(isOtherSport);
     // The main goal as a key (athlete-focus.js withGoalType): leaving Lose weight resets an unchanged losing calorie goal to maintain.
-    profile=withGoalType(profile,await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first().then(r=>r?JSON.parse(r.profile_json):{}).catch(()=>({})),sent?.goalType);
+    profile=withGoalType(profile,before,sent?.goalType);
     // Custom macros, own protein and own nutrient targets are Aurin Pro (diet.js); checked only when one is set.
     if(profile.dietStyle==='custom'||profile.proteinPerKg!=null||Object.keys(profile.nutrientTargets).length){const pro=await subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>null);if(pro===false)profile=withoutProDiet(profile);else if(pro===null){const saved=await dashboardProfile(env).catch(()=>null);if(saved)profile={...profile,dietStyle:profile.dietStyle==='custom'&&saved.dietStyle!=='custom'?'balanced':profile.dietStyle,proteinPerKg:saved.proteinPerKg??null,nutrientTargets:saved.nutrientTargets||{}};}}if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;
     // What "auto" resolves to with the saved goal and race (Settings shows it next to "automaticky").
@@ -2138,7 +2142,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let prefs;
       const start=url.searchParams.get('start');
       if(start&&!validTrainingDay(start))throw new Error(L('Neplatné datum týdne.', 'Invalid week date.'));
-      if(request.method==='POST'){if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});prefs=await saveWeekPlan(env.DB,await request.json(),start);}
+      if(request.method==='POST'){if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});const body=await request.json();
+        // An app that does not send other sports (builds before them) keeps the saved ones.
+        if(body&&typeof body==='object'&&body.events===undefined)body.events=(await getWeekPlan(env.DB,start,{calendar:false})).events;
+        prefs=await saveWeekPlan(env.DB,body,start);}
       else if(request.method==='DELETE'){if(!start)throw new Error(L('Vyber týden.', 'Choose a week.'));if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});prefs=await resetWeekPlan(env.DB,start);}
       else if(request.method==='GET')prefs=await getWeekPlan(env.DB,start);
       else return Response.json({message:'Method not allowed'},{status:405});
@@ -3085,6 +3092,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const missedOne=missedWorkoutView(missedWorkout({days:missedRead[0].days,today:date,decided:missedRead[1],red}),date);
         if(missedOne)body.missedWorkout=missedOne;
       }
+      // "Did you play?": yesterday's practice or match of the week plan that nothing recorded (only for an athlete with other sports).
+      if(isToday&&profile?.otherSports?.length){const day=shiftDate(date,-1),played=playedCheck((await getWeekPlan(env.DB,day,{calendar:false}).catch(()=>null))?.events,day,yesterday?.training?.completed||[]);if(played)body.played=played;}
       keepUsualWake(env,ctx,date,profile,body.tonight);
       // Today's row of the food history (nutrition-days.js), after the answer.
       if(isToday&&body.nutrition?.target!=null)ctx.waitUntil(saveNutritionDay(env.DB,nutritionDayOfToday(date,body.nutrition),date).catch(error=>console.error('Nutrition day save failed',error.message)));

@@ -126,6 +126,9 @@ export function tonightChoice(sleepSet, sleepDay, need) {
 export const MEAL_SLOTS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_late"];
 const mealSlots = v => { const chosen = new Set(Array.isArray(v) ? v.map(String) : []); return MEAL_SLOTS.filter(m => chosen.has(m)); };
 
+export const MAX_OTHER_SPORTS = 5;
+// An app that does not send other sports (builds before them) keeps the saved ones.
+export const keptOtherSports = (sent, saved) => normalizeProfile({ otherSports: sent?.otherSports === undefined ? saved?.otherSports : sent.otherSports }).otherSports;
 export function normalizeProfile(p = {}) {
   const inRange = (v, lo, hi) => { const x = num(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
   const birthDate = ageFrom(p.birthDate) != null ? p.birthDate : "";
@@ -163,6 +166,9 @@ export function normalizeProfile(p = {}) {
     waterGoal: inRange(p.waterGoal, 500, 6000),
     waterStart: inRange(p.waterStart, 500, 6000),
     waterFrom: /^\d{4}-\d{2}-\d{2}$/.test(String(p.waterFrom || "")) ? String(p.waterFrom) : "",
+    // Settings → Sports → Your other sports: Log workout types (football, boxing…)
+    // the week plan can hold; the app's server keeps only real ones (activity-type.js isOtherSport).
+    otherSports: [...new Set(Array.isArray(p.otherSports) ? p.otherSports.map(String).filter(t => /^[A-Za-z]{2,40}$/.test(t)) : [])].slice(0, MAX_OTHER_SPORTS),
     // Settings → Nutrition → Diet (diet.js).
     ...normalizeDiet(p),
     ...normalizeFocus(p)

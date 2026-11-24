@@ -87,7 +87,7 @@ test("sleep settings: tonight's own length and wake time", () => {
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
-      sleepGoal: null, fitnessNorm: "", wakeTime: "", wakeTimeWeekend: "", wakeDays: [1, 2, 3, 4, 5], wakeDaysWeekend: [0, 6], sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "",
+      sleepGoal: null, fitnessNorm: "", wakeTime: "", wakeTimeWeekend: "", wakeDays: [1, 2, 3, 4, 5], wakeDaysWeekend: [0, 6], sleepTonight: null, meals: [], kcalGoal: null, waterMode: "", waterGoal: null, waterStart: null, waterFrom: "", otherSports: [],
       dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: null, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: {},
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });
@@ -171,4 +171,13 @@ test("the app's setup (no everyday activity yet) still gets a calorie goal, as l
   assert.equal(b.ready, true);
   assert.deepEqual(b.missing, []);
   assert.equal(b.baselineRestTDEE, energyBaseline({ ...profile, activity: "light" }, 75).baselineRestTDEE);
+});
+
+test("other sports: kept as given, at most five, and kept from the saved profile when an older app sends none", async () => {
+  const { keptOtherSports } = await import("../src/energy-profile.js");
+  assert.deepEqual(normalizeProfile({ otherSports: ["Soccer", "Soccer", "Boxing", "x", "<b>", 3] }).otherSports, ["Soccer", "Boxing"]);
+  assert.equal(normalizeProfile({ otherSports: ["Soccer", "Boxing", "Tennis", "Hockey", "Squash", "Rugby"] }).otherSports.length, 5);
+  assert.deepEqual(normalizeProfile({}).otherSports, []);
+  assert.deepEqual(keptOtherSports({ sex: "male" }, { otherSports: ["Hockey"] }), ["Hockey"]);
+  assert.deepEqual(keptOtherSports({ otherSports: [] }, { otherSports: ["Hockey"] }), []);
 });

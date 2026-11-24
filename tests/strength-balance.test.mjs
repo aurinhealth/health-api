@@ -97,3 +97,10 @@ test('a split day names the date its part was last trained, never "N days ago" (
   const plan=generateStrengthPlan(context,{durationMinutes:60,weeklyGymDays:4});
   assert.match(plan.rationale,/naposledy ne 15\. 11\. Cviky/);assert.doesNotMatch(plan.rationale,/před \d+ dny/);
 });
+
+test('a match two days ago counts on the legs for the gym, like a run', () => {
+  const context = { ...base(), sports: { recentActivities: [{ id: 'm1', date: '2026-10-03', type: 'Soccer', name: 'Zápas', durationHours: 1.5 }] } };
+  const load = sportMuscleLoad(context);
+  assert.ok(load.get('quads') > 0 && load.get('calves') > 0);
+  assert.equal(load.get('chest'), undefined);
+});
