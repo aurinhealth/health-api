@@ -53,7 +53,16 @@ final class SwipeBackTests: XCTestCase {
             wait(1)
             edgeSwipe()
         }
-        expect(waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }, "the edge swipe did not go back from \(identifier)")
+        let wentBack = waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }
+        if !wentBack {
+            // What is still on screen, in the log: which "Zpět" is hittable and where.
+            for element in back.allElementsBoundByIndex where element.isHittable {
+                print("SwipeBack: hittable Zpět at \(element.frame), label \(element.label)")
+            }
+            print("SwipeBack: card on screen: \(onScreen(cards) != nil)")
+            print(app.debugDescription)
+        }
+        expect(wentBack, "the edge swipe did not go back from \(identifier)")
     }
 
     /// A finger from the very left edge to two thirds across.
