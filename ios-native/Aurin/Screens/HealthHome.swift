@@ -145,6 +145,9 @@ struct AurinOrb: View {
                 }
             }
             .frame(width: size * 1.6, height: size * 1.6)
+            // The halo reaches past the orb's frame (over the month title and
+            // Settings above it): it never takes a tap (617 review #4).
+            .allowsHitTesting(false)
         }
         .frame(width: size, height: size)
         .modifier(ScreenVisibility(onScreen: $onScreen))
@@ -282,6 +285,8 @@ struct AurinAgeOrbFace: View {
             if let real = Self.realAge(age) { Text(verbatim: real).font(Typo.caption).foregroundStyle(Palette.muted) }
         }
         .frame(maxWidth: .infinity)
+        // A tap counts only inside the face's own frame, not on the halo around it.
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([L10n.f("Aurin age, odhad %@", Fmt.decimal(age.value, digits: 1)), words, AurinAgeText.change(age), Self.realAge(age)].compactMap { $0 }.joined(separator: ", "))
     }
@@ -328,8 +333,10 @@ struct AurinAgeHero: View {
         VStack(spacing: 8) {
             ZStack {
                 AurinOrb(mood: .collecting)
-                Text("Sbírám tvoje data.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.center).padding(.horizontal, 50)
+                // Inside the pearl (its diameter is 0.72 of the orb's 250 pt), never on its edge (617 C13).
+                Text("Sbírám tvoje data.").font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).frame(maxWidth: 140)
+                    .minimumScaleFactor(0.8)
             }
             Text(verbatim: nextStep).font(Typo.body).foregroundStyle(Palette.secondary)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -341,8 +348,9 @@ struct AurinAgeHero: View {
     /// The one thing the estimate misses now (VO2max first: it needs one).
     private var nextStep: String {
         if health.vo2max == nil {
-            return L10n.tr(noWearable ? "Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut běhu venku."
-                                      : "Další krok k odhadu Aurin age: jeden odhad VO2max. Dej si 20 minut běhu venku s hodinkami.")
+            // Rides with power count as much as runs (src/own-vo2max.js), so a cyclist is not sent running (617 C13).
+            return L10n.tr(noWearable ? "Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut v kuse na kole s wattmetrem nebo běhu venku."
+                                      : "Další krok k odhadu Aurin age: jeden odhad VO2max. Stačí 20 minut v kuse na kole s wattmetrem a tepem, nebo běh venku s hodinkami.")
         }
         return L10n.tr("Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna.")
     }

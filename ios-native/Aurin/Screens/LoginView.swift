@@ -13,6 +13,8 @@ struct LoginView: View {
     @State private var emailLogin = false
     /// The server's answer (GET /auth/email); until it comes, only the live server offers e-mail.
     @State private var emailOffered = ServerChoice.current == .live
+    /// The server signed in to; "Přepnout na Live" changes it on this screen.
+    @State private var server = ServerChoice.current
     @State private var appleNonce = ""
     @Environment(\.colorScheme) private var colorScheme
 
@@ -34,12 +36,20 @@ struct LoginView: View {
                         }
                         .accessibilityLabel(L10n.tr("Zpět"))
                     }
-                    if ServerChoice.current == .staging {
+                    if server == .staging {
                         // Nastavení → Testování → Server: this sign-in is for the test server.
                         Label("Testovací server", systemImage: "server.rack")
                             .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
                             .padding(.horizontal, 10).padding(.vertical, 4)
                             .background(Palette.amber.opacity(0.14), in: Capsule())
+                    }
+                    if server == .staging && page == Self.signIn {
+                        // The way back to the live server, also signed out (after deleting
+                        // a test account the app stayed on the test server, 617 test).
+                        Button("Přepnout na Live") { Task { await switchToLive() } }
+                            .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.secondary)
+                            .lineLimit(1).fixedSize()
+                            .frame(minHeight: 44)
                     }
                     Spacer()
                     if page < Self.signIn {
@@ -176,7 +186,7 @@ struct LoginView: View {
                 .disabled(model.signingIn)
                 .padding(.top, 10)
             }
-            if ServerChoice.current.passkeys && PasskeyService.mayHaveOne {
+            if server.passkeys && PasskeyService.mayHaveOne {
                 // A passkey was made on this phone (Data/Passkeys.swift).
                 Button { Task { await signInWithPasskey() } } label: {
                     HStack(spacing: 8) {
@@ -197,6 +207,12 @@ struct LoginView: View {
                 .padding(.top, 14)
                 .padding(.bottom, 16)
         }
+    }
+
+    private func switchToLive() async {
+        await model.switchServer(to: .live)
+        server = ServerChoice.current
+        emailOffered = (try? await model.api.emailLoginEnabled()) ?? (server == .live)
     }
 
     /// The passkey sheet. A failure says why above the buttons (a passkey of a
@@ -275,6 +291,30 @@ enum PasskeyOfferLater {
     static func forget() { UserDefaults.standard.removeObject(forKey: key) }
 }
 
+/// The six digits of the e-mail code, one box each; the box to type in next is outlined.
+private struct CodeBoxes: View {
+    let code: String
+    let active: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<6, id: \.self) { i in
+                let digit = i < code.count ? String(Array(code)[i]) : ""
+                Text(verbatim: digit)
+                    .font(.system(size: 28, weight: .semibold)).monospacedDigit()
+                    .foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 60)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(active && i == min(code.count, 5) ? Palette.ink.opacity(0.5) : Palette.ink.opacity(0.12), lineWidth: 1)
+                    }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// Sign-in with a six-digit code sent to the e-mail (src/email-login.js).
 struct EmailLoginSheet: View {
     @Environment(AppModel.self) private var model
@@ -295,10 +335,13 @@ struct EmailLoginSheet: View {
                 Text(sent ? "Zadej kód z e-mailu" : "Přihlášení e-mailem").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 if sent {
                     Text(L10n.f("Poslali jsme ho na %@. Platí 10 minut.", email)).font(Typo.small).foregroundStyle(Palette.muted)
-                    TextField("123456", text: $code)
+                    // Six empty boxes: a greyed "123456" read as a code already filled in (617 test, C19).
+                    TextField("", text: $code)
                         .keyboardType(.numberPad).textContentType(.oneTimeCode)
-                        .font(Typo.number(34)).multilineTextAlignment(.center)
-                        .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .foregroundStyle(.clear).tint(.clear)
+                        .frame(height: 60)
+                        .overlay { CodeBoxes(code: code, active: focused == .code).allowsHitTesting(false) }
+                        .accessibilityLabel(Text("Kód z e-mailu"))
                         .focused($focused, equals: .code)
                         // Set when the field is there: in the same step as `sent` it doesn't exist yet.
                         .onAppear { focused = .code }
@@ -307,7 +350,7 @@ struct EmailLoginSheet: View {
                             if code.count == 6 { Task { await verify() } }
                         }
                 } else {
-                    TextField("e-mail", text: $email)
+                    TextField("E-mail", text: $email)
                         .keyboardType(.emailAddress).textContentType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

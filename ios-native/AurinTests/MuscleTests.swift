@@ -109,4 +109,45 @@ final class MuscleTests: XCTestCase {
         XCTAssertEqual(WidgetKind.musclesFigure.sizes, [.small, .medium, .large])
         XCTAssertEqual(WidgetKind.musclesGlance.sizes, [.small, .medium])
     }
+
+    /// 617 review #8: a group of more muscles opens its own page, one muscle opens the
+    /// muscle, and "Last trained" is the group's own muscles' day, not its body part's.
+    func testGroupsOpenThemselvesAndTakeTheirMusclesDay() {
+        func m(_ id: String, _ last: String?) -> MuscleFatigue.Muscle {
+            MuscleFatigue.Muscle(id: id, label: id, state: "rested", level: 0, hours: 0, readyDate: nil, estimated: false, from: nil, lastDate: last)
+        }
+        let legs = MuscleFatigue.Group(id: "legs", label: "Nohy", ring: true, state: "rested", percent: 100, readyDate: nil, estimated: false,
+                                       thisWeek: 1, target: 2, lastDate: "2026-10-06", daysSince: 2)
+        let data = MuscleFatigue(date: "2026-10-08", muscles: [m("quads", "2026-10-06"), m("adductors", "2026-10-01"), m("abductors", nil),
+                                                               m("shoulders", nil), m("side_delts", "2026-10-02"), m("rear_delts", "2026-10-05")],
+                                 recent: nil, groups: [legs])
+        let groups = Dictionary(uniqueKeysWithValues: data.freshnessGroups.map { ($0.id, $0) })
+        XCTAssertEqual(groups["hips"]?.lastDate, "2026-10-01")
+        XCTAssertEqual(groups["quads"]?.lastDate, "2026-10-06")
+        XCTAssertEqual(groups["shoulders"]?.lastDate, "2026-10-05")
+        XCTAssertEqual(groups["shoulders"]?.route, .muscleGroup("shoulders"))
+        XCTAssertEqual(groups["quads"]?.route, .muscle("quads"))
+        XCTAssertEqual(AppRoute(url: URL(string: "aurin://open/muscle-group/shoulders")!), .muscleGroup("shoulders"))
+        // An older server without the muscles' days: the body part's day as before.
+        let old = MuscleFatigue(date: "2026-10-08", muscles: [m("quads", nil), m("adductors", nil)], recent: nil, groups: [legs])
+        XCTAssertEqual(old.freshnessGroups.first { $0.id == "hips" }?.lastDate, "2026-10-06")
+    }
+
+    /// 617 review #12: an Apple Watch and a Fitbit both writing resting heart rate into
+    /// Health are never averaged; the device with the most days holds, another fills a gap.
+    func testOneSourcePerDay() {
+        let items: [(day: String, source: String, value: Double)] = [
+            ("d1", "watch", 50), ("d1", "fitbit", 60), ("d2", "watch", 52), ("d2", "fitbit", 62), ("d2", "fitbit", 64),
+            ("d3", "fitbit", 61), ("d4", "watch", 51)
+        ]
+        let picked = HealthReader.oneSource(items, day: \.day, source: \.source).mapValues { $0.map(\.value) }
+        // Both have three days: the tie goes by name (fitbit), the same on every sync.
+        XCTAssertEqual(picked["d1"], [60])
+        XCTAssertEqual(picked["d2"], [62, 64])
+        XCTAssertEqual(picked["d3"], [61])
+        XCTAssertEqual(picked["d4"], [51], "a day the home source missed is filled by the other")
+        let watchHome = HealthReader.oneSource(items + [("d5", "watch", 49)], day: \.day, source: \.source).mapValues { $0.map(\.value) }
+        XCTAssertEqual(watchHome["d1"], [50])
+        XCTAssertEqual(watchHome["d3"], [61])
+    }
 }

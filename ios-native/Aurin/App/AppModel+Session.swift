@@ -199,7 +199,7 @@ extension AppModel {
         defaults.removeObject(forKey: Self.displayNameKey)
         AccountCaches.forget()
         clearScreens()
-        AppleHealth.shared.pause(account: defaults.string(forKey: AvatarStore.emailKey))
+        AppleHealth.shared.pause()
         forgetAccountData()
     }
 
@@ -260,9 +260,8 @@ extension AppModel {
     /// Nastavení → Testování → Server: the other server, with its own account
     /// data and sign-in. What the screens and the outbox hold belongs to the
     /// old server; both sessions stay, so switching back needs no sign-in.
-    /// Apple Health stays as it is on this iPhone and reads into the chosen
-    /// server, each with its own last sync (AppleHealth.serverChanged). It
-    /// used to pause like a sign-out, and the way back switched it off for good.
+    /// Apple Health reads only for the account that connected it on that server
+    /// (AppleHealth.ownerKey): it stops here and the sign-in there resumes it.
     func switchServer(to choice: ServerChoice) async {
         guard !demo, choice != ServerChoice.current else { return }
         if phase == .signedIn { await PushRegistration.unregister(api: api) }
@@ -310,11 +309,14 @@ extension AppModel {
         if expired {
             // The writes wait for the next sign-in, which shows whether it is the same account.
             writes.forgetSent()
+            // So does Apple Health: until then its observers send nothing (signedIn, resume).
+            AppleHealth.shared.hold()
+            if UserDefaults.standard.string(forKey: AvatarStore.emailKey) != nil { UserDefaults.standard.set(true, forKey: Self.accountUncheckedKey) }
         } else {
             // Waiting writes belong to this account; the next one must not send them.
             writes.clear()
             // Apple Health was allowed for this account, not the next one.
-            AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+            AppleHealth.shared.pause()
             forgetAccountData()
             ErrorLog.clear()
             RequestTrail.clear()

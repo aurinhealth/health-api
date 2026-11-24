@@ -959,8 +959,8 @@ final class SnapshotTests: XCTestCase {
         focus.sports = choice
         focus.swims100 = true
         try render("setup-goal-en", height: 844) { SetupGoalPage(focus: .constant(focus)).padding(24).padding(.top, 40).environment(\.locale, L10n.locale) }
-        // The steps over the pages (point 6): the goal is page 4 of 6.
-        try render("setup-steps-en", height: 80) { SetupSteps(done: 4, total: 6).padding(24) }
+        // The setup's progress is the welcome's line (617 test, C17): page 2 of 3.
+        try render("setup-steps-en", height: 80) { WelcomeProgress(count: 3, index: 1).padding(24) }
         XCTAssertEqual(AvailabilityBarRow.maxMinutes, 480)
         XCTAssertEqual(WeekSessionDraft.lengths("ride", including: 60).last, 480)
         XCTAssertEqual(WeekSessionDraft.lengths("run", including: 60).last, 360)

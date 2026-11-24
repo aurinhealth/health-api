@@ -9,6 +9,8 @@ struct SetupStatus: Decodable {
     let savedProfile: JSONObject?
     let suggestions: JSONObject?
     let weightKg: Double?
+    /// The weight's source_family ("apple-health", "google-wearables", "manual"…).
+    let weightSource: String?
     let training: Training?
 
     struct Training: Decodable {

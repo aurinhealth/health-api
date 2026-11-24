@@ -13,6 +13,9 @@ final class SettingsBackupTests: XCTestCase {
         // Things of this phone or this session stay out.
         XCTAssertFalse(SettingsBackup.kept(AvatarStore.idKey))
         XCTAssertFalse(SettingsBackup.kept("appleHealth.enabled"))
+        // Which account reads Apple Health here is this phone's, never restored to another (617 review).
+        XCTAssertFalse(SettingsBackup.kept("appleHealth.owner"))
+        XCTAssertFalse(SettingsBackup.kept("appleHealth.owner.staging"))
         XCTAssertFalse(SettingsBackup.kept("heartRateSensorID"))
         XCTAssertFalse(SettingsBackup.kept("liveWorkout.checkpoint"))
         XCTAssertFalse(SettingsBackup.kept("push.sentToken"))

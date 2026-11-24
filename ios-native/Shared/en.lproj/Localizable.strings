@@ -311,7 +311,6 @@
 "Nahlásit problém" = "Report a problem";
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
-"Najít video" = "Find a video";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
 "Napij se" = "Time for a drink";
 "Napiš kouči…" = "Message the coach…";
@@ -1205,6 +1204,7 @@
 "Opravit" = "Fix";
 "Spravovat" = "Manage";
 "nepřipojeno" = "not connected";
+"nečte se v tomhle iPhonu" = "not read on this iPhone";
 "Synchronizace" = "Sync";
 "Naposledy v pořádku" = "Last successful";
 "Poslední chyba" = "Last error";
@@ -1442,10 +1442,6 @@
 "udržování" = "maintaining";
 "budování" = "building";
 "hluboká únava" = "deep fatigue";
-"Video" = "Video";
-"Otevřít v YouTube" = "Open in YouTube";
-"Podobný cvik" = "Similar exercise";
-"K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
 "Odebrat cvik" = "Remove exercise";
 "Dokončit trénink" = "Finish workout";
@@ -1709,10 +1705,10 @@
 /* Sign-in and the first-run setup (LoginView, SetupFlowView, Passkeys) */
 "Pokračovat přes Apple" = "Continue with Apple";
 "Pokračovat přes Google" = "Continue with Google";
-"Pokračovat e-mailem" = "Continue with e-mail";
+"Pokračovat e-mailem" = "Continue with email";
 "Přihlásit přes passkey" = "Sign in with a passkey";
 "Příště přes Face ID" = "Next time with Face ID";
-"Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Aurin saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no e-mail code.";
+"Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Aurin saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no email code.";
 "Zapnout" = "Turn on";
 "Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
 "Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
@@ -3884,7 +3880,7 @@
 /* Sports to suggest: the sports picker, Settings → Goals → Sports, ⋯ on Activity of the day, the coach chat */
 "Jaké sporty děláš?" = "Which sports do you do?";
 "Zaškrtni všechny, které děláš, a u těch, na které trénuješ nejvíc, klepni na Hlavní. Kouč navrhuje jen tyhle." = "Tick all you do and tap Main on what you train for most. The coach only suggests these.";
-"Bez hlavního sportu je to obecná kondice. Hlavní kolo, běh i plavání je příprava na triatlon. Závod (duatlon, triatlon, maraton) nastavíš v cíli." = "No Main = general fitness. Main on Ride, Run and Swim = triathlon training. A race (duathlon, triathlon, marathon) goes in your goal.";
+"Bez hlavního sportu plánuje Aurin obecnou kondici, s hlavním kolem, během i plaváním přípravu na triatlon." = "Without a main sport Aurin plans for general fitness, and with Ride, Run and Swim all as Main it plans for a triathlon.";
 "Hlavní sport: %@" = "Main sport: %@";
 "Sporty k navrhování" = "Sports to suggest";
 "Kouč navrhuje" = "The coach suggests";
@@ -4380,8 +4376,8 @@
 "Aurin age se počítá z kondice, síly a spánku." = "Aurin age comes from your fitness, strength and sleep.";
 "Co ho tvoří" = "What shapes it";
 "Pas" = "Waist";
-"Další krok k odhadu Aurin age: jeden odhad VO2max. Dej si 20 minut běhu venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. Run outdoors for 20 minutes with your watch.";
-"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut běhu venku." = "Next step to your Aurin age: connect a watch or ring and run outdoors for 20 minutes.";
+"Další krok k odhadu Aurin age: jeden odhad VO2max. Stačí 20 minut v kuse na kole s wattmetrem a tepem, nebo běh venku s hodinkami." = "Next step to your Aurin age: one VO2max estimate. A steady 20-minute ride with power and heart rate, or an outdoor run with your watch.";
+"Další krok k odhadu Aurin age: připoj hodinky nebo prsten a dej si 20 minut v kuse na kole s wattmetrem nebo běhu venku." = "Next step to your Aurin age: connect a watch or ring, then a steady 20-minute ride with power or an outdoor run.";
 "Další krok k odhadu Aurin age: týden spánku s hodinkami nebo pravidelná posilovna." = "Next step to your Aurin age: a week of sleep with your watch, or regular strength training.";
 "Sbírám tvoje data." = "Collecting your data.";
 "Posledních 12 týdnů" = "Last 12 weeks";
@@ -5251,6 +5247,16 @@
 "vysoký klidový tep" = "a high resting heart rate";
 "a" = "and";
 "Odpověď trvala moc dlouho. Zkus to znovu." = "The answer took too long. Try again.";
+"Video techniky" = "Technique video";
+"YouTube, podobný cvik" = "YouTube, similar exercise";
+"Přehraje video" = "Plays the video";
+"pohlaví" = "sex";
+"rok narození" = "year of birth";
+"výška" = "height";
+"Ještě chybí: %@." = "Still missing: %@.";
+"I tréninky z Garminu a COROSu" = "Also Garmin and COROS workouts";
+"Přepnout na Live" = "Switch to Live";
+"Kód z e-mailu" = "Code from the email";
 "Přidáno (%2$@): %1$@" = "%1$@ added to %2$@";
 "Váha uložena: %@" = "Weight saved: %@";
 "Zavře kolečko množství" = "Closes the amount wheel";

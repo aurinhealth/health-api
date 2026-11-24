@@ -20,6 +20,8 @@ enum APIError: LocalizedError, Equatable {
     /// The coach's answer stream ended without "done" or "error" (the server
     /// always sends one): the connection was cut, the server goes on.
     case interrupted
+    /// The account has not connected Apple Health (409 apple_health_not_connected, src/apple-health.js).
+    case appleHealthNotConnected(String)
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +34,7 @@ enum APIError: LocalizedError, Equatable {
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
         case .stepUpRequired(let text, _): return text
+        case .appleHealthNotConnected(let text): return text
         case .interrupted: return L10n.tr("Spojení se přerušilo a odpověď se nedokončila.")
         }
     }
@@ -941,6 +944,9 @@ final class APIClient: @unchecked Sendable {
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             if json?["status"] as? String == "health_consent_required" { onHealthConsentRequired?() }
+            if json?["status"] as? String == "apple_health_not_connected" {
+                throw APIError.appleHealthNotConnected(message ?? "")
+            }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }
