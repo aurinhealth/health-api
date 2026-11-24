@@ -169,6 +169,24 @@ test("goalType reads the old Czech goal words and leaving Lose weight resets the
   assert.equal(withGoalType({ goalType: "race", sportGoal: "Prague half under 1:45", goal: "maintain" }, {}).sportGoal, "Prague half under 1:45");
 });
 
+test("Strength and muscle: a small surplus to it, maintain away from it", () => {
+  assert.equal(goalTypeOf({ sportGoal: "Síla a svaly" }), "muscle");
+  assert.equal(normalizeFocus({ goalType: "muscle" }).goalType, "muscle");
+  // From Lose weight: the unchanged losing goal becomes gaining 0.25 kg a week, the words follow.
+  const lose = { goalType: "lose", sportGoal: "zhubnout", goal: "lose_0.5" };
+  const muscle = withGoalType({ ...lose, goalType: "muscle" }, lose);
+  assert.deepEqual([muscle.goalType, muscle.sportGoal, muscle.goal], ["muscle", "síla a svaly", "gain_0.25"]);
+  // A first goal, or one already gaining, the same; a goal the athlete set in the same save stays.
+  assert.equal(withGoalType({ goalType: "muscle", sportGoal: "síla a svaly" }, {}).goal, "gain_0.25");
+  assert.equal(withGoalType({ goal: "gain_0.5", goalType: "muscle" }, { goal: "gain_0.5", goalType: "fitness" }).goal, "gain_0.5");
+  assert.equal(withGoalType({ goal: "maintain", goalType: "muscle" }, { goal: "lose_0.5", goalType: "lose" }).goal, "maintain");
+  // Away from it the unchanged surplus becomes maintain, a changed one stays.
+  const saved = { goalType: "muscle", sportGoal: "síla a svaly", goal: "gain_0.25" };
+  assert.equal(withGoalType({ ...saved, goalType: "fitness" }, saved).goal, "maintain");
+  assert.equal(withGoalType({ ...saved, goalType: "race", goal: "gain_0.5" }, saved).goal, "gain_0.5");
+  assert.equal(withGoalType({ ...saved, goalType: "fitness", goal: "gain_0.25" }, { ...saved, goalType: "fitness" }).goal, "gain_0.25");
+});
+
 test("the return after illness: 3 easy days, a week after more than 7 days ill, then the doctor sentence", () => {
   const short = { status: "active", recoveredAt: "2026-11-14", sickFrom: "2026-11-10" };
   const card = illnessReturn(short, date);

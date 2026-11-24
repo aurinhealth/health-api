@@ -64,12 +64,13 @@ export function withoutProDiet(profile) {
 }
 
 // Auto protein, g/kg: by the goal (ISSN 1.4–2.0; more in a deficit to keep
-// muscle), +0.2 when the main sport is the gym, +0.2 on a vegan diet
-// (less leucine, lower digestibility of plant protein).
+// muscle, 2.0 for Strength and muscle: Morton 2018 found the gain levels off
+// at 1.6 with a top of 2.2), +0.2 when the main sport is the gym, +0.2 on a
+// vegan diet (less leucine, lower digestibility of plant protein).
 export function autoProteinPerKg(profile = {}) {
   // No goal yet: the calories default to maintaining (energy-profile.js), so does the protein.
   const goal = String(profile.goal || "maintain");
-  let perKg = goal.startsWith("lose") ? 2.0 : goal.startsWith("gain") ? 1.8 : 1.6;
+  let perKg = goal.startsWith("lose") || profile.goalType === "muscle" ? 2.0 : goal.startsWith("gain") ? 1.8 : 1.6;
   if (profile.mainSport === "strength") perKg += 0.2;
   if (profile.dietEating === "vegan") perKg += 0.2;
   return Math.round(perKg * 10) / 10;
