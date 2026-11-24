@@ -1,39 +1,41 @@
 import SwiftUI
 
-/// The page of one value in the new design (redesign Z2): back on the left,
-/// the title centred in spaced capitals, a place on the right for the coach
-/// and the "i" (`trailing`, the coach entry of part Z3), then the page. The
-/// sections build the page from the parts below: SiblingCells, DetailHeadline,
-/// a Card with DetailChart, TrendTable and HowMeasuredCard.
-struct DetailTemplate<Trailing: View, Content: View>: View {
+/// The page of one value in the new design (redesign Z2): the page header
+/// (PageHeader, 617 #14) pinned on top with back, the title centred in spaced
+/// capitals and the coach with the "i" in one 44 pt row that stays while the
+/// page scrolls, then the page. The sections build the page from the parts
+/// below: SiblingCells, DetailHeadline, a Card with DetailChart, TrendTable and
+/// HowMeasuredCard.
+struct DetailTemplate<Content: View>: View {
     let title: String
     var glow: Color = Palette.Glow.health
-    @Environment(\.tabGlow) private var tabGlow
-    @ViewBuilder var trailing: Trailing
+    let coach: CoachEntry
     @ViewBuilder var content: Content
+    @Environment(\.tabGlow) private var tabGlow
     @Environment(\.dismiss) private var dismiss
+
+    init(title: String, glow: Color = Palette.Glow.health, coach: () -> CoachEntry, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.glow = glow
+        self.coach = coach()
+        self.content = content()
+    }
 
     var body: some View {
         ZStack {
             ScreenBackground(glow: tabGlow ?? glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    DetailTitleRow(title: title, back: { dismiss() }) { trailing }
+                    BackSlot { dismiss() }
                     content
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack(title: title) { dismiss() }
+        .floatingBack(title: title, pinTitle: true, spacedTitle: true, coach: coach) { dismiss() }
         .navBarVisibility(.hidden)
-    }
-}
-
-extension DetailTemplate where Trailing == EmptyView {
-    init(title: String, glow: Color = Palette.Glow.health, @ViewBuilder content: () -> Content) {
-        self.init(title: title, glow: glow, trailing: { EmptyView() }, content: content)
     }
 }
 
