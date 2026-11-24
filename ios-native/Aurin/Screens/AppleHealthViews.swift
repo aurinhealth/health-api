@@ -117,8 +117,10 @@ struct AppleHealthSettings: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 Text("Aurin čte").font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                // Not read on this iPhone for this account: only the button above starts it
+                // (an explicit Connect, 617 review c-06), not a switch tapped by the way.
                 AppleHealthCategoryList(chosen: $chosen)
-                    .disabled(health.syncing || store.demo)
+                    .disabled(health.syncing || store.demo || !health.enabled)
             }
             .onChange(of: chosen) { _, value in
                 // Every switch off: reading stops, as Odpojit does, on the server too (else the
@@ -129,13 +131,7 @@ struct AppleHealthSettings: View {
                     Task { try? await model.api.disconnect(provider: "apple"); await store.load() }
                     return
                 }
-                // Switched off on this iPhone (another sign-in, Aurin posílá): a switch turned
-                // here means reading again, so it asks iOS and starts, instead of being forgotten.
-                if !health.enabled {
-                    Task { _ = await health.connect(value, api: model.api); await store.load() }
-                    return
-                }
-                guard value != health.categories else { return }
+                guard health.enabled, value != health.categories else { return }
                 Task { await health.update(value, api: model.api); await store.load() }
             }
             if health.enabled {

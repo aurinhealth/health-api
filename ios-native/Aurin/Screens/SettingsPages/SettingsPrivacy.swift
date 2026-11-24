@@ -181,6 +181,8 @@ struct PrivacySettingsView: View {
             if let passkey { PasskeyService.forgetAccount(rpId: passkey.rpId, userHandle: passkey.userHandle) }
             PasskeyService.remember(false)
             AvatarStore.remove()
+            // A later account with the same id never counts as the one that connected Apple Health here.
+            AppleHealth.shared.disconnect()
             model.signOut()
         } catch APIError.stepUpRequired(_, let info) {
             stepUp = StepUpRequest(info: info, reason: L10n.tr("Smazání účtu potřebuje krátké ověření."), destructive: true) { await delete(ownerConfirmed: true) }
