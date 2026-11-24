@@ -333,7 +333,8 @@ extension GymDay {
     /// by its exercise, side, number and whether it is a drop set, as the
     /// order of the rows may have changed.
     func carryingProgress(from current: GymDay, since original: GymDay) -> GymDay {
-        let result = [5, 6, 7, 8, 11, 14]
+        // The type too (a W letter makes a warm-up) and the set's note.
+        let result = [0, 5, 6, 7, 8, 9, 11, 14]
         let before = Self.setRows(original), now = Self.setRows(current)
         var out = self
         let mine = Self.setRows(out)
