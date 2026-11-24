@@ -567,7 +567,7 @@ struct RecoveryTimeContent: View {
             if let sleep = time.causes.first(where: { $0.kind == "sleep" }), let need = sleep.need, need > 0 {
                 SectionLabel(text: "Co pomůže").padding(.top, 30).padding(.bottom, 10)
                 Card {
-                    row(icon: "bed.double.fill", color: Palette.indigo, title: L10n.tr("Celá noc dnes"),
+                    row(icon: "bed.double.fill", color: Palette.indigo, title: L10n.tr("Dnes se pořádně vyspi"),
                         detail: L10n.f("%@ spánku může čekání zkrátit", Fmt.duration(need)))
                 }
             }
@@ -588,13 +588,14 @@ struct RecoveryTimeContent: View {
                 Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .layoutPriority(1)
             Spacer(minLength: 8)
             if ready {
                 Label(trailing, systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.green).lineLimit(1)
             } else if !trailing.isEmpty {
                 Text(verbatim: trailing).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 150, alignment: .trailing)
+                    .frame(maxWidth: 130, alignment: .trailing)
             }
         }
         .padding(.vertical, 8)
@@ -626,7 +627,7 @@ struct RecoveryTimeContent: View {
         let greener = RecoveryTime.waitsForGreener(zone)
         guard let ready = time.ready, ready > now else { return L10n.tr(greener ? "po zeleném ránu" : "už teď") }
         let when = RecoveryTime.when(ready, today: today, now: now, partOfDay: true)
-        return greener ? L10n.f("%@, pokud zelené", when) : when
+        return greener ? L10n.f("%@, při zelené", when) : when
     }
 
     /// The sessions grouped by what they were (three "Gym, upper body" in one

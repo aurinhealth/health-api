@@ -2461,7 +2461,7 @@
 "Co můžeš dělat" = "What you can do";
 "Proč to trvá" = "Why it takes this long";
 "Co pomůže" = "What helps";
-"Celá noc dnes" = "A full night tonight";
+"Dnes se pořádně vyspi" = "A full night tonight";
 "%@ spánku může čekání zkrátit" = "%@ of sleep can shorten the wait";
 "Aktualizuje se každé ráno. Nejde o lékařské hodnocení." = "Updates every morning. Not a medical assessment.";
 "Další zelené ráno" = "Next green morning";
@@ -2470,7 +2470,7 @@
 "Tělo se z tréninku zotavilo. Tvrdý trénink čeká na zelené ráno." = "Your body has recovered from training. Hard training waits for a green morning.";
 "Odhad z tvých tréninků, spánku a tepu." = "Estimate from your training, sleep and heart rate.";
 "po zeleném ránu" = "after a green morning";
-"%@, pokud zelené" = "%@, if green";
+"%@, při zelené" = "%@, if green";
 "Svaly budou odpočaté %@" = "Muscles rested by %@";
 "Únava odezní %@" = "Recovered by %@";
 "Dnes červená připravenost" = "Red readiness today";
