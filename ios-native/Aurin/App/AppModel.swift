@@ -138,8 +138,10 @@ final class AppModel {
     /// The "+" sheet is open: what it adds goes to today, whatever day the
     /// screens show (weight always did).
     var writesToday = false
+    /// The day chosen on the day pill of an add flow (DayPill), until that flow closes.
+    var addDay: String?
     /// The day food and drinks are written to.
-    var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
+    var writeDay: String { addDay ?? (writesToday ? Self.localDate(Date()) : shownDay) }
     /// The open tab and each tab's navigation stack, so cards, widgets and
     /// links (aurin://open/sleep) can open any detail.
     var tab: AppTab = .today

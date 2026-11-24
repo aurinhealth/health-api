@@ -770,6 +770,8 @@ struct WeightEntrySheet: View {
             // Without signal the weigh-in waits on the phone (AppModel outbox).
             try await model.addWeight(kg: value)
             dismiss()
+            // Said on the tab the sheet returns to, as after a food or a drink (617 C8).
+            model.thanks = L10n.f("Váha uložena: %@", Units.weightText(value, digits: 1))
         } catch {
             self.error = error.localizedDescription
         }

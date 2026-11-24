@@ -143,8 +143,8 @@ struct SettingsGoalsCard: View {
             let today = model.settingsToday
             switch goal {
             case .sleep: SleepGoalSheet(store: store)
-            case .kcal: CalorieGoalSheet(store: store, auto: today?.nutrition.autoTarget ?? today?.nutrition.target)
-            case .water: WaterGoalSheet(store: store, water: today?.nutrition.water, today: AppModel.localDate(Date()))
+            case .kcal: CalorieGoalSheet(store: store, auto: today?.nutrition.autoTarget ?? model.todayGoals?.kcal)
+            case .water: WaterGoalSheet(store: store, water: today?.nutrition.water, goalMl: model.todayGoals?.waterMl, today: AppModel.localDate(Date()))
             case .weight: TargetWeightSheet(store: store, latest: today?.weight?.latest)
             }
         }
@@ -180,8 +180,8 @@ struct SettingsGoalsCard: View {
     /// The drinks goal as Cíle shows it: today's goal from the server, the
     /// same number Today and Food show (606: hub 1.0 l, Food 1.7 l with the
     /// workout's extra); before Today loads, your own or the build-up's start.
-    static func waterGoal(_ store: SettingsStore, _ water: TodaySnapshot.Water?) -> Double? {
-        if let target = water?.target { return target }
+    static func waterGoal(_ store: SettingsStore, _ goal: Double?) -> Double? {
+        if let goal { return goal }
         switch store.profile["waterMode"]?.string {
         case "custom": return store.profile["waterGoal"]?.number
         case "build": return store.profile["waterStart"]?.number
@@ -191,9 +191,11 @@ struct SettingsGoalsCard: View {
 
     var cells: [Cell] {
         let today = model.settingsToday
-        let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.sleep?.need.map(Double.init)
-        let kcal = today?.nutrition.target
-        let water = Self.waterGoal(store, today?.nutrition.water)
+        // Tonight's need, as the Sleep planner shows it, not last night's (617 #3).
+        let sleepGoal = store.profile["sleepGoal"]?.number ?? today?.tonight?.need.map(Double.init)
+        // The day's one set of goals, the numbers Today and Food show (617 #3).
+        let kcal = model.todayGoals?.kcal
+        let water = Self.waterGoal(store, model.todayGoals?.waterMl)
         let weightGoal = store.profile["targetWeight"]?.number ?? today?.weight?.goal
         return [
             Cell(goal: .sleep, symbol: "moon.fill", color: Palette.indigo, number: sleepGoal.map(Self.sleepText),

@@ -4034,9 +4034,9 @@
 /* Food → amount: what is left of the day's target before adding (DayLeftLine) */
 "Po přidání" = "After adding";
 "Po přidání zbývá dnes" = "After adding, left today";
-"Po přidání zbývá %@" = "After adding, left %@";
+"Po přidání zbývá na %@" = "After adding, left on %@";
 "%@ kcal nad dnešním cílem" = "%@ kcal over today's target";
-"%@ kcal nad cílem %@" = "%@ kcal over the target %@";
+"%@ kcal nad cílem na %@" = "%@ kcal over the target on %@";
 "limit sacharidů: zbývá %@ g" = "carb limit: %@ g left";
 "%@ g nad limitem sacharidů" = "%@ g over the carb limit";
 "%@ z %@ kcal snědeno, tohle jídlo %@ kcal" = "%@ of %@ kcal eaten, this food %@ kcal";
@@ -4999,7 +4999,7 @@
 "Nejlépe venku %@." = "Best outdoors %@.";
 "Přidej widget" = "Add a widget";
 "Tečky pod dny nahoře mají stejnou barvu: zelená v obvyklém rozmezí, oranžová a červená pod ním." = "The dots under the days at the top use the same colours: green in your usual range, orange and red below it.";
-"Tréninky jsou jen část ze spálených %@ kcal." = "Workouts count only part of the %@ kcal burned.";
+"(ze spálených %@)" = "(of %@ burned)";
 
 /* Planned gym detail as concept K04/017 (GymSessionView, GymDayParts, GymWhyCard) */
 "Části tréninku" = "Workout";
@@ -5246,3 +5246,8 @@
 "I tréninky z Garminu a COROSu" = "Also Garmin and COROS workouts";
 "Přepnout na Live" = "Switch to Live";
 "Kód z e-mailu" = "Code from the email";
+"Přidáno (%2$@): %1$@" = "%1$@ added to %2$@";
+"Váha uložena: %@" = "Weight saved: %@";
+"Zavře kolečko množství" = "Closes the amount wheel";
+"Otevře kolečko množství" = "Opens the amount wheel";
+"%@ + %@ za trénink" = "%@ + %@ for training";
