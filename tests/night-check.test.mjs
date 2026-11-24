@@ -124,3 +124,16 @@ test('through the real readiness: a steady rise for two nights fires, a new watc
   const moved = up.map((r, i) => i >= 38 ? { ...r, restingHR: 56, restingHRSource: 'apple-health', hrvSource: 'apple-health' } : r);
   assert.equal(restingHRAbove(on(moved, date), on(moved, day(-1))), false);
 });
+
+test('no easier-day card once today\'s training is done (Petr 2026-11-24)', async () => {
+  const { trainedOut } = await import('../src/night-check.js');
+  const day = (completed, planned = []) => ({ date, daily: { training: { completed, planned } } });
+  // Walk, Gym, Walk done, the planned gym among them: done.
+  assert.equal(trainedOut(day([{ type: 'Walk' }, { type: 'WeightTraining' }, { type: 'Walk' }], [{ id: 'planned:1', type: 'WeightTraining' }])), true);
+  // Nothing done, or a ride still planned after the gym: not done.
+  assert.equal(trainedOut(day([], [{ id: 'planned:1', type: 'Ride' }])), false);
+  assert.equal(trainedOut(day([{ type: 'WeightTraining' }], [{ id: 'planned:1', type: 'WeightTraining' }, { id: 'planned:2', type: 'Ride' }])), false);
+  assert.equal(trainedOut(undefined), false);
+  assert.equal(easierDayCard({ date, readiness: off, trained: true }), null);
+  assert.ok(easierDayCard({ date, readiness: off, trained: false }));
+});

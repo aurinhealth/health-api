@@ -10,6 +10,7 @@
 // Sick status stays the athlete's own switch on Today. The resting heart
 // rate alone has its own card text (restingHRAbove).
 import { L } from './lang.js';
+import { sportOf } from './adaptive-week.js';
 
 const comma = (v, digits) => L(v.toFixed(digits).replace('.', ','), v.toFixed(digits));
 const signed = (v, digits) => (v >= 0 ? '+' : '−') + comma(Math.abs(v), digits);
@@ -48,13 +49,26 @@ export function restingHRAbove(readiness, yesterday = null) {
   return (ownRange(yesterday) && yesterday.components?.restingHR?.z >= 2) || hrvLow(c);
 }
 
+// Today's training is done (Petr 2026-11-24): something was done and every
+// session planned for the day has a done one of its sport. Then "an easier day
+// fits today" is too late; the coach's own sentence already says the day is
+// done. day: an /app/api/week day.
+const kindOf = a => sportOf(a) ?? String(a.type || '').toLowerCase();
+export function trainedOut(day) {
+  const completed = day?.daily?.training?.completed || [];
+  if (!completed.length) return false;
+  const doneKinds = new Set(completed.map(kindOf));
+  return (day.daily.training.planned || []).filter(p => String(p.id || '').startsWith('planned:')).every(p => doneKinds.has(kindOf(p)));
+}
+
 // The card for `date`, or null. yesterday: the night before's readiness (for
 // the resting heart rate). offer: the swap of today's hard session
 // (coach-push.js swapOffer) when there is one. signal says which card it is. Hidden once dismissed, or once
-// the athlete swapped or kept today's session, and on a day the verdict
+// the athlete swapped or kept today's session, once today's training is done
+// (trained, trainedOut), and on a day the verdict
 // (day-verdict.js) calls hard: one verdict a morning (audit 2026-11-06, 25.1).
-export function easierDayCard({ date, readiness, yesterday = null, state = {}, offer = null, verdict = null }) {
-  if ((state.status || 'active') !== 'active' || verdict === 'hard') return null;
+export function easierDayCard({ date, readiness, yesterday = null, state = {}, offer = null, verdict = null, trained = false }) {
+  if ((state.status || 'active') !== 'active' || verdict === 'hard' || trained) return null;
   const id = date + ':easier';
   if ((state.dismissed || []).includes(id)) return null;
   if (state.nudge?.day === date && state.nudge.date === date && state.nudge.status && state.nudge.status !== 'pending') return null;
