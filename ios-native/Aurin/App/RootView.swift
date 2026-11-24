@@ -197,7 +197,9 @@ struct RootView: View {
                     .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Zdroje dat (Aurin posílá) (SyncViews.swift).
-                if let report = model.syncReport, !showSyncStatus {
+                // Not over a workout: its summary lists the apps itself, and the toast lay
+                // on its Zavřít (Petr 2026-11-24); a failed one shows after it closes.
+                if let report = model.syncReport, !showSyncStatus, !model.immersive {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
                         .padding(.bottom, toastInset)
