@@ -211,7 +211,10 @@ export function readinessMessage(input) {
   // The coach card's one green sentence (concept N1, at most 2 sentences with
   // the night): the advice without the plan's names, which its workout row
   // shows, and without the reasons.
-  const tip = signs ? L("Dnes bez intenzity, jen lehce.", "No intensity today, easy training only.")
+  // Red or rest with a plan: one sentence, the workout row names it.
+  const tip = noSleep ? null : signs ? L("Dnes bez intenzity, jen lehce.", "No intensity today, easy training only.")
+    : names && rest ? L("Vynech ho a dej tělu klid.", "Skip it and let your body recover.")
+    : names && level === "red" ? L("Vynech ho, nanejvýš procházka nebo lehké protažení.", "Skip it, a walk or easy mobility at most.")
     : body && names ? body.replace(L(`Dnešní plán: ${names}. `, `Today's plan: ${names}. `), "") : body;
   if (body && !saveFor && signals.length) body = reasonsSentence(signals) + " " + body;
   // The words of an injury the coach was told about are never on the lock
@@ -228,12 +231,22 @@ export function readinessMessage(input) {
   // Held down, the parts apart (ios-native AurinMorning): the label and
   // Today's pill beside the number, the coach card's night and advice, and
   // the first workout still planned. sendMorningReadiness adds `coach`.
+  // The banner as the concept (Gemini review 2026-11-24): the night, then
+  // "Today: Upper body strength at 17:30." and the advice only when it holds
+  // back; signs keep their full sentence with the ordinary causes (O22), and
+  // a night not synced yet says only that, with no verdict and no pill.
   const night = nightWords({ sleep, hrv, noSleep });
   const first = v.sessions[0] || null;
-  const pill = { green: L("v obvyklém rozmezí", "in your usual range"), yellow: L("pod obvyklým rozmezím", "below your usual range"), red: L("pod obvyklým rozmezím", "below your usual range") }[v.shown || input.zone] || null;
-  const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)), ...(advice ? { subtitle: advice } : {}), body: [night, body].filter(Boolean).join(" "),
-    label: L("Připravenost", "Readiness"), ...(pill ? { pill } : {}), ...(night ? { night } : {}), ...(tip ? { advice: tip } : {}),
-    ...(first?.title ? { workout: { title: short(first.title), ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
+  const at = first?.time ? L(` v ${first.time}`, ` at ${first.time}`) : "";
+  const today = first?.title ? L(`Dnes: ${short(first.title)}${at}.`, `Today: ${short(first.title)}${at}.`) : "";
+  const ready = level === "green" && !signals.length && !injury && !rest && !signs && !saveFor && today;
+  const banner = noSleep ? body : signs ? [night, signsAdvice()].join(" ") : [night, today, ready ? "" : tip].filter(Boolean).join(" ");
+  const pill = noSleep ? null : { green: L("v obvyklém rozmezí", "in your usual range"), yellow: L("pod obvyklým rozmezím", "below your usual range"), red: L("pod obvyklým rozmezím", "below your usual range") }[v.shown || input.zone] || null;
+  const layout = { title: L("Připravenost", "Readiness") + " " + Math.round(Number(score)),
+    subtitle: noSleep ? L("Noc se ještě nenahrála", "Last night isn't synced yet") : advice || undefined, body: banner,
+    label: L("Připravenost", "Readiness"), ...(pill ? { pill } : {}), ...(night ? { night: signs ? nightWords({ sleep, hrv, signs }) : night } : {}), ...(tip ? { advice: tip } : {}),
+    ...(first?.title ? { workout: { title: short(first.title), ...(first.sport ? { sport: first.sport } : {}), ...(first.time ? { time: first.time, when: L(`Dnes v ${first.time}`, `Today at ${first.time}`) } : {}), ...(first.minutes ? { minutes: first.minutes } : {}) } } : {}) };
+  if (!layout.subtitle) delete layout.subtitle;
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, layout, zone: v.shown || null, verdict: v.key, ...(changed ? { changed } : {}) };
 }
 
@@ -241,12 +254,13 @@ const short = text => (String(text).length > 60 ? String(text).slice(0, 59).trim
 
 // "Sleep 6 h 54, HRV in your usual range.": the night in words, HRV against
 // the usual range Today shows (low and high); no number for HRV, no cause (MDR).
-export function nightWords({ sleep = null, hrv = null, noSleep = false } = {}) {
+export function nightWords({ sleep = null, hrv = null, noSleep = false, signs = false } = {}) {
   const parts = [];
   const minutes = Math.round(Number(sleep?.minutes));
-  if (minutes > 0 && !noSleep) parts.push(L("Spánek", "Sleep") + " " + Math.floor(minutes / 60) + " h " + String(minutes % 60).padStart(2, "0"));
+  if (minutes > 0 && !noSleep) parts.push(L("Spánek", "Sleep") + " " + Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + String(minutes % 60).padStart(2, "0") : ""));
   const h = Number(hrv?.value), low = Number(hrv?.low), high = Number(hrv?.high);
-  if (h > 0 && low > 0 && high >= low) parts.push(h < low ? L("HRV pod obvyklým rozmezím", "HRV under your usual range") : h > high ? L("HRV nad obvyklým rozmezím", "HRV above your usual range") : L("HRV v obvyklém rozmezí", "HRV in your usual range"));
+  if (h > 0 && low > 0 && high >= low) parts.push(h < low ? L("HRV pod obvyklým rozmezím", "HRV below your usual range") : h > high ? L("HRV nad obvyklým rozmezím", "HRV above your usual range") : L("HRV v obvyklém rozmezí", "HRV in your usual range"));
+  if (signs) parts.push(L("teplota nebo dech ve spánku nad obvyklým rozmezím", "temperature or breathing in sleep above your usual range"));
   return parts.length ? parts.join(", ") + "." : "";
 }
 
