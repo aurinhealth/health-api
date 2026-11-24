@@ -704,7 +704,6 @@
 "Stáhnout moje data" = "Download my data";
 "Střední" = "Moderate";
 "Suroviny" = "Ingredients";
-"Svalová hmota" = "Muscle mass";
 "Sweet spot" = "Sweet spot";
 "Synchronizuji…" = "Syncing…";
 "Série" = "Sets";
@@ -3230,7 +3229,7 @@
 "Jak se mi vyvíjí tělesný tuk?" = "How is my body fat changing?";
 "Jak upravit jídlo?" = "How should I change my food?";
 "Jak upravit trénink?" = "How should I change my training?";
-"Jak se mi vyvíjí svalová hmota?" = "How is my muscle mass changing?";
+"Jak se mi vyvíjí beztuková hmota?" = "How is my lean mass changing?";
 "Mám jíst víc bílkovin?" = "Should I eat more protein?";
 "Jak upravit posilovnu?" = "How should I change my gym training?";
 "Jak jsem se vyspal?" = "How did I sleep?";
@@ -4288,7 +4287,9 @@
 "Další data srdce" = "More heart data";
 "Dnes %@ kroků z cíle %@" = "%1$@ steps today of your %2$@ goal";
 "Energie spálená pohybem nad klidovým výdejem, odhad hodinek nebo telefonu." = "Energy burned by moving, above what you burn at rest. An estimate from your watch or phone.";
-"Hodnoty z chytré váhy nebo z tvých zápisů. Tuk a svaly jsou odhad váhy." = "Values from your smart scale or from your own entries. Body fat and muscle are the scale's estimates.";
+"Hodnoty z chytré váhy nebo z tvých zápisů. Tuk je odhad váhy." = "Values from your smart scale or from your own entries. Body fat is the scale's estimate.";
+"Beztuková hmota" = "Lean mass";
+"Odhad chytré váhy: všechno kromě tuku, tedy svaly, kosti, voda a orgány. Samotné svaly to nejsou." = "Your smart scale's estimate of everything except fat: muscle, bones, water and organs. It is not muscle alone.";
 "Jak se mi daří s kroky?" = "How am I doing with my steps?";
 "Jak se mi vyvíjí VO2max?" = "How is my VO2max changing?";
 "Jak se mi vyvíjí aktivní energie?" = "How is my active energy changing?";
