@@ -38,8 +38,11 @@ struct ReadinessHome: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             heroLink
+                // Under the corner buttons, not beside them (CI shot: "Readiness"
+                // sat under the alarm button).
+                .padding(.top, W.small ? 12 : 16)
             staleLine
-            Spacer(minLength: W.small ? 4 : 8)
+            Spacer(minLength: 4)
             if !dimmed {
                 dials.disabled(older)
             }
@@ -243,7 +246,7 @@ struct ReadinessHome: View {
     }
 
     private var dials: some View {
-        let size: CGFloat = W.small ? 40 : 50
+        let size: CGFloat = W.small ? 38 : 46
         return HStack(spacing: 0) {
             ForEach(Array([sleep, strain, hrv].enumerated()), id: \.offset) { index, dial in
                 if index > 0 { Rectangle().fill(W.hair).frame(width: 1) }
