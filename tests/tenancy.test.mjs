@@ -102,6 +102,25 @@ test("a personal-data query not bound to the user's id is only logged, once (N7)
   assert.equal(unboundUserQuery("CREATE TABLE IF NOT EXISTS food_logs (user_id INTEGER)", [], 5), false);
 });
 
+test("queries that read across accounts on purpose are not logged (N7)", () => {
+  // The shared catalogues count every account's reports or check that no
+  // account still shares an item; the subscriptions are copied once.
+  const onPurpose = [
+    "SELECT food_key,product_json,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=food_key) AS reports FROM shared_foods WHERE json_extract(product_json,'$.label_verified')=1 AND food_key=?",
+    "SELECT catalog_id,recipe_json,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=shared_recipes.catalog_id) AS reports FROM shared_recipes WHERE search_name LIKE ? ORDER BY updated_at DESC LIMIT 12",
+    "DELETE FROM shared_foods WHERE food_key=? AND COALESCE(json_extract(product_json,'$.label_verified'),0)!=1 AND NOT EXISTS (SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)",
+    "DELETE FROM shared_recipes WHERE catalog_id=? AND NOT EXISTS (SELECT 1 FROM recipe_contributions WHERE user_id IS NOT NULL AND catalog_id=?)",
+    "INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) SELECT original_transaction_id,user_id,COALESCE(store_signed_at,0) FROM subscriptions WHERE original_transaction_id IS NOT NULL"
+  ];
+  for (const sql of onPurpose) assert.equal(unboundUserQuery(sql, ["x", "x"], 5), false, sql);
+  // The same pieces next to another account's personal data are still logged.
+  assert.equal(unboundUserQuery("SELECT f.*,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=f.food_key) AS reports FROM personal_foods f WHERE user_id=?", [7], 5), true);
+  assert.equal(unboundUserQuery("SELECT * FROM food_reports WHERE user_id IS NOT NULL", [], 5), true);
+  // A removed piece leaves a space, so a table name right beside it keeps its word boundary (audit 2026-11-24 point 11).
+  assert.equal(unboundUserQuery("SELECT * FROM personal_foods(SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)AS t", ["x"], 5), true);
+  assert.equal(unboundUserQuery("INSERT OR IGNORE INTO store_originals(original_transaction_id,user_id,signed_at) VALUES(?,?,?)", ["t", 7, 1], 5), true);
+});
+
 test("only the owner, existing users and invited emails can sign in", async () => {
   _resetTenancyForTest();
   const db = createD1();
