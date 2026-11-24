@@ -6,7 +6,9 @@ const OTHER_SPORTS = [
   [/soccer|football|rugby|lacrosse|basketball|handball|netball|volleyball|floorball|ultimate|frisbee|cricket|baseball|softball|trackandfield/, 'team'],
   [/tennis|squash|badminton|padel|pickleball|racquet/, 'racket'],
   [/hockey|skat/, 'skate'],
-  [/ski|snowboard/, 'ski']
+  [/ski|snowboard/, 'ski'],
+  [/boxing|kickbox|martial|wrestl|judo|karate|taekwondo|mma|fencing/, 'combat'],
+  [/equestrian|horse/, 'riding']
 ];
 export function otherSportKind(type) {
   const t = String(type || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -25,6 +27,8 @@ export function sportMuscleLoad(context){
     else if(/swim|plav/.test(type))muscles=['back','lats','upper_back','shoulders','front_delts','side_delts','chest'];
     else if(/row|vesl/.test(type))muscles=['quads','hamstrings','back','upper_back','lats','biceps'];
     // A match or another sport with running, jumps or skating (otherSportKind).
+    else if(otherSportKind(a.type)==='combat')muscles=['quads','glutes','shoulders','front_delts','core','abs'];
+    else if(otherSportKind(a.type)==='riding')muscles=['glutes','core','abs'];
     else if(otherSportKind(a.type))muscles=['quads','hamstrings','glutes','calves'];
     if(!muscles.length)continue;
     const minutes=Number(a.durationHours)*60||Number(a.durationMinutes)||Number(a.moving_time)/60||0;

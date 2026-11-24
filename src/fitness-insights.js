@@ -44,7 +44,10 @@ const CARDIO = {
   team: { quads: .9, hamstrings: .9, calves: .8, hips: .7 },
   racket: { calves: .8, quads: .6, hips: .5, hamstrings: .4, front_delts: .3 },
   skate: { quads: 1, hips: .8, hamstrings: .4, calves: .3 },
-  ski: { quads: .9, hips: .6, calves: .3, lats: .3, triceps: .2 }
+  ski: { quads: .9, hips: .6, calves: .3, lats: .3, triceps: .2 },
+  // Combat sports punch, kick and grapple; riding holds the hips and trunk.
+  combat: { front_delts: .7, quads: .6, hips: .6, abs: .5, calves: .4 },
+  riding: { hips: .5, abs: .4, quads: .3 }
 };
 // A sport's muscle-model kind: ride, run, walk, swim, strength or one of the other sports.
 export const muscleKind = a => activityKind(a) || otherSportKind(a?.type || a?.payload?.type);
