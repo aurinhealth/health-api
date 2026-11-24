@@ -80,7 +80,7 @@ export async function onboardingStatus(env){
   const profile=effectiveProfile(savedProfile,suggestions);
   if(!profile.goal)profile.goal='maintain';
   const baseline=energyBaseline(profile,weight?.value_numeric,{activityTracked:tracked});
-  return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,baseline,training,history,automaticPlan:starterPlan(history,Object.fromEntries(Object.entries(training.experienceBySport).map(([s,e])=>[s,e.mode==='manual'?e.level:'auto']))),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
+  return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,weightSource:weight?.source_family||null,baseline,training,history,automaticPlan:starterPlan(history,Object.fromEntries(Object.entries(training.experienceBySport).map(([s,e])=>[s,e.mode==='manual'?e.level:'auto']))),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
 }
 export function normalizeTraining(input={}){
   // experienceBySport wins; a lone "experience" (older clients, the setup) is the gym's.

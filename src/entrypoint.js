@@ -162,7 +162,7 @@ import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess, aiRouteFeature } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
-import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
+import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, connectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
 import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
@@ -3486,7 +3486,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
 
   // Apple Health from the iPhone app (apple-health.js): the phone reads
-  // HealthKit and sends sums, nights and workouts; DELETE disconnects.
+  // HealthKit and sends sums, nights and workouts; PUT connects (the user's Connect), DELETE disconnects.
   if(url.pathname==='/app/api/health/apple'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
@@ -3496,7 +3496,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const body=await request.json().catch(()=>null);
         if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
         const result=await saveAppleHealth(env.DB,env.USER_ID,body);
-        if(result.code)return Response.json({message:result.message},{status:result.code});
+        if(result.code)return Response.json({status:result.status,message:result.message},{status:result.code});
         // The phone sends the last days again on every sync. A workout, a night,
         // the morning's first values or an earlier day make the cached screens and
         // the coach's texts outdated at once; today's running totals (steps, energy,
@@ -3517,6 +3517,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Only running totals: the screen kept for the coach's text stays (fetch below).
         return Response.json(result,{headers:{'Cache-Control':'no-store',...(result.meaningful||result.foodChanged?{}:{[UNCHANGED_HEADER]:'1'})}});
       }
+      if(request.method==='PUT'){const result=await connectAppleHealth(env.DB,env.USER_ID);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='DELETE'){const result=await disconnectAppleHealth(env.DB,env.USER_ID);await bumpCacheVersion(env.DB);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){console.error('Apple Health',error);return Response.json({message:error.message},{status:500});}

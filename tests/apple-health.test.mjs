@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { localToday, zonedIso, zonedTime } from "../src/user-time.js";
-import { appleRow, appleRowDay, meaningfulChange, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, flushGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
+import { appleRow, appleRowDay, meaningfulChange, saveAppleHealth, disconnectAppleHealth, connectAppleHealth, appleHealthStatus, afterGoogleSync, flushGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { sleepSessionFromRow } from "../src/sleep-sessions.js";
 import { averageRestingHeartRate } from "../src/profile-suggestions.js";
@@ -218,6 +218,32 @@ test("profile suggestions take Apple's resting heart rate", async () => {
   const now = Date.parse("2026-10-11T12:00:00Z");
   await saveAppleHealth(db, 1, { records: ["07", "08", "09", "10"].map((d, i) => ({ type: "daily-resting-heart-rate", id: "rhr:" + d, date: "2026-10-" + d, value: 50 + i })) });
   assert.equal(await averageRestingHeartRate(db, 1, now), 52);
+});
+
+test("an upload marked connectedOnly is kept only after the account connected Apple Health itself", async () => {
+  const { raw, db } = setup();
+  const body = { connectedOnly: true, records: [{ type: "steps", id: `steps:${D10}T08`, start: `${D10}T08:00:00Z`, end: `${D10}T09:00:00Z`, value: 3000 }] };
+  // A first upload does not connect the account (617 review: a new account on the same iPhone).
+  assert.equal((await saveAppleHealth(db, 1, body)).code, 409);
+  assert.equal(rows(raw, "source_family='apple-health'").length, 0);
+  assert.equal((await appleHealthStatus(db, 1)).connected, false);
+  await connectAppleHealth(db, 1);
+  assert.deepEqual(await appleHealthStatus(db, 1), { connected: true, lastSuccessAt: null, categories: [], saved: null });
+  assert.equal((await saveAppleHealth(db, 1, body)).status, "ok");
+  const synced = await appleHealthStatus(db, 1);
+  // Connecting again keeps the last sync and its categories.
+  await connectAppleHealth(db, 1);
+  assert.deepEqual(await appleHealthStatus(db, 1), synced);
+  // Disconnected: refused again until the next Connect.
+  await disconnectAppleHealth(db, 1);
+  assert.equal((await saveAppleHealth(db, 1, body)).code, 409);
+  // An older build without the flag is kept as before.
+  assert.equal((await saveAppleHealth(db, 1, { records: body.records })).status, "ok");
+  // An account that read Apple Health before this change (its row says ok): the new
+  // build's uploads are kept without a new Connect.
+  const { db: before } = setup();
+  await saveAppleHealth(before, 1, { records: body.records });
+  assert.equal((await saveAppleHealth(before, 1, body)).status, "ok");
 });
 
 test("too many records are refused", async () => {
