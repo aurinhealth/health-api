@@ -58,6 +58,31 @@ test("steps are merged hour by hour: the home device's hours, the other one's wh
   assert.equal(role(raw, "apple-health", "apple:a14"), "primary", "the hour without the Fitbit comes from the phone");
 });
 
+test("the hour a device was swapped goes to the one that counted most of it; energy follows the steps", async () => {
+  const { raw, db } = setup();
+  fitbitEveryDay(raw);
+  // 17:01 the Fitbit (home) comes off and the watch goes on: 30 Fitbit steps, 1,200 on the watch.
+  insert(raw, "google-wearables", "steps", "g17", { start: day(0) + "T17:00:00Z", end: day(0) + "T17:01:00Z", value: 30 });
+  insert(raw, "google-wearables", "active-energy-burned", "ge17", { start: day(0) + "T17:00:00Z", end: day(0) + "T17:01:00Z", value: 40 });
+  // Both worn all of 9 o'clock: close counts, the home device keeps the hour.
+  insert(raw, "google-wearables", "steps", "g09", { start: day(0) + "T09:00:00Z", end: day(0) + "T09:30:00Z", value: 1000 });
+  await saveAppleHealth(db, 1, { records: [
+    { type: "steps", id: "a17", start: day(0) + "T17:00:00Z", end: day(0) + "T18:00:00Z", value: 1200 },
+    { type: "active-energy-burned", id: "e17", start: day(0) + "T17:00:00Z", end: day(0) + "T18:00:00Z", value: 20 },
+    { type: "steps", id: "a09", start: day(0) + "T09:00:00Z", end: day(0) + "T10:00:00Z", value: 1150 },
+    { type: "daily-wear-hours", id: "wear:" + day(0), date: day(0), value: 2 }
+  ] }, { now: NOW });
+  assert.equal(role(raw, "apple-health", "apple:a17"), "primary", "the watch counted most of 17 o'clock");
+  assert.equal(role(raw, "google-wearables", "g17"), "duplicate");
+  assert.equal(role(raw, "apple-health", "apple:e17"), "primary", "the hour's energy comes from the same device as its steps");
+  assert.equal(role(raw, "google-wearables", "ge17"), "duplicate");
+  assert.equal(role(raw, "google-wearables", "g09"), "primary", "worn side by side, the home device keeps the hour");
+  assert.equal(role(raw, "apple-health", "apple:a09"), "duplicate");
+  assert.equal(await resolveSources(db, 1, { since: day(30), now: NOW }), 0, "running again changes nothing");
+  assert.equal(await resolveSources(db, 1, { types: ["active-energy-burned"], since: day(30), now: NOW }), 0, "a sync of energy alone keeps the steps' choice");
+  assert.equal(role(raw, "apple-health", "apple:e17"), "primary");
+});
+
 test("a chosen source wins where it has data and the choice can go back to automatic", async () => {
   const { raw, db } = setup();
   fitbitEveryDay(raw);

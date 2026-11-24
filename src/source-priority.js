@@ -44,6 +44,10 @@ const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
 // keyed together the other device's nap was set aside with its night.
 const SLEEP_KEY = `${DAY_OF} || CASE WHEN json_valid(payload_json) THEN CASE WHEN json_extract(payload_json, '$.sleep.metadata.nap') THEN '|nap' ELSE '' END ELSE '' END`;
 const HOUR_OF = 'substr(start_time,1,13)';
+// Steps of a family in the hour (Google's rows carry them in the payload), and
+// the share of the other device's steps under which the home device gives the hour away.
+const STEPS_SUM = "SUM(COALESCE(value_numeric, CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.steps.count') END, 0))";
+const SWAP_SHARE = 0.5;
 // A night's minutes asleep: in bed less the minutes awake its source gave, as readiness counts them
 // (sleep-sessions.js durationMin), so a night of 3:10 in bed and 2:40 asleep is short in both places.
 const ASLEEP_MIN = `MAX(COALESCE((julianday(end_time) - julianday(start_time)) * 1440 - COALESCE(CASE WHEN json_valid(payload_json) THEN json_extract(payload_json, '$.sleep.summary.minutesAwake') END, 0), 0))`;
@@ -147,6 +151,8 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
   const wanted = types ? new Set(types.filter(t => PART[t])) : null;
   const pick = groups => groups.filter(g => (!part || PART[g[0]] === part) && (!wanted || g.some(t => wanted.has(t))));
   const night = pick(NIGHT), hourly = pick(DAY_HOURLY), daily = pick(DAY_DAILY);
+  // Energy or distance alone still decide their hours by the steps (hourWinner).
+  if (hourly.length && hourly[0][0] !== 'steps') hourly.unshift(DAY_HOURLY[0]);
   if (!night.length && !hourly.length && !daily.length) return 0;
   const today = new Date(now).toISOString().slice(0, 10);
   const from = String(since || addDays(today, -35)).slice(0, 10);
@@ -160,11 +166,13 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
   const off = new Set(apple?.status === 'disconnected' ? ['apple-health'] : []);
 
   const statements = [];
+  // The steps' choice per hour, for the energy and distance of the same hour.
+  const hourWinner = new Map();
   const apply = async (group, keyExpr, partName, homeOf) => {
     const names = group.map(t => `'${t}'`).join(',');
     // Every key with the families that have a row for it, the ones set aside by these rules included.
     const keys = (await db.prepare(`SELECT ${keyExpr} k, source_family f, MAX(record_role = 'primary') kept, MAX(record_role = 'duplicate') aside,
-      ${group[0] === 'sleep' ? ASLEEP_MIN : '0'} mins FROM health_datapoints WHERE user_id = ? AND data_type IN (${names}) AND source_family IN ${FAMILY_SQL}
+      ${group[0] === 'sleep' ? ASLEEP_MIN : '0'} mins, ${group[0] === 'steps' ? STEPS_SUM : '0'} total FROM health_datapoints WHERE user_id = ? AND data_type IN (${names}) AND source_family IN ${FAMILY_SQL}
       AND COALESCE(sample_time,end_time,start_time) >= ? AND (record_role = 'primary' OR (record_role = 'duplicate' AND matched_activity_id IN ${OURS})) GROUP BY 1, 2`).bind(userId, from).all()).results || [];
     const byKey = new Map();
     for (const r of keys) { if (!r.k) continue; if (!byKey.has(r.k)) byKey.set(r.k, new Map()); byKey.get(r.k).set(r.f, r); }
@@ -181,6 +189,18 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
       if (needsHome && group[0] === 'sleep' && !key.endsWith('|nap') && Number(families.get(win)?.mins) < FULL_NIGHT_MIN) {
         const longest = [...families].filter(([f]) => !off.has(f)).sort((a, b) => Number(b[1].mins) - Number(a[1].mins))[0];
         if (longest && Number(longest[1].mins) >= FULL_NIGHT_MIN) win = longest[0];
+      }
+      // The hour a device was swapped: both have rows, but one only a few
+      // minutes of it. The home device gives the hour away when it counted
+      // under half the other's steps (Petr 2026-11-23, watch off at 17:01);
+      // energy and distance follow the steps' choice, so one hour is one device.
+      // Worn side by side all day the two stay within that, and the day keeps one device.
+      if (needsHome && keyExpr === HOUR_OF) {
+        if (group[0] === 'steps') {
+          const most = [...families].filter(([f]) => !off.has(f)).sort((a, b) => Number(b[1].total) - Number(a[1].total))[0];
+          if (most && most[0] !== win && Number(families.get(win)?.total || 0) < SWAP_SHARE * Number(most[1].total)) win = most[0];
+          hourWinner.set(key, win);
+        } else if (hourWinner.has(key) && families.has(hourWinner.get(key))) win = hourWinner.get(key);
       }
       for (const [f, r] of families) {
         if (f === win) { if (Number(r.aside)) keep.get(f).push(key); }
