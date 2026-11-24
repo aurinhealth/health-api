@@ -15,7 +15,7 @@ struct SleepDetailView: View {
         DetailScreen(glow: Palette.Glow.today, title: "Spánek",
                      coach: .sleep(line: health.sleep.night?.minutes.map { L10n.f("Dnes %@", Fmt.duration(Int($0))) }, date: health.date)) {
             SleepDetailContent(health: health, detail: detail, failed: failed, retry: { await load() },
-                               loadNight: model.demo ? nil : { date in try? await model.api.night(date: date) })
+                               loadNight: model.demo ? nil : { date in try await model.api.night(date: date) })
         }
         .task {
             guard detail == nil, health.sleep.night != nil else { return }
@@ -36,11 +36,13 @@ struct SleepDetailContent: View {
     var failed = false
     var retry: () async -> Void = {}
     /// An earlier night for the arrows; nil keeps the page on last night.
-    var loadNight: ((String) async -> NightDetail?)? = nil
+    var loadNight: ((String) async throws -> NightDetail)? = nil
 
     /// The night shown, the morning's date; nil is last night.
     @State private var picked: String?
     @State private var earlier: [String: NightDetail] = [:]
+    /// Earlier nights whose load failed: "Zkusit znovu" instead of the spinner.
+    @State private var failedNights: Set<String> = []
 
     private var date: String { picked ?? health.date }
     private var isLast: Bool { picked == nil || picked == health.date }
@@ -76,7 +78,9 @@ struct SleepDetailContent: View {
                 }
             } else if isLast {
                 Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-            } else if failed || loadNight == nil {
+            } else if failedNights.contains(date) {
+                RetryRow(message: "Tuhle noc se nepodařilo načíst.", retry: { await fetch(date) }).padding(.top, 16)
+            } else if loadNight == nil || earlier[date] != nil {
                 Text("Tuhle noc se nepodařilo načíst.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 16)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -161,8 +165,8 @@ struct SleepDetailContent: View {
         Button {
             guard let night else { return }
             picked = night == health.date ? nil : night
-            guard night != health.date, earlier[night] == nil, let loadNight else { return }
-            Task { if let loaded = await loadNight(night) { earlier[night] = loaded } }
+            guard night != health.date, earlier[night] == nil else { return }
+            Task { await fetch(night) }
         } label: {
             Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(night == nil || loadNight == nil ? Palette.faint.opacity(0.5) : Palette.ink)
@@ -172,6 +176,14 @@ struct SleepDetailContent: View {
         .buttonStyle(.plain)
         .disabled(night == nil || loadNight == nil)
         .accessibilityLabel(L10n.tr(label))
+    }
+
+    /// Loads an earlier night; a failure shows "Zkusit znovu" instead of a
+    /// spinner that never ends.
+    private func fetch(_ night: String) async {
+        guard let loadNight else { return }
+        failedNights.remove(night)
+        do { earlier[night] = try await loadNight(night) } catch { failedNights.insert(night) }
     }
 
     /// "Mon, Nov 9" / "po 9. 11." for the morning the night ends on.

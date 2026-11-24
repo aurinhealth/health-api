@@ -107,8 +107,7 @@ struct ShareStyle {
     }
 
     func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: u * size) }
-    func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", fixedSize: u * size) }
-    func italic(_ size: CGFloat) -> Font { .custom("Newsreader-Italic", fixedSize: u * size) }
+    func italic(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Italic", fixedSize: u * size) }
     func sans(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font { .system(size: u * size, weight: weight) }
 
     /// The header: the mark and Aurin on the left, the date on the right.
@@ -150,7 +149,7 @@ struct ShareStyle {
 
     func title(_ text: String, sub: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: u * 1) {
-            Text(verbatim: text).font(news(10)).foregroundStyle(t.ink).lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: text).font(serif(10)).foregroundStyle(t.ink).lineLimit(2).minimumScaleFactor(0.6)
             if let sub { Text(verbatim: sub).font(sans(3.8)).foregroundStyle(t.muted) }
         }
         .padding(.horizontal, u * 7)
@@ -714,7 +713,7 @@ struct ShareActivityCard: View {
             Image(systemName: workout.symbol).font(.system(size: u * 5.4, weight: .semibold)).foregroundStyle(s.t.amber)
                 .frame(width: u * 11, height: u * 11)
                 .background(s.t.amber.opacity(0.18), in: Circle())
-            Text(verbatim: workout.title).font(s.news(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: workout.title).font(s.serif(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
         }
     }
 
@@ -778,7 +777,7 @@ struct ShareActivityCard: View {
             .frame(maxWidth: .infinity)
             .padding(.top, u * 20)
             VStack(alignment: .leading, spacing: u * 4) {
-                Text(verbatim: workout.title).font(s.news(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+                Text(verbatim: workout.title).font(s.serif(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
                     .sharePiece("title", s)
                 HStack(spacing: u * (list.count < 3 ? 12 : 6)) {
                     ForEach(list) { s.number($0.label, $0.value, $0.unit, size: list.count < 3 ? 11 : 8).sharePiece($0.id, s) }
