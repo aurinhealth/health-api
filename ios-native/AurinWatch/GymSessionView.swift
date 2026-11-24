@@ -390,7 +390,7 @@ struct GymSessionView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .frame(height: W.small ? 34 : 38)
+                .frame(height: W.small ? 32 : 36)
                 .background(W.ink, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -401,7 +401,7 @@ struct GymSessionView: View {
 
     private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int) -> some View {
         let lb = gym.machineLb(row: lift.row)
-        return VStack(alignment: .leading, spacing: 3) {
+        return VStack(alignment: .leading, spacing: 2) {
             if let line = supersetLine(gym, lift, e) {
                 // The superset's violet tag, as on the iPhone.
                 Text(line).watchFont(12, .semibold).foregroundStyle(W.indigo)
@@ -414,7 +414,7 @@ struct GymSessionView: View {
                 info = Info(exercise: ex, index: e)
             } label: {
                 HStack(spacing: 4) {
-                    Text(ex.title).font(W.serif(W.small ? 18 : 21)).foregroundStyle(W.num)
+                    Text(ex.title).font(W.serif(W.small ? 17 : 19)).foregroundStyle(W.num)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     // Its own time, running on by itself (the screen stays still between taps).
@@ -436,7 +436,7 @@ struct GymSessionView: View {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
                     }
                     .watchFont(12, .medium).foregroundStyle(W.secondary)
-                    .frame(minHeight: 24)
+                    .frame(minHeight: 20)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -462,7 +462,6 @@ struct GymSessionView: View {
                 tile("\(Int(reps))", unit: Self.repsUnit(lift.plannedReps), extra: nil,
                      field: .reps, value: $reps, step: 1, top: 100)
             }
-            .padding(.top, 2)
             .focusable(true)
             .focused($crown)
             .focusEffectDisabled()
@@ -582,14 +581,14 @@ struct GymSessionView: View {
         let on = selected == field && !dimmed
         let shape = RoundedRectangle(cornerRadius: 14)
         return VStack(spacing: 0) {
-            Text(value).font(W.serif(W.small ? 24 : 28)).foregroundStyle(dimmed ? W.muted : W.num).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(W.serif(W.small ? 22 : 25)).foregroundStyle(dimmed ? W.muted : W.num).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).watchFont(12).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
             if let extra, !dimmed {
                 Text(extra).watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: W.small ? 50 : 58)
-        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, minHeight: W.small ? 42 : 48)
+        .padding(.vertical, 1)
         .background(dimmed ? AnyShapeStyle(Color.clear) : AnyShapeStyle(W.card), in: shape)
         .overlay { shape.stroke(on ? W.green : W.hair, lineWidth: on ? 2 : 1) }
         .contentShape(shape)
@@ -807,7 +806,7 @@ struct GymSessionView: View {
         }
         liveLine
         HStack(spacing: 4) {
-            Button("−15 s") { shift(-15) }
+            Button { shift(-15) } label: { Text("−15 s").frame(height: 30) }
                 .buttonStyle(.bordered)
                 .fixedSize()
             Button {
@@ -816,10 +815,11 @@ struct GymSessionView: View {
                 Text(startLabel(lift, in: e)).foregroundStyle(.black)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity)
+                    .frame(height: 30)
             }
             .mainButton()
             .doubleTap()
-            Button("+15 s") { shift(15) }
+            Button { shift(15) } label: { Text("+15 s").frame(height: 30) }
                 .buttonStyle(.bordered)
                 .fixedSize()
         }
