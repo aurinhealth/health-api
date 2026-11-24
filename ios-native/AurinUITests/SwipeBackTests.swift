@@ -45,6 +45,14 @@ final class SwipeBackTests: XCTestCase {
         XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
         wait(1.5)
         edgeSwipe()
+        // One more swipe if the first did not take: on CI the simulator now and
+        // then drops a synthesized edge drag right after the push (redesign run
+        // 45391506777; the same page passed on its own PR). A swipe that never
+        // goes back, the bug of builds 602 to 611, still fails here.
+        if !waitUntil(3, { self.onScreen(back) == nil }) {
+            wait(1)
+            edgeSwipe()
+        }
         expect(waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }, "the edge swipe did not go back from \(identifier)")
     }
 
