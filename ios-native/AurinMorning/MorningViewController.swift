@@ -66,6 +66,8 @@ struct MorningLayout {
     /// "Coach" while the coach is in the plan; nil: no coach card.
     var coach: String?
     var workout: (title: String, sport: String?, time: String?, minutes: Int?)?
+    /// "Today at 17:30" in the user's language; older servers send only the time.
+    var when: String?
 
     init(_ info: [String: Any]) {
         label = info["label"] as? String ?? ""
@@ -76,6 +78,7 @@ struct MorningLayout {
         coach = info["coach"] as? String
         if let w = info["workout"] as? [String: Any], let title = w["title"] as? String {
             workout = (title, w["sport"] as? String, w["time"] as? String, (w["minutes"] as? NSNumber)?.intValue)
+            when = w["when"] as? String ?? w["time"] as? String
         }
     }
 }
@@ -103,9 +106,13 @@ struct TodayMorningView: View {
     private let green = Self.color(StatusHex.good.dark)
 
     private var pillColors: (Color, Color) {
-        // Below the range: amber text for 4.5:1 on its chip (concept fix 4.6).
-        guard let hex = StatusHex.zone(zone)?.dark else { return (muted, muted.opacity(0.16)) }
-        return (zone == "green" ? green : Self.color(0xFFD08A), Self.color(hex).opacity(0.16))
+        // Today's pill (HealthView ReadinessText.pill, dark): green, amber, rust.
+        switch zone {
+        case "green": return (green, Self.color(0x1D3B33))
+        case "yellow": return (Self.color(StatusHex.warn.dark), Self.color(0x3A2A17))
+        case "red": return (Self.color(0xF0907A), Self.color(0xF0907A).opacity(0.14))
+        default: return (muted, muted.opacity(0.16))
+        }
     }
 
     var body: some View {
@@ -163,7 +170,7 @@ struct TodayMorningView: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.title).font(.subheadline.weight(.semibold)).foregroundStyle(ink).lineLimit(2)
-                        let when = [workout.time, workout.minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: ", ")
+                        let when = [layout.when, workout.minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: ", ")
                         if !when.isEmpty { Text(when).font(.caption).foregroundStyle(muted) }
                     }
                 }
