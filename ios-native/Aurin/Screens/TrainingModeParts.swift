@@ -564,6 +564,15 @@ struct MinimizedGym {
     var waiting = false
     /// The part as the lock screen showed it, so it stays there while hidden.
     var activity: GymLiveActivity.Part? = nil
+    /// The weight and reps typed for the set at hand, as its fields held them.
+    var draft: Draft? = nil
+
+    struct Draft: Equatable {
+        let row: Int
+        let kg: String
+        let reps: String
+        let machineLb: Bool
+    }
 }
 
 /// The bar over the tab bar while the workout is hidden, as a music app's
