@@ -320,10 +320,13 @@ struct StrainDetail: View {
     /// "Strength at 17:30 adds 4.2 (estimate)": the estimate said once (concept 03 point 6).
     private var note: String? {
         guard let title = strain.nextTitle, let planned = strain.planned, planned > 0 else { return nil }
-        let at = strain.nextTime.map { W.tr(" v ", " at ") + W.clockText($0) } ?? ""
+        var text: String = title
+        if let time = strain.nextTime { text += W.tr(" v ", " at ") + W.clockText(time) }
+        text += W.tr(" přidá ", " adds ") + W.number(planned, digits: 1)
+        text += W.tr(" (odhad)", " (estimate)")
         // A yellow morning: how to do it, as under the workout on the iPhone (wave 4, 28.2).
-        return title + at + W.tr(" přidá ", " adds ") + W.number(planned, digits: 1) + W.tr(" (odhad)", " (estimate)")
-            + (strain.nextNote.map { "\n" + $0 } ?? "")
+        if let steady = strain.nextNote { text += "\n" + steady }
+        return text
     }
 }
 
@@ -383,11 +386,15 @@ struct WhyDetail: View {
         var rows: [Row] = []
         if let minutes = s.sleep?.minutes {
             let need = s.sleep?.need
-            let short = need.map { Int(($0 - minutes).rounded()) } ?? 0
+            let short: Int = need.map { Int(($0 - minutes).rounded()) } ?? 0
             let m = Int(minutes.rounded())
-            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: "\(m / 60) h " + String(format: "%02d", m % 60), unit: "min",
-                            note: need == nil ? nil : short > 0 ? W.tr("o \(W.hours(Double(short))) méně", "\(W.hours(Double(short))) short") : W.tr("dost", "enough"),
-                            amber: short > 0))
+            let value: String = "\(m / 60) h " + String(format: "%02d", m % 60)
+            var note: String? = nil
+            if need != nil {
+                let gap = W.hours(Double(short))
+                note = short > 0 ? W.tr("o \(gap) méně", "\(gap) short") : W.tr("dost", "enough")
+            }
+            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: value, unit: "min", note: note, amber: short > 0))
         }
         for (metric, m) in [(WatchMetric.hrv, s.hrv), (WatchMetric.restingHR, s.restingHR)] {
             guard let value = m?.value else { continue }
