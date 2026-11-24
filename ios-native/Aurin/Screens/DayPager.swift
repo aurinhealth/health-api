@@ -315,7 +315,7 @@ private struct DayPlaceholder: View {
             block(96)
             block(96)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageGrid.margin)
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

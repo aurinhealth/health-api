@@ -136,7 +136,7 @@ struct SharePreviewCard: View {
                     .font(.system(size: 20)).foregroundStyle(muted)
             }
             Text(template.name)
-                .font(.custom("Newsreader-Regular", size: 52)).foregroundStyle(ink)
+                .font(.custom("InstrumentSerif-Regular", size: 52)).foregroundStyle(ink)
                 .lineLimit(1).minimumScaleFactor(0.6)
                 .padding(.top, 18)
             Text(line).font(.system(size: 22)).foregroundStyle(muted).padding(.top, 4)

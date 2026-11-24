@@ -38,9 +38,9 @@ struct ReadinessHome: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             heroLink
-                // Under the corner buttons, not beside them (CI shot: "Readiness"
-                // sat under the alarm button).
-                .padding(.top, W.small ? 12 : 16)
+                // Under the corner buttons: the page sized to fit below them
+                // (CI shot: "Readiness" sat under the alarm button, the page too tall).
+                .padding(.top, 4)
             staleLine
             Spacer(minLength: 4)
             if !dimmed {
@@ -121,11 +121,11 @@ struct ReadinessHome: View {
             // (a worse morning, Czech, a 42 mm watch, larger text).
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .bottom, spacing: 6) {
-                    number(W.small ? 44 : 58)
-                    pillView.padding(.bottom, 7)
+                    number(W.small ? 40 : 48)
+                    pillView.padding(.bottom, 6)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    number(W.small ? 44 : 52)
+                    number(W.small ? 40 : 46)
                     pillView
                 }
             }
@@ -133,12 +133,12 @@ struct ReadinessHome: View {
             .padding(.leading, 1)
             if let sentence, stale == nil {
                 Text(sentence)
-                    .font(W.serif(W.small ? 16 : 17))
+                    .font(W.serif(W.small ? 14 : 15))
                     .foregroundStyle(dimmed ? W.secondary : W.num)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 5)
+                    .padding(.top, 3)
                     .padding(.horizontal, 3)
             }
         }
@@ -171,12 +171,12 @@ struct ReadinessHome: View {
     private var pillView: some View {
         if let pill {
             Text(pill.text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(pill.color)
                 .lineLimit(1)
                 .fixedSize()
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
                 .background(dimmed ? Color.clear : pill.fill, in: Capsule())
                 // Always-On: the outline only, no fill.
                 .overlay { if dimmed { Capsule().stroke(pill.color, lineWidth: 1) } }
@@ -246,16 +246,16 @@ struct ReadinessHome: View {
     }
 
     private var dials: some View {
-        let size: CGFloat = W.small ? 38 : 46
+        let size: CGFloat = W.small ? 34 : 40
         return HStack(spacing: 0) {
             ForEach(Array([sleep, strain, hrv].enumerated()), id: \.offset) { index, dial in
                 if index > 0 { Rectangle().fill(W.hair).frame(width: 1) }
                 NavigationLink(value: dial.page) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         WatchDial(value: dial.value, scale: dial.scale, band: dial.band, dot: dial.dot,
                                   number: dial.number, unit: W.small && dial.page != .sleep ? nil : dial.unit, size: size)
                         Text(dial.title)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(W.ink)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -272,8 +272,8 @@ struct ReadinessHome: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 8)
-        .padding(.bottom, 7)
+        .padding(.top, 6)
+        .padding(.bottom, 5)
         .padding(.horizontal, 4)
         // An older day's numbers, greyed (point 6).
         .saturation(older ? 0 : 1)

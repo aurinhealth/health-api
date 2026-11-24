@@ -27,7 +27,7 @@ struct FoodView: View {
             if let food = model.food {
                 PageScroll {
                     FoodContent(food: food, add: { adding = AddFoodTarget(meal: $0) }, scan: { scanning = true })
-                        .padding(.bottom, 100)
+                        .padding(.bottom, PageGrid.tabBottom)
                 }
                 .refreshable { await model.refreshFood() }
                 .tabTopBar {
@@ -136,7 +136,7 @@ struct FoodContent: View {
                     }
                     WeekStrip(date: model.headerDay(food.date), ahead: true).padding(.top, 14)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
             }
             VStack(alignment: .leading, spacing: 0) {
@@ -146,7 +146,7 @@ struct FoodContent: View {
                     content
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             .padding(.top, editing ? 16 : 0)
             .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
         }
@@ -417,9 +417,9 @@ struct DrinksCard: View {
         ml >= target ? L10n.tr("cíl splněn") : L10n.f("ještě %@ do cíle", litres(target - ml))
     }
 
-    /// "1,3 l", or "44 fl oz" in imperial units.
+    /// "1,3 l", "1.3 L", or "44 fl oz" in imperial units (Fmt.litres).
     static func litres(_ ml: Double) -> String {
-        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.decimal(ml / 1000) + (L10n.isEnglish ? " L" : " l")
+        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.litresText(ml)
     }
 
     /// The big number: litres, or fluid ounces in imperial units.

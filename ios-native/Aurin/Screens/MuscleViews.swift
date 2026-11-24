@@ -322,7 +322,7 @@ struct MusclesView: View {
             .padding(.vertical, 10)
             ForEach(groups.filter { filter == nil || $0.state(on: data.date) == filter }) { group in
                 Rectangle().fill(Palette.hairline).frame(height: 1)
-                Button { model.push(.muscle(group.open)) } label: { FreshnessRow(group: group, today: data.date) }
+                Button { model.push(group.route) } label: { FreshnessRow(group: group, today: data.date) }
                     .buttonStyle(.plain)
             }
         }
@@ -647,7 +647,6 @@ struct MuscleDetailView: View {
 
 /// "i" of Unavené svaly: what the percentages and the days mean.
 struct MuscleFatigueInfoSheet: View {
-    @Environment(\.dismiss) private var dismiss
 
     private let lines = [
         "Každá zapsaná série, běh a jízda přidá práci svalům, které zapojí. Čerstvost se odhaduje z toho, kolik práce sval dostal a jak dávno.",
@@ -656,21 +655,14 @@ struct MuscleFatigueInfoSheet: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(lines, id: \.self) { line in
-                        Text(L10n.tr(line)).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-                    }
+        SheetFrame(title: "Jak se čerstvost odhaduje") {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(lines, id: \.self) { line in
+                    Text(L10n.tr(line)).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(20)
             }
-            .background(Palette.background)
-            .navigationTitle(L10n.tr("Jak se čerstvost odhaduje"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
         }
-        .presentationDetents([.medium, .large])
+        .presentationBackground(Palette.background)
     }
 }
 

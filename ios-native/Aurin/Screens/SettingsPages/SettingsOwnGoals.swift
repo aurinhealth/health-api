@@ -5,10 +5,10 @@ import SwiftUI
 // drinks, up to the target (Postupně, src/water-goal.js). Saved in the profile:
 // kcalGoal, waterMode, waterGoal, waterStart, waterFrom.
 
-/// "2,0 l" or "67.6 fl oz".
+/// "2 l", "2.25 L" or "67.6 fl oz" (Fmt.litres).
 func waterText(_ ml: Double?) -> String {
     guard let ml else { return "–" }
-    return Units.imperial ? Units.volumeText(ml) : Fmt.decimal(ml / 1000, digits: ml.truncatingRemainder(dividingBy: 100) == 0 ? 1 : 2) + " l"
+    return Units.imperial ? Units.volumeText(ml) : Fmt.litresText(ml)
 }
 
 /// Auto / Vlastní (/ Postupně): the choice at the top of both sheets.

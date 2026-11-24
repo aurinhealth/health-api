@@ -617,7 +617,7 @@ struct MinimizedGymBar: View {
                     GeometryReader { geo in
                         Capsule().fill(Palette.amber).frame(width: geo.size.width * min(1, max(0, left)))
                     }
-                    .frame(height: 3).padding(.horizontal, 24)
+                    .frame(height: 3).padding(.horizontal, PageGrid.margin)
                     .accessibilityHidden(true)
                 }
             }

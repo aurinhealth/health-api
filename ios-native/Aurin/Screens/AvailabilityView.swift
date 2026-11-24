@@ -381,12 +381,11 @@ struct AvailabilityBarRow: View {
         if snapped != minutes { minutes = snapped }
     }
 
-    /// 90 → "1 h 30", 45 → "45 min", 0 → "volno", not set → "–".
+    /// 90 → "1 h 30 min", 45 → "45 min", 0 → "volno", not set → "–".
     static func text(_ m: Int) -> String {
         if m < 0 { return "–" }
         if m == 0 { return L10n.tr("volno") }
-        if m < 60 { return "\(m) min" }
-        return "\(m / 60) h" + (m % 60 > 0 ? " \(m % 60)" : "")
+        return Fmt.duration(m)
     }
 }
 

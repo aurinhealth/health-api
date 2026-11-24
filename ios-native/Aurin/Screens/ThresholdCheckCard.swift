@@ -164,7 +164,8 @@ struct ThresholdCheckCard: View {
         VStack(alignment: .leading, spacing: 12) {
             WidgetHeader(title: sportTitle(o.sport) + ", " + metricName(o.metric), color: Palette.amberBar)
             Text(headline(o)).font(Typo.coach(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-            Text(L10n.f("Ověř to testem: %@ (%@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
+            // The test's name has its own effort ("20 min"); the bracket is the whole session (617 C10).
+            Text(L10n.f("Ověř to testem: %@ (celkem %@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
                 .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
@@ -173,12 +174,14 @@ struct ThresholdCheckCard: View {
                         Button { day[o.sport] = option.date } label: {
                             VStack(spacing: 2) {
                                 Text(Fmt.weekdayShort(option.date)).font(.footnote.weight(.semibold))
-                                Text(Fmt.dayMonth(option.date)).font(.caption)
+                                // "Nov 28", never a cut "Novemb…" (617 C10).
+                                Text(Fmt.dayMonthShort(option.date)).font(.caption).lineLimit(1).fixedSize()
                                 Image(systemName: "star.fill").scaledFont(8)
                                     .opacity(option.date == o.recommended ? 1 : 0)
                             }
                             .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                            .frame(width: 58, height: 58)
+                            .padding(.horizontal, 6)
+                            .frame(minWidth: 58, minHeight: 58)
                             .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)

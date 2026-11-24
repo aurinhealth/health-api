@@ -290,7 +290,7 @@ struct SharePlaceView: View {
                     SecondaryButton(title: again, action: onAgain)
                     PrimaryButton(title: L10n.tr("Použít"), action: onUse)
                 }
-                .padding(.horizontal, 24).padding(.top, 18)
+                .padding(.horizontal, PageGrid.margin).padding(.top, 18)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
