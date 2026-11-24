@@ -4068,7 +4068,9 @@
 "pod obvyklým" = "below usual";
 "obvyklé" = "usual";
 "Dnes:" = "Today:";
-"Ulehčit dnešek" = "Make today easier";
+"Ulehčit dnešek" = "Go easier";
+"Lehčí varianta" = "Easier option";
+"Místo toho" = "Instead";
 "obvyklé rozmezí %@–%@ ms" = "usual range %@–%@ ms";
 "obvyklé rozmezí %@–%@ bpm" = "usual range %@–%@ bpm";
 "Průměr (60 dní)" = "Average (60 days)";
