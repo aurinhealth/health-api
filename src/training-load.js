@@ -46,6 +46,9 @@ function trimpWeight(hrr, sex) {
 // makes an hour at RPE 10 worth 60: lifting felt as hard loads the heart and
 // the endurance fitness less than an hour at threshold (100).
 export const SRPE_SCALE = 0.1;
+// The intensity (share of threshold) an RPE of 1–10 stands for in a session
+// with no heart rate or power: 10 = an all-out hour at threshold.
+export const RPE_INTENSITY = [null, 0.5, 0.55, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1];
 // RPE when the session has none and no volume: a moderate session.
 export const DEFAULT_STRENGTH_RPE = 6;
 // Without any RPE the volume lifted (kg × reps) stands in: an ordinary hour of
@@ -114,6 +117,11 @@ export function sessionLoad(session, athlete = {}) {
     return Math.round(minutes * perMinute / (60 * thresholdPerMinute) * 100);
   }
   if (kind === "strength") return strengthLoad(session);
+  // Without heart rate or power, the athlete's RPE of the session (typed into
+  // Log workout: a football or hockey match, tennis): the intensity it stands
+  // for, as an hour at threshold is 100 (RPE 8 for 90 min ≈ 120).
+  const rpe = n(session.rpe);
+  if (rpe != null && rpe > 0) return Math.round(hours * RPE_INTENSITY[Math.round(clamp(rpe, 1, 10))] ** 2 * 100);
   return Math.round(hours * (kind === "ride" || kind === "run" ? 36 : 20));
 }
 
@@ -161,7 +169,7 @@ export function sessionsFrom(activities, rowsById, gymDays = []) {
     let p = {};
     try { p = JSON.parse(rowsById.get(a)?.payload_json || "{}"); } catch { p = {}; }
     const m = p.exercise?.metricsSummary || {};
-    out.push({ date: a.date, kind: a.kind, minutes: a.minutes, tss: a.tss, avgHr: n(m.averageHeartRateBeatsPerMinute ?? p.average_heartrate), avgPower: n(m.averagePowerWatts ?? p.icu_average_watts ?? p.average_watts) });
+    out.push({ date: a.date, kind: a.kind, minutes: a.minutes, tss: a.tss, avgHr: n(m.averageHeartRateBeatsPerMinute ?? p.average_heartrate), avgPower: n(m.averagePowerWatts ?? p.icu_average_watts ?? p.average_watts), rpe: n(p.rpe ?? p.icu_rpe) });
   }
   for (const g of gymDays || []) {
     const gym = typeof g === "string" ? { date: g, kind: "strength", minutes: 60 } : g;

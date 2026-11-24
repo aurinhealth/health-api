@@ -7,6 +7,8 @@ import { EXERCISES, FOCUS_GROUPS } from "./strength-generator.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { sameSession } from "./activity-match.js";
 import { localDate } from "./user-time.js";
+import { RPE_INTENSITY } from "./training-load.js";
+import { otherSportKind } from "./strength-balance.js";
 
 const DAY = 86400000;
 const n = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
@@ -35,8 +37,17 @@ const CARDIO = {
   run: { calves: 1, quads: .8, hamstrings: .7, hips: .6 },
   walk: { calves: .4, quads: .25, hips: .2 },
   // Swimming pulls with the lats and shoulders; the legs barely work.
-  swim: { lats: 1, upper_back: .6, front_delts: .5, triceps: .4 }
+  swim: { lats: 1, upper_back: .6, front_delts: .5, triceps: .4 },
+  // Other sports (otherSportKind): team sports sprint, stop and cut; racket
+  // sports lunge and jump; skating (ice hockey too) and skiing load the
+  // quads and hips most, cross-country skiing also pulls with the arms.
+  team: { quads: .9, hamstrings: .9, calves: .8, hips: .7 },
+  racket: { calves: .8, quads: .6, hips: .5, hamstrings: .4, front_delts: .3 },
+  skate: { quads: 1, hips: .8, hamstrings: .4, calves: .3 },
+  ski: { quads: .9, hips: .6, calves: .3, lats: .3, triceps: .2 }
 };
+// A sport's muscle-model kind: ride, run, walk, swim, strength or one of the other sports.
+export const muscleKind = a => activityKind(a) || otherSportKind(a?.type || a?.payload?.type);
 
 // Which body-map groups an exercise loads, with weights.
 export function exerciseMuscles(name) {
@@ -80,9 +91,11 @@ export function muscleEvents({ sets = [], activities = [] } = {}) {
     for (const [muscle, w] of Object.entries(exerciseMuscles(s.exercise))) events.push({ date, muscle, load: load * w, source: "strength", ...(failure ? { failure } : {}) });
   }
   for (const a of activities) {
-    const kind = activityKind(a), shares = CARDIO[kind]; if (!shares) continue;
+    const kind = muscleKind(a), shares = CARDIO[kind]; if (!shares) continue;
     const date = iso(a.date || a.start), hours = n(a.durationHours, n(a.moving_time) / 3600);
-    const tss = n(a.tss, n(a.icu_training_load, kind === "walk" ? hours * 20 : hours * 50));
+    // Without a load, the RPE typed in for the session (training-load.js sessionLoad).
+    const rpe = n(a.rpe ?? a.payload?.rpe ?? a.icu_rpe, 0);
+    const tss = n(a.tss, n(a.icu_training_load, rpe >= 1 ? hours * RPE_INTENSITY[Math.round(Math.min(10, rpe))] ** 2 * 100 : kind === "walk" ? hours * 20 : hours * 50));
     for (const [muscle, w] of Object.entries(shares)) events.push({ date, muscle, load: tss * .35 * w, source: kind });
   }
   return events.filter(e => e.date && e.load > 0);

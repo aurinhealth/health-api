@@ -133,3 +133,14 @@ test("watch-only workouts are added to the Intervals.icu CTL without counting a 
   assert.match(entry, /const watchExtra = await watchOnlyFitness\(env,ctx,from,to\)/);
   assert.match(entry, /const wellness = watchExtra \? addLoads\(intervalsRows,watchExtra\) : intervalsRows;/);
 });
+
+test("a session with only its RPE (a football match typed in): the intensity the RPE stands for", () => {
+  // 90 minutes at RPE 8 ≈ 0.9 of threshold: 122, not the flat 30 of an easy hour and a half.
+  assert.equal(sessionLoad({ kind: "other", minutes: 90, rpe: 8 }), 122);
+  assert.equal(sessionLoad({ kind: "other", minutes: 90 }), 30);
+  // Heart rate still comes first.
+  assert.equal(sessionLoad({ kind: "other", minutes: 60, rpe: 10, avgHr: 50 }, athlete), 0);
+  const rows = new Map(), match = { date: "2026-11-21", kind: "other", minutes: 90 };
+  rows.set(match, { payload_json: JSON.stringify({ type: "Soccer", rpe: 8 }) });
+  assert.equal(sessionsFrom([match], rows)[0].rpe, 8);
+});

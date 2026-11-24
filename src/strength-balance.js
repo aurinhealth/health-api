@@ -1,5 +1,17 @@
 const key=v=>String(v||'').slice(0,10);
 const age=(a,b)=>(Date.parse(key(b)+'T12:00:00Z')-Date.parse(key(a)+'T12:00:00Z'))/86400000;
+// The sports Aurin has no model of its own for, by their type (Intervals.icu,
+// Apple Health or Google Health): the muscle group they load like (fitness-insights.js CARDIO).
+const OTHER_SPORTS = [
+  [/soccer|football|rugby|lacrosse|basketball|handball|netball|volleyball|floorball|ultimate|frisbee|cricket|baseball|softball|trackandfield/, 'team'],
+  [/tennis|squash|badminton|padel|pickleball|racquet/, 'racket'],
+  [/hockey|skat/, 'skate'],
+  [/ski|snowboard/, 'ski']
+];
+export function otherSportKind(type) {
+  const t = String(type || '').toLowerCase().replace(/[^a-z]/g, '');
+  return t ? (OTHER_SPORTS.find(([re]) => re.test(t)) || [])[1] || null : null;
+}
 // Other sports affect the dose; only completed gym sets count as strength coverage.
 export function sportMuscleLoad(context){
   const activities=[...(context?.sports?.recentActivities||[]),...(context?.cycling?.recentActivities||[])],seen=new Set(),load=new Map();
@@ -12,6 +24,8 @@ export function sportMuscleLoad(context){
     else if(/climb|boulder|horolez/.test(type))muscles=['back','lats','upper_back','biceps','forearms','core','abs'];
     else if(/swim|plav/.test(type))muscles=['back','lats','upper_back','shoulders','front_delts','side_delts','chest'];
     else if(/row|vesl/.test(type))muscles=['quads','hamstrings','back','upper_back','lats','biceps'];
+    // A match or another sport with running, jumps or skating (otherSportKind).
+    else if(otherSportKind(a.type))muscles=['quads','hamstrings','glutes','calves'];
     if(!muscles.length)continue;
     const minutes=Number(a.durationHours)*60||Number(a.durationMinutes)||Number(a.moving_time)/60||0;
     // Cycling is concentric work with little muscle damage; it counts at 70 %.
