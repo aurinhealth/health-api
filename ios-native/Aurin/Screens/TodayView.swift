@@ -27,7 +27,7 @@ struct TodayView: View {
             if let today = model.today {
                 PageScroll {
                     TodayContent(today: today, openSettings: openSettings, openCoach: openCoach, openShare: { sharing = true })
-                        .padding(.bottom, 100)
+                        .padding(.bottom, PageGrid.tabBottom)
                 }
                 .refreshable {
                     // Pulled down: the coach's cards ask again even when Today is the same.
@@ -138,11 +138,11 @@ struct TodayContent: View {
             // (Petr, 2026-11-11, as Bevel); a day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) { header }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, PageGrid.margin)
                     .padding(.top, 16)
             }
             day
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, editing ? 16 : 0)
                 .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
         }
@@ -473,7 +473,7 @@ struct WeekStrip: View {
                 strip
             }
         }
-        .padding(.horizontal, -6)
+        // No bleed past the page margin: the strip lines up with the cards (617 #13).
         // Food's rings: the last 30 days, again after a meal is logged today.
         .task(id: ahead ? model.food?.kcal : nil) {
             guard ahead else { return }

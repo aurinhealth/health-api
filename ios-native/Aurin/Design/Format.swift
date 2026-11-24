@@ -204,11 +204,33 @@ enum Fmt {
         return names[utcCalendar.component(.weekday, from: date) - 1]
     }
 
-    /// 75 → "1 h 15 min", 62 → "1 h 2 min", 120 → "2 h", 42 → "42 min": the
-    /// one way a length is written (Petr 2026-11-23: "4 h 23 min" everywhere,
-    /// no leading zero).
+    /// The one way a length is written (Petr 2026-11-23, 617 #19): 263 → "4 h 23 min",
+    /// 62 → "1 h 2 min", 120 → "2 h", 42 → "42 min". No-break spaces: it never splits.
     static func duration(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"
+        let parts = durationParts(minutes)
+        return parts.number + (parts.unit.map { "\u{00A0}" + $0 } ?? "")
+    }
+
+    /// A length as a big number with its unit below, as "ms" under the HRV:
+    /// "4 h 23" over "min", "45" over "min", "2 h" alone.
+    static func durationParts(_ minutes: Int) -> (number: String, unit: String?) {
+        let m = max(0, minutes)
+        if m < 60 { return ("\(m)", "min") }
+        return m % 60 == 0 ? ("\(m / 60)\u{00A0}h", nil) : ("\(m / 60)\u{00A0}h\u{00A0}\(m % 60)", "min")
+    }
+
+    /// Water in litres, one way everywhere (617 #19, "1.0 l" read as "1.01"):
+    /// 1000 → "1", 2500 → "2.5", 1750 → "1.75"; the unit "L" in English, "l" in Czech.
+    static func litres(_ ml: Double) -> (number: String, unit: String) {
+        let litres = ml / 1000
+        let digits = (litres * 10).rounded() == litres * 10 ? ((litres.rounded() == litres) ? 0 : 1) : 2
+        return (decimal(litres, digits: digits), L10n.isEnglish ? "L" : "l")
+    }
+
+    /// "1.5 L", "2 l".
+    static func litresText(_ ml: Double) -> String {
+        let parts = litres(ml)
+        return parts.number + "\u{00A0}" + parts.unit
     }
 
     /// 860 → "14 h 20 min".

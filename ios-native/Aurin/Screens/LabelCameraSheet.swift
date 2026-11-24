@@ -49,7 +49,7 @@ struct LabelCameraSheet: View {
                     Color.clear.frame(width: 40, height: 40)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 12)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12)
 
             ZStack {
                 RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
@@ -75,7 +75,7 @@ struct LabelCameraSheet: View {
             .padding(.horizontal, 24).padding(.top, 28)
 
             Text(L10n.tr(hint)).font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
-                .multilineTextAlignment(.center).padding(.top, 22).padding(.horizontal, 24)
+                .multilineTextAlignment(.center).padding(.top, 22).padding(.horizontal, PageGrid.margin)
 
             HStack {
                 PhotosPicker(selection: $photo, matching: .images) {

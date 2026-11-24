@@ -470,7 +470,7 @@ struct StageTotals: View {
                 }
             }
             .frame(height: 10)
-            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8).frame(width: 62, alignment: .trailing)
+            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7).frame(width: 84, alignment: .trailing)
             Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -685,13 +685,8 @@ struct WeightEntrySheet: View {
     }
 
     var body: some View {
+        SheetFrame(title: "Zapsat váhu") {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                Text("Zapsat váhu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
-            }
             // − and + by 0.1 (held, they repeat); a tap on the number types it (D-PLUS-3).
             HStack(alignment: .center, spacing: 12) {
                 stepButton(-1)
@@ -719,10 +714,8 @@ struct WeightEntrySheet: View {
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
                 .disabled(saving || value == nil)
-            Spacer(minLength: 0)
         }
-        .padding(24)
-        .presentationDetents([.height(340), .medium])
+        }
         .glassSheetBackground()
         .onAppear {
             // The last weigh-in to start from; nothing yet: type it.

@@ -187,13 +187,13 @@ final class SnapshotTests: XCTestCase {
     /// never "78 min, 47 TSS" (611 retest, point 3).
     func testDayTimelinePlannedLine() {
         let today = DemoData.today
-        XCTAssertEqual(DayTimelineRows.plannedLine(today.plan[1], strainNow: nil), "45 min")
+        XCTAssertEqual(DayTimelineRows.plannedLine(today.plan[1], strainNow: nil), "45\u{00A0}min")
         let ride = TodaySnapshot.PlanItem(kind: "workout", time: nil, title: "Tempo", detail: "78 min, 47 TSS", done: false, status: "planned",
                                           session: today.plan[0].session)
-        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42\u{00A0}min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
         // Today: where it takes the day's strain, as Training's card counts it.
-        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
-        XCTAssertEqual(Fmt.duration(78), "1 h 18 min")
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42\u{00A0}min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
+        XCTAssertEqual(Fmt.duration(78), "1\u{00A0}h\u{00A0}18\u{00A0}min")
     }
 
     /// A nap sits among what was done in the order of the day.
@@ -463,7 +463,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(result.chatId, 12)
         XCTAssertEqual(result.actions?.count, 2)
         XCTAssertEqual(result.actions?[0].title, "Přesunout „Dlouhý běh“ na So 10. října")
-        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1 h, Pá 9. října")
+        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1\u{00A0}h, Pá 9. října")
         try render("coach-action", height: 300) {
             VStack { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
         }
@@ -657,7 +657,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
         try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
         XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
-        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7 h 30 min")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7\u{00A0}h\u{00A0}30\u{00A0}min")
         XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
@@ -745,11 +745,18 @@ final class SnapshotTests: XCTestCase {
         // VoiceOver reads the tab header's month with its year and week (Today audit 25).
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
-        XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
-        XCTAssertEqual(Fmt.duration(125), "2 h 5 min")
-        XCTAssertEqual(Fmt.duration(120), "2 h")
-        XCTAssertEqual(Fmt.duration(42), "42 min")
-        XCTAssertEqual(L10n.plural("dní", 24), "dní")
+        XCTAssertEqual(Fmt.duration(75), "1\u{00A0}h\u{00A0}15\u{00A0}min")
+        XCTAssertEqual(Fmt.duration(125), "2\u{00A0}h\u{00A0}5\u{00A0}min")
+        XCTAssertEqual(Fmt.duration(120), "2\u{00A0}h")
+        XCTAssertEqual(Fmt.duration(42), "42\u{00A0}min")
+        XCTAssertEqual(Fmt.durationParts(263).number, "4\u{00A0}h\u{00A0}23")
+        XCTAssertEqual(Fmt.durationParts(263).unit, "min")
+        XCTAssertNil(Fmt.durationParts(240).unit)
+        // Water never as "1.0 l", read as "1.01" (617 #19).
+        XCTAssertEqual(Fmt.litres(1000).number, "1")
+        XCTAssertEqual(Fmt.litres(2500).number, Fmt.decimal(2.5, digits: 1))
+        XCTAssertEqual(Fmt.litres(1750).number, Fmt.decimal(1.75, digits: 2))
+                XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
     func testSignInScreen() throws {
@@ -1158,7 +1165,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30 min, 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1\u{00A0}h\u{00A0}30\u{00A0}min, 42,3 km")
         // The concept's figures: gym is the lifting figure, not a dumbbell.
         XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
         XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)
@@ -1179,7 +1186,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(off.session.plannedId, "planned:2")
         let missed = try XCTUnwrap(planDay.activities.last)
         XCTAssertEqual(PlanState(missed.session), .missed)
-        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno, 45 min")
+        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno, 45\u{00A0}min")
         // October 2026 starts on a Thursday: three empty cells first.
         let grid = ISODay.monthGrid("2026-10-15")
         XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])
@@ -1249,7 +1256,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
         XCTAssertEqual(DrinkFigureKind.from("dragon"), .whale, "an unknown figure falls back to the whale")
-        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3 l do cíle")
+        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3\u{00A0}l do cíle")
         XCTAssertEqual(DrinksCard.remaining(ml: 2600, target: 2500), "cíl splněn")
     }
 

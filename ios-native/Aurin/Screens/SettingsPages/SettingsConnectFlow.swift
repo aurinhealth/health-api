@@ -248,7 +248,7 @@ struct ServiceConnectSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
             }
             VStack(spacing: 14) {
                 PrimaryButton(title: L10n.f("Pokračovat na %@", service.name), busy: busy) { Task { await connect() } }
@@ -257,7 +257,7 @@ struct ServiceConnectSheet: View {
                 Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy"))
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
-            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 16)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 16)
         }
     }
 
@@ -294,9 +294,9 @@ struct ServiceConnectSheet: View {
             DownloadBar().padding(.horizontal, 40).padding(.top, 22)
             Spacer()
             PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
-                .padding(.horizontal, 24).padding(.bottom, 16)
+                .padding(.horizontal, PageGrid.margin).padding(.bottom, 16)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageGrid.margin)
     }
 
     private func connect() async {

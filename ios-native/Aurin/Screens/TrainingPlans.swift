@@ -383,7 +383,7 @@ private func hoursLabel(_ minutes: Int) -> String {
     return text + " h"
 }
 
-/// "4 h 50 min" in the plan's rows, as every length (Fmt.duration).
+/// "4 h 50 min" in the plan's rows (Fmt.duration).
 func planDuration(_ minutes: Int) -> String {
     Fmt.duration(minutes)
 }

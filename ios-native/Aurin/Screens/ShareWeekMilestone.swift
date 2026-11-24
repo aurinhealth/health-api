@@ -42,7 +42,7 @@ struct ShareWeek: Decodable, Equatable {
         switch key {
         case "Trénink":
             guard let m = t.minutes, m > 0 else { return nil }
-            return (Fmt.hoursMinutes(m), "h", m)
+            return (shareLength(m).value, shareLength(m).unit, m)
         case "Zátěž":
             guard let v = t.tss, v > 0 else { return nil }
             return (Fmt.int(v), "TSS", v)
@@ -55,7 +55,7 @@ struct ShareWeek: Decodable, Equatable {
             return (Fmt.decimal(shown, digits: shown < 100 ? 1 : 0), Units.distanceUnit, km)
         case "Spánek":
             guard let m = t.sleepMinutes, m > 0 else { return nil }
-            return (Fmt.hoursMinutes(m), "h", m)
+            return (shareLength(m).value, shareLength(m).unit, m)
         case "Připravenost":
             guard let v = t.readiness else { return nil }
             return (Fmt.int(v), "", v)
@@ -64,12 +64,12 @@ struct ShareWeek: Decodable, Equatable {
         }
     }
 
-    /// "+1:05 h", "+74", "−4": this week against the one before.
+    /// "+1 h 5 min", "+74", "−4": this week against the one before.
     static func delta(_ key: String, now: Double, before: Double) -> String {
         let d = now - before
         switch key {
         case "Trénink", "Spánek":
-            return (d < 0 ? "−" : "+") + Fmt.hoursMinutes(abs(d)) + (key == "Trénink" ? " h" : "")
+            return (d < 0 ? "−" : "+") + Fmt.duration(Int(abs(d).rounded()))
         case "Kolo", "Běh":
             return Fmt.signed(Units.distance(d))
         case "Plavání":
@@ -227,7 +227,7 @@ extension ShareMilestones.Item {
             return ShareStat(label: label, value: String(sessions), unit: "")
         case "Čas":
             guard let minutes, minutes > 0 else { return nil }
-            return minutes < 600 ? ShareStat(label: "Čas", value: Fmt.hoursMinutes(minutes), unit: "h")
+            return minutes < 600 ? ShareStat(label: "Čas", value: shareLength(minutes).value, unit: shareLength(minutes).unit)
                 : ShareStat(label: "Čas", value: Fmt.int(minutes / 60), unit: "h")
         case "Převýšení":
             guard isDistance, let elevation, elevation >= 1 else { return nil }
@@ -349,7 +349,7 @@ struct ShareWeekCard: View {
             Text(verbatim: sport).font(s.sans(4)).foregroundStyle(day.sessions > 0 ? s.t.ink : s.t.muted).lineLimit(1)
             Spacer(minLength: u * 2)
             if minutes > 0 {
-                Text(verbatim: Fmt.hoursMinutes(minutes)).font(s.serif(5.6)).foregroundStyle(s.t.ink)
+                Text(verbatim: Fmt.duration(Int(minutes.rounded()))).font(s.serif(5.6)).foregroundStyle(s.t.ink)
             }
             ZStack(alignment: .leading) {
                 Capsule().fill(s.t.line(0.1))
@@ -572,7 +572,7 @@ struct ShareMilestoneCard: View {
                                 s.value(sport.distance, Units.distanceUnit, size: 11, color: sportColor(sport.kind)).lineLimit(1)
                                 Spacer(minLength: u * 2)
                                 if let minutes = sport.minutes, minutes > 0 {
-                                    s.value(Fmt.hoursMinutes(minutes), "h", size: 6).lineLimit(1)
+                                    s.value(shareLength(minutes).value, shareLength(minutes).unit, size: 6).lineLimit(1)
                                 }
                             }
                             s.bar((sport.minutes ?? 0) / total, sportColor(sport.kind), height: 1.3)
