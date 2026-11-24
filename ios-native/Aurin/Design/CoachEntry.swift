@@ -44,7 +44,7 @@ struct CoachEntry: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!companion.enabled)
-                .opacity(companion.enabled ? 1 : 0.45)
+                .opacity(companion.enabled ? 1 : 0.6)
                 .accessibilityLabel(L10n.tr(companion.label))
             } else if let menu {
                 Menu { menu } label: {

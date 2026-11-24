@@ -59,16 +59,16 @@ struct LoginView: View {
                     }
                 }
                 .frame(height: 40)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
 
                 TabView(selection: $page) {
                     ForEach(WelcomePage.allCases) { welcome in
                         WelcomePageView(page: welcome, active: page == welcome.rawValue)
-                            .padding(.horizontal, 24)
+                            .padding(.horizontal, PageGrid.margin)
                             .tag(welcome.rawValue)
                     }
                     signInPage
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, PageGrid.margin)
                         .tag(Self.signIn)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -83,7 +83,7 @@ struct LoginView: View {
                             withAnimation { page += 1 }
                         }
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, PageGrid.margin)
                     .padding(.top, 8)
                     .padding(.bottom, 16)
                     .transition(.opacity)

@@ -35,6 +35,8 @@ struct RootView: View {
     /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
     @State private var visited: Set<AppTab> = []
     @State private var scrolledTabs: Set<AppTab> = []
+    /// The open tab's widgets are being edited: "Synced" steps aside for "+" and "Hotovo" (617 #22).
+    @State private var editingWidgets = false
     /// iPhone Duo open, or a wide window beside another app: two columns (WideLayout).
     @State private var wide = false
     private static let tabs: [AppTab] = [.today, .training, .food, .health]
@@ -149,6 +151,9 @@ struct RootView: View {
                             .environment(\.scrollDragReport, {
                                 if tab == model.tab { barHeld = false }
                             })
+                            .environment(\.widgetEditingReport, { (editing: Bool) in
+                                if tab == model.tab, editing != editingWidgets { editingWidgets = editing }
+                            })
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
@@ -168,7 +173,7 @@ struct RootView: View {
                 }
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
-                        if let status = model.syncStatus, !model.offline {
+                        if let status = model.syncStatus, !model.offline, !editingWidgets {
                             SyncPill(status: status) {
                                 model.dismissSyncFailure()
                                 Task { await model.refresh(announce: true) }
@@ -611,7 +616,7 @@ struct OfflineBanner: View {
 
 /// The sync after opening the app: "Synchronizuji…" with a spinner,
 /// "Synchronizováno" for a moment, or a failure a tap tries again. It sits
-/// where a detail's pinned bar has its title (PinnedTopBar hides the title).
+/// where a detail's pinned bar has its title (PageHeader hides the title).
 struct SyncPill: View {
     let status: AppModel.SyncStatus
     let retry: () -> Void

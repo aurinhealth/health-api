@@ -188,7 +188,7 @@ enum Reminders {
         }
         // Water through the chosen part of the day while below the day's target.
         if isOn(waterKey), has(days(waterKey), weekday), let target = today.nutrition.water.target, (today.nutrition.water.ml ?? 0) < target {
-            let amount = Units.imperial ? Units.volumeText(target) : Fmt.decimal(target / 1000) + " l"
+            let amount = Units.imperial ? Units.volumeText(target) : Fmt.litresText(target)
             let times = waterTimes(from: minute(waterFromKey, 10 * 60), to: minute(waterToKey, 16 * 60),
                                    mode: UserDefaults.standard.string(forKey: waterModeKey) ?? "every",
                                    every: minute(waterEveryKey, 3 * 60), count: minute(waterCountKey, 4))

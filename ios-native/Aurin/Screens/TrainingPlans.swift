@@ -383,9 +383,9 @@ private func hoursLabel(_ minutes: Int) -> String {
     return text + " h"
 }
 
-/// "4 h 50" in the plan's rows.
+/// "4 h 50 min" in the plan's rows (Fmt.duration).
 func planDuration(_ minutes: Int) -> String {
-    minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? String(format: " %02d", minutes % 60) : "") : "\(minutes) min"
+    Fmt.duration(minutes)
 }
 
 // MARK: - The weeks as bars

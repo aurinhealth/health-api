@@ -982,17 +982,17 @@ struct TechniqueSheet: View {
                     Text(verbatim: plan).font(Typo.small).foregroundStyle(Palette.muted)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 24)
-            taste.padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 24)
+            taste.padding(.horizontal, PageGrid.margin)
             Picker("Zobrazit", selection: $page) {
                 Text("Jak na to").tag(0)
                 Text("Historie").tag(1)
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             TabView(selection: $page) {
-                PageScroll { howTo.padding(.horizontal, 24).padding(.bottom, 24) }.tag(0)
-                PageScroll { historyPage.padding(.horizontal, 24).padding(.bottom, 24) }.tag(1)
+                PageScroll { howTo.padding(.horizontal, PageGrid.margin).padding(.bottom, 24) }.tag(0)
+                PageScroll { historyPage.padding(.horizontal, PageGrid.margin).padding(.bottom, 24) }.tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
@@ -1005,7 +1005,7 @@ struct TechniqueSheet: View {
                         .overlay { Capsule().stroke(Palette.cardEdge, lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 8)
+                .padding(.horizontal, PageGrid.margin).padding(.top, 8).padding(.bottom, 8)
                 .background(Palette.background)
             }
         }

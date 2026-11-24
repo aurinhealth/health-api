@@ -11,7 +11,7 @@ struct HealthView: View {
                 if let health = model.health {
                     PageScroll {
                         HealthContent(health: health)
-                            .padding(.bottom, 100)
+                            .padding(.bottom, PageGrid.tabBottom)
                     }
                     .refreshable { await model.refreshHealth() }
                     .tabTopBar {
@@ -63,9 +63,9 @@ struct DetailScreen<Content: View>: View {
                     BackSlot { dismiss() }
                     content
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
-                .padding(.bottom, 100)
+                .padding(.bottom, PageGrid.tabBottom)
             }
         }
         .floatingBack(title: title, pinTitle: pinTitle, coach: showsCoach ? CoachEntry(subject: coach, view: Self.coachView(glow), companion: info) : nil) { dismiss() }
@@ -112,11 +112,11 @@ struct HealthContent: View {
                         ConnectionProblemCard()
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
             }
             day
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, editing ? 16 : 0)
                 .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
             // "Edit overview" as on Food, under the day rather than inside the

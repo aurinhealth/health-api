@@ -54,7 +54,7 @@ struct DrinkHistoryView: View {
         .overlay(alignment: .bottom) {
             if selecting {
                 BulkActionBar(count: selected.count, copy: { moving = "Kopírovat" }, move: { moving = "Přesunout" }, delete: { confirmDelete = true })
-                    .padding(.horizontal, 24).padding(.bottom, 92)
+                    .padding(.horizontal, PageGrid.margin).padding(.bottom, 92)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
