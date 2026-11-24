@@ -4474,7 +4474,7 @@
 "Zapsané dny za posledních 30" = "Days logged in the last 30";
 "Průměrný cíl" = "Average target";
 "Snězeno dnes, zatím" = "Eaten today, so far";
-"Každá tečka je jeden zapsaný den. Mezera je den bez zápisu." = "Each dot is one logged day. A gap is a day without a log.";
+"Každá tečka je jeden zapsaný den. Mezera je den bez zápisu. Dnešek přibude, až skončí." = "Each dot is one logged day. A gap is a day without a log. Today joins once it's over.";
 "Proti cíli, %@" = "Against your target, %@";
 "Nad cílem" = "Over target";
 "V cíli" = "At target";
@@ -5266,3 +5266,4 @@
 "Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
 "Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
 "Jídlo se tu ukazuje od %@." = "Food shows here from %@.";
+"Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";

@@ -202,7 +202,9 @@ extension AppModel {
     /// onlyIfChanged (opening the app): the coach's cards ask again only when
     /// the answer differs, or ten minutes on (the forecast, a choice made on
     /// another device). Pulling down, a write or a setting always asks them again.
-    func loadToday(onlyIfChanged: Bool = false) async throws {
+    /// followFood false: a load Food asked for (its goals were newer), which
+    /// does not send Food to load again.
+    func loadToday(onlyIfChanged: Bool = false, followFood: Bool = true) async throws {
         let settled = todayScreen.settlingIds
         let day = selectedDate
         let account = scope
@@ -216,7 +218,7 @@ extension AppModel {
         todayScreen.show(snapshot, data: data, settled: settled)
         fetched[.today] = (Date(), shownDay)
         // One set of goals on every screen (617 #3): Food catches up when Today moved them.
-        if foodGoalsBehind(snapshot) { Task { await catchUpFood() } }
+        if followFood, foodGoalsBehind(snapshot) { Task { await catchUpFood() } }
         if !(onlyIfChanged && same && Date().timeIntervalSince(coachAskedAt) < 600) {
             dataRevision += 1
             todayRevision += 1
@@ -493,6 +495,9 @@ extension AppModel {
             dataRevision += 1
             applyOutbox()
             foodError = nil
+            // The other way round too (retest 618 R1): Food's answer is newer and
+            // its goals differ, so Today and Settings catch up with it once.
+            if let today, foodGoalsBehind(today) { Task { try? await loadToday(onlyIfChanged: true, followFood: false) } }
             _ = noteConnection(nil)
         } catch APIError.unauthorized {
             signOut(expired: true)
