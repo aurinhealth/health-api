@@ -22,3 +22,17 @@ test("a main lift done three times in the block comes back the next time its pat
   const names = plan.rows.filter(r => r[0] === "WORK").map(r => EXERCISES[r[1]]?.variantOf || r[1]);
   assert.ok(names.includes("Barbell bench press"), names.join(", "));
 });
+
+test("a two-sided exercise turns one-sided for its five weeks only while the session has fewer than two one-sided exercises (Petr 2026-11-24)", () => {
+  const start = "2026-11-24", hist = [];
+  const at = n => new Date(Date.parse(start + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  for (let n = -35; n <= 0; n++) {
+    const d = at(n);
+    if (![1, 2, 3, 4, 5].includes(new Date(d + "T12:00:00Z").getUTCDay())) continue;
+    const plan = generateStrengthPlan({ date: d, cycling: { recentActivities: [], plannedWorkouts: [], recentRideTss: 0 }, strength: { recentCompletedSets: hist.filter(r => r.workout_date < d), plannedSessions: [] }, athleteState: { status: "active", memories: [] }, trainingSetup: { experience: "regular" }, recovery: {}, checkin: null }, { durationMinutes: 75, weeklyGymDays: 5 });
+    const names = [...new Set(plan.rows.filter(r => r[0] === "WORK").map(r => r[1]))];
+    const turned = names.filter(e => EXERCISES[e]?.unilateral && EXERCISES[e]?.variantOf && !EXERCISES[EXERCISES[e].variantOf]?.unilateral);
+    if (turned.length) assert.ok(names.filter(e => EXERCISES[e]?.unilateral).length <= 2, d + ": " + names.join(", "));
+    for (const r of plan.rows.filter(r => r[0] === "WORK")) hist.push({ workout_date: d, exercise: r[1], actual_kg: Number(r[3]) || 0, actual_reps: parseInt(r[4], 10) || 8, set_no: 1 });
+  }
+});

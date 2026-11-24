@@ -1068,6 +1068,7 @@ export function stalledExercises(rows, date) {
 // variants) done in the most sessions of the last 42 days (at least three, ties
 // to the latest). The block changes with variantFor's five-week variant or a stall.
 const ANCHOR_BONUS = 5;
+const MAX_ONE_SIDED = 2;
 export function blockAnchors(rows, date) {
   const days = new Map();
   for (const r of rows || []) {
@@ -1175,7 +1176,8 @@ function choosePlan(context, options = {}) {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
     const anchor = anchors.has(ex) && !(withStall && stalled.has(ex)) ? ANCHOR_BONUS : 0;
-    return (shown.has(ex) ? SHOWN_PENALTY : 0) + recent - anchor + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    const oneSided = def?.unilateral && oneSidedPicked >= MAX_ONE_SIDED ? 10 : 0;
+    return (shown.has(ex) ? SHOWN_PENALTY : 0) + recent - anchor + oneSided + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -1269,13 +1271,14 @@ function choosePlan(context, options = {}) {
   for (const ex of adjacentExercises) used.add(ex);
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
+  let oneSidedPicked = 0;
   function pick(patterns) {
     // A disliked exercise only when the pattern has nothing else.
     const pool = withoutDisliked([].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup) && !used.has(ex)), disliked, x => x.ex);
     const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
     const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
     if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
-    if (ex) { used.add(ex); usedPatterns.add(EXERCISES[ex].pattern); }
+    if (ex) { used.add(ex); usedPatterns.add(EXERCISES[ex].pattern); if (EXERCISES[ex].unilateral) oneSidedPicked++; }
     return ex;
   }
   // Ordered by priority; the session length decides how many are kept.
@@ -1756,9 +1759,15 @@ export function generateStrengthPlan(context, options = {}) {
   // takes a turn only for an exercise that is a stand-in itself.
   const fits = name => availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
   const variantOf = ex => variantFor(ex, context.date, name => fits(name) && (!isStandIn(name) || isStandIn(ex)));
-  exercises = [...new Set(exercises.map(variantOf))];
+  // At most two one-sided exercises a session (each takes twice the time): a
+  // two-sided exercise keeps its own form when its variant of the five weeks
+  // would be the third (Petr 2026-11-24: single-leg press, curl and calf raise
+  // with a split squat in every leg day).
+  let oneSided = exercises.filter(ex => EXERCISES[ex]?.unilateral).length;
+  const turned = new Map(exercises.map(ex => { const v = variantOf(ex); if (v !== ex && EXERCISES[v]?.unilateral && !EXERCISES[ex]?.unilateral) { if (oneSided >= MAX_ONE_SIDED) return [ex, ex]; oneSided++; } return [ex, v]; }));
+  exercises = [...new Set(exercises.map(ex => turned.get(ex)))];
   // The coach's sets follow its exercise to the variant the rules take this week.
-  for (const e of coachSession?.exercises || []) { const v = variantOf(e.name); if (v !== e.name) coachSets.set(v, Math.min(coachSets.get(v) ?? 4, Math.round(Number(e.sets)) || 4)); }
+  for (const e of coachSession?.exercises || []) { const v = turned.get(e.name) ?? variantOf(e.name); if (v !== e.name) coachSets.set(v, Math.min(coachSets.get(v) ?? 4, Math.round(Number(e.sets)) || 4)); }
 
   // Warm-up exercises must be the first exercises of the session. Keep the
   // relative order otherwise, so each exercise's warm-up sets stay immediately
