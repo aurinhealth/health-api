@@ -312,7 +312,6 @@
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
-"Napij se" = "Time for a drink";
 "Napiš kouči…" = "Message the coach…";
 "Naplánovat" = "Schedule";
 "Naplánovat týden" = "Plan the week";
@@ -1391,7 +1390,6 @@
 "Zapiš, co jíš, ať sedí dnešní příjem." = "Log what you eat so today's intake is right.";
 "Zvaž se" = "Weigh yourself";
 "Ráno nalačno, ať je trend váhy přesný." = "In the morning before eating, so the weight trend is accurate.";
-"Zkontroluj tréninky a volný čas na další týden." = "Check the workouts and free time for next week.";
 "Prům. tep" = "Avg HR";
 "Max. tep" = "Max HR";
 "Čas ve výkonových zónách" = "Time in power zones";
@@ -5214,7 +5212,11 @@
 "Večer zapsat den" = "Log the day in the evening";
 "Jen když ještě nic není zapsané" = "Only when nothing is logged yet";
 "Denní připomínka" = "Daily reminder";
-"Označ, až to bude hotové" = "Mark as done when ready";
+"Otevřít Dnes" = "Open Today";
+"Označ, až to bude hotové." = "Mark as done when ready.";
+"Ještě není označeno." = "Not marked yet.";
+"Zkontroluj tréninky a volný čas." = "Check your workouts and free time.";
+"Čas na vodu" = "Time for water";
 "Za 30 min" = "In 30 min";
 "Připomínky" = "Reminders";
 "Widgety na zamčené obrazovce ukážou čísla po odemknutí Touch ID." = "Lock screen widgets show numbers after Touch ID.";
@@ -5222,7 +5224,6 @@
 "Otevře čas a dny." = "Opens time and days.";
 "ráno" = "morning";
 "Obvykle v" = "Usually at";
-"Ještě není označeno" = "Not marked yet";
 "%@ min. Začíná za hodinu." = "%@ min. Starts in an hour.";
 "Začíná za hodinu." = "Starts in an hour.";
 "%@ min." = "%@ min.";

@@ -315,22 +315,27 @@ enum PushRegistration {
 }
 
 /// The morning readiness push (src/push.js): held down it shows the morning
-/// in full (AurinMorning), with "Zeptat se kouče" under it, which opens the
-/// coach about today. A tap opens the app as before.
+/// in full (AurinMorning) with "Otevřít Dnes" and "Zeptat se kouče" under it
+/// (concept N1; without Aurin Pro the view drops the coach). A tap opens the app as before.
 enum MorningPush {
     static let categoryID = "MORNING_READINESS"
+    private static let todayAction = "MORNING_OPEN_TODAY"
     private static let coachAction = "MORNING_ASK_COACH"
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
+            UNNotificationAction(identifier: todayAction, title: L10n.tr("Otevřít Dnes"), options: [.foreground]),
             UNNotificationAction(identifier: coachAction, title: L10n.tr("Zeptat se kouče"), options: [.foreground])
         ], intentIdentifiers: [], options: [])
     }
 
     @MainActor
     static func answer(_ response: UNNotificationResponse) {
-        guard response.actionIdentifier == coachAction else { return }
-        QuickActions.shared.pick = QuickActions.Pick(id: "coach")
+        switch response.actionIdentifier {
+        case coachAction: QuickActions.shared.pick = QuickActions.Pick(id: "coach")
+        case todayAction: QuickActions.shared.pick = QuickActions.Pick(id: "today")
+        default: break
+        }
     }
 }
 

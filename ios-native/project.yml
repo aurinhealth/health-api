@@ -216,6 +216,8 @@ targets:
       - path: Shared/StatusHex.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Italic.ttf
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.morning
