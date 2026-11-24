@@ -15,6 +15,13 @@ enum Typo {
         .custom("InstrumentSerif-Regular", size: size, relativeTo: .largeTitle)
     }
 
+    /// The live workout's numbers read from afar (Petr 2026-11-23, an exception
+    /// like the nutrients table): the set table and the rest countdown in SF Pro
+    /// with tabular digits, so they keep their width as they change.
+    static func tabular(_ style: Font.TextStyle, weight: Font.Weight = .semibold) -> Font {
+        .system(style, weight: weight).monospacedDigit()
+    }
+
     /// A heading or a big title, 22 pt and up, growing like the text style
     /// nearest to its size unless one is given.
     static func heading(_ size: CGFloat, relativeTo style: Font.TextStyle? = nil) -> Font {

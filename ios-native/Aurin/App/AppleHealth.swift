@@ -169,7 +169,20 @@ final class AppleHealth {
         return lastSync >= ten
     }
 
+    /// Before the 617 review: one switch for the whole iPhone, read once into ownerKey.
     private static let enabledKey = "appleHealth.enabled"
+    /// The account this iPhone reads Apple Health for, per server (as lastSyncKey).
+    /// Only that account's own Connect sets it (GDPR art. 9(2)(a), 25): another
+    /// account, a new one after skipping "Connect your data", or the same id on
+    /// the other server never reads it (617 review, c-06).
+    private static var ownerKey: String { ServerChoice.current == .live ? "appleHealth.owner" : "appleHealth.owner.staging" }
+    /// The signed-in account as this iPhone knows it (AppModel.loadAccountInitial).
+    private static var account: String? { (UserDefaults.standard.object(forKey: AvatarStore.idKey) as? Int).map(String.init) }
+    /// Whether this server's signed-in account is the one that connected Apple Health here.
+    private static var readsForAccount: Bool {
+        guard let owner = UserDefaults.standard.string(forKey: ownerKey) else { return false }
+        return owner == account
+    }
     private static let categoriesKey = "appleHealth.categories"
     private static let journalOffKey = "appleHealth.journalOff"
     /// Each server has its own last sync, so the days spent on the other one
@@ -180,7 +193,13 @@ final class AppleHealth {
 
     private init() {
         let defaults = UserDefaults.standard
-        enabled = defaults.bool(forKey: Self.enabledKey)
+        // An iPhone that read Apple Health before: for the account signed in now on
+        // Live (a tester on the test server connects there again).
+        if defaults.bool(forKey: Self.enabledKey) {
+            if ServerChoice.current == .live, defaults.string(forKey: Self.ownerKey) == nil, let account = Self.account { defaults.set(account, forKey: Self.ownerKey) }
+            defaults.removeObject(forKey: Self.enabledKey)
+        }
+        enabled = Self.readsForAccount
         let saved = (defaults.string(forKey: Self.categoriesKey) ?? "").split(separator: ",").flatMap { HealthCategory.saved(String($0)) }
         var chosen = saved.isEmpty ? HealthCategory.defaults : Set(saved)
         // Deník is read only when chosen (GDPR art. 25): an update once turned
@@ -202,6 +221,7 @@ final class AppleHealth {
     func connect(_ chosen: Set<HealthCategory>, api: APIClient) async -> Bool {
         guard isAvailable else { message = L10n.tr("Apple Health na tomhle zařízení není."); return false }
         guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return false }
+        guard let account = Self.account else { message = L10n.tr("Server neodpověděl."); return false }
         do {
             // What Synchronizace writes there stays allowed in the same sheet.
             let export = AppleHealthExport.shared
@@ -212,8 +232,11 @@ final class AppleHealth {
             return false
         }
         setCategories(chosen)
+        // The account's Connect, on the server too: uploads are kept only after it (src/apple-health.js).
+        // An older server does not know it and keeps them anyway.
+        _ = try? await api.send("/app/api/health/apple", method: "PUT", body: [String: String]()) as JSONValue
+        UserDefaults.standard.set(account, forKey: Self.ownerKey)
         enabled = true
-        UserDefaults.standard.set(true, forKey: Self.enabledKey)
         // A new category needs its history, not just the last days.
         lastSync = nil
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
@@ -231,36 +254,43 @@ final class AppleHealth {
         _ = await sync(api: api, force: true)
     }
 
-    /// After switching the server: that server's last sync.
+    /// After switching the server: that server's last sync. Reading stops until
+    /// the account there turns out to be the one that connected it (resume).
     func serverChanged() {
         lastSync = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
+        stopReading()
     }
 
-    /// Stops reading. The server keeps what it already has.
-    func disconnect() {
+    /// Reading stops for now; the account that connected it stays (ownerKey).
+    private func stopReading() {
         enabled = false
         generation += 1
         nightsFound = nil
         readyToScore = false
-        UserDefaults.standard.set(false, forKey: Self.enabledKey)
-        UserDefaults.standard.removeObject(forKey: Self.resumeKey)
         stopObservers()
     }
 
-    /// Signing out: the next account must not read this iPhone, but signing
-    /// back in to this one reads it again (resume).
-    func pause(account email: String?) {
-        let wasOn = enabled
-        let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
-        disconnect()
+    /// Stops reading. The server keeps what it already has.
+    func disconnect() {
+        stopReading()
+        UserDefaults.standard.removeObject(forKey: Self.ownerKey)
+        UserDefaults.standard.removeObject(forKey: Self.resumeKey)
+    }
+
+    /// The session ran out (or the server was switched): nothing is read until the
+    /// next sign-in shows whose it is (resume), so an observer firing meanwhile
+    /// sends nothing with another account's new session (security review SEC-1).
+    func hold() { stopReading() }
+
+    /// Signing out or another account: the next account must not read this
+    /// iPhone, but signing back in to the one that connected it reads it again (resume).
+    func pause() {
+        stopReading()
         // The sources one account switched off are not the next one's, nor is
         // the reading it paused with its health data (resumeAfterHealthPause).
         hidden = [:]
         UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
         UserDefaults.standard.removeObject(forKey: Self.hiddenKey)
-        // Off already (a second sign-out): the account that read it still gets it back.
-        if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
-        else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
     }
 
     /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
@@ -271,34 +301,39 @@ final class AppleHealth {
         disconnect()
         lastSync = nil
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
-        if wasOn { UserDefaults.standard.set(true, forKey: Self.healthPausedKey) }
+        // Kept for this account on this server only (a same e-mail on the other server is not it).
+        if wasOn, let account = Self.account { UserDefaults.standard.set(Self.ownerKey + ":" + account, forKey: Self.healthPausedKey) }
     }
 
     /// Health data on again: with the permissions iOS kept, from the start.
     func resumeAfterHealthPause(api: APIClient) async {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: Self.healthPausedKey) else { return }
+        guard let account = Self.account, defaults.string(forKey: Self.healthPausedKey) == Self.ownerKey + ":" + account else { return }
         defaults.removeObject(forKey: Self.healthPausedKey)
+        defaults.set(account, forKey: Self.ownerKey)
         enabled = true
-        defaults.set(true, forKey: Self.enabledKey)
         start(api: api)
         await sync(api: api, force: true)
     }
 
     private static let healthPausedKey = "appleHealth.readBeforePause"
 
-    /// After a sign-in to the account that read Apple Health before signing
-    /// out: on again with the permissions iOS kept, and the days in between.
+    /// After a sign-in (or switching the server) to the account that connected
+    /// Apple Health here: on again with the permissions iOS kept, and the days in between.
     func resume(account email: String?, api: APIClient) async {
         let defaults = UserDefaults.standard
-        guard let saved = defaults.string(forKey: Self.resumeKey), let email else { return }
-        guard saved == Self.fingerprint(email), !enabled else { defaults.removeObject(forKey: Self.resumeKey); return }
-        // Switched off for this account elsewhere in the meantime: stays off.
+        // Signed out before the 617 review: that account by its e-mail.
+        if let saved = defaults.string(forKey: Self.resumeKey) {
+            defaults.removeObject(forKey: Self.resumeKey)
+            if let email, saved == Self.fingerprint(email), let account = Self.account { defaults.set(account, forKey: Self.ownerKey) }
+        }
+        guard Self.readsForAccount else { stopReading(); return }
+        guard !enabled else { return }
+        // Switched off for this account elsewhere in the meantime (or an id used
+        // again after a deleted account): stays off.
         guard let status: AppleHealthServerStatus = try? await api.get("/app/api/health/apple") else { return }
-        defaults.removeObject(forKey: Self.resumeKey)
-        guard status.connected == true else { return }
+        guard status.connected == true else { disconnect(); return }
         enabled = true
-        defaults.set(true, forKey: Self.enabledKey)
         start(api: api)
         await sync(api: api)
     }
@@ -449,7 +484,7 @@ final class AppleHealth {
     /// The sync with what it did; one already running is awaited, not skipped.
     func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
         if let running { return await running.value }
-        guard enabled, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
+        guard enabled, Self.readsForAccount, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
         // No health data leaves the phone before the account's consent to it.
         guard AppModel.healthConsentGiven else { return SyncOutcome(ok: false, changed: false) }
         // A locked iPhone keeps Apple Health closed: nothing would be read and
@@ -538,7 +573,7 @@ final class AppleHealth {
             var changed = false, meaningful = false
             for upload in uploads {
                 // Signed out or another account meanwhile: this iPhone's data is not theirs to get.
-                guard round == generation, enabled, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
+                guard round == generation, enabled, Self.readsForAccount, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
                 let answer: UploadAnswer = try await api.send("/app/api/health/apple", method: "POST", body: upload)
                 // An older server does not say: count it as new.
                 let new = (answer.changed ?? 1) > 0
@@ -557,6 +592,12 @@ final class AppleHealth {
         } catch {
             // Abandoned (AppleHealth.abandon): no error to show, the next sync goes on.
             if AppModel.isCancellation(error) || round != generation { return SyncOutcome(ok: false, changed: false) }
+            // The server does not have this account connected (disconnected elsewhere): reading stops here too.
+            if case APIError.appleHealthNotConnected = error {
+                disconnect()
+                message = error.localizedDescription
+                return SyncOutcome(ok: false, changed: false)
+            }
             message = error.localizedDescription
             return SyncOutcome(ok: false, changed: false)
         }
@@ -579,6 +620,8 @@ private struct AppleHealthServerStatus: Decodable {
 
 struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
+    /// Kept by the server only for an account that connected Apple Health (PUT).
+    var connectedOnly = true
     var windows: [String: Window]? = nil
     var categories: [String]
     /// Food and water other apps logged, every one from these days (src/apple-food.js).
