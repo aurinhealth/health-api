@@ -257,7 +257,7 @@ struct CoachView: View {
                                leaveGhost()
                                Task { await open(id, at: message) }
                            }, memory: { showMemory = true })
-                .transition(.move(edge: .leading))
+                .motionTransition(.move(edge: .leading))
             }
         }
         .tint(Palette.ink)

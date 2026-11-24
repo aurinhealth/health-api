@@ -1419,7 +1419,7 @@ struct ExerciseInfoButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "info.circle").scaledFont(18, cap: .denseCap).foregroundStyle(Palette.muted)
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(L10n.f("Jak na %@", name))

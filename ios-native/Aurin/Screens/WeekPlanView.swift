@@ -607,7 +607,7 @@ struct WeekPlanView: View {
         if let toast { settle(toast, undo: false) }
         withAnimation(.snappy) { toast = next }
         Task {
-            try? await Task.sleep(for: .seconds(5))
+            try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == next.id { settle(next, undo: false) }
         }
     }

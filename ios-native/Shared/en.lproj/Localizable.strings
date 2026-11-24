@@ -5266,3 +5266,15 @@
 "Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
 "Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
 "Jídlo se tu ukazuje od %@." = "Food shows here from %@.";
+"Smazat sérii" = "Delete set";
+"Drop série" = "Drop set";
+"Zahřívací série" = "Warm-up set";
+"Levá strana série" = "Set, left side";
+"Pravá strana série" = "Set, right side";
+"pravá strana" = "right side";
+"levá strana" = "left side";
+"Váha, %@" = "Weight, %@";
+"Opakování, %@" = "Reps, %@";
+"Nevyplněno" = "Empty";
+"Můžeš to vrátit." = "You can undo it.";
+"Rozpracováno" = "In progress";
