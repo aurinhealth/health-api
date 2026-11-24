@@ -39,10 +39,13 @@ final class SwipeBackTests: XCTestCase {
         for _ in 0..<3 where card == nil { app.swipeUp(); card = onScreen(cards) }
         guard let card else { return XCTFail("\(identifier) is not on screen") }
         card.tap()
-        XCTAssertTrue(waitUntil { !card.isHittable }, "\(identifier) did not open")
+        // The detail's "Zpět" tells it opened: the card itself, bound by index,
+        // can lose its activation point under the pushed page (CI, #1259).
+        let back = app.buttons.matching(identifier: "Zpět")
+        XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
         wait(1.5)
         edgeSwipe()
-        expect(waitUntil { card.isHittable }, "the edge swipe did not go back from \(identifier)")
+        expect(waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }, "the edge swipe did not go back from \(identifier)")
     }
 
     /// A finger from the very left edge to two thirds across.
