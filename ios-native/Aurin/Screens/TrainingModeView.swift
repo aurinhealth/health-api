@@ -1228,8 +1228,13 @@ struct TrainingModeView: View {
 
     /// Turns to a part or an exercise; `auto`: it starts at once (tapped),
     /// else it waits for its Start (it came on after the one before).
+    /// During a rest a part tapped waits for its Start and the rest runs on,
+    /// so back on the exercise it is still there (Petr 2026-11-24).
     private func go(_ step: Step?, auto: Bool) {
-        restEnd = nil
+        let resting = restEnd.map { $0 > Date() } ?? false
+        var auto = auto
+        if case .part? = step, resting { auto = false }
+        if step == nil || !resting { restEnd = nil }
         // The new part's runner names its first move when it appears.
         partMove = nil
         cardioClock = nil
@@ -1343,7 +1348,7 @@ struct TrainingModeView: View {
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
                                 inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
                                                                autoStart: partAutoStart, next: stepName(then, day), close: close,
-                                                               started: { waiting = false }, zoneLows: zoneLows,
+                                                               started: { waiting = false; restEnd = nil }, zoneLows: zoneLows,
                                                                target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
                                                                command: cardioCommand,
                                                                clock: { cardioClock = $0 }))
@@ -1507,6 +1512,8 @@ struct TrainingModeView: View {
             .accessibilityElement(children: .combine)
             PrimaryButton(title: L10n.tr(start), systemImage: "play.fill") {
                 waiting = false
+                // A part begun ends a rest that ran on (go).
+                if part != nil { restEnd = nil }
                 live.worked()
             }
             if let part {
