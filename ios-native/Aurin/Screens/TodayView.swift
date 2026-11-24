@@ -279,7 +279,7 @@ struct TodayContent: View {
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
             if coachShown, let words = firstWords {
                 CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
-                              tip: AnyView(TodayCoachAction(today: today)))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 14) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else if coachShown, let missed = today.missedWorkout {
                 // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
@@ -291,11 +291,12 @@ struct TodayContent: View {
                                       Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
                                       TodayCoachAction(today: today)
                                   }
+                                  coachThings(plain: true).padding(.top, 14)
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
-                              tip: AnyView(TodayCoachAction(today: today)))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 14) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else {
                 TodayCoachAction(today: today)
@@ -314,12 +315,23 @@ struct TodayContent: View {
             if today.trainingPlan?.paused == true {
                 PlanPausedCard().padding(.top, 10)
             }
-            // One card for what the coach asks today (check-in, review after a
-            // workout, week check, threshold, the plan's proposal). It keeps its
-            // gap only while it shows (an empty one left a hole).
-            CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
-                            openCoach: openCoach, top: 12)
+            // What the coach asks today (check-in, review after a workout, week
+            // check, threshold, the plan's proposal) sits in the Coach card above
+            // (Petr 2026-11-24: one coach card). With the coach off on Dnes it is
+            // a card of its own, so its buttons stay. It keeps its gap only while
+            // it shows (an empty one left a hole).
+            if !coachShown {
+                coachThings(plain: false)
+            }
         }
+    }
+}
+
+extension TodayView {
+    /// What the coach asks today: plain inside the Coach card, or its own card.
+    func coachThings(plain: Bool) -> some View {
+        CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
+                        openCoach: openCoach, top: plain ? 0 : 12, plain: plain)
     }
 }
 
