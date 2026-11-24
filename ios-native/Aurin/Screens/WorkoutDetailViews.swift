@@ -1840,10 +1840,9 @@ struct ManualWorkoutSheet: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    /// "55 min", "1 h 30", "4 h".
+    /// "55 min", "1 h 30 min", "4 h" (Fmt.duration).
     nonisolated static func length(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes) min" }
-        return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
+        Fmt.duration(minutes)
     }
 
     // MARK: Heart rate or effort

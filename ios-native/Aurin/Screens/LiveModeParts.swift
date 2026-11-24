@@ -515,7 +515,7 @@ struct StartCountdown: View {
                 }
                 Text("Klepnutím kamkoli začneš hned").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 24)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
         }
         .overlay(alignment: .topLeading) {
             Button(action: onCancel) {

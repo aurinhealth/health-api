@@ -43,11 +43,11 @@ struct LiveGymView: View {
             if let day {
                 if summary {
                     PageScroll {
-                        summaryView(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 40)
+                        summaryView(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 40)
                     }
                 } else {
                     PageScroll {
-                        live(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
+                        live(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
                     }
                     if let restEnd {
                         restBar(until: restEnd).padding(.horizontal, 16).padding(.bottom, 12)
@@ -63,7 +63,7 @@ struct LiveGymView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)

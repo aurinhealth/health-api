@@ -227,14 +227,11 @@ struct TodayDials: View {
 
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
-    /// "6 h 54" (the length rule, as "2 h 05" elsewhere); a whole hour is
-    /// "7 h", as in the concept's "6 min short of 7 h".
+    /// "6 h 54 min" (Fmt.duration); a whole hour is "7 h", as in the
+    /// concept's "6 min short of 7 h".
     nonisolated static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
-        let m = Int(minutes.rounded())
-        // No-break spaces: "6 h 54" never splits inside the dial.
-        if m < 60 { return "\(m)\u{00A0}min" }
-        return m % 60 == 0 ? "\(m / 60)\u{00A0}h" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
+        return Fmt.duration(Int(minutes.rounded()))
     }
 
     /// The night against its need: "of 7 h needed", amber below the need,
@@ -243,8 +240,10 @@ struct TodayDials: View {
         let minutes = sleepFailed ? nil : today.sleep?.minutes
         guard let minutes else { return Cell(value: nil, scale: 0...480, number: "–") }
         let spoken = Fmt.hoursMinutesSpoken(minutes)
+        // In the dial "4 h 23" with a small "min" below, as "ms" under the HRV (Petr 2026-11-23).
+        let dial = Fmt.durationParts(Int(minutes.rounded()))
         guard let need = today.sleep?.need, need > 0 else {
-            return Cell(value: minutes, scale: 0...max(540, minutes), number: Self.length(minutes), spokenValue: spoken)
+            return Cell(value: minutes, scale: 0...max(540, minutes), number: dial.number, unit: dial.unit, spokenValue: spoken)
         }
         let n = Double(need), gap = Int((n - minutes).rounded())
         // A line under the dial, so the whole length (Petr 2026-11-23: "of 8 h 58 min needed").
@@ -255,7 +254,7 @@ struct TodayDials: View {
         let gapText = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
             : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), needText)
             : L10n.f("přesně %@", needText)
-        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: Self.length(minutes),
+        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: dial.number, unit: dial.unit,
                     note: gap > 0 ? L10n.f("z potřebných %@", needText) : gapText, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red,
                     spokenValue: spoken, spokenNote: gapText)
     }

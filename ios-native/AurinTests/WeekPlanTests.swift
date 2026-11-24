@@ -44,14 +44,14 @@ final class WeekPlanTests: XCTestCase {
         defer { L10n.setLanguage(language) }
         L10n.setLanguage("en")
         XCTAssertEqual(WeekPlanText.done(4, of: 8), "4 of 8 planned workouts done")
-        XCTAssertEqual(WeekPlanText.summary(count: 8, minutes: 442), "8 workouts, 7 h 22 min")
+        XCTAssertEqual(WeekPlanText.summary(count: 8, minutes: 442), "8 workouts, 7\u{00A0}h\u{00A0}22\u{00A0}min")
         XCTAssertEqual(WeekPlanText.summary(count: 0, minutes: 0), "No workouts")
         XCTAssertEqual(WeekPlanText.dayWord("2026-10-08", today: "2026-10-08"), "Today")
         XCTAssertTrue(WeekPlanText.replans(from: "2026-11-12", to: "2026-11-22").hasSuffix("Finished workouts stay."))
         XCTAssertEqual(WeekPlanSettingsText.day(-1), "–")
         XCTAssertEqual(WeekPlanSettingsText.day(0), "Day off")
-        XCTAssertEqual(WeekPlanSettingsText.day(360), "6 h+")
-        XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8 h 15 min a week")
+        XCTAssertEqual(WeekPlanSettingsText.day(360), "6\u{00A0}h+")
+        XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8\u{00A0}h\u{00A0}15\u{00A0}min a week")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-08", today: "2026-10-08"), "Rest from today to Sunday.")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-09", today: "2026-10-08"), "Rest from tomorrow to Sunday.")
     }
