@@ -40,6 +40,20 @@ const list = await call({});
 if (list.status !== "ok") { console.error("The test server refused the evaluation:", list.message || list.status); process.exit(2); }
 // COACH_EVAL_CALIBRATE (luna, sol, both, haiku (Anthropic) or judge, the eval's judge): only the checker's calibration (coach-calibration.js), no coach answers.
 const calibrate = String(process.env.COACH_EVAL_CALIBRATE || "").trim();
+// rules: the rule judge (coach-judge.js) on Today texts with a known verdict.
+if (calibrate === "rules") {
+  const out = [];
+  for (const id of list.judgeCalibration || []) { const r = await call({ judgeCalibrate: id }).catch(error => ({ id, status: "error", message: error.message })); r.id ??= id; out.push(r);
+    console.log(r.status === "ok" ? `${id} ${r.correct ? "ok" : "CHYBA"} ${(r.failed || []).map(f => f.rule).join(",")}` : `${id} ${r.status}: ${r.message || ""}`); }
+  const ok = out.filter(r => r.status === "ok"), faults = ok.filter(r => r.expect.length), clean = ok.filter(r => !r.expect.length);
+  const usd = ok.reduce((sum, r) => sum + (r.usd || 0), 0), times = ok.map(r => r.ms).sort((a, b) => a - b);
+  const lines = [`# Kalibrace AI rozhodčího, ${host}`, "", `Chytil porušení: ${faults.filter(r => r.correct).length}/${faults.length}`, `Falešné poplachy: ${clean.filter(r => !r.correct).length}/${clean.length}`,
+    `Cena ${usd.toFixed(3)} USD, medián ${times.length ? (times[times.length >> 1] / 1000).toFixed(1) : "–"} s${out.length - ok.length ? `, chyb serveru ${out.length - ok.length}` : ""}`, "",
+    ...ok.map(r => `- ${r.correct ? "✅" : "❌"} ${r.id} (${r.expect.length ? "čeká " + r.expect.join(" nebo ") : "bez porušení"}): ${r.text} ${r.advice}${(r.failed || []).map(f => `\n  - ${f.rule}: „${f.quote}“ (${f.why})`).join("")}`), ""];
+  writeFileSync("coach-eval.json", JSON.stringify(out, null, 2));
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n"); else console.log(lines.join("\n"));
+  process.exit(out.some(r => r.status !== "ok") ? 1 : 0);
+}
 if (calibrate) {
   const models = calibrate === "both" ? ["luna", "sol"] : [["sol", "judge", "haiku"].includes(calibrate) ? calibrate : "luna"], out = [], lines = [`# Kalibrace AI kontrolora, ${host}`, ""];
   for (const model of models) {
@@ -90,10 +104,10 @@ const lines = [
 ];
 // The AI checker (coach-checker.js): what it cost and how long it took.
 // What the run cost on OpenAI (the coach's answers and the checker).
-const coachUsd = results.reduce((sum, r) => sum + (r.usd || 0), 0), checkerUsd = results.reduce((sum, r) => sum + (r.checker?.usd || 0), 0);
+const coachUsd = results.reduce((sum, r) => sum + (r.usd || 0), 0), checkerUsd = results.reduce((sum, r) => sum + (r.checker?.usd || 0), 0), judgeUsd = results.reduce((sum, r) => sum + (r.judge?.usd || 0), 0);
 const coachTimes = results.filter(r => r.ms != null && r.task !== "checker").map(r => r.ms).sort((a, b) => a - b);
 if (coachTimes.length) lines.push(`Kouč: ${coachTimes.length} odpovědí, ${(coachUsd / coachTimes.length).toFixed(4)} USD na odpověď, medián ${(coachTimes[coachTimes.length >> 1] / 1000).toFixed(1)} s`, "");
-lines.push(`Cena běhu: kouč ${coachUsd.toFixed(2)} USD + kontrolor ${checkerUsd.toFixed(2)} USD = ${(coachUsd + checkerUsd).toFixed(2)} USD`, "");
+lines.push(`Cena běhu: kouč ${coachUsd.toFixed(2)} USD + kontrolor ${checkerUsd.toFixed(2)} USD + rozhodčí ${judgeUsd.toFixed(2)} USD = ${(coachUsd + checkerUsd + judgeUsd).toFixed(2)} USD`, "");
 // How much of the capability map the situations cover, each sport on its own (coach-capabilities.js).
 if (list.coverage) {
   const c = list.coverage, pct = p => `${p.covered}/${p.total} (${Math.round(100 * p.covered / p.total)} %)`;
@@ -101,6 +115,15 @@ if (list.coverage) {
 }
 const checked = results.filter(r => r.checker?.ms != null), times = checked.map(r => r.checker.ms).sort((a, b) => a - b);
 if (checked.length) lines.push(`AI kontrolor: ${checked.length} odpovědí, ${checked.reduce((sum, r) => sum + (r.checker.usd || 0), 0).toFixed(3)} USD, medián ${(times[times.length >> 1] / 1000).toFixed(1)} s`, "");
+// The rule judge (coach-judge.js): per rule, how many texts kept it, broke it or had no such rule.
+const judged = results.filter(r => r.judge && !r.judge.error);
+if (judged.length) {
+  const labels = { NUMBERS: "Počet čísel", FACTS: "Fakta podle dat", LENGTH: "Délka", SAFETY: "Bezpečnost", TONE: "Tón a jazyk", RULES: "Ostatní pravidla" };
+  const count = (rule, verdict) => judged.filter(r => r.judge.rules.some(x => x.rule === rule && x.verdict === verdict)).length;
+  const jt = judged.map(r => r.judge.ms).sort((a, b) => a - b);
+  lines.push("## AI rozhodčí po pravidlech", "", `${judged.length} textů, ${judgeUsd.toFixed(3)} USD, medián ${(jt[jt.length >> 1] / 1000).toFixed(1)} s${results.some(r => r.judge?.error) ? `, selhal u ${results.filter(r => r.judge?.error).length}` : ""}`, "",
+    "| Pravidlo | Prošlo | Porušeno | Netýká se |", "|---|---|---|---|", ...Object.entries(labels).map(([rule, name]) => `| ${name} | ${count(rule, "pass")} | ${count(rule, "fail")} | ${count(rule, "na")} |`), "");
+}
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
 const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");

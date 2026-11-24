@@ -2,8 +2,10 @@ name: Coach evaluation
 
 # Sends fixed situations to the real AI coach on the test server
 # (src/coach-eval.js, scripts/coach-eval.mjs) and shows its replies with the
-# checks in the job summary. Started by hand from main; it costs OpenAI tokens
-# on the test server's key, counted on its owner's AI usage.
+# checks in the job summary, and the AI rule judge's verdicts per prompt rule
+# (src/coach-judge.js, Anthropic key on the test server). Started by hand from
+# main; it costs OpenAI tokens on the test server's key, counted on its owner's
+# AI usage, and Anthropic tokens for the judge.
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +22,7 @@ on:
         required: false
         default: ""
       calibrate:
-        description: "Only the AI checker's calibration on answers with a known verdict: luna, sol, both, haiku (Anthropic, staging key) or judge, the eval's judge (about 0.03 USD luna, haiku or judge, 0.6 USD sol); empty = the normal run"
+        description: "Only a calibration on answers with a known verdict: luna, sol, both, haiku (Anthropic, staging key) or judge for the AI checker (about 0.03 USD luna, haiku or judge, 0.6 USD sol), rules for the AI rule judge (Today texts, about 0.01 USD); empty = the normal run"
         required: false
         default: ""
 
