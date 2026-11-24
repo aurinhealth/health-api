@@ -118,6 +118,10 @@ final class AppModel {
     /// When each tab's data last came from the server, and for which day. The
     /// screens open with the copy saved on the phone; refreshIfStale loads it again.
     @ObservationIgnored var fetched: [AppTab: (at: Date, day: String)] = [:]
+    /// Food's load on its way, so Today's goals check waits for it instead of a second request (review 2026-11-24 point 15).
+    @ObservationIgnored var foodLoad: Task<Void, Never>?
+    /// Health detail charts (GET /app/api/health/series) kept for the session; see healthSeries(metric:period:).
+    @ObservationIgnored var seriesCache: [String: (at: Date, day: String, scope: AccountScope, series: HealthSeries)] = [:]
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
     var dataRevision = 0
