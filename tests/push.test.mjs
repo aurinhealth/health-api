@@ -301,7 +301,7 @@ test("the subtitle shows the night and the baselines, the body today's plan", ()
   const ride = [{ title: "Threshold 4×8 min", sport: "ride" }];
   assert.deepEqual(withLang("en", () => readinessMessage({ score: 66, zone: "yellow", ...night, planned: ride })), {
     alert: { title: "Readiness 66 · Keep it steady today", subtitle: "Sleep 6:40 · HRV −14% · Resting HR +2", body: "Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day." },
-    layout: { title: "Readiness 66", subtitle: "Keep it steady today", body: "Sleep 6 h 40. Today's plan: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day.",
+    layout: { title: "Readiness 66", subtitle: "Keep it steady today", body: "Sleep 6 h 40. Today: Threshold 4×8 min. Keep it easy in Z2 instead, intervals another day.",
       label: "Readiness", pill: "below your usual range", night: "Sleep 6 h 40.", advice: "Keep it easy in Z2 instead, intervals another day.", workout: { title: "Threshold 4×8 min", sport: "ride" } },
     zone: "yellow", verdict: "steady"
   });
@@ -430,19 +430,19 @@ test("a night under 3 hours waits for the other device's upload like a missing n
 test("the concept's morning banner: Readiness 78, the verdict, the night in words and the advice (no dots)", () => {
   const m = withLang("en", () => readinessMessage({ score: 78, zone: "green", sleep: { minutes: 414 }, hrv: { value: 68, baseline: 66, low: 60, high: 74 },
     planned: [{ title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 }] }));
-  assert.deepEqual(m.layout, { title: "Readiness 78", subtitle: "Good day for a hard workout", body: "Sleep 6 h 54, HRV in your usual range. Today's plan: Upper body strength. Your body is ready, go for it.",
+  assert.deepEqual(m.layout, { title: "Readiness 78", subtitle: "Good day for a hard workout", body: "Sleep 6 h 54, HRV in your usual range. Today: Upper body strength at 17:30.",
     label: "Readiness", pill: "in your usual range", night: "Sleep 6 h 54, HRV in your usual range.", advice: "Your body is ready, go for it.",
-    workout: { title: "Upper body strength", sport: "strength", time: "17:30", minutes: 45 } });
+    workout: { title: "Upper body strength", sport: "strength", time: "17:30", when: "Today at 17:30", minutes: 45 } });
   assert.doesNotMatch(JSON.stringify(m.layout), /·/);
   // Older builds keep parsing the old alert.
   assert.match(m.alert.title, /^Readiness 78 · /);
 });
 
-test("the night in words: HRV under, in or above the usual range, never a cause", () => {
+test("the night in words: HRV below, in or above the usual range, never a cause", () => {
   withLang("en", () => {
-    assert.equal(nightWords({ sleep: { minutes: 340 }, hrv: { value: 52, low: 60, high: 74 } }), "Sleep 5 h 40, HRV under your usual range.");
+    assert.equal(nightWords({ sleep: { minutes: 340 }, hrv: { value: 52, low: 60, high: 74 } }), "Sleep 5 h 40, HRV below your usual range.");
     assert.equal(nightWords({ hrv: { value: 80, low: 60, high: 74 } }), "HRV above your usual range.");
-    assert.equal(nightWords({ sleep: { minutes: 420 }, hrv: { value: 70 } }), "Sleep 7 h 00.");
+    assert.equal(nightWords({ sleep: { minutes: 420 }, hrv: { value: 70 } }), "Sleep 7 h.");
     assert.equal(nightWords({ sleep: { minutes: 420 }, noSleep: true }), "");
   });
   assert.equal(withLang("cs", () => nightWords({ sleep: { minutes: 414 }, hrv: { value: 68, low: 60, high: 74 } })), "Spánek 6 h 54, HRV v obvyklém rozmezí.");
@@ -473,4 +473,17 @@ test("long workout names are cut to 60 characters, signs get one card sentence",
   assert.ok(m.alert.body.length < 220);
   const s = readinessMessage({ score: 80, zone: "green", flags: ["respiration_elevated"] });
   assert.equal(s.layout.advice, "No intensity today, easy training only.");
+}));
+
+test("morning layout after the Gemini review: no verdict before last night syncs, a full hour without :00, signs named in the card", () => withLang("en", () => {
+  const n = readinessMessage({ score: 70, zone: "green", missing: ["sleep"] }).layout;
+  assert.equal(n.subtitle, "Last night isn't synced yet");
+  assert.equal(n.pill, undefined);
+  assert.equal(n.advice, undefined);
+  assert.equal(nightWords({ sleep: { minutes: 300 } }), "Sleep 5 h.");
+  const s = readinessMessage({ score: 72, zone: "green", flags: ["respiration_elevated"], sleep: { minutes: 420 } }).layout;
+  assert.equal(s.night, "Sleep 7 h, temperature or breathing in sleep above your usual range.");
+  const r = readinessMessage({ score: 38, zone: "red", planned: [{ title: "Long run", sport: "run", time: "07:00" }] }).layout;
+  assert.equal(r.advice, "Skip it, a walk or easy mobility at most.");
+  assert.equal(r.body, "Today: Long run at 07:00. Skip it, a walk or easy mobility at most.");
 }));
