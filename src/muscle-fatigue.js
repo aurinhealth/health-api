@@ -226,12 +226,14 @@ export function muscleCauses(doses, sources, muscle, now, today) {
 // (the sets when left out).
 export function muscleFatigue({ sets = [], history = sets, activities = [], now, today }) {
   const { doses, sources } = fatigueDoses({ sets, activities, now });
+  const last = lastTrained(history, today);
   const muscles = MUSCLES.map((id, order) => {
     const m = muscleState(doses, id, now), readyAt = m.hours ? new Date(now + m.hours * HOUR) : null;
     return {
       id, label: muscleLabel(id), state: m.state, level: Math.round(Math.min(1, m.fatigue / FULL) * 100) / 100,
       hours: m.hours, readyAt: readyAt ? readyAt.toISOString() : null, readyDate: readyAt ? localDate(readyAt) : null,
-      estimated: m.estimated, from: m.state === "rested" ? [] : muscleCauses(doses, sources, id, now, today), order
+      estimated: m.estimated, from: m.state === "rested" ? [] : muscleCauses(doses, sources, id, now, today),
+      lastDate: last.get(id) || null, order
     };
   }).sort((a, b) => b.hours - a.hours || b.level - a.level || a.order - b.order).map(({ order, ...m }) => m);
   const from = shiftDate(today, -3);
@@ -280,6 +282,29 @@ export function trainedDays(sets, muscleIds) {
     }
   }
   return [...perDay].filter(([, v]) => v >= TRAINED_FROM).map(([d]) => d).sort();
+}
+
+// Each muscle's last day with at least one set's worth of work on it (a helper's
+// share counts by its share), from the history of 4 weeks: the app's muscle
+// groups (Hips, Arms…) take the newest of their own muscles, not their body
+// part's (617 review #8: Hips showed the day of a quads session).
+export function lastTrained(sets, today) {
+  const perDay = new Map();
+  for (const s of sets || []) {
+    const date = dateOnly(s.workout_date);
+    if (!date || date > today) continue;
+    for (const [muscle, share] of Object.entries(setMuscles(s.exercise))) {
+      const key = muscle + "|" + date;
+      perDay.set(key, (perDay.get(key) || 0) + share);
+    }
+  }
+  const last = new Map();
+  for (const [key, v] of perDay) {
+    if (v < TRAINED_FROM) continue;
+    const [muscle, date] = key.split("|");
+    if (!(last.get(muscle) >= date)) last.set(muscle, date);
+  }
+  return last;
 }
 
 export function muscleGroups({ muscles, sets = [], today }) {
