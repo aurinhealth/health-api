@@ -1660,7 +1660,7 @@
 "Jak dopadl test %@?" = "How did the test on %@ go?";
 "Naplánovat test" = "Plan the test";
 "Neukládat" = "Don't save";
-"Ověř to testem: %@ (%@)." = "Check it with a test: %@ (%@).";
+"Ověř to testem: %@ (celkem %@)." = "Check it with a test: %@ (%@ in all).";
 "Podle tréninků se ti %@ zlepšilo na %@ (nastaveno %@)." = "Your training suggests your %@ has improved to %@ (set to %@).";
 "Podle tréninků je %@ nižší, %@ (nastaveno %@)." = "Your training suggests your %@ is lower, %@ (set to %@).";
 "Průměrný tep posledních 20 min" = "Average heart rate of the last 20 min";
@@ -4752,7 +4752,7 @@
 "Začít hned" = "Start now";
 "Detaily tréninku" = "Workout details";
 "Zátěž tréninku" = "Workout strain";
-"Zátěž dne %@ až %@" = "Day strain %1$@ to %2$@";
+"Zátěž dne z %@ na %@" = "Day strain from %1$@ to %2$@";
 "%@, předtím %@" = "%1$@, was %2$@";
 "Trvání" = "Duration";
 "Aktivní čas" = "Active time";
@@ -5243,6 +5243,11 @@
 "Zapsat večeři" = "Log dinner";
 "Zapsat druhou večeři" = "Log late snack";
 "Zapsat jídlo" = "Log food";
+"krátký spánek" = "short sleep";
+"nízká HRV" = "a low HRV";
+"vysoký klidový tep" = "a high resting heart rate";
+"a" = "and";
+"Odpověď trvala moc dlouho. Zkus to znovu." = "The answer took too long. Try again.";
 "Video techniky" = "Technique video";
 "YouTube, podobný cvik" = "YouTube, similar exercise";
 "Přehraje video" = "Plays the video";

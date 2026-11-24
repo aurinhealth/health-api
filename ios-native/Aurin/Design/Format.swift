@@ -204,14 +204,14 @@ enum Fmt {
         return names[utcCalendar.component(.weekday, from: date) - 1]
     }
 
-    /// Minutes as "1 h 15 min" or "45 min".
-    /// 75 → "1 h 15", 120 → "2 h", 42 → "42 min": the one way a length is
-    /// written (concept rule D-ZDRAVI-12, "2 h 05").
+    /// 75 → "1 h 15 min", 62 → "1 h 2 min", 120 → "2 h", 42 → "42 min": the
+    /// one way a length is written (Petr 2026-11-23: "4 h 23 min" everywhere,
+    /// no leading zero).
     static func duration(_ minutes: Int) -> String {
-        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " " + String(format: "%02d", minutes % 60) : "") : "\(minutes) min"
+        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"
     }
 
-    /// 860 → "14 h 20".
+    /// 860 → "14 h 20 min".
     static func hoursMinutesLong(_ minutes: Double) -> String {
         duration(Int(minutes.rounded()))
     }
