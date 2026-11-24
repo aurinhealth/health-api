@@ -36,7 +36,7 @@ const foodInput = {
 
 test("Food in English: the sentence, meal labels and amounts", () => {
   const f = en(() => buildFood(foodInput));
-  assert.match(f.sentence, /^Training day: 350 kcal extra\. 1385 kcal left, afternoon snack around \d+ kcal\.$/);
+  assert.match(f.sentence, /^Training day: 350 kcal extra\. 1,385 kcal left, afternoon snack around \d+ kcal\.$/);
   assert.deepEqual(f.meals.map(m => m.label), ["Breakfast", "Morning snack", "Lunch", "Afternoon snack", "Dinner", "Late snack"]);
   const all = f.meals.flatMap(m => m.entries);
   assert.equal(all.find(e => e.id === 1).amount, "1 serving");
@@ -52,8 +52,8 @@ test("Food sentences over and on target in English, Czech by default", () => {
   const onTarget = { ...foodInput, food: { ...foodInput.food, totals: { kcal: 2600 } } };
   assert.equal(en(() => buildFood(onTarget)).sentence, "Training day: 350 kcal extra. Today's target is reached.");
   const evening = { ...foodInput, hour: 23 };
-  assert.equal(en(() => buildFood(evening)).sentence, "Training day: 350 kcal extra. 1385 kcal left.");
-  assert.equal(buildFood(evening).sentence, "Tréninkový den: o 350 kcal víc. Zbývá 1385 kcal.");
+  assert.equal(en(() => buildFood(evening)).sentence, "Training day: 350 kcal extra. 1,385 kcal left.");
+  assert.equal(buildFood(evening).sentence, "Tréninkový den: o 350 kcal víc. Zbývá 1\u00a0385 kcal.");
   const cs = buildFood(foodInput);
   assert.equal(cs.meals[0].label, "Snídaně");
   assert.equal(cs.meals.flatMap(m => m.entries).find(e => e.id === 3).amount, "2 ks");

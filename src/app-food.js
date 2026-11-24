@@ -191,8 +191,12 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         carbs: part(num(macros.carbs_g), m, 5),
         fat: part(num(macros.fat_g), m, 1)
       } : null,
+      // What is left spread over the open meals, never more than the meal's own
+      // share of the day (617 #7: in the evening dinner got all 2,410 kcal
+      // left, unlike its row): the sentence, the chip and the coach say the row's kcal.
       suggestion: isOpen && left != null && shares > 0 ? {
-        kcal: slice(left, m, 10),
+        kcal: capped(slice(left, m, 10), part(target, m, 10)),
+        // The macros still catch up (protein left goes into the next meal).
         protein: slice(proteinLeft, m, 5),
         carbs: slice(carbsLeft, m, 5),
         fat: slice(fatLeft, m, 5)
@@ -257,13 +261,17 @@ function heatLine(date, daily, forecast) {
   return null;
 }
 
+// A number of kcal as the app writes it: "2 410", "2,410" (617 #7).
+const kcalText = v => Math.round(v).toLocaleString(L("cs-CZ", "en-US"));
+const capped = (v, cap) => (v == null || cap == null ? v : Math.min(v, cap));
+
 function sentence({ eaten, target, bonus, left, next }) {
   if (target == null) return null;
   const parts = [];
-  if (bonus > 50) parts.push(L(`Tréninkový den: o ${bonus} kcal víc.`, `Training day: ${bonus} kcal extra.`));
-  if (eaten > target + 100) parts.push(L(`Dnes je to o ${Math.round(eaten - target)} kcal nad cílem.`, `${Math.round(eaten - target)} kcal over today's target.`));
+  if (bonus > 50) parts.push(L(`Tréninkový den: o ${kcalText(bonus)} kcal víc.`, `Training day: ${kcalText(bonus)} kcal extra.`));
+  if (eaten > target + 100) parts.push(L(`Dnes je to o ${kcalText(eaten - target)} kcal nad cílem.`, `${kcalText(eaten - target)} kcal over today's target.`));
   else if (left != null && left <= 100) parts.push(L("Cíl na dnešek je splněný.", "Today's target is reached."));
-  else if (next) parts.push(L(`Zbývá ${Math.round(left)} kcal, ${next.label.toLowerCase()} kolem ${next.suggestion.kcal} kcal.`, `${Math.round(left)} kcal left, ${next.label.toLowerCase()} around ${next.suggestion.kcal} kcal.`));
-  else parts.push(L(`Zbývá ${Math.round(left)} kcal.`, `${Math.round(left)} kcal left.`));
+  else if (next) parts.push(L(`Zbývá ${kcalText(left)} kcal, ${next.label.toLowerCase()} kolem ${kcalText(next.suggestion.kcal)} kcal.`, `${kcalText(left)} kcal left, ${next.label.toLowerCase()} around ${kcalText(next.suggestion.kcal)} kcal.`));
+  else parts.push(L(`Zbývá ${kcalText(left)} kcal.`, `${kcalText(left)} kcal left.`));
   return parts.join(" ");
 }

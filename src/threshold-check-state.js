@@ -38,7 +38,8 @@ export async function loadThresholdSessions(env,ctx,today){
   const swims=unique.filter(a=>a.kind==='swim').map(a=>({date:a.date,kind:'swim',minutes:a.minutes}));
   const age=Number(profile?.age)||null;
   const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,runLthr:thresholds.runLthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null)};
-  return {sessions,swims,thresholds,athlete};
+  // The sports the athlete chose (athlete-focus.js): a test only for those (617 C10).
+  return {sessions,swims,thresholds,athlete,sports:Array.isArray(profile?.sports)?profile.sports:null};
 }
 // The test ride's own curves (time, watts) when its laps hold no 20-min effort:
 // Intervals.icu's streams of the activity (no per-ride power curve in its
@@ -57,7 +58,7 @@ async function testCurves(env,id){
 }
 
 export async function thresholdCheckState(env,ctx,today){
-  const [{sessions,swims,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
+  const [{sessions,swims,thresholds,athlete,sports},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
   // Since when each value is known (the old-threshold offer): the row
@@ -127,7 +128,7 @@ export async function thresholdCheckState(env,ctx,today){
     if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
     if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
     const metric=sport==='run'?'runThresholdPace':sport==='swim'?'swimCss':current.ftp?'ftp':'lthr',dates=(sport==='swim'?swims:sessions).filter(x=>x.kind===sport).map(x=>x.date);
-    const offer=thresholdOffer({sport,sessions:sport==='swim'?swims:sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(dates,today)});
+    const offer=thresholdOffer({sport,sports,sessions:sport==='swim'?swims:sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(dates,today)});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
     const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});

@@ -41,6 +41,9 @@ test("an offer only when the estimate moved 5 % or nothing is set", () => {
   assert.equal(thresholdOffer({ ...base, current: { ftp: 260 }, estimate: { value: 244 }, check: { status: "scheduled" } }), null);
   // A sport the athlete does not train gets nothing.
   assert.equal(thresholdOffer({ ...base, sport: "run", current: {}, estimate: null }), null);
+  // 617 C10: only the sports the athlete chose; never chosen = every sport.
+  assert.equal(thresholdOffer({ ...base, sports: ["swim", "strength"], current: {}, estimate: null }), null);
+  assert.equal(thresholdOffer({ ...base, sports: ["ride", "strength"], current: {}, estimate: null }).reason, "missing");
   // Without a power meter the ride test is the heart-rate one.
   const hrOnly = rides.map(({ avgPower, ...r }) => r);
   assert.deepEqual(Object.values((({ metric, testId }) => ({ metric, testId }))(thresholdOffer({ ...base, sessions: hrOnly, current: {}, estimate: null }))), ["lthr", "test-ride-lthr30"]);

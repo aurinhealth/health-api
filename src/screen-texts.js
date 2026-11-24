@@ -49,7 +49,29 @@ export const FOREGROUND_WAIT_MS = 1500;
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 const decimal = (v, d = 1) => (v == null ? null : (lang() === "en" ? String(round(v, d)) : String(round(v, d)).replace(".", ",")));
-const hm = minutes => (minutes == null ? null : Math.floor(minutes / 60) + ":" + String(Math.round(minutes) % 60).padStart(2, "0"));
+// "4 h 23 min", "45 min": the one way a length is written (Petr 2026-11-23).
+const hm = minutes => {
+  if (minutes == null) return null;
+  const m = Math.round(minutes), h = Math.floor(m / 60), rest = m % 60;
+  return h ? h + " h" + (rest ? " " + rest + " min" : "") : rest + " min";
+};
+// Today's rule-based card (617 #17, p6): one reason and one piece of advice,
+// the day's numbers stay under "Proč?" (the fact list "Sleep …, Yesterday …,
+// Current form …" is not shown any more). The coach's recommendation reads
+// "Reason. Advice." or "Reason: advice": the last sentence is the advice in
+// green, what is before it, or before its colon, the reason. A one-sentence
+// recommendation without a colon gets the first fact as its reason.
+const sentences = text => String(text || "").trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+export function todayFallback(summary) {
+  const rec = sentences(summary?.recommendation);
+  const first = sentences(summary?.text)[0] || null;
+  if (!rec.length) return first ? { text: first, advice: null } : null;
+  if (rec.length > 1) return { text: rec.slice(0, -1).join(" "), advice: rec.at(-1) };
+  const at = rec[0].indexOf(": ");
+  if (at < 0) return { text: first, advice: rec[0] };
+  const advice = rec[0].slice(at + 2);
+  return { text: rec[0].slice(0, at) + ".", advice: advice.charAt(0).toUpperCase() + advice.slice(1) };
+}
 const step = (v, by) => (v == null ? "" : String(Math.round(v / by)));
 const signed = v => (v == null ? null : (v < 0 ? "−" : "+") + Math.abs(Math.round(v)));
 
@@ -107,7 +129,6 @@ function todayFacts(d) {
     ...(adviceForAI(d.summary).restriction ? { injuryNoted: true } : {}),
     ...trendsOf(d)
   };
-  const hrvDiff = facts.hrv != null && facts.hrvBaseline != null ? facts.hrv - facts.hrvBaseline : null;
   const basis = [
     facts.readiness != null && { label: L("Připravenost", "Readiness"), value: String(facts.readiness) },
     facts.sleepMinutes != null && { label: L("Spánek", "Sleep"), value: hm(facts.sleepMinutes) + (facts.sleepNeedMinutes ? L(" z potřebných ", " of the needed ") + hm(facts.sleepNeedMinutes) : "") },
@@ -117,13 +138,12 @@ function todayFacts(d) {
     shown.length > 0 && { label: L("Plán dne", "Day plan"), value: shown.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
   ].filter(Boolean);
   const chips = [
-    facts.sleepMinutes != null && L("Spánek ", "Sleep ") + hm(facts.sleepMinutes),
-    facts.hrv != null && "HRV " + Math.round(facts.hrv) + (hrvDiff == null ? "" : hrvDiff >= 0 ? " ↑" : " ↓"),
-    facts.restingHR != null && L("Tep ", "RHR ") + Math.round(facts.restingHR)
+    // Only what the dials above do not show (617 p6): sleep and HRV are dials there.
+    facts.restingHR != null && L("Klidový tep ", "RHR ") + Math.round(facts.restingHR)
   ].filter(Boolean);
   return {
     facts, basis, chips,
-    fallback: d.summary && (d.summary.text || d.summary.recommendation) ? { text: d.summary.text || null, advice: d.summary.recommendation || null } : null,
+    fallback: todayFallback(d.summary),
     // Without last night the numbers are not there yet. Nor over a card that
     // failed to load this time (entrypoint.js todayUnavailable): its empty
     // place is not "no workout" or "nothing eaten".
@@ -147,7 +167,10 @@ function trainingFacts(d) {
   const done = (Array.isArray(d.sessions) ? d.sessions : []).filter(s => s && s.status === "done");
   const facts = {
     isoWeek: d.week ?? null,
-    strainToday: num(d.strain?.score), strainTarget: num(d.strain?.target),
+    // Where today's plan takes the day's strain (app-training.js), not a target:
+    // named a target, the coach wrote "10.5 against a 6.3 target" beside
+    // Today's "target 8 to 11" (617 C11). The target is Today's alone.
+    strainToday: num(d.strain?.score), strainAfterPlan: num(d.strain?.target),
     week: { done: num(week.done), planned: num(week.planned), doneLoad: num(week.doneLoad), plannedLoad: num(week.plannedLoad) },
     sessionsDone: done.slice(-5).map(s => ({ date: s.date, title: s.title, sport: s.sport, minutes: num(s.minutes), tss: num(s.tss) })),
     form: form ? { fitness: num(form.fitness), fatigue: num(form.fatigue), form: num(form.form), zone: form.label || null } : null,
@@ -161,7 +184,7 @@ function trainingFacts(d) {
     ...trendsOf(d)
   };
   const basis = [
-    facts.strainToday != null && { label: L("Námaha dnes", "Strain today"), value: decimal(facts.strainToday) + (facts.strainTarget != null ? L(", cíl ", ", target ") + decimal(facts.strainTarget) : "") },
+    facts.strainToday != null && { label: L("Námaha dnes", "Strain today"), value: decimal(facts.strainToday) + (facts.strainAfterPlan != null && facts.strainAfterPlan > facts.strainToday ? L(", s plánem ", ", with the plan ") + decimal(facts.strainAfterPlan) : "") },
     week.planned != null && { label: L("Týden", "Week"), value: (week.done ?? 0) + "/" + week.planned + L(" tréninků, ", " workouts, ") + (week.doneLoad ?? 0) + "/" + (week.plannedLoad ?? 0) + " TSS" },
     form && { label: L("Forma", "Form"), value: signed(form.form) + (form.label ? " (" + form.label + ")" : "") },
     done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? ", " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },

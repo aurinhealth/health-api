@@ -156,6 +156,9 @@ test('the stream names the chat, and a failure reads in the coach\'s voice witho
   }
   const limit=Object.assign(new Error('Denní limit AI je vyčerpaný.'),{limit:true});
   assert.equal((await frames(async()=>{throw limit;})).at(-1).message,'Denní limit AI je vyčerpaný.');
+  // 617 #6: the reason goes with the text, so the app can say it.
+  const reasons=[];for(const error of [limit,busy,down,Object.assign(new Error('t'),{name:'TimeoutError'}),new Error('Database unavailable')])reasons.push((await frames(async()=>{throw error;})).at(-1).reason);
+  assert.deepEqual(reasons,['limit','busy','ai','timeout','other']);
 });
 
 test('failed streamed work never publishes a completed reply or proposed actions',async()=>{

@@ -50,6 +50,15 @@ export function coachFailureText(error){
   return error?.ai&&error.status===429?L('Kouč teď neodpověděl, AI služba je přetížená. Zkus to za chvíli.', 'The coach didn\'t answer just now, the AI service is busy. Try again in a moment.'):L('Kouč teď neodpověděl. Zkus to za chvíli.', 'The coach didn\'t answer just now. Try again in a moment.');
 }
 
+// One word for the app and the log: limit, busy (the AI service said 429),
+// timeout, ai (another AI service error) or other (our own step failed).
+export function failureReason(error){
+  if(error?.limit)return 'limit';
+  if(error?.ai&&error.status===429)return 'busy';
+  if(error?.name==='TimeoutError'||error?.name==='AbortError')return 'timeout';
+  return error?.ai?'ai':'other';
+}
+
 // The browser receives readable answer updates; proposed changes are published
 // only in the final event, after server validation and draft persistence.
 // waitUntil (ctx.waitUntil) keeps the work going when the app hangs up, so the
@@ -62,7 +71,9 @@ export function assistantStreamResponse(work,{waitUntil=null}={}){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
       const done=(async()=>{
         try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}),chatId=>send({type:'chat',chatId}),step=>send({type:'step',step}));send({type:'done',result});}
-        catch(error){console.error('Streaming assistant failed',error.message);send({type:'error',message:coachFailureText(error)});}
+        // The reason with the text (617 #6: a suggested question got only "Couldn't get an
+        // answer"), and the log says which kind and step failed, so it can be found.
+        catch(error){console.error('Streaming assistant failed',failureReason(error),error?.name||'',error?.status??'',error?.message);send({type:'error',message:coachFailureText(error),reason:failureReason(error)});}
         finally{if(!cancelled)controller.close();}
       })();
       waitUntil?.(done);
