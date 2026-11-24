@@ -150,3 +150,32 @@ test("a match saved for one week stays in that week; the usual week keeps its ow
   assert.deepEqual((await getWeekPlan(db, "2026-11-25", { calendar: false })).events[5], [{ type: "Soccer", kind: "match", minutes: 90 }]);
   assert.deepEqual((await getWeekPlan(db, "2026-12-02", { calendar: false })).events[5], []);
 });
+
+test("a match is the week's hard day: no key session or heavy legs the day before, of and after it; practice spares the legs too", async () => {
+  const { roleTime } = await import("../src/week-planner.js");
+  const days = [["gym"], ["run"], ["gym", "ride"], ["run"], ["ride", "gym"], [], ["ride", "run"]];
+  const events = [[], [{ type: "Soccer", kind: "training", minutes: 75 }], [], [], [], [{ type: "Soccer", kind: "match", minutes: 90 }], []];
+  const roles = planWeekRoles(days, { events });
+  const of = (i, sport) => roles[i].items.find(x => x.sport === sport).role;
+  // Friday (the day before) and Sunday (the day after) stay easy, gym upper body only.
+  assert.equal(of(4, "ride"), "recovery");
+  assert.equal(of(4, "gym"), "gym_upper");
+  assert.equal(of(6, "ride"), "recovery");
+  // Monday is the day before practice: no heavy legs.
+  assert.equal(of(0, "gym"), "gym_upper");
+  // The match takes one of the usual two quality sessions.
+  assert.equal(roles.flatMap(d => d.items).filter(x => x.role === "quality").length, 1);
+  assert.equal(roles[1].items[0].role === "quality", false);
+  // The same events come from the saved week through roleTime.
+  assert.deepEqual(planWeekRoles(days, roleTime(sanitizeWeekPlan({ days, events }))), roles);
+  // Riding loads the legs little: the week stays as it was without it.
+  const riding = events.map(d => d.map(e => ({ ...e, type: "EquestrianSports" })));
+  assert.deepEqual(planWeekRoles(days, { events: riding }), planWeekRoles(days));
+});
+
+test("a week with two matches keeps the gym to the upper body", () => {
+  const days = [["gym"], ["ride"], [], ["gym"], [], [], []];
+  const events = [[], [], [{ type: "Hockey", kind: "match" }], [], [], [{ type: "Hockey", kind: "match" }], []];
+  assert.equal(planWeekRoles(days)[0].items[0].role, "gym_full");
+  for (const i of [0, 3]) assert.equal(planWeekRoles(days, { events })[i].items[0].role, "gym_upper");
+});

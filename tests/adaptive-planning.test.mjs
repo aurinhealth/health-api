@@ -232,3 +232,13 @@ test('the coach evaluation can run the coach on Claude: Haiku for short tasks, S
     assert.equal(calls[0].url,'https://api.openai.com/v1/responses');
   }finally{globalThis.fetch=original;}
 });
+
+test('an empty week leaves a match day to the match',()=>{
+  const events=[[],[],[],[],[],[{type:'Soccer',kind:'match'}],[]];
+  const prefs=sanitizeWeekPlan({weeklyActivities:3,events,availability:[{minutes:60},{minutes:0},{minutes:60},{minutes:0},{minutes:0},{minutes:180},{minutes:120}]});
+  const p=weekProposal({prefs,start:'2026-10-05',today:'2026-10-05',state:{status:'active'},focus:{sport:'cycling'}});
+  assert.ok(p.items.length>0);
+  assert.ok(p.items.every(x=>x.date!=='2026-10-10'),JSON.stringify(p.items.map(x=>x.date)));
+  // The day after the match is not a key day.
+  assert.ok(p.items.filter(x=>x.date==='2026-10-11').every(x=>!['quality','long'].includes(x.role)));
+});

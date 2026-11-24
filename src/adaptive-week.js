@@ -247,7 +247,8 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   // A triathlete: the split's counts; the brick's run is added after, on a ride day.
   const wanted = split ? { ...split.sessions, run: Math.max(0, (split.sessions.run || 0) - (split.brick ? 1 : 0)), gym: frequency.gym > 0 && count >= 8 ? 1 : 0 } : null;
   const tri = wanted ? Object.values(wanted).reduce((a, b) => a + b, 0) : 0;
-  const candidates = [0, 1, 2, 3, 4, 5, 6].filter(i => shift(start, i) >= today && prefs.availability[i].minutes >= 20 && !sessionsOn((week.days || []).find(d => d.date === shift(start, i))).length);
+  // A match day stays the match's (week-planner.js sanitizeEvents).
+  const candidates = [0, 1, 2, 3, 4, 5, 6].filter(i => shift(start, i) >= today && prefs.availability[i].minutes >= 20 && !sessionsOn((week.days || []).find(d => d.date === shift(start, i))).length && !prefs.events?.[i]?.some(e => e.kind === 'match'));
   let placed = 0;
   while (placed < Math.max(0, count - existing) && candidates.length) {
     candidates.sort((a, b) => {

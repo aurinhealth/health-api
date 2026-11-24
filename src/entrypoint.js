@@ -63,7 +63,7 @@ import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-re
 import { trendFacts } from "./trend-facts.js";
 import { workloadMetrics, loadBalance, LOAD_HISTORY_DAYS } from "./workload-ratio.js";
 import { planOverview } from "./plan-overview.js";
-import { MANUAL_SPORTS, manualWorkoutType, isOtherSport } from "./activity-type.js";
+import { MANUAL_SPORTS, manualWorkoutType, isOtherSport, typeName } from "./activity-type.js";
 import { illnessReturn } from "./illness-return.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities, fillWellness } from "./coach-reflection.js";
 import { addLoads } from "./training-load.js";
@@ -1745,6 +1745,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       delete coach.methodology;delete coach.cyclingCoachV2;
       const weekdayNames=L(['pondělí','úterý','středa','čtvrtek','pátek','sobota','neděle'],['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']);
       const facts={start,today,note:note||null,...(correction?{correction,previousProposal:previous}:{}),weekDays:dates.map((d,i)=>({date:d,weekday:weekdayNames[i]})),availabilityByDate:Object.fromEntries(dates.map(d=>[d,availabilityOn(prefs,d).minutes??null])),existingSessions,
+        // The athlete's other sports this week (football training, a match): the plan works around them.
+        ...(prefs.events?.some(d=>d.length)?{otherSports:dates.flatMap((date,i)=>(prefs.events[i]||[]).map(e=>({date,sport:typeName(e.type),kind:e.kind,minutes:e.minutes})))}:{}),
         rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label,...(x.brick?{brick:true}:{}),...(x.plan?{planSession:x.plan.kind}:{})})),...(rules.split?{triathlonSplit:splitFacts(rules.split)}:{}),...(openWater&&openWater!=='off'?{swimOpenWater:{setting:openWater,dueThisWeek:openWaterDue(start,openWater,inputs.focus?.event?.daysLeft??null)}}:{}),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
         ...(strain?.level?{recentState:{level:strain.level,signs:strain.chips}}:{}),
         weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
