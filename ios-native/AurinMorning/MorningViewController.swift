@@ -24,7 +24,7 @@ final class MorningViewController: UIViewController, UNNotificationContentExtens
         let layout = (content.userInfo["layout"] as? [String: Any]).map(MorningLayout.init)
         let morning = Morning(score: (readiness?["score"] as? NSNumber)?.intValue, zone: readiness?["zone"] as? String,
                               title: text.title, subtitle: text.subtitle, body: text.body)
-        let view = AnyView(layout.map { TodayMorningView(score: morning.score, zone: morning.zone, layout: $0) } ?? AnyView(MorningView(morning: morning)))
+        let view: AnyView = layout.map { AnyView(TodayMorningView(score: morning.score, zone: morning.zone, layout: $0)) } ?? AnyView(MorningView(morning: morning))
         // Without the coach in the plan (no Aurin Pro), no "Ask Coach" under it (concept N1, free).
         // Hidden values keep the layout in `private`: the plan still decides the button.
         let planned = layout ?? ((content.userInfo["private"] as? [String: Any])?["layout"] as? [String: Any]).map(MorningLayout.init)
