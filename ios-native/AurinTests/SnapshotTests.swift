@@ -1371,8 +1371,8 @@ final class SnapshotTests: XCTestCase {
         // The sport page (602 points 135 to 145): one length format, the name without its length, zones by % FTP.
         XCTAssertEqual(LengthControl.short(45), "45\u{00A0}min")
         XCTAssertEqual(LengthControl.short(60), "1\u{00A0}h")
-        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30")
-        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30\u{00A0}min")
+        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}5\u{00A0}min")
         XCTAssertEqual(LibraryWorkoutCard.shownName("Endurance with cadence drills, 60 min"), "Endurance with cadence drills")
         XCTAssertEqual(LibraryWorkoutCard.shownName("Over-unders 3 × 10"), "Over-unders 3 × 10")
         XCTAssertEqual(LibraryStepsBar.zone(50), 0)
