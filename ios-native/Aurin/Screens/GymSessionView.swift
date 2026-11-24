@@ -303,7 +303,7 @@ struct GymSessionView: View {
                 }
                 .padding(.top, 26)
                 .id(Self.exercisesID)
-                exerciseCards(day, started: started)
+                GymExerciseCards(day: day) { card(day, $0, started: started) }
                     .padding(.top, 8)
                 if !model.demo || previewing {
                     Button { Task { await loadCatalog(); adding = true } } label: {
@@ -313,7 +313,7 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 6)
                 }
-                if !muscles.isEmpty { worked.padding(.top, 22) }
+                if !muscles.isEmpty { GymWorkedCard(load: load).padding(.top, 22) }
                 // Sets ticked here: finished here. While the live workout runs it finishes there
                 // (finishing here would leave its Apple Health workout running).
                 if started && !LiveWorkout.shared.running {
@@ -407,23 +407,6 @@ struct GymSessionView: View {
         let card = cards.first { $0.date == date && $0.sport == "strength" }
         let week = training?.sessions?.first { $0.date == date && $0.sport == "strength" && $0.status != "done" }
         return (card?.time ?? week?.time, card?.strain, card?.minutes ?? week?.minutes)
-    }
-
-    /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
-    private var worked: some View {
-        let primary = Self.names(load.filter { $0.value >= BodyMap.primary })
-        // A group already primary (one of its muscles) is not secondary again.
-        let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
-        return VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "Co procvičíš")
-            VStack(alignment: .leading, spacing: 12) {
-                BodyMap(load: load, height: 200)
-                if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
-                if !secondary.isEmpty { muscleTags("Pomocně", secondary, filled: false) }
-            }
-            .padding(18)
-            .cardSurface(cornerRadius: 20)
-        }
     }
 
     /// The muscle groups by how hard they work, each once ("Chest", "Back", "Triceps"),
@@ -538,25 +521,6 @@ struct GymSessionView: View {
         "hamstrings": "Zadní stehna", "calves": "Lýtka"
     ].mapValues { L10n.tr($0) }
 
-    private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                // The figure's colours: rust for primary, amber for secondary.
-                Circle().fill(filled ? Palette.rust : Palette.amberBar).frame(width: 7, height: 7)
-                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            FlowLayout(spacing: 6) {
-                ForEach(names, id: \.self) { name in
-                    Text(verbatim: name).font(Typo.caption.weight(filled ? .semibold : .medium)).foregroundStyle(filled ? Palette.ink : Palette.muted)
-                        .padding(.horizontal, 13).frame(minHeight: 32)
-                        .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
-                        .overlay { if !filled { Capsule().stroke(Palette.amberBar.opacity(0.7), lineWidth: 1.5) } }
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
     /// Start workout (today) or Resume workout (the live workout still running), pinned.
     @ViewBuilder
     private func startPill(_ day: GymDay) -> some View {
@@ -610,44 +574,6 @@ struct GymSessionView: View {
         await save()
         if !model.demo, let names = day?.exercises.map(\.name) {
             muscles = (try? await model.api.gymMuscles(names: names)) ?? muscles
-        }
-    }
-
-    /// The exercises in order, a superset's together under its mark.
-    private func exerciseCards(_ day: GymDay, started: Bool) -> some View {
-        let all = day.exercises
-        let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
-        let groups: [String?] = list.map { $0.exercise.superset }
-        return VStack(spacing: 12) {
-            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
-                let items = Array(list[run])
-                if let letter = ExerciseOrder.letter(groups[run.lowerBound]), items.count == 2 {
-                    // A pair clasped as in the live workout: violet edges, "Superset A" on the seam.
-                    LiveSupersetClasp(letter: letter) {
-                        card(day, items[0].exercise, started: started)
-                    } second: {
-                        card(day, items[1].exercise, started: started)
-                    }
-                } else if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
-                    SupersetGroup(letter: letter, spacing: 12) {
-                        ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
-                    }
-                } else {
-                    ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
-                }
-            }
-        }
-    }
-
-    /// An exercise named by its name and which time it comes in the plan, not by
-    /// its first row (GymExercise.id): a set added or removed in an exercise above
-    /// moves the rows, and the weights typed here must stay.
-    private struct KeyedExercise {
-        let key: String
-        let exercise: GymExercise
-        init(_ all: [GymExercise], at index: Int) {
-            exercise = all[index]
-            key = exercise.name + "#" + String(all[..<index].filter { $0.name == all[index].name }.count)
         }
     }
 
@@ -755,6 +681,91 @@ struct GymSessionView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// A day's exercises as cards in order, a superset's together: a pair clasped as
+/// in the live workout (violet edges, "Superset A" on the seam), more under their
+/// mark. The planned detail and the builder's proposal (GymBuilderView) share it.
+struct GymExerciseCards<Card: View>: View {
+    let day: GymDay
+    @ViewBuilder let card: (GymExercise) -> Card
+
+    var body: some View {
+        let all = day.exercises
+        let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
+        let groups: [String?] = list.map { $0.exercise.superset }
+        VStack(spacing: 12) {
+            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
+                let items = Array(list[run])
+                if let letter = ExerciseOrder.letter(groups[run.lowerBound]), items.count == 2 {
+                    LiveSupersetClasp(letter: letter) {
+                        card(items[0].exercise)
+                    } second: {
+                        card(items[1].exercise)
+                    }
+                } else if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+                    SupersetGroup(letter: letter, spacing: 12) {
+                        ForEach(items, id: \.key) { (item: KeyedExercise) in card(item.exercise) }
+                    }
+                } else {
+                    ForEach(items, id: \.key) { (item: KeyedExercise) in card(item.exercise) }
+                }
+            }
+        }
+    }
+
+    /// An exercise named by its name and which time it comes in the plan, not by
+    /// its first row (GymExercise.id): a set added or removed in an exercise above
+    /// moves the rows, and the weights typed here must stay.
+    private struct KeyedExercise {
+        let key: String
+        let exercise: GymExercise
+        init(_ all: [GymExercise], at index: Int) {
+            exercise = all[index]
+            key = exercise.name + "#" + String(all[..<index].filter { $0.name == all[index].name }.count)
+        }
+    }
+}
+
+/// What you'll work: the figure, the Primary muscles filled, the Secondary
+/// outlined. The planned detail and the builder's proposal share it.
+struct GymWorkedCard: View {
+    let load: [String: Double]
+
+    var body: some View {
+        let primary = GymSessionView.names(load.filter { $0.value >= BodyMap.primary })
+        // A group already primary (one of its muscles) is not secondary again.
+        let secondary = GymSessionView.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Co procvičíš")
+            VStack(alignment: .leading, spacing: 12) {
+                BodyMap(load: load, height: 200)
+                if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
+                if !secondary.isEmpty { muscleTags("Pomocně", secondary, filled: false) }
+            }
+            .padding(18)
+            .cardSurface(cornerRadius: 20)
+        }
+    }
+
+    private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                // The figure's colours: rust for primary, amber for secondary.
+                Circle().fill(filled ? Palette.rust : Palette.amberBar).frame(width: 7, height: 7)
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            FlowLayout(spacing: 6) {
+                ForEach(names, id: \.self) { name in
+                    Text(verbatim: name).font(Typo.caption.weight(filled ? .semibold : .medium)).foregroundStyle(filled ? Palette.ink : Palette.muted)
+                        .padding(.horizontal, 13).frame(minHeight: 32)
+                        .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
+                        .overlay { if !filled { Capsule().stroke(Palette.amberBar.opacity(0.7), lineWidth: 1.5) } }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -4179,6 +4179,7 @@
 "Zahodit" = "Discard";
 
 "Zatím neuloženo, z %@" = "Not saved yet, from %@";
+"Zatím neuloženo" = "Not saved yet";
 
 /* Each part of the workout waits for its own Start (Režim tréninku). */
 "Na řadě" = "Up next";
