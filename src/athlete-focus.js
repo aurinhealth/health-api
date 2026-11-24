@@ -94,19 +94,21 @@ export function mainSportOfKinds(mains = []) {
 // The main sports as kinds: the chosen list, else the one main sport's.
 export const mainKindsOf = p => Array.isArray(p?.mainSports) ? sportKinds(p.mainSports) : [...(MAIN_KINDS[p?.mainSport] || [])];
 
-// The main goal as a key (DATA-2, redesign S2): Get fitter, Race or Lose
-// weight. Older apps wrote the choice as Czech words into sportGoal, the
+// The main goal as a key (DATA-2, redesign S2): Get fitter, Race, Lose
+// weight or Strength and muscle (617 p3). Older apps wrote the choice as Czech words into sportGoal, the
 // athlete's own words; those three texts read as the key. sportGoal stays as
 // it is, so an older app still shows its choice.
-export const GOAL_TYPES = ["fitness", "race", "lose"];
-const GOAL_TEXTS = { "zlepšit kondici": "fitness", "závod": "race", "zhubnout": "lose" };
+export const GOAL_TYPES = ["fitness", "race", "lose", "muscle"];
+const GOAL_TEXTS = { "zlepšit kondici": "fitness", "závod": "race", "zhubnout": "lose", "síla a svaly": "muscle" };
 export function goalTypeOf(p = {}) {
   if (GOAL_TYPES.includes(p.goalType)) return p.goalType;
   return GOAL_TEXTS[String(p.sportGoal || "").trim().toLowerCase()] || "";
 }
-// A profile being saved over `saved`: away from Lose weight to Race or Get
-// fitter, a losing calorie goal the athlete did not change becomes maintain
-// (no hidden deficit; the default since PR #1118 is maintain too).
+// A profile being saved over `saved`: away from Lose weight, a losing calorie
+// goal the athlete did not change becomes maintain (no hidden deficit; the
+// default since PR #1118 is maintain too). Strength and muscle is a small
+// surplus: to it an unchanged calorie goal becomes gaining 0.25 kg a week,
+// away from it an unchanged gaining goal becomes maintain.
 export function withGoalType(next = {}, saved = {}, sent = next.goalType) {
   const norm = v => String(v || "").trim().toLowerCase();
   const words = norm(next.sportGoal), changed = words !== norm(saved?.sportGoal), before = goalTypeOf(saved || {});
@@ -120,7 +122,10 @@ export function withGoalType(next = {}, saved = {}, sent = next.goalType) {
   if (type) out.goalType = type; else delete out.goalType;
   // The choice kept as words too, so older apps and the coach read the same goal.
   if (type && GOAL_TEXTS[words] && GOAL_TEXTS[words] !== type) out.sportGoal = Object.keys(GOAL_TEXTS).find(k => GOAL_TEXTS[k] === type);
-  if (before === "lose" && type && type !== "lose" && String(out.goal || "").startsWith("lose") && out.goal === saved?.goal) out.goal = "maintain";
+  const kept = out.goal === saved?.goal, goal = String(out.goal || "");
+  if (before === "lose" && type && type !== "lose" && goal.startsWith("lose") && kept) out.goal = "maintain";
+  if (type === "muscle" && before !== "muscle" && !goal.startsWith("gain") && kept) out.goal = "gain_0.25";
+  if (before === "muscle" && type && type !== "muscle" && goal.startsWith("gain") && kept) out.goal = "maintain";
   return out;
 }
 

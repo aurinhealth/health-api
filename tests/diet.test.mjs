@@ -26,6 +26,9 @@ test("auto protein follows the goal, the gym and a vegan diet", () => {
   // No goal yet: maintaining, as the calories (energy-profile.js).
   assert.equal(autoProteinPerKg({}), 1.6);
   assert.equal(autoProteinPerKg({ goal: "gain_0.25" }), 1.8);
+  // Strength and muscle: about 2 g/kg, 2.2 with the gym as the main sport.
+  assert.equal(autoProteinPerKg({ goal: "gain_0.25", goalType: "muscle" }), 2.0);
+  assert.equal(autoProteinPerKg({ goal: "maintain", goalType: "muscle", mainSport: "strength" }), 2.2);
   assert.equal(autoProteinPerKg({ goal: "lose_0.5", mainSport: "strength" }), 2.2);
   assert.equal(autoProteinPerKg({ goal: "maintain", mainSport: "strength", dietEating: "vegan" }), 2.0);
   assert.equal(dayMacros(80, 2600, {}, { goal: "maintain", dietEating: "vegan" }).protein_per_kg, 1.8);
