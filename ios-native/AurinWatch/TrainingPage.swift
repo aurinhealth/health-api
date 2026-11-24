@@ -347,21 +347,8 @@ struct TrainingPage: View {
 
     /// Another of the day's workouts, folded to one line: tap to pick it.
     private func foldedCard(_ s: WatchSnapshot.Session) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: W.sportSymbol(s.sport)).watchFont(13).foregroundStyle(W.amber)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(Self.name(s)).watchFont(13, .semibold).foregroundStyle(W.ink).lineLimit(1)
-                if let after = afterText(s) {
-                    Text(after).watchFont(12, .semibold).foregroundStyle(W.amber).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 4)
-            if let minutes = s.minutes { Text("\(minutes) min").watchFont(12).foregroundStyle(W.muted) }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
-        .contentShape(Rectangle())
+        rowCard(s, line: when(s))
+            .contentShape(Rectangle())
     }
 
     /// A ride or run (mockup 4): when and how long, its name, its steps as
@@ -377,10 +364,6 @@ struct TrainingPage: View {
                     .padding(.top, 8)
             }
         }
-        .padding(.horizontal, 10).padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
-        .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
         .onAppear {
             plans.load(s)
             // The next leg's plan only for the multisport start: the complication keeps this one's.
@@ -388,42 +371,55 @@ struct TrainingPage: View {
         }
     }
 
+    /// The iPhone's workout card for a ride, run or swim (concept 05): the
+    /// sport's disc, the name in the serif, when, Time and the strain it adds
+    /// (an estimate); a tap opens its steps.
     private func planInfo(_ s: WatchSnapshot.Session, plan: WatchPlan?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(subtitle(s, day: s.date, length: false)).watchFont(12, .semibold).foregroundStyle(W.amber)
-                Spacer(minLength: 4)
-                if let minutes = s.minutes { Text("\(minutes) min").watchFont(12).foregroundStyle(W.muted) }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                SportDisc(sport: s.sport)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Self.name(s)).font(W.serif(19)).foregroundStyle(W.num)
+                        .lineLimit(2).minimumScaleFactor(0.75)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(subtitle(s, day: s.date, length: false)).watchFont(13).foregroundStyle(W.muted).lineLimit(1)
+                }
             }
-            HStack(spacing: 6) {
-                Image(systemName: W.sportSymbol(s.sport)).watchFont(15).foregroundStyle(W.amber)
-                Text(Self.name(s)).watchFont(17, .semibold).foregroundStyle(W.ink)
-                    .lineLimit(2).minimumScaleFactor(0.75)
-            }
-            .padding(.top, 3)
             if let leg = nextLeg(s) {
                 HStack(spacing: 4) {
                     Image(systemName: W.sportSymbol(s.sport))
-                    Image(systemName: "arrow.right").watchFont(12, .bold).foregroundStyle(W.muted)
+                    Image(systemName: "arrow.right").foregroundStyle(W.muted)
                     Image(systemName: W.sportSymbol(leg.sport))
-                    Text(W.tr("hned po sobě", "back to back")).watchFont(12, .semibold).foregroundStyle(W.muted)
+                    Text(W.tr("hned po sobě", "back to back")).foregroundStyle(W.muted)
                 }
-                .watchFont(12)
-                .foregroundStyle(W.amber)
-                .padding(.top, 3)
+                .watchFont(12, .semibold)
+                .foregroundStyle(SportDisc.color(s.sport))
             }
-            Group {
-                if let plan, !plan.steps.isEmpty {
-                    PlanBars(plan: plan)
-                } else {
-                    RoundedRectangle(cornerRadius: 3).fill(W.track)
+            HStack(alignment: .top, spacing: 0) {
+                if let minutes = s.minutes ?? plan?.minutes {
+                    stat(W.tr("Čas", "Time"), Self.length(minutes), unit: "min")
+                }
+                if let added = addedStrain(s) {
+                    stat(W.tr("Námaha", "Strain"), W.number(added, digits: 1), unit: W.tr("odh.", "est."))
                 }
             }
-            .frame(height: 26)
-            .padding(.top, 7)
         }
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .watchCard()
         .contentShape(Rectangle())
+    }
+
+    /// "1 h 30" on a card, "45" under an hour (the unit beside it says min).
+    static func length(_ minutes: Int) -> String {
+        minutes < 60 ? String(minutes) : "\(minutes / 60) h " + String(format: "%02d", minutes % 60)
+    }
+
+    /// What this workout adds to today's strain: the next one's, from Today.
+    private func addedStrain(_ s: WatchSnapshot.Session) -> Double? {
+        guard s.date == today, let strain = watch.snapshot?.strain, let planned = strain.planned, planned > 0,
+              strain.nextTitle == s.title else { return nil }
+        return planned
     }
 
     /// A race (mockup hodinky-zavod): when and how long, its name, each leg
@@ -671,14 +667,16 @@ struct OpenInWorkoutButton: View {
                     opening = false
                 }
             } label: {
-                Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
-                    .watchFont(14, .semibold).foregroundStyle(.black)
+                // "Start in Workout": says another app opens (concept 05 point 1).
+                Text(W.tr("Spustit ve Cvičení", "Start in Workout"))
+                    .watchFont(16, .semibold).foregroundStyle(.black)
+                    .lineLimit(1).minimumScaleFactor(0.8)
                     .frame(maxWidth: .infinity)
             }
             .mainButton()
             .disabled(opening)
             if failed {
-                Text(W.tr("Aplikace Cvičení se neotevřela. Zkus to znovu.", "Couldn't open the Workout app. Try again."))
+                Text(W.tr("Aplikace Cvičení se neotevřela. Plán tu zůstává, zkus to znovu.", "Couldn't open the Workout app. Your plan is still here, try again."))
                     .watchFont(12).foregroundStyle(W.amber)
                     .fixedSize(horizontal: false, vertical: true)
             }
