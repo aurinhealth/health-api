@@ -216,7 +216,7 @@ extension AppModel {
         todayScreen.show(snapshot, data: data, settled: settled)
         fetched[.today] = (Date(), shownDay)
         // One set of goals on every screen (617 #3): Food catches up when Today moved them.
-        if foodGoalsBehind(snapshot) { Task { await refreshFood() } }
+        if foodGoalsBehind(snapshot) { Task { await catchUpFood() } }
         if !(onlyIfChanged && same && Date().timeIntervalSince(coachAskedAt) < 600) {
             dataRevision += 1
             todayRevision += 1
@@ -298,12 +298,36 @@ extension AppModel {
         followOtherTabs()
     }
 
-    /// Health, Training and Food again after new data, those opened at once.
+    /// Health, Training and Food after new data: all marked stale, only what is
+    /// on screen (the open tab and the details open on it) loads now; the rest
+    /// loads when its tab opens (refreshIfStale). Before, every new batch from
+    /// Apple Health loaded all three (review 2026-11-24 point 4).
     private func followOtherTabs() {
         for tab in [AppTab.health, .training, .food] { fetched[tab] = nil }
-        if health != nil { scope.task { await self.refreshHealth() } }
-        if training != nil { scope.task { await self.refreshTraining() } }
-        if food != nil { scope.task { await self.refreshFood() } }
+        dropSeries()
+        let shown = Set([tab] + (paths[tab] ?? []).map(\.tab))
+        if shown.contains(.health), health != nil { scope.task { await self.refreshHealth() } }
+        if shown.contains(.training), training != nil { scope.task { await self.refreshTraining() } }
+        if shown.contains(.food), food != nil { scope.task { await self.refreshFood() } }
+    }
+
+    /// The kept detail charts go; a series on its way is not kept either.
+    func dropSeries() {
+        seriesCache = [:]
+        seriesRound += 1
+    }
+
+    /// A Health detail's chart series. Opening the same detail again (or another
+    /// period and back) within 10 minutes of the same day takes the copy from
+    /// memory instead of asking the server each time (review 2026-11-24 point 20);
+    /// new data (followOtherTabs) and every Health load drop the copies.
+    func healthSeries(metric: String, period: ChartPeriod) async -> HealthSeries? {
+        let key = metric + ":" + period.key, day = Self.localDate(Date()), account = scope, round = seriesRound
+        if let kept = seriesCache[key], kept.scope === account, kept.day == day, Date().timeIntervalSince(kept.at) < 600 { return kept.series }
+        guard let series = try? await api.healthSeries(metric: metric, period: period), stillSignedIn(account) else { return nil }
+        // Dropped meanwhile (new data): this answer is shown but not kept.
+        if round == seriesRound { seriesCache[key] = (Date(), day, account, series) }
+        return series
     }
 
     /// The tab's data came from the server in the last 5 minutes, for this day.
@@ -417,6 +441,8 @@ extension AppModel {
             guard stillSignedIn(account), selectedDate == day else { return }
             health = value
             fetched[.health] = (Date(), shownDay)
+            // The detail charts follow the screen's data (pull to refresh, a new sync).
+            dropSeries()
             // The 90 days of resting HR and HRV for the Apple Watch app.
             if day == nil { WatchBridge.shared.update(value) }
             dataRevision += 1
@@ -433,8 +459,26 @@ extension AppModel {
         }
     }
 
+    /// Food again when Today brought other goals. A Food load already on its
+    /// way (tab opened, new Apple Health data) is awaited first and Food loads
+    /// again only if it still differs: before, both went out at once (review
+    /// 2026-11-24 point 15).
+    func catchUpFood() async {
+        if let running = foodLoad { await running.value }
+        guard let today, foodGoalsBehind(today) else { return }
+        await refreshFood()
+    }
+
     func refreshFood() async {
         guard !demo, phase == .signedIn else { return }
+        let task = Task { await loadFood() }
+        foodLoad = task
+        // A closed screen still cuts its own load short, as before.
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+        if foodLoad == task { foodLoad = nil }
+    }
+
+    private func loadFood() async {
         let settled = foodScreen.settlingIds
         do {
             let day = selectedDate, account = scope

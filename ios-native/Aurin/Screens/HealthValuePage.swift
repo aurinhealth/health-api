@@ -156,7 +156,7 @@ struct HealthValuePage: View {
     private func load() async {
         guard let key = value.seriesKey, loaded[seriesId] == nil, !model.demo else { return }
         let id = seriesId
-        if let series = try? await model.api.healthSeries(metric: key, period: period) { loaded[id] = series }
+        if let series = await model.healthSeries(metric: key, period: period) { loaded[id] = series }
     }
 }
 
@@ -627,21 +627,10 @@ struct StepsThroughDay: View {
 /// not a medical assessment (plan, Health law).
 struct HealthValueInfo: View {
     let value: HealthValue
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView {
+        SheetFrame(title: value.title) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Text(verbatim: L10n.tr(value.title)).font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.tr("Zavřít"))
-                }
                 HowMeasuredCard(text: value.howMeasured)
                 if value.hasBand {
                     Text(verbatim: L10n.tr("Obvyklé rozmezí počítá Aurin z tvých posledních 60 dní. Hodnota mimo ně jen říká, že se liší od tvých obvyklých dní."))
@@ -650,9 +639,7 @@ struct HealthValueInfo: View {
                 Text(verbatim: L10n.tr("Nejde o lékařské hodnocení."))
                     .font(Typo.body).foregroundStyle(Palette.muted)
             }
-            .padding(24)
         }
-        .presentationDetents([.medium, .large])
         .presentationBackground(Palette.background)
     }
 }

@@ -207,12 +207,10 @@ struct StretchingCard: View {
 /// "i" of a stretch: its photos, how long and how to do it.
 struct StretchInfoSheet: View {
     let item: GymStretching.Item
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+        SheetFrame(title: item.name, fitted: false) {
+            VStack(alignment: .leading, spacing: 16) {
                     if !item.photoURLs.isEmpty { ExercisePhotos(urls: item.photoURLs, labeled: false) }
                     Text(verbatim: item.duration).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     VStack(alignment: .leading, spacing: 10) {
@@ -232,15 +230,9 @@ struct StretchInfoSheet: View {
                         Text("Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet.")
                             .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                }
-                .padding(20)
             }
-            .background(Palette.background)
-            .navigationTitle(item.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
         }
-        .presentationDetents([.large])
+        .presentationBackground(Palette.background)
     }
 }
 

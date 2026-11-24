@@ -580,7 +580,14 @@ struct CoachView: View {
                 messages.removeAll { $0.id == id }
                 failedPhoto = picture
                 let offline = (error as? URLError).map { [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains($0.code) } ?? false
-                edit(mine.id) { $0.failed = L10n.tr(offline ? "Jsi offline. Zkus to znovu, až budeš připojený." : "Odpověď se nepodařilo získat.") }
+                // The server's own sentence says why (busy, limit, try again; 617 #6), not only "Couldn't get an answer".
+                let reason: String? = {
+                    if case .message(let text)? = error as? APIError, !text.isEmpty { return text }
+                    return nil
+                }()
+                edit(mine.id) { $0.failed = offline ? L10n.tr("Jsi offline. Zkus to znovu, až budeš připojený.")
+                    : (error as? URLError)?.code == .timedOut ? L10n.tr("Odpověď trvala moc dlouho. Zkus to znovu.")
+                    : reason ?? L10n.tr("Odpověď se nepodařilo získat.") }
             } else {
                 self.error = error.localizedDescription
             }
