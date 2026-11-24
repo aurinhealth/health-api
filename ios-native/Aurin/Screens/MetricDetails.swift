@@ -13,7 +13,7 @@ enum HealthMetric: String, Hashable, CaseIterable {
         case .temperature: return "Teplota zápěstí"
         case .oxygen: return "Kyslík v krvi"
         case .bodyFat: return "Tělesný tuk"
-        case .muscle: return "Svalová hmota"
+        case .muscle: return "Beztuková hmota"
         }
     }
 }

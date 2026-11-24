@@ -145,7 +145,7 @@ struct CoachSubject: Equatable {
         case .temperature: questions = ["Co znamená teplota zápěstí?", "Co ji ovlivňuje?", "Mám dnes trénovat?"]
         case .oxygen: questions = ["Je můj kyslík v krvi v pořádku?", "Co ho ovlivňuje?", "Mám dnes trénovat?"]
         case .bodyFat: questions = ["Jak se mi vyvíjí tělesný tuk?", "Jak upravit jídlo?", "Jak upravit trénink?"]
-        case .muscle: questions = ["Jak se mi vyvíjí svalová hmota?", "Mám jíst víc bílkovin?", "Jak upravit posilovnu?"]
+        case .muscle: questions = ["Jak se mi vyvíjí beztuková hmota?", "Mám jíst víc bílkovin?", "Jak upravit posilovnu?"]
         }
         return CoachSubject(kind: .metric, title: L10n.tr(metric.title), line: line, metric: metric.rawValue, date: date, view: "health",
                             symbol: "waveform.path.ecg", color: Palette.green, questions: questions)

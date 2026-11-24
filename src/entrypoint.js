@@ -93,7 +93,7 @@ import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, pastMemoryList, memoryCheck, memoryChanges, memorySaves, usedMemories, healthMemorySince, statusCheck, heartSince, pausedSports } from './athlete-state.js';
 import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, summarizeChatStart, forgetNote, usersWithNotesDue, runCoachNotes } from './coach-notes.js';
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
-import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
+import { capWeekTargets, estimatedTargets, weekProposal, withoutPlannedFrom, weekWeather, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
@@ -1692,9 +1692,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const plan=await planForWeek(env,ctx,start);
-      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:body.replan===true?withoutPlannedFrom(inputs.week,today):inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
-      return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',start,proposal,...(body.replan===true?{replan:true}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // "Plán týdne → Navrhne AI" (week-ai.js): the AI lays out the week from the
@@ -3164,7 +3164,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>Object.keys(d).length?intervalsSleep(env,ctx,d,from,to):d).catch(()=>({})),
         read('/health/weight'),dashboardProfile(env).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
-        // Muscle mass from a scale through Apple Health (lean body mass).
+        // Lean body mass (not muscle alone) from a scale through Apple Health.
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[]),
         // Aurin's own VO2max and Aurin age (own-vo2max-store.js): 98 days for the 3-month change, at most 98 rows.
         fitnessEstimatesSince(env.DB,env.USER_ID,shiftDate(date,-97)).then(rows=>rows.filter(r=>r.date<=date)).catch(()=>[])
