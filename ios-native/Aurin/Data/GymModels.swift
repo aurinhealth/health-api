@@ -108,7 +108,9 @@ struct GymCatalogExercise: Decodable, Equatable, Identifiable, Hashable {
     var liked: Bool? = nil
     var id: String { name }
 
-    static func == (a: Self, b: Self) -> Bool { a.name == b.name }
+    /// The same exercise in the same state: a thumb that changes is a change,
+    /// so a list in @State redraws (a name-only == hid it, the thumbs never moved).
+    static func == (a: Self, b: Self) -> Bool { a.name == b.name && a.liked == b.liked && a.fits == b.fits }
     func hash(into hasher: inout Hasher) { hasher.combine(name) }
 }
 
