@@ -108,12 +108,16 @@ struct FoodEntryEditSheet: View {
                         SettingsRow(title: "Energie", value: Fmt.int(previewKcal) + " kcal", chevron: false)
                         SettingsDivider()
                     }
-                    Picker(selection: $meal) {
-                        ForEach(MealSlot.all) { slot in Text(slot.label).tag(slot.id) }
-                    } label: {
+                    // The label left, the meal right, as the other rows (617 C23: "Dinner" sat in the middle).
+                    HStack {
                         Text("Jídlo dne").font(.body).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Picker("Jídlo dne", selection: $meal) {
+                            ForEach(MealSlot.all) { slot in Text(slot.label).tag(slot.id) }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.menu)
                     .padding(.horizontal, 16).frame(minHeight: 50)
                     SettingsDivider()
                     DatePicker("Den", selection: $day, in: ...lastDay, displayedComponents: .date)

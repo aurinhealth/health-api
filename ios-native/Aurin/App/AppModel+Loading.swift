@@ -215,6 +215,8 @@ extension AppModel {
         let same = todayScreen.base == data
         todayScreen.show(snapshot, data: data, settled: settled)
         fetched[.today] = (Date(), shownDay)
+        // One set of goals on every screen (617 #3): Food catches up when Today moved them.
+        if foodGoalsBehind(snapshot) { Task { await refreshFood() } }
         if !(onlyIfChanged && same && Date().timeIntervalSince(coachAskedAt) < 600) {
             dataRevision += 1
             todayRevision += 1
