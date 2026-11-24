@@ -4530,6 +4530,7 @@
 "Vygenerovat tréninky" = "Generate workouts";
 "Nahradit naplánované tréninky?" = "Replace the planned workouts?";
 "Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou." = "Workouts from today to next Sunday are replaced with new ones, your own changes too. Finished ones stay.";
+"Tréninky od %@ do příští neděle se nahradí novými, i s tvými úpravami. Dřívější dny a hotové zůstanou." = "Workouts from %@ to next Sunday are replaced with new ones, your own changes too. Earlier days and finished ones stay.";
 "Zatím bez plánu" = "No plan yet";
 "Zatím žádné naplánované tréninky" = "No workouts planned yet";
 "Zrušit volné dny" = "Clear rest days";
