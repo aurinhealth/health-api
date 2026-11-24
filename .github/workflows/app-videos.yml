@@ -1,0 +1,162 @@
+name: App videos
+
+# Screen recordings of the running app for Aurin's socials (TikTok, Instagram):
+# the iPhone simulator with the sample data, in English, each clip one short walk
+# through the app (ios-native/AurinUITests/ClipTests.swift), recorded from the
+# test's start() to its end(). Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
+# and in raw/ the recording of a clip that ffmpeg could not encode. The clips also
+# go to the app-videos branch, for links Metricool can take.
+# Runs after each app change on main, on pull requests that change the clips,
+# and by hand (Actions → App videos → Run).
+
+on:
+  workflow_dispatch:
+    inputs:
+      appearance:
+        description: Light mode, dark mode or both
+        type: choice
+        options: [both, dark, light]
+        default: both
+  push:
+    branches:
+      - main
+    paths:
+      - "ios-native/**"
+      - ".github/workflows/app-videos.yml"
+  # A change to the clips themselves shows its videos before the merge.
+  pull_request:
+    paths:
+      - "ios-native/AurinUITests/ClipTests.swift"
+      - ".github/workflows/app-videos.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: macos-latest
+    # Writes the clips to the app-videos branch (the last step).
+    permissions:
+      contents: write
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ios-native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # As in ios-native.yml: the newest stable Xcode.
+      - name: Pick Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Generate the Xcode project
+        env:
+          APPLE_TEAM_ID: SIMULATOR
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+
+      # The newest iPhone on the newest iOS: the clips show the app as a new phone does.
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
+          names = ("iPhone 17 Pro", "iPhone 17", "iPhone 16 Pro", "iPhone 16")
+          phones = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")]
+          pick = next((d for n in names for d in phones if d["name"] == n), phones[0])
+          print(runtimes[0], pick["name"], file=sys.stderr)
+          print(pick["udid"])')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Build the app and the clips
+        run: |
+          set -o pipefail
+          xcodebuild -project Aurin.xcodeproj -scheme AurinClips -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build-for-testing | tail -20
+
+      # Each clip test runs on its own; the simulator records the screen from the
+      # test's start() to its end().
+      - name: Record the clips
+        env:
+          APPEARANCE: ${{ inputs.appearance || 'both' }}
+          CLIP_DIR: ${{ runner.temp }}/clips
+          TEST_RUNNER_CLIP_DIR: ${{ runner.temp }}/clips
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          out="$GITHUB_WORKSPACE/videos"
+          mkdir -p "$out/raw" "$CLIP_DIR"
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          modes=$APPEARANCE; [ "$modes" = both ] && modes="dark light"
+          for mode in $modes; do
+            xcrun simctl ui "$udid" appearance "$mode"
+            sleep 10
+            mkdir -p "$out/clips/$mode"
+            for clip in Today Sleep Readiness Strain Muscles Workout Food Coach; do
+              name=$(echo "$clip" | tr '[:upper:]' '[:lower:]')
+              raw="$out/raw/$mode-$name.mp4"
+              rm -f "$CLIP_DIR/$name".*
+              xcodebuild -project Aurin.xcodeproj -scheme AurinClips -configuration Debug \
+                -destination "id=$udid" -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+                -only-testing:"AurinUITests/ClipTests/test$clip" test-without-building > "$RUNNER_TEMP/test-$name.log" 2>&1 &
+              test=$!
+              # The test says when its screen is up; the recording starts then and
+              # stops when the test is done (ClipTests.start() and end()).
+              until [ -e "$CLIP_DIR/$name.ready" ] || ! kill -0 "$test" 2>/dev/null; do sleep 0.2; done
+              rec=
+              if [ -e "$CLIP_DIR/$name.ready" ]; then
+                xcrun simctl io "$udid" recordVideo --codec=h264 --force "$raw" 2> "$RUNNER_TEMP/rec.log" &
+                rec=$!
+                for _ in $(seq 50); do grep -q "Recording started" "$RUNNER_TEMP/rec.log" && break; sleep 0.2; done
+                touch "$CLIP_DIR/$name.go"
+                until [ -e "$CLIP_DIR/$name.done" ] || ! kill -0 "$test" 2>/dev/null; do sleep 0.2; done
+                kill -INT "$rec"; wait "$rec" || true
+              fi
+              wait "$test" || { echo "::warning title=App videos::$clip did not finish"; tail -20 "$RUNNER_TEMP/test-$name.log"; }
+              if [ -z "$rec" ] || [ ! -s "$raw" ]; then echo "::warning title=App videos::no $mode $name clip"; continue; fi
+              # XCUITest on CI can stand still for seconds before a tap; those stretches go.
+              python3 "$GITHUB_WORKSPACE/.github/scripts/trim_freezes.py" "$raw" "$out/clips/$mode/$name.mp4"
+              # The whole recording stays only when its clip did not come out.
+              rm -f "$raw"
+              echo "$mode/$name.mp4: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out/clips/$mode/$name.mp4") s" | tee -a "$GITHUB_STEP_SUMMARY"
+            done
+          done
+
+      - name: Upload the videos
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: Aurin-videos
+          path: videos
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # The clips also go to the app-videos branch, one commit replaced by each run, so
+      # they have public links (raw.githubusercontent.com): Metricool takes the media of
+      # a post by URL, and the social videos are cut from them.
+      - name: Publish the clips
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: ${{ github.workspace }}/videos/clips
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b app-videos
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "App videos from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY" app-videos
