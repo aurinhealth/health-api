@@ -4615,7 +4615,7 @@
 "Vyměnit tento cvik" = "Swap this exercise";
 "Zdroj tepu" = "Heart rate source";
 "Nastavení tréninku" = "Workout settings";
-"%@ zbývá" = "%@ upcoming";
+"Ještě %@" = "%@ upcoming";
 "Potom %@" = "Next %@";
 "Obě strany" = "Both sides";
 "Klepnutím na ovál ve sloupci Úsilí zapíšeš, jak těžká série byla." = "Tap the oval in the Effort column to log how hard the set felt.";

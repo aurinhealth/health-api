@@ -680,7 +680,7 @@ struct TrainingModeView: View {
             if let note = GymSides.note(exercise), viewing == nil { CoachNote(text: note) }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !upcoming.isEmpty {
-                LiveListRow(title: L10n.f("%@ zbývá", String(upcoming.count)),
+                LiveListRow(title: L10n.f("Ještě %@", String(upcoming.count)),
                             detail: L10n.f("Potom %@", upcoming[0].name), open: showUpcoming) {
                     withAnimation(.snappy) { showUpcoming.toggle() }
                 }

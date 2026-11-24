@@ -161,7 +161,9 @@ struct LiveRestGap: View {
         let running = fill != nil
         return HStack(spacing: 8) {
             hair(fill: fill.map { min(1, $0 * 2) })
+            // Never cut (618: "2:00 před dal…"): the hairlines give way instead.
             Text(verbatim: text).font(Typo.small.weight(strong ? .semibold : .medium)).monospacedDigit()
+                .lineLimit(1).fixedSize()
                 .foregroundStyle(running ? Palette.onAccent : strong ? Palette.ink : Palette.muted)
                 .padding(.horizontal, strong ? 10 : 0).padding(.vertical, running ? 3 : 1)
                 .background(running ? Palette.green : strong ? Palette.track : .clear, in: Capsule())

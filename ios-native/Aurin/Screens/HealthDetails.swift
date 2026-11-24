@@ -205,8 +205,8 @@ struct SleepDetailContent: View {
         let need = Double(health.sleep.need)
         let gap = night.minutes.map { Int((need - $0).rounded()) }
         let note: String? = gap.map { g in
-            g > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(g), TodayDials.length(need))
-                : g < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-g), TodayDials.length(need)) : L10n.f("přesně %@", TodayDials.length(need))
+            g > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(g), Fmt.duration(Int(need)))
+                : g < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-g), Fmt.duration(Int(need))) : L10n.f("přesně %@", Fmt.duration(Int(need)))
         }
         return RangeDial(value: nil, scale: from...to, band: band, bandColor: Palette.green, ends: (ClockText.format(minutes: 20 * 60), ClockText.format(minutes: 10 * 60)), size: 220,
                          spoken: [L10n.tr("Spánek"), Fmt.hoursMinutesSpoken(night.minutes), note].compactMap { $0 }.joined(separator: ", ")) {
