@@ -617,7 +617,7 @@ struct ActivityDetailContent: View {
                     Text("Čas").frame(width: 56, alignment: .trailing)
                     if hasWatts { Text("Výkon").frame(width: 70, alignment: .trailing) }
                     if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: paceWidth, alignment: .trailing) }
-                    if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
+                    if hasHr { Text(verbatim: L10n.isEnglish ? "HR" : "Tep").frame(width: 48, alignment: .trailing) }
                 }
                 .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
                 .padding(.top, 28).padding(.bottom, 8)
