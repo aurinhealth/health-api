@@ -76,6 +76,7 @@ test('the probe counts the USER_JOBS calls one request may make, straight and tw
   const body = await (await handleLoadTest(post({ probe: 'invocations' }), env, { kind: 'load-test' })).json();
   assert.equal(body.direct.ok, 32);
   assert.deepEqual(body.direct.error, { at: 33, message: 'Too many Worker invocations' });
-  assert.equal(body.nested.length, 3);
+  const nested = await (await handleLoadTest(post({ probe: 'nested' }), env, { kind: 'load-test' })).json();
+  assert.equal(nested.nested.length, 3);
   assert.equal((await handleLoadTest(post({ probe: 'invocations' }), { ENVIRONMENT: 'production' }, { kind: 'load-test' })).status, 404);
 });

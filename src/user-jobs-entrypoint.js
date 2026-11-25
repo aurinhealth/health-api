@@ -16,7 +16,7 @@ export class UserJobs extends WorkerEntrypoint {
   // The load test's probe of how many calls one invocation may make through this
   // binding (src/load-test.js, staging only): ping answers, fan calls ping n times itself.
   async ping() { return { ok: true }; }
-  async fan(n) { return probeCalls(() => this.env.USER_JOBS.ping(), n); }
+  async fan(n) { return probeCalls(() => this.env.USER_JOBS.ping(), Math.max(0, Math.min(40, Number(n) || 0))); }
 
   // One athlete's Intervals.icu webhook changes ({ athlete, parts, kinds, deleted }).
   async intervalsWebhook(message) {

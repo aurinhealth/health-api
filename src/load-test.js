@@ -63,10 +63,13 @@ export async function handleLoadTest(request, env, principal, { remove = deleteA
   // measures where the calls stop: straight from one request, and two levels deep.
   if (body?.probe) {
     if (typeof env.USER_JOBS?.ping !== 'function') return Response.json({ status: 'error', message: 'No USER_JOBS binding.' }, { status: 500, headers });
-    const direct = await probeCalls(() => env.USER_JOBS.ping(), 40);
-    const nested = [];
-    for (let i = 0; i < 3; i++) nested.push(await env.USER_JOBS.fan(30).catch(error => ({ ok: 0, error: String(error?.message || error).slice(0, 200) })));
-    return Response.json({ status: 'ok', direct, nested }, { headers });
+    // Each kind in a request of its own: the direct calls would use up the nested ones' allowance.
+    if (body.probe === 'nested') {
+      const nested = [];
+      for (let i = 0; i < 3; i++) nested.push(await env.USER_JOBS.fan(30).catch(error => ({ ok: 0, error: String(error?.message || error).slice(0, 200) })));
+      return Response.json({ status: 'ok', nested }, { headers });
+    }
+    return Response.json({ status: 'ok', direct: await probeCalls(() => env.USER_JOBS.ping(), 40) }, { headers });
   }
   if (body?.cleanup) {
     const rows = (await env.DB.prepare("SELECT id, email, name, role FROM users WHERE email LIKE 'sample+load%@test.aurin.health'").all()).results || [];
@@ -79,5 +82,5 @@ export async function handleLoadTest(request, env, principal, { remove = deleteA
     }
     return Response.json({ status: failed ? 'error' : 'ok', deleted, failed, remaining: accounts.length - deleted }, { headers });
   }
-  return Response.json({ status: 'error', message: 'Use prepare or cleanup.' }, { status: 400, headers });
+  return Response.json({ status: 'error', message: 'Use prepare, cleanup or probe.' }, { status: 400, headers });
 }

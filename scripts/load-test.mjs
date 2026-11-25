@@ -74,8 +74,8 @@ if (process.argv[1]?.endsWith("load-test.mjs")) {
   const results = [], wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   let failed = null;
   try {
-    if (process.env.LOAD_TEST_PROBE === "invocations") {
-      const probe = await automation({ probe: "invocations" });
+    if (process.env.LOAD_TEST_PROBE) {
+      const probe = { direct: (await automation({ probe: "invocations" })).direct, nested: (await automation({ probe: "nested" })).nested };
       console.log(JSON.stringify(probe, null, 2));
       writeFileSync("load-test.json", JSON.stringify(probe, null, 2));
       process.exit(0);

@@ -16,7 +16,7 @@ const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long|generating t
 // databases) a few reads were still refused after 650 ms. Each wait is spread over
 // half to one and a half of its length, so requests refused together don't all come back together.
 export const D1_RETRY_DELAYS_MS = [150, 500, 1500];
-const spread = ms => Math.round(ms * (0.5 + Math.random()));
+export const spread = ms => Math.round(ms * (0.5 + Math.random()));
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const messageOf = error => String(error?.message ?? error ?? "");
