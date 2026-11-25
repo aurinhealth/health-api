@@ -978,6 +978,11 @@ function droppedCards(r) {
   return r.proposed.slice(0, 5).filter(p => { const i = left.findIndex(k => same(p, k)); if (i < 0) return true; left.splice(i, 1); return false; }).map(p => [p.type, p.kind || p.sport, p.date].filter(Boolean).join(' '));
 }
 
+// The held-out set (Petr 2026-11-25, claude.dev "Automating eval design and hillclimbing"): every fifth
+// S, D, G and K situation by number. Prompt fixes are never tuned on them, so a gap between the tuning and
+// the held-out score shows a prompt fitted to its own tests. The summary hides their answers.
+export const isHoldout = id => /^[SDGK]\d+$/.test(String(id)) && Number(String(id).slice(1)) % 5 === 0;
+
 export function scenarioById(id) { return COACH_EVAL_SCENARIOS.find(s => s.id === id) || null; }
 
 // The coach's context for a situation, built as the chat builds it.
@@ -1323,7 +1328,7 @@ export async function handleCoachEval(request, env, principal, { run = runScenar
     try { return Response.json(await withLang(scenarioById(item.screen).lang || 'cs', () => runJudgeCalibration({ ...env, COACH_EVAL: true }, item)), { headers: { 'Cache-Control': 'no-store' } }); }
     catch (error) { return Response.json({ id: item.id, status: 'error', message: error.message }, { headers: { 'Cache-Control': 'no-store' } }); }
   }
-  if (!body?.id) return Response.json({ status: 'ok', calibration: COACH_CALIBRATION.map(c => c.id), judgeCalibration: JUDGE_CALIBRATION.map(c => c.id), scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs' })),
+  if (!body?.id) return Response.json({ status: 'ok', calibration: COACH_CALIBRATION.map(c => c.id), judgeCalibration: JUDGE_CALIBRATION.map(c => c.id), scenarios: [...COACH_EVAL_SCENARIOS.map(s => ({ id: s.id, title: s.title, lang: s.lang || 'cs', ...(isHoldout(s.id) ? { holdout: true } : {}) })),
     ...COACH_PERSONAS.map(p => ({ id: p.id, title: p.title, lang: p.lang || 'cs', turns: p.turns.length }))], coverage: evalCoverage() });
   // A persona's message `turn` with the conversation so far, which the workflow keeps.
   const persona = personaById(String(body.id));
