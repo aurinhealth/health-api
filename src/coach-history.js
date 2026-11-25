@@ -16,7 +16,7 @@ export const HISTORY_PERIODS = [30, 90, 365];
 
 // A past stretch, an average or a trend: "za rok", "posledních 30 dní",
 // "průměr", "last 3 months", "average", "trend"; not a plan for the next weeks.
-const ASKS = /(?<!\p{L})(?:průměr\p{L}*|prumer\p{L}*|dlouhodob\p{L}*|vývoj\p{L}*|vyvoj\p{L}*|vyvíj\p{L}*|vyvij\p{L}*|trend\p{L}*|histori\p{L}*|letos|loni|ročn\p{L}*|rocn\p{L}*|average\p{L}*|avg|long[- ]term|over time|this year)(?!\p{L})|(?<!\p{L})(?:posledn\p{L}*|uplynul\p{L}*|minul\p{L}*|celý|cely|last|past|previous|whole)\s+(?:\d+\s*)?(?:rok\p{L}*|let|měsíc\p{L}*|mesic\p{L}*|měsíc|dn[íiy]|den|týd\p{L}*|tyd\p{L}*|year\p{L}*|months?|days?|weeks?)(?!\p{L})|(?<!\p{L})za\s+rok(?!\p{L})/iu;
+const ASKS = /(?<!\p{L})(?:průměr\p{L}*|prumer\p{L}*|dlouhodob\p{L}*|vývoj\p{L}*|vyvoj\p{L}*|vyvíj\p{L}*|vyvij\p{L}*|trend\p{L}*|histori\p{L}*|letos|loni|ročn\p{L}*|rocn\p{L}*|average\p{L}*|avg|long[- ]term|over time|this year)(?!\p{L})|(?<!\p{L})(?:posledn\p{L}*|uplynul\p{L}*|minul\p{L}*|celý|cely|last|past|previous|whole)\s+(?:(?:\d+\s*)?(?:rok\p{L}*|let|měsíc\p{L}*|mesic\p{L}*|year\p{L}*|months?)|\d+\s*(?:dn[íiy]|den|týd\p{L}*|tyd\p{L}*|days?|weeks?))(?!\p{L})|(?<!\p{L})za\s+rok(?!\p{L})/iu;
 export const asksHistory = message => ASKS.test(String(message || ""));
 
 // The night of each day: the longest main sleep (naps aside), as the chat's

@@ -13,7 +13,7 @@ const day = offset => new Date(Date.parse(DATE + "T12:00:00Z") + offset * 864000
 test("asks about a longer stretch in Czech and English, not about today", () => {
   for (const m of ["A za poslední rok?", "A za poslednich 30 dni?", "Jaký je můj průměrná délka spánku", "Jak se mi vyvíjí HRV za 3 měsíce?", "my sleep over the last year", "average resting HR", "Jak jsem spal minulý měsíc?", "HRV za posledních 90 dní"])
     assert.equal(asksHistory(m), true, m);
-  for (const m of ["Co mám dnes trénovat?", "Jak jsem spal?", "Should I ride today?", "Naplánuj mi další 3 dny", "Make me a 4 weeks plan", "Plán na měsíc do závodu"])
+  for (const m of ["Co mám dnes trénovat?", "Jak jsem spal?", "Should I ride today?", "Naplánuj mi další 3 dny", "Make me a 4 weeks plan", "Plán na měsíc do závodu", "how was my last week", "Jak se mi dařilo minulý týden?"])
     assert.equal(asksHistory(m), false, m);
 });
 
