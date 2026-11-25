@@ -34,6 +34,7 @@ import { judgeAnswer, judgeChecks } from './coach-judge.js';
 import { coachGymSession, sessionOf } from './gym-compose.js';
 import { COACH_PERSONAS, personaById, personaTurn } from './coach-personas.js';
 import { capabilityCoverage } from './coach-capabilities.js';
+import { historyFacts } from './coach-history.js';
 import { COACH_CALIBRATION } from './coach-calibration.js';
 
 export const COACH_EVAL_AUDIENCE = 'aurin-coach-eval';
@@ -750,6 +751,15 @@ export const COACH_EVAL_SCENARIOS = [
       quality('řekne, že týden byl těžší než obvykle', says(r, /těžš|náročnějš|víc než obvykl|nad obvykl|harder|more than usual/i)), noUnaskedCard(r)] },
   { id: 'S101', title: 'Dotaz z detailu VO2max', message: 'Jak na tom jsem?', athlete: { baseWellness: { vo2max: 55 } }, context: subjectContext({ kind: 'metric', metric: 'vo2max', title: 'VO2max' }, { vo2maxEstimate: { value: 52.4, date: COACH_EVAL_DATE, change3m: 1.2 } }),
     checks: r => [quality('řekne odhad Aurinu 52,4', says(r, /52[.,]4|\b52\b/)), quality('necituje hodinky (55)', !says(r, /\b55(?:[.,]\d)?\b/)), quality('nazve ho odhadem', says(r, /odhad|estimat/i)), noUnaskedCard(r)] },
+  // Longer periods (coach-history.js): the chat sends averages for 30 days, 90 days and a year
+  // with dataSince. Sleep recorded only for the last 7 months: the coach says so and gives that
+  // average without asking (Petr 2026-11-25); 30 days fully covered gives its average.
+  { id: 'S102', title: 'Průměr spánku za rok, data jen 7 měsíců', message: 'Jaký je můj průměrný spánek za poslední rok?', context: date => ({ history: historyFacts({ date, sessions: Array.from({ length: 212 }, (_, i) => ({ date: shift(date, -i), durationMin: i < 30 ? 405 : 425 })) }) }),
+    checks: r => [quality('řekne, že celý rok nemá, jen od března nebo 7 měsíců', says(r, /břez|bře\b|24\.\s*3\.|7\s*měs|sedm měs|212|march|7 months/i)),
+      quality('dá průměr za dostupné období (7 h 02 min)', says(r, /7\s*h\s*0?2\b|7:02/i)),
+      quality('neptá se, jestli to chce', !says(r, /chce[šs]\??$|m[áa]m ti (?:ho|je|to) (?:uk[áa]zat|poslat)|do you want/im))] },
+  { id: 'S103', title: 'Průměr spánku za 30 dní', message: 'Kolik jsem v průměru spal za posledních 30 dní?', context: date => ({ history: historyFacts({ date, sessions: Array.from({ length: 212 }, (_, i) => ({ date: shift(date, -i), durationMin: i < 30 ? 405 : 425 })) }) }),
+    checks: r => [quality('průměr za 30 dní 6 h 45 min', says(r, /6\s*h\s*45|6:45/i)), quality('netvrdí, že má jen 7 nocí', !says(r, /(?:jen|pouze|only)[^.]{0,30}7\s*(?:noc|nights)/i))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
