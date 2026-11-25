@@ -85,14 +85,13 @@ function purchaseGroup(env) {
 
 const noAccount = env => !env?.DB || !(Number(env.USER_ID) > 0) || env.COACH_EVAL === true;
 
-// AI_PAID_LIMIT_EMAILS (Worker secret, separated by commas or spaces): accounts
-// that get a paying account's AI limits whatever they bought, like the owner
-// (a tester close to the owner, Petr 2026-11-25). Never the App Review account.
-// Their spending stays in the group of their purchase.
-export function paidLimitAccount(env) {
-  const email = String(env?.USER_EMAIL || "").trim().toLowerCase();
-  if (!email || isReviewAccount(env)) return false;
-  return String(env?.AI_PAID_LIMIT_EMAILS || "").split(/[,\s]+/).some(listed => listed.toLowerCase() === email);
+// AI_PAID_LIMIT_USER_IDS (wrangler.jsonc, ids separated by commas or spaces):
+// accounts that get a paying account's AI limits whatever they bought, like the
+// owner (a tester close to the owner, Petr 2026-11-25). Never the App Review
+// account. Their spending stays in the group of their purchase.
+export function paidLimitAccount(env, id = env?.USER_ID) {
+  if (!(Number(id) > 0) || isReviewAccount(env)) return false;
+  return String(env?.AI_PAID_LIMIT_USER_IDS || "").split(/[,\s]+/).some(listed => listed !== "" && Number(listed) === Number(id));
 }
 const paidLimits = env => noAccount(env) || env.USER_IS_OWNER === true || paidLimitAccount(env);
 

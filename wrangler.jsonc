@@ -119,8 +119,9 @@
     // not bought Pro (the free week counts as one period). A paid week may use 30 % of its month.
     "AI_MONTHLY_LIMIT_USD": "5",
     "AI_UNPAID_LIMIT_USD": "1.25",
-    // AI_PAID_LIMIT_EMAILS (Worker secret, not here): accounts with a paying account's AI
-    // limits whatever they bought, like the owner (src/ai-limit-share.js paidLimitAccount).
+    // Accounts with a paying account's AI limits whatever they bought, like the owner
+    // (src/ai-limit-share.js paidLimitAccount): a tester close to the owner (Petr 2026-11-25).
+    "AI_PAID_LIMIT_USER_IDS": "6",
     // Half of the other AI limits (the daily guard, the coach's week) until
     // the account pays for Pro: the pilot, TestFlight and the free week (src/ai-limit-share.js).
     "AI_UNPAID_LIMIT_SHARE": "0.5",
