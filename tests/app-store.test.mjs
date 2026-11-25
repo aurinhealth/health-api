@@ -626,6 +626,9 @@ test("every notification Apple signed for the app is kept once in the history, a
   stranger.signedDate = now + 3000;
   assert.equal((await (await notify(stranger, central)).json()).unknown, true);
   assert.deepEqual([events()[2].user_id, events()[2].original_transaction_id], [0, "9000000000"]);
+  // Once an account sends that purchase, its history joins the account.
+  await saveAppTransaction(user(2), { signedTransaction: jws(transaction({ originalTransactionId: "9000000000", transactionId: "9000000001", signedDate: now + 3000 })) }, { roots });
+  assert.equal(events()[2].user_id, 2);
 
   // A notification without a transaction (such as a summary) is kept too, without one.
   const summary = { notificationType: "RENEWAL_EXTENSION", subtype: "SUMMARY", notificationUUID: crypto.randomUUID(), signedDate: now + 4000, data: { bundleId: "health.aurin.app", environment: "Sandbox" } };

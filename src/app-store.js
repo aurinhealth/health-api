@@ -353,6 +353,7 @@ export async function saveAppTransaction(env, body, options = {}) {
   const claim = await claimOriginal(env.RAW_DB || env.DB, env.USER_ID, tx);
   if (claim === 'taken') throw refuse(L('Tento nákup patří jinému účtu Aurin.', 'This purchase belongs to another Aurin account.'), 409);
   if (claim === 'stale') return { status: 'ok', stale: true, productId: tx.productId, environment: tx.environment };
+  await linkStoreEvents(env.RAW_DB || env.DB, env.USER_ID, String(tx.originalTransactionId));
   const saved = await write(env.DB, env.USER_ID, tx, null, null);
   return { status: 'ok', plan: saved.plan, validUntil: saved.validUntil, productId: tx.productId, environment: tx.environment };
 }
@@ -422,6 +423,14 @@ export async function recordStoreEvent(db, note, tx, renewal, userId = 0) {
   return true;
 }
 
+// The history Apple sent before an account held the subscription joins that
+// account, so it is exported and deleted with it.
+export async function linkStoreEvents(db, userId, original) {
+  if (!(Number(userId) > 0) || !original) return;
+  await db.prepare('UPDATE store_events SET user_id=? WHERE original_transaction_id=? AND user_id=?').bind(Number(userId), String(original), 0).run()
+    .catch(error => { if (!/no such table/i.test(String(error?.message))) console.error('Store events not linked', error?.message || error); });
+}
+
 // The cron's cleanup of the history older than STORE_EVENT_DAYS.
 export async function forgetOldStoreEvents(db, now = Date.now()) {
   try { return Number((await db.prepare('DELETE FROM store_events WHERE signed_at<?').bind(now - STORE_EVENT_DAYS * 864e5).run())?.meta?.changes) || 0; }
@@ -441,13 +450,14 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     if (data.bundleId !== bundleId(env)) return Response.json({ status: 'error', message: 'Wrong app' }, { status: 400 });
     if (data.environment === 'Production' && storeConfigured(env) && String(data.appAppleId) !== String(env.APP_STORE_APP_ID).trim()) return Response.json({ status: 'error', message: 'Wrong app' }, { status: 400 });
     const tx = data.signedTransactionInfo ? await verifyAppStoreJws(data.signedTransactionInfo, options) : null;
-    const renewal = data.signedRenewalInfo ? await verifyAppStoreJws(data.signedRenewalInfo, options) : null;
+    const renewal = tx && data.signedRenewalInfo ? await verifyAppStoreJws(data.signedRenewalInfo, options) : null;
     if (tx) checkTransaction(env, tx);
     // The holder known so far (the account whose token the purchase carries);
     // a later notification of the same subscription finds it through store_originals.
     const known = tx?.appAccountToken ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first()) : null;
     const owner = known || (tx ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first()) : null);
-    await recordStoreEvent(env.DB, note, tx, renewal, owner?.user_id);
+    // The history only feeds the owner's overview: it never holds up Pro.
+    await recordStoreEvent(env.DB, note, tx, renewal, owner?.user_id).catch(error => console.error('Store event not kept', error?.message || error));
     if (!tx) return Response.json({ status: 'ok', ignored: note.notificationType });
     // A refunded pack stops counting; nothing else about a pack needs the server.
     if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
@@ -468,6 +478,7 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     }
     if (!holder) return Response.json({ status: 'ok', unknown: true });
     if (await claimOriginal(env.DB, holder, tx, true) === 'stale') return Response.json({ status: 'ok', stale: true });
+    await linkStoreEvents(env.DB, holder, original);
     // Pro goes to the holder only; its end also reaches a copy made before claimOriginal.
     const { plan } = planOf(tx, renewal, note.notificationType);
     const targets = new Set([holder, ...(plan === 'free' ? rows.map(row => Number(row.user_id)) : [])]);
