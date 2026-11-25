@@ -47,6 +47,8 @@ final class SwipeBackTests: XCTestCase {
             XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
             wait(1.5)
             edgeSwipe()
+            // Let the pop settle before reading the screen (a cancelled pop is redone after it).
+            wait(1)
             // One swipe has to do it: a dropped first swipe was a real bug (CI and
             // TestFlight 602 to 611). With "-swipeBackLog" the app keeps what the
             // swipe was asked on an invisible element, printed here when it fails.
@@ -81,13 +83,15 @@ final class SwipeBackTests: XCTestCase {
     }
 
     /// The first element on screen. An element mid-animation (the page the
-    /// swipe takes away) can have no frame to hit, and asking isHittable then
-    /// fails the test by itself (CI, #1298): such an element is not on screen.
+    /// swipe takes away) can have no frame to hit or be gone a moment later,
+    /// and reading it then fails the test by itself: such an element is not on screen.
     private func onScreen(_ query: XCUIElementQuery) -> XCUIElement? {
+        // Read through snapshot(), which throws instead of failing the test
+        // when the element went away between the query and the read (CI, #1298).
         let screen = app.frame
         return query.allElementsBoundByIndex.first { element in
-            let frame = element.frame
-            guard element.exists, !frame.isEmpty, screen.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
+            guard let frame = (try? element.snapshot())?.frame, !frame.isEmpty,
+                  screen.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
             return element.isHittable
         }
     }
