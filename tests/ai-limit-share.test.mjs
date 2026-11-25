@@ -40,21 +40,21 @@ test("the free week, a TestFlight (Sandbox) purchase and an expired one stay at 
   }
 });
 
-test("unset share: everyone has the whole limits; the owner has any account's, none on the test server", async () => {
+test("unset share: everyone has the whole limits; the owner has a paying account's whatever it bought, none on the test server", async () => {
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "" })), 1);
   assert.equal(await aiLimitShare(await account({ AI_UNPAID_LIMIT_SHARE: "nonsense" })), 1);
   const owner = await account({ USER_IS_OWNER: true });
-  assert.equal(await aiLimitShare(owner), 0.5, "the owner without a purchase: half, like everyone");
-  assert.equal((await coachAllowance(owner)).limit, 15);
-  assert.equal((await coachAllowance(await account({ plan: "ai", environment: "Sandbox", USER_IS_OWNER: true }))).limit, 15, "a TestFlight purchase: half, like the testers");
+  assert.equal(await aiLimitShare(owner), 1, "the owner without a purchase: whole (Petr 2026-11-25)");
+  assert.equal((await coachAllowance(owner)).limit, 30);
+  assert.equal((await coachAllowance(await account({ plan: "ai", environment: "Sandbox", USER_IS_OWNER: true }))).limit, 30, "a TestFlight purchase: whole too");
   assert.equal((await coachAllowance(await account({ plan: "ai", USER_IS_OWNER: true }))).limit, 30, "a paid Pro: whole");
   assert.equal(await coachAllowance(await account({ USER_IS_OWNER: true, ENVIRONMENT: "staging" })), null);
 });
 
-test("the owner's spending is a group of its own and the coach evaluation a job of the server; the limits still follow the purchase", async () => {
+test("the owner's spending is a group of its own and the coach evaluation a job of the server; the limits are a paying account's", async () => {
   const owner = await account({ plan: "ai", environment: "Sandbox", USER_IS_OWNER: true });
   assert.equal(await aiGroup(owner), "owner");
-  assert.equal(await aiLimitShare(owner), 0.5, "a TestFlight purchase: half, like the testers");
+  assert.equal(await aiLimitShare(owner), 1, "a TestFlight purchase: whole, unlike the testers");
   assert.equal(await aiGroup(await account({ plan: "ai", USER_IS_OWNER: true, COACH_EVAL: true })), "system");
   assert.equal(await aiGroup(await account({ plan: "ai", environment: "Sandbox" })), "testflight");
 });

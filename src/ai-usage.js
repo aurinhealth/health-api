@@ -7,8 +7,8 @@
 // week does not lock the rest of the month. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
 // a loop); the coach chat is not in it, its messages get their own allowance.
-// 0 in either turns AI off for everyone. The owner has the same limits as any
-// account on the live server and none on the test server, where the coach
+// 0 in either turns AI off for everyone. The owner has a paying account's
+// limits on the live server whatever it bought (aiPlan) and none on the test server, where the coach
 // evaluation runs as the owner (the day's brake caps it there). The App Review
 // account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 // The messages name no amount: the user is told when it resets, not what it costs.
