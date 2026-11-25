@@ -74,5 +74,8 @@ export function historyFacts({ date, sessions = [], wellness = [], fitness = [],
   // since 3 June" when a period asked for reaches further back.
   const first = map => [...map.keys()].filter(d => d >= shift(date, -364) && d <= date).sort()[0] || null;
   const since = Object.fromEntries([["sleep", nights], ["hrv", hrv], ["restingHR", rhr], ["steps", steps], ["weight", weight], ["training", load]].map(([k, m]) => [k, first(m)]).filter(([, d]) => d));
+  // A period that reaches back before the first data says so on the metric itself
+  // ("onlyFrom": the average covers only the days since then), so the coach cannot miss it.
+  for (const p of periods) for (const [k, d] of Object.entries(since)) if (p[k] && d > shift(p.from, 7)) p[k].onlyFrom = d;
   return periods.length ? { periods, dataSince: since } : null;
 }

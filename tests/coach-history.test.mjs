@@ -32,6 +32,8 @@ test("averages per period with the nights and days they cover, and where the dat
   // A year asked, 180 nights there: the coach says so.
   assert.equal(y.sleep.nights, 180);
   assert.equal(facts.dataSince.sleep, day(-179));
+  assert.equal(y.sleep.onlyFrom, day(-179));
+  assert.equal(m3.sleep.onlyFrom, undefined);
   assert.equal(m3.hrv.averageMs, 60);
   assert.equal(y.hrv.averageMs, Math.round((90 * 60 + 275 * 40) / 365));
   assert.equal(y.steps.averagePerDay, 8000);
