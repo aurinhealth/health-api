@@ -1,0 +1,88 @@
+name: Recipe library upload
+
+# The recipe library of the food version (src/recipes.js) to R2: the recipes
+# come from the private repository aurin-prompts (recipes/recipes.json),
+# scripts/build-recipes.mjs packs them (index + one line per recipe) and prints
+# how many recipes each meal x diet x region cell has. The new version is
+# switched on by writing recipes/current.json last; older versions stay (a few
+# MB each) until removed by hand.
+#
+# Run by hand ("Run workflow" on main): target staging (the test server, where
+# RECIPES_ENABLED is on) or production (where the routes stay off until the
+# food version ships). A pull request touching the build runs the tests and the
+# build without R2.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which server's bucket"
+        type: choice
+        options: [staging, production]
+        default: staging
+  pull_request:
+    paths:
+      - "scripts/build-recipes.mjs"
+      - "src/recipes.js"
+      - "tests/recipes.test.mjs"
+      - ".github/workflows/recipes-upload.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recipes-upload
+  cancel-in-progress: false
+
+env:
+  BUCKET: aurin-food-catalog
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The R2 tokens are secrets of the environment food-catalog (main only); a pull request builds without them.
+    environment: ${{ github.event_name != 'pull_request' && 'food-catalog' || '' }}
+    env:
+      AWS_DEFAULT_REGION: auto
+      AWS_EC2_METADATA_DISABLED: "true"
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Check out the private recipes and prompts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: aurinhealth/aurin-prompts
+          token: ${{ secrets.PROMPTS_REPO_TOKEN }}
+          path: src/private
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "24"
+
+      - name: Run tests
+        run: node --test tests/recipes.test.mjs
+
+      - name: Build the library
+        id: build
+        run: node scripts/build-recipes.mjs src/private/recipes/recipes.json out/recipes
+
+      - name: Upload and switch to the new version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ inputs.target == 'production' && secrets.R2_ACCESS_KEY_ID || secrets.STAGING_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ inputs.target == 'production' && secrets.R2_SECRET_ACCESS_KEY || secrets.STAGING_R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ inputs.target == 'production' && secrets.R2_ENDPOINT || secrets.STAGING_R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          for s in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ENDPOINT; do [ -n "${!s}" ] || { echo "Missing $s for ${{ inputs.target }}"; exit 1; }; done
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          aws s3 cp "out/recipes/$VERSION/" "s3://$BUCKET/recipes/$VERSION/" --recursive --endpoint-url "$ep" --only-show-errors
+          aws s3 cp out/recipes/current.json "s3://$BUCKET/recipes/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          echo "Recipes $VERSION live in the ${{ inputs.target }} bucket"
