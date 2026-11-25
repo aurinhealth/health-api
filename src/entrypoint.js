@@ -671,7 +671,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
-    if (url.pathname === "/automation/load-test") return handleLoadTest(request, env, principal);
+    // No user here, so env.DB is null: the route works on the server's own databases (rawEnv).
+    if (url.pathname === "/automation/load-test") return handleLoadTest(request, rawEnv, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.

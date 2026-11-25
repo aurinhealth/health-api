@@ -37,3 +37,23 @@ test('Server-Timing and the summary', () => {
   const lines = summary([{ phase: 'P', path: 'GET /a', status: 200, ms: 100, queries: 2, rows: 10, dbMs: 5 }, { phase: 'P', path: 'GET /a', status: 503, ms: 300 }]).join('\n');
   assert.match(lines, /\| GET \/a \| 2 \| 503×1 \| 300 \| 300 \| 300 \| 1 \| 5 \| 3 \|/);
 });
+
+test('prepare opens the accounts with health consent, no AI and a working session', async () => {
+  const { createD1 } = await import('./helpers/d1.mjs');
+  const { verifyDashboardSession } = await import('../src/dashboard-auth.js');
+  const db = createD1();
+  db.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, role TEXT, disabled INTEGER DEFAULT 0, session_epoch INTEGER DEFAULT 0); CREATE TABLE user_consents (user_id INTEGER, kind TEXT, version TEXT, granted_at TEXT, withdrawn_at TEXT, PRIMARY KEY (user_id, kind));");
+  db.sqlite.exec("INSERT INTO users(email, role, session_epoch) VALUES ('sample+load02@test.aurin.health', 'user', 4)");
+  const env = { ENVIRONMENT: 'staging', DB: db, SESSION_SECRET: 'x'.repeat(40) };
+  const body = await (await handleLoadTest(post({ prepare: 3 }), env, { kind: 'load-test' })).json();
+  assert.equal(body.status, 'ok');
+  assert.equal(body.sessions.length, 3);
+  assert.ok(body.upload.records.length > 0);
+  const consents = db.sqlite.prepare("SELECT kind, withdrawn_at IS NULL AS given FROM user_consents ORDER BY user_id, kind").all().map(r => r.kind + ':' + r.given);
+  assert.deepEqual(consents, ['ai:0', 'health:1', 'ai:0', 'health:1', 'ai:0', 'health:1']);
+  // The account opened before gets a new epoch, so an older session of it ends.
+  assert.equal(db.sqlite.prepare("SELECT session_epoch FROM users WHERE email='sample+load02@test.aurin.health'").get().session_epoch, 5);
+  const session = await verifyDashboardSession(new Request('https://staging.aurin.health/', { headers: { Cookie: body.sessions[1] } }), env.SESSION_SECRET);
+  assert.equal(session.uid, 1);
+  assert.equal(session.epoch, 5);
+});
