@@ -362,7 +362,14 @@ struct GymSessionView: View {
             setStack(gym, lift, ex, e)
         }
         .safeAreaInset(edge: .bottom) {
-            if !dimmed { setDone(gym, lift) }
+            // Time and heart rate as a small line right above Set done, never
+            // under it (concept 06, point 3; CI screenshot: the line was cut).
+            if !dimmed {
+                VStack(alignment: .leading, spacing: 3) {
+                    liveLine.padding(.horizontal, 2)
+                    setDone(gym, lift)
+                }
+            }
         }
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
@@ -390,7 +397,7 @@ struct GymSessionView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .frame(height: W.small ? 32 : 36)
+                .frame(height: W.small ? 30 : 32)
                 .background(W.ink, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -436,7 +443,7 @@ struct GymSessionView: View {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
                     }
                     .watchFont(12, .medium).foregroundStyle(W.secondary)
-                    .frame(minHeight: 20)
+                    .frame(minHeight: 18)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -468,7 +475,6 @@ struct GymSessionView: View {
             .digitalCrownRotation(detent: crownValue, from: 0, through: selected == .kg ? Self.topKg(lb) : 100,
                                   by: selected == .kg ? (lb ? 1 : W.weightStep) : 1, sensitivity: selected == .kg ? .medium : .low,
                                   isContinuous: false, isHapticFeedbackEnabled: true)
-            if !dimmed { liveLine.padding(.top, 2) }
         }
         .padding(.top, 2)
     }
@@ -581,13 +587,13 @@ struct GymSessionView: View {
         let on = selected == field && !dimmed
         let shape = RoundedRectangle(cornerRadius: 14)
         return VStack(spacing: 0) {
-            Text(value).font(W.serif(W.small ? 22 : 25)).foregroundStyle(dimmed ? W.muted : W.num).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(W.serif(W.small ? 21 : 23)).foregroundStyle(dimmed ? W.muted : W.num).lineLimit(1).minimumScaleFactor(0.6)
             Text(unit).watchFont(12).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
             if let extra, !dimmed {
                 Text(extra).watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.6)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: W.small ? 42 : 48)
+        .frame(maxWidth: .infinity, minHeight: W.small ? 40 : 44)
         .padding(.vertical, 1)
         .background(dimmed ? AnyShapeStyle(Color.clear) : AnyShapeStyle(W.card), in: shape)
         .overlay { shape.stroke(on ? W.green : W.hair, lineWidth: on ? 2 : 1) }
