@@ -168,6 +168,9 @@ test("the food day type comes from the day's ride, run or swim, not a ride on a 
   const later = day({ cycling: { plannedWorkouts: [laterRide], nextRide: laterRide, recentActivities: [] } });
   assert.equal(later.dayType, "rest");
   assert.equal(later.training.plannedCyclingCalories, 0);
+  assert.equal(later.fueling.plannedRide, null);
+  const two = day({ cycling: { plannedWorkouts: [{ date: "2026-10-05", name: "Commute", durationHours: 1 }, { date: "2026-10-05", name: "Commute home", durationHours: 1 }], recentActivities: [] } });
+  assert.equal(two.training.plannedCyclingCalories, 2 * Math.round(500 * 70 / 88));
   assert.equal(day({ running: { plannedWorkouts: [{ date: "2026-10-05", name: "Long run", durationHours: 1.75 }] } }).dayType, "long");
   assert.equal(day({ running: { plannedWorkouts: [{ date: "2026-10-05", name: "Tempo", durationHours: 0.75, intensity: true }] } }).dayType, "hard");
   const swim = day({ swimming: { plannedWorkouts: [{ date: "2026-10-05", name: "Steady swim", durationHours: 0.75 }] } });

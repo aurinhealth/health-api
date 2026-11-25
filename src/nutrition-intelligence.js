@@ -106,10 +106,9 @@ export function buildNutritionPlan(context, options = {}) {
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
   const dayType = classifyDay(context);
   const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend, options.goal || context?.goal);
-  const next = context?.cycling?.nextRide || null;
-  // Calories count only what is planned for this day.
-  const today = enduranceToday(context);
-  const rideToday = onDay(next, context?.date) ? next : null;
+  // Food, fuelling and calories count only what is planned for this day.
+  const today = enduranceToday(context), ridesToday = today.filter(w => w.sport === "ride");
+  const next = ridesToday[0] || null;
   const durationHours = n(next?.durationHours);
   const rideRate = rideCarbsPerHour(next, options.experience ?? context?.experience ?? null);
   const plannedRideCarbs = Math.round(durationHours * rideRate);
@@ -135,8 +134,8 @@ export function buildNutritionPlan(context, options = {}) {
     .filter(a => String(a.date || "") === String(context.date || ""))
     .reduce((sum, a) => sum + n(a.calories), 0));
   const completedCyclingCalories = cyclingTrainingCalories;
-  const plannedCyclingCalories = rideToday && !context?.cycling?.recentActivities?.some(a => String(a.date || "") === String(context.date || ""))
-    ? estimatePlannedRideCalories(rideToday, weightKg)
+  const plannedCyclingCalories = ridesToday.length && !context?.cycling?.recentActivities?.some(a => String(a.date || "") === String(context.date || ""))
+    ? ridesToday.reduce((sum, ride) => sum + estimatePlannedRideCalories(ride, weightKg), 0)
     : 0;
   const plannedRunSwimCalories = estimateRunSwimCalories(today, weightKg);
   const trainingCalories = strengthCalories + completedCyclingCalories;
