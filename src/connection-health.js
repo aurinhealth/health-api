@@ -7,7 +7,7 @@
 // with the account) as sync_name 'connection_<provider>'.
 import { L } from "./lang.js";
 import { recordOpsEvent } from "./ops-report.js";
-import { transientD1Error, D1_RETRY_DELAYS_MS } from "./d1-retry.js";
+import { transientD1Error, D1_RETRY_DELAYS_MS, spread } from "./d1-retry.js";
 
 export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman", "whoop", "wahoo"];
 const name = provider => "connection_" + provider;
@@ -27,7 +27,7 @@ async function write(statement, delays = D1_RETRY_DELAYS_MS) {
     try { return await statement.run(); }
     catch (error) {
       if (attempt >= delays.length || !transientD1Error(error, { read: true })) throw error;
-      await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+      await new Promise(resolve => setTimeout(resolve, spread(delays[attempt])));
     }
   }
 }

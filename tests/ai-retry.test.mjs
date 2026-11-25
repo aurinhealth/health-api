@@ -27,3 +27,29 @@ test("an exhausted quota is not asked again", async t => {
   await assert.rejects(callOpenAI(env(), { instructions: "x", input: "y" }), error => /^AI 429: /.test(error.message) && !/quota/.test(error.message), "OpenAI's own text stays in the log");
   assert.equal(calls, 1);
 });
+
+test("an exhausted credit or limit e-mails the owner at once, once a day", async t => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { readFileSync } = await import("node:fs");
+  const { alertAiQuota } = await import("../src/ai-total.js");
+  const raw = createD1();
+  raw.sqlite.exec(readFileSync(new URL("../migrations/0025_ops_events.sql", import.meta.url), "utf8"));
+  const sent = [];
+  const env = { RAW_DB: raw, OWNER_EMAIL: "owner@example.test", EMAIL_FROM: "noreply@aurin.health", EMAIL: { send: async mail => { sent.push(mail); return { messageId: "m" }; } } };
+  // The refused call itself raises it (fetchOpenAI, coach-assistant.js).
+  assert.match(readFileSync(new URL("../src/coach-assistant.js", import.meta.url), "utf8"), /insufficient_quota'\)\{await alertAiQuota\(env\);return response;\}/);
+  await alertAiQuota(env);
+  assert.equal(sent.length, 1);
+  await alertAiQuota(env);
+  assert.equal(sent.length, 1, "not again the same day");
+  assert.match(sent[0].subject, /došel kredit nebo strop OpenAI/);
+  await alertAiQuota(env, new Date(Date.now() + 86400000));
+  assert.equal(sent.length, 2);
+  // A send that failed leaves the day free for the next refused call.
+  const later = new Date(Date.now() + 2 * 86400000);
+  let tries = 0;
+  const failing = { ...env, EMAIL: { send: async () => { tries++; throw new Error("mail down"); } } };
+  await alertAiQuota(failing, later);
+  await alertAiQuota(failing, later);
+  assert.equal(tries, 2);
+});

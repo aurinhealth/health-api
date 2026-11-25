@@ -68,3 +68,15 @@ test('cleanup deletes a few accounts per call and says how many remain', async (
   assert.equal(body.deleted, 5);
   assert.equal(body.remaining, 2);
 });
+
+test('the probe counts the USER_JOBS calls one request may make, straight and two levels deep', async () => {
+  let calls = 0;
+  const ping = async () => { if (++calls > 32) throw new Error('Too many Worker invocations'); return { ok: true }; };
+  const env = { ENVIRONMENT: 'staging', USER_JOBS: { ping, fan: async n => ({ ok: n, of: n, error: null }) } };
+  const body = await (await handleLoadTest(post({ probe: 'invocations' }), env, { kind: 'load-test' })).json();
+  assert.equal(body.direct.ok, 32);
+  assert.deepEqual(body.direct.error, { at: 33, message: 'Too many Worker invocations' });
+  const nested = await (await handleLoadTest(post({ probe: 'nested' }), env, { kind: 'load-test' })).json();
+  assert.equal(nested.nested.length, 3);
+  assert.equal((await handleLoadTest(post({ probe: 'invocations' }), { ENVIRONMENT: 'production' }, { kind: 'load-test' })).status, 404);
+});

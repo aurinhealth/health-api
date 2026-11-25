@@ -4,7 +4,8 @@
 // each answer reports in Server-Timing. Deletes the accounts at the end, also after a failure.
 // Only staging.aurin.health; the sessions never leave this process (the logs are public).
 // LOAD_TEST_ACCOUNTS (1–50, default 40), LOAD_TEST_BURSTS ("10,20,40,80,120" app opens at once),
-// LOAD_TEST_ROUNDS (rounds of each burst, default 3).
+// LOAD_TEST_ROUNDS (rounds of each burst, default 3). LOAD_TEST_PROBE=invocations only counts how many
+// USER_JOBS calls one request may make (src/load-test.js) and creates no accounts.
 import { appendFileSync, writeFileSync } from "node:fs";
 
 const host = "staging.aurin.health", origin = `https://${host}`;
@@ -73,6 +74,12 @@ if (process.argv[1]?.endsWith("load-test.mjs")) {
   const results = [], wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   let failed = null;
   try {
+    if (process.env.LOAD_TEST_PROBE) {
+      const probe = { direct: (await automation({ probe: "invocations" })).direct, nested: (await automation({ probe: "nested" })).nested };
+      console.log(JSON.stringify(probe, null, 2));
+      writeFileSync("load-test.json", JSON.stringify(probe, null, 2));
+      process.exit(0);
+    }
     const { sessions, upload } = await automation({ prepare: accounts });
     uploadBody = JSON.stringify(upload);
     console.log(`${sessions.length} accounts ready.`);

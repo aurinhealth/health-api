@@ -19,6 +19,14 @@ export const LOAD_TEST_MAX_ACCOUNTS = 50;
 export const LOAD_TEST_SESSION_SECONDS = 2 * 60 * 60;
 // Accounts one cleanup call deletes; the script calls again while some remain.
 export const LOAD_TEST_CLEANUP_BATCH = 5;
+// Calls one after another; how many went through and the first refusal.
+export async function probeCalls(call, n) {
+  let ok = 0, error = null;
+  for (let i = 0; i < n; i++) {
+    try { await call(); ok++; } catch (e) { error ||= { at: i + 1, message: String(e?.message || e).slice(0, 200) }; }
+  }
+  return { ok, of: n, error };
+}
 export const loadTestEmail = n => `sample+load${String(n).padStart(2, '0')}@test.aurin.health`;
 const LOAD_EMAIL = /^sample\+load\d{2}@test\.aurin\.health$/;
 
@@ -50,6 +58,19 @@ export async function handleLoadTest(request, env, principal, { remove = deleteA
     const upload = { records: sampleRecords(Date.now(), 2), categories: ['sleep', 'heart', 'hrv', 'resting', 'breathing', 'steps', 'energy', 'workouts', 'body'] };
     return Response.json({ status: 'ok', sessions, upload }, { headers });
   }
+  // Cloudflare: "a single request has a maximum of 32 Worker invocations" through service
+  // bindings. The cron sends each user's jobs through USER_JOBS one call per user, so this
+  // measures where the calls stop: straight from one request, and two levels deep.
+  if (body?.probe) {
+    if (typeof env.USER_JOBS?.ping !== 'function') return Response.json({ status: 'error', message: 'No USER_JOBS binding.' }, { status: 500, headers });
+    // Each kind in a request of its own: the direct calls would use up the nested ones' allowance.
+    if (body.probe === 'nested') {
+      const nested = [];
+      for (let i = 0; i < 3; i++) nested.push(await env.USER_JOBS.fan(30).catch(error => ({ ok: 0, error: String(error?.message || error).slice(0, 200) })));
+      return Response.json({ status: 'ok', nested }, { headers });
+    }
+    return Response.json({ status: 'ok', direct: await probeCalls(() => env.USER_JOBS.ping(), 40) }, { headers });
+  }
   if (body?.cleanup) {
     const rows = (await env.DB.prepare("SELECT id, email, name, role FROM users WHERE email LIKE 'sample+load%@test.aurin.health'").all()).results || [];
     let deleted = 0, failed = 0;
@@ -61,5 +82,5 @@ export async function handleLoadTest(request, env, principal, { remove = deleteA
     }
     return Response.json({ status: failed ? 'error' : 'ok', deleted, failed, remaining: accounts.length - deleted }, { headers });
   }
-  return Response.json({ status: 'error', message: 'Use prepare or cleanup.' }, { status: 400, headers });
+  return Response.json({ status: 'error', message: 'Use prepare, cleanup or probe.' }, { status: 400, headers });
 }

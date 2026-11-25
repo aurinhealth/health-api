@@ -1,5 +1,5 @@
 import {assertAIAccess} from './subscription.js';
-import { assertAiTotal, addAiSpend } from './ai-total.js';
+import { assertAiTotal, addAiSpend, alertAiQuota } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
 import { cycleShared } from "./cycle-model.js";
@@ -477,9 +477,10 @@ async function fetchOpenAI(env,{signal,body}){
       if(last||signal.aborted||error?.name==='AbortError'||error?.name==='TimeoutError')throw error;
       await retryWait(AI_RETRY_DELAYS_MS[attempt],signal);continue;
     }
-    if(response.ok||last||!AI_RETRY_STATUSES.has(response.status))return response;
-    const error=await response.clone().json().catch(()=>({}));
-    if(error.error?.code==='insufficient_quota')return response;
+    if(response.ok||!AI_RETRY_STATUSES.has(response.status))return response;
+    const error=response.status===429?await response.clone().json().catch(()=>({})):{};
+    if(error.error?.code==='insufficient_quota'){await alertAiQuota(env);return response;}
+    if(last)return response;
     const after=Number(response.headers.get('retry-after'))*1000;
     await response.body?.cancel().catch(()=>{});
     console.warn(JSON.stringify({ai_retry:response.status,attempt:attempt+1}));
