@@ -307,7 +307,7 @@ struct CaloriesDetailContent: View {
         Card {
             DetailChart(points: list, today: history.today, period: $period, unit: value.unit,
                         color: value == .calories ? Palette.green : value.color,
-                        note: "Každá tečka je jeden zapsaný den. Mezera je den bez zápisu.")
+                        note: "Každá tečka je jeden zapsaný den. Mezera je den bez zápisu. Dnešek přibude, až skončí.")
         }
 
         let count = TargetDays.count(history.list.suffix(FoodHistory.days(for: period)).filter { $0.date < history.today }, value: value)
@@ -326,7 +326,11 @@ struct CaloriesDetailContent: View {
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
         } else {
-            Card { LearningState(kind: .missing, text: L10n.tr("Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat.")) }
+            // Logged days without a kept target (before targets were kept) are
+            // no "no data yet": they are in the chart above (retest 618 R4).
+            Card { LearningState(kind: .missing, text: L10n.tr(list.isEmpty
+                ? "Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat."
+                : "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí.")) }
         }
 
         let rows = TrendMath.rows(list, today: history.today, lags: period == .days30 ? TrendLags.month : TrendLags.year)

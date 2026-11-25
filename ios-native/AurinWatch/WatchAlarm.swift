@@ -30,6 +30,8 @@ final class WatchAlarm: NSObject, ObservableObject {
     }
     /// The alarm rings now (AlarmRinging on the screen).
     @Published private(set) var ringing = false
+    /// Snoozed: when it rings again, for the Snoozed screen (watch concept 08).
+    @Published private(set) var snoozedUntil: Date?
     @Published private(set) var next: Date?
 
     private var session: WKExtendedRuntimeSession?
@@ -69,9 +71,11 @@ final class WatchAlarm: NSObject, ObservableObject {
         session?.invalidate()
         session = nil
         ringing = false
+        let wasSnoozed = snoozedUntil != nil
+        snoozedUntil = nil
         next = nil
         schedule()
-        if wasRinging { tellPhone([WatchSnapshot.alarmStoppedKey: true]) }
+        if wasRinging || wasSnoozed { tellPhone([WatchSnapshot.alarmStoppedKey: true]) }
     }
 
     func snoozeNow() {
@@ -79,9 +83,13 @@ final class WatchAlarm: NSObject, ObservableObject {
         session = nil
         ringing = false
         let until = Date().addingTimeInterval(Self.snooze)
+        snoozedUntil = until
         schedule(at: until)
         tellPhone([WatchSnapshot.alarmSnoozedKey: until])
     }
+
+    /// The Snoozed screen closed: the alarm still rings again.
+    func hideSnoozed() { snoozedUntil = nil }
 
     /// Settings → Apple Watch → Rings on, changed on the iPhone.
     func fromPhone(_ on: Bool) {
@@ -109,6 +117,7 @@ final class WatchAlarm: NSObject, ObservableObject {
     }
 
     private func ring(_ running: WKExtendedRuntimeSession) {
+        snoozedUntil = nil
         ringing = true
         let type: WKHapticType = haptic == "gentle" ? .click : haptic == "strong" ? .failure : .notification
         running.notifyUser(hapticType: type) { pointer in

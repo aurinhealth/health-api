@@ -7,6 +7,7 @@ import { localDateTime, localToday } from "./user-time.js";
 import { MEAL_DEFAULT_TIMES } from "./food-log.js";
 import { L } from "./lang.js";
 import { daySessions } from "./app-training.js";
+import { typeName } from "./activity-type.js";
 import { heatAdvice, indoorText } from "./heat-advice.js";
 import { isHardSession } from "./session-intensity.js";
 
@@ -100,7 +101,10 @@ export function targetParts(nutrition = {}, { past = false } = {}) {
     const items = list.map((w, i) => {
       const counted = i === list.length - 1 ? total - given : Math.round(total * num(w.kcal) * coverage / Math.max(wanted, 1));
       given += counted;
-      return { kind, type: w.type || null, name: w.name ? String(w.name).slice(0, 80) : null, minutes: num(w.minutes) || null, kcal: Math.round(num(w.kcal)), counted };
+      // A watch workout without its own name is named by its type, in words
+      // ("Posilovna", not "WeightTraining"), as on Training (app-training.js).
+      const name = w.name && w.name !== w.type ? w.name : w.type && w.type !== "Workout" ? typeName(w.type) : null;
+      return { kind, type: w.type || null, name: name ? String(name).slice(0, 80) : null, minutes: num(w.minutes) || null, kcal: Math.round(num(w.kcal)), counted };
     });
     return { total, items };
   };

@@ -114,6 +114,10 @@ struct HealthContent: View {
                 }
                 .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
+                // Over the day pager, whose scroll view reaches 24 pt up for the
+                // cards' shadows and took the taps on the month and Settings
+                // (retest 618 R3); Today has the week strip in between.
+                .zIndex(1)
             }
             day
                 .padding(.horizontal, PageGrid.margin)

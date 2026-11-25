@@ -140,10 +140,29 @@ struct RecoveryTime: Decodable, Equatable {
         return L10n.tr(parts[slot(d)])
     }
 
-    /// "Po odpoledne" / "Mon afternoon" for the bar's ends.
-    static func short(_ date: Date, ready: Bool = true) -> String {
-        let d = ready ? day(date) : date
-        return format(d, L10n.isEnglish ? "EEE" : "EEEEEE").capitalized(with: L10n.locale) + " " + L10n.tr(["dopoledne", "odpoledne", "večer"][slot(d)])
+    /// A day ahead for Regenerace's page: "zítra dopoledne" within a day, then
+    /// "v sobotu" / "Saturday", with the half day when partOfDay: "v sobotu
+    /// dopoledne" / "Saturday morning". "už teď" once passed.
+    static func when(_ date: Date, today: String, now: Date? = nil, partOfDay: Bool = false) -> String {
+        let d = day(date), ahead = days(from: today, to: d)
+        if ahead < 2 || now.map({ date <= $0 }) == true { return part(date, today: today, now: now) }
+        let weekday = Calendar.current.component(.weekday, from: d) - 1
+        let name = L10n.isEnglish ? format(d, "EEEE") : ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday]
+        return partOfDay ? name + " " + L10n.tr(["dopoledne", "odpoledne", "večer"][slot(d)]) : name
+    }
+
+    /// A past session's day that can't be read as one ahead: "dnes", "včera",
+    /// "minulý pátek" / "last Friday".
+    static func pastDay(_ iso: String, today: String) -> String {
+        if iso == today { return L10n.tr("dnes") }
+        if Fmt.relativeDay(iso, today: today) == L10n.tr("včera") { return L10n.tr("včera") }
+        let utc = TimeZone(identifier: "UTC")!
+        guard let date = DateFormatters.iso(timeZone: utc).date(from: iso) else { return iso }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utc
+        let weekday = calendar.component(.weekday, from: date) - 1
+        if L10n.isEnglish { return "last " + DateFormatters.make("EEEE", locale: L10n.locale, timeZone: utc).string(from: date) }
+        return ["minulou neděli", "minulé pondělí", "minulé úterý", "minulou středu", "minulý čtvrtek", "minulý pátek", "minulou sobotu"][weekday]
     }
 
     /// A session's day: "dnes", "včera", "neděle" / "Sunday".

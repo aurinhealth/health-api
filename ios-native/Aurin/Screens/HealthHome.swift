@@ -146,8 +146,9 @@ struct AurinOrb: View {
             }
             .frame(width: size * 1.6, height: size * 1.6)
             // The halo reaches past the orb's frame (over the month title and
-            // Settings above it): it never takes a tap (617 review #4).
-            .allowsHitTesting(false)
+            // Settings above it): only the orb itself takes a tap (617 review #4),
+            // so a tap on it still opens Aurin age (retest 618 R3).
+            .contentShape(Circle().inset(by: size * 0.3))
         }
         .frame(width: size, height: size)
         .modifier(ScreenVisibility(onScreen: $onScreen))
