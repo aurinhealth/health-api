@@ -30,10 +30,17 @@ extension DemoData {
         "Sucho, nejvýš 13°.": "Dry, high of 13°.",
         "Sucho, nejvýš 9°.": "Dry, high of 9°.",
         "Jak dnes začít": "How to start today",
+        "Dnes odpočinek": "Rest today",
+        "Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.":
+            "If you feel unwell, skip training today and rest. Come back when you're well again.",
+        "Se zraněním dnes plán stojí. Pohyb jen takový, který nebolí, a s bolestí za lékařem.":
+            "With an injury the plan waits today. Only movement that doesn't hurt, and see a doctor if it does.",
+        "Máš pauzu od tréninku: plán stojí, dokud ji neukončíš.":
+            "You're taking a break from training: the plan waits until you end it.",
         "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.":
             "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day.",
-        "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy.":
-            "Go all in on strength today, with a carb snack an hour and a half before.",
+        "Horní polovinu těla dej naplno, dřep jen lehce.":
+            "Go all in on the upper body, keep the squat light.",
         "Silový trénink": "Strength training",
         "45 min, celé tělo": "45 min, full body",
         "Do postele": "Bedtime",
