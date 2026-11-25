@@ -397,14 +397,16 @@ struct WhyDetail: View {
         if let minutes = s.sleep?.minutes {
             let need = s.sleep?.need
             let short: Int = need.map { Int(($0 - minutes).rounded()) } ?? 0
-            let m = Int(minutes.rounded())
-            let value: String = "\(m / 60) h " + String(format: "%02d", m % 60)
+            // "7 h 5" + "min", "7" + "h", "45" + "min": W.hours with its last unit small.
+            let text = W.hours(minutes)
+            let unit = text.hasSuffix(" min") ? "min" : "h"
+            let value = String(text.dropLast(unit.count + 1))
             var note: String? = nil
             if need != nil {
                 let gap = W.hours(Double(short))
                 note = short > 0 ? W.tr("o \(gap) méně", "\(gap) short") : W.tr("dost", "enough")
             }
-            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: value, unit: "min", note: note, amber: short > 0))
+            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: value, unit: unit, note: note, amber: short > 0))
         }
         for (metric, m) in [(WatchMetric.hrv, s.hrv), (WatchMetric.restingHR, s.restingHR)] {
             guard let value = m?.value else { continue }
