@@ -164,7 +164,10 @@ const athleteView = t => ({ ftp: t?.ftp || null, runThresholdPace: t?.runThresho
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 // /app/api/my-workouts…, /app/api/shares… and /app/api/gym/template.
-export async function handleWorkoutTemplatesApi(request, env, url, session = {}) {
+// todayVersion(eventId, planned): the day coach's version of today's plan when
+// it eases it (entrypoint.js coachTodayVersion, C1), so an exported file never
+// holds the intervals the phone says to skip.
+export async function handleWorkoutTemplatesApi(request, env, url, session = {}, { todayVersion = null } = {}) {
   const path = url.pathname;
   if (!path.startsWith("/app/api/my-workouts") && !path.startsWith("/app/api/shares") && path !== "/app/api/gym/template") return undefined;
   if (!session.signedIn) return json({ message: L("Přihlas se do aplikace.", "Sign in to the app.") }, 401);
@@ -234,7 +237,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     // A planned ride or run (from the library, the coach or Intervals.icu), or
     // the plan a done one fulfilled, as an own workout to save or share; nothing is saved.
     if (path === "/app/api/my-workouts/from-planned" && request.method === "GET") {
-      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      const w = await plannedForToday(env, String(url.searchParams.get("id") || ""), todayVersion);
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
       if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
@@ -242,7 +245,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     }
     // "Export to" → .zwo: the planned ride or run as a Zwift file.
     if (path === "/app/api/my-workouts/from-planned.zwo" && request.method === "GET") {
-      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      const w = await plannedForToday(env, String(url.searchParams.get("id") || ""), todayVersion);
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
       const sport = w?.sport || "ride";
@@ -254,7 +257,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     // (Garmin, Wahoo, Karoo, COROS). A run asks for the threshold pace so the
     // steps get real paces; a ride stays in % FTP, a swim without targets.
     if (path === "/app/api/my-workouts/from-planned.fit" && request.method === "GET") {
-      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      const w = await plannedForToday(env, String(url.searchParams.get("id") || ""), todayVersion);
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
       const sport = ENDURANCE_SPORTS.includes(w?.sport) ? w.sport : "ride";
@@ -388,6 +391,11 @@ export function describedTemplate(sport, data, thresholds = null) {
 }
 
 // The planned workout behind an event id ("planned:<id>"), as /app/api/workouts/planned reads it.
+async function plannedForToday(env, eventId, todayVersion) {
+  const planned = await plannedWorkout(env, eventId);
+  return planned && todayVersion ? (await todayVersion(eventId, planned))?.workout || planned : planned;
+}
+
 async function plannedWorkout(env, eventId) {
   const id = eventId.replace(/^planned:/, "").slice(0, 120);
   if (!id) return null;

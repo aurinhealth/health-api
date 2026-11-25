@@ -151,3 +151,32 @@ test('C6: a revision makes at most one run long, and a longer run never gets sho
   const run = { date: '2026-10-11', sport: 'run', minutes: 62, kind: 'endurance' };
   assert.equal(guardSessionChange({ ...run, minutes: 120 }, run, { runCap: { cap: 64, single: 200 } }).minutes, 62);
 });
+
+// C1: what leaves the phone on a day the coach eases the plan.
+import { coachEases } from '../src/week-ai.js';
+import { handleWorkoutTemplatesApi } from '../src/workout-templates.js';
+import { createD1 } from './helpers/d1.mjs';
+import { scopedDb } from '../src/tenancy.js';
+
+test('C1: the coach eases a hard or long plan, or cuts it for a named reason', () => {
+  const vo2 = { name: 'VO2 5×4', duration_minutes: 75 }, easy = g => ({ system: 'recovery', adaptations: ['nízká připravenost'], workout: { duration_minutes: 45, ...g } });
+  assert.equal(coachEases(vo2, easy()), true);
+  assert.equal(coachEases(vo2, { system: 'vo2max', adaptations: [], workout: { duration_minutes: 75 } }), false, 'kept');
+  assert.equal(coachEases({ name: 'Ride', intensity_factor: 0.9, duration_minutes: 60 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 60 } }), true, 'hard by its IF');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, easy({ duration_minutes: 90 })), true, 'cut to half for a reason');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 150 } }), false, 'shorter without a reason');
+});
+
+test('C1: the .zwo and .fit files of today\'s plan hold the coach\'s version', async () => {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
+  const event = { name: 'VO2 5×4', type: 'Ride', workout_doc: { steps: [{ duration: 600, power: { start: 50, end: 70, units: '%ftp' } }, { reps: 5, steps: [{ duration: 240, power: { value: 115, units: '%ftp' } }, { duration: 240, power: { value: 55, units: '%ftp' } }] }] } };
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,payload_json) VALUES(1,'intervals','planned-workout','planned:77',?)").run(JSON.stringify(event));
+  const easy = { name: 'Recovery spin', sport: 'ride', environment: 'indoor', duration_minutes: 45, structure_json: JSON.stringify([{ type: 'steady', minutes: 45, power: 55 }]) };
+  const get = async (path, todayVersion) => { const url = new URL('https://aurin.health' + path); return handleWorkoutTemplatesApi(new Request(url, { headers: { Origin: url.origin } }), { DB: scopedDb(raw, 1), RAW_DB: raw, USER_ID: 1 }, url, { signedIn: true, user: { name: 'Petr' } }, { todayVersion }); };
+  const zwo = await (await get('/app/api/my-workouts/from-planned.zwo?id=planned:77', async () => ({ workout: easy }))).text();
+  assert.match(zwo, /Recovery spin/);
+  assert.doesNotMatch(zwo, /VO2/);
+  const kept = await (await get('/app/api/my-workouts/from-planned.zwo?id=planned:77', async () => null)).text();
+  assert.match(kept, /VO2/);
+});

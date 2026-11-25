@@ -99,7 +99,7 @@ import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, su
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
-import { proposeWeekAI, adjustByChip, adjustByText, guardSessionChange, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { proposeWeekAI, adjustByChip, adjustByText, guardSessionChange, coachEases, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
@@ -2180,7 +2180,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
-  {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
+  {const r=await handleWorkoutTemplatesApi(request,env,url,session,{todayVersion:(id,planned)=>coachTodayVersion(env,ctx,id,planned).catch(()=>null)});if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
   if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
@@ -3886,6 +3886,26 @@ async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
   const focus=(planned?({quality:systemOf(sport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]:null)||roleFor(prefs,date,sport,plan?.roles)?.focus||null;
   return buildCyclingCoachV2({...inputs,availabilityMinutes:trainingBudget(prefs,date,chip?.minutes||null),...await capabilitiesWithLevel(env.DB,sport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport,goal:focus?{focus}:null});
 }
+// Today's planned ride, run or swim as the day coach has it (load ramp-back
+// review 2026-11-25, C1). On a day the coach eases the plan (red readiness,
+// signs of illness, a pain, a break, the first days after Nemoc, 48 h after a
+// hard day…) the watch's "Open in Workout", the plan's detail and the .fit and
+// .zwo files get the coach's version, so none of them offers the intervals
+// the phone says to skip. Null: the plan stands (another day, the coach keeps
+// it, or the coach's version could not be made). planned: the plan's workout.
+async function coachTodayVersion(env,ctx,eventId,planned){
+  const id=String(eventId||'').replace(/^planned:/,''),date=localToday();
+  const sport=planned?.sport==='run'||planned?.sport==='swim'?planned.sport:planned?.sport==='ride'||!planned?.sport?'ride':null;
+  if(!id||!planned||!sport)return null;
+  const event=await env.DB.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first().catch(()=>null);
+  if(String(event?.start_time||'').slice(0,10)!==date)return null;
+  const u=new URL('https://internal/app/api/workouts/generate');
+  const response=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:planned.environment==='indoor'?'indoor':planned.environment==='outdoor'?'outdoor':'auto'})}),env,ctx,u,{signedIn:true}).catch(()=>null);
+  const g=response?.ok?await response.json().catch(()=>null):null;
+  if(g?.status!=='ok'||!g.workout)return null;
+  return coachEases(planned,g)?{workout:g.workout,from:{name:planned.name||null,kind:kindOfSystem(planned.primary_system||planned.name,'endurance'),minutes:Number(planned.duration_minutes)||null},why:(g.adaptations||[]).filter(Boolean).join(', ')||null}:null;
+}
+
 // The athlete's ratings since a day: library workouts (workout_feedback) and
 // the "Jak to šlo?" of any other session (coach_reflections).
 async function feedbackSince(env,since){
@@ -4023,13 +4043,16 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
       const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
       if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
-      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));let w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event);const kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
-      // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
+      // Today (the watch and the detail send ?date=): the day coach's version when it eases the plan (C1).
+      const coachDay=day===localToday()?await coachTodayVersion(env,ctx,id,{...w,sport:kind}).catch(()=>null):null;
+      if(coachDay)w={...coachDay.workout,name:coachDay.workout.name};
+      // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
       const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null,minutes:w.duration_minutes,intervals:isHardSession(w,kind)})?.text||null:null;
-      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',source:coachDay?'coach':library?'library':'intervals',workout:w,...(coachDay?{coachToday:{from:coachDay.from,why:coachDay.why}}:{}),...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     // The library's day: the coach of the week plan's role and the day's time
     // and the search's filters, as the list and the AI's own workout use them.
