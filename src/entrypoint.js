@@ -183,6 +183,7 @@ import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchSchedul
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
+import { weekSummary, summaryWeek } from "./coach-week-summary.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
@@ -1428,6 +1429,8 @@ function coachWeeks(env,ctx,weeks){
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   return Promise.all(weeks.map(w=>cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(r=>r.json().catch(()=>({}))))));
 }
+// The Sunday summary's nights: its week and the four weeks before (coach-week-summary.js).
+const USUAL_SLEEP_SPAN=35;
 // The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
 function coachSleep(env,ctx,internalAuth,date,days=30){
   return app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-days)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-days),shiftDate(date,1)));
@@ -1767,6 +1770,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // "Plán týdne → Navrhne AI" (week-ai.js): the AI lays out the week from the
   // same data as the coach, the rules' proposal and the athlete's note; the
   // rules' proposal stands when the AI is not available.
+  // The Sunday summary of the coach chat (coach-week-summary.js, AI-8): numbers
+  // from the rules, no AI. The next week's proposal is /app/api/coach/week-ai.
+  if(url.pathname==='/app/api/coach/week-summary'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const today=localToday(),asked=url.searchParams.get('start'),start=validTrainingDay(asked)?mondayOfDate(asked):summaryWeek(today,mondayOfDate(today));
+      if(start>today)throw new Error(L('Ten týden ještě nezačal.', 'That week has not started yet.'));
+      const end=shiftDate(start,6),[weeks,sleep,fitness]=await Promise.all([coachWeeks(env,ctx,[shiftDate(start,-7),start]),coachSleep(env,ctx,internalAuth,end,USUAL_SLEEP_SPAN),
+        cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>({}))]);
+      const summary=weekSummary({start,today,days:weeks.flatMap(w=>w.days||[]),sleep:sleep.sessions||[],load:loadBalance(fitness?.wellness||[],end<today?end:today)});
+      return Response.json({status:'ok',summary},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
   if(url.pathname==='/app/api/coach/week-ai'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
