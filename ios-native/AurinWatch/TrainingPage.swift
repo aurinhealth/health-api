@@ -17,6 +17,8 @@ struct TrainingPage: View {
     /// Which of a day's workouts is open, by day (the first until a tap).
     @State private var chosen: [String: Int] = [:]
     @ObservedObject private var plans = PlanStore.shared
+    /// Train anyway? open (concept 04, the three choices).
+    @State private var options = false
 
     private var today: String { WatchStore.localDate(WatchDemo.now) }
     private var sessions: [WatchSnapshot.Session] {
@@ -29,22 +31,16 @@ struct TrainingPage: View {
         ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // The page's name is the system title (watch audit D3); the
-                // day shown, when not today, on a row of its own.
-                if day != today {
-                    Text(day == tomorrow ? W.tr("ZÍTRA", "TOMORROW") : W.dayName(day).uppercased())
-                        .watchFont(12, .bold)
-                        .foregroundStyle(.black)
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(W.amber, in: Capsule())
-                        .padding(.bottom, 6)
+                // No row of week days (watch concept 04 point 7): the week
+                // lives on the iPhone, the watch shows today at a glance.
+                if day == tomorrow {
+                    // Today's done or a rest day: today first, then tomorrow (points 3 and 5).
+                    sectionLabel(W.tr("Dnes", "Today"))
+                    todayDone
+                    sectionLabel(W.tr("Zítra", "Tomorrow")).padding(.top, 10)
+                } else {
+                    sectionLabel(dayLabel(day))
                 }
-                WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
-                    // Where the sample day's screenshot scrolls to (-week): 8 pt into
-                    // the week, so it stays whole under the clock and Continue whole
-                    // above the screen's edge. The id sits on the 1 pt line itself:
-                    // on the padded view it pointed at the row's top.
-                    .overlay(alignment: .top) { Color.clear.frame(height: 1).id("week").padding(.top, 8) }
                 content(day)
                 // Race day offers no gym (the race card is the day).
                 if day == today, noGymToday, !raceDay(day) { noGym }
@@ -56,18 +52,20 @@ struct TrainingPage: View {
             .padding(.horizontal, 6)
         }
         .task {
-            // The sample day's screenshots: -week the week and Continue both whole,
-            // -race the race card from its top with Open in Workout.
+            // The sample day's screenshots: -race the race card from its top with Open in Workout.
             if WatchDemo.race {
                 try? await Task.sleep(for: .milliseconds(400))
                 proxy.scrollTo("race", anchor: .top)
-            } else if WatchDemo.flag("-week") {
-                try? await Task.sleep(for: .milliseconds(400))
-                proxy.scrollTo("week", anchor: .top)
             }
         }
         }
-        .navigationTitle(W.tr("Trénink", "Training"))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: ReadinessHome.Page.coach) { WatchCoachLights() }
+                    .accessibilityLabel(W.tr("Kouč", "Coach"))
+            }
+        }
+        .sheet(isPresented: $options) { trainAnyway }
         // Each turn of the crown to this page shows it again: the plan only
         // when there is none for today or it is older than 10 minutes (the
         // iPhone sends every change it saves on its own).
@@ -83,7 +81,8 @@ struct TrainingPage: View {
         .fullScreenCover(isPresented: $running, onDismiss: { WatchReport.visit("training") }) {
             GymSessionView().onAppear { WatchReport.visit("gym") }
         }
-        .containerBackground(W.glow(W.Glow.strain), for: .tabView)
+        // Dark green as Training on the iPhone, not brown (concept 04 point 1).
+        .containerBackground(W.glow(W.Glow.readiness), for: .tabView)
         .alert(W.tr("Trénink se nepodařilo sestavit", "Couldn't put the workout together"), isPresented: $store.failedStart) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -108,58 +107,73 @@ struct TrainingPage: View {
         sessions.contains { $0.date != today } && !sessions.contains { $0.date == today }
     }
 
-    /// Repeat last workout, Build from rested, Empty workout: the iPhone puts
-    /// it in the day (an empty one starts here alone too) and it opens. Watch
-    /// audit B2: on a rest day it asks "Train anyway?" with all three grey,
-    /// and without the iPhone the two it builds are off.
+    /// Train anyway? (concept 04): one glass button under the day, the
+    /// three choices on their own screen.
     private var noGym: some View {
-        let settings = watch.settings
-        let rest = restDay
-        let near = watch.phoneNear || WatchDemo.on
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(rest ? W.tr("Den volna", "Rest day") : W.tr("Posilovna není v plánu", "No gym planned"))
-                .watchFont(15, .semibold).foregroundStyle(W.ink)
-            if let last = settings.lastGym {
-                Text(W.tr("Minule: ", "Last: ") + W.dayName(last) + (settings.lastGymExercises.map { ", " + Self.exercises($0) } ?? ""))
-                    .watchFont(12).foregroundStyle(W.secondary)
-            }
-            if rest {
-                Text(W.tr("Přesto trénovat?", "Train anyway?"))
-                    .watchFont(12, .semibold).foregroundStyle(W.ink)
-                    .padding(.top, 4)
-            }
-            if store.starting {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 6)
-            } else {
-                if settings.lastGym != nil {
-                    startButton(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"), prominent: !rest && near, off: !near)
-                }
-                startButton(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), prominent: !rest && near && settings.lastGym == nil, off: !near)
-                if !near {
-                    Text(W.tr("Potřebuje iPhone poblíž", "Needs your iPhone nearby"))
-                        .watchFont(12).foregroundStyle(W.muted)
-                        .frame(maxWidth: .infinity)
-                }
-                startButton(.empty, W.tr("Prázdný trénink", "Empty workout"), prominent: !rest && !near)
-            }
+        Button { options = true } label: {
+            Text(W.tr("Přesto trénovat?", "Train anyway?"))
+                .watchFont(16, .semibold).foregroundStyle(W.ink)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
         }
+        .buttonStyle(.bordered)
         .padding(.top, 12)
     }
 
-    /// The main one white, the others the system's grey (watch audit D2).
-    @ViewBuilder private func startButton(_ kind: WatchGym.Start.Kind, _ title: String, prominent: Bool, off: Bool = false) -> some View {
-        let button = Button {
-            Task { if await store.start(kind) { running = true } }
-        } label: {
-            Text(title).watchFont(15, .semibold).foregroundStyle(prominent ? .black : W.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
+    /// Repeat last workout (with which one it is), Build from rested, Empty
+    /// workout: the iPhone puts it in the day (an empty one starts here alone
+    /// too) and it opens. Without the iPhone the two it builds are off.
+    private var trainAnyway: some View {
+        let settings = watch.settings
+        let near = watch.phoneNear || WatchDemo.on
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(W.tr("Přesto trénovat?", "Train anyway?"))
+                    .font(W.serif(19)).foregroundStyle(W.num)
+                    .padding(.bottom, 4)
+                if store.starting {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+                } else {
+                    if let last = settings.lastGym {
+                        option(.repeatLast, W.tr("Zopakovat minulý", "Repeat last workout"),
+                               W.dayName(last).capitalized + (settings.lastGymExercises.map { ", " + Self.exercises($0) } ?? ""), off: !near)
+                    }
+                    option(.rested, W.tr("Sestavit z odpočatých", "Build from rested"), W.tr("Svaly, které jsou odpočaté", "Muscles that are fresh"), off: !near)
+                    option(.empty, W.tr("Prázdný trénink", "Empty workout"), W.tr("Cviky přidáš za pochodu", "Add exercises as you go"))
+                    if !near {
+                        Text(W.tr("Potřebuje iPhone poblíž", "Needs your iPhone nearby"))
+                            .watchFont(13).foregroundStyle(W.muted)
+                            .padding(.top, 10)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .disabled(off)
-        if prominent {
-            button.mainButton().padding(.top, 3)
-        } else {
-            button.buttonStyle(.bordered).padding(.top, 3)
+        .containerBackground(W.glow(W.Glow.readiness), for: .navigation)
+    }
+
+    private func option(_ kind: WatchGym.Start.Kind, _ title: String, _ note: String, off: Bool = false) -> some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(W.hair).frame(height: 1)
+            Button {
+                Task {
+                    if await store.start(kind) {
+                        options = false
+                        running = true
+                    }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).watchFont(15, .medium).foregroundStyle(W.ink)
+                    Text(note).watchFont(13).foregroundStyle(W.muted).lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(off)
+            .opacity(off ? 0.45 : 1)
         }
     }
 
@@ -191,14 +205,6 @@ struct TrainingPage: View {
         return today
     }
 
-    /// Monday to Sunday of this week.
-    private var weekDays: [String] {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.firstWeekday = 2
-        let start = calendar.dateInterval(of: .weekOfYear, for: WatchDemo.now)?.start ?? WatchDemo.now
-        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start).map(WatchStore.localDate) }
-    }
-
     @ViewBuilder private func content(_ day: String) -> some View {
         let planned = Self.joined(sessions.filter { $0.date == day && !$0.done })
         let done = sessions.filter { $0.date == day && $0.done }
@@ -221,12 +227,16 @@ struct TrainingPage: View {
             if gymPlanned, !others.contains(where: { $0.sport == "strength" }), !done.contains(where: { $0.sport == "strength" }) {
                 sideCard(WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false), day: day, gym: gym)
             }
-        } else if planned.count > 1 {
+        } else if planned.count > 1 || (day == today && !done.isEmpty && !planned.isEmpty) {
+            // Two in a day (concept 04): the done one on top with its tick.
+            ForEach(Array(done.enumerated()), id: \.offset) { _, session in
+                doneCard(session, gym: nil).padding(.top, 6)
+            }
             // Two or more (mockup 23): each its own card, the picked one open
             // with its steps or exercises and its button, a tap picks another.
             let pick = min(chosen[day] ?? 0, planned.count - 1)
             ForEach(Array(planned.enumerated()), id: \.offset) { index, session in
-                if index == pick {
+                if index == pick || planned.count == 1 {
                     pickedCard(session, day: day, gym: gym)
                 } else {
                     // A brick's second leg stays right under the first (mockup plavani-triatlon 6).
@@ -241,15 +251,9 @@ struct TrainingPage: View {
                 .padding(.top, 8)
         } else if let main = planned.first ?? (gymPlanned && done.isEmpty ? WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false) : nil) {
             single(main, day: day, gym: gym)
-        } else if let first = done.first {
-            HStack {
-                header(first)
-                Spacer(minLength: 4)
-                Image(systemName: "checkmark").foregroundStyle(W.green)
-            }
-            ForEach(Array(done.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text(Self.name(other) + (other.minutes.map { ", \($0) min" } ?? ""))
-                    .watchFont(12).foregroundStyle(W.secondary).padding(.top, 2)
+        } else if !done.isEmpty {
+            ForEach(Array(done.enumerated()), id: \.offset) { _, session in
+                doneCard(session, gym: day == today ? gym : nil).padding(.top, 6)
             }
         } else if day == today, let s = watch.snapshot, s.date != today {
             // Yesterday's Today: no word on today's plan yet, so not "Rest day".
@@ -257,9 +261,15 @@ struct TrainingPage: View {
                 .watchFont(17, .semibold).foregroundStyle(W.ink).padding(.top, 4)
             Text(W.tr("Dnešní plán přijde z iPhonu nebo serveru.", "Today's plan comes from your iPhone or the server."))
                 .watchFont(12).foregroundStyle(W.secondary)
+        } else if day == today, restDay {
+            restSentence
+            if let next = sessions.first(where: { $0.date == tomorrow && !$0.done }) {
+                sectionLabel(W.tr("Zítra", "Tomorrow")).padding(.top, 10)
+                rowCard(next, line: when(next))
+            }
         } else {
             Text(day == today ? W.tr("Dnes volno", "Rest day") : W.tr("Nic naplánováno", "Nothing planned"))
-                .watchFont(17, .semibold).foregroundStyle(W.ink).padding(.top, 4)
+                .font(W.serif(19)).foregroundStyle(W.num).padding(.top, 4)
             if sessions.isEmpty, watch.snapshot == nil || store.failed {
                 Text(W.tr("Trénink hodinky dostanou z iPhonu.", "Your watch gets training from your iPhone."))
                     .watchFont(12).foregroundStyle(W.secondary)
@@ -270,10 +280,28 @@ struct TrainingPage: View {
     /// One workout: its name and when, the gym's exercises with Start today,
     /// or where a ride or run without steps starts.
     @ViewBuilder private func single(_ main: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
-        header(main)
-        Text(subtitle(main, day: day)).watchFont(12).foregroundStyle(W.secondary).padding(.top, 1)
         if main.sport == "strength", let gym, !gym.exercises.isEmpty {
-            exercises(gym)
+            // The iPhone's workout card (concept 04): the sport's disc, the
+            // name in the serif, when, and the label over each number.
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    SportDisc(sport: main.sport)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(Self.name(main)).font(W.serif(19)).foregroundStyle(W.num)
+                            .lineLimit(2).minimumScaleFactor(0.75)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(subtitle(main, day: day, length: false)).watchFont(13).foregroundStyle(W.muted).lineLimit(1)
+                    }
+                }
+                HStack(alignment: .top, spacing: 0) {
+                    stat(W.tr("Čas", "Time"), (gym.minutes ?? main.minutes).map(String.init) ?? "–", unit: "min")
+                    stat(W.tr("Cviky", "Exercises"), String(gym.exercises.count))
+                    stat(W.tr("Série", "Sets"), String(Self.sets(gym)))
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .watchCard()
             if day == today {
                 if gym.allDone {
                     Label(W.tr("Hotovo", "Done"), systemImage: "checkmark")
@@ -286,25 +314,32 @@ struct TrainingPage: View {
                             .frame(maxWidth: .infinity)
                     }
                     .mainButton()
-                    // The button's own width, centred in the page.
-                    .frame(maxWidth: .infinity)
                     .padding(.top, 8)
                 }
             }
-        } else if main.sport == "strength", day == today, store.loading {
-            ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
-        } else if main.sport != "strength", day == today {
-            Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
-                .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
+        } else {
+            rowCard(main, line: when(main)).padding(.top, 6)
+            if main.sport == "strength", day == today, store.loading {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+            } else if main.sport == "strength", day == today {
+                // No exercises here yet and nothing loading: say where they come from (KRIT-21).
+                Text(W.tr("Cviky hodinky dostanou z iPhonu.", "The exercises come from your iPhone."))
+                    .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
+                Button { store.load() } label: {
+                    Text(W.tr("Zkusit znovu", "Try again")).watchFont(15, .semibold).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 4)
+            } else if main.sport != "strength", day == today {
+                Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
+                    .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
+            }
         }
     }
 
     /// Another workout on race day, open on its own tile.
     private func sideCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
         VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
-            .padding(.horizontal, 10).padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
             .padding(.top, 6)
     }
 
@@ -315,10 +350,6 @@ struct TrainingPage: View {
                 .padding(.top, 6)
         } else {
             VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
-                .padding(.horizontal, 10).padding(.vertical, 9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
-                .overlay { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) }
                 .padding(.top, 6)
         }
     }
@@ -340,22 +371,6 @@ struct TrainingPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle())
-    }
-
-    private func header(_ s: WatchSnapshot.Session) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: W.sportSymbol(s.sport)).watchFont(13).foregroundStyle(W.amber)
-            // One line when the name fits, if need be a little smaller
-            // ("Silový trénink, celé tělo"), else two lines.
-            ViewThatFits(in: .horizontal) {
-                Text(Self.name(s)).watchFont(16, .semibold).lineLimit(1)
-                Text(Self.name(s)).watchFont(14, .semibold).lineLimit(1)
-                Text(Self.name(s)).watchFont(16, .semibold)
-                    .lineLimit(2).minimumScaleFactor(0.7)
-            }
-            .foregroundStyle(W.ink)
-        }
-        .padding(.top, 2)
     }
 
     /// A ride or run (mockup 4): when and how long, its name, its steps as
@@ -544,86 +559,104 @@ struct TrainingPage: View {
     private func subtitle(_ s: WatchSnapshot.Session, day: String, length: Bool = true) -> String {
         let name = day == today ? W.tr("Dnes", "Today") : day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
         // A brick's second leg starts when the first ends, not at a time of its own.
-        let when = afterText(s).map { ", " + $0.lowercased() } ?? s.time.map { ", " + W.clockText($0) } ?? ""
+        let when = afterText(s).map { ", " + $0.lowercased() } ?? s.time.map { W.tr(" v ", " at ") + W.clockText($0) } ?? ""
         return name + when + (length ? s.minutes.map { ", \($0) min" } ?? "" : "")
     }
 
     static func name(_ s: WatchSnapshot.Session) -> String { s.name }
 
-    private func exercises(_ gym: WatchGym) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            ForEach(Array(gym.exercises.prefix(3).enumerated()), id: \.offset) { _, e in
-                Text(GymText.line(e)).lineLimit(1)
-            }
-            if gym.exercises.count > 3 {
-                let more = gym.exercises.count - 3
-                Text(W.tr("+ \(more) \(more < 5 ? "další cviky" : "dalších cviků")", "+ \(more) more"))
-                    .foregroundStyle(W.muted)
-            }
-        }
-        .watchFont(12)
-        .foregroundStyle(W.secondary)
-        .padding(.top, 4)
-    }
-}
-
-/// Monday to Sunday (mockup 14): green a day with a workout done, an orange
-/// ring today's plan, dashed the days to come (orange with a plan), dark a
-/// past day without one; the day shown has a white ring.
-struct WeekRow: View {
-    let days: [String]
-    let today: String
-    let shown: String
-    let sessions: [WatchSnapshot.Session]
-    let pick: (String) -> Void
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(days, id: \.self) { day in
-                Button { pick(day) } label: {
-                    VStack(spacing: 3) {
-                        dot(day)
-                            .frame(width: 18, height: 18)
-                            .padding(2)
-                            .overlay { Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5) }
-                        Text(W.dayLetter(day)).watchFont(12, .semibold)
-                            .foregroundStyle(day == today ? W.ink : W.muted)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
-                // "Thursday, today, planned", not "T" (watch audit G1).
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(day))
-                .accessibilityAddTraits(day == shown ? [.isButton, .isSelected] : .isButton)
-            }
-        }
+    /// "17:30, 45 min" under a name on a card.
+    private func when(_ s: WatchSnapshot.Session) -> String {
+        [afterText(s) ?? s.time.map(W.clockText), s.minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: ", ")
     }
 
-    private func spoken(_ day: String) -> String {
-        var parts = [W.dayName(day).capitalized(with: W.locale)]
-        if day == today { parts.append(W.tr("dnes", "today")) }
-        if sessions.contains(where: { $0.date == day && $0.done }) {
-            parts.append(W.tr("odcvičeno", "done"))
-        } else if sessions.contains(where: { $0.date == day && !$0.done }) {
-            parts.append(W.tr("naplánováno", "planned"))
-        }
-        return parts.joined(separator: ", ")
+    /// The gym's sets, warm-ups left out.
+    static func sets(_ gym: WatchGym) -> Int {
+        gym.exercises.reduce(0) { $0 + $1.lifts.filter { !$0.warmup }.count }
     }
 
-    @ViewBuilder private func dot(_ day: String) -> some View {
-        let done = sessions.contains { $0.date == day && $0.done }
-        let planned = sessions.contains { $0.date == day && !$0.done }
-        if done {
-            Circle().fill(W.green)
-        } else if day == today, planned {
-            Circle().stroke(W.amber, lineWidth: 2)
-        } else if day > today {
-            Circle().stroke(planned ? W.amber : W.dim, style: StrokeStyle(lineWidth: 1.5, dash: [3, 2.5]))
+    // MARK: The page's parts (concept 04)
+
+    /// "Today", "Tomorrow", "Today, 2 sessions" over the cards.
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text).watchFont(13, .medium).foregroundStyle(W.muted).padding(.horizontal, 3)
+    }
+
+    private func dayLabel(_ day: String) -> String {
+        if day == today {
+            let count = sessions.filter { $0.date == today }.count
+            return count > 1 ? W.tr("Dnes, \(count) tréninky", "Today, \(count) sessions") : W.tr("Dnes", "Today")
+        }
+        return day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
+    }
+
+    /// Today above tomorrow: what was done, or the rest day's sentence.
+    @ViewBuilder private var todayDone: some View {
+        let done = sessions.filter { $0.date == today && $0.done }
+        if done.isEmpty {
+            if restDay { restSentence }
         } else {
-            Circle().fill(W.track)
+            ForEach(Array(done.enumerated()), id: \.offset) { _, session in
+                doneCard(session, gym: store.gym.flatMap { $0.date == today ? $0 : nil }).padding(.top, 6)
+            }
         }
     }
+
+    /// The rest day's words from the iPhone's widget, the second half in green italics.
+    private var restSentence: some View {
+        (Text(W.tr("Den volna. ", "Rest day. ")).foregroundColor(W.num)
+            + Text(W.tr("Klidně se projdi.", "Easy walk if you like.")).italic().foregroundColor(W.green))
+            .font(W.serif(21))
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 2)
+            .padding(.horizontal, 3)
+    }
+
+    /// A workout on one row: its disc, its name and when.
+    private func rowCard(_ s: WatchSnapshot.Session, line: String, done: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            SportDisc(sport: s.sport, size: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Self.name(s)).watchFont(15, .medium).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(line).watchFont(13).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 2)
+            if done {
+                Image(systemName: "checkmark").watchFont(12, .bold).foregroundStyle(W.green)
+                    .frame(width: 24, height: 24)
+                    .background(W.green.opacity(0.16), in: Circle())
+            }
+        }
+        .padding(.horizontal, 9).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .watchCard()
+        .accessibilityElement(children: .combine)
+    }
+
+    /// A done workout: "42 min, 23 sets, done" for the gym.
+    private func doneCard(_ s: WatchSnapshot.Session, gym: WatchGym?) -> some View {
+        var parts = [s.minutes.map { "\($0) min" }]
+        if s.sport == "strength", let gym, gym.date == s.date { parts.append(W.tr("\(Self.sets(gym)) sérií", "\(Self.sets(gym)) sets")) }
+        let line = parts.compactMap { $0 }.joined(separator: ", ")
+        return rowCard(s, line: line.isEmpty ? W.tr("hotovo", "done") : line + W.tr(", hotovo", ", done"), done: true)
+    }
+
+    /// A number with its label over it, as on the iPhone's workout card.
+    private func stat(_ label: String, _ value: String, unit: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).watchFont(12, .medium).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.6)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value).font(W.serif(19)).foregroundStyle(W.num)
+                if let unit { Text(unit).font(.system(size: 12, weight: .medium)).foregroundStyle(W.muted) }
+            }
+            .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Room between the labels: "Exercises" ran into "Sets" (CI shot).
+        .padding(.trailing, 6)
+        .accessibilityElement(children: .combine)
+    }
+
 }
 
 /// Open in Workout (watch audit B1): one button for the Training page's cards
@@ -860,5 +893,43 @@ enum GymText {
     static func elapsed(_ seconds: TimeInterval) -> String {
         let s = max(0, Int(seconds))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// The sport's disc of the iPhone's cards (Design/SportDisc): the sport's
+/// light colour on a dark tint of it, Ride, Run, Swim, Gym.
+struct SportDisc: View {
+    let sport: String
+    var size: CGFloat = 32
+
+    var body: some View {
+        let color = Self.color(sport)
+        Image(systemName: W.sportSymbol(sport))
+            .font(.system(size: size * 0.55, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: size, height: size)
+            .background(Circle().fill(Color(hex: 0x111111)).overlay(Circle().fill(color.opacity(0.2))))
+            .accessibilityHidden(true)
+    }
+
+    /// The dark mode sport colours (Ride B7A0F5, Run FF9238, Swim 5CC8E8, Gym 8FE6C4, Yoga F1CA47).
+    static func color(_ sport: String) -> Color {
+        switch sport {
+        case "ride": Color(hex: 0xB7A0F5)
+        case "run": Color(hex: 0xFF9238)
+        case "swim": Color(hex: 0x5CC8E8)
+        case "strength", "gym": Color(hex: 0x8FE6C4)
+        case "yoga": Color(hex: 0xF1CA47)
+        default: Color(hex: 0x9AA39F)
+        }
+    }
+}
+
+extension View {
+    /// The watch concept's card: a dark gradient with a hairline rim.
+    func watchCard(radius: CGFloat = 20) -> some View {
+        background(LinearGradient(colors: [Color(hex: 0x1B1D1E), Color(hex: 0x151718)], startPoint: .top, endPoint: .bottom),
+                   in: RoundedRectangle(cornerRadius: radius))
+            .overlay { RoundedRectangle(cornerRadius: radius).stroke(Color.white.opacity(0.06), lineWidth: 1) }
     }
 }

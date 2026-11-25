@@ -1107,6 +1107,14 @@ struct GymExerciseList: View {
     let end: () -> Void
     let discard: () -> Void
     @State private var swap: Int?
+    /// A removed exercise, hidden here and sent only after a few seconds in
+    /// which Undo keeps it (as a drink on the Food page).
+    @State private var removing: Removing?
+
+    private struct Removing: Equatable {
+        let key: String
+        let title: String
+    }
 
     /// One line of the list: a part, or an exercise by its key.
     private enum Line: Hashable {
@@ -1134,6 +1142,12 @@ struct GymExerciseList: View {
     var body: some View {
         List {
             if let gym = store.gym {
+                if let removing {
+                    Button { self.removing = nil } label: {
+                        Label(W.tr("Vrátit: ", "Undo: ") + removing.title, systemImage: "arrow.uturn.backward")
+                            .foregroundStyle(W.amber).lineLimit(2)
+                    }
+                }
                 Section {
                     // By the line, not its place: a removed or moved exercise takes its swipe along.
                     ForEach(lines(gym), id: \.self) { line in
@@ -1145,7 +1159,7 @@ struct GymExerciseList: View {
                                 partLine(part)
                             }
                         case .exercise(let key):
-                            if let index = gym.exercises.firstIndex(where: { $0.key == key }) {
+                            if key != removing?.key, let index = gym.exercises.firstIndex(where: { $0.key == key }) {
                                 exerciseLine(gym.exercises[index], index)
                             }
                         }
@@ -1194,6 +1208,25 @@ struct GymExerciseList: View {
         }
     }
 
+    /// Hidden at once, sent after 5 s unless Undo took it back; by its key,
+    /// since its place may change meanwhile.
+    private func remove(_ e: WatchGym.Exercise) {
+        if let earlier = removing { send(earlier) }
+        let item = Removing(key: e.key, title: e.title)
+        removing = item
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard removing == item else { return }
+            send(item)
+        }
+    }
+
+    private func send(_ item: Removing) {
+        if removing == item { removing = nil }
+        guard let index = store.gym?.exercises.firstIndex(where: { $0.key == item.key }) else { return }
+        store.change(.removeExercise, exercise: index)
+    }
+
     private func exerciseLine(_ e: WatchGym.Exercise, _ index: Int) -> some View {
         Button { pick(index) } label: {
             HStack {
@@ -1226,7 +1259,7 @@ struct GymExerciseList: View {
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                store.change(.removeExercise, exercise: index)
+                remove(e)
             } label: {
                 Label(W.tr("Odebrat", "Remove"), systemImage: "trash")
             }
@@ -1520,6 +1553,14 @@ struct GymSummary: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
+                // Sets still open: going on is the main way, at the top (concept 06); Finish waits at the end.
+                if let keepTraining, setsLeft > 0 {
+                    Button(action: keepTraining) {
+                        Text(W.tr("Cvičit dál", "Keep training")).watchFont(16, .semibold).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .mainButton()
+                }
                 // New records first (mockup "jen hodinky" 7, Training mode's Nový rekord).
                 ForEach(store.gym?.newRecords ?? []) { record in
                     HStack(spacing: 6) {
@@ -1578,21 +1619,20 @@ struct GymSummary: View {
                     .buttonStyle(.plain)
                     .padding(.top, 2)
                 }
-                Button {
-                    if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
-                    finish()
-                } label: {
-                    Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                }
-                .mainButton()
-                .padding(.top, 4)
-                if let keepTraining, setsLeft > 0 {
-                    Button(action: keepTraining) {
-                        Text(W.tr("Cvičit dál", "Keep training")).watchFont(15, .semibold)
+                if keepTraining != nil, setsLeft > 0 {
+                    Button(action: done) {
+                        Text(W.tr("Dokončit", "Finish")).watchFont(15, .semibold)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .padding(.top, 4)
+                } else {
+                    Button(action: done) {
+                        Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .mainButton()
+                    .padding(.top, 4)
                 }
             }
         }
@@ -1602,6 +1642,11 @@ struct GymSummary: View {
     }
 
     private var setsLeft: Int { store.gym?.setsLeft ?? 0 }
+
+    private func done() {
+        if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
+        finish()
+    }
 
     /// "4 sets left" / "Zbývají 4 série".
     private var leftText: String {
