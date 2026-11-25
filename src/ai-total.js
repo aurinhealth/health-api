@@ -320,7 +320,9 @@ export async function alertAiQuota(env, now = new Date()) {
     if (!(Number(claimed?.meta?.changes) > 0)) return;
     const to = String(env.OWNER_EMAIL || "").trim();
     if (!to || !emailConfigured(env)) { console.error("OpenAI refused for credit or limit (insufficient_quota)"); return; }
-    await sendEmail(env, { to, subject: "Aurin: AI stojí, došel kredit nebo strop OpenAI", text: "OpenAI odmítlo požadavek s insufficient_quota: došel předplacený kredit, nebo útrata za měsíc došla na strop organizace. AI teď nefunguje nikomu.\n\nDobij kredit nebo zvyš strop: https://platform.openai.com/settings/organization/billing\n\nDalší takový e-mail přijde nejdřív zítra." });
+    // A send that fails gives the day back, so the next refused call tries again.
+    await sendEmail(env, { to, subject: "Aurin: AI stojí, došel kredit nebo strop OpenAI", text: "OpenAI odmítlo požadavek s insufficient_quota: došel předplacený kredit, nebo útrata za měsíc došla na strop organizace. AI teď nefunguje nikomu.\n\nDobij kredit nebo zvyš strop: https://platform.openai.com/settings/organization/billing\n\nDalší takový e-mail přijde nejdřív zítra." })
+      .catch(async error => { await db.prepare("DELETE FROM ops_events WHERE day=? AND kind='ai-quota' AND service='openai'").bind(utcDay(now)).run().catch(() => null); throw error; });
   } catch (error) {
     console.error("AI quota alert failed", error?.message || error);
   }

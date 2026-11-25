@@ -45,4 +45,11 @@ test("an exhausted credit or limit e-mails the owner at once, once a day", async
   assert.match(sent[0].subject, /došel kredit nebo strop OpenAI/);
   await alertAiQuota(env, new Date(Date.now() + 86400000));
   assert.equal(sent.length, 2);
+  // A send that failed leaves the day free for the next refused call.
+  const later = new Date(Date.now() + 2 * 86400000);
+  let tries = 0;
+  const failing = { ...env, EMAIL: { send: async () => { tries++; throw new Error("mail down"); } } };
+  await alertAiQuota(failing, later);
+  await alertAiQuota(failing, later);
+  assert.equal(tries, 2);
 });
