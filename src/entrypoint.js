@@ -183,7 +183,7 @@ import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchSchedul
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
-import { weekSummary, summaryWeek, summaryDue, postWeekSummary } from "./coach-week-summary.js";
+import { weekSummary, summaryWeek, summaryDue, postWeekSummary, SUMMARY_FROM_HOUR } from "./coach-week-summary.js";
 import { raceWeek, postRaceWeek, RACE_WEEK_DAYS, RACE_WEEK_SPORTS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
@@ -969,7 +969,9 @@ async function coachPush(env, ctx) {
   if (await logged(COACH_PUSH, date)) return { sent: 0, reason: 'already-sent' };
   const zoneDue = Boolean(state.zone && Math.abs(state.zone.shift) >= 3 && state.zone.changed >= shiftDate(date, -1) && !(await logged('coach-zone', state.zone.changed)));
   const morningDue = hour < 11 && (hour >= 10 || await logged(MORNING_READINESS, date)) && !(await logged('coach-am', date));
-  const eveningDue = hour >= EVENING_FROM_HOUR && !(await logged('coach-pm', date));
+  // On Sunday the evening check waits for the week's summary (from 18:00), so the claim below does not end it first.
+  const sunday = new Date(date + 'T12:00:00Z').getUTCDay() === 0;
+  const eveningDue = hour >= (sunday ? SUMMARY_FROM_HOUR : EVENING_FROM_HOUR) && !(await logged('coach-pm', date));
   if (!zoneDue && !morningDue && !eveningDue) return { sent: 0, reason: 'nothing-due' };
   // Each check runs once, so a failing one is not repeated every five minutes.
   if (zoneDue) await claim('coach-zone', state.zone.changed);
@@ -982,14 +984,14 @@ async function coachPush(env, ctx) {
   let nudge = zoneDue ? coachNudge({ date, hour, zone: state.zone }) : null;
   // The coach's own chat messages (concept 09 pages 7 and 8): the week's summary on
   // Sunday evening and the race week's first morning; the chat posts them when it opens.
-  if (!nudge && eveningDue && summaryDue(date, hour) && new Date(date + 'T12:00:00Z').getUTCDay() === 0 && state.posted?.week?.key !== mondayOfDate(date)) {
+  if (!nudge && eveningDue && sunday && state.posted?.week?.key !== mondayOfDate(date)) {
     const summary = await weekSummaryFor(env, ctx, internalHeaders(), mondayOfDate(date), date).catch(() => null);
     if (summary && (summary.workouts.done || summary.workouts.planned)) nudge = { kind: 'week_summary', title: L('Tvůj týden', 'Your week'), body: summary.headline };
   }
   if (!nudge && morningDue) {
     const race = await raceWeekFor(env, ctx).catch(() => null);
     // Once per race: an athlete who does not open the chat is not reminded every morning.
-    if (race?.race?.date && state.posted?.race?.key !== race.race.date && await claim('coach-race', race.race.date)) nudge = { kind: 'race_week', title: L('Závodní týden', 'Race week'), body: race.text.split('\n\n')[0] };
+    if (race?.race?.date && state.posted?.race?.key !== race.race.date && await claim('coach-race', race.race.date)) nudge = { kind: 'race_week', raceDate: race.race.date, title: L('Závodní týden', 'Race week'), body: race.text.split('\n\n')[0] };
   }
   if (!nudge && (morningDue || eveningDue) && state.status === 'active') {
     // The coach's inputs when a card has just made them, else only what the push reads.
@@ -1020,6 +1022,8 @@ async function coachPush(env, ctx) {
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
   }
   if (!sent) await db.prepare('DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, COACH_PUSH, date).run();
+  // Not delivered: the race week may be announced again tomorrow.
+  if (!sent && nudge.kind === 'race_week') await db.prepare('DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, 'coach-race', nudge.raceDate).run();
   return { sent, kind: nudge.kind };
 }
 
