@@ -49,6 +49,7 @@ test('C8: the thigh, the back of the thigh, the glutes and the ribs are body par
   assert.deepEqual(painAreas(['bolí mě hýždě']).map(a => a.id), ['glute']);
   assert.deepEqual(painAreas(['sore ribs']).map(a => a.id), ['ribs']);
   assert.deepEqual(painAreas(['nebolí mě stehno']), []);
+  assert.deepEqual(painAreas(['Bolí mě stehenní sval']).map(a => a.id), ['thigh']);
   assert.ok(painfulExercises(['natažený hamstring']).avoid.has('Barbell Romanian deadlift'));
   assert.ok(painfulExercises(['bolí mě hýždě']).avoid.has('Hip thrust'));
   assert.ok(!painfulExercises(['bolí mě hýždě']).avoid.has('Lat pulldown'));
