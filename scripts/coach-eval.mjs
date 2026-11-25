@@ -8,6 +8,7 @@
 // COACH_EVAL_HOST (staging.aurin.health), COACH_EVAL_SCENARIOS ("S02,S04") and
 // COACH_EVAL_REPEAT (1–5 rounds of the same situations, to see whether a reply is stable) are optional.
 import { appendFileSync, writeFileSync } from "node:fs";
+import { scoreLines } from "./coach-eval-score.mjs";
 
 const host = process.env.COACH_EVAL_HOST || "staging.aurin.health";
 const { ACTIONS_ID_TOKEN_REQUEST_URL: oidcUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: oidcAuth } = process.env;
@@ -77,6 +78,9 @@ if (rounds > 2 && scenarios.some(s => s.turns)) { console.log(`Personas: ${round
 // COACH_EVAL_COACH (haiku or sonnet): the coach on Anthropic's Claude instead of OpenAI, to compare.
 const coach = ["haiku", "sonnet"].includes(String(process.env.COACH_EVAL_COACH || "").trim()) ? { coach: String(process.env.COACH_EVAL_COACH).trim() } : {};
 const results = [];
+// Held-out situations (src/coach-eval.js isHoldout): the summary shows their scores and failed safety
+// checks, never their answers or failed quality checks, so a prompt fix cannot be tuned on them.
+const holdout = new Set(scenarios.filter(s => s.holdout).map(s => s.id));
 const label = r => r.round ? `${r.id} (${r.round}/${rounds})` : r.id;
 // A persona (P01–P20) is a conversation: each message goes with the coach's earlier answers.
 for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
@@ -88,7 +92,8 @@ for (let round = 1; round <= rounds; round++) for (const s of scenarios) {
     if (rounds > 1) result.round = round;
     results.push(result);
     const failed = (result.checks || []).filter(c => !c.ok);
-    console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${failed.length ? ", " + failed.map(c => c.name).join("; ") : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
+    const shown = holdout.has(result.id) ? failed.filter(c => c.severity === "safety") : failed;
+    console.log(result.status === "ok" ? `${label(result)} ${result.model} ${Math.round(result.ms / 1000)} s${shown.length ? ", " + shown.map(c => c.name).join("; ") : ""}${shown.length < failed.length ? ", kontrolní sada: " + (failed.length - shown.length) + " kvalita" : ""}` : `${label(result)} ${result.status}: ${result.message || ""}`);
     if (result.status !== "ok") break;
     conversation.push({ role: "user", content: result.message }, { role: "assistant", content: result.historyNote || result.answer || "" });
   }
@@ -100,7 +105,7 @@ const action = a => [a.type, a.kind, a.minutes ? a.minutes + " min" : "", a.date
 const lines = [
   `# Coach evaluation, ${host}${coach.coach ? `, kouč ${coach.coach}` : ""}`, "",
   "| | Situace | Úloha | Model | s | Bezpečnost | Kvalita |", "|---|---|---|---|---|---|---|",
-  ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
+  ...results.map(r => `| ${r.status !== "ok" ? "⚠️" : r.passed ? "✅" : "❌"} ${label(r)} | ${r.title}${holdout.has(r.id) ? " (kontrolní)" : ""} | ${r.task || ""} | ${r.model || ""} | ${r.ms != null ? Math.round(r.ms / 1000) : ""} | ${mark(r, "safety")} | ${mark(r, "quality")} |`), ""
 ];
 // The AI checker (coach-checker.js): what it cost and how long it took.
 // What the run cost on OpenAI (the coach's answers and the checker).
@@ -125,7 +130,8 @@ if (judged.length) {
     "| Pravidlo | Prošlo | Porušeno | Netýká se |", "|---|---|---|---|", ...Object.entries(labels).map(([rule, name]) => `| ${name} | ${count(rule, "pass")} | ${count(rule, "fail")} | ${count(rule, "na")} |`), "");
 }
 // Failed quality checks do not fail a situation, so they are listed on their own (Petr, run 39).
-const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+const weak = results.flatMap(r => (r.checks || []).filter(c => !c.ok && c.severity === "quality").map(c => holdout.has(r.id) ? `- ${label(r)}, kontrolní sada` : `- ${label(r)}, ${c.name}${c.detail ? ` (${c.detail})` : ""}`));
+lines.push(...scoreLines(results, holdout));
 lines.push("## Neprošlé kontroly kvality", "", ...(weak.length ? weak : ["Žádné."]), "");
 // Stable = every check passed in every round (Petr 2026-11-06: a fail that passes on a rerun is still a flaw).
 if (rounds > 1) {
@@ -135,6 +141,7 @@ if (rounds > 1) {
 for (const r of results) {
   lines.push(`## ${label(r)}, ${r.title}`, "");
   if (r.status !== "ok") { lines.push(`⚠️ ${r.status}: ${r.message || ""}`, ""); continue; }
+  if (holdout.has(r.id)) { lines.push("Kontrolní sada: odpověď je jen v artefaktu coach-eval.", "", ...r.checks.filter(c => !c.ok && c.severity === "safety").map(c => `- ❌ ${c.name}${c.detail ? ` (${c.detail})` : ""}`), ""); continue; }
   lines.push(`**Sportovec:** ${r.message}`, "", quote(r.answer), "");
   if ((r.proposed || []).length) lines.push(`**Akce:** navrženo ${r.proposed.map(action).join(", ")}, prošlo ${r.kept.length ? r.kept.map(action).join(", ") : "nic"}`, "");
   const failed = r.checks.filter(c => !c.ok);

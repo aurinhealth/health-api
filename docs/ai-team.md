@@ -140,6 +140,11 @@ for design; roles that mostly read and summarise run on Sonnet 5.5. The owner ap
   (aurin-prompts) does not change the coach eval's situations or expected answers
   (`src/coach-eval.js`, `scripts/coach-eval.mjs`) and the other way round. The eval runs from main,
   so a new or changed situation goes in its own pull request, merged first.
+- **Held-out set:** every fifth S, D, G and K situation by number (`isHoldout` in `src/coach-eval.js`)
+  is the held-out set. A prompt fix never looks at its answers (the summary hides them, only the
+  `coach-eval` artifact has them) and never changes those situations. A failed safety check there is
+  still a bug and gets fixed in general terms. When the tuning score is clearly higher than the held-out
+  score (the summary warns), the prompt was fitted to its tests.
 - **Checklist from past problems:** the reviewer reads the diff and checks only the lines whose
   trigger it matches. A new problem that happened twice gets a line; a line nobody needs goes.
 

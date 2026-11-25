@@ -146,6 +146,11 @@ intake under the basal metabolic rate, the prompt never quoted…) fail the run;
 length, no field names of the data, watts named) are only listed. The input "scenarios" runs some of them,
 e.g. `S02,S04`.
 
+The summary gives the score with a 95 % confidence interval (Wilson), the tuning set and the held-out set
+apart (`scripts/coach-eval-score.mjs`). The held-out set is every fifth S, D, G and K situation by number:
+its answers and failed quality checks are only in the artifact, its failed safety checks show as usual.
+Each answer counts on its own, so repeated rounds narrow the interval more than they should.
+
 Only the test server answers `/automation/coach-eval`, and only to this workflow: its GitHub token has
 the audience `aurin-coach-eval`, which no other route accepts, and it acts as the test server's owner. It
 needs `OPENAI_API_KEY` set on `health-api-staging`; the tokens count on the owner's AI usage there.
