@@ -1790,7 +1790,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
       const today=localToday(),focus=athleteFocus(await dashboardProfile(env).catch(()=>null),today);
-      if(focus?.event?.sport!=='run'||!(focus.event.daysLeft>=0&&focus.event.daysLeft<=RACE_WEEK_DAYS))return Response.json({status:'ok',raceWeek:null},{headers:{'Cache-Control':'no-store'}});
+      if(focus?.event?.sport!=='run'||!(focus.event.daysLeft!=null&&focus.event.daysLeft>=0&&focus.event.daysLeft<=RACE_WEEK_DAYS))return Response.json({status:'ok',raceWeek:null},{headers:{'Cache-Control':'no-store'}});
       const [thresholds,weight,level]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),capabilitiesWithLevel(env.DB,'run').then(c=>c.level).catch(()=>null)]);
       return Response.json({status:'ok',raceWeek:raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,weightKg:weightKg(weight),experience:level})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}

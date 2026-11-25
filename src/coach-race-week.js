@@ -28,7 +28,7 @@ const GEL_GRAMS = 25;
 const SPLIT_SHARE = 0.015;
 
 const systemOf = km => km <= 10 ? 'threshold' : km <= 21.1 ? 'tempo' : 'endurance';
-const hm = m => { const h = Math.floor(m / 60), r = Math.round(m % 60); return h ? `${h} h${r ? ` ${r} min` : ''}` : `${r} min`; };
+const hm = minutes => { const m = Math.round(minutes), h = Math.floor(m / 60), r = m % 60; return h ? `${h} h${r ? ` ${r} min` : ''}` : `${r} min`; };
 
 const tens = g => Math.round(g / 10) * 10;
 function fuel({ minutes, km, weightKg, experience }) {
