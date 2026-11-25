@@ -10,7 +10,7 @@ import { takeChipAnswer, giveChipBack, questionChips } from './coach-questions.j
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
-import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent,localWorkout} from './local-workouts.js';
+import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent,localWorkout,restoreLocalWorkout} from './local-workouts.js';
 import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
 import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict,goalCheck} from './race-estimate.js';
@@ -166,7 +166,7 @@ import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenCo
 import { handleSupportReport, handleReportView } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, connectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
-import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
+import { coachNudge, swapOffer, easedCard, easedPush, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
@@ -385,6 +385,8 @@ const USER_JOBS = [
   // The coach's push, after the morning push above: for everyone with a phone to notify,
   // whatever they connected (push: chosen by push_tokens, not by a service; no sync runs
   // for them). At most one a local day (push_log).
+  // Today's own plans the day coach eases, also in Wahoo and Intervals.icu (C1), before the coach's push tells it.
+  { name: "coach-ease", providers: ["intervals", "wahoo"], due: every5, run: (scoped, ctx) => easeTodayPlans(scoped, ctx) },
   { name: "coach-push", providers: [], push: true, due: every5, run: (scoped, ctx) => coachPush(scoped, ctx) },
   // Water Build-up: one push at 14:00 and one at 18:00 when the day is behind (water-goal.js).
   { name: "water-push", providers: [], push: true, due: every5, run: (scoped, ctx) => waterPush(scoped, ctx) },
@@ -964,6 +966,40 @@ async function raceWeekFor(env,ctx){
   return raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,ftp:thresholds?.ftp??null,swimCss:thresholds?.swimCss??null,weightKg:weightKg(weight),experience:level});
 }
 
+// Today's own plans (made in the app, sent to Wahoo and Intervals.icu) that
+// the day coach eases (C1; Petr 2026-11-25: everywhere the same, with "Vrátit
+// původní"): once a morning, when the night's data is in (the morning push, or
+// from 10:00), each is replaced by the coach's version, so Wahoo and
+// Intervals.icu get it too; the coach's push and Today say so, and
+// /app/api/coach/eased puts the plans back. A plan from the Intervals.icu
+// calendar stays as it is there (the watch and the files still get the
+// coach's version, coachTodayVersion).
+async function easeTodayPlans(env, ctx) {
+  if (!env.DB) return { eased: 0, reason: 'no-db' };
+  const db = env.DB, hour = localHour(), date = localToday();
+  if (hour >= 11) return { eased: 0, reason: 'off' };
+  const logged = kind => db.prepare('SELECT 1 AS sent FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).first().then(Boolean).catch(() => false);
+  if (await logged('coach-ease') || !(hour >= 10 || await logged(MORNING_READINESS))) return { eased: 0, reason: 'not-due' };
+  const claimed = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,'coach-ease',?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, date).run().then(r => Boolean(Number(r?.meta?.changes)));
+  if (!claimed) return { eased: 0, reason: 'already' };
+  const rows = (await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId, date, date + 'T23:59:59.999').all()).results || [];
+  const items = [];
+  for (const row of rows) {
+    const id = String(row.external_id || '').replace(/^planned:/, '');
+    try {
+      if (!id.startsWith('local-') || (await localWorkout(db, id))?.status !== 'scheduled') continue;
+      const planned = await plannedWorkoutOf(env, ctx, id);
+      const version = planned ? await coachTodayVersion(env, ctx, id, { ...planned.workout, sport: planned.kind }) : null;
+      if (!version?.workout?.id) continue;
+      const link = await db.prepare('SELECT sport,workout_id,family,scheduled_date,environment,intervals_external_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(db.userId, id).first();
+      const scheduled = await replacePlannedSession(env, { eventId: id, date, environment: link?.environment || planned.workout.environment || 'outdoor', to: { workoutId: version.workout.id } });
+      if (scheduled?.eventId) items.push({ from: id, link: link || null, to: scheduled.eventId, fromName: version.from.name, fromMinutes: version.from.minutes, toName: version.workout.name || null, toMinutes: Math.round(Number(version.workout.duration_minutes)) || null, why: version.why });
+    } catch (error) { console.error('Plan not eased', id, error.message); }
+  }
+  if (items.length) await updateAthleteState(db, { eased: { day: date, status: 'eased', items } });
+  return { eased: items.length };
+}
+
 // The coach's own push (coach-push.js), checked with the morning push: a time
 // zone change any time 7–21, the morning signs once after the morning push (or
 // from 10:00), the evening before a key session once from 17:00; at most one
@@ -1005,6 +1041,8 @@ async function coachPush(env, ctx) {
     const summary = await weekSummaryFor(env, ctx, internalHeaders(), mondayOfDate(date), date).catch(() => null);
     if (summary && (summary.workouts.done || summary.workouts.planned)) nudge = { kind: 'week_summary', title: L('Tvůj týden', 'Your week'), body: summary.headline };
   }
+  // The plans the coach eased this morning (easeTodayPlans), with "Vrátit původní" on Today.
+  if (!nudge && morningDue && state.eased?.day === date && state.eased.status === 'eased') nudge = easedPush(state.eased);
   if (!nudge && morningDue) {
     const race = await raceWeekFor(env, ctx).catch(() => null);
     // Once per race: an athlete who does not open the chat is not reminded every morning.
@@ -1763,7 +1801,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // old knee pain does not wait behind every other card (audit 4.6).
       // Chest symptoms: the latest day with a training since they were told, so the coach asks how it went.
       const since=heartSince(state),trainedOn=since?(inputs.week?.days||[]).filter(d=>d.date>since&&d.date<=date&&d.daily?.training?.completed?.length).map(d=>d.date).sort().pop()||null:null;
-      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date,{trainedOn})||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
+      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date,{trainedOn})||easedCard(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -1779,6 +1817,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const question=gapCheckin({date,weekDays:inputs.week?.days||[],sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
       return Response.json({status:'ok',question:await postGapCheckin(env.DB,question)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){console.error('Gap check-in failed',error.message);return Response.json({message:error.message},{status:500});}
+  }
+  // "Vrátit původní" of the plans the coach eased this morning (easeTodayPlans):
+  // the coach's sessions go, the plans come back, in Wahoo and Intervals.icu too.
+  if(url.pathname==='/app/api/coach/eased'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({})),state=await getAthleteState(env.DB),eased=state.eased,date=localToday();
+      if(body.action!=='restore')throw new Error(L('Neplatná volba.', 'Invalid choice.'));
+      if(!eased||eased.day!==date||eased.status!=='eased')return Response.json({status:'ok',eased:eased||null},{headers:{'Cache-Control':'no-store'}});
+      for(const item of eased.items||[]){
+        await deletePlannedEvent(env,{eventId:item.to}).catch(error=>console.error('Eased session not removed',error.message));
+        await restoreLocalWorkout(env,item.from,item.link?{...item.link,scheduled_date:item.link.scheduled_date||date}:null);
+      }
+      const next={...eased,status:'restored'};
+      await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);
+      return Response.json({status:'ok',eased:next},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // The coach's push "… vyměním za lehkou jízdu 60 min?" (coach-push.js):
   // "Vyměnit" puts an easy session in place of the hard one, "Nechat" keeps it.
@@ -3886,6 +3942,20 @@ async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
   const focus=(planned?({quality:systemOf(sport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]:null)||roleFor(prefs,date,sport,plan?.roles)?.focus||null;
   return buildCyclingCoachV2({...inputs,availabilityMinutes:trainingBudget(prefs,date,chip?.minutes||null),...await capabilitiesWithLevel(env.DB,sport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport,goal:focus?{focus}:null});
 }
+// A planned event's workout as the watch and the files get it: its library
+// workout in its place (indoor or outdoor), else the event itself, with the
+// athlete's steps and minutes. Null: no such event.
+async function plannedWorkoutOf(env,ctx,id){
+  const row=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
+  let event=null;try{event=JSON.parse(row?.payload_json||'null');}catch{event=null;}
+  const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
+  const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
+  if(!event&&!library)return null;
+  const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
+  let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+  w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
+  return {workout:w,library,thresholds,kind,event};
+}
 // Today's planned ride, run or swim as the day coach has it (load ramp-back
 // review 2026-11-25, C1). On a day the coach eases the plan (red readiness,
 // signs of illness, a pain, a break, the first days after Nemoc, 48 h after a
@@ -3896,6 +3966,9 @@ async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
 async function coachTodayVersion(env,ctx,eventId,planned){
   const id=String(eventId||'').replace(/^planned:/,''),date=localToday();
   if(!id||!planned)return null;
+  // "Vrátit původní" today: the plan stands everywhere, the watch too.
+  const eased=(await getAthleteState(env.DB).catch(()=>null))?.eased;
+  if(eased?.day===date&&eased.status==='restored'&&(eased.items||[]).some(x=>x.from===id))return null;
   const event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first().catch(()=>null);
   if(String(event?.start_time||'').slice(0,10)!==date)return null;
   // Only a ride, run or swim by the event's own type (a gym or yoga event reads as a ride in plannedEventWorkout).
@@ -4043,14 +4116,9 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/planned'&&request.method==='GET'){
       const id=String(url.searchParams.get('id')||'').replace(/^planned:/,'');
       if(!id)return Response.json({status:'error',message:L('Chybí trénink.', 'The workout is missing.')},{status:400});
-      const row=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
-      let event=null;try{event=JSON.parse(row?.payload_json||'null');}catch{event=null;}
-      const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
-      const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
-      if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
-      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));let w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event);const kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
-      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
+      const planned=await plannedWorkoutOf(env,ctx,id);
+      if(!planned)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
+      const {library,thresholds,kind}=planned;let w=planned.workout;
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
       // Today (the watch and the detail send ?date=): the day coach's version when it eases the plan (C1).
       const coachDay=day===localToday()?await coachTodayVersion(env,ctx,id,{...w,sport:kind}).catch(()=>null):null;

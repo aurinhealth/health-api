@@ -89,6 +89,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
   if (patch.zone !== undefined) state.zone = patch.zone;
   if (patch.nudge !== undefined) state.nudge = patch.nudge;
+  // Today's plans the day coach eased in Wahoo and Intervals.icu too, and how to put them back (entrypoint.js easeTodayPlans).
+  if (patch.eased !== undefined) state.eased = patch.eased;
   // The coach's question after a training gap (coach-gap-checkin.js): the gap it was asked for.
   if (validDay(patch.gapAsked)) state.gapAsked = patch.gapAsked;
   // The coach's own chat messages from the rules (coach-week-summary.js, coach-race-week.js):

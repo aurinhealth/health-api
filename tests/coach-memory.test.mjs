@@ -66,7 +66,7 @@ test('the coach gets the day a pain was told or last confirmed, and the check co
   assert.deepEqual(healthMemorySince(kept), [{ text: 'Bolí mě koleno', since: '2026-10-28' }]);
   assert.deepEqual(healthMemorySince({ ...kept, memoryOff: true }), []);
   const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|statusCheck\(state,date\)\|\|memoryCheck\(state,date,\{trainedOn\}\)\|\|easier/);
+  assert.match(src, /const advice=\(swap&&state\.nudge\.date!==date\?swap:null\)\|\|statusCheck\(state,date\)\|\|memoryCheck\(state,date,\{trainedOn\}\)\|\|easedCard\(state,date\)\|\|easier/);
   assert.match(src, /healthMemorySince:healthSince/);
 });
 

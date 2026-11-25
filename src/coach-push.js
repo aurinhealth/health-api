@@ -135,3 +135,22 @@ export function swapOffer(state = {}, date) {
   const from = (n.name || n.what || L('Trénink', 'Session')) + (n.fromMinutes ? ', ' + n.fromMinutes + ' min' : '');
   return { kind: 'swap', id: date + ':swap', headline: n.title || L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"), date: n.day, from, to: easy + ', ' + n.minutes + ' min' };
 }
+
+// The plans the coach eased this morning (entrypoint.js easeTodayPlans), as a
+// card on Today with "Vrátit původní" (/app/api/coach/eased) until the day ends.
+export function easedCard(state = {}, date) {
+  const e = state?.eased;
+  if (!e || e.day !== date || e.status !== 'eased' || !e.items?.length) return null;
+  const item = e.items[0], named = (name, minutes) => (name || L('Trénink', 'Session')) + (minutes ? ', ' + minutes + ' min' : '');
+  return { kind: 'eased', id: date + ':eased', headline: L('Dnešní trénink jsem zlehčil', "I eased today's session"), date, from: named(item.fromName, item.fromMinutes), to: named(item.toName, item.toMinutes), why: item.why || null, count: e.items.length };
+}
+
+// The morning push about it: what changed, no health values.
+export function easedPush(eased) {
+  const item = eased.items[0];
+  return {
+    kind: 'eased',
+    title: L('Dnešní trénink jsem zlehčil', "I eased today's session"),
+    body: L(`Místo ${item.fromName || 'plánu'} dnes ${item.toName || 'lehčí trénink'}${item.toMinutes ? ', ' + item.toMinutes + ' min' : ''}, i v připojených aplikacích. Původní vrátíš na Dnes.`, `Instead of ${item.fromName || 'the plan'}, today is ${item.toName || 'an easier session'}${item.toMinutes ? ', ' + item.toMinutes + ' min' : ''}, in your connected apps too. You can restore the original on Today.`)
+  };
+}

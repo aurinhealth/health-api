@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from "node:fs";
 import assert from 'node:assert/strict';
 import { gymLoadEstimate, gymAlternatives } from '../src/gym-catalog.js';
 import { generateStrengthPlan, templateStrengthPlan, painfulExercises, EXERCISES } from '../src/strength-generator.js';
@@ -182,4 +183,21 @@ test('C1: the .zwo and .fit files of today\'s plan hold the coach\'s version', a
   assert.doesNotMatch(zwo, /VO2/);
   const kept = await (await get('/app/api/my-workouts/from-planned.zwo?id=planned:77', async () => null)).text();
   assert.match(kept, /VO2/);
+});
+
+test('C1: the plans eased this morning show on Today with the original, and the push says so', async () => {
+  const { easedCard, easedPush } = await import('../src/coach-push.js');
+  const { getAthleteState: stateOf, updateAthleteState: update } = await import('../src/athlete-state.js');
+  const date = '2026-11-25', items = [{ from: 'local-1', to: 'local-2', fromName: 'VO2 5×4', fromMinutes: 75, toName: 'Endurance', toMinutes: 45, why: 'nízká připravenost' }];
+  const db = scopedDb(createD1(), 1);
+  await update(db, { eased: { day: date, status: 'eased', items } }, { date });
+  const state = await stateOf(db, { date });
+  assert.deepEqual(easedCard(state, date), { kind: 'eased', id: date + ':eased', headline: easedCard(state, date).headline, date, from: 'VO2 5×4, 75 min', to: 'Endurance, 45 min', why: 'nízká připravenost', count: 1 });
+  assert.equal(easedCard(state, '2026-11-26'), null, 'today only');
+  assert.equal(easedCard({ eased: { ...state.eased, status: 'restored' } }, date), null, 'gone once restored');
+  assert.match(easedPush(state.eased).body, /Endurance, 45 min/);
+  assert.doesNotMatch(easedPush(state.eased).body, /připravenost|readiness/, 'no health values in the push');
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.ok(src.indexOf('name: "coach-ease"') < src.indexOf('name: "coach-push"'), 'eased before the coach push tells it');
+  assert.match(src, /eased\.status==='restored'&&\(eased\.items\|\|\[\]\)\.some\(x=>x\.from===id\)\)return null/, 'after Vrátit původní the watch gets the plan too');
 });
