@@ -80,7 +80,7 @@ struct ReadinessHome: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             NavigationLink(value: Page.coach) { WatchCoachLights() }
-                .accessibilityLabel(W.tr("Kouč", "Coach"))
+                .accessibilityLabel(W.tr("Kouč, AI", "Coach, AI"))
         }
     }
 
