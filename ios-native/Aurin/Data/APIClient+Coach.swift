@@ -360,11 +360,11 @@ extension APIClient {
     }
 
     /// The sessions the coach would put into the rest of the week.
-    /// With `replan` the proposal counts the planned workouts from today on as
-    /// gone (Vygenerovat plán deletes them only once it has the new ones).
-    func weekProposal(start: String, replan: Bool = false) async throws -> WeekProposalResponse {
+    /// With `replanFrom` the proposal counts the planned workouts from that day on
+    /// as gone (Vygenerovat plán deletes them only once it has the new ones).
+    func weekProposal(start: String, replanFrom: String? = nil) async throws -> WeekProposalResponse {
         var body: JSONObject = ["start": .string(start)]
-        if replan { body["replan"] = .bool(true) }
+        if let replanFrom { body["replan"] = .string(replanFrom) }
         return try await send("/app/api/coach/week", method: "POST", body: body)
     }
 

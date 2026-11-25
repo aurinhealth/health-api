@@ -6,8 +6,9 @@ import SwiftUI
 // (Auto, Ride, Run, Swim, Gym or Rest), "Rest until Sunday" and "Rest all
 // week", the usual time per weekday as seven ink sliders, then the pinned
 // Generate workouts. Done saves without replanning (the planned workouts stay
-// until Generate); Generate saves and replans today to next Sunday, the
-// finished workouts stay (WeekPlanGenerator).
+// until Generate); Generate saves and replans from the first day changed
+// (today when nothing changed) to next Sunday, the finished workouts stay
+// (WeekPlanGenerator).
 
 /// One week's choices: the sports per weekday (empty: the coach picks) and the rest days.
 struct WeekPlanChoice: Equatable {
@@ -65,8 +66,8 @@ struct WeekPlanSettingsView: View {
     let monday: String
     let today: String
     let calendar: [String: CalendarDay]
-    /// Closed: true when Generate was tapped (the plan replans after the save).
-    let onClose: (Bool) -> Void
+    /// Closed: with Generate the day the plan replans from (after the save), nil for Done.
+    let onClose: (String?) -> Void
 
     @State private var loaded = false
     @State private var usualPrefs: JSONValue?
@@ -89,6 +90,13 @@ struct WeekPlanSettingsView: View {
     private var dirty: Bool { choices != original || usual != usualBefore }
     /// A change of days or rest the planned workouts do not follow until Generate.
     private var conflicting: Bool { choices != original }
+    /// Generate replans from the first day whose sports, rest or usual time changed,
+    /// today when nothing did: a workout added for a day left as it was stays
+    /// (Petr 2026-11-24: a gym for today went when he set the days from Wednesday).
+    private var replanFrom: String {
+        WeekPlanGenerator.replanFrom(weeks: weeks, today: today, choices: choices, original: original,
+                                     usual: usual, usualBefore: usualBefore)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -358,10 +366,10 @@ struct WeekPlanSettingsView: View {
                 Button(L10n.tr("Vygenerovat tréninky"), role: .destructive) { Task { await close(generate: true) } }
                 Button(L10n.tr("Zrušit"), role: .cancel) {}
             } message: {
-                Text(verbatim: L10n.tr("Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou."))
+                Text(verbatim: WeekPlanSettingsText.replaced(from: replanFrom, today: today))
             }
             Text(verbatim: model.offline ? L10n.tr("Jsi offline. Připoj se a plán se sestaví.")
-                 : WeekPlanText.replans(from: today, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
+                 : WeekPlanText.replans(from: replanFrom, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -369,9 +377,9 @@ struct WeekPlanSettingsView: View {
         .background(Palette.background.opacity(0.94).ignoresSafeArea(edges: .bottom))
     }
 
-    /// A planned workout from today to next Sunday, which Generate would replace.
+    /// A planned workout from the replan's first day to next Sunday, which Generate would replace.
     private var plannedAhead: Bool {
-        ISODay.range(today, ISODay.shift(nextMonday, 6)).contains { date in
+        ISODay.range(replanFrom, ISODay.shift(nextMonday, 6)).contains { date in
             (calendar[date]?.activities ?? []).contains { $0.status == "planned" }
         }
     }
@@ -407,11 +415,12 @@ struct WeekPlanSettingsView: View {
     private func close(generate: Bool) async {
         guard dirty, !model.demo else {
             dismiss()
-            onClose(generate && !model.demo)
+            onClose(generate && !model.demo ? replanFrom : nil)
             return
         }
         saving = true
         defer { saving = false }
+        let from = replanFrom
         do {
             if usual != usualBefore {
                 let days = WeekPlanPrefs.days(usualPrefs)
@@ -430,7 +439,7 @@ struct WeekPlanSettingsView: View {
             }
             error = nil
             dismiss()
-            onClose(generate)
+            onClose(generate ? from : nil)
         } catch {
             self.error = error.localizedDescription
         }
@@ -451,6 +460,12 @@ enum WeekPlanSettingsText {
         L10n.f("%@ týdně", planDuration(minutes.reduce(0) { $0 + max(0, $1) }))
     }
 
+    /// Generate's question: what goes, from today or from the first day changed.
+    static func replaced(from date: String, today: String) -> String {
+        date == today ? L10n.tr("Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou.")
+            : L10n.f("Tréninky od %@ do příští neděle se nahradí novými, i s tvými úpravami. Dřívější dny a hotové zůstanou.", Fmt.dayMonthShort(date))
+    }
+
     /// Whether the rest starts today: "Rest from today to Sunday." / "Rest from tomorrow to Sunday."
     static func rest(from date: String, today: String) -> String {
         if date == today { return L10n.tr("Volno od dneška do neděle.") }
@@ -467,13 +482,15 @@ enum WeekPlanSettingsText {
 /// the new ones get saved as the old week planner saved them (review
 /// 2026-11-24 point 1: offline or a server error leaves the week as it was).
 enum WeekPlanGenerator {
-    /// Replans each week from today on; finished workouts stay. False when a week failed.
+    /// Replans each week from `from` (today at the earliest) on; finished workouts
+    /// and the days before stay. False when a week failed.
     @MainActor
-    static func replan(_ model: AppModel, weeks: [String], today: String, calendar: [String: CalendarDay]) async -> Bool {
+    static func replan(_ model: AppModel, weeks: [String], today: String, from: String? = nil, calendar: [String: CalendarDay]) async -> Bool {
+        let today = max(today, from ?? today)
         var ok = true
         for week in weeks {
             do {
-                var r = try await model.api.weekProposal(start: week, replan: true)
+                var r = try await model.api.weekProposal(start: week, replanFrom: today)
                 let replanned = r.replan == true
                 if !replanned {
                     // A server without replan counts the planned workouts in: they go first, as before.
@@ -522,6 +539,20 @@ enum WeekPlanGenerator {
                 }
             }
         }
+    }
+
+    /// The first day from today whose sports, rest or usual time changed; today when none did.
+    static func replanFrom(weeks: [String], today: String, choices: [String: WeekPlanChoice], original: [String: WeekPlanChoice],
+                           usual: [Int], usualBefore: [Int]) -> String {
+        let changed = weeks.flatMap { week in
+            (0..<7).compactMap { i -> String? in
+                let date = ISODay.shift(week, i)
+                guard date >= today, let now = choices[week], let before = original[week] else { return nil }
+                let day = now.days[i] != before.days[i] || now.rest.contains(i) != before.rest.contains(i)
+                return day || usual[i] != usualBefore[i] ? date : nil
+            }
+        }
+        return changed.min() ?? today
     }
 
     /// Saves the built workouts in order: a brick run joins the day's ride, a

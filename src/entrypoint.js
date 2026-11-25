@@ -1686,15 +1686,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const body=await request.json(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(localToday());
       const today=localToday();
+      // Generate replans from the first day the athlete changed (a date) or today (true); the days before keep their workouts.
+      const replanFrom=body.replan===true?today:validTrainingDay(body.replan)?(body.replan>today?body.replan:today):null;
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week.days.push(...(data.days||[]));}
       // The athlete's state now (week-check.js): it eases the week, and a week
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const plan=await planForWeek(env,ctx,start);
-      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:body.replan===true?withoutPlannedFrom(inputs.week,today):inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const [weather,history,triathlon,openWater]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:replanFrom?withoutPlannedFrom(inputs.week,replanFrom):inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
-      return Response.json({status:'ok',start,proposal,...(body.replan===true?{replan:true}:{})},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',start,proposal,...(replanFrom?{replan:true}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // "Plán týdne → Navrhne AI" (week-ai.js): the AI lays out the week from the
