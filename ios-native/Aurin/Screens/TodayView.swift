@@ -985,7 +985,7 @@ struct ReadinessHero: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
-                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Připravenost i HRV se počítají ze spánku, ten z té noci chybí. Klidový tep najdeš níže.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
