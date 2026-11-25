@@ -216,24 +216,35 @@ struct GymRoutineLibrarySheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List(shown) { move in
-                Button { onPick(move); dismiss() } label: {
-                    HStack(spacing: 8) {
-                        Text(verbatim: move.name).font(.body).foregroundStyle(Palette.ink)
-                        Spacer(minLength: 6)
-                        Text(verbatim: GymPreferences.MyItem(move: move.id, name: move.name, seconds: move.seconds, sides: move.sides).duration)
-                            .font(.subheadline).foregroundStyle(Palette.muted)
-                    }
-                    .contentShape(Rectangle())
+        SheetFrame(title: "Přidat z knihovny", fitted: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+                    TextField(L10n.tr("Hledat"), text: $query)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
-                .buttonStyle(.plain)
+                .font(.body)
+                .padding(.horizontal, 12).frame(height: 42)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                SettingsGroup {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, move in
+                        if index > 0 { SettingsDivider() }
+                        Button { onPick(move); dismiss() } label: {
+                            HStack(spacing: 8) {
+                                Text(verbatim: move.name).font(.body).foregroundStyle(Palette.ink)
+                                Spacer(minLength: 6)
+                                Text(verbatim: GymPreferences.MyItem(move: move.id, name: move.name, seconds: move.seconds, sides: move.sides).duration)
+                                    .font(.subheadline).foregroundStyle(Palette.muted)
+                            }
+                            .padding(.horizontal, 16).frame(minHeight: 48)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
-            .searchable(text: $query, prompt: Text("Hledat"))
-            .navigationTitle(Text("Přidat z knihovny"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
         }
+        .glassSheetBackground()
     }
 }
 
@@ -248,29 +259,31 @@ struct GymOwnMoveSheet: View {
     private var item: GymPreferences.MyItem { GymPreferences.MyItem(move: nil, name: name.trimmingCharacters(in: .whitespaces), seconds: seconds, sides: sides) }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                TextField(L10n.tr("Název"), text: $name)
-                    .textInputAutocapitalization(.sentences)
-                Stepper(value: $seconds, in: 5...1800, step: seconds < 60 ? 5 : 30) {
-                    HStack {
-                        Text("Čas")
-                        Spacer()
-                        Text(verbatim: GymPreferences.MyItem(move: nil, name: "", seconds: seconds, sides: false).duration).monospacedDigit()
+        SheetFrame(title: "Vlastní cvik") {
+            VStack(alignment: .leading, spacing: 16) {
+                SettingsGroup {
+                    TextField(L10n.tr("Název"), text: $name)
+                        .textInputAutocapitalization(.sentences)
+                        .font(.body).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 16).frame(minHeight: 50)
+                    SettingsDivider()
+                    Stepper(value: $seconds, in: 5...1800, step: seconds < 60 ? 5 : 30) {
+                        HStack {
+                            Text("Čas")
+                            Spacer()
+                            Text(verbatim: GymPreferences.MyItem(move: nil, name: "", seconds: seconds, sides: false).duration).monospacedDigit()
+                        }
+                        .font(.body).foregroundStyle(Palette.ink)
                     }
+                    .padding(.horizontal, 16).frame(minHeight: 50)
+                    SettingsDivider()
+                    SettingsToggle(title: "Na každou stranu", isOn: $sides)
                 }
-                Toggle("Na každou stranu", isOn: $sides)
-            }
-            .navigationTitle(Text("Vlastní cvik"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Přidat") { onAdd(item); dismiss() }.disabled(item.name.isEmpty)
-                }
+                PrimaryButton(title: L10n.tr("Přidat")) { onAdd(item); dismiss() }
+                    .disabled(item.name.isEmpty)
             }
         }
-        .presentationDetents([.medium])
+        .glassSheetBackground()
     }
 }
 

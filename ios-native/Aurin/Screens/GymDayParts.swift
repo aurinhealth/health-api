@@ -338,48 +338,37 @@ struct GymCardioSheet: View {
     @State private var favourites = GymCardio.favourites
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(shown.enumerated()), id: \.element.id) { index, option in
-                            if index > 0 { SettingsDivider() }
-                            Button { type = option.id } label: {
-                                HStack {
-                                    Text(verbatim: GymCardio.name(option.id)).font(.body).foregroundStyle(Palette.ink)
-                                    Spacer()
-                                    if option.id == type {
-                                        Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
-                                    }
+        SheetFrame(title: "Kardio") {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, option in
+                        if index > 0 { SettingsDivider() }
+                        Button { type = option.id } label: {
+                            HStack {
+                                Text(verbatim: GymCardio.name(option.id)).font(.body).foregroundStyle(Palette.ink)
+                                Spacer()
+                                if option.id == type {
+                                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
                                 }
-                                .padding(.horizontal, 16).frame(minHeight: 48)
-                                .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(option.id == type ? .isSelected : [])
+                            .padding(.horizontal, 16).frame(minHeight: 48)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(option.id == type ? .isSelected : [])
                     }
-                    .cardSurface(cornerRadius: 22)
-                    VStack(alignment: .leading, spacing: 12) {
-                        CardioLengthSlider(minutes: $minutes, title: "Délka")
-                        CardioTimeChips(favourites: favourites, minutes: $minutes)
-                    }
-                    .padding(16)
-                    .cardSurface(cornerRadius: 22)
                 }
-                .padding(20)
-            }
-            .background(Palette.background)
-            .navigationTitle("Kardio")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Hotovo") { onDone(GymDayParts.Choice(type: type, minutes: minutes, target: choice.target)); dismiss() }
+                .cardSurface(cornerRadius: 22)
+                VStack(alignment: .leading, spacing: 12) {
+                    CardioLengthSlider(minutes: $minutes, title: "Délka")
+                    CardioTimeChips(favourites: favourites, minutes: $minutes)
                 }
+                .padding(16)
+                .cardSurface(cornerRadius: 22)
+                PrimaryButton(title: L10n.tr("Hotovo")) { onDone(GymDayParts.Choice(type: type, minutes: minutes, target: choice.target)); dismiss() }
             }
         }
-        .presentationDetents([.medium, .large])
+        .glassSheetBackground()
         .onAppear { type = choice.type; minutes = max(0, min(60, choice.minutes)) }
         .task {
             guard !model.demo, let saved = try? await model.api.gymPreferences().cardioFavourites else { return }

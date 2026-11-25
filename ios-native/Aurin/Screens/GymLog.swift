@@ -148,29 +148,23 @@ struct GymDoneDetail: View {
 
     /// An exercise's sets as you logged them, to fix: a weight, a set more.
     private func setsSheet(_ name: String) -> some View {
-        NavigationStack {
-            ScrollView {
-                if let exercise = day.exercises.first(where: { $0.name == name }) {
-                    GymExerciseTable(exercise: exercise,
-                                     coachLine: coach[exercise.name],
-                                     missingNote: true,
-                                     onToggle: { set, kg, reps in toggle(set, kg: kg, reps: reps) },
-                                     onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
-                                     onRemove: { set in remove(set) },
-                                     onHistory: { historyFor = exercise.name },
-                                     onTechnique: { technique = exercise.name })
-                        .padding(.horizontal, 16).padding(.top, 8)
-                }
+        SheetFrame(title: name, fitted: false) {
+            if let exercise = day.exercises.first(where: { $0.name == name }) {
+                GymExerciseTable(exercise: exercise,
+                                 coachLine: coach[exercise.name],
+                                 missingNote: true,
+                                 onToggle: { set, kg, reps in toggle(set, kg: kg, reps: reps) },
+                                 onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
+                                 onRemove: { set in remove(set) },
+                                 onHistory: { historyFor = exercise.name },
+                                 onTechnique: { technique = exercise.name })
             }
-            .navigationTitle(Text(verbatim: name))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { opened = nil } } }
-            .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
-                TechniqueSheet(exercise: item.name, showHistory: true, history: history)
-            }
-            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name, history: history) }
         }
-        .presentationDetents([.large])
+        .glassSheetBackground()
+        .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
+            TechniqueSheet(exercise: item.name, showHistory: true, history: history)
+        }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name, history: history) }
     }
 
     // MARK: Stats

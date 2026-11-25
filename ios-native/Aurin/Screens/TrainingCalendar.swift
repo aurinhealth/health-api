@@ -346,57 +346,50 @@ struct WatchActivityDetail: View {
     @State private var editingKcal = false
 
     var body: some View {
-        NavigationStack {
-            PageScroll {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 14) {
-                        Image(systemName: SportIcon.symbol(activity.sport, type: activity.type))
-                            .scaledFont(20, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(Palette.onAccent)
-                            .frame(width: 48, height: 48)
-                            .background(SportDisc.color(activity.sport), in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(verbatim: activity.title).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                            Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
-                        }
+        SheetFrame(title: activity.title) {
+            if !model.demo, ["intervals", "google-wearables", "apple-health", "local", "gym"].contains(activity.source ?? "") {
+                Menu {
+                    Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                    if activity.status == "done" && activity.source != "gym" {
+                        Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
                     }
-                    .padding(.bottom, 18)
-                    if let origin = activity.sources?.first ?? ActivityDetail.Origin.of(family: activity.source) {
-                        ActivityOriginLine(origin: origin).padding(.top, -8).padding(.bottom, 18)
+                    if activity.session.unpairTarget != nil {
+                        Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
                     }
-                    ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
+                    if activity.status == "done" {
+                        Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
+                    }
+                } label: {
+                    // The X's glass disc (ChromeButton), a menu in it.
+                    Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.ink)
+                        .frame(width: 40, height: 40)
+                        .contentShape(Circle())
+                        .tapTarget(width: 40, height: 40)
                 }
-                .padding(24)
+                .chromeGlass(in: Circle())
+                .chromeShadow(0.08, radius: 6, y: 2)
+                .accessibilityLabel(L10n.tr("Další volby"))
             }
-            .background { Palette.background.ignoresSafeArea() }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap) }
-                        .accessibilityLabel("Zavřít")
+        } content: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 14) {
+                    Image(systemName: SportIcon.symbol(activity.sport, type: activity.type))
+                        .scaledFont(20, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.onAccent)
+                        .frame(width: 48, height: 48)
+                        .background(SportDisc.color(activity.sport), in: Circle())
+                    Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
                 }
-                if !model.demo, ["intervals", "google-wearables", "apple-health", "local", "gym"].contains(activity.source ?? "") {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu {
-                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
-                            if activity.status == "done" && activity.source != "gym" {
-                                Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
-                            }
-                            if activity.session.unpairTarget != nil {
-                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
-                            }
-                            if activity.status == "done" {
-                                Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap)
-                        }
-                        .accessibilityLabel("Další volby")
-                    }
+                .padding(.bottom, 18)
+                if let origin = activity.sources?.first ?? ActivityDetail.Origin.of(family: activity.source) {
+                    ActivityOriginLine(origin: origin).padding(.top, -8).padding(.bottom, 18)
                 }
+                ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
             }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
-        .presentationDetents([.medium, .large])
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source == "gym" ? "app" : activity.source) { dismiss() }
         }

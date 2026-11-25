@@ -116,49 +116,32 @@ enum GymWhy {
 /// the kind on the left, no icons.
 struct GymWhySheet: View {
     let reasons: [GymWhy.Reason]
-    @Environment(\.dismiss) private var dismiss
-    /// The rows and the note, measured: the sheet opens as tall as they are.
-    @State private var contentHeight: CGFloat = 560
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(reasons.enumerated()), id: \.element.id) { index, reason in
-                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                            // The kind on the left, what it means on the right (concept sheet "whyg").
-                            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                Text(verbatim: reason.title ?? L10n.tr("Kouč")).font(Typo.caption).foregroundStyle(Palette.muted)
-                                    .frame(width: 96, alignment: .leading)
-                                Text(verbatim: reason.detail).font(Typo.bodyStrong.weight(.medium)).foregroundStyle(Palette.ink)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 12)
-                            .accessibilityElement(children: .combine)
+        SheetFrame(title: "Proč tenhle trénink") {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(reasons.enumerated()), id: \.element.id) { index, reason in
+                        if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                        // The kind on the left, what it means on the right (concept sheet "whyg").
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(verbatim: reason.title ?? L10n.tr("Kouč")).font(Typo.caption).foregroundStyle(Palette.muted)
+                                .frame(width: 96, alignment: .leading)
+                            Text(verbatim: reason.detail).font(Typo.bodyStrong.weight(.medium)).foregroundStyle(Palette.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .padding(.vertical, 12)
+                        .accessibilityElement(children: .combine)
                     }
-                    .padding(.horizontal, 18)
-                    .cardSurface(cornerRadius: 20)
-                    Text("Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink.")
-                        .font(Typo.small).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(20)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .background(Palette.background)
-            .navigationTitle(L10n.tr("Proč tenhle trénink"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } }
+                .padding(.horizontal, 18)
+                .cardSurface(cornerRadius: 20)
+                Text("Kouč vybírá odpočaté partie, drží týdenní zátěž v cíli a řídí se fází tvého plánu. Kterýkoli cvik můžeš vyměnit nebo změnit celý trénink.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        // Opened in full (611 test: half a sheet hid the last reasons); the
-        // title bar is about 64 pt above the rows, a long list goes up to large.
-        .presentationDetents([.height(contentHeight + 64), .large])
-        .presentationDragIndicator(.visible)
+        .glassSheetBackground()
     }
 }

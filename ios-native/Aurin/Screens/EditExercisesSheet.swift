@@ -289,51 +289,60 @@ struct ExercisePicker: View {
     }
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: 8) {
-                            chip("Vše", muscle == nil) { muscle = nil }
-                            ForEach(BodyFigure.choices, id: \.self) { id in
-                                chip(BodyFigure.name(id), muscle == id) { muscle = muscle == id ? nil : id }
-                            }
-                        }
-                    }
-                    .scrollIndicators(.hidden)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        SheetFrame(title: title, fitted: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+                    TextField(L10n.tr("Hledat cvik nebo stroj"), text: $query)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
-                ForEach(filtered) { ex in
+                .font(.body)
+                .padding(.horizontal, 12).frame(height: 42)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
-                        Button { pick(ex); dismiss() } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                                    Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
-                                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                                }
-                                Spacer()
-                                if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
-                                if let liked = ex.liked {
-                                    Image(systemName: liked ? "hand.thumbsup" : "hand.thumbsdown").scaledFont(13)
-                                        .foregroundStyle(liked ? Palette.green : Palette.faint)
-                                        .accessibilityLabel(L10n.tr(liked ? "Baví mě" : "Nebaví mě"))
-                                }
-                            }
-                            .contentShape(Rectangle())
+                        chip("Vše", muscle == nil) { muscle = nil }
+                        ForEach(BodyFigure.choices, id: \.self) { id in
+                            chip(BodyFigure.name(id), muscle == id) { muscle = muscle == id ? nil : id }
                         }
-                        .buttonStyle(.borderless)
-                        ExerciseInfoButton(name: ex.name) { technique = ex.name }
                     }
                 }
+                .scrollIndicators(.hidden)
+                // The whole catalog: rows are built as they scroll in.
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(filtered.enumerated()), id: \.element.id) { index, ex in
+                        if index > 0 { SettingsDivider() }
+                        HStack(spacing: 8) {
+                            Button { pick(ex); dismiss() } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                                        Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: ", "))
+                                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                                    }
+                                    Spacer()
+                                    if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
+                                    if let liked = ex.liked {
+                                        Image(systemName: liked ? "hand.thumbsup" : "hand.thumbsdown").scaledFont(13)
+                                            .foregroundStyle(liked ? Palette.green : Palette.faint)
+                                            .accessibilityLabel(L10n.tr(liked ? "Baví mě" : "Nebaví mě"))
+                                    }
+                                }
+                                .frame(minHeight: 52)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            ExerciseInfoButton(name: ex.name) { technique = ex.name }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                }
+                .cardSurface(cornerRadius: 22)
             }
-            .searchable(text: $query, prompt: "Hledat cvik nebo stroj")
-            .navigationTitle(L10n.tr(title))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
-            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
-                TechniqueSheet(exercise: item.name)
-            }
+        }
+        .glassSheetBackground()
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+            TechniqueSheet(exercise: item.name)
         }
     }
 
