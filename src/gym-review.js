@@ -16,7 +16,8 @@ const numText = v => { const s = String(Math.round(v * 10) / 10); return isEngli
 const loadNum = kg => numText(isImperial() ? kgToLb(kg) : kg);
 const unit = () => isImperial() ? ' lb' : ' kg';
 const kgText = kg => loadNum(kg) + unit();
-const e1rm = (kg, reps) => kg > 0 && reps > 0 ? kg * (1 + Math.min(reps, 15) / 30) : null;
+// Epley only for sets of 1–12 reps, as Svaly and the records (muscle-detail.js, fitness-insights.js).
+const e1rm = (kg, reps) => kg > 0 && reps >= 1 && reps <= 12 ? kg * (1 + reps / 30) : null;
 function repRange(text) {
   const m = String(text || '').match(/(\d+)\s*(?:[-–]\s*(\d+))?/);
   return m ? { min: Number(m[1]), max: Number(m[2] || m[1]) } : null;
@@ -70,7 +71,7 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
     : t('Povedený trénink: všechny série v plánovaném rozsahu.', 'A good session: every set within the planned range.');
 
   // Progress against the last time the exercise was done.
-  const up = exercises.filter(e => e.lastBest && e.best > e.lastBest * 1.01), down = exercises.filter(e => e.lastBest && e.best < e.lastBest * .95);
+  const up = exercises.filter(e => e.lastBest && e.best > e.lastBest * 1.01), down = exercises.filter(e => e.lastBest && e.best && e.best < e.lastBest * .95);
   for (const e of up.slice(0, 3)) wins.push(t(e.name + ': odhad maxima ' + kgText(e.best) + ', o ' + kgText(e.best - e.lastBest) + ' víc než minule (' + fmtDate(e.lastDate) + ').', e.name + ': estimated max ' + kgText(e.best) + ', ' + kgText(e.best - e.lastBest) + ' more than on ' + fmtDate(e.lastDate) + '.'));
   const clean = exercises.filter(e => e.doneSets === e.plannedSets && e.sets.every(s => s.status !== 'under') && !up.includes(e));
   if (clean.length) wins.push(t('Podle plánu: ' + clean.map(e => e.name).join(', ') + '.', 'As planned: ' + clean.map(e => e.name).join(', ') + '.'));

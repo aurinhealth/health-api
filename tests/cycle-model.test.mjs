@@ -70,6 +70,8 @@ test("the usual pill time is the median of the last 14 days, from 3 logged times
   // The missed-pill question is on unless turned off.
   assert.equal(normalizeCycleSettings({}).pillMissed, true);
   assert.equal(normalizeCycleSettings({ pillMissed: false }).pillMissed, false);
+  // The athlete's own length takes the same 18–50 days the gaps are learnt from.
+  assert.deepEqual([18, 45, 50, 17, 51].map(n => normalizeCycleSettings({ cycleLength: n }).cycleLength), [18, 45, 50, null, null]);
 });
 
 test("the pill pack counts pills and pause days", () => {

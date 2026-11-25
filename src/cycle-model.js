@@ -54,7 +54,7 @@ export function normalizeCycleSettings(raw) {
     // Settings → Cycle, GDPR art. 9), so the consent can be shown later.
     enabledAt: s.enabled === true && typeof s.enabledAt === "string" ? s.enabledAt : null,
     lastPeriod: isDate(s.lastPeriod) ? s.lastPeriod : null,
-    cycleLength: Number.isFinite(len) && len >= 21 && len <= 40 ? len : null,
+    cycleLength: Number.isFinite(len) && len >= 18 && len <= 50 ? len : null,
     periodLength: Number.isFinite(per) && per >= 2 && per <= 10 ? per : null,
     contraception: CONTRACEPTION.includes(s.contraception) ? s.contraception : "none",
     lifeStage: LIFE_STAGES.includes(s.lifeStage) ? s.lifeStage : "regular",
