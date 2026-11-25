@@ -321,6 +321,15 @@ struct TrainingPage: View {
             rowCard(main, line: when(main)).padding(.top, 6)
             if main.sport == "strength", day == today, store.loading {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+            } else if main.sport == "strength", day == today {
+                // No exercises here yet and nothing loading: say where they come from (KRIT-21).
+                Text(W.tr("Cviky hodinky dostanou z iPhonu.", "The exercises come from your iPhone."))
+                    .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
+                Button { store.load() } label: {
+                    Text(W.tr("Zkusit znovu", "Try again")).watchFont(15, .semibold).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 4)
             } else if main.sport != "strength", day == today {
                 Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
                     .watchFont(12).foregroundStyle(W.muted).padding(.top, 6)
