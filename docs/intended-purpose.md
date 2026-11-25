@@ -7,8 +7,11 @@ Aurin is not a medical device (MDCG 2019-11 rev.1, FDA General Wellness 2026). I
 monitor, prevent or treat any disease, and no feature is designed to:
 
 - Name an illness, or say that values "come before" or "point to" one.
-- Call a value "normal" or "abnormal", or judge it against a clinical threshold. Values are described only
-  against the athlete's own usual range ("above your usual range"), and estimates say they are estimates.
+- Call a value clinically "normal" or "abnormal", or judge it against a clinical threshold or a population
+  norm. Values are described only against the athlete's own average or usual range ("your normal", "above
+  your usual range"), and estimates say they are estimates. "Your normal" is fine because it names the
+  athlete's own baseline; "normal HRV", "abnormal" or "v normě" are not.
+- Colour a body value red because it is outside a range, even the athlete's own.
 - Send an alarm about a body value. The app only adjusts load and recovery: an easier day, a lighter
   session, rest.
 
@@ -19,9 +22,9 @@ before making medical decisions." (App Store 1.4.1); the site and the App Store 
 the App Store submission.
 
 Not yet in line (Today audit 17 and 26, with their mockups): HRV and resting heart rate words in Health
-("v normě", "nad normou", `MetricStatus.compare`), the readiness parts in Health ("tvůj normál"), the widget,
-the Apple Watch ("Normal") and the site's "HRV above normal". New texts follow this purpose; these move to
-"usual range" with those points.
+("v normě", "nad normou", `MetricStatus.compare`), the widget, the Apple Watch ("Normal") and the site's
+"HRV above normal". New texts follow this purpose; these move to "your normal" or "usual range" with those
+points. The readiness parts in Health ("tvůj normál") already compare with the athlete's own average.
 
 Every text the app, the coach and the pushes show follows this purpose. Change it only together with the
 privacy policy and the App Store listing.
