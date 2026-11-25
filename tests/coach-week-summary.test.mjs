@@ -48,3 +48,13 @@ test('Sunday sums up its own week, other days the week before', () => {
   assert.equal(summaryWeek(SUNDAY, START), START);
   assert.equal(summaryWeek('2026-11-16', '2026-11-16'), START);
 });
+
+test('the Sunday message: from Sunday 18:00 to Monday, in words, without activity names', async () => {
+  const { summaryDue, summaryText, postWeekSummary } = await import('../src/coach-week-summary.js');
+  assert.deepEqual([summaryDue(SUNDAY, 17), summaryDue(SUNDAY, 18), summaryDue('2026-11-16', 9), summaryDue('2026-11-17', 20)], [false, true, true, false]);
+  const s = withLang('en', () => weekSummary({ start: START, today: SUNDAY, days, sleep, load: { state: 'ready', level: 'above', text: 'This week was a little harder than your last four.' } }));
+  assert.equal(withLang('en', () => summaryText(s)), 'Good week: 4 of 5 planned workouts done.\n\nMissed: the run on Thursday. Sleep averaged 7 h 5 min, about 20 min under your usual. This week was a little harder than your last four.');
+  assert.equal(withLang('cs', () => summaryText(weekSummary({ start: START, today: SUNDAY, days }))), 'Dobrý týden, hotovo 4 z 5 plánovaných tréninků.\n\nVynechané: běh ve čtvrtek.');
+  assert.doesNotMatch(withLang('en', () => summaryText(s)), /Tempo run/, 'names from other services stay out of the text the model reads');
+  assert.equal(await postWeekSummary({}, s, { posted: { week: { key: START } } }), null, 'once a week');
+});

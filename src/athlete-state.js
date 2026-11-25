@@ -91,6 +91,10 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   if (patch.nudge !== undefined) state.nudge = patch.nudge;
   // The coach's question after a training gap (coach-gap-checkin.js): the gap it was asked for.
   if (validDay(patch.gapAsked)) state.gapAsked = patch.gapAsked;
+  // The coach's own chat messages from the rules (coach-week-summary.js, coach-race-week.js):
+  // the week or race each was posted for and where, so it is posted once and the chat shows its card.
+  if (['week', 'race'].includes(patch.posted?.kind) && validDay(patch.posted.key) && Number.isInteger(patch.posted.chatId) && Number.isInteger(patch.posted.messageId))
+    state.posted = { ...(state.posted || {}), [patch.posted.kind]: { key: patch.posted.key, chatId: patch.posted.chatId, messageId: patch.posted.messageId } };
   // Sessions cancelled when switching to Nemoc, Zranění or Pauza: the coach
   // offers them back afterwards. Kept 21 days, at most 14.
   if (Array.isArray(patch.cancelled)) {
