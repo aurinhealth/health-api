@@ -54,7 +54,7 @@ export function normalizeCycleSettings(raw) {
     // Settings → Cycle, GDPR art. 9), so the consent can be shown later.
     enabledAt: s.enabled === true && typeof s.enabledAt === "string" ? s.enabledAt : null,
     lastPeriod: isDate(s.lastPeriod) ? s.lastPeriod : null,
-    cycleLength: Number.isFinite(len) && len >= 21 && len <= 40 ? len : null,
+    cycleLength: Number.isFinite(len) && len >= 18 && len <= 50 ? len : null,
     periodLength: Number.isFinite(per) && per >= 2 && per <= 10 ? per : null,
     contraception: CONTRACEPTION.includes(s.contraception) ? s.contraception : "none",
     lifeStage: LIFE_STAGES.includes(s.lifeStage) ? s.lifeStage : "regular",
@@ -140,7 +140,7 @@ export function cycleState(input) {
   const { length, spread, learned, cycles, shortest, longest } = cycleLength(starts, settings);
   // Perimenopause: no phases, the next period from the shortest to the longest gap.
   if (settings.lifeStage === "perimenopause") {
-    const from = shift(lastStart, learned ? shortest : Math.max(21, length - 7)), to = shift(lastStart, learned ? longest : length + 14);
+    const from = shift(lastStart, learned ? shortest : Math.min(length, Math.max(21, length - 7))), to = shift(lastStart, learned ? longest : length + 14);
     return { ...out, cycleDay: between(lastStart, date) + 1, phase: null, length, learned, cycles, range: learned ? { shortest, longest } : null,
       lastStart, next: { start: shift(lastStart, length), from, to, late: date > to }, daysToNext: Math.max(0, between(date, from)) };
   }

@@ -223,7 +223,8 @@ export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
   const [workouts, capabilities, families] = await Promise.all([catalog(db, sport), getCapabilities(db, sport), recentFamilies(db, sport).catch(() => [])]);
   // The outdoor warm-up and rounded steps can change the actual duration.
   // Apply the hard duration window to the workout the athlete will receive.
-  const candidates = workouts.map(w => renderForEnvironment(w, environment));
+  // A pool swim in the athlete's pool (context.poolLength, workout-model.js fitToPool).
+  const candidates = workouts.map(w => renderForEnvironment(w, environment, { poolLength: context.poolLength }));
   const ranked = rankWorkoutCandidates(candidates, { ...filters, environment }, { ...context, recentFamilies: context.recentFamilies || families }, capabilities);
   const limit = clamp(n(filters.limit, 30), 1, 100);
   const selected = diversifyWorkoutCandidates(ranked, filters, limit);
@@ -243,7 +244,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   // The swim catalog has endurance, threshold (CSS), speed and sprints.
   if (sport === "swim") kind = { tempo: "threshold", sweet_spot: "threshold", anaerobic: "vo2max" }[kind] || kind;
   const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, MAX_MINUTES.run) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, MAX_MINUTES.ride);
-  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
+  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty, poolLength: sport === "swim" ? thresholds?.poolLength : null };
   // The swim catalogue's minutes are at 2:00/100 m: a slower swimmer's 45 min holds fewer metres.
   const css = sport === "swim" && Number(thresholds?.swimCss) >= 60 && Number(thresholds?.swimCss) <= 240 ? Number(thresholds.swimCss) : null;
   const searchMinutes = css ? Math.round(minutes * 120 / css) : minutes;
@@ -482,11 +483,12 @@ async function resizeGenerated(db, { sport, environment, date, coach, thresholds
   let resized = resizeWorkout(base, resizeTo, how);
   // Outdoor rendering can lengthen the warm-up; correct once so the ridden length
   // matches, unless the correction lands further away.
-  const ridden = w => renderForEnvironment(w, environmentOf(environment)).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
+  const poolLength = sport === "swim" ? thresholds?.poolLength : null;
+  const ridden = w => renderForEnvironment(w, environmentOf(environment), { poolLength }).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
   // A swim's length at the athlete's CSS is not the catalogue's: no correction from it.
   if (Math.abs(drift) >= 2 && !(sport === "swim" && how.swimCss)) { const corrected = resizeWorkout(base, Math.round(resizeTo) - drift, how); if (Math.abs(ridden(corrected) - Math.round(resizeTo)) < Math.abs(drift)) resized = corrected; }
   const [ranked] = rankWorkoutCandidates([resized], { environment: environmentOf(environment) }, context, capabilities);
-  const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment));
+  const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment), { poolLength });
   const plannedToday = coach.constraints?.plannedToday;
   const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
   const explanation = explainWorkout(pick, { coach, environment: pick.environment, thresholds, planned, sport });
@@ -593,7 +595,7 @@ export async function hasFeedback(db, workoutId, date) {
 // as the gym's) unless one is given: the athlete sets one in the app if they want.
 export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null, experience = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
-  const rendered = renderForEnvironment(workout, environment);
+  const rendered = renderForEnvironment(workout, environment, { poolLength: thresholds?.poolLength });
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
   // Intervals shows event tags as #hashtags after the name, so it gets only
   // where (indoor/outdoor) and the training type. The type is what the coaches
@@ -606,7 +608,7 @@ export function buildIntervalsEvent(workout, date, environment = "indoor", { thr
   const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport, experience);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime || "")) ? startTime : "00:00";
   return {
-    external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: workout.name,
+    external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: rendered.name,
     description: own + focusLine(rendered, { thresholds }) + "\n\n" + rendered.intervals_description,
     load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(tags)],
     ...(carbs ? { carbs_per_hour: carbs } : {})
@@ -643,7 +645,7 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // Watts in the description only for a new event.
   const thresholds = await athleteThresholds(env).catch(() => null);
   event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime, experience });
-  const rendered=renderForEnvironment(workout,environmentOf(environment));
+  const rendered=renderForEnvironment(workout,environmentOf(environment),{poolLength:thresholds?.poolLength});
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).
   if(workout.family==='race')event.race=true;

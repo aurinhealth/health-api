@@ -27,6 +27,13 @@ test('the gym review sets every exercise against the plan, last time and next ti
   assert.deepEqual(r.sets[1].sets.map(s => s.status), ['under', 'under', 'missing']);
 });
 
+test('sets over 12 reps give no estimated max, and no "lower than last time"', () => {
+  const light = [['ADAPTIVNÍ SILOVÝ TRÉNINK'], [''], ['Datum', date, '', 'Horní tělo A'], [], [], [], GYM_PLAN_COLUMNS,
+    set('DB bench press', 1, 14, '15-20', 14, 15, 7), set('DB bench press', 2, 14, '15-20', 14, 15, 7)];
+  const r = withLang('cs', () => buildGymReview({ values: light, history, date })), text = JSON.stringify(r);
+  assert.doesNotMatch(text, /DB bench press: odhad maxima/);
+});
+
 test('in English the gym review is English', () => {
   const r = withLang('en', () => buildGymReview({ values, history, date }));
   assert.equal(r.verdict, '7 of 8 work sets done.');

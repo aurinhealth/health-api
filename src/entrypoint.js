@@ -3929,7 +3929,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
       const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
       if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
-      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
       // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
@@ -3994,7 +3994,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await readinessCheckin(env.DB,date).catch(()=>null),ratings:await recentWorkoutRatings(env.DB,{sport,since:shiftDate(date,-42)})};
       const own=await composeWorkout(env,{sport,kind,minutes,coach,today,asked});
       if(!own)return Response.json({status:'empty'},{headers:{'Cache-Control':'no-store'}});
-      const w=renderForEnvironment(own,environment),thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=renderForEnvironment(own,environment,{poolLength:thresholds?.poolLength});
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=athleteSteps(structure,sport,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,sport,thresholds);
       try{const e=explainWorkout(w,{environment:w.environment,thresholds,sport,experience:coach?.experience??null});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[],...(e.fuel?{fuel:e.fuel}:{})};}catch{w.guide=null;}
@@ -4081,7 +4081,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
         const ownMinutes=sessionMinutes||generated.durationMinutes;
         const bg=body.background===true&&ctx?.waitUntil?{key:composeKey({date,sport:genSport,environment,kind:coachKind,minutes:ownMinutes})+'|'+(coach.readiness?.status||'')+'|'+(today.feeling||''),defer:p=>ctx.waitUntil(p)}:{};
         const daily=await dailyOwnWorkout(env,generated.workout,{sport:genSport,kind:coachKind,minutes:ownMinutes,coach,today,focus:coachInputs.focus,experience:coachInputs.experience,runBase:coachInputs.runBase,thresholds,...bg,...(ask?{ask}:{})}),own=daily.workout;
-        generated=own?{...generated,workout:renderForEnvironment(own,environment),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:daily.pending?{...generated,aiPending:true}:daily.tried?generated:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})});
+        generated=own?{...generated,workout:renderForEnvironment(own,environment,{poolLength:thresholds?.poolLength}),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:daily.pending?{...generated,aiPending:true}:daily.tried?generated:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus,...(ask?{ask}:{})});
         if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
       }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;
