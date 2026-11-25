@@ -351,18 +351,22 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     status: r.done ? "done" : "planned"
   }));
   // Cycle tracking (cycle-model.js, profile.cycle from dashboard-shared.js):
-  // on a bleeding day with cramps or fatigue a hard ride or run
-  // shows as an easy one ("eased", the original kept for "vrátit"), unless
-  // the athlete kept the plan that day; the pill of the pack joins the plan.
+  // on a bleeding day with cramps or fatigue a hard ride, run or swim
+  // shows as an easy one ("eased", the original kept for "vrátit") and a
+  // gym session stays with a line to lift lighter, unless the athlete kept
+  // the plan that day; the pill of the pack joins the plan.
   const cycleIn = profile?.cycle || null;
   const cyc = cycleIn ? cycleState({ settings: cycleIn.settings, days: cycleIn.days, date }) : null;
   const keepPlan = !!cycleIn?.days?.find(d => d.date === date)?.keepPlan;
   const caution = cyc ? cycleTrainingCaution(cyc) : null;
   let eased = false;
   const easy = (s, item) => {
-    if (!caution || keepPlan || s.status !== "planned" || !["ride", "run"].includes(s.sport) || !isHardSession(s.title, s.sport)) return item;
+    if (!caution || keepPlan || s.status !== "planned") return item;
+    if (s.sport === "strength") return { ...item, steady: L("Dnes lehčeji: nech si 3 opakování v rezervě a vynech poslední sérii každého cviku.", "Lighter today: keep 3 reps in reserve and skip the last set of each exercise.") };
+    if (!["ride", "run", "swim"].includes(s.sport) || !isHardSession(s.title, s.sport)) return item;
     eased = true;
-    return { ...item, title: s.sport === "run" ? L("Lehký běh 30 min", "Easy run 30 min") : L("Lehká jízda 45 min", "Easy ride 45 min"), detail: null, eased: { title: s.title } };
+    const title = s.sport === "run" ? L("Lehký běh 30 min", "Easy run 30 min") : s.sport === "swim" ? L("Lehké plavání 30 min", "Easy swim 30 min") : L("Lehká jízda 45 min", "Easy ride 45 min");
+    return { ...item, title, detail: null, eased: { title: s.title } };
   };
   const pill = cyc?.pill && !cyc.pill.pause ? cyc.pill : null;
   const pillItems = pill ? [{
