@@ -437,7 +437,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const weeks=Math.round(eventDays/7);
   if(eventPhase&&!goal?.phase&&!preferences.phase)rationale.push(eventPhase==="race"?L("Dnes je "+eventName+".","Today is "+eventName+"."):eventPhase==="openers"?L("Zítra je "+eventName+" – dnes jen krátká aktivace.","Tomorrow is "+eventName+" – just short openers today."):eventPhase==="taper"?L("Do "+toEvent+" "+pluralWord(eventDays,"zbývá","zbývají","zbývá")+" "+count(eventDays,"den","dny","dní")+": ladění formy, objem jde dolů a intenzita zůstává krátká.",count(eventDays,"","","","day","days")+" to "+toEvent+": tapering, volume goes down and intensity stays short."):eventPhase==="build"?L("Do "+toEvent+" "+pluralWord(weeks,"zbývá","zbývají","zbývá")+" "+count(weeks,"týden","týdny","týdnů")+": fáze rozvoje, kvalita míří na závodní intenzitu.",count(weeks,"","","","week","weeks")+" to "+toEvent+": build phase, quality targets race intensity."):L("Do "+toEvent+" "+pluralWord(weeks,"zbývá","zbývají","zbývá")+" "+count(weeks,"týden","týdny","týdnů")+": základní fáze, stavíme aerobní základ a sweet spot.",count(weeks,"","","","week","weeks")+" to "+toEvent+": base phase, building the aerobic base and sweet spot."));
 
-  const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
+  // The last session of this sport: the loaded weeks reach back 7 to 13 days,
+  // the activities read with `returns` 90 (last), so a longer break shows too.
+  const lastDone=returns?.last?.[sport]?diffDays(targetDate,returns.last[sport]):null;
+  const lastRide=[...completedAll.map(a=>diffDays(targetDate,a.date)),lastDone].filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   // The other sport tires the same legs and heart: a hard run counts before a
   // hard ride (and the other way round) for the 48 h rule and the week's quality.
@@ -584,9 +587,11 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?L("první týden po pauze delší než 2 týdny: bez intenzity","first week back after more than 2 weeks off: no intensity"):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
     }
-    if(breakWeek&&!novice)returning=true;
-    if(offBreak&&!novice){
-      returning=true;
+    // The first day back and the rest of the first week alike: no long
+    // session and the length capped, whatever the plan or the ask (C7); asked
+    // again after the coach's concern (insisted), the athlete's call stands.
+    if((offBreak||breakWeek)&&!novice)returning=true;
+    if((offBreak||breakWeek)&&!novice&&!insisted){
       if(kind==="long_endurance")kind="endurance";
       capAt(short?45:90,L("návrat po pauze","returning after a break"));
     }

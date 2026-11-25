@@ -66,8 +66,16 @@ export function liveRevision(revision, days = [], today) {
 // day's time, to two hard days never in a row and to nothing harder on a red
 // morning. A change that changes nothing goes.
 // upcoming: [{eventId, date, sport, name, minutes, kind, environment}]
-export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDate = {}, readiness = null } = {}) {
+// The week plan's checks too (load ramp-back review 2026-11-25, C6): a sport
+// resting for a pain (paused) gets no change but an easier or shorter one, a
+// ride or run becomes long only when the next and the last 6 days have no long
+// one of it, and a longer run stays within runCap ({single, cap, committed}:
+// the one-run cap and this week's running cap with what is committed).
+export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDate = {}, readiness = null, paused = [], runCap = null, weekEnd = null } = {}) {
   const byId = new Map(upcoming.map(u => [u.eventId, u])), out = [], seen = new Set();
+  let runRoom = runCap?.cap != null ? runCap.cap - (Number(runCap.committed) || 0) : Infinity;
+  // The long sessions of the plan and those the changes so far made long.
+  const chosen = [], longOf = (sport, date, except) => [...done, ...upcoming, ...chosen].some(x => x !== except && x.eventId !== except?.eventId && x.sport === sport && x.kind === "long" && x.date && gap(x.date, date) <= 6);
   const kindOn = new Map();
   for (const d of done) if (d.kind && HARD_KINDS.has(d.kind)) kindOn.set(d.date, d.kind);
   for (const u of upcoming) if (u.kind && HARD_KINDS.has(u.kind)) kindOn.set(u.date, u.kind);
@@ -83,11 +91,19 @@ export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDa
       const neighbour = [...kindOn.keys()].some(d => d !== u.date && gap(d, u.date) <= 1);
       if (readiness?.zone === "red" || neighbour) { kind = u.kind || "endurance"; undone = true; }
     }
+    if (kind === "long" && u.kind !== "long" && longOf(u.sport, u.date, u)) kind = u.kind || "endurance";
     const budget = num(availabilityByDate[u.date]);
     const cap = Math.min(LONGEST[u.sport], Math.max(u.minutes || 0, Math.min(MAX_MINUTES[u.sport], Math.max(budget && budget > 0 ? budget : 0, MIN_MINUTES[u.sport]))));
     let minutes = Math.round(num(c.minutes) || u.minutes || 60);
     minutes = Math.max(MIN_MINUTES[u.sport], Math.min(cap, round5(minutes)));
+    if (paused.includes(u.sport) && (minutes > (u.minutes || 0) || HARD_KINDS.has(kind) && !HARD_KINDS.has(u.kind) || kind === "long" && u.kind !== "long")) continue;
+    if (u.sport === "run" && minutes > (u.minutes || 0)) {
+      const room = weekEnd && u.date > weekEnd ? Infinity : runRoom;
+      minutes = Math.max(u.minutes || 0, Math.floor(Math.min(minutes, runCap?.single ?? Infinity, (u.minutes || 0) + Math.max(0, room)) / 5) * 5);
+    }
     if (kind === u.kind && Math.abs(minutes - (u.minutes || 0)) < 5) continue;
+    if (u.sport === "run" && (!weekEnd || u.date <= weekEnd)) runRoom -= Math.max(0, minutes - (u.minutes || 0));
+    if (kind === "long" && u.kind !== "long") chosen.push({ eventId: u.eventId, sport: u.sport, date: u.date, kind });
     seen.add(u.eventId);
     if (HARD_KINDS.has(kind)) kindOn.set(u.date, kind); else if (kindOn.get(u.date) && !HARD_KINDS.has(kind)) kindOn.delete(u.date);
     out.push({ eventId: u.eventId, date: u.date, sport: u.sport, environment: u.environment || "outdoor", from: { name: u.name, minutes: u.minutes, kind: u.kind || null }, kind, minutes, reason: undone ? null : String(c.reason || "").trim().slice(0, 240) || null });
@@ -149,7 +165,8 @@ export function withWeekdays(facts) {
 }
 
 // facts: { date, today, done, feedback, planFit, reviews, readiness, upcoming, availabilityByDate, preferenceMemory? }
-export async function reviseWeek(env, facts, { focus = null, ask = callOpenAI } = {}) {
+// guards: { paused, runCap, weekEnd } for sanitizeChanges.
+export async function reviseWeek(env, facts, { focus = null, ask = callOpenAI, guards = {} } = {}) {
   let parsed = null, source = "rules";
   try {
     const r = await ask(env, { feature: "week-revision", instructions: withFocus(revisionInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(withWeekdays(facts)), format: REVISION_SCHEMA, maxOutputTokens: 1500, model: lightModel(env) });
@@ -159,7 +176,7 @@ export async function reviseWeek(env, facts, { focus = null, ask = callOpenAI } 
     if (!error?.ai && !/AI|souhlas|consent|předplat|subscription/i.test(String(error?.message || ""))) console.error("Week revision AI failed", error?.message || error);
     parsed = rulesRevision(facts);
   }
-  const changes = sanitizeChanges(parsed?.changes, facts.upcoming || [], { done: facts.done, availabilityByDate: facts.availabilityByDate, readiness: facts.readiness });
+  const changes = sanitizeChanges(parsed?.changes, facts.upcoming || [], { done: facts.done, availabilityByDate: facts.availabilityByDate, readiness: facts.readiness, ...guards });
   // A summary that promised changes the checks all dropped would show above an
   // empty card; the rules then say how the session went.
   const promised = Array.isArray(parsed?.changes) && parsed.changes.length > 0;

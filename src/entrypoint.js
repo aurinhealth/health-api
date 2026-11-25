@@ -99,7 +99,7 @@ import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, su
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
-import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { proposeWeekAI, adjustByChip, adjustByText, guardSessionChange, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
@@ -1909,7 +1909,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
         const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
-        const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard,split:rules.split||null});
+        // A sport resting for a pain and the rules' running cap hold for the AI's week too (C6).
+        const paused=pausedSports(state).flatMap(s=>s==='gym'?['gym','strength']:[s]),runCap=rules.targets?.runCap||(await computeWeekTargets(env,ctx,start,null).catch(()=>null))?.runCap||weeklyRunCap(history||[],start);
+        const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard,split:rules.split||null,paused,runCap});
         return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       }catch(error){
         if(!error?.ai&&!/AI|souhlas|consent/i.test(String(error?.message||'')))console.error('Week AI failed',error?.message||error);
@@ -1939,6 +1941,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         try{changed=await adjustByText(env,{session:current,request:text,weekDays,availabilityByDate:Object.fromEntries(weekDays.map(d=>[d,availabilityOn(prefs,d).minutes??null])),otherSessions:others,readiness:{score:readiness?.score??null,zone:readiness?.zone||null},prefs,today,preferenceMemory:usedMemories(await getAthleteState(env.DB).catch(()=>({})))});}
         catch(error){return Response.json({status:'unavailable',message:error?.ai?error.message:L('AI teď není dostupná. Použij rychlé volby.', 'AI isn\'t available right now. Use the quick options.')},{status:503});}
       }
+      // The week plan's checks for this one session too (C6): a sport resting
+      // for a pain, one long ride or run a week, the running cap.
+      const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system),minutes:Math.max(0,Math.min(600,Math.round(Number(o.minutes)||0)))||null}));
+      // The week the session lands in: its runs done and in the calendar (the rules' cap) and the other drafts.
+      const landing=mondayOfDate(changed.date||date),weekCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?(await computeWeekTargets(env,ctx,landing,null).catch(()=>null))?.runCap||weeklyRunCap(await planningHistory(env,landing<today?landing:today,30).catch(()=>[]),landing):null;
+      const runCap=weekCap?{...weekCap,cap:weekCap.cap-(Number(weekCap.committed)||0)}:null;
+      changed=guardSessionChange(changed,current,{paused:pausedSports(await getAthleteState(env.DB).catch(()=>({}))),others,runCap});
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
@@ -2000,7 +2009,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const plans=new Map();const availabilityByDate={};
       for(const u of upcoming){const w=mondayOfDate(u.date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);availabilityByDate[u.date]=p?availabilityOn(p,u.date).minutes??null:null;}
       const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),planFit,reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate,...(usedMemories(athlete).length?{preferenceMemory:usedMemories(athlete)}:{})};
-      const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
+      // A sport resting for a pain and the running caps of the week plan (C6): this week's
+      // runs done and planned count against its cap; next week's runs keep the one-run cap.
+      const weekStart=mondayOfDate(today),weekEnd=shiftDate(weekStart,6);
+      const runOf=list=>(list||[]).filter(a=>sportOf(a)==='run').reduce((m,a)=>m+(Number(a.durationHours)||0)*60,0);
+      const runCap=upcoming.some(u=>u.sport==='run')?{...weeklyRunCap(await planningHistory(env,today,30).catch(()=>[]),weekStart),committed:days.filter(d=>d.date>=weekStart&&d.date<=weekEnd).reduce((n,d)=>n+committedRunMinutes(d.date,today,runOf(d.daily?.training?.planned),runOf(d.daily?.training?.completed)),0)}:null;
+      const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus,guards:{paused:pausedSports(athlete),runCap,weekEnd}}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
       // Each change gets its workout now, so the card shows what replaces what.
       const changes=[];
       for(const c of r.changes||[]){

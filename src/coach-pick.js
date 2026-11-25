@@ -237,9 +237,13 @@ export async function recentKinds(db, userId, today) {
 
 // The day each of ride, run and swim came back after 14 or more days without
 // it (threshold-check.js returnAfterBreak), for the coach's first week back.
-// One read of 35 days of activities, kept with the coach's inputs.
+// One read of 90 days of activities, kept with the coach's inputs: per sport
+// the day it came back after a break, and `last`, the last day it was done
+// (the day coach's own weeks reach back only 7 to 13 days, so a longer break
+// was not seen before its first session; load ramp-back review 2026-11-25, C7).
+const RETURNS_DAYS = 90;
 export async function sportReturns(db, userId, today) {
-  const from = new Date(Date.parse(today + "T00:00:00Z") - 35 * 86400000).toISOString().slice(0, 10);
+  const from = new Date(Date.parse(today + "T00:00:00Z") - RETURNS_DAYS * 86400000).toISOString().slice(0, 10);
   const rows = (await db.prepare("SELECT start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
     .bind(userId, from).all().catch(() => ({ results: [] }))).results || [];
   const dates = { ride: [], run: [], swim: [] };
@@ -248,7 +252,8 @@ export async function sportReturns(db, userId, today) {
     const kind = activityKindOf(p.type || p.exercise?.exerciseType || p.name), day = String(p.start_date_local || r.start_time || "").slice(0, 10);
     if (dates[kind] && day) dates[kind].push(day);
   }
-  return Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today)]));
+  const before = list => list.filter(d => d < today).sort().at(-1) || null;
+  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])) };
 }
 
 export async function pickState(db, userId, date) {
