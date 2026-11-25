@@ -371,6 +371,11 @@ struct CoachView: View {
                 Text("Kouč je AI. Může se splést, tak si důležité věci ověř.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center)
+            } else {
+                // Always in sight, small (Petr 2026-11-25, AI Act art. 50: the
+                // athlete knows an AI answers).
+                Text("Kouč je AI a může se splést.")
+                    .font(Typo.tiny).foregroundStyle(Palette.muted)
             }
         }
         .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 8)
