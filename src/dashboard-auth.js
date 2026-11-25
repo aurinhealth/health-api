@@ -84,7 +84,8 @@ const PUBLIC_PATHS = new Set([
   "/webhooks/app-store"
 ]);
 // /support/report/…: a signed link to one problem report (support-report.js).
-const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/", "/support/report/"];
+// /email/unsubscribe/…: the signed unsubscribe link of product news (product-emails.js).
+const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/", "/support/report/", "/email/unsubscribe/"];
 
 export function isPublicPath(pathname) {
   return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some(prefix => pathname.startsWith(prefix));
