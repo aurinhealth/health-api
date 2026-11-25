@@ -478,9 +478,15 @@ export async function runUserJobsInvocation(env, ctx, { user, names, cron, sched
     return { ok: false, error: message };
   }
 }
-// Ten users at a time through the USER_JOBS binding. Without the binding (tests,
-// local runs), or when no call of the first ten went through, the jobs run here.
-export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } = {}) {
+// Up to USER_JOBS_AT_ONCE users at a time through the USER_JOBS binding, a new one as
+// soon as any finishes (not batch after batch, where every batch waits for its slowest).
+// 2026-11-25, ready for a wave: at 1,000 users with a phone to notify, 10 in lockstep
+// batches every 5 minutes would take minutes per cron run. The staging probe sent 40
+// calls from one request and 3 x 30 nested without a refusal (load-test.yml probe).
+// Without the binding (tests, local runs), or when no call of the first ones went
+// through, the jobs run here.
+export const USER_JOBS_AT_ONCE = 25;
+export async function fanOutUserJobs(env, ctx, controller, { concurrency = USER_JOBS_AT_ONCE } = {}) {
   const scheduledTime = controller.scheduledTime || Date.now();
   const names = dueUserJobs(controller.cron, new Date(scheduledTime));
   if (!names.length) return { users: 0, names };
@@ -502,8 +508,6 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   // A rejected call is a broken binding, or that one user's invocation went over
   // a limit (CPU, queries). Running that user here would put the same load on
   // this cron run, which every user shares, so the user waits for the next run.
-  // Only when every call of the first batch is rejected is the binding taken as
-  // broken, and then all users run here.
   const send = async user => {
     try {
       const result = await binding.run({ user, names, cron: controller.cron, scheduledTime });
@@ -511,9 +515,22 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
       return true;
     } catch (error) { console.error("User jobs invocation failed", user.id, error.message); return false; }
   };
-  const first = users.slice(0, concurrency);
-  if (first.length && !(await Promise.all(first.map(send))).some(Boolean)) { await inline(users); return { users: users.length, names }; }
-  for (let i = concurrency; i < users.length; i += concurrency) await Promise.all(users.slice(i, i + concurrency).map(send));
+  // Only when the first `concurrency` calls are all rejected is the binding taken as broken:
+  // no new call starts, and every user whose call did not go through runs here.
+  const through = new Set(), first = Math.min(concurrency, users.length);
+  let next = 0, tried = 0, broken = false, verdict;
+  const judged = new Promise(resolve => { verdict = resolve; });
+  const worker = async () => {
+    while (next < users.length && !broken) {
+      // Past the first calls, a new one waits until one of them went through.
+      if (next >= first && !through.size) { await judged; if (broken || next >= users.length) break; }
+      const user = users[next++];
+      if (await send(user)) { through.add(user.id); verdict(); }
+      if (++tried === first && !through.size) { broken = true; verdict(); }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, users.length) }, worker));
+  if (broken) await inline(users.filter(user => !through.has(user.id)));
   return { users: users.length, names };
 }
 

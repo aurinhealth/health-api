@@ -81,15 +81,20 @@ function database(count) {
   return db;
 }
 
-test("every user's jobs go to an invocation of their own, ten at a time", async () => {
+test("every user's jobs go to an invocation of their own, 25 at a time, a new one as soon as one finishes", async () => {
   const sent = [];
   let running = 0, most = 0;
   const USER_JOBS = { run: async message => { running++; most = Math.max(most, running); await new Promise(r => setTimeout(r, 2)); sent.push(message); running--; } };
-  const result = await fanOutUserJobs({ DB: database(25), OWNER_EMAIL: "owner@example.com", USER_JOBS }, {}, { cron: "* * * * *", scheduledTime: at(10, 5).getTime() });
-  assert.equal(result.users, 25);
-  assert.deepEqual(sent.map(m => m.user.id).sort((a, b) => a - b), Array.from({ length: 25 }, (_, i) => i + 1));
+  const result = await fanOutUserJobs({ DB: database(60), OWNER_EMAIL: "owner@example.com", USER_JOBS }, {}, { cron: "* * * * *", scheduledTime: at(10, 5).getTime() });
+  assert.equal(result.users, 60);
+  assert.deepEqual(sent.map(m => m.user.id).sort((a, b) => a - b), Array.from({ length: 60 }, (_, i) => i + 1));
   assert.ok(sent.every(m => m.names.includes("sync") && m.names.includes("google-food") && m.cron === "* * * * *"));
-  assert.ok(most <= 10);
+  assert.equal(most, 25);
+  // One slow user holds only their own slot: the others go on past them.
+  const order = [];
+  const slowFirst = { run: async message => { await new Promise(r => setTimeout(r, message.user.id === 1 ? 60 : 1)); order.push(message.user.id); } };
+  await fanOutUserJobs({ DB: database(60), OWNER_EMAIL: "owner@example.com", USER_JOBS: slowFirst }, {}, { cron: "* * * * *", scheduledTime: at(10, 5).getTime() });
+  assert.equal(order.at(-1), 1);
 });
 
 test("a broken binding before any user went through falls back to running the jobs here", async () => {
@@ -138,16 +143,16 @@ test("one user's jobs failing in their invocation leave every other user on the 
 });
 
 test("without the binding, or when no call of the first batch goes through, every user runs here", async () => {
-  const healthy = cronEnv(12, { run: async () => ({ ok: true }) });
+  const healthy = cronEnv(30, { run: async () => ({ ok: true }) });
   await fanOutUserJobs(healthy.env, {}, minuteRun);
-  const missing = cronEnv(12);
+  const missing = cronEnv(30);
   await quietly(() => fanOutUserJobs(missing.env, {}, minuteRun));
-  assert.ok(missing.here() >= healthy.here() + 12, `${missing.here()} vs ${healthy.here()}`);
+  assert.ok(missing.here() >= healthy.here() + 30, `${missing.here()} vs ${healthy.here()}`);
   let calls = 0;
-  const broken = cronEnv(12, { run: async () => { calls++; throw new Error("Service binding unavailable"); } });
+  const broken = cronEnv(30, { run: async () => { calls++; throw new Error("Service binding unavailable"); } });
   const { errors } = await quietly(() => fanOutUserJobs(broken.env, {}, minuteRun));
-  assert.equal(calls, 10);
-  assert.equal(errors.filter(e => /User jobs invocation failed/.test(e)).length, 10);
+  assert.equal(calls, 25);
+  assert.equal(errors.filter(e => /User jobs invocation failed/.test(e)).length, 25);
   assert.equal(broken.here(), missing.here());
 });
 
