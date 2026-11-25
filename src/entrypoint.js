@@ -994,7 +994,7 @@ async function easeTodayPlans(env, ctx) {
     const id = String(row.external_id || '').replace(/^planned:/, ''), event = json(row.payload_json);
     try {
       // A race, a test or one of a joined pair stays as planned; so does a sport already done today.
-      if (!id.startsWith('local-') || event.race || event.after || event.next || /race|závod|zavod|\btest\b/i.test(String(event.name || '')) || doneSports.has(eventSport(event))) continue;
+      if (!id.startsWith('local-') || event.race || event.after || event.next || /\brace\b|závod|zavod|\btest\b/i.test(String(event.name || '')) || doneSports.has(eventSport(event))) continue;
       if ((await localWorkout(db, id))?.status !== 'scheduled') continue;
       const planned = await plannedWorkoutOf(env, ctx, id);
       if (!planned || ['race', 'test'].includes(planned.library?.family)) continue;
@@ -1848,13 +1848,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       for(const item of eased.items||[]){
         if(item.restored)continue;
         try{
-          if((await localWorkout(env.DB,item.to.replace(/^planned:/,'')).catch(()=>null))?.status!=='deleted')await deletePlannedEvent(env,{eventId:item.to});
+          // The coach's session already done: it stays, and the plan does not come back beside it.
+          const coach=(await localWorkout(env.DB,item.to.replace(/^planned:/,'')).catch(()=>null))?.status;
+          if(coach&&coach!=='scheduled'&&coach!=='deleted'){item.restored=true;continue;}
+          if(coach==='scheduled')await deletePlannedEvent(env,{eventId:item.to});
           if((await localWorkout(env.DB,item.from))?.status==='deleted')await restoreLocalWorkout(env,item.from,item.link?{...item.link,scheduled_date:item.link.scheduled_date||date}:null);
           item.restored=true;
         }catch(error){left++;console.error('Plan not restored',item.from,error.message);}
       }
       const next={...eased,status:left?'eased':'restored'};
-      if(left){await updateAthleteState(env.DB,{eased:next});throw new Error(L('Část plánu se nepodařilo vrátit, zkus to za chvíli.','Part of the plan could not be restored, try again in a moment.'));}
+      if(left){await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);throw new Error(L('Část plánu se nepodařilo vrátit, zkus to za chvíli.','Part of the plan could not be restored, try again in a moment.'));}
       await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);
       return Response.json({status:'ok',eased:next},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
