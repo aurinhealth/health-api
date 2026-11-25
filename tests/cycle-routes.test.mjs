@@ -29,6 +29,22 @@ test("Today eases a hard ride on a heavy cycle day and shows the morning questio
   assert.equal(today({ sex: "female" }).cycle, null);
 });
 
+test("the cycle eases a hard swim too and lightens a gym session", () => {
+  const days = [{ date: "2026-10-30", flow: 2, symptoms: ["fatigue"] }];
+  const one = (type, name) => ({ planned: [{ id: "p1", type, name, durationHours: 1, date: "2026-10-30" }], completed: [] });
+  const swim = today({ sex: "female", cycle: cycle(days) }, one("Swim", "CSS 8×100 m")).plan.find(i => i.kind === "workout");
+  assert.equal(swim.title, "Lehké plavání 30 min");
+  assert.deepEqual(swim.eased, { title: "CSS 8×100 m" });
+  const gym = today({ sex: "female", cycle: cycle(days) }, one("WeightTraining", "Síla celé tělo")).plan.find(i => i.kind === "workout");
+  assert.equal(gym.sport, "strength");
+  assert.equal(gym.title, "Síla celé tělo");
+  assert.equal(gym.eased, undefined);
+  assert.match(gym.steady, /3 opakování v rezervě/);
+  // Kept plan: no line.
+  const kept = today({ sex: "female", cycle: cycle([{ ...days[0], keepPlan: true }]) }, one("WeightTraining", "Síla celé tělo")).plan.find(i => i.kind === "workout");
+  assert.equal(kept.steady, undefined);
+});
+
 test("the pill joins the day's plan, not on pause days", () => {
   const settings = { contraception: "pill", packStart: "2026-10-24" };
   const t = today({ sex: "female", cycle: cycle([], settings) });
