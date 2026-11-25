@@ -36,7 +36,9 @@ export function parseTiming(header) {
 async function request(phase, cookie, path, init = {}) {
   const started = Date.now();
   try {
-    const response = await fetch(origin + path, { ...init, headers: { Cookie: cookie, Origin: origin, ...(init.headers || {}) }, signal: AbortSignal.timeout(60 * 1000) });
+    // The headers the iPhone app sends (APIClient.swift makeRequest): without X-Aurin-Api the
+    // server sends a browser to the home page (web-app-closed.js), and a redirect counts as an error.
+    const response = await fetch(origin + path, { ...init, redirect: "manual", headers: { Cookie: cookie, Origin: origin, Accept: "application/json", "X-Aurin-Api": "2", "X-Time-Zone": "Europe/Prague", "X-Interface-Language": "en", "X-Units": "metric", ...(init.headers || {}) }, signal: AbortSignal.timeout(60 * 1000) });
     await response.arrayBuffer();
     return { phase, path: (init.method || "GET") + " " + path, status: response.status, ms: Date.now() - started, ...parseTiming(response.headers.get("Server-Timing")) };
   } catch (error) { return { phase, path: (init.method || "GET") + " " + path, status: error.name === "TimeoutError" ? "timeout" : "network", ms: Date.now() - started }; }
@@ -86,7 +88,8 @@ if (process.argv[1]?.endsWith("load-test.mjs")) {
     }
   } catch (error) { failed = error; console.error("Load test stopped:", error.message); }
   finally {
-    try { const done = await automation({ cleanup: true }); console.log(`Deleted ${done.deleted} test accounts.`); }
+    // A few accounts per call, so each answer comes well within Cloudflare's 100 s.
+    try { let deleted = 0, done; do { done = await automation({ cleanup: true }); deleted += done.deleted; } while (done.remaining > 0 && done.deleted > 0); console.log(`Deleted ${deleted} test accounts.`); }
     catch (error) { console.error("Cleanup failed:", error.message); failed ||= error; }
   }
   const markdown = [`# Zátěžový test, ${host}`, "", `${accounts} testovacích účtů (vzorový sportovec, bez AI), kola: ${rounds}. Časy jsou za celý požadavek z GitHub runneru, D1 je průměr ze Server-Timing.`, "", ...summary(results)].join("\n");

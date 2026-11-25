@@ -57,3 +57,14 @@ test('prepare opens the accounts with health consent, no AI and a working sessio
   assert.equal(session.uid, 1);
   assert.equal(session.epoch, 5);
 });
+
+test('cleanup deletes a few accounts per call and says how many remain', async () => {
+  const rows = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, email: loadTestEmail(i + 1) }));
+  const db = { prepare: () => ({ all: async () => ({ results: rows }) }) };
+  const removed = [];
+  const response = await handleLoadTest(post({ cleanup: true }), { ENVIRONMENT: 'staging', DB: db }, { kind: 'load-test' }, { remove: async (e, user) => removed.push(user.id), environment: async (e, user) => ({ USER_ID: user.id }) });
+  assert.deepEqual(removed, [1, 2, 3, 4, 5]);
+  const body = await response.json();
+  assert.equal(body.deleted, 5);
+  assert.equal(body.remaining, 2);
+});
