@@ -69,3 +69,10 @@ test("a host named with digits is not taken for a reserved IP", () => {
   assert.ok(publicUrl("https://250.example.com/"));
   assert.equal(publicUrl("http://234.1.2.3/"), null);
 });
+
+test("the privacy page names Google Workspace for the support mailbox in both languages", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../src/site-pages.js", import.meta.url), "utf8");
+  assert.equal(page.match(/<strong>Google<\/strong> \(Google Workspace\)/g)?.length, 2);
+  assert.equal(page.match(/<strong>Google<\/strong> \(Google Ireland Ltd/g)?.length, 2);
+});
