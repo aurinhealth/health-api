@@ -52,8 +52,9 @@ export async function withIdempotency(request, env, url, handler) {
     const seen = await db.prepare("SELECT status,body,created_at < datetime('now','-2 minutes') AS stale FROM client_requests WHERE user_id=? AND route=? AND request_id=?").bind(user, route, id).first();
     // A first attempt that never finished (the Worker was stopped) does not block the id.
     if (seen && !seen.status && seen.stale) {
-      await db.prepare("DELETE FROM client_requests WHERE user_id=? AND route=? AND request_id=?").bind(user, route, id).run();
-      return withIdempotency(request, env, url, handler);
+      // Only a row still unfinished and stale: one that just finished is replayed, not run again (Gemini review 2026-11-25).
+      const gone = await db.prepare("DELETE FROM client_requests WHERE user_id=? AND route=? AND request_id=? AND status IS NULL AND created_at < datetime('now','-2 minutes')").bind(user, route, id).run();
+      if (gone?.meta?.changes) return withIdempotency(request, env, url, handler);
     }
     const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Idempotent-Replay": "1" };
     if (seen?.status) return new Response(seen.body || "{}", { status: Number(seen.status), headers });

@@ -51,6 +51,13 @@ export async function saveCalendarFree(db, days, today) {
   return { days: clean, changed: true };
 }
 
+// Once a day for everyone: days older than a week go also when the app has not
+// sent the calendar since, as the privacy policy says (Gemini review 2026-11-25).
+export async function pruneCalendarFree(db, today) {
+  try { await db.prepare('DELETE FROM calendar_free WHERE user_id=? AND date<?').bind(db.userId, shift(today, -KEEP_PAST_DAYS)).run(); }
+  catch (error) { if (!missingTable(error)) throw error; }
+}
+
 // "Číst kalendář" turned off: the calendar no longer limits any day.
 export async function clearCalendarFree(db) {
   try { await db.prepare('DELETE FROM calendar_free WHERE user_id=?').bind(db.userId).run(); }

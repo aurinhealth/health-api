@@ -3,15 +3,20 @@
 // cannot send the Worker on to a local or private address.
 
 const PRIVATE_HOST = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[|169\.254\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|198\.1[89]\.|192\.0\.0\.)|\.(localhost|local|internal)$/i;
+// Documentation, multicast and reserved IPv4 ranges, for an address written as an IP only (Gemini review 2026-11-25).
+const RESERVED_IP = /^(192\.0\.2|198\.51\.100|203\.0\.113)\.|^(22[4-9]|2[3-5]\d)\./;
+const DOTTED_IP = /^\d+(\.\d+){3}$/;
 // Aurin's own sites: the Worker never fetches itself for a user (audit 2026-11-24 point 8).
-const OWN_HOST = /(^|\.)(aurin\.health|petrfitnessdata\.eu)$/i;
+const OWN_HOST = /(^|\.)(aurin\.health|aurin-staging\.com|petrfitnessdata\.eu)$/i;
 
 // The address when it is a public http(s) page, else null.
 export function publicUrl(link, { https = false } = {}) {
   let u; try { u = new URL(link); } catch { return null; }
   // "a.local." is "a.local": the trailing dot comes off before the checks.
   const host = u.hostname.replace(/\.+$/, "");
-  if (!(https ? /^https:$/ : /^https?:$/).test(u.protocol) || u.username || u.password || PRIVATE_HOST.test(host) || OWN_HOST.test(host) || !host.includes(".")) return null;
+  if (!(https ? /^https:$/ : /^https?:$/).test(u.protocol) || u.username || u.password || PRIVATE_HOST.test(host) || OWN_HOST.test(host) || (DOTTED_IP.test(host) && RESERVED_IP.test(host)) || !host.includes(".")) return null;
+  // Web ports only (Gemini review 2026-11-25).
+  if (u.port && u.port !== "443" && u.port !== "80") return null;
   return u.href;
 }
 
@@ -22,6 +27,7 @@ export async function fetchPublic(link, init = {}, fetchImpl = fetch, { hops = 3
     const response = await fetchImpl(url, { ...init, redirect: "manual" });
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const next = response.headers.get("location");
+    await response.body?.cancel().catch(() => {});
     url = next ? publicUrl(new URL(next, url).href, { https }) : null;
   }
   return null;

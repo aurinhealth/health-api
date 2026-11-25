@@ -170,7 +170,9 @@ test("the change is refused for the same or the owner's address, and from anothe
   const user = await member(env);
   const owner = await signInEmailUser(env.DB, env, "owner@example.com");
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "friend@example.com" })).status, 400);
-  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "owner@example.com" })).status, 400);
+  // The owner's address answers like any taken one (no hint whose it is) changeUserEmail still refuses it.
+  assert.equal((await change(env, user, "/app/api/account/email/start", { email: "owner@example.com" })).status, 200);
+  assert.notEqual((await env.DB.prepare("SELECT email FROM users WHERE id=?").bind(user.id).first()).email, "owner@example.com");
   assert.equal((await change(env, owner, "/app/api/account/email/start", { email: "boss@example.com" })).status, 400);
   assert.equal((await change(env, user, "/app/api/account/email/start", { email: "x@example.com" }, "https://evil.example")).status, 403);
   assert.equal((await handleEmailChange(post("/app/api/account/email/start", { email: "x@example.com" }), env, new URL(ORIGIN + "/app/api/account/email/start"), { signedIn: false })).status, 401);

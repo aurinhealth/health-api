@@ -81,7 +81,8 @@ const PUBLIC_PATHS = new Set([
   // App Store Server Notifications: Apple signs every notification, checked in app-store.js.
   "/webhooks/app-store"
 ]);
-const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/"];
+// /support/report/…: a signed link to one problem report (support-report.js).
+const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/", "/support/report/"];
 
 export function isPublicPath(pathname) {
   return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some(prefix => pathname.startsWith(prefix));

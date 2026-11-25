@@ -11,6 +11,8 @@
 // also without diagnostics, from the request's own headers (client).
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
+import { signText, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+import { appOrigin } from "./app-origin.js";
 
 export const MAX_MESSAGE = 4000;
 // Base64 of the JPEG; under D1's 2 MB value limit with room for the rest.
@@ -183,21 +185,59 @@ function ideaEmail(env, { id, message, parsed, who }) {
   return { subject: `Aurin: feature idea #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
 }
 
-function reportEmail(env, { id, message, diagnostics, screenshot, idea }) {
+// The e-mail carries what the user wrote and the hints, never the screenshot or
+// the diagnostics: those stay with the report in the database, which goes with
+// the account and a health data pause (privacy policy), and a signed link opens
+// them for 30 days (Gemini review 2026-11-25, Petr chose this).
+function reportEmail(env, { id, message, diagnostics, screenshot, idea }, link = null) {
   let parsed = null;
   try { parsed = diagnostics ? JSON.parse(diagnostics) : null; } catch {}
   const who = `${env.USER_EMAIL || "?"} (user ${env.USER_ID ?? env.DB?.userId})`;
   if (idea) return ideaEmail(env, { id, message, parsed, who });
-  const pretty = parsed ? JSON.stringify(parsed, null, 2) : diagnostics || "";
   const findings = reportFindings(parsed, parsed?.server);
   const where = reportWhere(parsed, parsed?.client);
   const screen = reportScreen(parsed);
-  const text = [`Aurin problem report #${id}`, `From: ${who}`, ...where, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
+  const stored = [screenshot ? `screenshot (${Math.round(screenshot.length * 0.75 / 1024)} kB)` : null, diagnostics ? "diagnostics" : null].filter(Boolean);
+  const kept = stored.length ? `With the report: ${stored.join(" and ")}${link ? `, for 30 days at ${link}` : ` (support_reports #${id})`}.` : "No screenshot or diagnostics.";
+  const text = [`Aurin problem report #${id}`, `From: ${who}`, ...where, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", kept].join("\n");
   const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}${where.map(line => `<br>${escape(line)}`).join("")}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
     + (findings.length ? `<p><strong>Worth a look:</strong></p><ul>${findings.map(f => `<li>${escape(f)}</li>`).join("")}</ul>` : "<p>Nothing stands out in the diagnostics.</p>")
-    + (screenshot ? `<p><img alt="Screenshot" style="max-width:360px;border:1px solid #ddd" src="data:image/jpeg;base64,${screenshot}"></p>` : "")
-    + `<pre style="font-size:12px;background:#f4f4f5;padding:12px;white-space:pre-wrap">${escape(pretty || "none")}</pre></body></html>`;
+    + (stored.length && link ? `<p><a href="${escape(link)}">Open the ${escape(stored.join(" and "))}</a> (30 days)</p>` : `<p>${escape(kept)}</p>`)
+    + `</body></html>`;
   return { subject: `Aurin: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}${screen ? ` (${screen})` : ""}`, text, html };
+}
+
+const VIEW_SECONDS = 30 * 86400;
+const VIEW_PATH = /^\/support\/report\/(\d{1,12})\/(\d{1,12})\/(\d{10})\/([A-Za-z0-9_-]{20,})$/;
+const viewSignature = (env, uid, id, exp) => signText(`support-report:${uid}:${id}:${exp}`, sessionSecret(env));
+
+// The signed address of one report's screenshot and diagnostics, valid 30 days.
+export async function reportViewLink(env, uid, id, now = Date.now()) {
+  if (!sessionSecret(env)) return null;
+  const exp = Math.floor(now / 1000) + VIEW_SECONDS;
+  return `${appOrigin(env)}/support/report/${uid}/${id}/${exp}/${await viewSignature(env, uid, id, exp)}`;
+}
+
+// GET /support/report/<user>/<id>/<expires>/<signature>: the report with its
+// screenshot and diagnostics. reportDb(userId) gives that user's database.
+export async function handleReportView(request, env, url, { reportDb }) {
+  const match = VIEW_PATH.exec(url.pathname);
+  const headers = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" };
+  const missing = () => new Response("Not found.", { status: 404, headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" } });
+  // Without the secret anyone could sign a link: nothing opens then.
+  if (!match || request.method !== "GET" || !sessionSecret(env)) return missing();
+  const [, uid, id, exp, signature] = match;
+  if (Number(exp) * 1000 < Date.now() || !timingSafeEqualString(signature, await viewSignature(env, uid, id, exp))) return missing();
+  const db = await reportDb(Number(uid)).catch(() => null);
+  const row = db ? await db.prepare("SELECT message, screenshot_base64, diagnostics_json, created_at FROM support_reports WHERE user_id=? AND id=?").bind(Number(uid), Number(id)).first().catch(() => null) : null;
+  if (!row) return missing();
+  let pretty = row.diagnostics_json || "";
+  try { pretty = pretty ? JSON.stringify(JSON.parse(pretty), null, 2) : ""; } catch {}
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Aurin problem report #${escape(id)}</title></head><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:720px;margin:16px auto;padding:0 16px">`
+    + `<h1 style="font-size:20px">Problem report #${escape(id)}</h1><p>${escape(row.created_at || "")}</p><p style="white-space:pre-wrap">${escape(row.message || "")}</p>`
+    + (row.screenshot_base64 && /^[A-Za-z0-9+/=]+$/.test(row.screenshot_base64) ? `<p><img alt="Screenshot" style="max-width:100%;border:1px solid #ddd" src="data:image/jpeg;base64,${row.screenshot_base64}"></p>` : "")
+    + `<pre style="font-size:12px;background:#f4f4f5;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere">${escape(pretty || "No diagnostics.")}</pre></body></html>`;
+  return new Response(html, { headers: { ...headers, "Content-Type": "text/html; charset=utf-8" } });
 }
 
 export function supportAddress(env) {
@@ -228,7 +268,8 @@ export async function saveSupportReport(env, body, client = null) {
   const to = supportAddress(env);
   if (to && emailConfigured(env)) {
     try {
-      await sendEmail(env, { to, ...reportEmail(env, { id, ...report }) });
+      const link = report.idea || !(report.screenshot || report.diagnostics) ? null : await reportViewLink(env, env.DB.userId, id).catch(() => null);
+      await sendEmail(env, { to, ...reportEmail(env, { id, ...report }, link) });
       emailed = true;
       await env.DB.prepare("UPDATE support_reports SET emailed=1 WHERE user_id=? AND id=?").bind(env.DB.userId, id).run();
     } catch (error) { console.error("Support report e-mail failed", error?.code || error?.message); }

@@ -88,7 +88,7 @@ import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
-import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
+import { saveCalendarFree, clearCalendarFree, pruneCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-checkin.js';
 import { HISTORY_DAYS, nutritionDayOf, nutritionDayOfToday, saveNutritionDay, loadFoodHistory, buildFoodHistory } from './nutrition-days.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
@@ -161,7 +161,7 @@ import { forgetStaleRequestLimits } from "./ip-rate-limit.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess, aiRouteFeature } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "./connection-health.js";
-import { handleSupportReport } from "./support-report.js";
+import { handleSupportReport, handleReportView } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, connectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
 import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
@@ -356,7 +356,11 @@ const USER_JOBS = [
   // after the user's noon works the day's row out again: the night and the
   // morning sync often arrive after the first run, which used to keep the day's
   // first value (in Europe 4:47 creates and 16:47 refreshes, in the Americas the other way round).
-  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => (h === 4 || h === 16) && m === 47), run: scoped => updateFitnessEstimate(scoped, { refresh: localHour() >= 12 }) },
+  { name: "fitness-estimate", providers: [], everyone: true, due: (cron, now) => minute(cron, now, (m, h) => (h === 4 || h === 16) && m === 47), run: async scoped => {
+    // Calendar free minutes older than a week go on the morning run too (calendar-free.js, privacy policy).
+    if (localHour() < 12) await pruneCalendarFree(scoped.DB, localToday()).catch(error => console.error("Calendar prune failed", error.message));
+    return updateFitnessEstimate(scoped, { refresh: localHour() >= 12 });
+  } },
   // After the user's midnight (0:00–6:00 in their zone), old Google data gets
   // thinner a step a minute: a workout's heart-rate samples older than a week become 5-minute
   // rows, those older than a month hourly rows, zone minutes hourly rows
@@ -569,6 +573,8 @@ const worker = {
       request = limited.request;
       publicLimited = true;
     }
+    // A problem report's screenshot and diagnostics behind the signed link in its e-mail (support-report.js).
+    if (url.pathname.startsWith("/support/report/")) return handleReportView(request, rawEnv, url, { reportDb: async id => { const account = await findUser(rawEnv.DB, id, rawEnv); return account ? (await userDataEnvironment(rawEnv, account)).DB : null; } });
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
       if ((request.method === 'GET' || request.method === 'HEAD') && /text\/html/.test(request.headers.get('Accept') || '')) {

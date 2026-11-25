@@ -41,8 +41,9 @@ export function reviewCodeActive(env, now = Date.now()) {
 }
 
 // Starting a connection to a third-party service, or sending data out to one.
-const CONNECT_PREFIXES = ["/oauth/google", "/oauth/intervals"];
-const OUTBOUND_POSTS = new Set(["/app/api/connect/start", "/app/api/connections", "/app/api/sync/activity", "/app/api/sync/retry", "/app/api/workouts/export", "/auth/app/connect"]);
+// Every /oauth/<service> start, also when called straight with the session cookie (Gemini review 2026-11-25).
+const CONNECT_PREFIXES = ["/oauth/google", "/oauth/intervals", "/oauth/whoop", "/oauth/wahoo", "/oauth/ultrahuman", "/auth/app/connect"];
+const OUTBOUND_POSTS = new Set(["/app/api/connect/start", "/app/api/connections", "/app/api/sync/activity", "/app/api/sync/retry", "/app/api/workouts/export", "/app/api/planned/send"]);
 
 export function reviewBlocked(method, pathname) {
   if (CONNECT_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(prefix + "/"))) return true;

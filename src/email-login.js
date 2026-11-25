@@ -351,7 +351,9 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
   if (email.length > 254 || !EMAIL_PATTERN.test(email) || !plainEmail(body?.email)) return emailChangeRefusal("invalid");
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
-    if (user.isOwner || email === normalizeEmail(env.OWNER_EMAIL)) return emailChangeRefusal("owner");
+    // The owner's own account only: the owner's address answers like any taken one (Gemini review 2026-11-25),
+    // and changeUserEmail still refuses it on confirm.
+    if (user.isOwner) return emailChangeRefusal("owner");
     const unconfirmed = stepUp ? await stepUp() : null;
     if (unconfirmed) return unconfirmed;
     // Per account and per caller, before any address is looked up, so rotating addresses runs into them.
@@ -370,6 +372,8 @@ export async function handleEmailChange(request, env, url, session, ctx, stepUp 
     const mail = (async () => {
       if (!(await allowRequest(db, await keyOf("email-change-to"), { day: MAX_SENDS_PER_DAY }, time))) return;
       const holder = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
+      // The owner's address never gets a change code, also before the owner's first sign-in.
+      if (!holder && email === ownerEmail(env)) return;
       if (holder && !(await allowRequest(db, await keyOf("email-taken"), { day: 1 }, time))) return;
       await sendEmail(env, { to: email, ...(holder ? emailTakenEmail(await storedLanguage(db, holder.id)) : emailChangeCodeEmail(lang, code)) });
     })().catch(error => console.error("E-mail change mail failed", error?.code || error?.message));
