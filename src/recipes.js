@@ -15,6 +15,8 @@ import { L, lang } from './lang.js';
 export const RECIPES_FORMAT = 1;
 export const DIETS = ['everything', 'pescatarian', 'vegetarian', 'vegan'];
 export const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
+// The 14 allergens of EU Regulation 1169/2011 Annex II, as the recipes name them.
+export const ALLERGENS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
 export const PAGE = 30;
 export const MAX_PAGE = 50;
 const TTL_MS = 10 * 60 * 1000;
@@ -39,20 +41,27 @@ export async function recipeIndex(bucket) {
 }
 
 // A recipe the user can be offered: a vegan dish suits every diet, a fish dish a pescatarian and everyone.
-export const fitsDiet = (recipeDiet, userDiet) => !DIETS.includes(userDiet) || DIETS.indexOf(recipeDiet) >= DIETS.indexOf(userDiet);
+export const fitsDiet = (recipeDiet, userDiet) => !userDiet || DIETS.indexOf(recipeDiet) >= DIETS.indexOf(userDiet);
+const bad = message => Object.assign(new Error(message), { status: 400 });
 
-// Allergens, ingredient keys and groups to one set of what the recipe must not have.
+// Allergens, ingredient keys and groups to one set of what the recipe must not
+// have. Something it doesn't know is refused, never ignored: a filter that
+// silently lets an allergen through is worse than an error.
 export function excluded(index, value) {
   const allergens = new Set(), keys = new Set();
   for (const raw of String(value || '').split(',').map(s => s.trim()).filter(Boolean)) {
-    if (index.groups?.[raw]) index.groups[raw].forEach(k => keys.add(k));
-    else if (raw.includes(':')) keys.add(raw);
-    else allergens.add(raw);
+    const token = raw.includes(':') ? raw : raw.toLowerCase();
+    if (Object.hasOwn(index.groups || {}, token)) index.groups[token].forEach(k => keys.add(k));
+    else if (token.includes(':')) keys.add(token);
+    else if (ALLERGENS.includes(token)) allergens.add(token);
+    else throw bad(L(`Neznámá položka „${raw}“.`, `Unknown item "${raw}".`));
   }
   return { allergens, keys };
 }
 
 export function filterRecipes(index, { slot, diet, exclude, q, keto, lowerCarb } = {}) {
+  diet = diet ? String(diet).trim().toLowerCase() : null;
+  if (diet && !DIETS.includes(diet)) throw bad(L(`Neznámá dieta „${diet}“.`, `Unknown diet "${diet}".`));
   const ex = excluded(index, exclude), words = fold(q).match(/[a-z0-9]+/g) || [];
   return index.recipes.filter(r => (!slot || r.slot === slot) && fitsDiet(r.diet, diet)
     && (!keto || r.keto) && (!lowerCarb || r.lowerCarb || r.keto)
@@ -92,8 +101,9 @@ export async function handleRecipesApi(request, env, url, session = {}) {
   const bucket = env.FOOD_CATALOG_R2, index = bucket ? await recipeIndex(bucket).catch(() => null) : null;
   if (!index) return json({ message: L('Recepty teď nejdou načíst.', "Recipes can't be loaded right now.") }, 503);
   if (path === '/app/api/recipes/index') {
-    const etag = `"${index.version}-${lang()}"`;
-    if (request.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers: { ETag: etag } });
+    // Compression on the way out may turn the tag weak (W/"..."); the app may send several.
+    const etag = `"${index.version}-${lang()}"`, sent = String(request.headers.get('If-None-Match') || '').split(',').map(t => t.trim().replace(/^W\//, ''));
+    if (sent.includes(etag)) return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'private, max-age=86400' } });
     return json({ status: 'ok', version: index.version, recipes: index.recipes.map(r => ({ ...row(r), ingredients: r.ingredients, keto: r.keto, lowerCarb: r.lowerCarb })),
       ingredients: index.ingredients.map(i => ({ k: i.k, name: lang() === 'en' ? i.en : i.cs, recipes: i.n })), groups: index.groups },
     200, { ETag: etag, 'Cache-Control': 'private, max-age=86400' });
@@ -101,11 +111,16 @@ export async function handleRecipesApi(request, env, url, session = {}) {
   if (path === '/app/api/recipes') {
     const p = url.searchParams, slot = SLOTS.includes(p.get('slot')) ? p.get('slot') : null;
     const limit = Math.min(MAX_PAGE, Math.max(1, Number(p.get('limit')) || PAGE)), from = Math.max(0, Number(p.get('cursor')) || 0);
-    const found = filterRecipes(index, { slot, diet: p.get('diet'), exclude: p.get('exclude'), q: p.get('q'), keto: p.get('keto') === 'true', lowerCarb: p.get('lowerCarb') === 'true' });
+    let found;
+    try {
+      found = filterRecipes(index, { slot, diet: p.get('diet'), exclude: p.get('exclude'), q: p.get('q'), keto: p.get('keto') === 'true', lowerCarb: p.get('lowerCarb') === 'true' });
+    } catch (error) { if (error.status === 400) return json({ message: error.message }, 400); throw error; }
     const page = found.slice(from, from + limit);
     return json({ status: 'ok', version: index.version, total: found.length, recipes: page.map(row), next: from + limit < found.length ? String(from + limit) : null });
   }
-  const recipe = await recipeDetail(bucket, index, decodeURIComponent(path.slice('/app/api/recipes/'.length)));
+  let id;
+  try { id = decodeURIComponent(path.slice('/app/api/recipes/'.length)); } catch { id = null; }
+  const recipe = id ? await recipeDetail(bucket, index, id) : null;
   if (!recipe) return json({ message: L('Recept nebyl nalezen.', "The recipe wasn't found.") }, 404);
   return json({ status: 'ok', version: index.version, recipe });
 }

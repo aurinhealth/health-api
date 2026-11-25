@@ -19,8 +19,8 @@ export const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
 export const DIETS = ['everything', 'pescatarian', 'vegetarian', 'vegan'];
 export const REGIONS = ['intl', 'cz'];
 export const MIN_PER_CELL = 30;
-// The 14 allergens of EU Regulation 1169/2011 Annex II, as the recipes name them.
-export const ALLERGENS = ['gluten', 'crustaceans', 'eggs', 'fish', 'peanuts', 'soy', 'milk', 'tree_nuts', 'celery', 'mustard', 'sesame', 'sulphites', 'lupin', 'molluscs'];
+export { ALLERGENS } from '../src/recipes.js';
+import { ALLERGENS } from '../src/recipes.js';
 // Foods people often just don't eat ("I don't eat", NAVRH.md): ticked as one
 // row, they stand for every ingredient whose English name matches.
 export const GROUPS = {
@@ -45,6 +45,7 @@ export function build(recipes, { extra = [] } = {}) {
   const lines = [], index = [];
   let offset = 0;
   for (const r of [...recipes].sort((a, b) => a.id.localeCompare(b.id))) {
+    if (!r?.id || !r.diet || !r.title) { problems.push(`${r?.id || '(no id)'}: id, title or diet missing`); continue; }
     if (ids.has(r.id)) { problems.push(`${r.id}: twice`); continue; }
     ids.add(r.id);
     if (!SLOTS.includes(r.slot)) problems.push(`${r.id}: slot ${r.slot}`);

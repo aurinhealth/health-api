@@ -117,3 +117,23 @@ test('no published library answers 503', async () => {
   const e = { RECIPES_ENABLED: 'true', FOOD_CATALOG_R2: bucketOf({}) };
   assert.equal((await call(e, '/app/api/recipes')).status, 503);
 });
+
+test('unknown filters are refused, never ignored; odd paths are 404', async () => {
+  const e = env();
+  for (const q of ['diet=vegann', 'exclude=nuts', 'exclude=constructor', 'exclude=__proto__']) assert.equal((await call(e, '/app/api/recipes?' + q)).status, 400, q);
+  const upper = await (await call(e, '/app/api/recipes?diet=Vegan&exclude=Gluten')).json();
+  assert.deepEqual(upper.recipes.map(r => r.id), []);
+  assert.deepEqual((await (await call(e, '/app/api/recipes?exclude=GLUTEN,Pork')).json()).recipes.map(r => r.id), ['a1', 'a3']);
+  assert.equal((await call(e, '/app/api/recipes/%E0%A4%A')).status, 404);
+});
+
+test('a weak or listed ETag still gets 304', async () => {
+  const e = env(), tag = (await call(e, '/app/api/recipes/index')).headers.get('ETag');
+  const again = await call(e, '/app/api/recipes/index', { headers: { 'If-None-Match': `"old", W/${tag}` } });
+  assert.equal(again.status, 304);
+  assert.equal(again.headers.get('Cache-Control'), 'private, max-age=86400');
+});
+
+test('build: a recipe without id or diet is a problem, not a crash', () => {
+  assert.deepEqual(build([{ id: 'z', title: { cs: 'a', en: 'a' } }]).problems, ['z: id, title or diet missing']);
+});

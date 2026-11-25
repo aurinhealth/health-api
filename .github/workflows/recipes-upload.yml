@@ -23,6 +23,7 @@ on:
   pull_request:
     paths:
       - "scripts/build-recipes.mjs"
+      - "src/staples-data.js"
       - "src/recipes.js"
       - "tests/recipes.test.mjs"
       - ".github/workflows/recipes-upload.yml"
@@ -72,12 +73,29 @@ jobs:
         id: build
         run: node scripts/build-recipes.mjs src/private/recipes/recipes.json out/recipes
 
-      - name: Upload and switch to the new version
-        if: github.event_name == 'workflow_dispatch'
+      # One step per target, each with only its own secrets: a missing production
+      # secret must fail, never fall back to the test server's.
+      - name: Upload to the test server and switch
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'staging'
         env:
-          AWS_ACCESS_KEY_ID: ${{ inputs.target == 'production' && secrets.R2_ACCESS_KEY_ID || secrets.STAGING_R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ inputs.target == 'production' && secrets.R2_SECRET_ACCESS_KEY || secrets.STAGING_R2_SECRET_ACCESS_KEY }}
-          R2_ENDPOINT: ${{ inputs.target == 'production' && secrets.R2_ENDPOINT || secrets.STAGING_R2_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.STAGING_R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.STAGING_R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.STAGING_R2_ENDPOINT }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          for s in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ENDPOINT; do [ -n "${!s}" ] || { echo "Missing $s for ${{ inputs.target }}"; exit 1; }; done
+          ep="${R2_ENDPOINT%/}"; ep="${ep%/$BUCKET}"
+          aws s3 cp "out/recipes/$VERSION/" "s3://$BUCKET/recipes/$VERSION/" --recursive --endpoint-url "$ep" --only-show-errors
+          aws s3 cp out/recipes/current.json "s3://$BUCKET/recipes/current.json" --content-type application/json --endpoint-url "$ep" --only-show-errors
+          echo "Recipes $VERSION live in the ${{ inputs.target }} bucket"
+
+      - name: Upload to production and switch
+        if: github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           VERSION: ${{ steps.build.outputs.version }}
         run: |
           set -euo pipefail
