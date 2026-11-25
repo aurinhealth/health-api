@@ -164,10 +164,11 @@ struct FinishSetupCard: View {
     /// the evening line only where Reminders sends it (asksForWatch: Apple Watch).
     private var notificationsNote: String {
         if model.noWearable { return L10n.tr("Kouč, když je potřeba změnit plán, a kdy jít spát") }
-        let seven = ClockText.format("7:00")
+        // The morning one comes once the night has synced, not at a set hour
+        // (review 2026-11-25: "Readiness at 7:00 AM" vs Notifications).
         let watch = WatchBridge.shared.watchState.paired && (today.readiness.pastNights ?? 0) == 0
-        return watch ? L10n.f("Připravenost v %@ a dnes večer připomínka nasadit hodinky", seven)
-            : L10n.f("Připravenost v %@ a kouč, když se mění plán", seven)
+        return watch ? L10n.tr("Připravenost ráno po synchronizaci a dnes večer připomínka nasadit hodinky")
+            : L10n.tr("Připravenost ráno po synchronizaci a kouč, když se mění plán")
     }
 
     /// Whether iOS was asked already, Gym is one of the sports and a goal was set (a start on the web).

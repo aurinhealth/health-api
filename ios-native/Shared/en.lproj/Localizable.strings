@@ -1291,7 +1291,7 @@
 "není v tarifu" = "not in your plan";
 "Přejít na Aurin Pro" = "Upgrade to Aurin Pro";
 "Otázky k předplatnému? Přečti si podmínky a ceny." = "Questions about your subscription? Read the terms and pricing.";
-"Všechny tarify" = "See all plans";
+"Všechny tarify" = "All plans";
 "Uplatnit promo kód" = "Redeem promo code";
 "Obnovit nákup" = "Restore purchase";
 "Začni naplno s Aurin Pro" = "Go all in with Aurin Pro";
@@ -2713,7 +2713,7 @@
 "Hodnota" = "Value";
 "Spánek v minutách" = "Sleep in minutes";
 "Zbývající kalorie" = "Calories left";
-"Zátěž dne" = "Day strain";
+"Námaha dne" = "Day strain";
 "Hodnota z Aurinu" = "Aurin value";
 "Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách." = "Returns today's number from Aurin for Shortcuts automations.";
 "Hodnota z Aurinu: ${metric}" = "Aurin value: ${metric}";
@@ -3404,7 +3404,7 @@
 "Dřep" = "Squat";
 "Minulá noc" = "Last night";
 "Špatná noc. Dneska nohy?" = "Bad night. Legs today?";
-"Připravenost je 61 po 5 h 40 spánku. " = "Readiness is 61 after 5 h 40 of sleep. ";
+"Připravenost je 61 po 5 h 40 min spánku. " = "Readiness is 61 after 5 h 40 min of sleep. ";
 "Nohy nech, jen lehčeji:" = "Keep legs, go lighter:";
 " dřep 3 × 8 se 70 kg." = " squat 3 × 8 at 70 kg.";
 "Nohy, lehčeji" = "Legs, lighter";
@@ -4777,8 +4777,8 @@
 "Posilovna, doma nebo obojí" = "Gym, home or both";
 "Zapni oznámení" = "Turn on notifications";
 "Kouč, když je potřeba změnit plán, a kdy jít spát" = "The coach when your plan needs a change, and when to go to bed";
-"Připravenost v %@ a kouč, když se mění plán" = "Readiness at %@, and the coach when your plan changes";
-"Připravenost v %@ a dnes večer připomínka nasadit hodinky" = "Readiness at %@, and tonight a reminder to wear your watch";
+"Připravenost ráno po synchronizaci a kouč, když se mění plán" = "Readiness each morning once your data syncs, and the coach when your plan changes";
+"Připravenost ráno po synchronizaci a dnes večer připomínka nasadit hodinky" = "Readiness each morning once your data syncs, and tonight a reminder to wear your watch";
 "Tvoje sporty" = "Your sports";
 "Kouč skládá týden kolem tvých hlavních sportů." = "The coach builds your week around your main sports.";
 "Skrýt kartu" = "Hide card";
@@ -4808,8 +4808,8 @@
 "Klepnutím kamkoli začneš hned" = "Tap anywhere to start now";
 "Začít hned" = "Start now";
 "Detaily tréninku" = "Workout details";
-"Zátěž tréninku" = "Workout strain";
-"Zátěž dne z %@ na %@" = "Day strain from %1$@ to %2$@";
+"Námaha tréninku" = "Workout strain";
+"Námaha dne z %@ na %@" = "Day strain from %1$@ to %2$@";
 "%@, předtím %@" = "%1$@, was %2$@";
 "Trvání" = "Duration";
 "Aktivní čas" = "Active time";
@@ -5339,3 +5339,8 @@
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
+"Obvyklá teplota se ukáže po 7 nocích." = "Your usual shows after 7 nights.";
+"neuvedeno" = "not given";
+"Každý bod je jeden den. Čárkovaně průměr období." = "Each point is one day. The dashed line is the period's average.";
+"Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The dashed line is the period's average. Today is only part of the day so far.";
+"Celkem ve dnech plánu" = "Total on plan days";

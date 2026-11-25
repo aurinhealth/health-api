@@ -117,10 +117,15 @@ struct StrainDetailContent: View {
         StrainDial(score: today.strain.score ?? 0, planned: split.planned, target: today.strain.target)
             .frame(maxWidth: .infinity).padding(.top, 14)
         let points = strainPoints
+        // The grey band is drawn only after 7 earlier days: never name it
+        // when it isn't there (review 2026-11-25).
+        let band = points.contains { $0.low != nil }
         Card {
             DetailChart(points: points, today: today.date, period: $period, digits: 1,
-                        note: past ? "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období."
-                            : "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období. Dnešek je zatím jen část dne.",
+                        note: band ? (past ? "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období."
+                            : "Každý bod je jeden den. Šedý pruh je tvoje obvyklé rozmezí, čárkovaně průměr období. Dnešek je zatím jen část dne.")
+                            : (past ? "Každý bod je jeden den. Čárkovaně průměr období."
+                               : "Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne."),
                         periods: [.days30, .months3])
         }
         .padding(.top, 24)

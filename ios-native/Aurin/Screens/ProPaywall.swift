@@ -879,8 +879,8 @@ struct AllProPlans: View {
                 .disabled(buying)
                 .padding(.top, 18)
                 HStack(spacing: 22) {
-                    Button(action: redeem) { Text("Uplatnit promo kód") }
-                    Button(action: restore) { Text("Obnovit nákup") }
+                    Button(action: redeem) { Text("Uplatnit promo kód").frame(minHeight: 44).contentShape(Rectangle()) }
+                    Button(action: restore) { Text("Obnovit nákup").frame(minHeight: 44).contentShape(Rectangle()) }
                 }
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink).buttonStyle(.plain)
                 .padding(.top, 14)
@@ -890,10 +890,10 @@ struct AllProPlans: View {
                         .padding(.top, 12)
                 }
                 HStack(spacing: 16) {
-                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                    Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
+                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline().frame(minHeight: 44).contentShape(Rectangle()) }
+                    Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline().frame(minHeight: 44).contentShape(Rectangle()) }
                 }
-                .font(.caption2).foregroundStyle(Palette.muted).padding(.top, 3).padding(.bottom, 16)
+                .font(.caption2).foregroundStyle(Palette.muted).padding(.bottom, 6)
             }
             .padding(.horizontal, 20)
         }
