@@ -418,7 +418,7 @@ struct GymBuilderView: View {
         }
         .sheet(isPresented: $reordering) {
             if let proposal {
-                EditExercisesSheet(day: proposal.day, catalog: catalog) { edited in
+                EditExercisesSheet(day: proposal.day, catalog: catalog) { edited, _ in
                     var next = proposal
                     next.take(edited, catalog: catalog)
                     self.proposal = next

@@ -306,6 +306,11 @@ struct TodayContent: View {
                     .padding(.top, 12)
             }
 
+            // "Did you play?": yesterday's practice or match nothing recorded (other sports).
+            if !model.demo, let played = today.played {
+                PlayedCard(played: played).id(played.date + played.type).padding(.top, 12)
+            }
+
             // Day 1 with a number (screen 02-todayh): what the setup left, after the coach.
             if !model.demo && FinishSetup.showing(finishingSetup) && setupCardAfterCoach {
                 FinishSetupCard(today: today).padding(.top, 12)
