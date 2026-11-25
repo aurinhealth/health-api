@@ -14,6 +14,7 @@ import { unpaidLimitShare, groupOfSubscription, newAccountSince } from "./ai-lim
 import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
 import { opsReportHtml, money, monthText } from "./ops-report-html.js";
+import { storeData, storeCounts, storeReport, saveDailyStats } from "./store-report.js";
 export { money };
 
 const scope = new AsyncLocalStorage();
@@ -256,8 +257,8 @@ export function barcodeReport(rows) {
   return `Čárové kódy včera\n${lines.join("\n")}`;
 }
 
-// ai: aiSummary (or its text); accounts: accountsReport's text.
-export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null) {
+// ai: aiSummary (or its text); accounts: accountsReport's text; store: storeReport's text.
+export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], accounts = null, store = null) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const sections = [];
   const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (${row.kind === "slow" ? "nejdéle" : "naposledy"}: ${row.last_message})` : ""}`).join("\n");
@@ -274,6 +275,7 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], 
   const stuck = stuckDeletions?.length ? stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n") : null;
   if (stuck) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuck}`);
   if (accounts) sections.push(accounts);
+  if (store) sections.push(store);
   const scans = barcodeReport(rows);
   if (scans) sections.push(scans);
   const aiLines = typeof ai === "string" ? ai : aiText(ai);
@@ -282,7 +284,7 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = [], 
   return {
     subject: `Aurin: přehled za ${date}`,
     text: `Přehled za ${date} (UTC).\n\n${sections.join("\n\n")}\n\nPodrobnosti jsou v Cloudflare → Workers → health-api → Logs.\n`,
-    html: opsReportHtml({ date, rows, room, stuck, accounts, scans, ai: typeof ai === "string" ? null : ai, aiLines, label })
+    html: opsReportHtml({ date, rows, room, stuck, accounts, store, scans, ai: typeof ai === "string" ? null : ai, aiLines, label })
   };
 }
 
@@ -302,9 +304,15 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   const ai = await aiData(env, yesterday, now.getTime()).then(({ rows: used, month, calls }) => aiSummary(used, month, aiMonthlyLimitUsd(env), calls)).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
   const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
-  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaid: aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid"), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
-    .catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
-  const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts);
+  const stats = await accountStats(env, yesterday).catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
+  let accounts = null;
+  try { if (stats) accounts = accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaid: aiMonthlyLimitUsd(env, unpaidLimitShare(env), "unpaid"), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }); }
+  catch (error) { console.warn("Accounts report failed", error?.message || error); }
+  const counts = await storeData(env, yesterday).then(({ rows: events, earlier }) => storeCounts(events, earlier))
+    .catch(error => { console.warn("Store report failed", error?.message || error); return null; });
+  const store = storeReport(counts);
+  await saveDailyStats(env.DB, yesterday, stats, counts).catch(error => console.warn("Daily stats not saved", error?.message || error));
+  const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts, store);
   const to = String(env.OWNER_EMAIL || "").trim();
   if (report && to && emailConfigured(env)) await sendEmail(env, { to, subject: report.subject, text: report.text, html: report.html });
   await env.DB.prepare("INSERT INTO ops_events(day,kind,service,count) VALUES(?,'report','-',1) ON CONFLICT(day,kind,service) DO NOTHING").bind(today).run();

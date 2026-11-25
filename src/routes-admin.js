@@ -6,6 +6,7 @@ import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { listWaitlist, decideWaitlist } from "./testflight-waitlist.js";
 import { aiSpendingReport } from "./ai-total.js";
+import { dailyStats } from "./store-report.js";
 
 // Only the app's owner (OWNER_EMAIL, tenancy.js isOwner) gets here. There is no
 // route that lists, invites, blocks or moves other accounts (security audit
@@ -26,6 +27,8 @@ export async function handleAdminApi(request, env, url, session) {
       } catch (error) { return Response.json({status:"error",message:error.message},{status:error.status||500}); }
     }
     // Nastavení → Správa → Útraty AI (ai-total.js): today's spending by group against its brake.
+    // The owner's charts (store-report.js): one row of counts per day, no accounts.
+    if (url.pathname === "/app/api/admin/overview" && request.method === "GET") return Response.json({status:"ok",days:await dailyStats(db)},{headers:{"Cache-Control":"no-store"}});
     if (url.pathname === "/app/api/admin/ai-spending" && request.method === "GET") return Response.json({status:"ok",...await aiSpendingReport(env)},{headers:{"Cache-Control":"no-store"}});
   } catch (error) { return Response.json({status:"error",message:error.message},{status:400}); }
   return Response.json({status:"error",message:"Not found"},{status:404});

@@ -79,6 +79,8 @@ export const PERSONAL_TABLES = {
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   // Which account holds each App Store subscription, and its newest record (app-store.js).
   store_originals: {},
+  // The history of Apple's notifications for the owner's overview (app-store.js recordStoreEvent).
+  store_events: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
   // The coach's daily sentence per screen (screen-texts.js).
