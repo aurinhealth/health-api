@@ -11,8 +11,8 @@ final class WatchSnapshotTests: XCTestCase {
         s.updated = Date(timeIntervalSince1970: 1_791_450_000)
         XCTAssertEqual(s.date, today.date)
         XCTAssertEqual(s.readiness, 78)
-        // The day's verdict, the line under the watch's number (Today audit 17).
-        XCTAssertEqual(s.verdict, "hard")
+        // The line under the watch's number: the iPhone's, never advice (watch review 2026-11-25).
+        XCTAssertEqual(s.numbersLine, "hard")
         XCTAssertEqual(s.sleep?.minutes, 432)
         XCTAssertEqual(s.sleep?.start, "23:33")
         XCTAssertEqual(s.sleep?.end, "7:02")
@@ -39,6 +39,17 @@ final class WatchSnapshotTests: XCTestCase {
         // Through WatchConnectivity and back.
         let data = try XCTUnwrap(s.encoded())
         XCTAssertEqual(WatchSnapshot.decode(data), s)
+    }
+
+    /// The watch's line under the readiness number says what the iPhone's says, word for word.
+    func testNumbersLineMatchesIPhone() {
+        let english = L10n.language == "en"
+        let cases: [(String?, [String])] = [("hard", []), ("steady", []), ("easy", []), ("signs", []), ("usual", []), ("paused", []),
+                                            ("steady", ["sleep"]), ("easy", ["sleep", "restingHR"]), ("easy", ["sleep", "hrv", "restingHR"]),
+                                            ("hard", ["sleep"]), (nil, []), ("unknown", [])]
+        for (key, off) in cases {
+            XCTAssertEqual(WatchSnapshot.numbersText(key, off: off, english: english), ReadinessText.numbersLine(key, off: off), "\(key ?? "nil") \(off)")
+        }
     }
 
     @MainActor

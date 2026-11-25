@@ -16,9 +16,11 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     /// A new athlete's days of baseline so far (1–14) while readiness has no
     /// number yet (TodaySnapshot.Readiness.learningDays).
     var learningDays: Int? = nil
-    /// What to do today, a key of src/day-verdict.js ("hard", "steady",
-    /// "easy", "legs", "no_intensity", "rest"); nil from an older iPhone.
-    var verdict: String? = nil
+    /// The line under the readiness number, a key of src/day-verdict.js
+    /// NUMBERS_LINE_KEYS ("hard", "steady", "easy", "signs", "usual", "paused"),
+    /// and what is off on a yellow or red day (NUMBERS_OFF_KEYS); nil from an older iPhone.
+    var numbersLine: String? = nil
+    var numbersOff: [String]? = nil
     /// Today's summary from the server (src/app-today.js), in the app's language.
     var headline: String?
     var summary: String?
@@ -217,5 +219,38 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .secondsSince1970
         return try? decoder.decode(WatchSnapshot.self, from: data)
+    }
+}
+
+extension WatchSnapshot {
+    /// The iPhone's line under the readiness number (ReadinessText.numbersLine,
+    /// D-DNES-2): what the numbers say, never what to do (2026-11-20), in
+    /// English or Czech. One copy for the watch; WatchSnapshotTests checks it
+    /// against the iPhone's.
+    static func numbersText(_ key: String?, off: [String], english: Bool) -> String? {
+        let tr = { (czech: String, en: String) in english ? en : czech }
+        if key == "steady" || key == "easy" {
+            let parts = off.compactMap { key -> String? in
+                switch key {
+                case "sleep": tr("krátký spánek", "short sleep")
+                case "hrv": tr("nízká HRV", "a low HRV")
+                case "restingHR": tr("vysoký klidový tep", "a high resting heart rate")
+                default: nil
+                }
+            }
+            if let last = parts.last {
+                let joined = parts.count == 1 ? last : parts.dropLast().joined(separator: ", ") + " " + tr("a", "and") + " " + last
+                return joined.prefix(1).uppercased() + joined.dropFirst()
+            }
+        }
+        return switch key {
+        case "hard": tr("Tvoje čísla jsou v obvyklém rozmezí nebo lepší", "Your numbers are in your usual range or better")
+        case "steady": tr("Některá tvoje čísla jsou pod obvyklým rozmezím", "Some of your numbers are below your usual range")
+        case "easy": tr("Tvoje čísla jsou pod obvyklým rozmezím", "Your numbers are below your usual range")
+        case "signs": tr("Teplota nebo dech jsou nad tvým obvyklým rozmezím", "Your temperature or breathing is above your usual range")
+        case "usual": tr("Tvoje čísla jsou v obvyklém rozmezí", "Your numbers are within your usual range")
+        case "paused": tr("Trénink je dnes pozastavený", "Training is paused today")
+        default: nil
+        }
     }
 }
