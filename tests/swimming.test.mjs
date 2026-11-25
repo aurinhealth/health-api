@@ -160,6 +160,9 @@ test("a catalogue swim fits the athlete's pool: whole lengths, minutes and name 
   assert.deepEqual(fitToPool([{ meters: 50, durationMinutes: 1 }], 33.33).structure[0], { meters: 66.7, durationMinutes: 66.7 / 50 });
   const { structure } = fitToPool([{ meters: 100, durationMinutes: 2, power: 100 }, { rest: true, durationMinutes: .25 }], 33.33);
   assert.deepEqual([structure[0].meters, Math.round(structure[0].durationMinutes * 100) / 100, structure[1].rest], [100, 2, true]);
+  // A name without "×" follows too: 400 m in 25 yd (22.86 m) lengths is 17 lengths, 389 m.
+  const continuous = all.find(w => w.family === "swim-continuous" && /\b400 m/.test(w.name));
+  assert.match(renderForEnvironment(continuous, "indoor", { poolLength: 22.86 }).name, /\b389 m/);
   // An unknown pool length changes nothing.
   assert.equal(fitToPool([{ meters: 25 }], 30).structure[0].meters, 25);
 });

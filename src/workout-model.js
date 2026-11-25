@@ -304,7 +304,7 @@ export function renderForEnvironment(workout, environment = "indoor", { poolLeng
   if (sport === "swim" && env === "indoor" && poolLength) {
     const fitted = fitToPool(adapted, poolLength);
     adapted = fitted.structure;
-    for (const [from, to] of fitted.renamed) name = typeof name === "string" ? name.replace(new RegExp(`×${from} m\\b`), `×${to} m`) : name;
+    for (const [from, to] of fitted.renamed) name = typeof name === "string" ? name.replace(new RegExp(`(^|[^\\d.,])${from} m\\b`), `$1${to} m`) : name;
   }
   return {
     ...workout,

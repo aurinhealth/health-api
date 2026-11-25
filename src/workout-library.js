@@ -223,7 +223,8 @@ export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
   const [workouts, capabilities, families] = await Promise.all([catalog(db, sport), getCapabilities(db, sport), recentFamilies(db, sport).catch(() => [])]);
   // The outdoor warm-up and rounded steps can change the actual duration.
   // Apply the hard duration window to the workout the athlete will receive.
-  const candidates = workouts.map(w => renderForEnvironment(w, environment));
+  // A pool swim in the athlete's pool (context.poolLength, workout-model.js fitToPool).
+  const candidates = workouts.map(w => renderForEnvironment(w, environment, { poolLength: context.poolLength }));
   const ranked = rankWorkoutCandidates(candidates, { ...filters, environment }, { ...context, recentFamilies: context.recentFamilies || families }, capabilities);
   const limit = clamp(n(filters.limit, 30), 1, 100);
   const selected = diversifyWorkoutCandidates(ranked, filters, limit);
@@ -243,7 +244,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   // The swim catalog has endurance, threshold (CSS), speed and sprints.
   if (sport === "swim") kind = { tempo: "threshold", sweet_spot: "threshold", anaerobic: "vo2max" }[kind] || kind;
   const minutes = sport === "swim" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 40)), 15, 90) : sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, MAX_MINUTES.run) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, MAX_MINUTES.ride);
-  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
+  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty, poolLength: sport === "swim" ? thresholds?.poolLength : null };
   // The swim catalogue's minutes are at 2:00/100 m: a slower swimmer's 45 min holds fewer metres.
   const css = sport === "swim" && Number(thresholds?.swimCss) >= 60 && Number(thresholds?.swimCss) <= 240 ? Number(thresholds.swimCss) : null;
   const searchMinutes = css ? Math.round(minutes * 120 / css) : minutes;
@@ -257,9 +258,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   // beginning swimmer with first lengths and technique.
   if (sport === "run" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (b.family === "run-walk") - (a.family === "run-walk"));
   if (sport === "swim" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (/^swim-(first|technique)$/.test(b.family) ? 1 : 0) - (/^swim-(first|technique)$/.test(a.family) ? 1 : 0));
-  // A pool swim fits the athlete's pool (workout-model.js fitToPool).
-  const inPool = w => sport === "swim" && thresholds?.poolLength ? renderForEnvironment(w, w.environment || environment, { poolLength: thresholds.poolLength }) : w;
-  const pool = distinct.slice(0, 5).map(inPool), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
+  const pool = distinct.slice(0, 5), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
   const plannedToday = coach.constraints?.plannedToday;
   const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
   return {
@@ -484,11 +483,12 @@ async function resizeGenerated(db, { sport, environment, date, coach, thresholds
   let resized = resizeWorkout(base, resizeTo, how);
   // Outdoor rendering can lengthen the warm-up; correct once so the ridden length
   // matches, unless the correction lands further away.
-  const ridden = w => renderForEnvironment(w, environmentOf(environment)).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
+  const poolLength = sport === "swim" ? thresholds?.poolLength : null;
+  const ridden = w => renderForEnvironment(w, environmentOf(environment), { poolLength }).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
   // A swim's length at the athlete's CSS is not the catalogue's: no correction from it.
   if (Math.abs(drift) >= 2 && !(sport === "swim" && how.swimCss)) { const corrected = resizeWorkout(base, Math.round(resizeTo) - drift, how); if (Math.abs(ridden(corrected) - Math.round(resizeTo)) < Math.abs(drift)) resized = corrected; }
   const [ranked] = rankWorkoutCandidates([resized], { environment: environmentOf(environment) }, context, capabilities);
-  const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment));
+  const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment), { poolLength });
   const plannedToday = coach.constraints?.plannedToday;
   const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
   const explanation = explainWorkout(pick, { coach, environment: pick.environment, thresholds, planned, sport });
