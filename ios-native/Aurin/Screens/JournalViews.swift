@@ -160,7 +160,7 @@ struct JournalHealthCard: View {
                     }
                     Spacer(minLength: 8)
                     Button { model.push(.journal(card.date)) } label: {
-                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Color.black.opacity(0.85))
+                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onAccent)
                             .padding(.horizontal, 18).frame(height: 40).background(Palette.amber, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -434,19 +434,33 @@ struct JournalDayEditor: View {
                 .buttonStyle(.plain)
                 .disabled(d.state == "future")
                 .accessibilityLabel(Fmt.dayMonth(d.date))
+                .accessibilityValue(Self.spokenState(d.state))
                 .accessibilityAddTraits(d.date == date ? .isSelected : [])
             }
         }
     }
 
-    /// Done: a green ✓; open items: an amber ring; nothing yet: a faint ring.
+    /// The day's state in words, not only its colour (redesign review 17).
+    static func spokenState(_ state: String) -> String {
+        switch state {
+        case "done": L10n.tr("Hotovo")
+        case "partial": L10n.tr("Rozpracováno")
+        case "future": ""
+        default: L10n.tr("Nevyplněno")
+        }
+    }
+
+    /// Done: a green ✓; open items: an amber ring with a dot in it (told
+    /// apart by its shape too, redesign review 17); nothing yet: a faint ring.
     @ViewBuilder private func mark(_ state: String) -> some View {
         switch state {
         case "done":
             Image(systemName: "checkmark").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green)
                 .frame(width: 26, height: 26).background(Palette.green.opacity(0.18), in: Circle())
         case "partial":
-            Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24).frame(width: 26, height: 26)
+            Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24)
+                .overlay { Circle().fill(Palette.amber).frame(width: 8, height: 8) }
+                .frame(width: 26, height: 26)
         case "future":
             Circle().stroke(Palette.ink.opacity(0.08), lineWidth: 1).frame(width: 24, height: 24).frame(width: 26, height: 26)
         default:

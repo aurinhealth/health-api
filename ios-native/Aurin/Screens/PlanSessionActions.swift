@@ -236,6 +236,10 @@ enum PlanSessionActions {
 /// A cancel reaches the server only when the toast goes away without the
 /// undo (commit); a move is done at once and its undo moves it back.
 final class PlanToast: Identifiable {
+    /// How long Undo stays: 6 s, longer with VoiceOver, which has to reach the
+    /// button first (redesign review 13).
+    static var shownFor: Duration { .seconds(UIAccessibility.isVoiceOverRunning ? 20 : 6) }
+
     let id = UUID()
     let title: String
     let note: String?
@@ -284,7 +288,7 @@ struct PlanToastView: View {
                         .font(Typo.bodyStrong)
                         .foregroundStyle(Palette.amber)
                         .frame(minHeight: 32)
-                        .contentShape(Rectangle())
+                        .tapTarget(width: 44, height: 32)
                 }
                 .buttonStyle(.plain)
             }
@@ -300,6 +304,8 @@ struct PlanToastView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 18)
         .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+        // VoiceOver hears it and that Undo is there (redesign review 13).
+        .onChange(of: toast.id, initial: true) { AccessibilityNotification.Announcement(toast.title + ". " + L10n.tr("Můžeš to vrátit.")).post() }
     }
 }
 

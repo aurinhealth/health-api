@@ -979,6 +979,11 @@ struct ZoneList: View {
         return colors[min(i, colors.count - 1)]
     }
 
+    /// "Z4" on the light amber stays dark: white on it is only 3.5 : 1 (redesign review 18).
+    static func label(_ i: Int) -> Color {
+        i > 3 ? Palette.onAccent : i == 3 ? Color(light: 0x1B1A17, dark: 0x0A0B0C) : Palette.ink
+    }
+
     var body: some View {
         let top = max(rows.map(\.percent).max() ?? 1, 1)
         VStack(spacing: 0) {
@@ -986,7 +991,7 @@ struct ZoneList: View {
                 VStack(spacing: 10) {
                     HStack(spacing: 12) {
                         Text(verbatim: "Z\(r.id + 1)").scaledFont(13, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(r.id >= 3 ? Palette.onAccent : Palette.ink)
+                            .foregroundStyle(Self.label(r.id))
                             .frame(width: 30, height: 30)
                             .background(Self.color(r.id), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         VStack(alignment: .leading, spacing: 1) {
