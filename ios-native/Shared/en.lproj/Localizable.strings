@@ -4637,7 +4637,7 @@
 "Zprávy na tento týden jsi vyčerpal. Nové přijdou v pondělí." = "You've used this week's messages. New ones arrive on Monday.";
 "Napiš kouči" = "Message the coach";
 "Kouč je AI. Může se splést, tak si důležité věci ověř." = "The coach is an AI. It can make mistakes, so check anything that matters.";
-"Kouč je AI" = "The coach is an AI";
+"Kouč Aurin je AI" = "Aurin Coach is an AI";
 "nedostupné do zítřka" = "unavailable until tomorrow";
 "nedostupné do pondělí" = "unavailable until Monday";
 "Kouč, AI" = "Coach, AI";

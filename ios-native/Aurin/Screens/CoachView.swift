@@ -374,7 +374,7 @@ struct CoachView: View {
             } else {
                 // Always in sight, small (Petr 2026-11-25, AI Act art. 50: the
                 // athlete knows an AI answers).
-                Text("Kouč je AI")
+                Text("Kouč Aurin je AI")
                     .font(Typo.tiny).foregroundStyle(Palette.muted)
             }
         }
