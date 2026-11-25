@@ -114,4 +114,14 @@ final class WatchSnapshotTests: XCTestCase {
         let old = try XCTUnwrap(#"{"pages":["readiness"],"alarmOnWatch":true}"#.data(using: .utf8))
         XCTAssertNil(try XCTUnwrap(WatchSettings.decode(old)).alarmBackup)
     }
+
+    /// HRV or resting HR: only the worse way out of the usual range is off.
+    func testMetricWorse() {
+        typealias M = WatchSnapshot.Metric
+        XCTAssertEqual(M.worse(50, low: 55, high: 72, higherIsBetter: true), true)
+        XCTAssertEqual(M.worse(80, low: 55, high: 72, higherIsBetter: true), false)
+        XCTAssertEqual(M.worse(64, low: 55, high: 72, higherIsBetter: true), false)
+        XCTAssertEqual(M.worse(60, low: 48, high: 56, higherIsBetter: false), true)
+        XCTAssertNil(M.worse(60, low: nil, high: 56, higherIsBetter: false))
+    }
 }
