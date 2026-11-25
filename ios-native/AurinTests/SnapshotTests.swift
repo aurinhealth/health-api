@@ -690,6 +690,14 @@ final class SnapshotTests: XCTestCase {
         try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
             NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
         }
+        // The builder's proposal in the planned detail's look: hero "Not saved yet", chips,
+        // the coach's reasons, the same exercise cards, What you'll work, pinned Save to plan.
+        let proposal = GymProposal(draftId: 1, planName: plan.planName ?? "Upper body",
+                                   rationale: "Těžší hlavní cviky, doplňky ve středním rozsahu. Nohy dnes odpočívají, dva dny před dlouhou jízdou.",
+                                   rows: Array(plan.values.dropFirst(GymDay.firstSetRow)), muscles: worked)
+        try render("gym-builder-proposal", glow: Palette.Glow.gym, height: 2200, window: true) {
+            NavigationStack { GymBuilderView(date: AppModel.localDate(Date()), preview: proposal) }.environment(AppModel(demo: true))
+        }
         // The done workout as concept wgym: header, Workout details, exercise rows, muscles, quiet actions.
         var done = DemoData.gym
         for set in done.exercises.flatMap(\.sets) where !set.done {
