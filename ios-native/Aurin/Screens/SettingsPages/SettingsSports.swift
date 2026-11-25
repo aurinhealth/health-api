@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Nastavení → Cíle → Sporty: the sports the coach suggests and the main ones
 /// (SportsPicker), the one place to turn back on what ⋯ → "Nenavrhovat kolo"
-/// or a word to the coach turned off, and what Aktivita dne suggests less often.
+/// or a word to the coach turned off, the athlete's other sports (OtherSportsGroup)
+/// and what Aktivita dne suggests less often.
 struct SportsSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -32,6 +33,7 @@ struct SportsSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if choice.swims { SwimLevelGroup(swims100: $swims100) }
+            OtherSportsGroup(store: store)
             if !less.isEmpty {
                 SettingsGroup(title: "Navrhuji méně často") {
                     ForEach(Array(less.enumerated()), id: \.element) { index, kind in
