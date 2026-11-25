@@ -82,13 +82,12 @@ extension W {
     /// The Health tint of the sleep, HRV and resting HR details (concept 03).
     static let healthGlow = Glow.sleep
 
-    /// "6 h 54 min" (Petr 2026-11-23: durations as "4 h 23 min"); "1 h 18"
-    /// without "min" in the narrow stage columns.
-    static func hours(_ minutes: Double, min: Bool = true) -> String {
+    /// "6 h 54 min" (Petr 2026-11-23: durations as "4 h 23 min").
+    static func hours(_ minutes: Double) -> String {
         let m = Int(minutes.rounded())
         if m < 60 { return "\(m) min" }
         if m % 60 == 0 { return "\(m / 60) h" }
-        return "\(m / 60) h " + (min ? "\(m % 60) min" : String(format: "%02d", m % 60))
+        return "\(m / 60) h \(m % 60) min"
     }
 
     /// "60 to 74" / "60 až 74".
@@ -217,12 +216,20 @@ struct SleepDetail: View {
         return [(W.tr("Hluboký", "Deep"), deep), ("REM", rem), (W.tr("Lehký", "Light"), light)]
     }
 
+    private func stageText(_ minutes: Double) -> Text {
+        let text = W.hours(minutes)
+        guard text.hasSuffix(" min"), text.contains(" h ") else { return Text(text) }
+        let unit = Text(" min").font(W.serif(W.small ? 11 : 13))
+        return Text("\(String(text.dropLast(4)))\(unit)")
+    }
+
     private func stagesCard(_ stages: [(String, Double)]) -> some View {
         HStack(spacing: 0) {
             ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
                 if index > 0 { Rectangle().fill(W.hair).frame(width: 1) }
                 VStack(spacing: 3) {
-                    Text(W.hours(stage.1, min: false))
+                    // "1 h 23 min" as everywhere (Petr 2026-11-23: "1 h 22" read as a bug), the "min" smaller.
+                    stageText(stage.1)
                         .font(W.serif(W.small ? 16 : 19))
                         .foregroundStyle(W.num)
                         .lineLimit(1)
