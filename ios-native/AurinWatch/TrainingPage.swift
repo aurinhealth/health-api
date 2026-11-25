@@ -556,14 +556,14 @@ struct TrainingPage: View {
         let name = day == today ? W.tr("Dnes", "Today") : day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
         // A brick's second leg starts when the first ends, not at a time of its own.
         let when = afterText(s).map { ", " + $0.lowercased() } ?? s.time.map { W.tr(" v ", " at ") + W.clockText($0) } ?? ""
-        return name + when + (length ? s.minutes.map { ", \($0) min" } ?? "" : "")
+        return name + when + (length ? s.minutes.map { ", " + W.duration(minutes: Double($0)) } ?? "" : "")
     }
 
     static func name(_ s: WatchSnapshot.Session) -> String { s.name }
 
     /// "17:30, 45 min" under a name on a card.
     private func when(_ s: WatchSnapshot.Session) -> String {
-        [afterText(s) ?? s.time.map(W.clockText), s.minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: ", ")
+        [afterText(s) ?? s.time.map(W.clockText), s.minutes.map { W.duration(minutes: Double($0)) }].compactMap { $0 }.joined(separator: ", ")
     }
 
     /// The gym's sets, warm-ups left out.
@@ -631,7 +631,7 @@ struct TrainingPage: View {
 
     /// A done workout: "42 min, 23 sets, done" for the gym.
     private func doneCard(_ s: WatchSnapshot.Session, gym: WatchGym?) -> some View {
-        var parts = [s.minutes.map { "\($0) min" }]
+        var parts = [s.minutes.map { W.duration(minutes: Double($0)) }]
         if s.sport == "strength", let gym, gym.date == s.date { parts.append(W.tr("\(Self.sets(gym)) sérií", "\(Self.sets(gym)) sets")) }
         let line = parts.compactMap { $0 }.joined(separator: ", ")
         return rowCard(s, line: line.isEmpty ? W.tr("hotovo", "done") : line + W.tr(", hotovo", ", done"), done: true)

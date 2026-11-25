@@ -79,10 +79,8 @@ struct RaceDay: Hashable {
         }
     }
 
-    /// "33 min", "1 h 06".
-    static func length(_ minutes: Int) -> String {
-        minutes < 60 ? "\(minutes) min" : "\(minutes / 60) h " + String(format: "%02d", minutes % 60)
-    }
+    /// "33 min", "1 h 6 min".
+    static func length(_ minutes: Int) -> String { W.duration(minutes: Double(minutes)) }
 
     /// The leg's own target from its plan: watts on the bike, the pace on a run or swim.
     @MainActor
@@ -93,7 +91,7 @@ struct RaceDay: Hashable {
             return (high > low ? "\(Int(low.rounded()))–\(Int(high.rounded()))" : "\(Int(low.rounded()))", "W")
         }
         guard let pace = step.pace else { return nil }
-        if sport == "run" { return (clock(W.imperial ? pace * 1.609344 : pace), W.imperial ? "/mi" : "/km") }
+        if sport == "run" { return W.runPace(pace) }
         if sport == "swim" { return (clock(pace), "/100 m") }
         return nil
     }

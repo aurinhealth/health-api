@@ -206,21 +206,23 @@ struct RideDetail: View {
     private func rows(_ plan: WatchPlan) -> [Row] {
         let swim = session.sport == "swim"
         return plan.steps.map { s in
-            let minutes = s.seconds >= 60 ? W.number(s.seconds / 60, digits: s.seconds.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1) + " min" : "\(Int(s.seconds)) s"
+            let whole = s.seconds.truncatingRemainder(dividingBy: 60) == 0
+            let minutes = s.seconds < 60 ? "\(Int(s.seconds)) s"
+                : whole ? W.duration(minutes: s.seconds / 60) : W.number(s.seconds / 60, digits: 1) + " min"
             let length = plan.openWater != true ? s.meters.map { "\(Int($0.rounded())) m" } ?? minutes : minutes
             return Row(title: s.label, length: s.repeats > 1 ? "\(s.repeats) × " + length : length,
                        detail: swim ? nil : target(s), color: swim ? W.dim : PlanStore.color(s.zone))
         }
     }
 
-    /// "Zone 2, 150 to 205 W", "Zone 4, 4:20 /km".
+    /// "Zone 2, 150 to 205 W", "Zone 4, 4:20 /km" (per mile in imperial).
     private func target(_ s: WatchPlan.Step) -> String {
         var text = W.tr("Zóna ", "Zone ") + String(s.zone)
         if let low = s.wattsLow, let high = s.wattsHigh {
             text += ", " + (low > 0 ? W.number(low) + W.tr(" až ", " to ") : W.tr("do ", "up to ")) + W.number(high) + " W"
         } else if let pace = s.pace, pace > 0 {
-            let p = Int(pace.rounded())
-            text += ", " + "\(p / 60):" + String(format: "%02d", p % 60) + " /km"
+            let shown = W.runPace(pace)
+            text += ", " + shown.value + " " + shown.unit
         }
         return text
     }
