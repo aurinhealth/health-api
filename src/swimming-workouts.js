@@ -15,7 +15,9 @@ function catalog(t) {
   const CD = [swim(100, 84, t("vyplavání", "cool-down"))];
   const DRILLS = [t("catch-up: ruka čeká na ruku", "catch-up: one hand waits for the other"), t("prsty po hladině", "fingertip drag"),
     t("kraul na boku, nohy", "kick on the side"), t("jednou rukou", "single arm"), t("6 kopů, 1 záběr, 6 kopů", "6-1-6")];
-  const drills = count => rep(1, Array.from({ length: count }, (_, i) => [swim(50, 88, DRILLS[i % DRILLS.length]), rest(20)]).flat());
+  // A drill is technique at an easy effort: no pace target (free), its 88 %
+  // only for the minutes and the load.
+  const drills = count => rep(1, Array.from({ length: count }, (_, i) => [{ ...swim(50, 88, DRILLS[i % DRILLS.length]), free: true }, rest(20)]).flat());
   const sw = props => buildWorkout({ sport: "swim", sourceName: "Aurin", ...props });
   const out = [];
   const add = (key, system, levels, name, structureOf, desc, tags = []) => levels.forEach((level, index) => {

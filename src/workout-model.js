@@ -184,7 +184,7 @@ export function stepIntensities(structure = [], sport = "ride") {
 function stepLine(s, opts, intensity = null) {
   if (opts.sport === "swim") {
     const length = s.meters && opts.environment !== "outdoor" ? Math.round(s.meters) + "mtr" : stepDuration(n(s.durationMinutes, 0));
-    return "- " + length + (s.rest ? "" : " " + stepTarget(s, opts)) + (s.note ? " " + s.note : "") + (intensity ? " intensity=" + intensity : "");
+    return "- " + length + (s.rest || s.free ? "" : " " + stepTarget(s, opts)) + (s.note ? " " + s.note : "") + (intensity ? " intensity=" + intensity : "");
   }
   const cadence = opts.sport === "ride" && s.cadence ? " " + String(s.cadence).replace(/[–—]/g, "-").replace(/[^0-9-]/g, "") + "rpm" : "";
   const note = s.note ? " " + s.note : "";

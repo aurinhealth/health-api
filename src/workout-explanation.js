@@ -203,7 +203,10 @@ function swimRows(structure, { swimPace }) {
   const kinds = stepIntensities(structure, "swim");
   const row = (s, intensity) => s.rest
     ? { durationSeconds: Math.round(n(s.durationMinutes, 0) * 60), rest: true, note: s.note || null, intensity }
-    : { durationSeconds: Math.round(n(s.durationMinutes, 0) * (swimPace ? swimPace / 120 : 1) * 60), meters: s.meters ? Math.round(s.meters) : null, percentLow: Math.round(n(s.power, 0)) - 2, percentHigh: Math.round(n(s.power, 0)) + 2,
+    : s.free
+      // A drill: no pace target, only its length.
+      ? { durationSeconds: Math.round(n(s.durationMinutes, 0) * (swimPace ? swimPace / 120 : 1) * 60), meters: s.meters ? Math.round(s.meters) : null, percentLow: null, percentHigh: null, paceSlow: null, paceFast: null, free: true, note: s.note || null, intensity }
+      : { durationSeconds: Math.round(n(s.durationMinutes, 0) * (swimPace ? swimPace / 120 : 1) * 60), meters: s.meters ? Math.round(s.meters) : null, percentLow: Math.round(n(s.power, 0)) - 2, percentHigh: Math.round(n(s.power, 0)) + 2,
       paceSlow: formatPace(pace(n(s.power, 0) - 2)), paceFast: formatPace(pace(n(s.power, 0) + 2)), note: s.note || null, intensity };
   return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => row(s, kinds[i][j])) } : { repeats: 1, steps: [row(block, kinds[i])] });
 }
