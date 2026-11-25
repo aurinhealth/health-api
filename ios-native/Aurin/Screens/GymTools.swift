@@ -769,8 +769,8 @@ struct GymBuilderView: View {
             } label: {
                 Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 14).frame(minHeight: 36)
+                    .tapTarget(width: 44, height: 36)
                     .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                    .contentShape(Capsule())
             }
             .buttonStyle(.plain)
             .tapTarget(width: 44, height: 44)

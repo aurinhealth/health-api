@@ -52,6 +52,14 @@ struct WeekProposalResponse: Decodable {
     let proposal: Proposal?
     /// The server took `replan` (an older one leaves it out).
     var replan: Bool? = nil
+    /// With `replan` as a list of days: whether those days touch the workouts kept around them.
+    var affects: ReplanAffects? = nil
+
+    /// "hard_in_a_row" (dates: the two days), "key_lost", "volume_down" or "volume_up" (dates: the days changed).
+    struct ReplanAffects: Decodable, Equatable {
+        let kind: String
+        let dates: [String]
+    }
 
     struct Proposal: Decodable {
         let prefs: JSONValue?
@@ -361,10 +369,11 @@ extension APIClient {
 
     /// The sessions the coach would put into the rest of the week.
     /// With `replanFrom` the proposal counts the planned workouts from that day on
-    /// as gone (Vygenerovat plán deletes them only once it has the new ones).
-    func weekProposal(start: String, replanFrom: String? = nil) async throws -> WeekProposalResponse {
+    /// as gone (Vygenerovat plán deletes them only once it has the new ones); with
+    /// `replanDays` only those days' ones, and the answer says what that touches.
+    func weekProposal(start: String, replanFrom: String? = nil, replanDays: [String]? = nil) async throws -> WeekProposalResponse {
         var body: JSONObject = ["start": .string(start)]
-        if let replanFrom { body["replan"] = .string(replanFrom) }
+        if let replanDays { body["replan"] = .array(replanDays.map { .string($0) }) } else if let replanFrom { body["replan"] = .string(replanFrom) }
         return try await send("/app/api/coach/week", method: "POST", body: body)
     }
 

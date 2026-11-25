@@ -73,12 +73,6 @@ struct GymSessionView: View {
 
     struct Rated {
         let row: Int
-        /// Its weight, in kg: the next set starts from it.
-        let kg: Double
-        /// The letter it had before the tap, sent back when the tap is taken back.
-        let before: String?
-        /// The next set is of the same exercise: its weight follows the letter.
-        let sameExercise: Bool
         var letter: String?
     }
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -134,7 +128,7 @@ struct GymSessionView: View {
                     // exercises open from "Exercise 1 of 7 ›" under the name.
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { coach = true } label: { WatchCoachLights() }
-                            .accessibilityLabel(W.tr("Kouč", "Coach"))
+                            .accessibilityLabel(W.tr("Kouč, AI", "Coach, AI"))
                     }
                 }
             }
@@ -190,7 +184,7 @@ struct GymSessionView: View {
                 if WatchDemo.flag("-rest") {
                     restTotal = 150
                     restEnd = Date().addingTimeInterval(84)
-                    rated = Rated(row: 8, kg: 80, before: nil, sameExercise: true, letter: "M")
+                    rated = Rated(row: 8, letter: "M")
                 }
                 return
             }
@@ -648,7 +642,8 @@ struct GymSessionView: View {
         loaded = lift.fieldKey(in: exercise)
         row = lift.row
         kg = GymText.shown(lift.kg ?? 0, machineLb: gym.machineLb(row: lift.row))
-        reps = Double(lift.reps ?? 8)
+        // Last time's reps before a made-up 8 (watch review 2026-11-25).
+        reps = Double(lift.reps ?? lift.last?.reps ?? 8)
         // What the iPhone already has in its fields for this set, when it came
         // before the watch moved on to it (the iPhone sends it as it moves on).
         if let draft = store.phoneDraft, draft.date == gym.date, draft.row == lift.row {
@@ -693,7 +688,7 @@ struct GymSessionView: View {
         picked = nil
         let done = GymText.kgOf(kg, machineLb: gym.machineLb(row: lift.row))
         store.complete(row: lift.row, kg: done, reps: Int(reps))
-        rated = lift.work ? Rated(row: lift.row, kg: done, before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
+        rated = lift.work ? Rated(row: lift.row) : nil
         WKInterfaceDevice.current().play(.success)
         guard let next else {
             // The cardio or stretching after the exercises first, then the summary.
@@ -806,10 +801,6 @@ struct GymSessionView: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
         }
-        if let hint = hint {
-            Text(hint.text).watchFont(12, .semibold).foregroundStyle(hint.color)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
         liveLine
         HStack(spacing: 4) {
             Button { shift(-15) } label: { Text("−15 s").frame(height: 30) }
@@ -847,11 +838,16 @@ struct GymSessionView: View {
     /// "Next, set 3 of 4, 60 kg × 8".
     private func nextLine(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, _ gym: WatchGym) -> String {
         let set = label(lift, in: e)
-        let weight = GymText.weight(lift.kg ?? 0, machineLb: e.pounds == true) + " × \(lift.reps ?? 0)"
+        // A bodyweight set or one without a weight: its reps alone, never "0 kg × 0".
+        let weight: String? = if let kg = lift.kg, kg > 0 {
+            GymText.weight(kg, machineLb: e.pounds == true) + (lift.reps.map { " × \($0)" } ?? "")
+        } else {
+            lift.reps.map { "\($0) " + Self.repsUnit(nil) }
+        }
         let sameExercise = gym.exercises.indices.contains(exercise) && gym.exercises[exercise].name == e.name
         var what: String = e.title
         if sameExercise { what = set.prefix(1).lowercased() + String(set.dropFirst()) }
-        return W.tr("Další, ", "Next, ") + what + ", " + weight
+        return W.tr("Další, ", "Next, ") + what + (weight.map { ", " + $0 } ?? "")
     }
 
     /// "Start set 3", or "Start" before a warm-up or a drop set.
@@ -897,36 +893,15 @@ struct GymSessionView: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// One 2.5 kg (5 lb) step: up after Easy, down after Failure.
-    private static var step: Double { W.imperial ? W.kg(5) : 2.5 }
-
-    /// The weight the next set starts from after the letter, in kg.
-    private static func nextKg(_ kg: Double, _ letter: String?) -> Double {
-        switch letter {
-        case "E": return kg + step
-        case "F": return max(0, kg - step)
-        default: return kg
-        }
-    }
-
-    /// Why the next set moved: "+2.5 kg, it was easy".
-    private var hint: (text: String, color: Color)? {
-        guard rated?.sameExercise == true else { return nil }
-        let amount = GymText.weight(Self.step)
-        switch rated?.letter {
-        case "E": return ("+" + amount + W.tr(", šlo to lehce", ", it was easy"), W.green)
-        case "F": return ("−" + amount + W.tr(" po selhání", " after failure"), W.amber)
-        default: return nil
-        }
-    }
-
-    /// A tap rates the set; the same tap again takes it back.
+    /// A tap rates the set, another letter changes it. The weight of the next
+    /// set stays as planned: no step up or down without an approved method
+    /// (watch review 2026-11-25), and the iPhone's sheet keeps the same.
     private func rate(_ letter: String) {
-        guard var current = rated else { return }
-        current.letter = current.letter == letter ? nil : letter
+        guard var current = rated, current.letter != letter else { return }
+        current.letter = letter
         rated = current
         WKInterfaceDevice.current().play(.click)
-        store.rate(row: current.row, letter: current.letter ?? current.before ?? "M", next: Self.nextKg(current.kg, current.letter))
+        store.rate(row: current.row, letter: letter)
     }
 
     /// The rest to Training mode on the iPhone, unless it came from there.
@@ -1132,6 +1107,14 @@ struct GymExerciseList: View {
     let end: () -> Void
     let discard: () -> Void
     @State private var swap: Int?
+    /// A removed exercise, hidden here and sent only after a few seconds in
+    /// which Undo keeps it (as a drink on the Food page).
+    @State private var removing: Removing?
+
+    private struct Removing: Equatable {
+        let key: String
+        let title: String
+    }
 
     /// One line of the list: a part, or an exercise by its key.
     private enum Line: Hashable {
@@ -1159,6 +1142,12 @@ struct GymExerciseList: View {
     var body: some View {
         List {
             if let gym = store.gym {
+                if let removing {
+                    Button { self.removing = nil } label: {
+                        Label(W.tr("Vrátit: ", "Undo: ") + removing.title, systemImage: "arrow.uturn.backward")
+                            .foregroundStyle(W.amber).lineLimit(2)
+                    }
+                }
                 Section {
                     // By the line, not its place: a removed or moved exercise takes its swipe along.
                     ForEach(lines(gym), id: \.self) { line in
@@ -1170,7 +1159,7 @@ struct GymExerciseList: View {
                                 partLine(part)
                             }
                         case .exercise(let key):
-                            if let index = gym.exercises.firstIndex(where: { $0.key == key }) {
+                            if key != removing?.key, let index = gym.exercises.firstIndex(where: { $0.key == key }) {
                                 exerciseLine(gym.exercises[index], index)
                             }
                         }
@@ -1219,6 +1208,25 @@ struct GymExerciseList: View {
         }
     }
 
+    /// Hidden at once, sent after 5 s unless Undo took it back; by its key,
+    /// since its place may change meanwhile.
+    private func remove(_ e: WatchGym.Exercise) {
+        if let earlier = removing { send(earlier) }
+        let item = Removing(key: e.key, title: e.title)
+        removing = item
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard removing == item else { return }
+            send(item)
+        }
+    }
+
+    private func send(_ item: Removing) {
+        if removing == item { removing = nil }
+        guard let index = store.gym?.exercises.firstIndex(where: { $0.key == item.key }) else { return }
+        store.change(.removeExercise, exercise: index)
+    }
+
     private func exerciseLine(_ e: WatchGym.Exercise, _ index: Int) -> some View {
         Button { pick(index) } label: {
             HStack {
@@ -1251,7 +1259,7 @@ struct GymExerciseList: View {
         }
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                store.change(.removeExercise, exercise: index)
+                remove(e)
             } label: {
                 Label(W.tr("Odebrat", "Remove"), systemImage: "trash")
             }
@@ -1437,6 +1445,41 @@ struct GymOptionsView: View {
 /// The end (mockup 19 P4): calories, heart rate, sets, volume and each exercise, then Finish.
 struct GymSummary: View {
     @ObservedObject private var store = GymStore.shared
+
+    /// The summary's exercises with a set done, one row each.
+    @ViewBuilder private var exerciseRows: some View {
+        if let gym = store.gym {
+            let done: [(title: String, line: String)] = gym.exercises.compactMap { e in
+                let lifts = e.lifts.filter { $0.done && $0.work }
+                return lifts.isEmpty ? nil : (e.title, Self.summaryLine(lifts))
+            }
+            Divider()
+            ForEach(done.indices, id: \.self) { index in
+                HStack {
+                    Text(done[index].title).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(done[index].line)
+                        .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .watchFont(12)
+            }
+        }
+    }
+
+    /// An exercise in the summary: "3 sets, best 100 kg × 6"; both sides of a
+    /// set count once, and the best set is the heaviest, its own reps with it.
+    static func summaryLine(_ done: [WatchGym.Lift]) -> String {
+        let sets = Set(done.map(\.number)).count
+        let setsText = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
+        guard let best = done.max(by: { ($0.kg ?? 0, $0.reps ?? 0) < ($1.kg ?? 0, $1.reps ?? 0) }) else { return setsText }
+        let set: String? = if let kg = best.kg, kg > 0 {
+            GymText.weight(kg) + (best.reps.map { " × \($0)" } ?? "")
+        } else {
+            best.reps.map { "\($0) " + GymSessionView.repsUnit(nil) }
+        }
+        return setsText + (set.map { W.tr(", nejlépe ", ", best ") + $0 } ?? "")
+    }
+
     @ObservedObject private var workout = GymWorkout.shared
     let finish: () -> Void
     /// Back to the sets: only while some are left (End workout came early).
@@ -1510,6 +1553,14 @@ struct GymSummary: View {
                     }
                 }
                 .accessibilityElement(children: .combine)
+                // Sets still open: going on is the main way, at the top (concept 06); Finish waits at the end.
+                if let keepTraining, setsLeft > 0 {
+                    Button(action: keepTraining) {
+                        Text(W.tr("Cvičit dál", "Keep training")).watchFont(16, .semibold).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .mainButton()
+                }
                 // New records first (mockup "jen hodinky" 7, Training mode's Nový rekord).
                 ForEach(store.gym?.newRecords ?? []) { record in
                     HStack(spacing: 6) {
@@ -1530,19 +1581,7 @@ struct GymSummary: View {
                     stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
                 }
                 partRows
-                if let gym = store.gym {
-                    Divider()
-                    ForEach(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }, id: \.name) { e in
-                        let done = e.lifts.filter { $0.done && $0.work }
-                        HStack {
-                            Text(e.title).lineLimit(1)
-                            Spacer(minLength: 4)
-                            Text("\(done.count) × \(done.last?.reps ?? 0), " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
-                                .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .watchFont(12)
-                    }
-                }
+                exerciseRows
                 if (store.gym?.setsDone ?? 0) > 0 {
                     Text(W.tr("Jak ti trénink sedl?", "How was it?")).watchFont(12, .semibold).foregroundStyle(W.muted).padding(.top, 6)
                     HStack(spacing: 4) {
@@ -1580,21 +1619,20 @@ struct GymSummary: View {
                     .buttonStyle(.plain)
                     .padding(.top, 2)
                 }
-                Button {
-                    if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
-                    finish()
-                } label: {
-                    Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                }
-                .mainButton()
-                .padding(.top, 4)
-                if let keepTraining, setsLeft > 0 {
-                    Button(action: keepTraining) {
-                        Text(W.tr("Cvičit dál", "Keep training")).watchFont(15, .semibold)
+                if keepTraining != nil, setsLeft > 0 {
+                    Button(action: done) {
+                        Text(W.tr("Dokončit", "Finish")).watchFont(15, .semibold)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
+                    .padding(.top, 4)
+                } else {
+                    Button(action: done) {
+                        Text(W.tr("Dokončit", "Finish")).watchFont(16, .semibold).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .mainButton()
+                    .padding(.top, 4)
                 }
             }
         }
@@ -1604,6 +1642,11 @@ struct GymSummary: View {
     }
 
     private var setsLeft: Int { store.gym?.setsLeft ?? 0 }
+
+    private func done() {
+        if let rating, let date = store.gym?.date { store.rateWorkout(rating, date: date) }
+        finish()
+    }
 
     /// "4 sets left" / "Zbývají 4 série".
     private var leftText: String {

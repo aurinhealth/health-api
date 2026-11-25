@@ -43,7 +43,6 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Not capped yet: the screens below cap it (textSizes).
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if model.updateRequired {
@@ -180,7 +179,7 @@ struct RootView: View {
                                 model.dismissSyncFailure()
                                 Task { await model.refresh(announce: true) }
                             }
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            .motionTransition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
@@ -203,7 +202,7 @@ struct RootView: View {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
                         .padding(.bottom, model.immersive ? 100 : toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // A food read from its label went to the owner for the common catalogue (AppModel.suggestNewFood).
@@ -211,7 +210,7 @@ struct RootView: View {
                     ThanksToast(text: thanks) { model.thanks = nil }
                         .padding(.horizontal, 16)
                         .padding(.bottom, toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // An AI lookup that ended after "Co přidáme?" closed: a tap shows it in Jídlo (AppModel+PendingFood.swift).
@@ -223,7 +222,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
                 }
                 // A deletion with its "Vrátit" (AppModel.deleteLater).
@@ -234,7 +233,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
                 // "+" open: the page blurs and dims a little under its card
@@ -264,7 +263,7 @@ struct RootView: View {
                             .padding(.horizontal, 16)
                             .padding(.bottom, 4)
                             .dynamicTypeSize(Self.textSizes)
-                            .transition(reduceMotion ? .opacity : .scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+                            .motionTransition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
                         }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
@@ -274,7 +273,7 @@ struct RootView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 4)
                                 .dynamicTypeSize(Self.textSizes)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         // Details have no tab bar; a hidden workout stays reachable there.
                         if !barHidden && tabsShown {
@@ -288,10 +287,10 @@ struct RootView: View {
                                 .padding(.bottom, 8)
                                 .dynamicTypeSize(Self.textSizes)
                                 .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
                     .zIndex(showAdd ? 4 : 0)
                     // Open, the card and the bar are all VoiceOver reads; escape closes.
@@ -384,7 +383,7 @@ struct RootView: View {
             // toast took its place.
             .task(id: model.undoToast?.id) {
                 guard let current = model.undoToast else { return }
-                try? await Task.sleep(for: .seconds(6))
+                try? await Task.sleep(for: PlanToast.shownFor)
                 if model.undoToast?.id == current.id { model.undoToast = nil }
                 // Its own task: hiding the toast ends this one, which cut the
                 // deletion short and left "zrušeno" on top.

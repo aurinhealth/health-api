@@ -275,6 +275,7 @@ struct CoachPickCard: View {
                     Button { Task { await undo() } } label: {
                         Label("Vrátit", systemImage: "arrow.uturn.backward").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
                             .padding(.horizontal, 14).frame(height: 36)
+                            .tapTarget(width: 44, height: 36)
                             .background(Palette.ink.opacity(0.1), in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -327,8 +328,8 @@ struct CoachPickCard: View {
                 .scaledFont(15, weight: .semibold)
                 .foregroundStyle(Palette.muted)
                 .frame(width: 36, height: 36)
+                .tapTarget(width: 36, height: 36)
                 .background(Palette.ink.opacity(0.06), in: Circle())
-                .contentShape(Circle())
         }
         .accessibilityLabel(Text("Možnosti aktivity dne"))
         .disabled(busy || model.demo)
@@ -342,6 +343,7 @@ struct CoachPickCard: View {
             Button(action: undo) {
                 Label("Vrátit", systemImage: "arrow.uturn.backward").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 14).frame(height: 36)
+                    .tapTarget(width: 44, height: 36)
                     .background(Palette.ink.opacity(0.1), in: Capsule())
             }
             .buttonStyle(.plain)
@@ -414,7 +416,7 @@ struct CoachPickCard: View {
         }
         Button { Task { await decline(best) } } label: {
             Text("Odmítnout").font(Typo.small.weight(.medium)).foregroundStyle(Palette.muted)
-                .frame(maxWidth: .infinity).frame(height: 32).contentShape(Rectangle())
+                .frame(maxWidth: .infinity).frame(height: 32).tapTarget(width: 44, height: 32)
         }
         .buttonStyle(.plain)
         .disabled(busy)

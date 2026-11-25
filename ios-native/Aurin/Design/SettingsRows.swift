@@ -22,7 +22,7 @@ struct SettingsGroup<Content: View>: View {
                     if let action {
                         Button(action: action.run) {
                             Text(action.title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
-                                .frame(minHeight: 32).contentShape(Rectangle())
+                                .frame(minHeight: 32).tapTarget(width: 44, height: 32)
                         }
                         .buttonStyle(.plain)
                     }

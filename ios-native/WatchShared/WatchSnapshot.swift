@@ -114,6 +114,9 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     static let waterKey = "addWater"
     /// The drink sent with waterKey; water when missing.
     static let drinkKindKey = "addWaterKind"
+    /// When it was drunk (seconds since 1970): a glass that reaches the iPhone
+    /// later still counts for its own day; now when missing.
+    static let drinkAtKey = "addWaterAt"
 
     struct Session: Codable, Hashable, Sendable {
         var date: String

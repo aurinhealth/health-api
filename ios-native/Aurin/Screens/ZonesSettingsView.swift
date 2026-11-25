@@ -902,6 +902,7 @@ struct MaxHeartSuggestion: View {
             Button(action: use) {
                 Text("Použít").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 14).frame(height: 34)
+                    .tapTarget(width: 44, height: 34)
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)

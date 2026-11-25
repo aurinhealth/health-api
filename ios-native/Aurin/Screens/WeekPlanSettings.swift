@@ -6,9 +6,9 @@ import SwiftUI
 // (Auto, Ride, Run, Swim, Gym or Rest), "Rest until Sunday" and "Rest all
 // week", the usual time per weekday as seven ink sliders, then the pinned
 // Generate workouts. Done saves without replanning (the planned workouts stay
-// until Generate); Generate saves and replans from the first day changed
-// (today when nothing changed) to next Sunday, the finished workouts stay
-// (WeekPlanGenerator).
+// until Generate); Generate saves and plans again only the days changed (the
+// other planned workouts stay, Petr 2026-11-25), or with nothing changed
+// today to next Sunday; the finished workouts stay (WeekPlanGenerator).
 
 /// One week's choices: the sports per weekday (empty: the coach picks), the rest
 /// days and the athlete's other sports (a football practice or match) per weekday.
@@ -95,8 +95,9 @@ struct WeekPlanSettingsView: View {
     let monday: String
     let today: String
     let calendar: [String: CalendarDay]
-    /// Closed: with Generate the day the plan replans from (after the save), nil for Done.
-    let onClose: (String?) -> Void
+    /// Closed: nil for Done; with Generate the days to plan again (after the save),
+    /// empty for the whole plan from today.
+    let onClose: ([String]?) -> Void
 
     @State private var loaded = false
     @State private var usualPrefs: JSONValue?
@@ -127,12 +128,12 @@ struct WeekPlanSettingsView: View {
     private var dirty: Bool { choices != original || usual != usualBefore || usualEvents != usualEventsBefore }
     /// A change of days or rest the planned workouts do not follow until Generate.
     private var conflicting: Bool { choices != original }
-    /// Generate replans from the first day whose sports, rest or usual time changed,
-    /// today when nothing did: a workout added for a day left as it was stays
-    /// (Petr 2026-11-24: a gym for today went when he set the days from Wednesday).
-    private var replanFrom: String {
-        WeekPlanGenerator.replanFrom(weeks: weeks, today: today, choices: choices, original: original,
-                                     usual: usual, usualBefore: usualBefore)
+    /// Generate plans again only the days whose sports, rest or usual time changed;
+    /// a workout on a day left as it was stays (Petr 2026-11-24: a gym added for
+    /// today went when he set the days from Wednesday). Empty: the whole plan.
+    private var changedDays: [String] {
+        WeekPlanGenerator.changedDays(weeks: weeks, today: today, choices: choices, original: original,
+                                      usual: usual, usualBefore: usualBefore)
     }
 
     var body: some View {
@@ -508,14 +509,18 @@ struct WeekPlanSettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(saving || model.demo || model.offline || failed || !loaded)
-            .confirmationDialog(L10n.tr("Nahradit naplánované tréninky?"), isPresented: $confirmGenerate, titleVisibility: .visible) {
-                Button(L10n.tr("Vygenerovat tréninky"), role: .destructive) { Task { await close(generate: true) } }
+            .confirmationDialog(changedDays.isEmpty ? L10n.tr("Nahradit naplánované tréninky?") : WeekPlanSettingsText.again(changedDays),
+                                isPresented: $confirmGenerate, titleVisibility: .visible) {
+                Button(L10n.tr("Vygenerovat tréninky"), role: changedDays.isEmpty ? .destructive : nil) { Task { await close(generate: true) } }
                 Button(L10n.tr("Zrušit"), role: .cancel) {}
             } message: {
-                Text(verbatim: WeekPlanSettingsText.replaced(from: replanFrom, today: today))
+                Text(verbatim: changedDays.isEmpty
+                     ? L10n.tr("Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou.")
+                     : L10n.tr("Nové tréninky dostanou jen dny, které jsi změnil. Ostatní naplánované tréninky zůstanou."))
             }
             Text(verbatim: model.offline ? L10n.tr("Jsi offline. Připoj se a plán se sestaví.")
-                 : WeekPlanText.replans(from: replanFrom, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
+                 : !changedDays.isEmpty ? WeekPlanSettingsText.plans(changedDays)
+                 : WeekPlanText.replans(from: today, to: ISODay.shift(nextMonday, 6)) + " " + L10n.tr("Tvoje vlastní úpravy se nahradí."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -523,9 +528,9 @@ struct WeekPlanSettingsView: View {
         .background(Palette.background.opacity(0.94).ignoresSafeArea(edges: .bottom))
     }
 
-    /// A planned workout from the replan's first day to next Sunday, which Generate would replace.
+    /// A planned workout Generate would replace: on a changed day, else from today to next Sunday.
     private var plannedAhead: Bool {
-        ISODay.range(replanFrom, ISODay.shift(nextMonday, 6)).contains { date in
+        (changedDays.isEmpty ? ISODay.range(today, ISODay.shift(nextMonday, 6)) : changedDays).contains { date in
             (calendar[date]?.activities ?? []).contains { $0.status == "planned" }
         }
     }
@@ -574,12 +579,12 @@ struct WeekPlanSettingsView: View {
     private func close(generate: Bool) async {
         guard dirty, !model.demo else {
             dismiss()
-            onClose(generate && !model.demo ? replanFrom : nil)
+            onClose(generate && !model.demo ? changedDays : nil)
             return
         }
         saving = true
         defer { saving = false }
-        let from = replanFrom
+        let days = changedDays
         do {
             if usual != usualBefore || usualEvents != usualEventsBefore {
                 let days = WeekPlanPrefs.days(usualPrefs)
@@ -599,7 +604,7 @@ struct WeekPlanSettingsView: View {
             }
             error = nil
             dismiss()
-            onClose(generate ? from : nil)
+            onClose(generate ? days : nil)
         } catch {
             self.error = error.localizedDescription
         }
@@ -620,10 +625,15 @@ enum WeekPlanSettingsText {
         L10n.f("%@ týdně", planDuration(minutes.reduce(0) { $0 + max(0, $1) }))
     }
 
-    /// Generate's question: what goes, from today or from the first day changed.
-    static func replaced(from date: String, today: String) -> String {
-        date == today ? L10n.tr("Tréninky od dneška do příští neděle se nahradí novými, i s tvými úpravami. Hotové zůstanou.")
-            : L10n.f("Tréninky od %@ do příští neděle se nahradí novými, i s tvými úpravami. Dřívější dny a hotové zůstanou.", Fmt.dayMonthShort(date))
+    /// Generate's question for the days changed: "Plan Sat, Nov 28 again?", "Plan 2 days again?".
+    static func again(_ days: [String]) -> String {
+        days.count == 1 ? L10n.f("Naplánovat znovu %@?", Fmt.weekdayDayMonthShort(days[0]))
+            : L10n.f("Naplánovat znovu %@?", L10n.plural("%lld dní", days.count))
+    }
+
+    /// The line under Generate for the days changed: "Plans Sat, Nov 28. Your other workouts stay."
+    static func plans(_ days: [String]) -> String {
+        L10n.f("Naplánuje %@. Ostatní tréninky zůstanou.", days.count == 1 ? Fmt.weekdayDayMonthShort(days[0]) : L10n.plural("%lld dní", days.count))
     }
 
     /// Whether the rest starts today: "Rest from today to Sunday." / "Rest from tomorrow to Sunday."
@@ -642,23 +652,37 @@ enum WeekPlanSettingsText {
 /// the new ones get saved as the old week planner saved them (review
 /// 2026-11-24 point 1: offline or a server error leaves the week as it was).
 enum WeekPlanGenerator {
-    /// Replans each week from `from` (today at the earliest) on; finished workouts
-    /// and the days before stay. False when a week failed.
-    @MainActor
-    static func replan(_ model: AppModel, weeks: [String], today: String, from: String? = nil, calendar: [String: CalendarDay]) async -> Bool {
-        let today = max(today, from ?? today)
+    /// What Generate did: false when a week failed; `affects` when the days
+    /// planned again touch the workouts kept around them (Recalculate / Keep as is).
+    struct Result {
         var ok = true
+        var affects: WeekProposalResponse.ReplanAffects?
+    }
+
+    /// Replans each week from `from` (today at the earliest) on, or with `days`
+    /// only those days (the other planned workouts stay and count in); the
+    /// finished workouts and the days before stay.
+    @MainActor @discardableResult
+    static func replan(_ model: AppModel, weeks: [String], today: String, from: String? = nil, days: [String]? = nil,
+                       calendar: [String: CalendarDay]) async -> Result {
+        let today = max(today, from ?? today)
+        var result = Result()
         for week in weeks {
+            // The days of this week to plan again; nil: all from today.
+            let only = days.map { list in list.filter { $0 >= max(week, today) && $0 <= ISODay.shift(week, 6) }.sorted() }
+            if only?.isEmpty == true { continue }
+            let dates = only ?? ISODay.range(max(week, today), ISODay.shift(week, 6))
             do {
-                var r = try await model.api.weekProposal(start: week, replanFrom: today)
+                var r = try await model.api.weekProposal(start: week, replanFrom: only == nil ? today : nil, replanDays: only)
                 let replanned = r.replan == true
                 if !replanned {
                     // A server without replan counts the planned workouts in: they go first, as before.
-                    try await deletePlanned(model, week: week, today: today, calendar: calendar)
+                    try await deletePlanned(model, dates: dates, calendar: calendar)
                     r = try await model.api.weekProposal(start: week)
                 }
+                if result.affects == nil { result.affects = r.affects }
                 let bricks = WeekPlanPrefs.bricks(r.proposal?.prefs)
-                var drafts = (r.proposal?.items ?? []).filter { $0.date >= today }.map { item -> WeekSessionDraft in
+                var drafts = (r.proposal?.items ?? []).filter { dates.contains($0.date) }.map { item -> WeekSessionDraft in
                     let sport = item.sport == "strength" ? "gym" : item.sport
                     return WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? WeekPlanSport.usualMinutes(sport),
                                             environment: sport == "gym" ? nil : item.environment ?? "outdoor",
@@ -669,28 +693,32 @@ enum WeekPlanGenerator {
                     let ride = drafts.contains { $0.sport == "ride" && $0.date == date }
                     drafts[i].brick = ride
                 }
+                // Gym days kept around the days planned again, so a new gym follows on from them (critic 2026-11-25).
+                let keptGym = ISODay.range(week, ISODay.shift(week, 6)).filter { date in
+                    !dates.contains(date) && (calendar[date]?.activities ?? []).contains { $0.status == "planned" && $0.sport == "strength" }
+                }.map { WeekSessionDraft(date: $0, sport: "gym", minutes: WeekPlanSport.usualMinutes("gym"), environment: nil) }
                 for i in drafts.indices {
                     let id = drafts[i].id
-                    let built = await drafts[i].building(model.api, others: drafts.filter { $0.id != id })
+                    let built = await drafts[i].building(model.api, others: drafts.filter { $0.id != id } + keptGym)
                     drafts[i] = built
                 }
                 if replanned {
                     // A workout that did not build: the week stays as it was.
-                    guard drafts.allSatisfy({ $0.status == .ready }) else { ok = false; continue }
-                    try await deletePlanned(model, week: week, today: today, calendar: calendar)
+                    guard drafts.allSatisfy({ $0.status == .ready }) else { result.ok = false; continue }
+                    try await deletePlanned(model, dates: dates, calendar: calendar)
                 }
-                if try await save(model, drafts) == false { ok = false }
+                if try await save(model, drafts) == false { result.ok = false }
             } catch {
-                ok = false
+                result.ok = false
             }
         }
-        return ok
+        return result
     }
 
-    /// The week's planned workouts from today on go; the finished ones stay.
+    /// The days' planned workouts go; the finished ones stay.
     @MainActor
-    private static func deletePlanned(_ model: AppModel, week: String, today: String, calendar: [String: CalendarDay]) async throws {
-        for date in ISODay.range(max(week, today), ISODay.shift(week, 6)) {
+    private static func deletePlanned(_ model: AppModel, dates: [String], calendar: [String: CalendarDay]) async throws {
+        for date in dates {
             for a in calendar[date]?.activities ?? [] where a.status == "planned" {
                 if let eventId = a.eventId {
                     try await model.api.deletePlanned(eventId: eventId)
@@ -701,9 +729,10 @@ enum WeekPlanGenerator {
         }
     }
 
-    /// The first day from today whose sports, rest or usual time changed; today when none did.
-    static func replanFrom(weeks: [String], today: String, choices: [String: WeekPlanChoice], original: [String: WeekPlanChoice],
-                           usual: [Int], usualBefore: [Int]) -> String {
+    /// The days from today whose sports, rest, other sports or usual time changed, in order (a weekday's
+    /// usual time changes it in both weeks); empty when none did.
+    static func changedDays(weeks: [String], today: String, choices: [String: WeekPlanChoice], original: [String: WeekPlanChoice],
+                            usual: [Int], usualBefore: [Int]) -> [String] {
         // A day's practice or match, the next Monday's from the next week (none after the last week shown).
         func events(_ list: [String: WeekPlanChoice], _ week: String, _ i: Int) -> [OtherSportEvent] {
             i < 6 ? list[week]?.events[i + 1] ?? [] : list[ISODay.shift(week, 7)]?.events[0] ?? []
@@ -718,7 +747,7 @@ enum WeekPlanGenerator {
                 return day || usual[i] != usualBefore[i] ? date : nil
             }
         }
-        return changed.min() ?? today
+        return changed.sorted()
     }
 
     /// A week is sent when it changed, or when the usual week's other sports changed

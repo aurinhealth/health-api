@@ -647,6 +647,7 @@ struct PendingFoodRow: View {
                 Button(action: add) {
                     Text("Přidat").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 32)
+                        .tapTarget(width: 44, height: 32)
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -672,7 +673,7 @@ struct PendingFoodRow: View {
     private var closeButton: some View {
         Button(action: discard) {
             Image(systemName: "xmark").scaledFont(13, weight: .semibold).foregroundStyle(Palette.muted)
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Zahodit")

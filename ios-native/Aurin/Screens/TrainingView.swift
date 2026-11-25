@@ -55,7 +55,7 @@ struct TrainingView: View {
         .animation(.snappy, value: toast?.id)
         .task(id: toast?.id) {
             guard let current = toast else { return }
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == current.id { toast = nil }
             // Also when the screen went away or another toast came: a cancel still reaches the server.
             if let commit = current.settle(undo: false) { Task { await commit() } }

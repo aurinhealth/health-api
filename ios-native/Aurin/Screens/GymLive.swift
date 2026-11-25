@@ -119,6 +119,7 @@ struct LiveGymView: View {
                     Text("Dokončit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 16).frame(height: 34)
                         .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 34)
                 }
                 .buttonStyle(.plain)
             }
@@ -259,11 +260,13 @@ struct LiveGymView: View {
             Button { restEnd = end.addingTimeInterval(30) } label: {
                 Text("+30 s").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             Button { restEnd = nil } label: {
                 Text("Přeskočit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
         }

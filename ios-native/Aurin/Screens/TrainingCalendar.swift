@@ -33,8 +33,8 @@ struct TrainingCalendarCard: View {
             }
         }
         .id(week.first)
-        .transition(.asymmetric(insertion: .move(edge: direction > 0 ? .trailing : .leading).combined(with: .opacity),
-                                removal: .move(edge: direction > 0 ? .leading : .trailing).combined(with: .opacity)))
+        .motionTransition(.asymmetric(insertion: .move(edge: direction > 0 ? .trailing : .leading).combined(with: .opacity),
+                                      removal: .move(edge: direction > 0 ? .leading : .trailing).combined(with: .opacity)))
         .clipped()
         .contentShape(Rectangle())
         .gesture(

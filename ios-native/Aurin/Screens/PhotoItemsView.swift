@@ -151,6 +151,7 @@ struct PhotoItemsView: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 26, height: 26).background(Palette.track, in: Circle())
+                .tapTarget(width: 26, height: 26)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
