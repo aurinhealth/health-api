@@ -128,7 +128,7 @@ struct GymSessionView: View {
                     // exercises open from "Exercise 1 of 7 ›" under the name.
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { coach = true } label: { WatchCoachLights() }
-                            .accessibilityLabel(W.tr("Kouč", "Coach"))
+                            .accessibilityLabel(W.tr("Kouč, AI", "Coach, AI"))
                     }
                 }
             }
