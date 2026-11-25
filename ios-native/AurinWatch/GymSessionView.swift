@@ -364,15 +364,17 @@ struct GymSessionView: View {
             // Time and heart rate as a small line right above Set done, never
             // under it (concept 06, point 3; CI screenshot: the line was cut).
             if !dimmed {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts.
+                    // In the live line's place while it shows: one line more did not fit above the tiles (CI screenshot).
                     if hintWorkouts <= 3, !crown {
                         Text(W.tr("Klepni na číslo, pak otoč korunkou", "Tap a number, then turn the crown"))
-                            .watchFont(12).foregroundStyle(W.muted)
-                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                            .watchFont(12).foregroundStyle(W.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 2)
+                    } else {
+                        liveLine.padding(.horizontal, 2)
                     }
-                    liveLine.padding(.horizontal, 2)
                     setDone(gym, lift)
                 }
             }
@@ -403,8 +405,8 @@ struct GymSessionView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                // Big enough with gloves on (watch review KRIT-18; watchOS's 44 pt default).
-                .frame(height: W.small ? 40 : 44)
+                // Big enough with gloves on (watch review KRIT-18); 44 pt pushed the tiles under it.
+                .frame(height: 40)
                 .background(W.ink, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -450,9 +452,11 @@ struct GymSessionView: View {
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
                     }
                     .watchFont(12, .medium).foregroundStyle(W.secondary)
-                    // Not under watchOS's 28 pt minimum to tap.
-                    .frame(minHeight: 28)
+                    .frame(minHeight: 18)
+                    // A 28 pt tap area (watchOS's minimum) without making the row taller.
+                    .padding(.vertical, 5)
                     .contentShape(Rectangle())
+                    .padding(.vertical, -5)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(W.tr("Seznam cviků", "The exercises"))
