@@ -116,12 +116,15 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "čtvrtek")
-        parts.hour = 14
-        XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
-        let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
-        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle, svaly")
+        // Regenerace's page (concept B): a past day can't read as one ahead.
+        XCTAssertEqual(RecoveryTime.pastDay("2026-10-11", today: "2026-10-15"), "minulou neděli")
+        XCTAssertEqual(RecoveryTime.pastDay("2026-10-14", today: "2026-10-15"), "včera")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13", partOfDay: true), "ve čtvrtek večer")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-14", partOfDay: true), "zítra večer")
+        parts.hour = 14
         // A yellow or red morning: hard training waits for a greener one.
         let time = DemoData.today.recoveryTime
         XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
@@ -238,6 +241,42 @@ final class SnapshotTests: XCTestCase {
     /// The athlete status sheet (concept b-podstranky-03): four rows in one card.
     func testAthleteStatusSheet() throws {
         try render("today-status", height: 560) { AthleteStatusSheet(current: .active).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
+    /// Regenerace (concept B, 2026-11-24): three gym days in one line with
+    /// the day the muscles are rested, the morning's signs in words, a
+    /// yellow morning as its own reason and in the headline's condition.
+    func testRecoveryTimeReasons() {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let iso = ISO8601DateFormatter()
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 18)) ?? Date()
+        let friday = cal.date(from: DateComponents(year: 2026, month: 11, day: 27, hour: 19)) ?? Date()
+        let saturday = cal.date(from: DateComponents(year: 2026, month: 11, day: 28, hour: 9)) ?? Date()
+        let tomorrow = cal.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 9)) ?? Date()
+        let gym = { (date: String, ready: Date) in RecoveryTime.Cause(kind: "gym", title: "Gym, upper body", detail: nil, date: date, hours: 96, readyAt: iso.string(from: ready)) }
+        let time = RecoveryTime(readyAt: iso.string(from: saturday), from: iso.string(from: now), lightAt: iso.string(from: tomorrow), hours: 111, progress: 0, causes: [
+            gym("2026-11-23", friday), gym("2026-11-22", friday.addingTimeInterval(-86400)), gym("2026-11-20", tomorrow),
+            RecoveryTime.Cause(kind: "sleep", title: nil, detail: nil, date: nil, hours: 8, minutes: 263, need: 538),
+            RecoveryTime.Cause(kind: "restingHR", title: nil, detail: nil, date: nil, hours: 2, value: 59, high: 57)
+        ])
+        XCTAssertEqual(RecoveryTimeContent.headline(time, today: "2026-11-23", zone: "yellow", now: now), "Saturday morning")
+        XCTAssertEqual(RecoveryTimeContent.condition(time, zone: "yellow", now: now), "Estimate, if that morning's readiness is green.")
+        XCTAssertEqual(RecoveryTimeContent.hardRow(time, today: "2026-11-23", zone: "yellow", now: now), "Saturday morning, if green")
+        XCTAssertEqual(RecoveryTimeContent.hardRow(time, today: "2026-11-23", zone: "green", now: now), "Saturday morning")
+        let reasons = RecoveryTimeContent.reasons(time, today: "2026-11-23", zone: "yellow", now: now)
+        XCTAssertEqual(reasons.map(\.title), ["Gym, upper body, 3 workouts", "Short sleep", "Resting heart rate", "Yellow readiness today"])
+        XCTAssertEqual(reasons.map(\.detail), ["Last Friday, yesterday and today. Muscles rested by Friday",
+                                               "4\u{00A0}h\u{00A0}23\u{00A0}min of 8\u{00A0}h\u{00A0}58\u{00A0}min needed",
+                                               "59 bpm, above your usual range", "Hard training needs a green morning"])
+        // Past the time on a yellow morning: no day, the green morning decides.
+        let later = saturday.addingTimeInterval(3600)
+        XCTAssertEqual(RecoveryTimeContent.headline(time, today: "2026-11-28", zone: "yellow", now: later), "Next green morning")
+        XCTAssertEqual(RecoveryTimeContent.reasons(time, today: "2026-11-28", zone: "green", now: later).count, 3)
     }
 
     func testRecoveryTimeScreen() throws {
