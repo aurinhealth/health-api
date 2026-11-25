@@ -6,7 +6,7 @@ import { trainingSetup } from './onboarding.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { subscriptionStatus, assertAIAccess, plansUnlocked, assertPlanAccess, paywallOn } from './subscription.js';
 import { claimCoachMessage, claimFreeReply, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
-import { takeChipAnswer, giveChipBack } from './coach-questions.js';
+import { takeChipAnswer, giveChipBack, questionChips } from './coach-questions.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
@@ -182,6 +182,7 @@ import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraft
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
+import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
@@ -1713,6 +1714,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
+  // The coach's question after a training gap (coach-gap-checkin.js, AI-7): the
+  // redesign app asks when the coach chat opens; the server posts it once per
+  // gap as a new chat with the chips All good, Rest, Sick, Injured.
+  if(url.pathname==='/app/api/coach/gap-checkin'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const date=localToday(),[state,inputs]=await Promise.all([getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,date)]);
+      const readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
+      const question=gapCheckin({date,weekDays:inputs.week?.days||[],sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
+      return Response.json({status:'ok',question:await postGapCheckin(env.DB,question)},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){console.error('Gap check-in failed',error.message);return Response.json({message:error.message},{status:500});}
+  }
   // The coach's push "… vyměním za lehkou jízdu 60 min?" (coach-push.js):
   // "Vyměnit" puts an easy session in place of the hard one, "Nechat" keeps it.
   if(url.pathname==='/app/api/coach/nudge'&&request.method==='POST'){
@@ -2808,6 +2822,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
       // "Plan around your knee?" is a card of the redesign app (API level 3) only.
       if(!(Number(appApiLevel(request))>=3))chat.actions=chat.actions.filter(a=>a.type!=='plan_around');
+      // The chips of a server question under the chat's last coach message, until one is tapped (coach-questions.js).
+      const lastCoach=chat.messages.filter(m=>m.role==='assistant').at(-1);
+      const chips=lastCoach&&chat.messages.at(-1)===lastCoach?await questionChips(env.DB,chat.id,lastCoach.id).catch(()=>[]):[];
+      if(chips.length)chat.question={messageId:lastCoach.id,chips};
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
