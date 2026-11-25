@@ -47,5 +47,6 @@ test("the gate names the photo route, the table goes and stays with the account"
   assert.ok(KEPT_TABLES.has("food_photo_trial"), "pausing health data does not start the photos over");
   const routes = readFileSync(new URL("../src/routes-food.js", import.meta.url), "utf8");
   assert.match(routes, /if\(!await plansUnlocked\(env\)&&\(body\.mode==='front'\|\|body\.mode==='barcode'\|\|!await claimFoodPhoto\(env\)\)\)return Response\.json\(\{status:'subscription_required'/, "without Pro: a photo is taken first, the package front and barcode need Pro");
-  assert.match(routes, /if\(!r\.result\)\{await returnFoodPhoto\(env\);/, "an unread photo is given back");
+  assert.match(routes, /if\(!r\.result\)\{return Response\.json\(\{status:'unreadable'/, "a photo AI read but found nothing in still counts (it was billed)");
+  assert.match(routes, /catch\(error\)\{await returnFoodPhoto\(env\)/, "a failed call gives the photo back");
 });

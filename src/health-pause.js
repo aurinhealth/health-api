@@ -20,7 +20,7 @@ export const KEPT_TABLES = new Set([
   'user_consents', 'user_identities', 'user_passkeys', 'user_language', 'user_time_zone',
   'connection_credentials', 'connection_accounts', 'subscriptions', 'store_originals', 'push_tokens', 'profile_photos',
   'app_settings', 'user_setup', 'ai_usage', 'coach_pack_purchases', 'coach_pack_balance', 'coach_messages', 'coach_carryover', 'food_photo_trial',
-  'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions', 'support_reports',
+  'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',
   'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods',
   'saved_workouts', 'workout_shares',

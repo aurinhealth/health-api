@@ -63,6 +63,10 @@ function activityClock(a){
   const at=v=>v?localDateTime(v).slice(11,16)||undefined:undefined;
   return {start:at(a.start),end:at(a.end),source:a.family||(/^(activity|merged):/.test(String(a.id||''))?'local':a.source)};
 }
+// Names and tags come from other services: one line each, cut short, so a long
+// title cannot carry a page of text into the coach (Gemini review 2026-11-25).
+const shortText=(v,max=120)=>v==null?v:String(v).replace(/[\u0000-\u001f\u007f]+/g,' ').trim().slice(0,max);
+const shortTags=t=>Array.isArray(t)?t.slice(0,10).map(x=>shortText(x,40)):t==null?t:shortText(t,40);
 export function compactActivity(a={}){
   const p=a.payload&&typeof a.payload==='object'?a.payload:{},w=p.exercise?.metricsSummary&&typeof p.exercise.metricsSummary==='object'?p.exercise.metricsSummary:{};
   const intensity=first(a.intensityFactor,p.icu_intensity),distance=first(p.distance,watchMetric(w,/^distance/i));
@@ -70,7 +74,7 @@ export function compactActivity(a={}){
   const pace=run&&distance>=500&&hours>0?hours*3600/(distance/1000):null;
   const minutes=secs=>round(num(secs)/60);
   return compactObject({
-    id:a.id,name:a.name||p.name,type:a.type||p.type,...activityClock(a),durationHours:round(num(a.durationHours),2),tss:round(first(a.tss,p.icu_training_load)),
+    id:a.id,name:shortText(a.name||p.name),type:shortText(a.type||p.type,40),...activityClock(a),durationHours:round(num(a.durationHours),2),tss:round(first(a.tss,p.icu_training_load)),
     averagePower:round(first(a.averagePower,p.icu_average_watts,p.average_watts,watchMetric(w,/power/i))),normalizedPower:round(first(a.normalizedPower,p.icu_weighted_average_watts,p.weighted_average_watts)),
     averageHeartRate:round(first(a.averageHeartRate,p.average_heartrate,p.average_hr,watchMetric(w,/heart.*(avg|average)|(avg|average).*heart/i))),maxHeartRate:round(first(a.maxHeartRate,p.max_heartrate,watchMetric(w,/heart.*max|max.*heart/i))),
     // Intervals stores intensity as a percentage of FTP (75 = IF 0.75).
@@ -79,10 +83,10 @@ export function compactActivity(a={}){
     distanceKm:distance==null?null:round(distance/1000,1),pace:pace?paceText(pace):null,elevationM:round(first(p.total_elevation_gain,watchMetric(w,/elevation/i))),calories:round(first(a.calories,watchMetric(w,/calorie/i))),
     powerZoneMinutes:Array.isArray(p.icu_zone_times)?p.icu_zone_times.map(z=>({zone:z.id,minutes:minutes(z.secs)})).filter(z=>z.minutes>0):null,
     hrZoneMinutes:Array.isArray(p.icu_hr_zone_times)?p.icu_hr_zone_times.map((secs,i)=>({zone:'Z'+(i+1),minutes:minutes(secs)})).filter(z=>z.minutes>0):null,
-    tags:a.tags
+    tags:shortTags(a.tags)
   });
 }
-export const compactPlanned=a=>compactObject({id:a.id,name:a.name,type:a.type,durationHours:round(num(a.durationHours),2),tss:round(num(a.tss)),tags:a.tags});
+export const compactPlanned=a=>compactObject({id:a.id,name:shortText(a.name),type:shortText(a.type,40),durationHours:round(num(a.durationHours),2),tss:round(num(a.tss)),tags:shortTags(a.tags)});
 // The day's training without raw payloads (they were most of the tokens).
 export function compactTraining(training){
   if(!training)return null;
@@ -552,7 +556,9 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
   catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId,hold}).catch(()=>{});throw error;}
   // Web searches are billed per call; a failed one is not.
   const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
-  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId,hold});
+  // An answer without usage keeps its reservation instead of costing nothing (Gemini review 2026-11-25).
+  if(data.usage)await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId,hold});
+  else await keepAiReservation(env,slotId,{feature,model:data.model||chosenModel,hold});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?L('Odpověď AI byla moc dlouhá a nedokončila se. Zkus zadání zúžit.', 'The AI answer ran too long and was cut off. Try a narrower request.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));

@@ -110,5 +110,5 @@ export async function exerciseInUse(db, exercise) {
   const name = normalizeExerciseName(exercise);
   const history = await db.prepare('SELECT 1 FROM strength_sets WHERE user_id=? AND lower(exercise)=lower(?) LIMIT 1').bind(db.userId, name).first().catch(() => null);
   if (history) return true;
-  return Boolean(await db.prepare('SELECT 1 FROM gym_plans WHERE user_id=? AND values_json LIKE ? LIMIT 1').bind(db.userId, '%' + JSON.stringify(name).slice(1, -1) + '%').first().catch(() => null));
+  return Boolean(await db.prepare("SELECT 1 FROM gym_plans WHERE user_id=? AND values_json LIKE ? ESCAPE '\\' LIMIT 1").bind(db.userId, '%' + JSON.stringify(name).slice(1, -1).replace(/[\\%_]/g, c => '\\' + c) + '%').first().catch(() => null));
 }

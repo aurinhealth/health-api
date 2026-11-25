@@ -15,7 +15,10 @@ import { siteLang } from "./site-pages.js";
 const OPEN_PATHS = new Set([
   "/",
   "/privacy",
+  "/cs/privacy",
   "/terms",
+  "/cs/terms",
+  "/health-data",
   "/support",
   "/logo.svg",
   "/app/logout",
@@ -25,7 +28,7 @@ const OPEN_PATHS = new Set([
   "/auth/app/connect"
 ]);
 // /t/<id>: a workout shared with a link (workout-templates.js).
-const OPEN_PREFIXES = ["/oauth/", "/.well-known/", "/t/"];
+const OPEN_PREFIXES = ["/oauth/", "/.well-known/", "/t/", "/support/report/"];
 
 export function webAppClosed(app) {
   return {

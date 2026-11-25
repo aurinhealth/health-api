@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { handleSupportReport, saveSupportReport, validateReport, reportFindings, reportWhere, reportScreen, requestClient, MAX_SCREENSHOT_BASE64, MAX_DIAGNOSTICS, DAILY_REPORTS } from "../src/support-report.js";
+import { handleSupportReport, handleReportView, reportViewLink, saveSupportReport, validateReport, reportFindings, reportWhere, reportScreen, requestClient, MAX_SCREENSHOT_BASE64, MAX_DIAGNOSTICS, DAILY_REPORTS } from "../src/support-report.js";
 
 const migration = readFileSync(new URL("../migrations/0016_support_reports.sql", import.meta.url), "utf8");
 const JPEG = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD";
@@ -11,7 +11,7 @@ function setup(extra = {}) {
   const raw = createD1();
   raw.sqlite.exec(migration);
   const sent = [];
-  const env = { DB: scopedDb(raw, 3), USER_ID: 3, USER_EMAIL: "a@b.cz", CONTACT_EMAIL: "support@example.com", EMAIL_FROM: "app@example.com", EMAIL: { async send(message) { sent.push(message); return { messageId: "m" }; } }, ...extra };
+  const env = { DB: scopedDb(raw, 3), USER_ID: 3, USER_EMAIL: "a@b.cz", CONTACT_EMAIL: "support@example.com", EMAIL_FROM: "app@example.com", SESSION_SECRET: "test-secret-key-for-support", EMAIL: { async send(message) { sent.push(message); return { messageId: "m" }; } }, ...extra };
   return { raw, env, sent };
 }
 const post = (body, origin = "https://x.test") => new Request("https://x.test/app/api/support/report", { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -29,7 +29,24 @@ test("a report is stored with its screenshot and diagnostics and e-mailed to sup
   assert.equal(row.emailed, 1);
   assert.equal(sent[0].to, "support@example.com");
   assert.match(sent[0].text, /Sync nefunguje/);
-  assert.match(sent[0].text, /"offline": false/);
+  // Gemini review 2026-11-25 (Petr chose): no screenshot and no diagnostics in the e-mail, a signed link instead.
+  assert.doesNotMatch(sent[0].text, /"offline": false/);
+  assert.doesNotMatch(sent[0].html, /data:image|"offline"/);
+  const link = /https?:\/\/\S+\/support\/report\/3\/1\/\d+\/[\w-]+/.exec(sent[0].text)?.[0];
+  assert.ok(link, "the e-mail links the report");
+  const reportDb = async id => (id === 3 ? env.DB : null);
+  const page = await handleReportView(new Request(link), env, new URL(link), { reportDb });
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /Sync nefunguje/);
+  assert.match(html, /data:image\/jpeg;base64,/);
+  assert.match(html, /&quot;offline&quot;: false/);
+  assert.equal(page.headers.get("Cache-Control"), "no-store");
+  // A changed number, another user or a wrong signature opens nothing.
+  for (const bad of [link.replace("/3/1/", "/3/2/"), link.replace("/3/1/", "/4/1/"), link.slice(0, -2) + "xx"]) assert.equal((await handleReportView(new Request(bad), env, new URL(bad), { reportDb })).status, 404, bad);
+  // After 30 days the link is gone.
+  const old = await reportViewLink(env, 3, 1, Date.now() - 31 * 86400000);
+  assert.equal((await handleReportView(new Request(old), env, new URL(old), { reportDb })).status, 404);
 });
 
 test("a line break in the screen name never reaches the e-mail's headers", async () => {

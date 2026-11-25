@@ -149,8 +149,11 @@ export async function websitePhotos(link, fetchImpl = fetch) {
 
 export async function detectGymEquipment(env, { images = [], url = "" } = {}, fetchImpl = fetch) {
   const pictures = (Array.isArray(images) ? images : [images]).filter(Boolean).slice(0, 8);
-  const link = String(url || "").trim();
-  if (!pictures.length && !/^https?:\/\/\S+$/i.test(link)) throw new Error(L("Pošli fotku posilovny nebo odkaz na její web.", "Send a photo of the gym or a link to its website."));
+  const typed = String(url || "").trim();
+  // Only a public web address goes to the AI, with or without photos (Gemini review 2026-11-25).
+  const link = typed ? publicUrl(typed.slice(0, 500)) : "";
+  if (typed && (!link || typed.length > 500)) throw new Error(L("Odkaz na web posilovny není platný.", "The gym website link is not valid."));
+  if (!pictures.length && !link) throw new Error(L("Pošli fotku posilovny nebo odkaz na její web.", "Send a photo of the gym or a link to its website."));
   if (pictures.some(p => !validFoodImage(p))) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
   // A web page: its text through web search, and its photos as pictures.
   // The AI limits first: an account past them makes the Worker fetch no page (audit 2026-11-24 point 8).
