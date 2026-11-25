@@ -17,6 +17,8 @@ export const LOAD_TEST_AUDIENCE = 'aurin-load-test';
 export const LOAD_TEST_WORKFLOWS = new Set(['aurinhealth/health-api/.github/workflows/load-test.yml@refs/heads/main']);
 export const LOAD_TEST_MAX_ACCOUNTS = 50;
 export const LOAD_TEST_SESSION_SECONDS = 2 * 60 * 60;
+// Accounts one cleanup call deletes; the script calls again while some remain.
+export const LOAD_TEST_CLEANUP_BATCH = 5;
 export const loadTestEmail = n => `sample+load${String(n).padStart(2, '0')}@test.aurin.health`;
 const LOAD_EMAIL = /^sample\+load\d{2}@test\.aurin\.health$/;
 
@@ -51,13 +53,13 @@ export async function handleLoadTest(request, env, principal, { remove = deleteA
   if (body?.cleanup) {
     const rows = (await env.DB.prepare("SELECT id, email, name, role FROM users WHERE email LIKE 'sample+load%@test.aurin.health'").all()).results || [];
     let deleted = 0, failed = 0;
-    for (const row of rows.filter(r => LOAD_EMAIL.test(r.email))) {
+    const accounts = rows.filter(r => LOAD_EMAIL.test(r.email) && !publicUser(r, env).isOwner);
+    for (const row of accounts.slice(0, LOAD_TEST_CLEANUP_BATCH)) {
       const user = publicUser(row, env);
-      if (user.isOwner) continue;
       try { await remove(await environment(env, user), user, { budgetMs: 5000 }); deleted++; }
       catch (error) { failed++; console.error('Load test account not deleted', row.id, error.message); }
     }
-    return Response.json({ status: failed ? 'error' : 'ok', deleted, failed }, { headers });
+    return Response.json({ status: failed ? 'error' : 'ok', deleted, failed, remaining: accounts.length - deleted }, { headers });
   }
   return Response.json({ status: 'error', message: 'Use prepare or cleanup.' }, { status: 400, headers });
 }
