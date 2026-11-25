@@ -53,6 +53,12 @@ test("other gyms' equipment is listed and its exercises are complete", () => {
   }
   for (const name of OTHER_GYM_EXERCISES) assert.notEqual(withLang("en", () => EXERCISES[name].note), EXERCISES[name].note, name + " has an English note");
   assert.equal(stationLabel("Landmine press"), "Landmine (ukotvení osy) + Stojan na rovné osy + trny na kotouče");
+  // No Czech station name in English (Wrist Roller showed "Kotouče", 2026-11-14).
+  assert.equal(withLang("en", () => stationLabel("Wrist Roller")), "Weight plates");
+  for (const name of Object.keys(EXERCISE_STATIONS)) {
+    const label = withLang("en", () => stationLabel(name)) || "";
+    assert.doesNotMatch(label, /[áčďéěíňóřšťúůýž]|Volné|lavice|stroj|osa\b|kladky|Činkárna|Podložky/iu, name + ": " + label);
+  }
 });
 
 test("exercises for other equipment are chosen only when the athlete has it", () => {

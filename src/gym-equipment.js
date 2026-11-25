@@ -100,6 +100,7 @@ const STATION_EN = {
  "Klec na dřepy (power rack)": "Power rack",
  "Smith stroj": "Smith machine",
  "Podložky na zem": "Floor mats",
+ "Kotouče": "Weight plates",
  "Lýtka v polostoji": "Standing calf raise machine",
  "Rowing stroj na záda vestoje": "Standing rowing machine",
  "Standing multi flight (roztahování na ramena)": "Standing multi flight (shoulder flyes)",
