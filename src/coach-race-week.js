@@ -28,8 +28,6 @@ import { L, paceText } from './lang.js';
 import { carbsPerHour } from './workout-explanation.js';
 import { runRaceSeconds, rideRace } from './race-estimate.js';
 import { openWaterPace } from './training-plans.js';
-import { ensureAssistantChats } from './assistant-chats.js';
-import { updateAthleteState } from './athlete-state.js';
 
 export const RACE_WEEK_DAYS = 6;
 export const RACE_WEEK_SPORTS = ['run', 'ride', 'swim'];
@@ -200,6 +198,8 @@ export function raceWeek({ focus, thresholdPace = null, ftp = null, swimCss = nu
 // day): the text only, the card's numbers come from GET /app/api/coach/race-week.
 export async function postRaceWeek(db, week) {
   if (!week?.race?.date) return null;
+  // Loaded here: the coach's context (coach-assistant.js) imports raceWeek, and these import it back.
+  const [{ ensureAssistantChats }, { updateAthleteState }] = await Promise.all([import('./assistant-chats.js'), import('./athlete-state.js')]);
   await ensureAssistantChats(db);
   const chat = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?) RETURNING id').bind(db.userId, L('Závodní týden', 'Race week')).first();
   const message = await db.prepare("INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,'assistant',?) RETURNING id").bind(chat.id, db.userId, week.text).first();

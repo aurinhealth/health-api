@@ -1,3 +1,4 @@
+import { raceWeek } from './coach-race-week.js';
 import {assertAIAccess} from './subscription.js';
 import { assertAiTotal, addAiSpend, alertAiQuota } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
@@ -275,6 +276,8 @@ export function recoveryForCoach(r) {
 
 export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null,feeling=null}) {
   const strengthSince=shiftDay(date,-14);
+  const rw=raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,ftp:thresholds?.ftp??null,swimCss:thresholds?.swimCss??null,weightKg:daily?.weight?.current??null,experience});
+  const race=rw?{race:rw.race,fuel:rw.fuel.rows.map(r=>({when:r.when,title:r.title,text:r.text})),...(rw.pacing?{pacing:{line:rw.pacing.line,segments:rw.pacing.segments.map(x=>({from:x.fromKm??x.fromM,to:x.toKm??x.toM,unit:x.fromKm!=null?'km':'m',value:x.paceText||x.wattsText,cue:x.cue})),...(rw.pacing.climb?{climb:rw.pacing.climb}:{})}}:{})}:null;
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
     date: row.date, weekday: weekdayOf(row.date),
@@ -306,6 +309,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     statusUntil:athleteState?.statusUntil||null,
     rhythm:preferences.weeklyActivities == null ? null : {weeklyActivities:preferences.weeklyActivities},
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),
+    // The race week's fuel and pacing, the same numbers as the chat's cards (coach-race-week.js).
+    ...(race?{raceWeek:race}:{}),
     // Only when the athlete shares it (cycle-model.js cycleForCoach).
     ...(cycle?{cycle}:{}),
     // Back from Sick (illness-return.js): the easy days the server set, the same
