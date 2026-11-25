@@ -96,12 +96,17 @@ import UIKit
               let coordinator = navigation.transitionCoordinator, coordinator.isCancelled,
               Self.finished(translation: pan.translation(in: view).x, velocity: pan.velocity(in: view).x, width: view.bounds.width)
         else { return }
-        let page = navigation.topViewController
+        // The page the swipe tried to take away. Not topViewController: during
+        // the pop that is already the page underneath (CI log, round 2).
+        let page = coordinator.viewController(forKey: .from)
         coordinator.animate(alongsideTransition: nil) { _ in
             // Once the cancel has settled: still the same page on top, nothing else moving.
             DispatchQueue.main.async {
-                guard navigation.topViewController === page, navigation.viewControllers.count > 1,
-                      navigation.transitionCoordinator == nil else { return }
+                guard let page, navigation.topViewController === page, navigation.viewControllers.count > 1,
+                      navigation.transitionCoordinator == nil else {
+                    Self.log("cancelled swipe not redone: top is the page \(navigation.topViewController === page), \(navigation.viewControllers.count) pages, animating \(navigation.transitionCoordinator != nil)")
+                    return
+                }
                 Self.log("UIKit cancelled a finished swipe: popping")
                 navigation.popViewController(animated: true)
             }
