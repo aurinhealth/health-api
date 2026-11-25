@@ -103,44 +103,24 @@ final class PlanStore: ObservableObject {
         WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.aurin")
     }
 
+    /// Zone colour set B (Palette.Zone, dark), as on the iPhone.
     static func color(_ zone: Int) -> Color {
         switch zone {
-        case 1: Color(hex: 0x6B7275)
-        case 2: W.blue
-        case 3: W.green
-        case 4: W.amber
-        case 5: Color(hex: 0xF0907A)
-        default: W.indigo
+        case 1: Color(hex: 0x8C928F)
+        case 2: Color(hex: 0x86A9FF)
+        case 3: Color(hex: 0x8FE6C4)
+        case 4: Color(hex: 0xE09A55)
+        case 5: Color(hex: 0xEC4A58)
+        case 6: Color(hex: 0xD98BF0)
+        default: Color(hex: 0xFF7EB6)
         }
     }
 }
 
-/// The steps as blocks over time, their height and colour by zone.
-struct PlanBars: View {
-    let plan: WatchPlan
-
-    var body: some View {
-        let steps = plan.ridden
-        let total = max(steps.map(\.seconds).reduce(0, +), 1)
-        GeometryReader { geo in
-            let gap: CGFloat = steps.count > 40 ? 0.5 : 1
-            let width = geo.size.width - gap * CGFloat(max(steps.count - 1, 0))
-            HStack(alignment: .bottom, spacing: gap) {
-                ForEach(Array(steps.enumerated()), id: \.offset) { _, s in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(PlanStore.color(s.zone))
-                        .frame(width: max(1, width * CGFloat(s.seconds / total)),
-                               height: geo.size.height * CGFloat(0.28 + 0.12 * Double(min(s.zone, 6))))
-                }
-            }
-            .frame(maxHeight: .infinity, alignment: .bottom)
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// Tapping a ride or run on Training: what it is, its chart, and by the
-/// crown every step with its length and zone.
+/// Tapping a ride, run or swim on Training (watch concept 05): its name in
+/// the serif and every step on a row, a bar in its zone's colour (grey for a
+/// swim, which has no zone), the step and its length, the zone and target
+/// under it; Start in Workout pinned at the bottom. The Workout app runs it.
 struct RideDetail: View {
     let session: WatchSnapshot.Session
     @EnvironmentObject private var watch: WatchStore
@@ -149,56 +129,63 @@ struct RideDetail: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 5) {
-                    Image(systemName: W.sportSymbol(session.sport)).watchFont(12)
-                    Text(when.uppercased()).watchFont(12, .semibold)
-                }
-                .foregroundStyle(W.amber)
                 Text(TrainingPage.name(session))
-                    .font(W.news(19))
-                    .foregroundStyle(W.ink)
+                    .font(W.serif(21))
+                    .foregroundStyle(W.num)
+                    .lineLimit(2).minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
+                    .padding(.horizontal, 3)
                 if let plan, !plan.steps.isEmpty {
-                    PlanBars(plan: plan).frame(height: 40).padding(.top, 10)
-                    axis(plan).padding(.top, 3)
-                    // Today's start, as on the Training page's card (a brick starts with its next leg).
-                    if WorkoutOpener.canStart(session, plan: plan, today: today, sessions: sessions) {
-                        OpenInWorkoutButton { try await WorkoutOpener.start(session, plan: plan, sessions: sessions) }
-                            .padding(.top, 8)
-                    }
                     VStack(spacing: 0) {
                         ForEach(Array(rows(plan).enumerated()), id: \.offset) { _, row in
+                            Rectangle().fill(W.hair).frame(height: 1)
                             stepRow(row)
                         }
                     }
-                    .padding(.top, 6)
-                    Text(footer)
-                        .watchFont(12)
-                        .foregroundStyle(W.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 8)
+                    .padding(.top, 4)
                 } else if let id = session.eventId, plans.failed.contains(id) {
                     Text(W.tr("Kroky teď nejdou načíst. Otevři Aurin v iPhonu.", "The steps won't load right now. Open Aurin on your iPhone."))
-                        .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
+                        .watchFont(13).foregroundStyle(W.secondary).padding(.top, 10)
                 } else if session.eventId != nil, plan == nil {
                     HStack(spacing: 6) {
                         ProgressView().frame(width: 20, height: 20)
-                        Text(W.tr("Načítám kroky…", "Loading steps…")).watchFont(12).foregroundStyle(W.secondary)
+                        Text(W.tr("Načítám kroky…", "Loading steps…")).watchFont(13).foregroundStyle(W.secondary)
                     }
                     .padding(.top, 14)
                 } else {
                     Text(W.tr("Tenhle trénink nemá kroky.", "This session has no steps."))
-                        .watchFont(12).foregroundStyle(W.secondary).padding(.top, 10)
+                        .watchFont(13).foregroundStyle(W.secondary).padding(.top, 10)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Today's start pinned at the bottom (a brick starts with its next leg).
+        .safeAreaInset(edge: .bottom) {
+            if let plan, WorkoutOpener.canStart(session, plan: plan, today: today, sessions: sessions) {
+                OpenInWorkoutButton { try await WorkoutOpener.start(session, plan: plan, sessions: sessions) }
+            }
         }
         .onAppear {
             plans.load(session)
             if let leg = WorkoutOpener.nextLeg(session, in: sessions) { plans.load(leg, shelf: false) }
         }
-        .containerBackground(W.glow(W.Glow.strain), for: .navigation)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: ReadinessHome.Page.coach) { WatchCoachLights() }
+                    .accessibilityLabel(W.tr("Kouč", "Coach"))
+            }
+        }
+        .containerBackground(W.glow(Self.glow(session.sport)), for: .navigation)
+    }
+
+    /// The sport's tint at the top (concept 05): ride violet, run orange, swim blue.
+    static func glow(_ sport: String) -> Color {
+        switch sport {
+        case "ride": Color(hex: 0x2E2456)
+        case "run": Color(hex: 0x4A2608)
+        case "swim": Color(hex: 0x0B3346)
+        default: W.Glow.readiness
+        }
     }
 
     private var plan: WatchPlan? { session.eventId.flatMap { plans.plans[$0] } }
@@ -208,62 +195,55 @@ struct RideDetail: View {
         return s.week ?? []
     }
 
-    /// Where it starts, by sport: only a ride from Wahoo too.
-    private var footer: String {
-        switch session.sport {
-        case "ride": W.tr("Jeď ho z Wahoo nebo z aplikace Cvičení. Kouč ho změní v iPhonu.",
-                          "Ride it from Wahoo or the Workout app. Your coach can change it on your iPhone.")
-        case "swim": W.tr("Plav ho z aplikace Cvičení. Kouč ho změní v iPhonu.",
-                          "Swim it from the Workout app. Your coach can change it on your iPhone.")
-        default: W.tr("Běž ho z aplikace Cvičení. Kouč ho změní v iPhonu.",
-                      "Run it from the Workout app. Your coach can change it on your iPhone.")
-        }
-    }
-
-    /// "ZÍTRA, 60 MIN".
-    private var when: String {
-        let day = W.relativeDay(session.date)
-        let minutes = session.minutes ?? plan?.minutes
-        return day + (session.time.map { ", " + W.clockText($0) } ?? "") + (minutes.map { ", \($0) min" } ?? "")
-    }
-
-    private func axis(_ plan: WatchPlan) -> some View {
-        let total = Int((plan.ridden.map(\.seconds).reduce(0, +) / 60).rounded())
-        return HStack {
-            Text("0")
-            Spacer()
-            Text("\(total / 2) min")
-            Spacer()
-            Text("\(total)")
-        }
-        .watchFont(12)
-        .foregroundStyle(W.muted)
-    }
-
     private struct Row {
+        var title: String
         var length: String
-        var label: String
-        var zone: Int
+        var detail: String?
+        var color: Color
     }
 
-    /// One line per step; a repeated block shows once as "4 × 3′", a pool swim as "4 × 100 m".
+    /// One row per step; a repeated block once as "5 × 4 min", a pool swim as "8 × 100 m".
     private func rows(_ plan: WatchPlan) -> [Row] {
-        plan.steps.map { s in
-            let minutes = s.seconds >= 60 ? W.number(s.seconds / 60, digits: s.seconds.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1) + "′" : "\(Int(s.seconds))″"
+        let swim = session.sport == "swim"
+        return plan.steps.map { s in
+            let whole = s.seconds.truncatingRemainder(dividingBy: 60) == 0
+            let minutes = s.seconds < 60 ? "\(Int(s.seconds)) s"
+                : whole ? W.duration(minutes: s.seconds / 60) : W.number(s.seconds / 60, digits: 1) + " min"
             let length = plan.openWater != true ? s.meters.map { "\(Int($0.rounded())) m" } ?? minutes : minutes
-            return Row(length: s.repeats > 1 ? "\(s.repeats) × " + length : length, label: s.label, zone: s.zone)
+            return Row(title: s.label, length: s.repeats > 1 ? "\(s.repeats) × " + length : length,
+                       detail: swim ? nil : target(s), color: swim ? W.dim : PlanStore.color(s.zone))
         }
+    }
+
+    /// "Zone 2, 150 to 205 W", "Zone 4, 4:20 /km" (per mile in imperial).
+    private func target(_ s: WatchPlan.Step) -> String {
+        var text = W.tr("Zóna ", "Zone ") + String(s.zone)
+        if let low = s.wattsLow, let high = s.wattsHigh {
+            text += ", " + (low > 0 ? W.number(low) + W.tr(" až ", " to ") : W.tr("do ", "up to ")) + W.number(high) + " W"
+        } else if let pace = s.pace, pace > 0 {
+            let shown = W.runPace(pace)
+            text += ", " + shown.value + " " + shown.unit
+        }
+        return text
     }
 
     private func stepRow(_ row: Row) -> some View {
-        HStack(spacing: 7) {
-            RoundedRectangle(cornerRadius: 2).fill(PlanStore.color(row.zone)).frame(width: 4, height: 16)
-            Text(row.length).watchFont(12, .semibold).foregroundStyle(W.ink)
-                .frame(minWidth: 40, alignment: .leading)
-            Text(row.label).watchFont(12).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.8)
-            Spacer(minLength: 2)
-            Text("Z\(row.zone)").watchFont(12, .semibold).foregroundStyle(PlanStore.color(row.zone))
+        HStack(alignment: .top, spacing: 7) {
+            RoundedRectangle(cornerRadius: 2).fill(row.color).frame(width: 4)
+                .padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(row.title).watchFont(15, .medium).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: 4)
+                    Text(row.length).watchFont(13, .medium).foregroundStyle(W.ink).lineLimit(1)
+                }
+                if let detail = row.detail {
+                    Text(detail).watchFont(13).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
         }
-        .padding(.vertical, 3)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 5)
+        .accessibilityElement(children: .combine)
     }
 }

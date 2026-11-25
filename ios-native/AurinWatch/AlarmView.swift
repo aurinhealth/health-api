@@ -150,7 +150,7 @@ private struct AlarmDay: View {
                 }
             }
         } else if set {
-            Text(Self.hours(sleepMinutes) + W.tr(" spánku", " of sleep"))
+            Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
                 .watchFont(12)
                 .foregroundStyle(W.muted)
         } else {
@@ -232,12 +232,6 @@ private struct AlarmDay: View {
         case "weekend": W.tr("víkend", "weekend")
         default: W.tr("všední dny", "weekdays")
         }
-    }
-
-    /// "7 h 20 min", as durations read everywhere (Petr 2026-11-23).
-    static func hours(_ minutes: Int) -> String {
-        let h = minutes / 60, m = minutes % 60
-        return m == 0 ? "\(h) h" : "\(h) h \(m) min"
     }
 
     /// "6:45" or "06:45" as minutes after midnight.
