@@ -543,11 +543,12 @@ struct GymSessionView: View {
         .background(W.tile, in: Capsule())
     }
 
-    /// "série 2/4" ("kolo 2/4" in a superset), "rozcvička", "drop", with the side of a one-sided set.
+    /// "série 2/4" ("kolo 2/4" in a superset), "zahřívací série", "drop", with the side of a one-sided set.
     private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, superset: Bool = false, side: Bool = true) -> String {
         var text: String
         if lift.warmup {
-            text = W.tr("Rozcvička", "Warm-up")
+            // Not "Rozcvička": that is the day's warm-up part (GymPartView).
+            text = W.tr("Zahřívací série", "Warm-up set")
         } else if lift.drop {
             text = "Drop"
         } else {
@@ -610,8 +611,10 @@ struct GymSessionView: View {
     /// set and the rest already have (no row of its own where the screen is short).
     private var liveLine: some View {
         HStack(spacing: 5) {
+            // The workout's time, not the time of day beside it at the top (QA-24): marked as a stopwatch.
+            Image(systemName: "stopwatch").foregroundStyle(W.secondary).accessibilityHidden(true)
             clock.foregroundStyle(W.secondary)
-            Circle().fill(W.pink).frame(width: 5, height: 5).accessibilityHidden(true)
+            Image(systemName: "heart.fill").foregroundStyle(W.pink).padding(.leading, 3).accessibilityHidden(true)
             // As the Heart tile said it: a bare dash told nothing (Petr 2026-11-09).
             Text(workout.heartRate.map { W.number($0) + " bpm" } ?? (workout.noHealth ? W.tr("Povol ve Zdraví", "Allow in Health") : "–"))
                 .foregroundStyle(W.secondary)
@@ -1322,7 +1325,7 @@ struct GymExerciseList: View {
         let routine = parts.moves(part, day: day)
         if part == .warmup {
             let count = routine?.items.count ?? 0
-            return W.english ? "\(count) move" + (count == 1 ? "" : "s") : "\(count) " + (count == 1 ? "cvik" : count < 5 ? "cviky" : "cviků")
+            return W.english ? "\(count) move" + (count == 1 ? "" : "s") : W.czech(count, "cvik", "cviky", "cviků")
         }
         return "\(routine?.minutes ?? 0) min"
     }
@@ -1578,7 +1581,7 @@ struct GymSummary: View {
                     stat(W.tr("Série", "Sets"), "\(store.gym?.setsDone ?? 0)")
                     stat(W.tr("Objem", "Volume"), GymText.volume(store.gym?.volume ?? 0))
                     stat(W.tr("Kalorie", "Calories"), W.number(workout.calories))
-                    stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
+                    stat(W.tr("Prům. tep", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
                 }
                 partRows
                 exerciseRows

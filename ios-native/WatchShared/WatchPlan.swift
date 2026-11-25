@@ -35,6 +35,12 @@ struct WatchPlan: Codable, Equatable, Sendable {
         var wattsLow: Double? = nil
         var wattsHigh: Double? = nil
         var pace: Double? = nil
+        /// The range for the Workout app's alerts, as the iPhone sends them
+        /// (WatchWorkout.swift): the pace range (s/km), else the heart-rate zone (bpm).
+        var paceSlow: Double? = nil
+        var paceFast: Double? = nil
+        var hrLow: Double? = nil
+        var hrHigh: Double? = nil
     }
 
     struct Request: Codable, Sendable {
@@ -120,7 +126,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
                 steps.append(step(seconds: number(s["durationSeconds"]), low: number(s["percentLow"]), high: number(s["percentHigh"]),
                                   note: s["note"] as? String, intensity: s["intensity"] as? String, meters: number(s["meters"]),
                                   rest: s["rest"] as? Bool == true, swim: swim, english: english, repeats: repeats, first: i == 0,
-                                  watts: (number(s["wattsLow"]), number(s["wattsHigh"])), pace: (paceSeconds(s["paceSlow"]), paceSeconds(s["paceFast"]))))
+                                  watts: (number(s["wattsLow"]), number(s["wattsHigh"])), pace: (paceSeconds(s["paceSlow"]), paceSeconds(s["paceFast"])),
+                                  hr: (number(s["hrLow"]), number(s["hrHigh"]))))
             }
         }
         // A plan without steps (a steady run after a ride) still comes back: a brick needs to know it.
@@ -132,7 +139,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
     /// One step of the server's plan; a rest at the wall is zone 1.
     static func step(seconds: Double?, low: Double?, high: Double?, note: String?, intensity: String?, meters: Double?, rest: Bool,
                      swim: Bool, english: Bool, repeats: Int, first: Bool,
-                     watts: (low: Double?, high: Double?) = (nil, nil), pace: (slow: Double?, fast: Double?) = (nil, nil)) -> Step {
+                     watts: (low: Double?, high: Double?) = (nil, nil), pace: (slow: Double?, fast: Double?) = (nil, nil),
+                     hr: (low: Double?, high: Double?) = (nil, nil)) -> Step {
         let mid = low.flatMap { l in high.map { (l + $0) / 2 } } ?? high ?? low
         let positive = { (v: Double?) in v.flatMap { $0 > 0 ? $0 : nil } }
         let slow = positive(pace.slow), fast = positive(pace.fast)
@@ -141,7 +149,9 @@ struct WatchPlan: Codable, Equatable, Sendable {
                     label: label(note: note, intensity: intensity, english: english, swim: swim, rest: rest),
                     repeats: repeats, first: first, meters: swim && !rest ? meters.flatMap { $0 > 0 ? $0 : nil } : nil, rest: rest ? true : nil,
                     interval: intensity == "interval" ? true : nil,
-                    wattsLow: rest ? nil : positive(watts.low), wattsHigh: rest ? nil : positive(watts.high), pace: rest ? nil : paceMid)
+                    wattsLow: rest ? nil : positive(watts.low), wattsHigh: rest ? nil : positive(watts.high), pace: rest ? nil : paceMid,
+                    paceSlow: rest ? nil : slow, paceFast: rest ? nil : fast,
+                    hrLow: rest ? nil : positive(hr.low), hrHigh: rest ? nil : positive(hr.high))
     }
 
     /// The step the race is: the longest, with its target ("176–194 W", "4:48 /km").
