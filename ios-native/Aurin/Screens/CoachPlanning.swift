@@ -45,14 +45,14 @@ struct CoachCheckInCard: View {
                 }
                 if advice.kind == "swap" || advice.kind == "easier_day", let from = advice.from, let to = advice.to {
                     let easier = advice.kind == "easier_day"
-                    // "VO2max 5×4, 75 min → Lehká jízda, 45 min", as the push offered it.
-                    HStack(spacing: 8) {
-                        if easier { Text("Dnes:").foregroundStyle(Palette.muted) }
-                        Text(verbatim: from).strikethrough(!easier).foregroundStyle(Palette.muted)
+                    // The planned session and the easier one side by side (Petr 2026-11-24,
+                    // morning v2), as the server offers them ("VO2max 5×4, 75 min").
+                    HStack(alignment: .top, spacing: 8) {
+                        SwapTile(label: L10n.tr("Naplánováno"), session: from, chosen: false)
                         Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.faint)
-                        Text(verbatim: to).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                            .frame(maxHeight: .infinity).accessibilityHidden(true)
+                        SwapTile(label: L10n.tr(easier ? "Lehčí varianta" : "Místo toho"), session: to, chosen: true)
                     }
-                    .font(Typo.small)
                     .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 10) {
                         PrimaryButton(title: L10n.tr(easier ? "Ulehčit dnešek" : "Vyměnit")) { Task { await answerSwap(advice, swap: true) } }
@@ -119,6 +119,32 @@ struct CoachCheckInCard: View {
     private func dismiss(_ advice: CoachCheckIn.Advice) async {
         withAnimation { things.advice = nil }
         if let id = advice.id { try? await model.api.dismissAdvice(id: id) }
+    }
+}
+
+/// One session of the swap: its label, name and the rest ("75 min").
+private struct SwapTile: View {
+    let label: String
+    let session: String
+    let chosen: Bool
+
+    var body: some View {
+        // The server ends it with ", 75 min"; a name may hold a comma itself.
+        let cut = session.range(of: ", ", options: .backwards)
+        let parts = cut.map { [String(session[..<$0.lowerBound]), String(session[$0.upperBound...])] } ?? [session]
+        VStack(alignment: .leading, spacing: 2) {
+            Text(verbatim: label).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: parts.first ?? session).font(Typo.bodyStrong).foregroundStyle(chosen ? Palette.ink : Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if parts.count > 1 {
+                Text(verbatim: parts[1]).font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Palette.track.opacity(chosen ? 1 : 0.5), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
