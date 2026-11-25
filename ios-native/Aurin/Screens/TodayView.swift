@@ -279,7 +279,7 @@ struct TodayContent: View {
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
             if coachShown, let words = firstWords {
                 CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
-                              tip: AnyView(VStack(alignment: .leading, spacing: 14) { TodayCoachAction(today: today); coachThings(plain: true) }))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else if coachShown, let missed = today.missedWorkout {
                 // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
@@ -291,12 +291,12 @@ struct TodayContent: View {
                                       Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
                                       TodayCoachAction(today: today)
                                   }
-                                  coachThings(plain: true).padding(.top, 14)
+                                  coachThings(plain: true)
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
-                              tip: AnyView(VStack(alignment: .leading, spacing: 14) { TodayCoachAction(today: today); coachThings(plain: true) }))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else {
                 TodayCoachAction(today: today)

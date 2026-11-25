@@ -78,6 +78,8 @@ struct CoachThingsCard: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // The gap under the Coach card's rows only while a thing shows.
+                .padding(.top, 14)
             } else if !items.isEmpty {
                 Card {
                     header(count: items.count)
