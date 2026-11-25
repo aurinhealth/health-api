@@ -835,6 +835,26 @@ struct GymSessionView: View {
         }
     }
 
+    /// The summary's exercises with a set done, one row each.
+    @ViewBuilder private var exerciseRows: some View {
+        if let gym = store.gym {
+            let done: [(title: String, line: String)] = gym.exercises.compactMap { e in
+                let lifts = e.lifts.filter { $0.done && $0.work }
+                return lifts.isEmpty ? nil : (e.title, Self.summaryLine(lifts))
+            }
+            Divider()
+            ForEach(done.indices, id: \.self) { index in
+                HStack {
+                    Text(done[index].title).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(done[index].line)
+                        .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .watchFont(12)
+            }
+        }
+    }
+
     /// An exercise in the summary: "3 sets, best 100 kg × 6"; both sides of a
     /// set count once, and the best set is the heaviest, its own reps with it.
     static func summaryLine(_ done: [WatchGym.Lift]) -> String {
@@ -1519,18 +1539,7 @@ struct GymSummary: View {
                     stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
                 }
                 partRows
-                if let gym = store.gym {
-                    Divider()
-                    ForEach(Array(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }.enumerated()), id: \.offset) { _, e in
-                        HStack {
-                            Text(e.title).lineLimit(1)
-                            Spacer(minLength: 4)
-                            Text(Self.summaryLine(e.lifts.filter { $0.done && $0.work }))
-                                .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
-                        }
-                        .watchFont(12)
-                    }
-                }
+                exerciseRows
                 if (store.gym?.setsDone ?? 0) > 0 {
                     Text(W.tr("Jak ti trénink sedl?", "How was it?")).watchFont(12, .semibold).foregroundStyle(W.muted).padding(.top, 6)
                     HStack(spacing: 4) {
