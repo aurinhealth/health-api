@@ -632,7 +632,7 @@ struct TrainingPage: View {
     /// A done workout: "42 min, 23 sets, done" for the gym.
     private func doneCard(_ s: WatchSnapshot.Session, gym: WatchGym?) -> some View {
         var parts = [s.minutes.map { W.duration(minutes: Double($0)) }]
-        if s.sport == "strength", let gym, gym.date == s.date { parts.append(W.tr("\(Self.sets(gym)) sérií", "\(Self.sets(gym)) sets")) }
+        if s.sport == "strength", let gym, gym.date == s.date { parts.append(W.english ? "\(Self.sets(gym)) sets" : W.czech(Self.sets(gym), "série", "série", "sérií")) }
         let line = parts.compactMap { $0 }.joined(separator: ", ")
         return rowCard(s, line: line.isEmpty ? W.tr("hotovo", "done") : line + W.tr(", hotovo", ", done"), done: true)
     }

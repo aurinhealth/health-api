@@ -153,9 +153,16 @@ enum W {
     /// The crown's step: 0.5 kg or 1 lb.
     static var weightStep: Double { imperial ? 1 : 0.5 }
 
-    /// "1,2 l" or "41 fl oz".
+    /// "1,2 l", "1.2 L" or "41 fl oz": litres as the iPhone writes them in each language.
     static func water(_ ml: Double) -> String {
-        imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " l"
+        imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " " + waterUnit
+    }
+
+    static var waterUnit: String { imperial ? "fl oz" : english ? "L" : "l" }
+
+    /// The Czech word for a count: 1 série, 2 až 4 série, 0 or 5 and more sérií.
+    nonisolated static func czech(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        "\(count) " + (count == 1 ? one : (2...4).contains(count) ? few : many)
     }
 
     /// A glass of a drink: "200 ml" or "7 fl oz".
