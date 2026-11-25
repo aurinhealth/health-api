@@ -153,11 +153,11 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     // swap works without the iPhone and offline. The same reads as one swap.
     if(Array.isArray(many)){
       const names=[...new Set(many.filter(n=>typeof n==='string'&&n).map(n=>n.slice(0,120)))].slice(0,20);
-      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits,start).slice(0,3)
+      const byExercise=Object.fromEntries(names.map(name=>[name,gymAlternatives(name,history,inPlan,taste,fits,start,date).slice(0,3)
         .map(a=>({name:a.name,sets:a.sets??null,reps:a.reps??null,kg:a.kg??null}))]));
       return Response.json({status:'ok',byExercise},{headers:{'Cache-Control':'no-store'}});
     }
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits,start)},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste,fits,start,date)},{headers:{'Cache-Control':'no-store'}});
   }
   // The load of one exercise picked from the whole catalog in place of another
   // ("Vybrat jiný cvik"): as an alternative's, from the history or the catalogue.
@@ -165,7 +165,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     const exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
     const [recent,setup,sex]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env)]);
     const history=await withHistoryOf(env.DB,recent,historyFamily(normalizeExerciseName(exercise)));
-    const estimate=gymLoadEstimate(exercise,history)||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
+    const estimate=gymLoadEstimate(exercise,history,localToday())||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
     return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
   }
   // The live mode's effort sheet: each letter with its reps left (gym-intensity.js effortScale).
@@ -224,7 +224,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
       // Today's readiness, status and leg load, as the generator has them (Revize 2026-10-16, nález 27).
       const day=await buildStrengthContext(env,localToday()).then(gymDayFacts).catch(()=>null);
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:usedMemories(state)},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day});
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:usedMemories(state)},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day,today:/^\d{4}-\d{2}-\d{2}$/.test(String(body.date||''))?body.date:localToday()});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}

@@ -71,10 +71,12 @@ export function placeExercise(values,name){
   return [...rest.slice(0,at),...moved,...rest.slice(at)];
 }
 
+// The plan's own day, so the load after a break is held or lowered for it.
+const planDate=gym=>{try{return parseStrengthPlan(gym.values).date||null;}catch{return null;}};
 // The rows of an exercise new to the plan: its usual sets at the generator's
 // estimate, warm-ups for a main lift, left and right for a one-sided one.
 function newExerciseRows(name,gym){
-  const def=EXERCISES[name],estimate=gymLoadEstimate(name,gym.history||[])||{kg:null},kg=estimate.kg??'';
+  const def=EXERCISES[name],estimate=gymLoadEstimate(name,gym.history||[],planDate(gym))||{kg:null},kg=estimate.kg??'';
   const video='https://www.youtube.com/results?search_query='+encodeURIComponent(name+' exercise technique'),rows=[];
   if(def.warmup)for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',name,String(i),kg===''?'':String(resolveLoad(name,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','','','']);
   for(let i=0;i<addSets(name);i++)rows.push(['WORK',name,String(i+1),String(kg),def.reps,'','','','FALSE','',video,'FALSE','','','']);
@@ -194,7 +196,7 @@ export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[],br
   const all=source.filter(r=>r.type==='WORK'),sided=all.some(r=>r.side),work=sided?all.filter(r=>r.side===(all.filter(x=>x.side==='L').length<=all.filter(x=>x.side==='P').length?'L':'P')):all;
   if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
   // The generator's estimate: own history, a similar exercise, or the catalogue's start.
-  const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
+  const estimate=gymLoadEstimate(toExercise,gym.history||[],parsed.date)||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
   const rows=[];
   // Warm-ups at the equipment's step (a bar 17,5 kg, not 17; Revize 2026-10-16, nález 28).

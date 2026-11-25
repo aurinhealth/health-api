@@ -1404,7 +1404,9 @@ function warmupRows(exercise, workKg = null, first = true, step = null) {
   if (!first) return [["WARMUP", exercise, "1", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution]];
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
 }
-function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModifier = 1) {
+// afterBreak: no gym session for 14 days or more; the muscle has no recent
+// load then because of the break, which is no reason for an extra set.
+function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModifier = 1, afterBreak = false) {
   const def = EXERCISES[exercise];
   const base = Number(def?.sets) || 3;
   const recentLoad = Number(muscleLoad?.get(def?.muscle) || 0);
@@ -1416,7 +1418,7 @@ function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModif
   else if (recentLoad >= 2.5 && base >= 3) sets -= 1;
 
   if (recoveryFactorValue < 0.90) sets -= 1;
-  else if (recoveryFactorValue >= 0.97 && recentLoad < 0.8) sets += 1;
+  else if (recoveryFactorValue >= 0.97 && recentLoad < 0.8 && !afterBreak) sets += 1;
 
   // Keep the range deliberately conservative: accessories can move between
   // 2–3 sets, while main movements can move between 2–4 sets.
@@ -1492,7 +1494,7 @@ export function dumbbellFor(estimate, weights) {
   if (estimate.referenceKg != null && best === Number(estimate.referenceKg) && (up || down)) out.progression = "hold";
   return out;
 }
-function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null, goal = 'auto', experience = '', dumbbells = null) {
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null, goal = 'auto', experience = '', dumbbells = null, afterBreak = false) {
   // The catalogue's loads are an experienced athlete's: anyone else starts an
   // exercise new to them lighter, as on the first session.
   const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : CATALOGUE_SCALE[experience] ?? CATALOGUE_SCALE.regular);
@@ -1507,7 +1509,7 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   // Strength for an experienced athlete: one more set of the main lifts.
   const extra = !spared && !planReps && (goal === 'strength' || goal === 'strength_muscle') && experience === 'experienced' && def.warmup ? 1 : 0;
-  const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier) + extra, maxSets + extra);
+  const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier, afterBreak) + extra, maxSets + extra);
   const progression = progressionNote(estimate);
   const note = (estimate.source === "cross-exercise-estimate" ? def.note + L("; odhad z ", "; estimated from ") + estimate.referenceExercise + L(", ověř RPE", ", check the RPE") : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE() : estimate.source === "catalogue-default" && kg != null ? "; " + NEW_EXERCISE_NOTE() : "");
   const rows = [];
@@ -1563,12 +1565,16 @@ export function snapDumbbells(rows, weights) {
 export function templateStrengthPlan(context, template, options = {}) {
   const policy = trainingStatus(context?.athleteState);
   if (policy.paused) throw new Error(policy.headline + '. ' + policy.guidance[0]);
+  assertGymDay(context);
   const factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length, sex = athleteSex(context, options);
+  // An exercise loading a part the coach remembers as painful is left out, as in a generated plan.
+  const pain = painfulExercises(context?.athleteState?.memories), left = [];
   const rows = [], loadEstimates = [];
   let warmedUp = false;
   for (const item of template.exercises || []) {
     const exercise = EXERCISES[item.name] ? item.name : normalizeExerciseName(item.name);
+    if (pain.avoid.has(exercise)) { left.push(exercise); continue; }
     const sets = Math.max(1, Math.min(10, Number(item.sets) || 3)), reps = String(item.reps || '10');
     if (!EXERCISES[exercise]) {
       // An exercise the app doesn't know has no weight to start from: the
@@ -1585,7 +1591,7 @@ export function templateStrengthPlan(context, template, options = {}) {
     rows.push(...warmup, ...own);
     loadEstimates.push({ exercise, sets, ...work.estimate });
   }
-  if (!rows.some(r => r[0] === 'WORK')) throw new Error(L('Trénink nemá žádný cvik.', 'The workout has no exercise.'));
+  if (!rows.some(r => r[0] === 'WORK')) throw new Error(left.length ? L('Všechny cviky tréninku zatěžují bolest ' + pain.parts.join(', ') + ', kterou si kouč pamatuje. Vyber jiný trénink.', 'Every exercise of this workout loads the ' + pain.parts.join(', ') + ' pain the coach remembers. Choose another workout.') : L('Trénink nemá žádný cvik.', 'The workout has no exercise.'));
   configureStrengthCoaching(rows, EXERCISES, { factor, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
   // The workout's own length, else the time its exercises take.
   const estimated = estimateStrengthTiming(rows, EXERCISES, 60).estimatedMinutes;
@@ -1594,7 +1600,7 @@ export function templateStrengthPlan(context, template, options = {}) {
   // The warm-up, the cardio and the stretching as in a generated plan (Posilovna).
   const routines = planRoutines(rows, name => EXERCISES[name]?.muscle, context?.trainingSetup || {}, timing.requestedMinutes || 60, { date: context.date, sport: context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '' });
   const from = String(options.fromName || '').trim();
-  const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
+  const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (left.length ? ' ' + L('Kvůli bolesti ' + pain.parts.join(', ') + ' vynechávám: ' + left.join(', ') + '.', 'Because of the ' + pain.parts.join(', ') + ' pain I leave out: ' + left.join(', ') + '.') : '') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
   return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true, ...routines };
 }
 
@@ -1624,16 +1630,27 @@ function afterIllness(context) {
   return { illness: true, reason: L("První trénink po nemoci: váhy se drží a série je o jednu méně. Když se potíže vrátí, přestaň a odpočívej.", "Your first workout after being ill: the weights hold and there is one set less. If the symptoms come back, stop and rest.") };
 }
 
+// A red morning or signs of illness (breathing or temperature raised in
+// sleep, a sick check-in) leave the gym out today, as the ride and the run
+// (Revize doporučování tréninků 2026-10-16, nález 22), a generated plan and a
+// saved workout alike (load ramp-back review 2026-11-25, C5).
+function assertGymDay(context) {
+  const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
+  if(today?.zone==='red'||ill)throw new Error(context?.checkin==='sick'?L('V Deníku máš Nemoc. Posilovnu dnes vynech a odpočívej.','You marked Sick in your Journal. Skip the gym today and rest.'):ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+}
+// No completed gym set in the 14 days before the day (the same 14 days after
+// which the loads hold, strength-intelligence.js progressionDecision).
+function gymBreak(history, date) {
+  const last = (history || []).map(r => dateKey(r.workout_date)).filter(d => d && d < dateKey(date)).sort().at(-1);
+  return Boolean(last) && daysBetween(last, date) >= 14;
+}
+
 export function generateStrengthPlan(context, options = {}) {
   const policy=trainingStatus(context?.athleteState);
   // The gateway explicitly marks its read-only deployment diagnostic; ordinary
   // gym requests and previews still obey the athlete's status.
   if(policy.paused&&!options.diagnosticPreview)throw new Error(policy.headline+'. '+policy.guidance[0]);
-  // A red morning or signs of illness (breathing or temperature raised in
-  // sleep, a sick check-in) leave the gym out today, as the ride and the run
-  // (Revize doporučování tréninků 2026-10-16, nález 22).
-  const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
-  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(context?.checkin==='sick'?L('V Deníku máš Nemoc. Posilovnu dnes vynech a odpočívej.','You marked Sick in your Journal. Skip the gym today and rest.'):ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  if(!options.diagnosticPreview)assertGymDay(context);
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };
@@ -1650,7 +1667,7 @@ export function generateStrengthPlan(context, options = {}) {
   const deload = options.noDeload ? null : afterIllness(context) || (shared?.recovery ? { shared: true, reason: L("Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7.", "Recovery week for all training (" + (shared.reason === "three_weeks" ? "after three weeks above maintenance load" : shared.reason === "hrv_trend" ? "HRV over the last week below your usual range" : "after a hard week") + "): the gym is lighter – fewer sets, weights held, RPE up to 7.") } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date, context.trainingSetup?.experience));
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
-  const firstSession = !history.length;
+  const firstSession = !history.length, afterBreak = gymBreak(history, context.date);
   let focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   const planPhase = !focusMuscles && options.planPhase?.exercises?.length ? options.planPhase : null;
   const coachSession = !focusMuscles && !planPhase && options.coachSession?.exercises?.length ? options.coachSession : null, coachSets = new Map((coachSession?.exercises || []).map(e => [e.name, Math.round(Number(e.sets))]));
@@ -1818,7 +1835,7 @@ export function generateStrengthPlan(context, options = {}) {
     const cap=Math.min(reducedDose?Math.min(2,maxSets):moderated?Math.min(3,maxSets):maxSets,planPhase?.sets||4,coachSets.get(exercise)>=1?coachSets.get(exercise):4);
     // Legs next to hard endurance days keep their weight and its progression,
     // only with fewer sets (audit 2026-11-06, 6.2); other muscles go lighter.
-    const work = workRows(exercise, historyMap, (reducedDose||moderated)&&!leg?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession, planPhase?.reps||null, goal, experience, context?.trainingSetup?.dumbbellWeights);
+    const work = workRows(exercise, historyMap, (reducedDose||moderated)&&!leg?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession, planPhase?.reps||null, goal, experience, context?.trainingSetup?.dumbbellWeights, afterBreak);
     // The third gym day in a row: about 30 % fewer sets, never under two.
     if (chosen.lighterDay && work.rows.length > 2) { work.rows.splice(Math.max(2, Math.round(work.rows.length * 0.7))); work.sets = work.rows.length; }
     const earlier = earlierLoad.get(exercise);
