@@ -145,3 +145,10 @@ test("the live server and the test server set the brakes by plan", () => {
     assert.ok(text.match(new RegExp(`"${key}": "([^"]+)"`, "g")).every(line => line.endsWith(`"${value}"`)), key);
   }
 });
+
+test("live, the owner's TestFlight account without a purchase has a paying account's limits", async () => {
+  const { aiPlan, aiLimitShare } = await import("../src/ai-limit-share.js");
+  const env = { USER_IS_OWNER: true, DB: {}, USER_ID: 1, AI_UNPAID_LIMIT_SHARE: "0.5" };
+  assert.deepEqual(await aiPlan(env), { plan: "paid" });
+  assert.equal(await aiLimitShare(env), 1);
+});

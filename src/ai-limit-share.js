@@ -3,7 +3,8 @@
 // the free week (Apple's introductory offer). A paid Production subscription
 // (an offer code's too) gets the whole limits. AI_UNPAID_LIMIT_SHARE
 // (wrangler.jsonc) is the share; unset, every account has the whole limits.
-// The owner's account has the same limits as any other with the same purchase.
+// The owner's account has a paying account's limits whatever it bought: it
+// tests the live server from TestFlight every day (Petr 2026-11-25).
 import { ensureStoreColumns } from "./app-store.js";
 import { packMessagesLeft } from "./coach-packs.js";
 
@@ -29,7 +30,7 @@ export const unpaidLimitShare = env => {
 // - "free": no purchase, an account older than NEW_ACCOUNT_DAYS (everyone of
 //   the pilot until the paywall is on);
 // - "owner": the owner's own account, apart from the testers, whatever it
-//   bought (the limits still follow the purchase, aiPaid);
+//   bought (a paying account's limits, aiPaid and aiPlan);
 // - "new": no purchase, an account made in the last NEW_ACCOUNT_DAYS (open
 //   sign-up), counted apart, so accounts made in bulk never stop the pilot's AI;
 // - "system": a call of no account (a job of the server) and the coach
@@ -92,7 +93,7 @@ export function aiGroup(env) {
 }
 
 // Whether the account pays (or has Pro as a gift): the whole limits.
-export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(await purchaseGroup(env));
+export const aiPaid = async env => noAccount(env) || env.USER_IS_OWNER === true || ["paid", "gift"].includes(await purchaseGroup(env));
 
 // The plan the account's monthly AI brake follows (aiMonthlyLimitUsd,
 // ai-usage.js), from its subscription now: "paid" (Pro bought, any plan or
@@ -108,7 +109,7 @@ export const aiPaid = async env => noAccount(env) || ["paid", "gift"].includes(a
 export const FREE_WEEK_DAYS = 7;
 const planOnce = new WeakMap();
 export function aiPlan(env) {
-  if (noAccount(env)) return Promise.resolve({ plan: "paid" });
+  if (noAccount(env) || env.USER_IS_OWNER === true) return Promise.resolve({ plan: "paid" });
   if (!planOnce.has(env)) planOnce.set(env, subscriptionRow(env).then(row => {
     const group = groupOfSubscription(row);
     const paidSince = Number(row?.store_signed_at) > 0 ? new Date(Number(row.store_signed_at)).toISOString().slice(0, 10) : null;

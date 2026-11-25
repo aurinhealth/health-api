@@ -211,19 +211,19 @@ test("a slow request keeps the day's slowest message, other kinds the last one",
   ]);
 });
 
-test("the month line measures each account, the owner too, against its own cap: an unpaid one at 1.25 USD shows blocked", async () => {
+test("the month line measures each account against its own cap: an unpaid one at 1.25 USD shows blocked, the owner the paid one", async () => {
   const db = createD1();
   db.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
-  db.sqlite.exec("INSERT INTO users (id, email, created_at) VALUES (1, 'owner@example.com', '2026-10-01 08:00:00'), (9, 'pro@x.cz', '2026-10-01 08:00:00')");
+  db.sqlite.exec("INSERT INTO users (id, email, created_at) VALUES (1, 'owner@example.com', '2026-10-01 08:00:00'), (6, 'tester@x.cz', '2026-10-01 08:00:00'), (9, 'pro@x.cz', '2026-10-01 08:00:00')");
   await ensureAiUsage(db);
   await ensureStoreColumns(db);
-  db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, product_id, store_environment, free_trial, testflight) VALUES (1, 'free', NULL, NULL, NULL, 0, 1), (9, 'ai', '2026-12-31T00:00:00Z', 'pro.monthly', 'Production', 0, 0)").run();
+  db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, valid_until, product_id, store_environment, free_trial, testflight) VALUES (1, 'free', NULL, NULL, NULL, 0, 1), (6, 'free', NULL, NULL, NULL, 0, 1), (9, 'ai', '2026-12-31T00:00:00Z', 'pro.monthly', 'Production', 0, 0)").run();
   const add = db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) VALUES (?, '2026-11-23', 'assistant', 'gpt', ?)");
-  add.run(1, 1.32); add.run(9, 1.32);
+  add.run(1, 1.32); add.run(6, 1.32); add.run(9, 1.32);
   const env = { DB: db, OWNER_EMAIL: "owner@example.com", AI_MONTHLY_LIMIT_USD: "5", AI_UNPAID_LIMIT_USD: "1.25", AI_UNPAID_LIMIT_SHARE: "0.5" };
   const { rows, month } = await aiData(env, "2026-11-23", Date.parse("2026-11-24T06:00:00Z"));
   const report = opsReport([], null, "2026-11-23", aiSummary(rows, month, 5));
-  assert.match(report.text, /Ty 1\.32 \$ \(106 % z 1\.25 \$, AI zablokované\)/);
-  assert.match(report.html, /Ty má za měsíc 106 % stropu AI/);
-  assert.doesNotMatch(report.text, /Účet #9, Pro 1\.32 \$ \(26 % z/, "a paying account keeps the header's cap");
+  assert.match(report.text, /Účet #6, TestFlight 1\.32 \$ \(106 % z 1\.25 \$, AI zablokované\)/);
+  assert.match(report.html, /Účet #6, TestFlight má za měsíc 106 % stropu AI/);
+  assert.match(report.text, /Ty 1\.32 \$ \(26 %\)/, "the owner has a paying account's cap");
 });
