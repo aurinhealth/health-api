@@ -46,6 +46,8 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^"SELECT COALESCE\(SUM\(messages\), 0\) AS n FROM coach_pack_purchases WHERE counted = 1 AND refunded_at IS NULL AND purchased_at >= \?"$/,
   // An App Store subscription belongs to one account: who holds it, when another account sends it (app-store.js).
   /^'SELECT user_id FROM store_originals WHERE original_transaction_id=\?'$/,
+  // The history of Apple's notifications older than two years goes for everyone (app-store.js).
+  /^'DELETE FROM store_events WHERE signed_at<\?'$/,
   // The night's job finds the users with a coach day note due (coach-notes.js).
   /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/];
 

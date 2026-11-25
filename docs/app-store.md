@@ -35,6 +35,12 @@ How Aurin Pro is bought and how the server learns about it. The code is in
    record from before the refund gives nothing; a newer record goes to the account that sends it.
    A refund of a period that has already run out is not kept there: its record gives no Pro,
    and the paid period's record must stay the newest.
+   Every notification Apple signed for the app is also kept once in `store_events`
+   (`recordStoreEvent`, by `notificationUUID`), before anything decides to leave it: type,
+   subtype, product, environment, Family Sharing, free trial, offer, renewal status, expiry and
+   refund time, never a price or the token. One no account holds yet has `user_id` 0 and is
+   linked later by `original_transaction_id`. It feeds the owner's overview, goes with the
+   account and the cron deletes it after two years (privacy policy).
 4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI and nothing is on sale
    (`checkoutAvailable` stays false). `owner` turns the paid split on for the owner's account
    only, to try the offer, the locked plans and a TestFlight purchase; `true` turns it on for

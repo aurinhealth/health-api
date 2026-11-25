@@ -154,7 +154,9 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 // (Apple's signed AppTransaction says Sandbox), its AI counted with TestFlight's.
 // install_hash: SHA-256 of that build's appTransactionId (one Apple Account's
 // download of the app), so one TestFlight install marks one account (saveAppInstall).
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER', 'install_hash TEXT'];
+// first_download_at: the day this Apple Account first downloaded Aurin from the
+// App Store (AppTransaction.originalPurchaseDate), for the owner's overview.
+const COLUMNS = ['first_download_at TEXT', 'app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER', 'offer_type INTEGER', 'testflight INTEGER', 'install_hash TEXT'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -370,7 +372,9 @@ export async function saveAppInstall(env, body, options = {}) {
   if (!ENVIRONMENTS.has(app.receiptType)) throw refuse(L('Doklad z neznámého prostředí.', 'Record from an unknown environment.'));
   let testflight = app.receiptType === 'Sandbox' ? 1 : 0;
   const hash = testflight && app.appTransactionId ? hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(app.appTransactionId)))) : null;
-  const save = (flag, install) => withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight,install_hash) VALUES(?,'free',?,?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight,install_hash=excluded.install_hash WHERE subscriptions.testflight IS NOT excluded.testflight OR subscriptions.install_hash IS NOT excluded.install_hash").bind(env.USER_ID, flag, install).run());
+  // Sandbox records always carry 2013-08-01, so only an App Store download has a date.
+  const downloaded = app.receiptType === 'Production' && Number(app.originalPurchaseDate) > 0 ? new Date(Number(app.originalPurchaseDate)).toISOString().slice(0, 10) : null;
+  const save = (flag, install) => withColumns(env.DB, () => env.DB.prepare("INSERT INTO subscriptions(user_id,plan,testflight,install_hash,first_download_at) VALUES(?,'free',?,?,?) ON CONFLICT(user_id) DO UPDATE SET testflight=excluded.testflight,install_hash=excluded.install_hash,first_download_at=COALESCE(excluded.first_download_at,subscriptions.first_download_at) WHERE subscriptions.testflight IS NOT excluded.testflight OR subscriptions.install_hash IS NOT excluded.install_hash OR (excluded.first_download_at IS NOT NULL AND subscriptions.first_download_at IS NOT excluded.first_download_at)").bind(env.USER_ID, flag, install, downloaded).run());
   try { await save(testflight, hash); } catch (error) {
     // Another account holds this install.
     if (!/UNIQUE constraint/i.test(String(error?.message || error))) throw error;
@@ -378,6 +382,50 @@ export async function saveAppInstall(env, body, options = {}) {
     await save(0, null);
   }
   return { status: 'ok', testflight: testflight === 1 };
+}
+
+// ---- The history of Apple's notifications ----
+// One row per notification Apple signed for this app (deduplicated by its
+// notificationUUID, as Apple resends), written before anything below decides
+// to leave it, so a purchase no account has sent yet keeps its history too:
+// user_id is then 0 and original_transaction_id links it once an account
+// holds the subscription (store_originals). Only what the owner's overview
+// needs (what happened, when, to which plan), never a price or the account's
+// token. Kept STORE_EVENT_DAYS, deleted with the account (PERSONAL_TABLES).
+const STORE_EVENT_DAYS = 730;
+const STORE_EVENTS = 'CREATE TABLE IF NOT EXISTS store_events (notification_uuid TEXT PRIMARY KEY, user_id INTEGER NOT NULL DEFAULT 0, original_transaction_id TEXT, type TEXT NOT NULL, subtype TEXT, product_id TEXT, environment TEXT, ownership TEXT, free_trial INTEGER, offer_type INTEGER, auto_renew INTEGER, expiration_intent INTEGER, expires_at INTEGER, revoked_at INTEGER, signed_at INTEGER NOT NULL)';
+
+async function ensureStoreEvents(db) {
+  await db.batch([
+    db.prepare(STORE_EVENTS),
+    db.prepare('CREATE INDEX IF NOT EXISTS store_events_user ON store_events(user_id, signed_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS store_events_original ON store_events(original_transaction_id)')
+  ]);
+}
+
+export async function recordStoreEvent(db, note, tx, renewal, userId = 0) {
+  const uuid = String(note?.notificationUUID || '');
+  if (!uuid) return false;
+  const data = note.data || {};
+  const num = value => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+  const statement = () => db.prepare('INSERT INTO store_events(notification_uuid,user_id,original_transaction_id,type,subtype,product_id,environment,ownership,free_trial,offer_type,auto_renew,expiration_intent,expires_at,revoked_at,signed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(notification_uuid) DO NOTHING')
+    .bind(uuid, Number(userId) || 0, tx?.originalTransactionId != null ? String(tx.originalTransactionId) : null, String(note.notificationType || ''), note.subtype ? String(note.subtype) : null,
+      tx?.productId ? String(tx.productId) : null, String(data.environment || tx?.environment || '') || null, tx?.inAppOwnershipType ? String(tx.inAppOwnershipType) : null,
+      tx ? (Number(tx.offerType) === 1 || tx.offerDiscountType === 'FREE_TRIAL' ? 1 : 0) : null, num(tx?.offerType),
+      renewal?.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null, num(renewal?.expirationIntent),
+      num(tx?.expiresDate), num(tx?.revocationDate), num(note.signedDate) || Date.now());
+  try { await statement().run(); } catch (error) {
+    if (!/no such table/i.test(String(error?.message || error))) throw error;
+    await ensureStoreEvents(db);
+    await statement().run();
+  }
+  return true;
+}
+
+// The cron's cleanup of the history older than STORE_EVENT_DAYS.
+export async function forgetOldStoreEvents(db, now = Date.now()) {
+  try { return Number((await db.prepare('DELETE FROM store_events WHERE signed_at<?').bind(now - STORE_EVENT_DAYS * 864e5).run())?.meta?.changes) || 0; }
+  catch (error) { if (/no such table/i.test(String(error?.message))) return 0; throw error; }
 }
 
 // POST /webhooks/app-store: App Store Server Notifications V2 ({signedPayload}).
@@ -392,17 +440,22 @@ export async function handleAppStoreNotification(request, env, options = {}) {
     if (note.notificationType === 'TEST') return Response.json({ status: 'ok', test: true });
     if (data.bundleId !== bundleId(env)) return Response.json({ status: 'error', message: 'Wrong app' }, { status: 400 });
     if (data.environment === 'Production' && storeConfigured(env) && String(data.appAppleId) !== String(env.APP_STORE_APP_ID).trim()) return Response.json({ status: 'error', message: 'Wrong app' }, { status: 400 });
-    if (!data.signedTransactionInfo) return Response.json({ status: 'ok', ignored: note.notificationType });
-    const tx = await verifyAppStoreJws(data.signedTransactionInfo, options);
+    const tx = data.signedTransactionInfo ? await verifyAppStoreJws(data.signedTransactionInfo, options) : null;
     const renewal = data.signedRenewalInfo ? await verifyAppStoreJws(data.signedRenewalInfo, options) : null;
-    checkTransaction(env, tx);
+    if (tx) checkTransaction(env, tx);
+    // The holder known so far (the account whose token the purchase carries);
+    // a later notification of the same subscription finds it through store_originals.
+    const known = tx?.appAccountToken ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first()) : null;
+    const owner = known || (tx ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(String(tx.originalTransactionId)).first()) : null);
+    await recordStoreEvent(env.DB, note, tx, renewal, owner?.user_id);
+    if (!tx) return Response.json({ status: 'ok', ignored: note.notificationType });
     // A refunded pack stops counting; nothing else about a pack needs the server.
     if (isPack(env, tx)) return Response.json({ status: 'ok', refunded: tx.revocationDate || note.notificationType === 'REFUND' ? await refundPackTransaction(env.DB, tx) : false });
     const original = String(tx.originalTransactionId);
-    const byToken = tx.appAccountToken ? await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE app_account_token=?').bind(String(tx.appAccountToken).toLowerCase()).first()) : null;
+    const byToken = known;
     const rows = byToken ? [byToken] : (await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM subscriptions WHERE original_transaction_id=?').bind(original).all())).results || [];
     // The holder, also when its row holds another subscription by now.
-    const held = byToken || await withColumns(env.DB, () => env.DB.prepare('SELECT user_id FROM store_originals WHERE original_transaction_id=?').bind(original).first()) || rows[0];
+    const held = owner || rows[0];
     let holder = Number(held?.user_id) || 0;
     // No account has sent this purchase (yet). Its refund is remembered, so the
     // record from before it gives nothing later; an account that sent it in the

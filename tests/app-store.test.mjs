@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { createHash, createPrivateKey, sign, X509Certificate } from "node:crypto";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase, forgetEndedPurchases, proTester } from "../src/app-store.js";
+import { APPLE_ROOT_CA_G3, verifyAppStoreJws, saveAppTransaction, saveAppInstall, handleAppStoreNotification, appAccountToken, storePurchase, forgetEndedPurchases, forgetOldStoreEvents, proTester } from "../src/app-store.js";
 import { subscriptionStatus, plansUnlocked } from "../src/subscription.js";
 import { aiGroup } from "../src/ai-limit-share.js";
 import { deleteAccount, finishAccountDeletions } from "../src/account-data.js";
@@ -599,4 +599,55 @@ test("a paying tester's TestFlight purchase does not push out the App Store subs
   await saveAppTransaction(env, { signedTransaction: jws(transaction({ appAccountToken: token, transactionId: "3000000001", originalTransactionId: "3000000000", signedDate: now + 1000 })) }, { roots });
   assert.deepEqual([row(raw, 1).store_environment, row(raw, 1).original_transaction_id], ["Production", "2000000000"]);
   assert.equal((await storePurchase(env)).active, true);
+});
+
+test("every notification Apple signed for the app is kept once in the history, also one no account holds yet", async () => {
+  const { raw, user } = setup();
+  const env = user(1);
+  const token = await appAccountToken(env);
+  const central = { DB: raw };
+  const events = () => raw.sqlite.prepare("SELECT * FROM store_events ORDER BY signed_at").all();
+  const trial = notification("SUBSCRIBED", transaction({ appAccountToken: token, offerType: 1, environment: "Production" }), { signedRenewalInfo: jws({ originalTransactionId: "2000000000", autoRenewStatus: 1, signedDate: now }) });
+  trial.subtype = "INITIAL_BUY";
+  await notify(trial, central);
+  await notify(trial, central);
+  assert.equal(events().length, 1, "Apple's resend is the same notificationUUID");
+  assert.deepEqual([events()[0].user_id, events()[0].type, events()[0].subtype, events()[0].free_trial, events()[0].auto_renew, events()[0].environment], [1, "SUBSCRIBED", "INITIAL_BUY", 1, 1, "Production"]);
+
+  // The trial is cancelled: found through the subscription (no token in a later record).
+  const off = notification("DID_CHANGE_RENEWAL_STATUS", transaction({ signedDate: now + 2000 }), { signedRenewalInfo: jws({ originalTransactionId: "2000000000", autoRenewStatus: 0, signedDate: now + 2000 }) });
+  off.subtype = "AUTO_RENEW_DISABLED";
+  off.signedDate = now + 2000;
+  await notify(off, central);
+  assert.deepEqual([events()[1].user_id, events()[1].subtype, events()[1].auto_renew], [1, "AUTO_RENEW_DISABLED", 0]);
+
+  // A purchase no account has sent yet keeps its original transaction id.
+  const stranger = notification("SUBSCRIBED", transaction({ originalTransactionId: "9000000000", transactionId: "9000000001", signedDate: now + 3000 }));
+  stranger.signedDate = now + 3000;
+  assert.equal((await (await notify(stranger, central)).json()).unknown, true);
+  assert.deepEqual([events()[2].user_id, events()[2].original_transaction_id], [0, "9000000000"]);
+
+  // A notification without a transaction (such as a summary) is kept too, without one.
+  const summary = { notificationType: "RENEWAL_EXTENSION", subtype: "SUMMARY", notificationUUID: crypto.randomUUID(), signedDate: now + 4000, data: { bundleId: "health.aurin.app", environment: "Sandbox" } };
+  assert.equal((await (await notify(summary, central)).json()).ignored, "RENEWAL_EXTENSION");
+  assert.deepEqual([events()[3].type, events()[3].original_transaction_id, events()[3].user_id], ["RENEWAL_EXTENSION", null, 0]);
+
+  // Another app's notification is not ours to keep.
+  await notify({ ...notification("SUBSCRIBED", transaction()), data: { bundleId: "health.aurin.other", environment: "Sandbox", signedTransactionInfo: jws(transaction()) } }, central);
+  assert.equal(events().length, 4);
+
+  // The history goes after two years.
+  assert.equal(await forgetOldStoreEvents(raw, now + 731 * DAY), 4);
+  assert.equal(events().length, 0);
+});
+
+test("the App Store build's AppTransaction gives the day of the first download; a TestFlight one has none", async () => {
+  const { raw, user } = setup();
+  const app = (extra = {}) => ({ bundleId: "health.aurin.app", receiptType: "Sandbox", appTransactionId: "7", originalPurchaseDate: 1375340400000, signedDate: now, ...extra });
+  await saveAppInstall(user(1), { signedAppTransaction: jws(app()) }, { roots });
+  assert.equal(row(raw, 1).first_download_at, null, "Sandbox always says 2013-08-01");
+  await saveAppInstall(user(1), { signedAppTransaction: jws(app({ receiptType: "Production", originalPurchaseDate: Date.UTC(2026, 10, 20, 9) })) }, { roots });
+  assert.equal(row(raw, 1).first_download_at, "2026-11-20");
+  await saveAppInstall(user(1), { signedAppTransaction: jws(app()) }, { roots });
+  assert.equal(row(raw, 1).first_download_at, "2026-11-20", "a later TestFlight build keeps it");
 });
