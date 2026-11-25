@@ -321,7 +321,7 @@ final class WatchBridge: NSObject {
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone, learningDays: today.readiness.learningDays,
-                             verdict: today.readiness.verdict,
+                             numbersLine: today.readiness.numbersLine, numbersOff: today.readiness.numbersOff,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
                              week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
@@ -540,7 +540,7 @@ extension WatchBridge: WCSessionDelegate {
                 steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
                                             meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
                                             repeats: max(1, block.repeats ?? 1), first: i == 0,
-                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast)))
+                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast), hr: (s.hrLow, s.hrHigh)))
             }
         }
         // Without steps too: a brick's steady leg goes to the watch as one multisport workout.

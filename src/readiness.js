@@ -80,7 +80,10 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   const nights = primaryNights(list);
   const live = nights.get(date) || shortNight(list, date);
   const locked = profile?.readinessLocks?.[date] || null;
-  const own = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
+  const raw = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
+  const own = sleepHRV(raw, nights, list);
+  // The day's HRV was left out as measured awake: the number it gave is what the missing night takes away.
+  const awake = num(raw.find(r => r.id === date)?.hrv) > 0 && !(num(own.find(r => r.id === date)?.hrv) > 0);
   // The rest of a night locked at a wake-up brings its own night signals
   // too (HRV, resting HR, breathing, temperature), and so does the main
   // device's night arriving after another watch's: the lock is set anew.
@@ -92,23 +95,39 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
   const night = lock?.night || live;
-  const body = withoutNight(recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need }), night, tracksSleep(nights, date));
+  const body = withoutNight(recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need }), night, tracksSleep(nights, date), awake);
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
 }
 
 // Nights are usually recorded: one in the 14 days before the day.
 const tracksSleep = (nights, date) => [...nights.keys()].some(d => d < date && d >= shift(date, -14));
 
+// HRV is a measure of the night: the baseline and the usual range come from
+// sleep. Without a night the iPhone falls back to readings taken awake that
+// day (AppleHealth.swift dailyHRV), lower and not comparable with the nights
+// (a tester, 2026-11-25: watch left off at night, 33 ms shown against the
+// usual 33 to 60). So while nights are usually recorded, a day without its
+// night has no HRV: not on Today and not in the baseline. Resting heart rate
+// stays, the watch works it out from the whole day.
+function sleepHRV(rows, nights, sessions) {
+  return rows.map(r => {
+    if (!(num(r.hrv) > 0) || nights.has(r.id) || shortNight(sessions, r.id) || !tracksSleep(nights, r.id)) return r;
+    const { hrv, hrvSource, hrvBySource, ...rest } = r;
+    return rest;
+  });
+}
+
 // The night decides how far the number goes (Today audit point 5, Craven 2022:
 // acute sleep loss costs ~7.5 % performance):
 // - a short night (under 3 h) caps it at the top of yellow, flagged "short_night";
 // - no night while the athlete's nights are usually recorded gives no number,
 //   flagged "no_night": a sleepless night and a watch left on the table look
-//   the same, so HRV and resting heart rate show without a score.
+//   the same, so resting heart rate shows without a score (HRV needs the
+//   night, sleepHRV).
 // Without any recorded nights (no sleep tracking) the score stays as it is.
 const YELLOW_TOP = 66;
-function withoutNight(body, night, tracks) {
-  if (body.score == null) return body;
+function withoutNight(body, night, tracks, awake = false) {
+  if (body.score == null && !(awake && !night && tracks)) return body;
   if (!night) return tracks ? { ...body, score: null, zone: null, flags: [...body.flags, "no_night"] } : body;
   if (!(num(night.durationMin) < FULL_NIGHT_MIN)) return body;
   return { ...body, score: Math.min(body.score, YELLOW_TOP), zone: body.zone === "green" ? "yellow" : body.zone, flags: [...body.flags, "short_night"] };
