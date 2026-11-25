@@ -5296,7 +5296,6 @@
 "Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
 "Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
 "Jídlo se tu ukazuje od %@." = "Food shows here from %@.";
-<<<<<<< HEAD
 "Smazat sérii" = "Delete set";
 "Drop série" = "Drop set";
 "Zahřívací série" = "Warm-up set";
@@ -5309,6 +5308,4 @@
 "Nevyplněno" = "Empty";
 "Můžeš to vrátit." = "You can undo it.";
 "Rozpracováno" = "In progress";
-=======
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
->>>>>>> origin/redesign
