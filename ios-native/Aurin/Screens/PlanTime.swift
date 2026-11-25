@@ -191,12 +191,10 @@ struct FreeTimeSheet: View {
     var saved: () -> Void = {}
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Volný čas") {
-                FreeTimeForm(time: time, planDays: planDays) { saved(); dismiss() }
-            }
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
+        SheetFrame(title: "Volný čas") {
+            FreeTimeForm(time: time, planDays: planDays) { saved(); dismiss() }
         }
+        .glassSheetBackground()
     }
 }
 
@@ -216,8 +214,8 @@ struct TimeThisWeekSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Čas tento týden") {
+        SheetFrame(title: "Čas tento týden") {
+            VStack(alignment: .leading, spacing: 26) {
                 Text(verbatim: Fmt.dayMonth(week.monday) + "–" + Fmt.dayMonth(ISODay.shift(week.monday, 6)) + (week.time?.weekB == true ? ", " + L10n.tr("Týden B") : ""))
                     .font(Typo.small).foregroundStyle(Palette.secondary)
                 FreeTimeEditor(minutes: $minutes, highlight: planDays)
@@ -242,9 +240,9 @@ struct TimeThisWeekSheet: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
             .sheet(isPresented: $fewer, onDismiss: { dismiss() }) { WeekDaysSheet(week: week, usual: usual) }
         }
+        .glassSheetBackground()
         .onAppear { if let days = week.time?.days, days.count == 7 { minutes = days } }
     }
 
@@ -499,8 +497,8 @@ struct PlanSportsSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Sporty") {
+        SheetFrame(title: "Sporty") {
+            VStack(alignment: .leading, spacing: 26) {
                 VStack(alignment: .leading, spacing: 8) {
                     PlanSportChips(selected: sports, toggle: toggle)
                     Text("Vyber dva nebo tři. Šest tréninků týdně se mezi ně rozdělí.")
@@ -510,8 +508,8 @@ struct PlanSportsSheet: View {
                 PrimaryButton(title: L10n.tr("Uložit"), busy: busy) { Task { await save() } }
                     .disabled(busy || model.demo || sports.count < 2 || sports == initial)
             }
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
         }
+        .glassSheetBackground()
         .onAppear { if sports.isEmpty { sports = initial } }
     }
 

@@ -161,8 +161,8 @@ struct StartPlanSheet: View {
     private var range: ClosedRange<Int> { (template.days.first ?? 3)...(template.days.last ?? 3) }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: L10n.f("Začít %@", template.name)) {
+        SheetFrame(title: L10n.f("Začít %@", template.name), fitted: false) {
+            VStack(alignment: .leading, spacing: 26) {
                 if let race = template.race {
                     SettingsGroup(title: L10n.tr("Závod"), footer: raceNote) {
                         DatePicker("Datum závodu", selection: $raceDate, in: Date()..., displayedComponents: .date)
@@ -241,15 +241,11 @@ struct StartPlanSheet: View {
                 PrimaryButton(title: buttonTitle, systemImage: "flag", busy: busy) { Task { await begin() } }
                     .disabled(busy || model.demo || days.isEmpty)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-            }
             .sheet(isPresented: $editingTime) {
                 FreeTimeSheet(time: preview?.time, planDays: days) { timeSaved += 1 }
             }
             .sheet(isPresented: $pickingGoal) {
                 GoalTimeSheet(km: raceKm > 0 ? raceKm : template.race?.km ?? 10, estimate: preview?.race?.estimate, weeks: preview?.weeks.count ?? template.weeksCount, initial: target) { target = $0 }
-                    .presentationDetents([.medium, .large])
             }
             .sheet(isPresented: $pickingDate) {
                 VStack(spacing: 16) {
@@ -262,6 +258,7 @@ struct StartPlanSheet: View {
                 .presentationDetents([.medium, .large])
             }
         }
+        .glassSheetBackground()
         .onAppear {
             if start.isEmpty { start = initial?.firstDay ?? initial?.startDate ?? today }
             if start < today { start = today }
@@ -458,7 +455,7 @@ struct GoalTimeSheet: View {
     private var goal: Int { hours * 3600 + minutes * 60 + seconds }
 
     var body: some View {
-        NavigationStack {
+        SheetFrame(title: "Cílový čas") {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 0) {
                     wheel($hours, 0..<10, "h")
@@ -481,16 +478,8 @@ struct GoalTimeSheet: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .navigationTitle(L10n.tr("Cílový čas"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Hotovo") { save(goal >= 600 ? goal : nil); dismiss() }.disabled(goal < 600)
-                }
+                PrimaryButton(title: L10n.tr("Hotovo")) { save(goal >= 600 ? goal : nil); dismiss() }
+                    .disabled(goal < 600)
             }
         }
         .onAppear {
@@ -594,14 +583,13 @@ struct ActivePlanView: View {
             }
         }
         .sheet(isPresented: $editingSports, onDismiss: { Task { await reload() } }) {
-            if let active { PlanSportsSheet(initial: active.sports ?? []).presentationDetents([.medium]) }
+            if let active { PlanSportsSheet(initial: active.sports ?? []) }
         }
         .sheet(isPresented: $editingGoal) {
             if let active, let race = active.race {
                 GoalTimeSheet(km: race.km, estimate: race.estimate, weeks: max(1, active.weeksCount - max(0, active.week - 1)), initial: race.target) { value in
                     Task { await saveGoal(value) }
                 }
-                .presentationDetents([.medium, .large])
             }
         }
     }
@@ -1015,8 +1003,8 @@ struct ReschedulePlanSheet: View {
     @State private var error: String?
 
     var body: some View {
+        SheetFrame(title: "Změnit začátek") {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Změnit začátek").font(.headline).foregroundStyle(Palette.ink)
             DatePicker("Začátek", selection: $day, in: Date()...(Calendar.current.date(byAdding: .day, value: 120, to: Date()) ?? Date()), displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .environment(\.locale, Fmt.locale)
@@ -1034,8 +1022,7 @@ struct ReschedulePlanSheet: View {
             }
             .disabled(busy || model.demo)
         }
-        .padding(20)
-        .presentationDetents([.large])
+        }
     }
 }
 
@@ -1223,11 +1210,9 @@ struct PlanSessionList: View {
         }
         .sheet(item: $moving) { s in
             MoveSessionSheet(session: s, detail: detail) { to in await edit(["date": .string(s.date), "op": .string("move"), "to": .string(to)]) }
-                .presentationDetents([.height(330)])
         }
         .sheet(item: $shortening) { s in
             ShortenSessionSheet(session: s) { minutes in await edit(["date": .string(s.date), "op": .string("minutes"), "minutes": .number(Double(minutes))]) }
-                .presentationDetents([.height(300)])
         }
         .confirmationDialog(L10n.f("Vynechat %@?", skipping?.name ?? ""), isPresented: Binding(get: { skipping != nil }, set: { if !$0 { skipping = nil } }), titleVisibility: .visible) {
             Button("Vynechat", role: .destructive) {
@@ -1333,8 +1318,8 @@ struct MoveSessionSheet: View {
     }
 
     var body: some View {
+        SheetFrame(title: L10n.f("Přesunout %@", session.name)) {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.f("Přesunout %@", session.name)).font(.headline).foregroundStyle(Palette.ink)
             HStack(spacing: 6) {
                 ForEach(days, id: \.self) { d in
                     Button { day = d } label: {
@@ -1362,7 +1347,7 @@ struct MoveSessionSheet: View {
             }
             .disabled(day == nil || busy)
         }
-        .padding(20)
+        }
     }
 }
 
@@ -1380,8 +1365,8 @@ struct ShortenSessionSheet: View {
     }
 
     var body: some View {
+        SheetFrame(title: L10n.f("Zkrátit %@", session.name)) {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.f("Zkrátit %@", session.name)).font(.headline).foregroundStyle(Palette.ink)
             HStack(spacing: 8) {
                 ForEach(options, id: \.self) { m in
                     Button { minutes = m } label: {
@@ -1402,7 +1387,7 @@ struct ShortenSessionSheet: View {
             }
             .disabled(minutes == nil || busy)
         }
-        .padding(20)
+        }
         .onAppear { minutes = options.last }
     }
 }
@@ -1428,8 +1413,8 @@ struct WeekDaysSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Čas tento týden") {
+        SheetFrame(title: "Čas tento týden") {
+            VStack(alignment: .leading, spacing: 26) {
                 Picker("Dny", selection: $days) {
                     ForEach(max(1, keyCount)...max(usual, week.sessions.count, keyCount, 1), id: \.self) { n in
                         Text(L10n.plural("%lld dní", n)).tag(n)
@@ -1460,10 +1445,8 @@ struct WeekDaysSheet: View {
                 PrimaryButton(title: L10n.tr("Upravit týden"), busy: busy) { Task { await save(days >= usual ? nil : days) } }
                     .disabled(busy || model.demo)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-            }
         }
+        .glassSheetBackground()
         .onAppear { days = week.weekDays ?? week.sessions.count }
     }
 
