@@ -217,6 +217,8 @@
         "APP_ORIGIN": "https://staging.aurin.health",
         // Chat v1 (src/coach-actions.js chatV1On): on here, off on the live server until it ships.
         "CHAT_V1": "true",
+        // Today's eased plans also in Wahoo and Intervals.icu, with "Vrátit původní" (src/entrypoint.js easeTodayPlans): on here, off on the live server until the redesign app with its card ships.
+        "PLAN_EASE": "true",
         // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn).
         "COACH_FIRST": "true",
         // Coach writes today's gym session first (src/gym-compose.js coachFirstGymOn); off on the live server until its evals pass.

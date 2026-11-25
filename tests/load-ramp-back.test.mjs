@@ -201,3 +201,14 @@ test('C1: the plans eased this morning show on Today with the original, and the 
   assert.ok(src.indexOf('name: "coach-ease"') < src.indexOf('name: "coach-push"'), 'eased before the coach push tells it');
   assert.match(src, /eased\.status==='restored'&&\(eased\.items\|\|\[\]\)\.some\(x=>x\.from===id\)\)return null/, 'after Vrátit původní the watch gets the plan too');
 });
+
+test('C1: the morning easing is off on the live server, skips races, tests, pairs and done sports, and saves the way back first', () => {
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  const job = src.slice(src.indexOf('async function easeTodayPlans'), src.indexOf("// The coach's own push (coach-push.js)"));
+  assert.match(job, /env\.PLAN_EASE !== 'true'/);
+  assert.match(job, /event\.race \|\| event\.after \|\| event\.next/);
+  assert.match(job, /doneSports\.has\(eventSport\(event\)\)/);
+  assert.ok(job.indexOf('updateAthleteState(db, { eased') < job.indexOf('deletePlannedEvent(env, { eventId: id })'), 'the state is saved before the plan goes');
+  const wrangler = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  assert.equal((wrangler.match(/"PLAN_EASE": "true"/g) || []).length, 1, 'staging only');
+});

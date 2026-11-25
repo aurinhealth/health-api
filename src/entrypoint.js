@@ -975,28 +975,44 @@ async function raceWeekFor(env,ctx){
 // calendar stays as it is there (the watch and the files still get the
 // coach's version, coachTodayVersion).
 async function easeTodayPlans(env, ctx) {
-  if (!env.DB) return { eased: 0, reason: 'no-db' };
+  // On with the app that shows the card and its "Vrátit původní" (PLAN_EASE; the redesign's release).
+  if (!env.DB || env.PLAN_EASE !== 'true') return { eased: 0, reason: 'off' };
   const db = env.DB, hour = localHour(), date = localToday();
   if (hour >= 11) return { eased: 0, reason: 'off' };
   const logged = kind => db.prepare('SELECT 1 AS sent FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).first().then(Boolean).catch(() => false);
   if (await logged('coach-ease') || !(hour >= 10 || await logged(MORNING_READINESS))) return { eased: 0, reason: 'not-due' };
   const claimed = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,'coach-ease',?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, date).run().then(r => Boolean(Number(r?.meta?.changes)));
   if (!claimed) return { eased: 0, reason: 'already' };
-  const rows = (await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId, date, date + 'T23:59:59.999').all()).results || [];
-  const items = [];
+  const [rows, done] = await Promise.all([
+    db.prepare("SELECT external_id,start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId, date, date + 'T23:59:59.999').all().then(r => r.results || []),
+    db.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, date, date + 'T23:59:59.999').all().then(r => r.results || []).catch(() => [])
+  ]);
+  const json = text => { try { return JSON.parse(text || '{}') || {}; } catch { return {}; } };
+  const doneSports = new Set(done.map(r => { const p = json(r.payload_json); return eventSport({ type: p.type || p.sport || p.activityType || '' }); }).filter(Boolean));
+  const items = [], used = new Set();
   for (const row of rows) {
-    const id = String(row.external_id || '').replace(/^planned:/, '');
+    const id = String(row.external_id || '').replace(/^planned:/, ''), event = json(row.payload_json);
     try {
-      if (!id.startsWith('local-') || (await localWorkout(db, id))?.status !== 'scheduled') continue;
+      // A race, a test or one of a joined pair stays as planned; so does a sport already done today.
+      if (!id.startsWith('local-') || event.race || event.after || event.next || /race|závod|zavod|\btest\b/i.test(String(event.name || '')) || doneSports.has(eventSport(event))) continue;
+      if ((await localWorkout(db, id))?.status !== 'scheduled') continue;
       const planned = await plannedWorkoutOf(env, ctx, id);
-      const version = planned ? await coachTodayVersion(env, ctx, id, { ...planned.workout, sport: planned.kind }) : null;
-      if (!version?.workout?.id) continue;
+      if (!planned || ['race', 'test'].includes(planned.library?.family)) continue;
+      const version = await coachTodayVersion(env, ctx, id, { ...planned.workout, sport: planned.kind });
+      const to = version?.workout?.id;
+      // The coach's workout already on the day (another session): nothing is replaced, so nothing is lost.
+      if (!to || used.has(to) || await db.prepare('SELECT 1 FROM workout_schedule_links WHERE user_id=? AND workout_id=? AND scheduled_date=? LIMIT 1').bind(db.userId, to, date).first()) continue;
+      used.add(to);
       const link = await db.prepare('SELECT sport,workout_id,family,scheduled_date,environment,intervals_external_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(db.userId, id).first();
-      const scheduled = await replacePlannedSession(env, { eventId: id, date, environment: link?.environment || planned.workout.environment || 'outdoor', to: { workoutId: version.workout.id } });
-      if (scheduled?.eventId) items.push({ from: id, link: link || null, to: scheduled.eventId, fromName: version.from.name, fromMinutes: version.from.minutes, toName: version.workout.name || null, toMinutes: Math.round(Number(version.workout.duration_minutes)) || null, why: version.why });
+      const time = /T(\d{2}:\d{2})/.exec(String(event.start_date_local || row.start_time || ''))?.[1];
+      const scheduled = await scheduleWorkoutInIntervals(env, db, { workoutId: to, date, confirm: true, environment: link?.environment || planned.workout.environment || 'outdoor', startTime: time && time !== '00:00' ? time : null });
+      if (scheduled.status !== 'ok' || !scheduled.eventId) continue;
+      // Saved before the plan goes, so a stop on the way still leaves the way back.
+      items.push({ from: id, link: link || null, to: scheduled.eventId, fromName: version.from.name, fromMinutes: version.from.minutes, toName: version.workout.name || null, toMinutes: Math.round(Number(version.workout.duration_minutes)) || null, why: version.why });
+      await updateAthleteState(db, { eased: { day: date, status: 'eased', items } });
+      await deletePlannedEvent(env, { eventId: id });
     } catch (error) { console.error('Plan not eased', id, error.message); }
   }
-  if (items.length) await updateAthleteState(db, { eased: { day: date, status: 'eased', items } });
   return { eased: items.length };
 }
 
@@ -1827,11 +1843,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),state=await getAthleteState(env.DB),eased=state.eased,date=localToday();
       if(body.action!=='restore')throw new Error(L('Neplatná volba.', 'Invalid choice.'));
       if(!eased||eased.day!==date||eased.status!=='eased')return Response.json({status:'ok',eased:eased||null},{headers:{'Cache-Control':'no-store'}});
+      // Each plan on its own, so a second tap finishes what the first could not.
+      let left=0;
       for(const item of eased.items||[]){
-        await deletePlannedEvent(env,{eventId:item.to}).catch(error=>console.error('Eased session not removed',error.message));
-        await restoreLocalWorkout(env,item.from,item.link?{...item.link,scheduled_date:item.link.scheduled_date||date}:null);
+        if(item.restored)continue;
+        try{
+          if((await localWorkout(env.DB,item.to.replace(/^planned:/,'')).catch(()=>null))?.status!=='deleted')await deletePlannedEvent(env,{eventId:item.to});
+          if((await localWorkout(env.DB,item.from))?.status==='deleted')await restoreLocalWorkout(env,item.from,item.link?{...item.link,scheduled_date:item.link.scheduled_date||date}:null);
+          item.restored=true;
+        }catch(error){left++;console.error('Plan not restored',item.from,error.message);}
       }
-      const next={...eased,status:'restored'};
+      const next={...eased,status:left?'eased':'restored'};
+      if(left){await updateAthleteState(env.DB,{eased:next});throw new Error(L('Část plánu se nepodařilo vrátit, zkus to za chvíli.','Part of the plan could not be restored, try again in a moment.'));}
       await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);
       return Response.json({status:'ok',eased:next},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
