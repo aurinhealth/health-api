@@ -54,36 +54,36 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8\u{00A0}h\u{00A0}15\u{00A0}min a week")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-08", today: "2026-10-08"), "Rest from today to Sunday.")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-09", today: "2026-10-08"), "Rest from tomorrow to Sunday.")
-        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-08", today: "2026-10-08").hasPrefix("Workouts from today"))
-        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-09", today: "2026-10-08").hasSuffix("Earlier days and finished ones stay."))
+        XCTAssertEqual(WeekPlanSettingsText.again(["2026-11-28"]), "Plan Sat, Nov 28 again?")
+        XCTAssertEqual(WeekPlanSettingsText.again(["2026-11-28", "2026-12-01"]), "Plan 2 days again?")
+        XCTAssertEqual(WeekPlanSettingsText.plans(["2026-11-28"]), "Plans Sat, Nov 28. Your other workouts stay.")
+        XCTAssertEqual(WeekPlanText.affects(.init(kind: "hard_in_a_row", dates: ["2026-11-27", "2026-11-28"])),
+                       "Fri, Nov 27 and Sat, Nov 28 are now two demanding days in a row.")
+        XCTAssertEqual(WeekPlanText.recalculateAdvice(from: "2026-11-26", to: "2026-12-06"), "I'd recalculate Nov 26 to Dec 6 and keep your sports.")
     }
 
-    /// Petr 2026-11-24: a gym added for today went when he set only the days from Wednesday.
-    func testReplanStartsAtTheFirstDayChanged() {
+    /// Petr 2026-11-24/25: Generate plans again only the days changed; a gym added for today stays.
+    func testGeneratePlansOnlyTheDaysChanged() {
         let mon = "2026-11-23", next = "2026-11-30", today = "2026-11-24"
         let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
         let usual = [120, 150, 150, 150, 120, 360, 360]
         var changed = empty
         changed.toggle("ride", day: 2)
-        changed.toggle("gym", day: 3)
+        changed.toggle("gym", day: 5)
         var nextChanged = empty
         nextChanged.toggle("gym", day: 0)
-        func from(_ choices: [String: WeekPlanChoice], usualNow: [Int] = usual) -> String {
-            WeekPlanGenerator.replanFrom(weeks: [mon, next], today: today, choices: choices, original: [mon: empty, next: empty],
-                                         usual: usualNow, usualBefore: usual)
+        func days(_ choices: [String: WeekPlanChoice], usualNow: [Int] = usual) -> [String] {
+            WeekPlanGenerator.changedDays(weeks: [mon, next], today: today, choices: choices, original: [mon: empty, next: empty],
+                                          usual: usualNow, usualBefore: usual)
         }
-        XCTAssertEqual(from([mon: changed, next: nextChanged]), "2026-11-25", "today left as it was keeps its workout")
-        XCTAssertEqual(from([mon: empty, next: nextChanged]), "2026-11-30")
-        XCTAssertEqual(from([mon: empty, next: empty]), today, "nothing changed: Generate replans from today")
-        var restToday = empty
-        restToday.makeRest(1)
-        XCTAssertEqual(from([mon: restToday, next: empty]), today)
+        XCTAssertEqual(days([mon: changed, next: nextChanged]), ["2026-11-25", "2026-11-28", "2026-11-30"], "today and the days between stay")
+        XCTAssertEqual(days([mon: empty, next: empty]), [], "nothing changed: the whole plan")
         var monday = empty
         monday.makeRest(0)
-        XCTAssertEqual(from([mon: monday, next: empty]), today, "a day before today does not count")
-        var longerTuesday = usual
-        longerTuesday[1] = 180
-        XCTAssertEqual(from([mon: changed, next: empty], usualNow: longerTuesday), today, "today's usual time changed")
+        XCTAssertEqual(days([mon: monday, next: empty]), [], "a day before today does not count")
+        var longerSaturday = usual
+        longerSaturday[5] = 240
+        XCTAssertEqual(days([mon: empty, next: empty], usualNow: longerSaturday), ["2026-11-28", "2026-12-05"], "a weekday's time: both weeks")
     }
 
     func testDayChoices() {
@@ -138,9 +138,9 @@ final class WeekPlanTests: XCTestCase {
         let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
         var match = empty
         match.toggleEvent("Soccer", day: 5)
-        let from = WeekPlanGenerator.replanFrom(weeks: ["2026-11-23"], today: "2026-11-24", choices: ["2026-11-23": match],
-                                                original: ["2026-11-23": empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
-        XCTAssertEqual(from, "2026-11-27", "the day before a match changes too")
+        let days = WeekPlanGenerator.changedDays(weeks: ["2026-11-23"], today: "2026-11-24", choices: ["2026-11-23": match],
+                                                 original: ["2026-11-23": empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(days, ["2026-11-27", "2026-11-28"], "the day before a match changes too")
 
         let prefs = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"days":[[],[],[],[],[],["gym"],[]],"events":[[],[],[],[],[],[{"type":"Soccer","kind":"match","minutes":95}],[]],"availability":[{"minutes":30,"ownMinutes":60,"calendarMinutes":30}],"source":"week","calendar":true}"#.utf8))
         XCTAssertEqual(OtherSports.events(prefs)[5], [OtherSportEvent(type: "Soccer", kind: "match", minutes: 95)])
@@ -175,8 +175,8 @@ final class WeekPlanTests: XCTestCase {
         var nextMatch = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
         nextMatch.toggleEvent("Soccer", day: 0)
         let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
-        let from = WeekPlanGenerator.replanFrom(weeks: [mon, next], today: "2026-11-24", choices: [mon: empty, next: nextMatch],
-                                                original: [mon: empty, next: empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
-        XCTAssertEqual(from, "2026-11-29")
+        let days = WeekPlanGenerator.changedDays(weeks: [mon, next], today: "2026-11-24", choices: [mon: empty, next: nextMatch],
+                                                 original: [mon: empty, next: empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(days, ["2026-11-29", "2026-11-30"])
     }
 }
