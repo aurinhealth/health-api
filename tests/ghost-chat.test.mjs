@@ -92,7 +92,7 @@ test('the coach route keeps nothing of a ghost chat: no memory, setting, summary
   assert.match(route, /for\(const action of ghost&&!chatId\?\[\]:actions\)/);
   assert.match(route, /\.\.\.\(ghost\?\{ghost:true\}:\{\}\)\};/);
   assert.match(route, /\.\.\.\(ghost\?\{ghostChat:true\}:\{\}\)/);
-  assert.match(route, /appendChatTurnIds\(env\.DB,answerChat,saved,answer,\{ghost\}\)/);
+  assert.match(route, /appendChatTurnIds\(env\.DB,answerChat,saved,answer,\{ghost,model\}\)/);
   assert.match(entry, /openChatForAnswer\(env\.DB,body\.chatId,saved,\{ghost\}\)/);
   // A ghost card's quick changes teach the coach nothing.
   assert.match(entry, /if\(chip!=='undo'&&chip!=='day'&&!draft\.ghost\)\{/);

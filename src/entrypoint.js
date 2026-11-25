@@ -2723,7 +2723,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The answer's id comes back as messageId: copy and the thumbs under it point to it.
     // A streamed answer knows its chat before the model runs (reply below).
     let answerChat=body.chatId;
-    const remember=async answer=>appendChatTurnIds(env.DB,answerChat,saved,answer,{ghost}).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
+    const remember=async (answer,model=null)=>appendChatTurnIds(env.DB,answerChat,saved,answer,{ghost,model}).catch(error=>{console.error('Chat save failed',error.message);return {chatId:null,messageId:null};});
     if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,...await remember('Zapamatoval jsem si: '+memory)});}
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&!image&&isFoodLogMessage(message)){
@@ -2925,7 +2925,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await saveMemory();
       const changes=keeps?memoryChanges(answer.memory,athleteState.memories):{forgotten:[],updated:[]};
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
-      const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''));
+      const note=actionsNote(actions),{chatId,messageId}=await remember(answer.answer+(note?'\n\n'+note:''),answer.model);
       // The day gets its note after midnight; a long chat's older part its summary, after the answer.
       if(remembers||ghost)await queueDayNote(env.DB,date).catch(error=>console.error('Day note not queued',error.message));
       if(chat.more&&chatId&&chat.firstId&&!ghost)ctx.waitUntil(summarizeChatStart(env,chatId,chat.firstId).catch(error=>console.error('Chat summary failed',error.message)));
@@ -2940,7 +2940,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // "From …" and "From memory: …" under the answer, from the steps and the memory the server sent (coach-steps.js sourceLines, AI-5).
       const sources=answer.status==='ok'&&!answer.fallback&&check?.status!=='fallback'?sourceLines(steps.list,{used:answer.memory?.used,memories:coachCtx.preferenceMemory||[]}):null;
       delete answer.memory;
-      return {...answer,chatId,messageId,actions:proposals,...(sources?{sources}:{}),...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      // AI Act art. 50(2): the answer says it is AI-generated, next to its model.
+      return {...answer,aiGenerated:true,chatId,messageId,actions:proposals,...(sources?{sources}:{}),...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.
