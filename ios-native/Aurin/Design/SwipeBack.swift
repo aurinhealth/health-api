@@ -78,28 +78,40 @@ import UIKit
         return nil
     }
 
-    @objc private func changed(_ pop: UIGestureRecognizer) {
-        let velocity = (pop as? UIPanGestureRecognizer)?.velocity(in: pop.view).x ?? 0
-        // With the transition's own view of it: when does it turn cancelled?
-        let transition = Self.navigation(of: pop)?.transitionCoordinator
-            .map { " t \(Int($0.percentComplete * 100))%\($0.isCancelled ? " cancelled" : "")\($0.isInteractive ? "" : " not-interactive")" } ?? " no-t"
-        Self.log("state \(pop.state.rawValue) at \(Int(pop.location(in: pop.view).x)) v \(Int(velocity))\(transition)")
-        // Did the pop finish or snap back, and how far it had got.
-        if pop.state == .ended || pop.state == .cancelled, let navigation = Self.navigation(of: pop),
-           let coordinator = navigation.transitionCoordinator {
-            coordinator.notifyWhenInteractionChanges { context in
-                Self.log("pop cancelled \(context.isCancelled), at \(Int(context.percentComplete * 100)) %")
-            }
-        } else if pop.state == .ended {
-            Self.log("ended without a transition")
+    /// The end of the swipe. On iOS 26 UIKit now and then undoes a pop the
+    /// finger clearly finished: the UI test's log showed the same swipe end
+    /// at 66 % of the screen moving right at 423 pt/s once finished and once
+    /// cancelled, with nothing else in between (CI, #1298; TestFlight 602 to
+    /// 611: "the first swipe does nothing"). A swipe past half the screen, or
+    /// a flick to the right, goes back: when UIKit cancelled it, the page is
+    /// popped once the cancel has settled.
+    @objc private func ended(_ pop: UIGestureRecognizer) {
+        guard let pan = pop as? UIPanGestureRecognizer, let view = pan.view else { return }
+        if Self.logging {
+            let transition = Self.navigation(of: pop)?.transitionCoordinator
+                .map { " t \(Int($0.percentComplete * 100))%\($0.isCancelled ? " cancelled" : "")" } ?? " no-t"
+            Self.log("state \(pop.state.rawValue) at \(Int(pan.location(in: view).x)) v \(Int(pan.velocity(in: view).x))\(transition)")
         }
-        // Where the stack is once the pop has settled.
-        if pop.state == .ended || pop.state == .cancelled, let navigation = Self.navigation(of: pop) {
-            Self.log("coordinator \(navigation.transitionCoordinator.map { "interactive \($0.isInteractive), cancelled \($0.isCancelled), \(Int($0.percentComplete * 100)) %" } ?? "none")")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                Self.log("after: \(navigation.viewControllers.count) pages")
+        guard pop.state == .ended, let navigation = Self.navigation(of: pop),
+              let coordinator = navigation.transitionCoordinator, coordinator.isCancelled,
+              Self.finished(translation: pan.translation(in: view).x, velocity: pan.velocity(in: view).x, width: view.bounds.width)
+        else { return }
+        let page = navigation.topViewController
+        coordinator.animate(alongsideTransition: nil) { _ in
+            // Once the cancel has settled: still the same page on top, nothing else moving.
+            DispatchQueue.main.async {
+                guard navigation.topViewController === page, navigation.viewControllers.count > 1,
+                      navigation.transitionCoordinator == nil else { return }
+                Self.log("UIKit cancelled a finished swipe: popping")
+                navigation.popViewController(animated: true)
             }
         }
+    }
+
+    /// Past half the width, or a flick right: the swipe meant to go back.
+    nonisolated static func finished(translation: CGFloat, velocity: CGFloat, width: CGFloat) -> Bool {
+        guard width > 0, velocity >= 0 else { return false }
+        return translation > width / 2 || velocity > 500
     }
 
     /// Switches the swipe on for the stack that shows `controller`.
@@ -111,7 +123,7 @@ import UIKit
         Self.log("enable: delegate was ours \(pop.delegate === self), enabled \(pop.isEnabled), \(controller.navigationController?.viewControllers.count ?? 0) pages")
         if pop.delegate !== self {
             pop.delegate = self
-            if Self.logging { pop.addTarget(self, action: #selector(changed)) }
+            pop.addTarget(self, action: #selector(ended))
         }
         pop.isEnabled = true
     }
@@ -121,21 +133,13 @@ import UIKit
 /// appearance it gives the stack's edge swipe back to SwipeBack.
 struct SwipeBackEnabler: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {
-        // The UI test's log: SwiftUI redrawing the page while a swipe goes back.
-        if SwipeBack.logging, controller.navigationController?.transitionCoordinator != nil { SwipeBack.log("page redrawn mid-transition") }
-    }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
 
     final class Controller: UIViewController {
         override func loadView() {
             view = UIView()
             view.isUserInteractionEnabled = false
             view.isAccessibilityElement = false
-        }
-
-        override func viewWillDisappear(_ animated: Bool) {
-            super.viewWillDisappear(animated)
-            SwipeBack.log("will disappear, \(navigationController?.viewControllers.count ?? 0) pages")
         }
 
         override func viewDidAppear(_ animated: Bool) {
