@@ -58,6 +58,16 @@ export const PAIN_AREAS = [
     exercises: /shoulder press|overhead press|military press|push press|arnold|landmine press|bench press|incline press|floor press|chest flat press|chest press|standing dumbbell press|clean (?:&|and) press|cuban press|thruster|^dips$|assisted dip|bench dips/i },
   { id: 'arm', part: /zápěst|zapest|(?<!\p{L})lok(?:et|t)|předlok|predlok|wrist|elbow|forearm/iu, sports: [], label: ['zápěstí a lokte', 'wrist and elbow'],
     exercises: /curl|tricep|pushdown|push down|skull|^dips$|assisted dip|bench dips|push-up|push up|wrist/i },
+  // The thigh, the back of the thigh, the glutes and the ribs (load ramp-back
+  // review 2026-11-25, C8): before, no part matched and nothing was held back.
+  { id: 'thigh', part: /stehn|thigh|(?<!\p{L})quad(?:s|riceps)?(?!\p{L})|čtyřhlav|ctyrhlav/iu, sports: ['run', 'ride'], label: ['stehna', 'thigh'],
+    exercises: /squat|lunge|leg press|step-up|step-down|leg extension|leg curl|thruster|jump|romanian|deadlift|good morning|nordic|pull-through|swing|rack pull/i },
+  { id: 'hamstring', part: /hamstr|podkolen/iu, sports: ['run', 'ride'], label: ['zadního stehna', 'hamstring'],
+    exercises: /leg curl|romanian|deadlift|good morning|nordic|pull-through|swing|rack pull|hyperextension|back extension|bridge|hip thrust/i },
+  { id: 'glute', part: /hýžď|hýžd|hyzd|(?<!\p{L})zad(?:ek|ku)(?!\p{L})|(?<!\p{L})glute|buttock|piriform/iu, sports: ['run', 'ride'], label: ['hýždí', 'glute'],
+    exercises: /hip thrust|glute|bridge|kickback|abduction|deadlift|romanian|good morning|swing|pull-through|squat|lunge|step-up|hyperextension|back extension|cossack|clamshell|fire hydrant|frog pump/i },
+  { id: 'ribs', part: /žebr|zebr|(?<!\p{L})ribs?(?!\p{L})/iu, sports: ['run', 'swim'], label: ['žeber', 'ribs'],
+    exercises: /bench press|chest press|floor press|incline press|overhead press|military press|shoulder press|push press|clean|push-up|push up|pull-up|pull up|chin-up|pulldown|pullover|row|crunch|sit-up|twist|wood ?chop|rotation|leg raise|knee raise|dips|plank|v-up|pallof|renegade/i },
   { id: 'neck', part: /(?<!\p{L})kr[kč]|šíj|(?<!\p{L})sij|neck/iu, sports: ['swim'], label: ['krku', 'neck'],
     exercises: /shrug|upright row|overhead press|military press|push press/i }
 ];

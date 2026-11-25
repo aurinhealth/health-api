@@ -346,9 +346,11 @@ export function gymExerciseCatalog(){
 // The load for an exercise put into a plan by hand or by the AI coach, from
 // the athlete's own history of it or of a variant (barbell squat → Smith
 // squat). An exercise unlike anything done before stays without a weight.
-export function gymLoadEstimate(exercise,history=[]){
+// today: the day the load is for, so a break holds the weight (14 days) or
+// takes it down (more than 21 days) as in a generated plan.
+export function gymLoadEstimate(exercise,history=[],today=null){
   const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!def)return null;
-  const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null});
+  const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null,today});
   if(estimate.kg==null)return null;
   // From another exercise never more than twice the catalogue's start, as the
   // generator (Revize 2026-10-16, nález 21: a 150 kg back squat gave a 135 kg pendulum squat).
@@ -368,14 +370,14 @@ export function catalogueStartLoad(exercise,{sex='',experience=''}={},history=[]
 // when nothing else fits; liked ones come first among equally similar ones.
 // fits: what the athlete's gym has, kept before the 8 are cut (a small home
 // gym still gets its 8 from further down, not what is left of the first 8).
-export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=>true,start={}){
+export function gymAlternatives(exercise,history=[],exclude=[],taste={},fits=()=>true,start={},today=null){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
   const liked=new Set((taste.liked||[]).map(normalizeExerciseName));
   const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)&&fits(a.name));
   const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
   return ranked.slice(0,8).map(a=>{
-    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||catalogueStartLoad(a.name,start,history)||{kg:null,source:'no-reference'};
+    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history,today)||catalogueStartLoad(a.name,start,history)||{kg:null,source:'no-reference'};
     // The weight is only suggested, never carried over 1:1 from another
     // exercise (strength coach S1, 2026-11-16): "suggested" with a reference in
     // the history, "start-light" with only the catalogue's start load or none.
