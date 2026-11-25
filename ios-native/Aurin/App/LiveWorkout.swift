@@ -120,9 +120,12 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var savedWorkout: HKWorkout?
     /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
     @ObservationIgnored private var sensorBeats: [(Date, Double)] = []
-    /// Pokračovat v tréninku: the pause and the samples of the workout saved
-    /// before it, carried into the one recorded now.
-    @ObservationIgnored private var carried: (pause: DateInterval, samples: [HKQuantitySample])?
+    /// Pokračovat v tréninku: the pauses (those before Dokončit, then the time
+    /// from Dokončit on) and the samples of the workout saved before it,
+    /// carried into the one recorded now.
+    @ObservationIgnored private var carried: (pauses: [DateInterval], samples: [HKQuantitySample])?
+    /// The pauses of the workout last finished, for Pokračovat v tréninku (reset() keeps them).
+    @ObservationIgnored private var finishedPauses: [DateInterval] = []
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
 
     /// Starts once per session; `since` is when the gym sheet started.
@@ -133,13 +136,18 @@ final class LiveWorkout: NSObject {
         var workout = saved
         if workout == nil { workout = await savedWorkout(since: since) }
         var samples: [HKQuantitySample] = []
+        // The pauses before Dokončit stay pauses (review 2026-11-24 point 8):
+        // those kept since, else the ones saved with the workout.
+        let now = Date(), end = min(pausedAt, now)
+        var earlier = finishedPauses.filter { $0.start >= since && $0.start < end }.map { DateInterval(start: $0.start, end: min($0.end, end)) }
         if let workout {
+            if earlier.isEmpty { earlier = Self.pauses(of: workout) }
             samples = await copies(of: workout)
             await delete(workout)
         }
         reset()
-        let now = Date()
-        carried = (DateInterval(start: min(pausedAt, now), end: now), samples)
+        finishedPauses = []
+        carried = (earlier + [DateInterval(start: end, end: now)], samples)
         await begin(since: since, weightKg: weightKg)
     }
 
@@ -166,7 +174,7 @@ final class LiveWorkout: NSObject {
                 samples = [HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: saved.kcal),
                                             start: saved.start, end: max(saved.start.addingTimeInterval(1), saved.at))]
             }
-            carried = (DateInterval(start: saved.at, duration: 0), samples)
+            carried = ([], samples)
         }
         await begin(since: recent, weightKg: weightKg)
         if let saved { restore(saved, kcal: false); paused = saved.paused; restorePauses(saved) }
@@ -264,7 +272,7 @@ final class LiveWorkout: NSObject {
         trail = []
         segments = []
         kcalTrail = []
-        paused = carried?.pause.duration ?? 0
+        paused = carried?.pauses.reduce(0) { $0 + $1.duration } ?? 0
         pausedAt = nil; pauses = []
         let unit = HKUnit.count().unitDivided(by: .minute())
         let beats = (carried?.samples ?? []).filter { $0.quantityType == HKQuantityType(.heartRate) }.sorted { $0.startDate < $1.startDate }
@@ -394,6 +402,7 @@ final class LiveWorkout: NSObject {
     func finish(at end: Date = Date()) async -> Bool {
         guard let begun = start else { return false }
         resumeFromPause()
+        finishedPauses = (carried?.pauses ?? []) + pauses
         Task { await IdleWorkout.plan(after: nil) }
         poll?.cancel(); poll = nil
         stopSensor()
@@ -508,8 +517,11 @@ final class LiveWorkout: NSObject {
         return kcalTrail.last(where: { $0.at <= end })?.kcal ?? kcal
     }
 
-    /// The minutes until `end` (an idle workout ends at its last set).
-    func minutes(at end: Date) -> Int { clockStart.map { max(1, Int((end.timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+    /// The minutes until `end` (an idle workout ends at its last set). A pause
+    /// still open counts no more (Dokončit while paused, review 2026-11-24 point 3).
+    func minutes(at end: Date) -> Int {
+        clockStart.map { max(1, Int((min(pausedAt ?? end, end).timeIntervalSince($0) / 60).rounded())) } ?? 0
+    }
 
     // MARK: The parts (Training mode as one workout)
 
@@ -806,12 +818,27 @@ final class LiveWorkout: NSObject {
         guard let carried else { return }
         let energy = HKQuantityType(.activeEnergyBurned)
         await add(carried.samples.filter { kcal || $0.quantityType != energy }, to: builder)
-        guard carried.pause.duration > 0 else { return }
-        let events = [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: carried.pause.start, duration: 0), metadata: nil),
-                      HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: carried.pause.end, duration: 0), metadata: nil)]
+        let events = carried.pauses.filter { $0.duration > 0 }.flatMap {
+            [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: $0.start, duration: 0), metadata: nil),
+             HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: $0.end, duration: 0), metadata: nil)]
+        }
+        guard !events.isEmpty else { return }
         _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
             builder.addWorkoutEvents(events) { ok, _ in continuation.resume(returning: ok) }
         }
+    }
+
+    /// A saved workout's pauses, from its pause and resume events.
+    static func pauses(of workout: HKWorkout) -> [DateInterval] {
+        var out: [DateInterval] = [], since: Date?
+        for event in (workout.workoutEvents ?? []).sorted(by: { $0.dateInterval.start < $1.dateInterval.start }) {
+            if event.type == .pause, since == nil { since = event.dateInterval.start }
+            if event.type == .resume, let start = since {
+                if event.dateInterval.start > start { out.append(DateInterval(start: start, end: event.dateInterval.start)) }
+                since = nil
+            }
+        }
+        return out
     }
 
     /// New samples like the calories and heart rate saved with a workout.

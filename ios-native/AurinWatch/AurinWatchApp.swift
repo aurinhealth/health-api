@@ -95,9 +95,9 @@ struct WatchRoot: View {
                         // Drawn again at noon, when the night stops being awaited.
                         TimelineView(.explicit([WatchStore.noon()])) { _ in
                             if store.nightPending {
-                                ReadinessHome(s: snapshot, stale: .night, openTraining: openTraining)
+                                ReadinessHome(s: snapshot, stale: .night)
                             } else {
-                                ReadinessHome(s: snapshot, openTraining: openTraining)
+                                ReadinessHome(s: snapshot)
                             }
                         }
                     } else if let snapshot = store.snapshot {
@@ -150,16 +150,12 @@ struct WatchRoot: View {
                 .onAppear { WatchReport.visit("readiness/\(page)") }
             }
         }
-        .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
+        // Ringing, or snoozed (watch concept 08): closing the Snoozed screen leaves the alarm snoozed.
+        .fullScreenCover(isPresented: Binding(get: { alarm.ringing || alarm.snoozedUntil != nil },
+                                              set: { if !$0 { if alarm.ringing { alarm.stop() } else { alarm.hideSnoozed() } } })) {
             AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
         .task { openDemo() }
-    }
-
-    /// The Training page, from today's gym row on the first page (watch audit B1).
-    private var openTraining: (() -> Void)? {
-        guard store.settings.pages.contains("training") else { return nil }
-        return { withAnimation { page = "training" } }
     }
 
     /// The sample day's screenshots (WatchDemo): a detail as its complication

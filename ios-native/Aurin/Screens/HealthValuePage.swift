@@ -24,7 +24,7 @@ enum HealthValue: String, CaseIterable, Identifiable {
         case .temperature: return "Teplota kůže"
         case .weight: return "Váha"
         case .bodyFat: return "Tělesný tuk"
-        case .muscle: return "Svaly"
+        case .muscle: return "Beztuková hmota"
         case .steps: return "Kroky"
         case .activeEnergy: return "Aktivní energie"
         }
@@ -96,7 +96,9 @@ enum HealthValue: String, CaseIterable, Identifiable {
         case .respiration: return "Počet dechů za minutu ve spánku, odhad hodinek nebo prstenu."
         case .oxygen: return "Kyslík v krvi ve spánku, odhad hodinek nebo prstenu. Není to lékařské měření."
         case .temperature: return "Teplota kůže ve spánku jako rozdíl proti tvým obvyklým nocím. Hodinky ani prsten neměří teplotu těla."
-        case .weight, .bodyFat, .muscle: return "Hodnoty z chytré váhy nebo z tvých zápisů. Tuk a svaly jsou odhad váhy."
+        case .weight, .bodyFat: return "Hodnoty z chytré váhy nebo z tvých zápisů. Tuk je odhad váhy."
+        // Apple Health has lean body mass only, no muscle mass: everything but fat.
+        case .muscle: return "Odhad chytré váhy: všechno kromě tuku, tedy svaly, kosti, voda a orgány. Samotné svaly to nejsou."
         case .steps: return "Kroky za den z telefonu, hodinek nebo prstenu."
         case .activeEnergy: return "Energie spálená pohybem nad klidovým výdejem, odhad hodinek nebo telefonu."
         }

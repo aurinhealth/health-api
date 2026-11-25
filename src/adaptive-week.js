@@ -10,6 +10,10 @@ import { pausedSports } from "./athlete-state.js";
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
 export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?.daily?.training?.planned || [])].filter(a => sportOf(a));
+// "Vygenerovat plán" asks before it deletes the planned workouts ahead (review
+// 2026-11-24 point 1): the proposal is built as if they were gone already, so
+// a failed request leaves the week as it was.
+export const withoutPlannedFrom = (week, today) => ({ ...week, days: (week?.days || []).map(d => d.date >= today && d.daily?.training?.planned?.length ? { ...d, daily: { ...d.daily, training: { ...d.daily.training, planned: [] } } } : d) });
 // A first week from the athlete's own "hours a week now" (onboarding review
 // point 10, triathlon coach 2026-11-10), only until the history gives an
 // estimate: 80 % of the stated hours (at most 15), 2 to 5 easy sessions and

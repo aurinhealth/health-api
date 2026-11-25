@@ -141,10 +141,10 @@ struct GoalsSettingsView: View {
         // The one screen of the time by weekday: Plan settings (week plan), here as there.
         .sheet(isPresented: $planSettings) {
             let monday = WeekPlanView.monday(), today = APIClient.localToday()
-            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { generate in
+            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { from in
                 Task {
-                    if generate {
-                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: today, calendar: model.calendar)
+                    if let from {
+                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: today, from: from, calendar: model.calendar)
                         await model.refreshTraining()
                     }
                     await loadFreeTime()

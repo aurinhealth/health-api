@@ -14,6 +14,8 @@ struct ActivityTypeSheet: View {
     /// "google-wearables" or "apple-health": the change stays in the app.
     var source: String? = nil
     var onSaved: () -> Void = {}
+    /// Settings → Sports → Your other sports: only the other sports (no ride, run, swim, gym or Other).
+    var otherOnly = false
     /// "+" → Log workout → More: only picks the type, nothing is saved here.
     var pick: ((ActivityTypeOption) -> Void)? = nil
     @State private var types: [ActivityTypeOption] = []
@@ -130,7 +132,10 @@ struct ActivityTypeSheet: View {
     private func load() async {
         chosen = current
         guard types.isEmpty else { return }
-        do { types = try await model.api.activityTypes() } catch { self.error = error.localizedDescription }
+        do {
+            let all = try await model.api.activityTypes()
+            types = otherOnly ? all.filter { $0.group == "other" && $0.type != "Workout" } : all
+        } catch { self.error = error.localizedDescription }
     }
 
     private func save() async {

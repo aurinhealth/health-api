@@ -114,6 +114,10 @@ struct HealthContent: View {
                 }
                 .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
+                // Over the day pager, whose scroll view reaches 24 pt up for the
+                // cards' shadows and took the taps on the month and Settings
+                // (retest 618 R3); Today has the week strip in between.
+                .zIndex(1)
             }
             day
                 .padding(.horizontal, PageGrid.margin)
@@ -631,7 +635,7 @@ struct MuscleWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Svalová hmota", color: Palette.brown)
+            WidgetHeader(title: "Beztuková hmota", color: Palette.brown)
             SizedWidgetBody(size: size, mediumChart: 44) {
                 NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
                 if let change = muscle.change, change != 0 {

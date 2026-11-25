@@ -54,6 +54,36 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8\u{00A0}h\u{00A0}15\u{00A0}min a week")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-08", today: "2026-10-08"), "Rest from today to Sunday.")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-09", today: "2026-10-08"), "Rest from tomorrow to Sunday.")
+        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-08", today: "2026-10-08").hasPrefix("Workouts from today"))
+        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-09", today: "2026-10-08").hasSuffix("Earlier days and finished ones stay."))
+    }
+
+    /// Petr 2026-11-24: a gym added for today went when he set only the days from Wednesday.
+    func testReplanStartsAtTheFirstDayChanged() {
+        let mon = "2026-11-23", next = "2026-11-30", today = "2026-11-24"
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        let usual = [120, 150, 150, 150, 120, 360, 360]
+        var changed = empty
+        changed.toggle("ride", day: 2)
+        changed.toggle("gym", day: 3)
+        var nextChanged = empty
+        nextChanged.toggle("gym", day: 0)
+        func from(_ choices: [String: WeekPlanChoice], usualNow: [Int] = usual) -> String {
+            WeekPlanGenerator.replanFrom(weeks: [mon, next], today: today, choices: choices, original: [mon: empty, next: empty],
+                                         usual: usualNow, usualBefore: usual)
+        }
+        XCTAssertEqual(from([mon: changed, next: nextChanged]), "2026-11-25", "today left as it was keeps its workout")
+        XCTAssertEqual(from([mon: empty, next: nextChanged]), "2026-11-30")
+        XCTAssertEqual(from([mon: empty, next: empty]), today, "nothing changed: Generate replans from today")
+        var restToday = empty
+        restToday.makeRest(1)
+        XCTAssertEqual(from([mon: restToday, next: empty]), today)
+        var monday = empty
+        monday.makeRest(0)
+        XCTAssertEqual(from([mon: monday, next: empty]), today, "a day before today does not count")
+        var longerTuesday = usual
+        longerTuesday[1] = 180
+        XCTAssertEqual(from([mon: changed, next: empty], usualNow: longerTuesday), today, "today's usual time changed")
     }
 
     func testDayChoices() {
@@ -86,5 +116,67 @@ final class WeekPlanTests: XCTestCase {
         // No 3 h cap for a long run.
         XCTAssertGreaterThan(WeekPlanSport.maxMinutes("run"), 180)
         XCTAssertEqual(WeekPlanPrefs.sports, ["ride", "run", "swim", "gym"])
+    }
+
+    /// Other sports in Plan settings: a practice or match per day, two at most, and Generate replans from the day before it.
+    func testOtherSportsOnADay() throws {
+        var choice = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        choice.toggle("gym", day: 5)
+        choice.toggleEvent("Soccer", day: 5)
+        XCTAssertEqual(choice.events[5], [OtherSportEvent(type: "Soccer", kind: "training", minutes: 75)])
+        XCTAssertEqual(choice.days[5], ["gym"], "the day's own sports stay")
+        choice.setEvent("Soccer", day: 5, kind: "match")
+        XCTAssertEqual(choice.events[5][0].minutes, 90, "a usual length follows the kind")
+        choice.setEvent("Soccer", day: 5, minutes: 400)
+        XCTAssertEqual(choice.events[5][0].minutes, 300)
+        choice.toggleEvent("Boxing", day: 5)
+        choice.toggleEvent("Tennis", day: 5)
+        XCTAssertEqual(choice.events[5].map(\.type), ["Boxing", "Tennis"], "a third replaces the first")
+        choice.toggleEvent("Boxing", day: 5)
+        XCTAssertEqual(choice.events[5].map(\.type), ["Tennis"])
+
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        var match = empty
+        match.toggleEvent("Soccer", day: 5)
+        let from = WeekPlanGenerator.replanFrom(weeks: ["2026-11-23"], today: "2026-11-24", choices: ["2026-11-23": match],
+                                                original: ["2026-11-23": empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(from, "2026-11-27", "the day before a match changes too")
+
+        let prefs = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"days":[[],[],[],[],[],["gym"],[]],"events":[[],[],[],[],[],[{"type":"Soccer","kind":"match","minutes":95}],[]],"availability":[{"minutes":30,"ownMinutes":60,"calendarMinutes":30}],"source":"week","calendar":true}"#.utf8))
+        XCTAssertEqual(OtherSports.events(prefs)[5], [OtherSportEvent(type: "Soccer", kind: "match", minutes: 95)])
+        let sent = OtherSports.uncapped(OtherSports.edited(prefs, events: Array(repeating: [], count: 7)))
+        XCTAssertEqual(OtherSports.events(sent)[5], [])
+        guard case .object(let o) = sent, case .array(let days)? = o["availability"], case .object(let day) = days[0] else { return XCTFail("no availability") }
+        XCTAssertEqual(day["minutes"], .number(60), "the day's own time goes back, not the calendar's cap")
+        XCTAssertNil(day["calendarMinutes"])
+        XCTAssertNil(o["source"])
+    }
+
+    /// Repeat every week off keeps the practice in the week it was turned off in; a removal from one day leaves the usual week.
+    func testRepeatAndRemoveOtherSport() {
+        let mon = "2026-11-23", next = "2026-11-30"
+        let soccer = OtherSportEvent(type: "Soccer")
+        var usualEvents = Array(repeating: [OtherSportEvent](), count: 7)
+        usualEvents[1] = [soccer]
+        let before = usualEvents
+        let loaded = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [], events: usualEvents)
+        var choices = [mon: loaded, next: loaded]
+        let original = choices
+        WeekPlanGenerator.setRepeat("Soccer", day: 1, week: mon, on: false, weeks: [mon, next], choices: &choices, usualEvents: &usualEvents)
+        XCTAssertEqual(usualEvents[1], [])
+        XCTAssertEqual(choices[mon]?.events[1], [soccer], "this week keeps it")
+        XCTAssertEqual(choices[next]?.events[1], [], "the next week follows the usual week")
+        XCTAssertTrue(WeekPlanGenerator.needsSave(choices[mon]!, original: original[mon], usualEvents: usualEvents, usualEventsBefore: before),
+                      "this week is sent, or it would follow the usual week and lose it")
+        XCTAssertTrue(WeekPlanGenerator.needsSave(choices[next]!, original: original[next], usualEvents: usualEvents, usualEventsBefore: before))
+        XCTAssertFalse(WeekPlanGenerator.needsSave(loaded, original: loaded, usualEvents: before, usualEventsBefore: before))
+
+        // A match on the next Monday: this Sunday replans too.
+        var nextMatch = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        nextMatch.toggleEvent("Soccer", day: 0)
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        let from = WeekPlanGenerator.replanFrom(weeks: [mon, next], today: "2026-11-24", choices: [mon: empty, next: nextMatch],
+                                                original: [mon: empty, next: empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(from, "2026-11-29")
     }
 }

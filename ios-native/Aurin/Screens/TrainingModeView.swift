@@ -315,7 +315,8 @@ struct TrainingModeView: View {
             // The Apple Watch's gym, 1:1 (its own view: the chain below is long enough).
             WatchGymHooks(live: live, restEnd: restEnd, sendRest: sendRest, received: receiveRest, ended: finishIfEndedOnWatch,
                           back: { Task { await catchUpWithWatch() } })
-            WatchDraftHooks(kg: kg, reps: reps, row: atHand?.row, send: sendDraft, received: receiveDraft)
+            // A weight or reps typed before the set: the lock screen shows it too (Petr 2026-11-24).
+            WatchDraftHooks(kg: kg, reps: reps, row: atHand?.row, send: { sendDraft(); syncActivity() }, received: receiveDraft)
             screen
         }
         .navBarVisibility(.hidden)
@@ -451,7 +452,11 @@ struct TrainingModeView: View {
         }
         .sheet(isPresented: $editing) {
             if let day {
-                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited in Task { await saveEdited(edited) } }
+                EditExercisesSheet(day: day, catalog: catalog, current: index) { edited, original in
+                    // Sets ticked on the watch while the sheet was open stay ticked.
+                    let merged = self.day.map { edited.carryingProgress(from: $0, since: original) } ?? edited
+                    Task { await saveEdited(merged) }
+                }
             }
         }
     }
@@ -1227,8 +1232,13 @@ struct TrainingModeView: View {
 
     /// Turns to a part or an exercise; `auto`: it starts at once (tapped),
     /// else it waits for its Start (it came on after the one before).
+    /// During a rest a part tapped waits for its Start and the rest runs on,
+    /// so back on the exercise it is still there (Petr 2026-11-24).
     private func go(_ step: Step?, auto: Bool) {
-        restEnd = nil
+        let resting = restEnd.map { $0 > Date() } ?? false
+        var auto = auto
+        if case .part? = step, resting { auto = false }
+        if step == nil || !resting { restEnd = nil }
         // The new part's runner names its first move when it appears.
         partMove = nil
         cardioClock = nil
@@ -1342,7 +1352,7 @@ struct TrainingModeView: View {
                 CardioTimerView(item: item, date: date, onDone: { tick(part, id: item.id) },
                                 inline: CardioTimerView.Inline(since: focused?.key == part.rawValue ? focused?.start : nil,
                                                                autoStart: partAutoStart, next: stepName(then, day), close: close,
-                                                               started: { waiting = false }, zoneLows: zoneLows,
+                                                               started: { waiting = false; restEnd = nil }, zoneLows: zoneLows,
                                                                target: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part).target,
                                                                command: cardioCommand,
                                                                clock: { cardioClock = $0 }))
@@ -1506,6 +1516,8 @@ struct TrainingModeView: View {
             .accessibilityElement(children: .combine)
             PrimaryButton(title: L10n.tr(start), systemImage: "play.fill") {
                 waiting = false
+                // A part begun ends a rest that ran on (go).
+                if part != nil { restEnd = nil }
                 live.worked()
             }
             if let part {
@@ -2161,7 +2173,21 @@ struct TrainingModeView: View {
     private func syncActivity(quiet: Bool = false) {
         // Paused: the lock screen's clock would run on; it comes back with Resume.
         GymLiveActivity.sync(day: finishedSession || !started || paused ? nil : day, focus: index, restStart: restStart, restEnd: restEnd,
-                             part: activityPart, title: day.map(title), quiet: quiet)
+                             part: activityPart, title: day.map(title), shown: activityShown, quiet: quiet)
+    }
+
+    /// The weights and reps the lock screen shows: the set at hand with what
+    /// its fields hold now (typed before the set), the others as their rows.
+    private func activityShown(_ set: GymSet, _ exercise: GymExercise) -> (kg: String?, reps: String?)? {
+        let carry = carried(set, in: exercise)
+        guard set.row == atHand?.row else { return carry }
+        return Self.typed(kg: kg, reps: reps, machineLb: lb(exercise.name), else: carry)
+    }
+
+    /// The fields of the set at hand over what it would show without them.
+    static func typed(kg: String, reps: String, machineLb: Bool, else carry: (kg: String?, reps: String?)?) -> (kg: String?, reps: String?) {
+        (LiftWeight.kgText(kg, machineLb: machineLb).nilIfBlank ?? carry?.kg,
+         reps.trimmingCharacters(in: .whitespaces).nilIfBlank ?? carry?.reps)
     }
 
     /// The part on screen as the lock screen shows it: "Cardio, Exercise
@@ -2220,10 +2246,12 @@ struct TrainingModeView: View {
     private func completeRow(_ row: Int) async {
         guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
               let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving, completing != row else { return }
+        // The fields are this set's: saved as typed there, not the plan (Petr 2026-11-24).
+        let typedHere = atHand?.row == row
         completing = row
         index = at
         restEnd = nil
-        prefill(set, in: list[at])
+        if !typedHere { prefill(set, in: list[at]) }
         await complete(set)
         completing = nil
     }
@@ -2500,7 +2528,8 @@ struct TrainingModeView: View {
     private func keepMinimized(_ day: GymDay) {
         model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
                                           restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped,
-                                          part: activePart, waiting: waiting, activity: activityPart)
+                                          part: activePart, waiting: waiting, activity: activityPart,
+                                          draft: atHand.map { MinimizedGym.Draft(row: $0.row, kg: kg, reps: reps, machineLb: atHandPounds) })
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
@@ -2520,6 +2549,8 @@ struct TrainingModeView: View {
         waiting = gym.waiting
         partAutoStart = !gym.waiting
         activePart = gym.part
+        // What was typed for the set at hand before the workout was hidden.
+        if let draft = gym.draft, draft.row == atHand?.row { kg = draft.kg; reps = draft.reps }
         // Each lock-screen tap once, in order (two taps on Série hotová are one).
         var seen: [GymActivityAction] = []
         for action in gym.pending where !seen.contains(action) { seen.append(action) }
@@ -2551,7 +2582,11 @@ struct TrainingModeView: View {
             // The lock screen moves on to the next set at once (the save waits for the screen).
             if let at = gym.day.exercises.firstIndex(where: { $0.sets.contains { $0.row == row && !$0.done } }),
                let set = gym.day.exercises[at].sets.first(where: { $0.row == row }) {
-                gym.day.complete(row: row, kg: set.kg ?? set.plannedKg ?? "", reps: set.reps ?? set.plannedReps ?? "", rpe: "", intensity: nil, keepDrops: [])
+                // The weight typed before the set, if it was this one (Petr 2026-11-24).
+                let typed = gym.draft.flatMap { $0.row == row ? $0 : nil }
+                    .map { Self.typed(kg: $0.kg, reps: $0.reps, machineLb: $0.machineLb, else: nil) }
+                gym.day.complete(row: row, kg: typed?.kg ?? set.kg ?? set.plannedKg ?? "", reps: typed?.reps ?? set.reps ?? set.plannedReps ?? "",
+                                 rpe: "", intensity: nil, keepDrops: [])
                 gym.index = at
             }
         case .partDone:
@@ -2563,7 +2598,13 @@ struct TrainingModeView: View {
         model.minimizedGym = gym
         let end = gym.restEnd
         Task { await Reminders.restEnds(at: end) }
-        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd, part: gym.activity, title: gym.title)
+        let draft = gym.draft
+        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd, part: gym.activity, title: gym.title,
+                             shown: { set, exercise in
+                                 let carry = GymSessionMath.carried(set, in: exercise)
+                                 guard let draft, draft.row == set.row, !set.done else { return carry }
+                                 return Self.typed(kg: draft.kg, reps: draft.reps, machineLb: draft.machineLb, else: carry)
+                             })
     }
 
     /// The cross: a workout changed here can be kept for later or thrown away.

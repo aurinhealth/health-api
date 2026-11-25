@@ -3,22 +3,24 @@ import SwiftUI
 /// Live workout → "…" → Edit exercises (concept 08): the exercises done, and
 /// those still to do to drag into another order (the handle) or take out (the
 /// minus); Add exercise, and Make superset, which picks the exercises that go
-/// together (not started, not paired yet) and puts them next to each other.
-/// A superset's Unpair takes it apart. Done hands the changed day back.
+/// together (not started or the one under way, not paired yet) and puts them next to each other.
+/// A superset's Unpair takes it apart. Done hands the changed day back with
+/// the day as it came (the caller keeps sets ticked meanwhile); unchanged it
+/// only closes.
 struct EditExercisesSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var day: GymDay
     let catalog: [GymCatalogExercise]
     /// The exercise under way ("Now"), by name: its place changes as the list is edited.
     let currentName: String?
-    let save: (GymDay) -> Void
+    let save: (_ edited: GymDay, _ original: GymDay) -> Void
     /// The day as it came: Cancel shows once something changed.
     private let original: GymDay
     @State private var adding = false
     /// Make superset: the exercises picked so far (by id); nil while editing.
     @State private var picking: Set<String>?
 
-    init(day: GymDay, catalog: [GymCatalogExercise], current: Int? = nil, save: @escaping (GymDay) -> Void) {
+    init(day: GymDay, catalog: [GymCatalogExercise], current: Int? = nil, save: @escaping (_ edited: GymDay, _ original: GymDay) -> Void) {
         _day = State(initialValue: day)
         original = day
         self.catalog = catalog
@@ -43,7 +45,7 @@ struct EditExercisesSheet: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(picking == nil ? "Upravit cviky" : "Udělat supersérii").font(Typo.heading(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                         Text(picking == nil ? "Táhni za úchyt a změníš pořadí. Mínus cvik odebere."
-                             : "Vyber cviky, které jdou spolu. Přesunou se k sobě. Cvik, který jsi začal nebo už je v páru, vybrat nejde.")
+                             : "Vyber cviky, které jdou spolu. Přesunou se k sobě. Hotový cvik nebo cvik, který už je v páru, vybrat nejde.")
                             .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                     .textCase(nil)
@@ -86,7 +88,7 @@ struct EditExercisesSheet: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let picking {
                     PrimaryButton(title: picking.count < 2 ? L10n.tr("Vyber dva nebo víc") : L10n.f("Spojit %@ do supersérie", String(picking.count))) {
-                        day.makeSuperset(Array(picking))
+                        day.makeSuperset(Array(picking), anchor: currentName.flatMap { name in day.exercises.first { $0.name == name }?.id })
                         withAnimation(.snappy) { self.picking = nil }
                     }
                     .disabled(picking.count < 2)
@@ -103,7 +105,10 @@ struct EditExercisesSheet: View {
                         ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button { save(day); dismiss() } label: { Text("Hotovo").fontWeight(.semibold).foregroundStyle(Palette.green) }
+                        Button {
+                            if day.values != original.values { save(day, original) }
+                            dismiss()
+                        } label: { Text("Hotovo").fontWeight(.semibold).foregroundStyle(Palette.green) }
                     }
                 }
             }
@@ -207,11 +212,12 @@ struct EditExercisesSheet: View {
         return reps.map { "\(exercise.workCount) × " + $0 } ?? L10n.plural("%lld sérií", exercise.workCount)
     }
 
-    /// Not started, not under way, in no superset yet.
+    /// Not started, or the one under way (its sets left go round with the others:
+    /// Petr 2026-11-24, after set 1 of 3), in no superset yet.
     private func pickable(_ i: Int) -> Bool {
         let exercise = day.exercises[i]
         // Warm-up sets count as begun too.
-        return !exercise.sets.contains(where: \.done) && exercise.name != currentName && ExerciseOrder.letter(exercise.superset) == nil
+        return (!exercise.sets.contains(where: \.done) || exercise.name == currentName) && ExerciseOrder.letter(exercise.superset) == nil
     }
 
     private func footerButton(_ title: String, action: @escaping () -> Void) -> some View {
