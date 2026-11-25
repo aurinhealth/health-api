@@ -381,7 +381,6 @@ extension WatchBridge: WCSessionDelegate {
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let drinkAt = (message[WatchSnapshot.drinkAtKey] as? Double).map(Date.init(timeIntervalSince1970:)) ?? Date()
-        let drinkAt = (message[WatchSnapshot.drinkAtKey] as? Double).map(Date.init(timeIntervalSince1970:)) ?? Date()
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
         let alarmStopped = message[WatchSnapshot.alarmStoppedKey] as? Bool == true
