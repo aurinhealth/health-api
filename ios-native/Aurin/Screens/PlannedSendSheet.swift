@@ -197,7 +197,7 @@ struct PlannedSendSheet: View {
             symbol("doc")
             VStack(alignment: .leading, spacing: 2) {
                 Text("Exportovat do").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Text(verbatim: zwo ? "Zwift, Garmin, Karoo" : "Garmin, COROS, Wahoo").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: zwo ? "Garmin, Wahoo, Karoo" : "Garmin, COROS, Wahoo").font(Typo.caption).foregroundStyle(Palette.muted)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)

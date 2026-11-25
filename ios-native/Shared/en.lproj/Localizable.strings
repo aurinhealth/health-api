@@ -5348,3 +5348,9 @@
 "Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The dashed line is the period's average. Today is only part of the day so far.";
 "Celkem ve dnech plánu" = "Total on plan days";
 "Auto (dnes %@)" = "Auto (tonight %@)";
+"Tvůj týden" = "Your week";
+"Minulý týden %@" = "Was %@";
+"%@ z %@ hotovo" = "%1$@ of %2$@ done";
+"Naplánovat příští týden" = "Plan next week";
+"km %@ až %@" = "km %1$@ to %2$@";
+"%@ až %@ m" = "%1$@ to %2$@ m";
