@@ -184,6 +184,7 @@ import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedP
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
 import { weekSummary, summaryWeek } from "./coach-week-summary.js";
+import { raceWeek, RACE_WEEK_DAYS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
@@ -1781,6 +1782,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>({}))]);
       const summary=weekSummary({start,today,days:weeks.flatMap(w=>w.days||[]),sleep:sleep.sessions||[],load:loadBalance(fitness?.wellness||[],end<today?end:today)});
       return Response.json({status:'ok',summary},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // The coach's race-week message (coach-race-week.js): fuel, drinks and
+  // pacing from the rules, no AI; null outside a running race's last six days.
+  if(url.pathname==='/app/api/coach/race-week'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const today=localToday(),focus=athleteFocus(await dashboardProfile(env).catch(()=>null),today);
+      if(focus?.event?.sport!=='run'||!(focus.event.daysLeft>=0&&focus.event.daysLeft<=RACE_WEEK_DAYS))return Response.json({status:'ok',raceWeek:null},{headers:{'Cache-Control':'no-store'}});
+      const [thresholds,weight,level]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),capabilitiesWithLevel(env.DB,'run').then(c=>c.level).catch(()=>null)]);
+      return Response.json({status:'ok',raceWeek:raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,weightKg:weightKg(weight),experience:level})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/coach/week-ai'&&request.method==='POST'){
