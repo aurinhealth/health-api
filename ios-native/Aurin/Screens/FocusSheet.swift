@@ -71,59 +71,54 @@ struct FocusSheet: View {
     static let goalTexts = FocusChoice.goalTexts
 
     var body: some View {
-        NavigationStack {
-            PageScroll {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Zaměření").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    SectionLabel(text: "Sporty").padding(.top, 4)
-                    SportsPicker(choice: $sports).disabled(loading || saving)
-                    if sports.swims { SwimLevelGroup(swims100: $swims100) }
+        SheetFrame(title: "Zaměření", fitted: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                SectionLabel(text: "Sporty").padding(.top, 4)
+                SportsPicker(choice: $sports).disabled(loading || saving)
+                if sports.swims { SwimLevelGroup(swims100: $swims100) }
 
-                    SectionLabel(text: "Kdy máš čas").padding(.top, 10)
-                    VStack(spacing: 0) {
-                        ForEach(0..<7, id: \.self) { i in
-                            if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                            AvailabilityBarRow(day: Fmt.weekdayShort(ISODay.shift(monday, i)), minutes: $minutes[i])
-                        }
+                SectionLabel(text: "Kdy máš čas").padding(.top, 10)
+                VStack(spacing: 0) {
+                    ForEach(0..<7, id: \.self) { i in
+                        if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                        AvailabilityBarRow(day: Fmt.weekdayShort(ISODay.shift(monday, i)), minutes: $minutes[i])
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 4)
-                    .cardSurface(cornerRadius: 22)
-                    .disabled(loading || saving)
-                    .sensoryFeedback(.selection, trigger: minutes)
-
-                    SectionLabel(text: "Cíl").padding(.top, 10)
-                    SettingsGroup {
-                        ForEach(Self.goals.indices, id: \.self) { i in
-                            if i > 0 { SettingsDivider() }
-                            Button { goal = Self.goals[i].0 } label: {
-                                HStack(spacing: 12) {
-                                    Text(Self.goals[i].1).font(.body).foregroundStyle(Palette.ink)
-                                    Spacer(minLength: 8)
-                                    if goal == Self.goals[i].0 {
-                                        Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
-                                    }
-                                }
-                                .padding(.horizontal, 16).padding(.vertical, 13)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(goal == Self.goals[i].0 ? .isSelected : [])
-                        }
-                    }
-
-                    if let error {
-                        Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
-                    }
-                    PrimaryButton(title: saving ? "Ukládám…" : "Uložit", systemImage: "checkmark", busy: saving) { Task { await save() } }
-                        .disabled(saving || loading || model.demo || sports.kinds.isEmpty || goal.isEmpty)
-                        .padding(.top, 10)
                 }
-                .padding(24)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 4)
+                .cardSurface(cornerRadius: 22)
+                .disabled(loading || saving)
+                .sensoryFeedback(.selection, trigger: minutes)
+
+                SectionLabel(text: "Cíl").padding(.top, 10)
+                SettingsGroup {
+                    ForEach(Self.goals.indices, id: \.self) { i in
+                        if i > 0 { SettingsDivider() }
+                        Button { goal = Self.goals[i].0 } label: {
+                            HStack(spacing: 12) {
+                                Text(Self.goals[i].1).font(.body).foregroundStyle(Palette.ink)
+                                Spacer(minLength: 8)
+                                if goal == Self.goals[i].0 {
+                                    Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                                }
+                            }
+                            .padding(.horizontal, 16).padding(.vertical, 13)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(goal == Self.goals[i].0 ? .isSelected : [])
+                    }
+                }
+
+                if let error {
+                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                }
+                PrimaryButton(title: saving ? "Ukládám…" : "Uložit", systemImage: "checkmark", busy: saving) { Task { await save() } }
+                    .disabled(saving || loading || model.demo || sports.kinds.isEmpty || goal.isEmpty)
+                    .padding(.top, 10)
             }
-            .background { ScreenBackground(glow: Palette.Glow.training) }
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
         .task { await load() }
     }

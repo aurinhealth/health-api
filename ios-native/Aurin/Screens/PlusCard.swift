@@ -608,13 +608,8 @@ struct DrinkSheet: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
-        PageScroll {
+        SheetFrame(title: editing ? "Upravit pití" : "Co piješ?", fitted: false) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-                }
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(DrinkKind.all) { d in
                         Button { kind = d.id } label: {
@@ -687,10 +682,8 @@ struct DrinkSheet: View {
                 }
                 .disabled(saving)
             }
-            .padding(24)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 
     /// −/+ by 50 ml, or by 1 fl oz in imperial units; the amount stays in ml.

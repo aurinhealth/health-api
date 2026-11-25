@@ -550,14 +550,8 @@ struct DrinksCard: View {
         }
         .sensoryFeedback(.success, trigger: reached) { _, now in now }
         .sheet(isPresented: $choosing) {
-            NavigationStack {
-                PageScroll { DrinkFigurePicker().padding(20) }
-                    .background { Palette.settingsBackground.ignoresSafeArea() }
-                    .navigationTitle("Postavička pití")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { choosing = false } } }
-            }
-            .presentationDetents([.medium, .large])
+            SheetFrame(title: "Postavička pití") { DrinkFigurePicker() }
+                .glassSheetBackground()
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
     }

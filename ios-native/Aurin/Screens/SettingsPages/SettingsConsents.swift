@@ -57,22 +57,19 @@ struct PrivacyConsentsGroup: View {
         }
         .sheet(isPresented: $askingAI) {
             // The onboarding's full consent text (PRIV-1), the same card as in the coach.
-            NavigationStack {
-                ScrollView {
+            SheetFrame(title: "AI funkce") {
+                VStack(spacing: 10) {
                     AIConsentCard(allow: { try await model.api.allowAI() }) {
                         ai = true
                         model.setAIOff(false)
                         error = nil
                         askingAI = false
                     }
-                    .padding(20)
-                }
-                .background { Palette.background.ignoresSafeArea() }
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Teď ne") { askingAI = false } }
+                    // Declining is an answer of its own, not only closing.
+                    SecondaryButton(title: "Teď ne") { askingAI = false }
                 }
             }
-            .presentationDetents([.medium, .large])
+            .glassSheetBackground()
         }
         .sheet(isPresented: $askingSensitive) {
             JournalSensitiveConsentSheet { Task { await setSensitive(true) } }

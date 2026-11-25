@@ -17,9 +17,8 @@ struct HealthPauseSheet: View {
     @State private var error: String?
 
     var body: some View {
-        ScrollView {
+        SheetFrame(title: "Odvolat souhlas se zdravotními daty", fitted: false) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Odvolat souhlas se zdravotními daty").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Aurin přestane tvoje zdravotní data používat a smaže, co z nich uchovává.")
                     .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -64,10 +63,8 @@ struct HealthPauseSheet: View {
                         .padding(.top, 10)
                 }
             }
-            .padding(24)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .interactiveDismissDisabled(pausing)
         // Shared or not, the export does not stay on the phone after the sheet.
         .onDisappear {

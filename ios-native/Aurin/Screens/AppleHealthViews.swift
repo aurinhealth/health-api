@@ -11,8 +11,8 @@ struct AppleHealthConnectSheet: View {
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Apple Health") {
+        SheetFrame(title: "Apple Health", fitted: false) {
+            VStack(alignment: .leading, spacing: 26) {
                 HStack(spacing: 14) {
                     IntegrationIcon(id: "apple", size: 56)
                     Text("Co může Aurin číst").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
@@ -35,16 +35,11 @@ struct AppleHealthConnectSheet: View {
                 }
                 .disabled(working || chosen.isEmpty)
             }
-            .toolbar {
-                // X top right, as every sheet (617 #15).
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
-                        .accessibilityLabel("Zavřít")
-                }
-            }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
         .interactiveDismissDisabled(working)
+        .onAppear { ScreenTrail.visit("page/Apple Health") }
     }
 }
 

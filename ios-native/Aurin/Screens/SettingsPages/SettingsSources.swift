@@ -276,12 +276,7 @@ struct SourcePrioritySheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(part.title).font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-            }
+        SheetFrame(title: part.title) {
             SettingsGroup(footer: L10n.tr("Automaticky bere zdroj s nejúplnějšími a nejstabilnějšími daty.")) {
                 ForEach(Array((["auto"] + choices).enumerated()), id: \.element) { index, id in
                     if index > 0 { SettingsDivider() }
@@ -311,10 +306,7 @@ struct SourcePrioritySheet: View {
                     .accessibilityAddTraits(id == selected ? .isSelected : [])
                 }
             }
-            Spacer(minLength: 0)
         }
-        .padding(24)
-        .presentationDetents([.medium])
         .glassSheetBackground(Palette.settingsBackground)
     }
 }

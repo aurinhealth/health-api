@@ -32,7 +32,6 @@ struct DayPill: View {
         .accessibilityValue(Self.text(day, today: today))
         .sheet(isPresented: $calendar) {
             DayPillCalendar(day: day, today: today) { model.addDay = $0 }
-                .presentationDetents([.medium])
         }
     }
 
@@ -59,22 +58,13 @@ private struct DayPillCalendar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Vybrat den").font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.muted)
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel(L10n.tr("Zavřít"))
-            }
+        SheetFrame(title: "Vybrat den") {
             DatePicker("Den", selection: $date, in: range, displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .tint(Palette.amber)
         }
-        .padding(.horizontal, 20).padding(.top, 16)
+        .glassSheetBackground()
         .onChange(of: date) { _, new in
             chosen(AppModel.localDate(new))
             dismiss()

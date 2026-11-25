@@ -91,8 +91,8 @@ struct FoodEntryEditSheet: View {
     private var changed: Bool { amountChanged || meal != entry.meal || AppModel.localDate(day) != date || !editedValues.isEmpty }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Upravit jídlo") {
+        SheetFrame(title: "Upravit jídlo", fitted: false) {
+            VStack(alignment: .leading, spacing: 26) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(entry.name).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -165,15 +165,14 @@ struct FoodEntryEditSheet: View {
                 }
                 .disabled(working)
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } }
-            }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
         .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button(entry.app == nil ? "Smazat" : "Smazat jen v Aurinu", role: .destructive) { Task { await delete() } }
         }
         .onAppear {
+            ScreenTrail.visit("page/Upravit jídlo")
             if let logged { amountText = Self.text(fluid ? Units.volume(logged.value) : logged.value) }
             meal = entry.meal
             day = Self.date(date) ?? Date()
