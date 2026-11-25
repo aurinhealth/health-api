@@ -164,6 +164,7 @@ import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess, aiRouteFeature } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, dataSources, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport, handleReportView } from "./support-report.js";
+import { handleUnsubscribe } from "./product-emails.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, connectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
 import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
@@ -600,6 +601,8 @@ const worker = {
     }
     // A problem report's screenshot and diagnostics behind the signed link in its e-mail (support-report.js).
     if (url.pathname.startsWith("/support/report/")) return handleReportView(request, rawEnv, url, { reportDb: async id => { const account = await findUser(rawEnv.DB, id, rawEnv); return account ? (await userDataEnvironment(rawEnv, account)).DB : null; } });
+    // Unsubscribing from product news by the signed link in each such e-mail (product-emails.js).
+    if (url.pathname.startsWith("/email/unsubscribe/")) return handleUnsubscribe(request, rawEnv, url, { userExists: async id => Boolean(await findUser(rawEnv.DB, id, rawEnv)) });
     if (!isPublic && !principal) {
       // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
       if ((request.method === 'GET' || request.method === 'HEAD') && /text\/html/.test(request.headers.get('Accept') || '')) {

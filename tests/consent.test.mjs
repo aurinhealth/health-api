@@ -123,3 +123,13 @@ test("an AI consent stores the AI text's own version; it does not ask for health
   assert.equal(c.needed, false);
   assert.equal(c.aiAllowed, true);
 });
+
+test("product news e-mails: not asked, then yes or no, and health pause leaves the choice alone", async () => {
+  const { raw, env } = setup();
+  assert.equal((await consentStatus(env)).productEmails, null);
+  assert.equal((await saveConsent(env, { health: true, ai: false, productEmails: true })).consent.productEmails, true);
+  assert.equal((await saveConsent(env, { productEmails: false })).consent.productEmails, false);
+  assert.ok(raw.sqlite.prepare("SELECT withdrawn_at FROM user_consents WHERE user_id=2 AND kind='product_emails'").get().withdrawn_at);
+  assert.equal((await saveConsent(env, { productEmails: true })).consent.productEmails, true);
+  await assert.rejects(saveConsent(env, { productEmails: "yes" }));
+});
