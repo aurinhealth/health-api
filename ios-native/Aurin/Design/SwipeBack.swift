@@ -80,7 +80,10 @@ import UIKit
 
     @objc private func changed(_ pop: UIGestureRecognizer) {
         let velocity = (pop as? UIPanGestureRecognizer)?.velocity(in: pop.view).x ?? 0
-        Self.log("state \(pop.state.rawValue) at \(Int(pop.location(in: pop.view).x)) v \(Int(velocity))")
+        // With the transition's own view of it: when does it turn cancelled?
+        let transition = Self.navigation(of: pop)?.transitionCoordinator
+            .map { " t \(Int($0.percentComplete * 100))%\($0.isCancelled ? " cancelled" : "")\($0.isInteractive ? "" : " not-interactive")" } ?? " no-t"
+        Self.log("state \(pop.state.rawValue) at \(Int(pop.location(in: pop.view).x)) v \(Int(velocity))\(transition)")
         // Did the pop finish or snap back, and how far it had got.
         if pop.state == .ended || pop.state == .cancelled, let navigation = Self.navigation(of: pop),
            let coordinator = navigation.transitionCoordinator {
@@ -118,13 +121,21 @@ import UIKit
 /// appearance it gives the stack's edge swipe back to SwipeBack.
 struct SwipeBackEnabler: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> Controller { Controller() }
-    func updateUIViewController(_ controller: Controller, context: Context) {}
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        // The UI test's log: SwiftUI redrawing the page while a swipe goes back.
+        if SwipeBack.logging, controller.navigationController?.transitionCoordinator != nil { SwipeBack.log("page redrawn mid-transition") }
+    }
 
     final class Controller: UIViewController {
         override func loadView() {
             view = UIView()
             view.isUserInteractionEnabled = false
             view.isAccessibilityElement = false
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            SwipeBack.log("will disappear, \(navigationController?.viewControllers.count ?? 0) pages")
         }
 
         override func viewDidAppear(_ animated: Bool) {
