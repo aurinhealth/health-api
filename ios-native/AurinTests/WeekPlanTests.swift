@@ -151,4 +151,32 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertNil(day["calendarMinutes"])
         XCTAssertNil(o["source"])
     }
+
+    /// Repeat every week off keeps the practice in the week it was turned off in; a removal from one day leaves the usual week.
+    func testRepeatAndRemoveOtherSport() {
+        let mon = "2026-11-23", next = "2026-11-30"
+        let soccer = OtherSportEvent(type: "Soccer")
+        var usualEvents = Array(repeating: [OtherSportEvent](), count: 7)
+        usualEvents[1] = [soccer]
+        let before = usualEvents
+        let loaded = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [], events: usualEvents)
+        var choices = [mon: loaded, next: loaded]
+        let original = choices
+        WeekPlanGenerator.setRepeat("Soccer", day: 1, week: mon, on: false, weeks: [mon, next], choices: &choices, usualEvents: &usualEvents)
+        XCTAssertEqual(usualEvents[1], [])
+        XCTAssertEqual(choices[mon]?.events[1], [soccer], "this week keeps it")
+        XCTAssertEqual(choices[next]?.events[1], [], "the next week follows the usual week")
+        XCTAssertTrue(WeekPlanGenerator.needsSave(choices[mon]!, original: original[mon], usualEvents: usualEvents, usualEventsBefore: before),
+                      "this week is sent, or it would follow the usual week and lose it")
+        XCTAssertTrue(WeekPlanGenerator.needsSave(choices[next]!, original: original[next], usualEvents: usualEvents, usualEventsBefore: before))
+        XCTAssertFalse(WeekPlanGenerator.needsSave(loaded, original: loaded, usualEvents: before, usualEventsBefore: before))
+
+        // A match on the next Monday: this Sunday replans too.
+        var nextMatch = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        nextMatch.toggleEvent("Soccer", day: 0)
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        let from = WeekPlanGenerator.replanFrom(weeks: [mon, next], today: "2026-11-24", choices: [mon: empty, next: nextMatch],
+                                                original: [mon: empty, next: empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(from, "2026-11-29")
+    }
 }

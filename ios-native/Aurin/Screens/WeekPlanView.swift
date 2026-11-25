@@ -400,7 +400,7 @@ struct WeekPlanView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
                     VStack(spacing: 8) {
-                        ForEach(own, id: \.self) { event in OtherSportRow(event: event) }
+                        ForEach(Array(own.enumerated()), id: \.offset) { _, event in OtherSportRow(event: event) }
                         ForEach(list) { activity in row(activity, week: week) }
                     }
                 }
@@ -412,7 +412,9 @@ struct WeekPlanView: View {
     /// The athlete's own practice or match that day (Plan settings), until a workout of that sport is recorded.
     private func ownEvents(_ week: WeekPlanWeek, date: String, sessions: [CalendarActivity]) -> [OtherSportEvent] {
         let events = OtherSports.events(weekPlans[week.monday]?.prefs)[ISODay.weekdayIndex(date)]
-        return events.filter { e in !sessions.contains { $0.status == "done" && $0.type == e.type } }
+        // Recorded by a watch under its own type or a general one (Hockey for IceSkate, Other): the record stands for it.
+        let recorded = sessions.filter { $0.status == "done" && !["ride", "run", "swim", "strength", "walk"].contains($0.sport) }
+        return recorded.isEmpty ? events : []
     }
 
     @ViewBuilder private func row(_ a: CalendarActivity, week: WeekPlanWeek) -> some View {
@@ -658,7 +660,7 @@ struct OtherSportRow: View {
             SportDisc(sport: "other", type: event.type, state: .ahead, size: 40)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: OtherSports.title(event)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
-                Text(verbatim: L10n.tr("Tvůj vlastní")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Text(verbatim: L10n.tr("Tvůj vlastní, změníš v Nastavení plánu")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
             }
             Spacer(minLength: 8)
             Text(verbatim: planDuration(event.minutes)).font(Typo.number(20)).foregroundStyle(Palette.ink)

@@ -112,7 +112,6 @@ struct OtherSportsGroup: View {
     let store: SettingsStore
     @State private var types: [ActivityTypeOption] = []
     @State private var adding = false
-    @State private var error: String?
 
     private var chosen: [String] { OtherSports.list(store.profile) }
 
@@ -152,7 +151,6 @@ struct OtherSportsGroup: View {
             }
             Text(verbatim: L10n.tr("Fotbal, box, jízda na koni… Jejich trénink nebo zápas si dáš na den v Nastavení plánu a plán se mu přizpůsobí."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            if let error { Text(verbatim: error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
         .sheet(isPresented: $adding) {
             ActivityTypeSheet(otherOnly: true, pick: { option in
@@ -174,7 +172,6 @@ struct OtherSportsGroup: View {
     }
 
     private func save(_ list: [String]) async {
-        error = nil
         guard await store.saveProfile(["otherSports": OtherSports.value(list)]) else { return }
         await model.refreshTraining()
     }
@@ -198,32 +195,40 @@ struct PlayedCard: View {
         _minutes = State(initialValue: Double(played.minutes))
     }
 
-    private var event: OtherSportEvent { OtherSportEvent(type: played.type, kind: played.kind, minutes: played.minutes) }
-
     var body: some View {
         if !done {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     OtherSports.disc(played.type, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: L10n.tr(played.kind == "match" ? "Hrál jsi včera zápas?" : "Byl jsi včera na tréninku?"))
+                        Text(verbatim: L10n.tr(played.kind == "match" ? "Včerejší zápas" : "Včerejší trénink"))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: played.name).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(verbatim: played.name + ". " + L10n.tr("Z hodinek nic nepřišlo, jak to šlo?"))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 SectionLabel(text: "Jak náročné to bylo")
-                HStack(spacing: 4) {
+                // The same scale as a workout's "How hard was it" (WorkoutDetailViews effortGrid).
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5), spacing: 8) {
                     ForEach(1...10, id: \.self) { value in
+                        let on = rpe == value
                         Button { rpe = value } label: {
-                            Text(verbatim: String(value)).font(Typo.number(15)).foregroundStyle(rpe == value ? Palette.onButton : Palette.ink)
-                                .frame(maxWidth: .infinity, minHeight: 44)
-                                .background(rpe == value ? Palette.button : Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            Text(verbatim: String(value)).font(Typo.bodyStrong).monospacedDigit()
+                                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                                .frame(maxWidth: .infinity).frame(height: 44)
+                                .background(on ? Palette.button : Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityAddTraits(rpe == value ? .isSelected : [])
+                        .accessibilityLabel(Text(verbatim: "\(value), " + FeedbackSheet.effortWord(value).lowercased(with: L10n.locale)))
+                        .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                Text(verbatim: L10n.tr("1 velmi lehké, 10 na maximum")).font(Typo.caption).foregroundStyle(Palette.muted)
+                HStack {
+                    Text("1 Velmi lehké")
+                    Spacer()
+                    Text("10 Maximum")
+                }
+                .font(Typo.caption).foregroundStyle(Palette.muted)
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(text: "Délka")
                     Spacer()
@@ -241,7 +246,7 @@ struct PlayedCard: View {
                     .buttonStyle(.plain)
                     .disabled(rpe == nil || saving)
                     Button { Task { await notPlayed() } } label: {
-                        Text(verbatim: L10n.tr(played.kind == "match" ? "Nehrál jsem" : "Nebyl jsem")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: L10n.tr("Neproběhl")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                             .frame(maxWidth: .infinity, minHeight: 48).background(Palette.track, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -262,7 +267,9 @@ struct PlayedCard: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.manualWorkout(name: OtherSports.title(event), date: played.date, sport: "other", type: played.type,
+            // The server's name of the type, in the app's language (the names may not be read yet on Today).
+            let name = L10n.f(played.kind == "match" ? "%@: zápas" : "%@: trénink", played.name)
+            try await model.api.manualWorkout(name: name, date: played.date, sport: "other", type: played.type,
                                               minutes: Int(minutes), completed: true, rpe: rpe, notes: "")
             error = nil
             withAnimation(.snappy) { done = true }
@@ -277,7 +284,7 @@ struct PlayedCard: View {
         let weekday = ISODay.weekdayIndex(played.date), monday = ISODay.shift(played.date, -weekday)
         do {
             let plan = try await model.api.weekPlan(start: monday)
-            guard let prefs = plan.prefs else { return }
+            guard let prefs = plan.prefs else { throw URLError(.cannotParseResponse) }
             var events = OtherSports.events(prefs)
             events[weekday].removeAll { $0.type == played.type }
             try await model.api.saveWeekPlan(start: monday, prefs: OtherSports.edited(OtherSports.uncapped(prefs), events: events))

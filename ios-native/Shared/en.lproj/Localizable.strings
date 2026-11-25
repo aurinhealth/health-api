@@ -5289,9 +5289,10 @@
 "Zápas" = "Match";
 "Opakovat každý týden" = "Repeat every week";
 "Zápas, turnaj nebo závod je pro plán tvrdý den, trénink středně náročný." = "A match, fight, race or tournament is a hard day for the plan, a practice a moderate one.";
-"Tvůj vlastní" = "Your own";
-"Hrál jsi včera zápas?" = "Did you play the match yesterday?";
-"Byl jsi včera na tréninku?" = "Did you go to practice yesterday?";
-"1 velmi lehké, 10 na maximum" = "1 very easy, 10 all out";
-"Nehrál jsem" = "Didn't play";
-"Nebyl jsem" = "Didn't go";
+"Včerejší zápas" = "Yesterday's match";
+"Včerejší trénink" = "Yesterday's training";
+"Z hodinek nic nepřišlo, jak to šlo?" = "Nothing came from your watch. How did it go?";
+"Neproběhl" = "Didn't happen";
+"Tvůj vlastní, změníš v Nastavení plánu" = "Your own, change it in Plan settings";
+"Odebrat z tohoto dne" = "Remove from this day";
+"Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
