@@ -145,3 +145,21 @@ test("a plan's swim is picked by its length at the athlete's CSS", async () => {
   const resized = resizeWorkout(w, 45, { swimCss: 160 });
   assert.ok(Math.abs(at(resized.id, 160) - 45) <= 6, resized.id + " " + at(resized.id, 160));
 });
+
+test("a catalogue swim fits the athlete's pool: whole lengths, minutes and name with it", async () => {
+  const { SWIMMING_WORKOUTS: all } = await import("../src/swimming-workouts.js");
+  const { renderForEnvironment, fitToPool, flattenSteps } = await import("../src/workout-model.js");
+  const sprint = all.find(w => w.family === "swim-sprint");
+  const in50 = renderForEnvironment(sprint, "indoor", { poolLength: 50 });
+  const lengths = flattenSteps(JSON.parse(in50.structure_json)).filter(s => !s.rest && s.meters).map(s => s.meters);
+  assert.ok(lengths.every(m => m % 50 === 0), String(lengths));
+  assert.match(in50.name, /×50 m/);
+  // 25 m pool: as written.
+  assert.equal(renderForEnvironment(sprint, "indoor", { poolLength: 25 }).structure_json, renderForEnvironment(sprint, "indoor").structure_json);
+  // 33⅓ m: 100 m is 3 lengths; 50 m becomes 2 lengths (66.7 m), its minutes scaled.
+  assert.deepEqual(fitToPool([{ meters: 50, durationMinutes: 1 }], 33.33).structure[0], { meters: 66.7, durationMinutes: 66.7 / 50 });
+  const { structure } = fitToPool([{ meters: 100, durationMinutes: 2, power: 100 }, { rest: true, durationMinutes: .25 }], 33.33);
+  assert.deepEqual([structure[0].meters, Math.round(structure[0].durationMinutes * 100) / 100, structure[1].rest], [100, 2, true]);
+  // An unknown pool length changes nothing.
+  assert.equal(fitToPool([{ meters: 25 }], 30).structure[0].meters, 25);
+});

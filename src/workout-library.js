@@ -257,7 +257,9 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   // beginning swimmer with first lengths and technique.
   if (sport === "run" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (b.family === "run-walk") - (a.family === "run-walk"));
   if (sport === "swim" && coach.constraints?.novice && ["endurance", "recovery"].includes(kind)) distinct.sort((a, b) => (/^swim-(first|technique)$/.test(b.family) ? 1 : 0) - (/^swim-(first|technique)$/.test(a.family) ? 1 : 0));
-  const pool = distinct.slice(0, 5), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
+  // A pool swim fits the athlete's pool (workout-model.js fitToPool).
+  const inPool = w => sport === "swim" && thresholds?.poolLength ? renderForEnvironment(w, w.environment || environment, { poolLength: thresholds.poolLength }) : w;
+  const pool = distinct.slice(0, 5).map(inPool), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
   const plannedToday = coach.constraints?.plannedToday;
   const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
   return {
@@ -593,7 +595,7 @@ export async function hasFeedback(db, workoutId, date) {
 // as the gym's) unless one is given: the athlete sets one in the app if they want.
 export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null, experience = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
-  const rendered = renderForEnvironment(workout, environment);
+  const rendered = renderForEnvironment(workout, environment, { poolLength: thresholds?.poolLength });
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
   // Intervals shows event tags as #hashtags after the name, so it gets only
   // where (indoor/outdoor) and the training type. The type is what the coaches
@@ -606,7 +608,7 @@ export function buildIntervalsEvent(workout, date, environment = "indoor", { thr
   const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport, experience);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime || "")) ? startTime : "00:00";
   return {
-    external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: workout.name,
+    external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: rendered.name,
     description: own + focusLine(rendered, { thresholds }) + "\n\n" + rendered.intervals_description,
     load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(tags)],
     ...(carbs ? { carbs_per_hour: carbs } : {})
@@ -643,7 +645,7 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // Watts in the description only for a new event.
   const thresholds = await athleteThresholds(env).catch(() => null);
   event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime, experience });
-  const rendered=renderForEnvironment(workout,environmentOf(environment));
+  const rendered=renderForEnvironment(workout,environmentOf(environment),{poolLength:thresholds?.poolLength});
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   // A plan's race leg: the watch shows the race day as one card (stays in the app, local-workouts.js).
   if(workout.family==='race')event.race=true;

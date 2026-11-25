@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { POOL_LENGTHS } from './training-zones.js';
 
 // Sport-neutral structured workout model. Prescribed intensity is a percentage
 // of threshold; power on free efforts is only an estimate for load and charts.
@@ -274,15 +275,40 @@ export function buildWorkout({ id, sport = "ride", name, system, secondarySystem
   };
 }
 
-// The workout as it should be ridden/run in the given environment.
-export function renderForEnvironment(workout, environment = "indoor") {
+// A pool swim in the athlete's pool: every length of the catalogue's 25/50 m
+// sets becomes whole lengths of that pool (at least one), its minutes scaled
+// with it, so a 25 m rep in a 50 m pool is 50 m and 100 m in a 33⅓ m pool is
+// 3 lengths. `renamed` maps the old metres to the new ones for the name.
+export function fitToPool(structure = [], poolLength = null) {
+  const listed = POOL_LENGTHS.find(m => Math.abs(m - n(poolLength, 0)) < .1), pool = listed === 33.33 ? 100 / 3 : listed;
+  const renamed = new Map();
+  if (!pool) return { structure, renamed };
+  const fit = s => {
+    if (s.rest || !(n(s.meters, 0) > 0)) return s;
+    const meters = Math.round(Math.max(1, Math.round(s.meters / pool)) * pool * 10) / 10;
+    if (Math.abs(meters - s.meters) < .05) return s;
+    renamed.set(s.meters, Math.round(meters));
+    return { ...s, meters, durationMinutes: n(s.durationMinutes, 0) * meters / s.meters };
+  };
+  return { structure: structure.map(b => Array.isArray(b.steps) ? { ...b, steps: b.steps.map(fit) } : fit(b)), renamed };
+}
+
+// The workout as it should be ridden/run in the given environment; a pool
+// swim with the athlete's pool length (thresholds.poolLength) fits that pool.
+export function renderForEnvironment(workout, environment = "indoor", { poolLength = null } = {}) {
   const sport = workout.sport || "ride";
   let structure = [];
   try { structure = JSON.parse(workout.structure_json || "[]"); } catch {}
   const env = environment === "outdoor" && !workout.indoor_only ? "outdoor" : "indoor";
-  const adapted = adaptStructure(structure, env, sport, workout.primary_system);
+  let adapted = adaptStructure(structure, env, sport, workout.primary_system), name = workout.name;
+  if (sport === "swim" && env === "indoor" && poolLength) {
+    const fitted = fitToPool(adapted, poolLength);
+    adapted = fitted.structure;
+    for (const [from, to] of fitted.renamed) name = typeof name === "string" ? name.replace(new RegExp(`×${from} m\\b`), `×${to} m`) : name;
+  }
   return {
     ...workout,
+    name,
     environment: env,
     structure_json: JSON.stringify(adapted),
     duration_minutes: Math.round(totalMinutes(adapted)),
