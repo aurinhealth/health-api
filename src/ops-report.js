@@ -13,7 +13,7 @@ import { ensureStoreColumns } from "./app-store.js";
 import { unpaidLimitShare, groupOfSubscription, newAccountSince } from "./ai-limit-share.js";
 import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
-import { opsReportHtml, money } from "./ops-report-html.js";
+import { opsReportHtml, money, monthText } from "./ops-report-html.js";
 export { money };
 
 const scope = new AsyncLocalStorage();
@@ -114,7 +114,11 @@ export function aiSummary(rows, month, limit, calls = []) {
   for (const u of list) u.features = u.features.sort((a, b) => (Number(b.cost) || 0) - (Number(a.cost) || 0) || (Number(b.calls) || 0) - (Number(a.calls) || 0)).slice(0, 3)
     .map(f => ({ name: f.feature ? featureName(f.feature) : "jiné", calls: Number(f.calls) || 0 }));
   const sum = key => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0), input = sum("input");
-  const months = month.map(m => ({ who: m.who ?? m.email, cost: Number(m.cost) || 0, owner: Boolean(m.owner), share: limit ? Math.round((Number(m.cost) || 0) / limit * 100) : null }));
+  // m.limit: the account's own monthly cap (aiData), else the paid one.
+  const months = month.map(m => {
+    const own = m.limit ?? limit;
+    return { who: m.who ?? m.email, cost: Number(m.cost) || 0, owner: Boolean(m.owner), limit: own && own !== limit ? own : null, share: own ? Math.round((Number(m.cost) || 0) / own * 100) : null };
+  });
   // By name only the owner and accounts past half the cap; the rest as one sum.
   const named = months.filter(m => m.owner || (m.share != null && m.share >= 50)).sort((a, b) => b.cost - a.cost);
   const others = months.filter(m => !named.includes(m));
@@ -132,7 +136,7 @@ export function aiText(ai) {
   if (!ai) return null;
   const cache = ai.cachedShare != null ? `, z cache ${ai.cachedShare} % vstupu` : "";
   const lines = ai.users.map(u => `- ${u.who}: ${money(u.cost)}, ${u.features.map(f => `${f.name} ${f.calls}×`).join(", ")}`);
-  const named = ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`);
+  const named = ai.named.map(monthText);
   const others = ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${accountsWord(ai.others.count)} dohromady ${money(ai.others.cost)}` : "";
   const monthLine = [...named, others].filter(Boolean).join(", ");
   const prices = (ai.prices || []).map(p => `- ${p.name}: průměr ${money(p.average)}, p95 ${money(p.p95)} (${p.calls}×)`);
@@ -339,9 +343,15 @@ export async function aiData(env, date, now = Date.now()) {
     return ACCOUNT_GROUPS[group] || group;
   };
   const who = id => isOwner(id) ? "Ty" : `Účet #${id}, ${groupOf(id)}`;
+  // The monthly cap the account's AI stops at (aiMonthlyLimitUsd), the owner's
+  // too: Pro bought or a gift the paid one, anything else the unpaid one.
+  const monthLimitOf = id => {
+    const sub = subs.get(id), paid = sub && ["paid", "gift"].includes(groupOfSubscription(sub, now));
+    return aiMonthlyLimitUsd(env, paid ? 1 : unpaidLimitShare(env), paid ? "paid" : "unpaid");
+  };
   return {
     rows: rows.map(r => ({ who: who(Number(r.user_id)), feature: r.feature, calls: r.calls, cost: r.cost, input: r.input, cached: r.cached })),
-    month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)) })),
+    month: month.map(m => ({ who: who(Number(m.user_id)), cost: m.cost, owner: isOwner(Number(m.user_id)), limit: monthLimitOf(Number(m.user_id)) })),
     calls: each.map(c => ({ group: groupOf(Number(c.user_id)), feature: c.feature, cost: c.cost }))
   };
 }
