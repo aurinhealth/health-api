@@ -48,13 +48,6 @@ test("the monthly brake follows the plan and stays under what it nets", async ()
   // A Sandbox purchase (TestFlight) is not Pro bought; the live owner has the same brakes.
   db.sqlite.prepare("UPDATE subscriptions SET store_environment = 'Sandbox' WHERE user_id = 7").run();
   assert.equal((await aiAllowance(envFor(db, 7))).monthLimitUsd, 1.25);
-  // A tester (TestFlight, a Sandbox purchase) has a month of its own once it is set (Petr 2026-11-25).
-  assert.equal((await aiPlan(envFor(db, 7))).plan, "tester");
-  assert.equal((await aiAllowance(envFor(db, 7, { AI_TESTFLIGHT_LIMIT_USD: "3.75" }))).monthLimitUsd, 3.75);
-  db.sqlite.prepare("INSERT INTO subscriptions (user_id, plan, testflight) VALUES (10, 'free', 1)").run();
-  assert.equal((await aiAllowance(envFor(db, 10, { AI_TESTFLIGHT_LIMIT_USD: "3.75" }))).monthLimitUsd, 3.75, "a TestFlight build without a purchase too");
-  assert.equal(aiWeeklyLimitUsd(3.75, "tester"), null);
-  assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5", AI_TESTFLIGHT_LIMIT_USD: "9" }, 0.5, "tester"), 5, "never above the paid brake");
   assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true }))).monthLimitUsd, 5);
   assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true, ENVIRONMENT: "staging" }))).monthLimitUsd, null);
   // Unset, every plan has the monthly brake (times the unpaid share), as before.

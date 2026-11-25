@@ -98,8 +98,7 @@ export const aiPaid = async env => noAccount(env) || env.USER_IS_OWNER === true 
 // The plan the account's monthly AI brake follows (aiMonthlyLimitUsd,
 // ai-usage.js), from its subscription now: "paid" (Pro bought, any plan or
 // an offer code, or a call of no account: every paying user the same brake,
-// Petr 2026-11-16), "tester" (a TestFlight build or a Sandbox purchase, the
-// group "testflight") or "unpaid" (no Pro bought: the free week, no
+// Petr 2026-11-16) or "unpaid" (no Pro bought: the free week, TestFlight, no
 // purchase, only bought coach messages). The free week (Apple's
 // introductory offer) counts as a period of its own: since is the day it began
 // (valid_until less FREE_WEEK_DAYS), so a week across two months does not get
@@ -115,7 +114,6 @@ export function aiPlan(env) {
     const group = groupOfSubscription(row);
     const paidSince = Number(row?.store_signed_at) > 0 ? new Date(Number(row.store_signed_at)).toISOString().slice(0, 10) : null;
     if (group === "paid" || group === "gift") return { plan: "paid", paidSince };
-    if (group === "testflight") return { plan: "tester" };
     if (group === "trial" && Number(row.offer_type) === 1) return { plan: "unpaid", since: new Date(Date.parse(row.valid_until) - FREE_WEEK_DAYS * 864e5).toISOString().slice(0, 10) };
     return { plan: "unpaid" };
   }).catch(error => { console.error("AI plan not read", error?.message || error); return { plan: "unpaid" }; }));
