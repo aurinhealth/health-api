@@ -181,7 +181,7 @@ export async function reviseWeek(env, facts, { focus = null, ask = callOpenAI, g
   // empty card; the rules then say how the session went.
   const promised = Array.isArray(parsed?.changes) && parsed.changes.length > 0;
   const summary = (promised && !changes.length ? "" : String(parsed?.summary || "").trim().slice(0, 400)) || rulesRevision({ ...facts, upcoming: [] }).summary;
-  return { summary, changes, source };
+  return { summary, changes, source, ...(source === "ai" && summary === String(parsed?.summary || "").trim().slice(0, 400) ? { aiGenerated: true } : {}) };
 }
 
 // ---- Stored revisions: one per day, pending until the athlete decides ----

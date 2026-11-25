@@ -75,11 +75,14 @@ export async function getAiWorkout(db, id) {
   return row ? aiWorkout(row) : null;
 }
 
+// A stored reason the model wrote, not the library fallback's "Z knihovny: …" (AI Act art. 50(2)).
+const fromModel = reason => !/^(Z knihovny|From the library): /.test(String(reason || ""));
+
 // The workout already written for this library choice, if any.
 async function composedFor(db, key) {
   const row = await db.prepare("SELECT id,sport,name,structure_json,reason FROM ai_workouts WHERE user_id=? AND request_key=? ORDER BY created_at DESC LIMIT 1").bind(db.userId, key).first().catch(() => null);
   const workout = row ? aiWorkout(row) : null;
-  return workout ? { ...workout, ai: { reason: row.reason, composed: true } } : null;
+  return workout ? { ...workout, ai: { reason: row.reason, composed: true, ...(fromModel(row.reason) ? { aiGenerated: true } : {}) } } : null;
 }
 
 // One line when the athlete asked for a hard type on a morning the coach would keep easier.
@@ -174,14 +177,14 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     const id = newId();
     if (!save) {
       const workout = aiWorkout({ id, sport, name: template.name, structure_json: JSON.stringify(structure), reason });
-      return workout ? { ...workout, ai: { reason, composed: true, model: r.model || model || lightModel(env), usage: r.usage || null, ...(warning ? { warning } : {}) } } : null;
+      return workout ? { ...workout, ai: { reason, composed: true, aiGenerated: true, model: r.model || model || lightModel(env), usage: r.usage || null, ...(warning ? { warning } : {}) } } : null;
     }
     await ensureAiWorkouts(env.DB);
     await env.DB.prepare("INSERT INTO ai_workouts (user_id,id,sport,name,structure_json,reason,request_key) VALUES (?,?,?,?,?,?,?)").bind(env.DB.userId, id, sport, template.name, JSON.stringify(structure), reason, asked?.key || daily?.key || null).run();
     // Old ones never planned go after a month; a planned one stays for its calendar day.
     await env.DB.prepare("DELETE FROM ai_workouts WHERE user_id=? AND created_at<datetime('now','-30 days') AND 'ai-'||id NOT IN (SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND workout_id LIKE 'ai-%')").bind(env.DB.userId, env.DB.userId).run().catch(() => {});
     const workout = aiWorkout({ id, sport, name: template.name, structure_json: JSON.stringify(structure), reason });
-    return workout ? { ...workout, ai: { reason, composed: true, ...(warning ? { warning } : {}) } } : null;
+    return workout ? { ...workout, ai: { reason, composed: true, aiGenerated: true, ...(warning ? { warning } : {}) } } : null;
   } catch (error) {
     if (!error?.ai) console.error("Workout compose AI failed", error?.message || error);
     return diagnose ? { rejected: "error: " + String(error?.message || error).slice(0, 120) } : null;
@@ -282,7 +285,7 @@ async function composeState(db, key) {
   const row = await db.prepare("SELECT id,sport,name,structure_json,reason,created_at FROM ai_workouts WHERE user_id=? AND request_key=? ORDER BY structure_json<>'[]' DESC, created_at DESC, rowid DESC LIMIT 1").bind(db.userId, key).first().catch(() => null);
   if (!row) return {};
   const workout = aiWorkout(row);
-  if (workout) return { workout: { ...workout, ai: { reason: row.reason, composed: true } } };
+  if (workout) return { workout: { ...workout, ai: { reason: row.reason, composed: true, ...(fromModel(row.reason) ? { aiGenerated: true } : {}) } } };
   return row.name === "failed" ? { failed: true } : { since: Date.parse(String(row.created_at).replace(" ", "T") + "Z") || Date.now() };
 }
 // "pending" only while the key has no row yet: true when this request claimed it.

@@ -273,7 +273,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {},
       const sport = ENDURANCE_SPORTS.includes(body.sport) ? body.sport : "ride", words = text(body.text, 400);
       if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
       if (!env.OPENAI_API_KEY) return json({ message: L("AI teď není dostupná. Zkus to později.", "AI isn't available right now. Try again later.") }, 503);
-      return json({ status: "ok", template: await describeWorkout(env, sport, words, await thresholdsOf(env)) });
+      return json({ status: "ok", aiGenerated: true, template: await describeWorkout(env, sport, words, await thresholdsOf(env)) });
     }
     const one = /^\/app\/api\/my-workouts\/([A-Za-z0-9]{10})$/.exec(path);
     if (one && request.method === "PUT") {

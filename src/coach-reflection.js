@@ -212,7 +212,7 @@ export async function listReflections(db, { date = null, limit = 10 } = {}) {
   const rows = date
     ? await db.prepare("SELECT * FROM coach_reflections WHERE user_id=? AND date=? ORDER BY id DESC LIMIT ?").bind(db.userId, date, limit).all()
     : await db.prepare("SELECT * FROM coach_reflections WHERE user_id=? ORDER BY date DESC, id DESC LIMIT ?").bind(db.userId, limit).all();
-  return (rows.results || []).map(r => ({ id: r.id, date: r.date, workoutId: r.workout_id, rpe: r.rpe, notes: r.notes, text: r.text, source: r.source, model: r.model, createdAt: r.created_at, signals: (() => { try { return JSON.parse(r.signals_json); } catch { return []; } })() }));
+  return (rows.results || []).map(r => ({ id: r.id, date: r.date, workoutId: r.workout_id, rpe: r.rpe, notes: r.notes, text: r.text, source: r.source, ...(r.source === "ai" ? { aiGenerated: true } : {}), model: r.model, createdAt: r.created_at, signals: (() => { try { return JSON.parse(r.signals_json); } catch { return []; } })() }));
 }
 
 // Builds and stores the note. `load` gathers the data (see entrypoint), so
@@ -234,5 +234,5 @@ export async function createReflection(env, { date, workoutId = null, rpe = null
   if (!text) text = rulesReflection({ feedback, workout, signals,athleteState:data.athleteState });
   await env.DB.prepare("INSERT INTO coach_reflections(user_id,date,workout_id,rpe,notes,signals_json,text,source,model) VALUES(?,?,?,?,?,?,?,?,?)")
     .bind(env.DB.userId, date, workoutId, feedback.rpe, feedback.notes, JSON.stringify(signals), text, source, model).run();
-  return { date, workoutId, rpe: feedback.rpe, notes: feedback.notes, text, source, model, signals };
+  return { date, workoutId, rpe: feedback.rpe, notes: feedback.notes, text, source, ...(source === "ai" ? { aiGenerated: true } : {}), model, signals };
 }

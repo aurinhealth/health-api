@@ -135,5 +135,5 @@ export async function coachGymSession(env, { context, options, plan, body = {}, 
   if (built.some(e => per(built, EXERCISES[e.name].muscle) > per(ruleSets, EXERCISES[e.name].muscle))) after.push("muscle");
   if (after.length) return out("rejected", { rejected: after.join(",") });
   if (log) console.log(JSON.stringify({ gym_compose: "composed" }));
-  return { ...own, coach: { composed: true } };
+  return { ...own, coach: { composed: true, aiGenerated: true } };
 }

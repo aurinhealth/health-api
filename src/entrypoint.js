@@ -2110,7 +2110,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       // Changes that couldn't be built leave no promise behind in the summary.
       const summary=(r.changes||[]).length&&!changes.length?rulesRevision({...facts,upcoming:[]}).summary:r.summary;
-      const revision=await saveRevision(env.DB,{date,signature,revision:{summary,changes,source:r.source}});
+      const revision=await saveRevision(env.DB,{date,signature,revision:{summary,changes,source:r.source,...(r.aiGenerated&&summary===r.summary?{aiGenerated:true}:{})}});
       return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
