@@ -232,6 +232,8 @@
         "SMOKE_USER_EMAIL": "deploy-check@aurin.health",
         "AI_MONTHLY_LIMIT_USD": "5",
         "AI_UNPAID_LIMIT_USD": "1.25",
+        // The live server's account ids mean other people here: none.
+        "AI_PAID_LIMIT_USER_IDS": "",
         "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",
         // Testing costs at most 10 USD of AI a day, the owner included (src/ai-total.js):
