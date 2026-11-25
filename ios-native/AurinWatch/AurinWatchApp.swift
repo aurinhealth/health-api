@@ -189,7 +189,7 @@ struct WatchRoot: View {
         } else {
             page = "readiness"
         }
-        if let detail, store.snapshot != nil { path.append(detail) }
+        if let detail, let snapshot = store.snapshot, ReadinessHome.canOpen(detail, snapshot) { path.append(detail) }
     }
 }
 

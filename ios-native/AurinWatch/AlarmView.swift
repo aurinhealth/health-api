@@ -163,8 +163,7 @@ private struct AlarmDay: View {
     }
 
     private var title: String {
-        let name = first ? W.tr("Zítra", "Tomorrow") : W.dayName(morning).capitalized(with: W.locale)
-        return name + (weekend ? W.tr(", víkend", ", weekend") : "")
+        return Self.dayWord(morning) + (weekend ? W.tr(", víkend", ", weekend") : "")
     }
 
     private var bedMinutes: Int {
@@ -208,7 +207,7 @@ private struct AlarmDay: View {
             }
             saved = wake
             WKInterfaceDevice.current().play(.success)
-            let text = W.tr("Uloženo: ", "Saved: ") + Self.scopeName(scope) + " " + W.clock(minutes: Double(wake))
+            let text = W.tr("Uloženo: ", "Saved: ") + Self.scopeName(scope, morning: morning) + " " + W.clock(minutes: Double(wake))
             result = .saved(text)
             AccessibilityNotification.Announcement(text).post()
             try? await Task.sleep(for: .seconds(2))
@@ -216,10 +215,20 @@ private struct AlarmDay: View {
         }
     }
 
-    /// "weekdays", "weekend" or "tomorrow" in "Saved, weekdays 6:45".
-    static func scopeName(_ scope: String) -> String {
+    /// "This morning" after midnight, "Tomorrow", or the day's name: the
+    /// first morning is today's once the evening is over (watch review 2026-11-25).
+    static func dayWord(_ morning: String, now: Date = Date()) -> String {
+        if morning == WatchStore.localDate(now) { return W.tr("Dnes ráno", "This morning") }
+        if let next = Calendar.current.date(byAdding: .day, value: 1, to: now), morning == WatchStore.localDate(next) {
+            return W.tr("Zítra", "Tomorrow")
+        }
+        return W.dayName(morning).capitalized(with: W.locale)
+    }
+
+    /// "weekdays", "weekend" or the morning ("tomorrow") in "Saved, weekdays 6:45".
+    static func scopeName(_ scope: String, morning: String) -> String {
         switch scope {
-        case "once": W.tr("zítra", "tomorrow")
+        case "once": dayWord(morning).lowercased(with: W.locale)
         case "weekend": W.tr("víkend", "weekend")
         default: W.tr("všední dny", "weekdays")
         }

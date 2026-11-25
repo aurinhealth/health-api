@@ -130,13 +130,15 @@ final class WatchBridge: NSObject {
 
     /// A glass of water from the watch's Food page: through the app's outbox
     /// when it runs (Today reloads and comes back to the watch), else straight to the server.
-    func addWater(ml: Int, kind: String = "water") async {
+    func addWater(ml: Int, kind: String = "water", at: Date = Date()) async {
         let kind = DrinkKind.find(kind) == nil ? "water" : kind
+        // Never in the future (a watch clock ahead of the iPhone's).
+        let at = min(at, Date())
         if let model = AppModel.live {
-            model.addDrinkToday(ml: ml, kind: kind)
+            model.addDrinkToday(ml: ml, kind: kind, at: at)
             return
         }
-        _ = try? await APIClient().sendQueued(AppModel.drinkItem(ml: ml, kind: kind, date: AppModel.localDate(Date())))
+        _ = try? await APIClient().sendQueued(AppModel.drinkItem(ml: ml, kind: kind, date: AppModel.localDate(at), at: at))
     }
 
     /// Food → Drinks: the favourite drinks in their usual glasses, for the watch.
@@ -278,15 +280,17 @@ final class WatchBridge: NSObject {
                                 deep: night?.stages?.deep, rem: night?.stages?.rem, light: night?.stages?.light,
                                 nights: day(health?.sleep.week ?? []))
         }
+        // Health's newest value only when it is today's: another day's would read as this morning's.
+        let sameDay = health?.date == today.date ? health : nil
         let rhrSeries = health?.restingHR?.series ?? today.restingHR?.series ?? []
         let restingHR = (today.restingHR != nil || !rhrSeries.isEmpty) ? WatchSnapshot.Metric(
-            value: today.restingHR?.value ?? health?.restingHR?.value,
+            value: today.restingHR?.value ?? sameDay?.restingHR?.value,
             low: today.restingHR?.low ?? today.restingHR?.baseline.map { $0 - 2 },
             high: today.restingHR?.high ?? today.restingHR?.baseline.map { $0 + 2 },
             series: day(rhrSeries)) : nil
         let hrvSeries = health?.hrv?.series ?? today.hrv?.series ?? []
         let hrv = (today.hrv != nil || !hrvSeries.isEmpty) ? WatchSnapshot.Metric(
-            value: today.hrv?.value ?? health?.hrv?.value,
+            value: today.hrv?.value ?? sameDay?.hrv?.value,
             low: today.hrv?.low ?? health?.hrv?.low, high: today.hrv?.high ?? health?.hrv?.high,
             series: day(hrvSeries)) : nil
         let next = today.plan.first { $0.kind == "workout" && !$0.done }
@@ -376,6 +380,7 @@ extension WatchBridge: WCSessionDelegate {
         let discard = message[WatchGym.discardKey] as? String
         let water = message[WatchSnapshot.waterKey] as? Int
         let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
+        let drinkAt = (message[WatchSnapshot.drinkAtKey] as? Double).map(Date.init(timeIntervalSince1970:)) ?? Date()
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
         let alarmStopped = message[WatchSnapshot.alarmStoppedKey] as? Bool == true
@@ -434,7 +439,7 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             if let water {
-                await addWater(ml: water, kind: drinkKind)
+                await addWater(ml: water, kind: drinkKind, at: drinkAt)
                 replyHandler(["ok": true])
                 return
             }
@@ -546,6 +551,7 @@ extension WatchBridge: WCSessionDelegate {
         let rated = (userInfo[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let water = userInfo[WatchSnapshot.waterKey] as? Int
         let drinkKind = userInfo[WatchSnapshot.drinkKindKey] as? String ?? "water"
+        let drinkAt = (userInfo[WatchSnapshot.drinkAtKey] as? Double).map(Date.init(timeIntervalSince1970:)) ?? Date()
         let onWatch = userInfo[WatchSnapshot.alarmOnWatchKey] as? Bool
         let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
         let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
@@ -563,7 +569,7 @@ extension WatchBridge: WCSessionDelegate {
             if let done { await applyGym(done) }
             if gymEnded { LiveWorkout.shared.watchEnded() }
             if let rated { await applyGym(rated) }
-            if let water { await addWater(ml: water, kind: drinkKind) }
+            if let water { await addWater(ml: water, kind: drinkKind, at: drinkAt) }
             if let onWatch { await alarmOnWatch(onWatch) }
             if alarmStopped || alarmSnoozed != nil { await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed) }
         }
