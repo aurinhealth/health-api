@@ -362,6 +362,13 @@ extension APIClient {
         return r.nudge
     }
 
+    /// "Vrátit původní" of the plans the coach eased this morning, in Wahoo
+    /// and Intervals.icu too (POST /app/api/coach/eased).
+    func restoreEasedPlans() async throws {
+        struct Response: Decodable { let status: String? }
+        let _: Response = try await send("/app/api/coach/eased", method: "POST", body: ["action": JSONValue.string("restore")])
+    }
+
     private func changeMemories(_ body: [String: JSONValue]) async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await send("/app/api/athlete-state", method: "POST", body: body)
         return r.memories ?? []
