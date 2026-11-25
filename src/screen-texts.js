@@ -298,7 +298,8 @@ const clock = iso => { const local = iso ? localDateTime(iso) : ""; return /T\d{
 const sqlTime = value => (value ? String(value).replace(" ", "T") + (/Z$|[+-]\d{2}:?\d{2}$/.test(String(value)) ? "" : "Z") : null);
 
 function answer(source, { text = null, advice = null, chips = [], basis = [], createdAt = null, reason = null } = {}) {
-  return { status: "ok", source, text, advice, chips, basis, time: clock(createdAt), reason };
+  // AI Act art. 50(2): what the model wrote says so in machine-readable form, as the coach chat does.
+  return { status: "ok", source, ...(source === "ai" ? { aiGenerated: true } : {}), text, advice, chips, basis, time: clock(createdAt), reason };
 }
 
 // The user's data version (api-cache.js: bumped by a sync with a workout or a
