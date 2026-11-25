@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Nastavení → Posilovna → Rozcvička / Protažení: what a workout gets by default
-// (automatic, one of the athlete's own, or nothing), the automatic one's length,
+// (automatic, one of the athlete's own, Free time or nothing), the automatic one's length,
 // and the own warm-ups and stretchings (src/stretching.js normalizeMyRoutines).
 
 extension GymPreferences.MyRoutine {
@@ -29,7 +29,7 @@ struct GymRoutineSettingsView: View {
 
     var body: some View {
         SettingsPage(title: kind.title) {
-            SettingsGroup(title: "Ve výchozím stavu") {
+            SettingsGroup(title: "Ve výchozím stavu", footer: "Volný čas spustí hodiny a neukáže žádné cviky. Zastavíš je, až skončíš.") {
                 choice(L10n.tr("Auto"), selected: on && current == nil) {
                     save([kind.id: .bool(true), kind.id + "Routine": .string("auto")])
                 }
@@ -40,21 +40,20 @@ struct GymRoutineSettingsView: View {
                     }
                 }
                 SettingsDivider()
+                choice(L10n.tr("Volný čas"), selected: on && current == LivePartDraft.freeId) {
+                    save([kind.id: .bool(true), kind.id + "Routine": .string(LivePartDraft.freeId)])
+                }
+                SettingsDivider()
                 choice(L10n.tr("Vypnuto"), selected: !on) { save([kind.id: .bool(false)]) }
             }
+            // Only Auto has a length: an own one and Free time take as long as they take.
             if on && current == nil {
-                SettingsGroup {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Délka").font(.body).foregroundStyle(Palette.ink)
-                        Picker("Délka", selection: Binding(get: { prefs?.length(kind) ?? 0 }, set: { value in
-                            save([kind.id + "Length": value == 0 ? .string("auto") : .number(Double(value))])
-                        })) {
-                            ForEach(GymRoutineSheet.lengths, id: \.self) { m in
-                                Text(verbatim: m == 0 ? L10n.tr("Auto") : "\(m) min").tag(m)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                SettingsGroup(title: L10n.tr("Jak dlouho trvá Auto")) {
+                    RoutineLengthSlider(title: kind == .warmup ? "Auto rozcvička" : "Auto protažení", minutes: prefs?.length(kind) ?? 0) { value in
+                        save([kind.id + "Length": value == 0 ? .string("auto") : .number(Double(value))])
                     }
+                    // Starts again from the saved length once it has loaded.
+                    .id(prefs?.length(kind) ?? -1)
                     .padding(16)
                 }
             }
@@ -87,20 +86,7 @@ struct GymRoutineSettingsView: View {
     }
 
     private func choice(_ title: String, value: String? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Text(verbatim: title).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer(minLength: 8)
-                if let value { Text(verbatim: value).font(.subheadline).foregroundStyle(Palette.muted) }
-                if selected {
-                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
-                }
-            }
-            .padding(.horizontal, 18).frame(minHeight: 50)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        GymChoiceRow(title: title, value: value, selected: selected, action: action)
     }
 
     private func load() async {
@@ -285,5 +271,77 @@ struct GymOwnMoveSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+/// How long the automatic warm-up or stretching lasts: far left fits it to the
+/// workout, then any minute from 5 to 30 (src/stretching.js routineLength).
+struct RoutineLengthSlider: View {
+    let title: String
+    let onCommit: (Int) -> Void
+    @State private var minutes: Int
+
+    init(title: String, minutes: Int, onCommit: @escaping (Int) -> Void) {
+        self.title = title
+        self.onCommit = onCommit
+        _minutes = State(initialValue: minutes)
+    }
+
+    /// 4 on the track is "Fits workout" (0), so 1–4 min can never be picked.
+    static func minutes(_ slider: Double) -> Int {
+        let n = Int(slider.rounded())
+        return n < 5 ? 0 : min(30, n)
+    }
+
+    static func shown(_ minutes: Int) -> String {
+        minutes == 0 ? L10n.tr("Podle tréninku") : "\(minutes) min"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.tr(title)).font(.body).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(verbatim: Self.shown(minutes)).font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
+                    .monospacedDigit()
+            }
+            Slider(value: Binding(get: { Double(minutes == 0 ? 4 : minutes) }, set: { minutes = Self.minutes($0) }), in: 4...30, step: 1,
+                   onEditingChanged: { editing in if !editing { onCommit(minutes) } })
+            .tint(Palette.ink)
+            .sensoryFeedback(.selection, trigger: minutes)
+            .accessibilityLabel(Text(L10n.tr(title)))
+            .accessibilityValue(Text(verbatim: Self.shown(minutes)))
+            HStack {
+                Text("Podle tréninku")
+                Spacer()
+                Text(verbatim: "30 min")
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+}
+
+/// One choice of a Settings list: the title, an optional value, a check when picked.
+struct GymChoiceRow: View {
+    let title: String
+    var value: String? = nil
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Text(verbatim: title).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                Spacer(minLength: 8)
+                if let value { Text(verbatim: value).font(.subheadline).foregroundStyle(Palette.muted) }
+                if selected {
+                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
+                }
+            }
+            .padding(.horizontal, 18).frame(minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

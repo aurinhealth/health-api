@@ -415,12 +415,20 @@ export function routineLength(value) {
  * The warm-up and the stretching for the work sets, on or off: an own routine
  * when the setup picks one (`warmupRoutine`), else built for the muscles, the
  * main sport and the date, as long as the setup's length (`warmupLength`) or
- * sized to the session. `override` changes one day: {warmup: {length, routine}}.
+ * sized to the session; Free time (`warmupRoutine: 'free'`) has no moves. `override` changes one day: {warmup: {length, routine}}.
  */
+/** Free time: a clock with no moves, stopped by the athlete (the app's LivePartDraft.freeId). */
+export const FREE_ROUTINE = 'free';
+export function freeRoutine() {
+  const name = L('Volný čas', 'Free time');
+  return { minutes: 0, seconds: 0, name, items: [{ id: FREE_ROUTINE, name, seconds: 0, sides: false, rounds: 1, steps: [], photos: [] }] };
+}
+
 export function routinesFor(rows, muscleOf, setup = {}, minutes = 60, { date, sport, override = {} } = {}) {
   const size = routineSize(minutes), stations = setup?.stations, mine = normalizeMyRoutines(setup?.myRoutines);
   const build = (kind, make, sized) => {
     const choice = { routine: setup?.[kind + 'Routine'], length: setup?.[kind + 'Length'], ...override[kind] };
+    if (choice.routine === FREE_ROUTINE) return freeRoutine();
     const own = choice.routine && choice.routine !== 'auto' ? mine[kind].find(r => r.id === choice.routine) : null;
     if (own) return ownRoutine(kind, own);
     const length = routineLength(choice.length);

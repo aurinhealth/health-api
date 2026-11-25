@@ -27,8 +27,14 @@ enum GymLiveActivity {
         var done: String
     }
 
-    static func sync(day: GymDay?, focus: Int? = nil, restStart: Date?, restEnd: Date?, part: Part? = nil, title: String? = nil, quiet: Bool = false) {
-        guard let day, let state = state(day, focus: focus, restStart: restStart, restEnd: restEnd, part: part, title: title) else { end(); return }
+    /// The weight and reps a set to come shows on the workout's screen: the
+    /// set at hand with what its fields hold (typed before the set), the
+    /// others as their rows show them. nil: as the set before was done (carried).
+    typealias Shown = (GymSet, GymExercise) -> (kg: String?, reps: String?)?
+
+    static func sync(day: GymDay?, focus: Int? = nil, restStart: Date?, restEnd: Date?, part: Part? = nil, title: String? = nil,
+                     shown: Shown? = nil, quiet: Bool = false) {
+        guard let day, let state = state(day, focus: focus, restStart: restStart, restEnd: restEnd, part: part, title: title, shown: shown) else { end(); return }
         guard state != last else { return }
         // Swiped away on the lock screen: it stays away for this workout.
         if activity?.activityState == .dismissed { dismissed = true; activity = nil }
@@ -70,7 +76,7 @@ enum GymLiveActivity {
     }
 
     static func state(_ day: GymDay, focus: Int?, restStart: Date?, restEnd: Date?, part: Part? = nil, title: String? = nil,
-                      now: Date = Date()) -> GymActivityAttributes.ContentState? {
+                      shown: Shown? = nil, now: Date = Date()) -> GymActivityAttributes.ContentState? {
         let list = day.exercises
         let open = list.indices.filter { list[$0].sets.contains { !$0.done } }
         let live = LiveWorkout.shared
@@ -90,15 +96,15 @@ enum GymLiveActivity {
         // In a superset its partner comes next, as on the screen (TrainingModeView.supersetTurn).
         let turn = TrainingModeView.supersetTurn(list, from: index).map(\.index).flatMap { $0 != index && open.contains($0) ? $0 : nil }
         let following = turn ?? open.first { $0 > index } ?? open.first { $0 != index }
-        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + ", " + load($0, in: list[i]) } }
+        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + ", " + load($0, in: list[i], shown: shown) } }
         let resting = part == nil && (restEnd.map { $0 > now } ?? false)
         return .init(
             header: L10n.tr("Posilovna") + ", " + exercisesLine(index + 1, of: list.count),
             exercise: exercise.name,
             setLabel: set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : setLine(set, of: exercise.workCount),
-            load: load(set, in: exercise),
-            weight: loadParts(set, in: exercise).weight,
-            reps: loadParts(set, in: exercise).reps,
+            load: load(set, in: exercise, shown: shown),
+            weight: loadParts(set, in: exercise, shown: shown).weight,
+            reps: loadParts(set, in: exercise, shown: shown).reps,
             setShort: set.warmup || set.drop ? nil : "\(set.number)/\(exercise.workCount)",
             then: then,
             row: part == nil ? set.row : nil,
@@ -114,15 +120,16 @@ enum GymLiveActivity {
 
     /// "80 kg × 8": what the set before was done with, else the plan. Without
     /// a weight "10 reps", never a bare "10" (617 C14).
-    static func load(_ set: GymSet, in exercise: GymExercise) -> String {
-        let parts = loadParts(set, in: exercise)
+    static func load(_ set: GymSet, in exercise: GymExercise, shown: Shown? = nil) -> String {
+        let parts = loadParts(set, in: exercise, shown: shown)
         guard let weight = parts.weight else { return parts.reps.map { L10n.f("%@ opak.", $0) } ?? "" }
         return weight + " × " + (parts.reps ?? "")
     }
 
     /// "80 kg" and "8" of "80 kg × 8".
-    static func loadParts(_ set: GymSet, in exercise: GymExercise) -> (weight: String?, reps: String?) {
-        let carry = GymSessionMath.carried(set, in: exercise)
+    /// shown: as the workout's screen shows it (Shown), else as carried.
+    static func loadParts(_ set: GymSet, in exercise: GymExercise, shown: Shown? = nil) -> (weight: String?, reps: String?) {
+        let carry = shown.map { $0(set, exercise) } ?? GymSessionMath.carried(set, in: exercise)
         let pounds = LiftUnits.pounds(exercise.name)
         let weight = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg, machineLb: pounds).map { $0 + " " + LiftWeight.unit(machineLb: pounds) }
         return (weight, (carry?.reps ?? set.plannedReps ?? set.reps)?.nilIfBlank)
