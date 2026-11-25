@@ -115,8 +115,9 @@ export async function setRecipeMark(db, userId, index, { id, mark } = {}) {
   if (mark != null && !MARKS.includes(mark)) throw Object.assign(new Error(L('Neznámé označení.', 'Unknown mark.')), { status: 400 });
   await ensureMarks(db);
   if (mark == null) { await db.prepare('DELETE FROM recipe_marks WHERE user_id=? AND recipe_id=?').bind(userId, String(id)).run(); return recipeMarks(db, userId); }
-  const count = (await db.prepare('SELECT COUNT(*) AS n FROM recipe_marks WHERE user_id=?').bind(userId).first())?.n || 0;
-  if (count >= MAX_MARKS) throw Object.assign(new Error(L('Označených receptů je moc, nějaké nejdřív odeber.', 'Too many marked recipes; remove some first.')), { status: 400 });
+  // A recipe already marked may always change its mark, even at the cap.
+  const count = (await db.prepare('SELECT COUNT(*) AS n, SUM(recipe_id=?) AS here FROM recipe_marks WHERE user_id=?').bind(String(id), userId).first()) || {};
+  if (!count.here && (count.n || 0) >= MAX_MARKS) throw Object.assign(new Error(L('Označených receptů je moc, nějaké nejdřív odeber.', 'Too many marked recipes; remove some first.')), { status: 400 });
   await db.prepare('INSERT INTO recipe_marks(user_id,recipe_id,mark,created_at) VALUES(?,?,?,?) ON CONFLICT(user_id,recipe_id) DO UPDATE SET mark=excluded.mark,created_at=excluded.created_at')
     .bind(userId, String(id), mark, new Date().toISOString()).run();
   return recipeMarks(db, userId);

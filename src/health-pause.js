@@ -22,7 +22,10 @@ export const KEPT_TABLES = new Set([
   'app_settings', 'user_setup', 'ai_usage', 'coach_pack_purchases', 'coach_pack_balance', 'coach_messages', 'coach_carryover', 'food_photo_trial',
   'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',
-  'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods', 'recipe_marks',
+  'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods',
+  // Saved and hidden recipes: choices about food like own recipes (privacy review
+  // 2026-11-25); the "I don't eat" list itself goes below.
+  'recipe_marks',
   'saved_workouts', 'workout_shares',
   // Cleaned below instead: the profile keeps its settings, sync_status the
   // switches of what is read (source-reading.js) and the Apple Health connection.
