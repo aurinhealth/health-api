@@ -22,7 +22,7 @@ struct DetailPage<RingContent: View>: View {
                     .watchFont(12)
                     .foregroundStyle(W.secondary)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .minimumScaleFactor(0.8)
             }
             .accessibilityElement(children: .combine)
@@ -214,9 +214,12 @@ struct StrainDetail: View {
 
     private var title: String {
         guard let score = strain.score, let low = strain.low, let high = strain.high else { return W.tr("Námaha", "Strain") }
-        if score > high { return W.tr("Nad cílem", "Above target") }
-        if score >= low { return W.tr("V cíli", "On target") }
-        return strain.nextTitle != nil ? W.tr("Prostor na trénink", "Room for the workout") : W.tr("Prostor na víc", "Room for more")
+        // With a workout still planned: where the day ends, as the iPhone's dial says it.
+        let planned = strain.nextTitle == nil ? 0 : strain.planned ?? 0
+        let end = score + planned, withPlan = planned > 0.05
+        if end > high { return withPlan ? W.tr("Skončí nad cílem", "Ends above target") : W.tr("Nad cílem", "Above target") }
+        if end >= low { return withPlan ? W.tr("Skončí v cíli", "Ends on target") : W.tr("V cíli", "On target") }
+        return withPlan ? W.tr("Skončí pod cílem", "Ends below target") : W.tr("Prostor na víc", "Room for more")
     }
 
     private var note: String {
