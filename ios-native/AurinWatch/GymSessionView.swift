@@ -835,40 +835,6 @@ struct GymSessionView: View {
         }
     }
 
-    /// The summary's exercises with a set done, one row each.
-    @ViewBuilder private var exerciseRows: some View {
-        if let gym = store.gym {
-            let done: [(title: String, line: String)] = gym.exercises.compactMap { e in
-                let lifts = e.lifts.filter { $0.done && $0.work }
-                return lifts.isEmpty ? nil : (e.title, Self.summaryLine(lifts))
-            }
-            Divider()
-            ForEach(done.indices, id: \.self) { index in
-                HStack {
-                    Text(done[index].title).lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(done[index].line)
-                        .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
-                }
-                .watchFont(12)
-            }
-        }
-    }
-
-    /// An exercise in the summary: "3 sets, best 100 kg × 6"; both sides of a
-    /// set count once, and the best set is the heaviest, its own reps with it.
-    static func summaryLine(_ done: [WatchGym.Lift]) -> String {
-        let sets = Set(done.map(\.number)).count
-        let setsText = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
-        guard let best = done.max(by: { ($0.kg ?? 0, $0.reps ?? 0) < ($1.kg ?? 0, $1.reps ?? 0) }) else { return setsText }
-        let set: String? = if let kg = best.kg, kg > 0 {
-            GymText.weight(kg) + (best.reps.map { " × \($0)" } ?? "")
-        } else {
-            best.reps.map { "\($0) " + repsUnit(nil) }
-        }
-        return setsText + (set.map { W.tr(", nejlépe ", ", best ") + $0 } ?? "")
-    }
-
     /// "Next, set 3 of 4, 60 kg × 8".
     private func nextLine(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, _ gym: WatchGym) -> String {
         let set = label(lift, in: e)
@@ -1446,6 +1412,41 @@ struct GymOptionsView: View {
 /// The end (mockup 19 P4): calories, heart rate, sets, volume and each exercise, then Finish.
 struct GymSummary: View {
     @ObservedObject private var store = GymStore.shared
+
+    /// The summary's exercises with a set done, one row each.
+    @ViewBuilder private var exerciseRows: some View {
+        if let gym = store.gym {
+            let done: [(title: String, line: String)] = gym.exercises.compactMap { e in
+                let lifts = e.lifts.filter { $0.done && $0.work }
+                return lifts.isEmpty ? nil : (e.title, Self.summaryLine(lifts))
+            }
+            Divider()
+            ForEach(done.indices, id: \.self) { index in
+                HStack {
+                    Text(done[index].title).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(done[index].line)
+                        .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .watchFont(12)
+            }
+        }
+    }
+
+    /// An exercise in the summary: "3 sets, best 100 kg × 6"; both sides of a
+    /// set count once, and the best set is the heaviest, its own reps with it.
+    static func summaryLine(_ done: [WatchGym.Lift]) -> String {
+        let sets = Set(done.map(\.number)).count
+        let setsText = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
+        guard let best = done.max(by: { ($0.kg ?? 0, $0.reps ?? 0) < ($1.kg ?? 0, $1.reps ?? 0) }) else { return setsText }
+        let set: String? = if let kg = best.kg, kg > 0 {
+            GymText.weight(kg) + (best.reps.map { " × \($0)" } ?? "")
+        } else {
+            best.reps.map { "\($0) " + GymSessionView.repsUnit(nil) }
+        }
+        return setsText + (set.map { W.tr(", nejlépe ", ", best ") + $0 } ?? "")
+    }
+
     @ObservedObject private var workout = GymWorkout.shared
     let finish: () -> Void
     /// Back to the sets: only while some are left (End workout came early).
