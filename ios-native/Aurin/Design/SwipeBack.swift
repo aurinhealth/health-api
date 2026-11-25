@@ -62,6 +62,12 @@ import UIKit
         Self.navigation(of: gestureRecognizer).map { $0.viewControllers.count > 1 } ?? false
     }
 
+    /// Only for the UI test's log: did the finger reach the swipe at all.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        Self.log("touch at \(touch.location(in: gestureRecognizer.view))")
+        return true
+    }
+
     /// The swipe sits on the navigation controller's own view.
     private static func navigation(of recognizer: UIGestureRecognizer) -> UINavigationController? {
         var responder: UIResponder? = recognizer.view
@@ -88,6 +94,15 @@ import UIKit
             if Self.logging { pop.addTarget(self, action: #selector(changed)) }
         }
         pop.isEnabled = true
+        // iOS 26 adds a swipe back from anywhere on the page. With the bar
+        // hidden it never goes back here, but the edge swipe could wait for it
+        // to fail, and then a quick swipe ended before it was even asked (the
+        // UI test's log: no "shouldBegin" for the dropped swipe; TestFlight
+        // 602 to 611). Off, the edge swipe alone decides.
+        if #available(iOS 26, *), let content = controller.navigationController?.interactiveContentPopGestureRecognizer {
+            Self.log("enable: content swipe enabled \(content.isEnabled)")
+            content.isEnabled = false
+        }
     }
 }
 
