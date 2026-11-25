@@ -233,8 +233,17 @@ final class AppleHealth {
         }
         setCategories(chosen)
         // The account's Connect, on the server too: uploads are kept only after it (src/apple-health.js).
-        // An older server does not know it and keeps them anyway.
-        _ = try? await api.send("/app/api/health/apple", method: "PUT", body: [String: String]()) as JSONValue
+        // A failed one fails the Connect with its reason, instead of a first sync the server
+        // refuses (409) and that quietly switches reading off again (redesign review point 7).
+        do {
+            let _: JSONValue = try await api.send("/app/api/health/apple", method: "PUT", body: [String: String]())
+        } catch APIError.message("Method not allowed") {
+            // A server from before the Connect (#1256 not yet released there) keeps the uploads anyway.
+        } catch {
+            message = error.localizedDescription
+            ErrorLog.add(path: "Apple Health connect", status: nil, message: error.localizedDescription)
+            return false
+        }
         UserDefaults.standard.set(account, forKey: Self.ownerKey)
         enabled = true
         // A new category needs its history, not just the last days.

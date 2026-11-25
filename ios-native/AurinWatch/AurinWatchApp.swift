@@ -159,7 +159,9 @@ struct WatchRoot: View {
                 .onAppear { WatchReport.visit("readiness/\(page)") }
             }
         }
-        .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
+        // Ringing, or snoozed (watch concept 08): closing the Snoozed screen leaves the alarm snoozed.
+        .fullScreenCover(isPresented: Binding(get: { alarm.ringing || alarm.snoozedUntil != nil },
+                                              set: { if !$0 { if alarm.ringing { alarm.stop() } else { alarm.hideSnoozed() } } })) {
             AlarmRinging().onAppear { WatchReport.visit("alarmRinging") }
         }
         .task { openDemo() }

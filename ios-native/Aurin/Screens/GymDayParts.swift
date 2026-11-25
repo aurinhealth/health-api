@@ -407,9 +407,6 @@ struct GymRoutineSheet: View {
     @AppStorage(GymDayParts.storageKey) private var stored = ""
     @State private var draft: LivePartDraft?
 
-    /// The automatic one's lengths (Settings → Gym).
-    static let lengths = [0, 5, 10, 15]
-
     private var parts: GymDayParts { GymDayParts.resolved(day, stored: stored, date: date) }
 
     var body: some View {

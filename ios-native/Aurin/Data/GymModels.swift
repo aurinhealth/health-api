@@ -108,7 +108,9 @@ struct GymCatalogExercise: Decodable, Equatable, Identifiable, Hashable {
     var liked: Bool? = nil
     var id: String { name }
 
-    static func == (a: Self, b: Self) -> Bool { a.name == b.name }
+    /// The same exercise in the same state: a thumb that changes is a change,
+    /// so a list in @State redraws (a name-only == hid it, the thumbs never moved).
+    static func == (a: Self, b: Self) -> Bool { a.name == b.name && a.liked == b.liked && a.fits == b.fits }
     func hash(into hasher: inout Hasher) { hasher.combine(name) }
 }
 
@@ -140,19 +142,26 @@ struct GymProposal: Codable, Equatable {
         return out
     }
 
+    /// The proposal as a day's sheet (the header rows empty): the planned
+    /// detail's exercise cards and Edit exercises work on it, `take` brings it back.
+    var day: GymDay { GymDay(date: nil, values: Array(repeating: [], count: GymDay.firstSetRow) + rows, cancelled: nil) }
+
+    /// The rows as edited on the sheet (`day`); an exercise added there gets its
+    /// muscles from the catalog, one taken out loses them.
+    mutating func take(_ edited: GymDay, catalog: [GymCatalogExercise]) {
+        rows = Array(edited.values.dropFirst(GymDay.firstSetRow))
+        let names = Set(exercises.map(\.name))
+        muscles = muscles.filter { names.contains($0.key) }
+        for name in names where muscles[name] == nil {
+            if let map = catalog.first(where: { $0.name == name })?.muscles { muscles[name] = map }
+        }
+    }
+
     /// Every muscle the plan works and how much (the strongest exercise wins).
     var load: [String: Double] {
         var out: [String: Double] = [:]
         for (_, map) in muscles { for (id, w) in map { out[id] = max(out[id] ?? 0, w) } }
         return out
-    }
-
-    /// The superset letter of each exercise, in the order of `exercises`.
-    var supersets: [String?] { blocks.list.map { Self.superset(of: $0) } }
-
-    /// The exercises with a set to failure.
-    var failing: Set<String> {
-        Set(rows.filter { $0.count > 11 && $0[11].isTrue }.compactMap { $0[1].string })
     }
 
     /// The rows of each exercise in the order of `exercises`, and the rows

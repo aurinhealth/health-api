@@ -54,6 +54,36 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertEqual(WeekPlanSettingsText.total([60, -1, 0, 90, 45, 120, 180]), "8\u{00A0}h\u{00A0}15\u{00A0}min a week")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-08", today: "2026-10-08"), "Rest from today to Sunday.")
         XCTAssertEqual(WeekPlanSettingsText.rest(from: "2026-10-09", today: "2026-10-08"), "Rest from tomorrow to Sunday.")
+        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-08", today: "2026-10-08").hasPrefix("Workouts from today"))
+        XCTAssertTrue(WeekPlanSettingsText.replaced(from: "2026-10-09", today: "2026-10-08").hasSuffix("Earlier days and finished ones stay."))
+    }
+
+    /// Petr 2026-11-24: a gym added for today went when he set only the days from Wednesday.
+    func testReplanStartsAtTheFirstDayChanged() {
+        let mon = "2026-11-23", next = "2026-11-30", today = "2026-11-24"
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        let usual = [120, 150, 150, 150, 120, 360, 360]
+        var changed = empty
+        changed.toggle("ride", day: 2)
+        changed.toggle("gym", day: 3)
+        var nextChanged = empty
+        nextChanged.toggle("gym", day: 0)
+        func from(_ choices: [String: WeekPlanChoice], usualNow: [Int] = usual) -> String {
+            WeekPlanGenerator.replanFrom(weeks: [mon, next], today: today, choices: choices, original: [mon: empty, next: empty],
+                                         usual: usualNow, usualBefore: usual)
+        }
+        XCTAssertEqual(from([mon: changed, next: nextChanged]), "2026-11-25", "today left as it was keeps its workout")
+        XCTAssertEqual(from([mon: empty, next: nextChanged]), "2026-11-30")
+        XCTAssertEqual(from([mon: empty, next: empty]), today, "nothing changed: Generate replans from today")
+        var restToday = empty
+        restToday.makeRest(1)
+        XCTAssertEqual(from([mon: restToday, next: empty]), today)
+        var monday = empty
+        monday.makeRest(0)
+        XCTAssertEqual(from([mon: monday, next: empty]), today, "a day before today does not count")
+        var longerTuesday = usual
+        longerTuesday[1] = 180
+        XCTAssertEqual(from([mon: changed, next: empty], usualNow: longerTuesday), today, "today's usual time changed")
     }
 
     func testDayChoices() {
