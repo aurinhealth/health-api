@@ -1202,7 +1202,6 @@
 "Datum narození" = "Date of birth";
 "Zadat" = "Set";
 "Účet" = "Account";
-"E-mail" = "Email";
 "E-mail %@, zkopírovat" = "Email %@, copy";
 "Tep a aktivita" = "Heart rate and activity";
 "max %@" = "max %@";
@@ -5339,3 +5338,12 @@
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
+"Posílat mi e-mailem novinky o Aurinu" = "Email me Aurin news";
+"Občas, o nových funkcích. Vypneš je v Nastavení → Oznámení nebo odkazem v každém e-mailu." = "Now and then, about new features. Turn it off in Settings → Notifications or with the link in every email.";
+"E-mail" = "Email";
+"Novinky e-mailem" = "News by email";
+"O nových funkcích Aurinu. Odhlásit se dá i odkazem v každém e-mailu." = "About new Aurin features. Every email also has an unsubscribe link.";
+"Novinky e-mailem?" = "Aurin news by email?";
+"Ano, posílat" = "Yes, send them";
+"Ne, díky" = "No, thanks";
+"Občas ti napíšeme o nových funkcích Aurinu. Vypneš to v Nastavení → Oznámení nebo odkazem v každém e-mailu." = "Now and then we'll email you about new Aurin features. Turn it off in Settings → Notifications or with the link in every email.";

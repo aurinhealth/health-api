@@ -180,6 +180,8 @@ final class AppModel {
     /// Cycle tracking was on before it had its own consent (src/cycle-store.js
     /// consentNeeded): its consent sheet, once per launch until answered (RootView).
     var cycleConsentAsk = false
+    /// An account set up before product news by e-mail existed: asked once whether it wants them (RootView).
+    var productEmailsAsk = false
     @ObservationIgnored var cycleConsentAsked = false
     /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
     var notInvited = false
