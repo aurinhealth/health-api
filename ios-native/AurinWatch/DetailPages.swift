@@ -389,7 +389,9 @@ struct WhyDetail: View {
         let value: String
         let unit: String
         let note: String?
-        let amber: Bool
+        /// The note's colour: green in the usual range or with enough sleep, amber
+        /// for short sleep, plain for a value outside its usual range (as the dials).
+        let tone: Color
     }
 
     private var rows: [Row] {
@@ -406,13 +408,14 @@ struct WhyDetail: View {
                 let gap = W.hours(Double(short))
                 note = short > 0 ? W.tr("o \(gap) méně", "\(gap) short") : W.tr("dost", "enough")
             }
-            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: value, unit: unit, note: note, amber: short > 0))
+            rows.append(Row(title: W.tr("Spánek", "Sleep"), value: value, unit: unit, note: note, tone: short > 0 ? W.amber : W.green))
         }
         for (metric, m) in [(WatchMetric.hrv, s.hrv), (WatchMetric.restingHR, s.restingHR)] {
             guard let value = m?.value else { continue }
-            let usual = Usual(value: value, low: m?.low, high: m?.high).band
+            let range = Usual(value: value, low: m?.low, high: m?.high)
+            let usual = range.band
             rows.append(Row(title: metric == .hrv ? "HRV" : W.tr("Klidový tep", "Resting HR"), value: W.number(value), unit: metric.unit,
-                            note: usual.map { W.tr("obvykle ", "usual ") + W.range($0.lowerBound, $0.upperBound) }, amber: false))
+                            note: usual.map { W.tr("obvykle ", "usual ") + W.range($0.lowerBound, $0.upperBound) }, tone: range.side == 0 ? W.green : W.ink))
         }
         return rows
     }
@@ -430,7 +433,7 @@ struct WhyDetail: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.title).watchFont(15, .medium).foregroundStyle(W.ink)
                             if let note = row.note {
-                                Text(note).watchFont(13, .medium).foregroundStyle(row.amber ? W.amber : W.green)
+                                Text(note).watchFont(13, .medium).foregroundStyle(row.tone)
                                     .lineLimit(1).minimumScaleFactor(0.8)
                             }
                         }
