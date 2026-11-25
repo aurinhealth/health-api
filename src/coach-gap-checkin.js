@@ -17,6 +17,7 @@ import { shiftDate } from './dashboard-shared.js';
 import { saveCoachQuestion } from './coach-questions.js';
 import { ensureAssistantChats } from './assistant-chats.js';
 import { updateAthleteState } from './athlete-state.js';
+import { sportOf } from './adaptive-week.js';
 
 export const GAP_DAYS = 3;
 export const GAP_MISSED = 2;
@@ -26,7 +27,10 @@ const LOW_NIGHTS = 3;
 export const gapChips = () => [L('V pohodě', 'All good'), L('Odpočinek', 'Rest'), L('Nemoc', 'Sick'), L('Zranění', 'Injured')];
 
 const days = (from, to) => Math.round((Date.parse(to + 'T12:00:00Z') - Date.parse(from + 'T12:00:00Z')) / 864e5);
-const real = list => (Array.isArray(list) ? list : []).filter(a => a && !/nutrition/i.test(a.name || a.type || ''));
+// A done ride, run, swim or gym (a walk or yoga alone hides no gap, as night-check.js
+// trainedOut), and a planned session of the plan (planned:…, not a note or a holiday).
+const doneWorkouts = list => (Array.isArray(list) ? list : []).filter(a => a && sportOf(a));
+const plannedSessions = list => (Array.isArray(list) ? list : []).filter(p => p && String(p.id || '').startsWith('planned:') && !/nutrition|note/i.test(String(p.category || '')));
 const WEEKDAYS = () => L(['neděle', 'pondělí', 'úterý', 'středy', 'čtvrtka', 'pátku', 'soboty'], ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 // "since Friday" within a week, "since 3 November" before that.
@@ -41,7 +45,9 @@ function lowNights(wellness = [], low, today) {
   if (!(Number(low) > 0)) return 0;
   const hrv = new Map((Array.isArray(wellness) ? wellness : []).filter(w => w && Number(w.hrv) > 0).map(w => [w.id || w.date, Number(w.hrv)]));
   let count = 0;
-  for (let day = today; hrv.has(day) && hrv.get(day) < low; day = shiftDate(day, -1)) count++;
+  // This morning may not have synced yet: then the streak counts from last night's morning.
+  const start = hrv.has(today) ? today : shiftDate(today, -1);
+  for (let day = start; hrv.has(day) && hrv.get(day) < low; day = shiftDate(day, -1)) count++;
   return count;
 }
 
@@ -51,11 +57,11 @@ function lowNights(wellness = [], low, today) {
 export function gapCheckin({ date, weekDays = [], sleep = [], wellness = [], hrvLow = null, state = {} }) {
   if ((state.status || 'active') !== 'active') return null;
   const past = weekDays.filter(d => d?.date && d.date <= date).sort((a, b) => a.date.localeCompare(b.date));
-  const done = past.filter(d => real(d.daily?.training?.completed).length).map(d => d.date);
+  const done = past.filter(d => doneWorkouts(d.daily?.training?.completed).length).map(d => d.date);
   const last = done.at(-1);
   // No workout in the whole span: a new account or a longer break, not this question.
   if (!last || last === date || days(last, date) < GAP_DAYS || state.gapAsked === last) return null;
-  const missed = past.filter(d => d.date > last && d.date < date && real(d.daily?.training?.planned).length).map(d => d.date);
+  const missed = past.filter(d => d.date > last && d.date < date && plannedSessions(d.daily?.training?.planned).length).map(d => d.date);
   if (missed.length < GAP_MISSED) return null;
   const lastMissed = missed.at(-1);
   const synced = (Array.isArray(sleep) ? sleep : []).some(s => s?.date > lastMissed) || (Array.isArray(wellness) ? wellness : []).some(w => (w?.id || w?.date) > lastMissed && (Number(w.hrv) > 0 || Number(w.restingHR) > 0));
