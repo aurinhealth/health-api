@@ -80,8 +80,16 @@ final class SwipeBackTests: XCTestCase {
         XCTAssertTrue(ok, message)
     }
 
+    /// The first element on screen. An element mid-animation (the page the
+    /// swipe takes away) can have no frame to hit, and asking isHittable then
+    /// fails the test by itself (CI, #1298): such an element is not on screen.
     private func onScreen(_ query: XCUIElementQuery) -> XCUIElement? {
-        query.allElementsBoundByIndex.first { $0.isHittable }
+        let screen = app.frame
+        return query.allElementsBoundByIndex.first { element in
+            let frame = element.frame
+            guard element.exists, !frame.isEmpty, screen.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
+            return element.isHittable
+        }
     }
 
     private func waitUntil(_ timeout: TimeInterval = 5, _ condition: () -> Bool) -> Bool {
