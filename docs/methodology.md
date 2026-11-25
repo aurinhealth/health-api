@@ -12,8 +12,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 - **Výpočet:** pokles tepu od posledního úseku v zóně 4+ k nejnižšímu tepu během následujících 2 minut (`src/activity-detail.js`, `heartRateRecovery`).
 - **Srovnání:** Garmin počítá „Recovery Heart Rate“ stejně, jako rozdíl tepu na konci zátěže a po 2 minutách. My HRR dopočítáme ze záznamu aktivity i bez ukončení tréninku na hodinkách.
-- **Zdroj:** Cole CR et al. *Heart-rate recovery immediately after exercise as a predictor of mortality.* N Engl J Med 1999;341:1351–1357. [PMID 10536127](https://pubmed.ncbi.nlm.nih.gov/10536127/). Pokles o ≤ 12 tepů za první minutu: 4× vyšší úmrtnost za 6 let (2× po úpravě na další faktory).
-- **Co tvrdit:** klinicky ověřená metrika zotavení srdce. Nejde o diagnózu.
+- **Zdroj:** Daanen HAM, Lamberts RP, Kallen VL, Jin A, Van Meeteren NLU. *A systematic review on heart-rate recovery to monitor changes in training status in athletes.* Int J Sports Physiol Perform 2012;7(3):251–260. [PMID 22357753](https://pubmed.ncbi.nlm.nih.gov/22357753/). HRR je rychlejší u trénovaných a zlepšuje se s lepší kondicí; při únavě se může měnit, proto jen trend vůči vlastním hodnotám.
+- **Co tvrdit:** ukazatel, jak rychle se tep po zátěži vrací, srovnaný s tvými vlastními hodnotami. Nejde o diagnózu; nikdy riziko, úmrtnost, nemoc ani „klinicky ověřeno“.
 
 ### Klidový metabolismus (Mifflin-St Jeor)
 
