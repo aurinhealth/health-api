@@ -579,7 +579,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];
-  const memory={save:Array.isArray(parsed?.memory?.save)?parsed.memory.save:[],forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
+  const memory={save:Array.isArray(parsed?.memory?.save)?parsed.memory.save:[],forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[],used:Array.isArray(parsed?.memory?.used)?parsed.memory.used.filter(t=>typeof t==='string'):[]};
   return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[],memory};
 }
 
