@@ -125,8 +125,8 @@ struct GymSessionView: View {
         .sheet(isPresented: $whyOpen) { GymWhySheet(reasons: GymWhy.reasons(day?.note)) }
         .sheet(isPresented: $reordering) {
             if let day {
-                EditExercisesSheet(day: day, catalog: catalog, current: nil) { edited in
-                    self.day = edited
+                EditExercisesSheet(day: day, catalog: catalog, current: nil) { edited, original in
+                    self.day = self.day.map { edited.carryingProgress(from: $0, since: original) } ?? edited
                     Task { await save() }
                 }
             }
@@ -303,7 +303,7 @@ struct GymSessionView: View {
                 }
                 .padding(.top, 26)
                 .id(Self.exercisesID)
-                exerciseCards(day, started: started)
+                GymExerciseCards(day: day) { card(day, $0, started: started) }
                     .padding(.top, 8)
                 if !model.demo || previewing {
                     Button { Task { await loadCatalog(); adding = true } } label: {
@@ -313,7 +313,7 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 6)
                 }
-                if !muscles.isEmpty { worked.padding(.top, 22) }
+                if !muscles.isEmpty { GymWorkedCard(load: load).padding(.top, 22) }
                 // Sets ticked here: finished here. While the live workout runs it finishes there
                 // (finishing here would leave its Apple Health workout running).
                 if started && !LiveWorkout.shared.running {
@@ -407,23 +407,6 @@ struct GymSessionView: View {
         let card = cards.first { $0.date == date && $0.sport == "strength" }
         let week = training?.sessions?.first { $0.date == date && $0.sport == "strength" && $0.status != "done" }
         return (card?.time ?? week?.time, card?.strain, card?.minutes ?? week?.minutes)
-    }
-
-    /// What you'll work: the figure, the Primary muscles filled, the Secondary outlined.
-    private var worked: some View {
-        let primary = Self.names(load.filter { $0.value >= BodyMap.primary })
-        // A group already primary (one of its muscles) is not secondary again.
-        let secondary = Self.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
-        return VStack(alignment: .leading, spacing: 8) {
-            SectionLabel(text: "Co procvičíš")
-            VStack(alignment: .leading, spacing: 12) {
-                BodyMap(load: load, height: 200)
-                if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
-                if !secondary.isEmpty { muscleTags("Pomocně", secondary, filled: false) }
-            }
-            .padding(18)
-            .cardSurface(cornerRadius: 20)
-        }
     }
 
     /// The muscle groups by how hard they work, each once ("Chest", "Back", "Triceps"),
@@ -538,25 +521,6 @@ struct GymSessionView: View {
         "hamstrings": "Zadní stehna", "calves": "Lýtka"
     ].mapValues { L10n.tr($0) }
 
-    private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                // The figure's colours: rust for primary, amber for secondary.
-                Circle().fill(filled ? Palette.rust : Palette.amberBar).frame(width: 7, height: 7)
-                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            FlowLayout(spacing: 6) {
-                ForEach(names, id: \.self) { name in
-                    Text(verbatim: name).font(Typo.caption.weight(filled ? .semibold : .medium)).foregroundStyle(filled ? Palette.ink : Palette.muted)
-                        .padding(.horizontal, 13).frame(minHeight: 32)
-                        .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
-                        .overlay { if !filled { Capsule().stroke(Palette.amberBar.opacity(0.7), lineWidth: 1.5) } }
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
     /// Start workout (today) or Resume workout (the live workout still running), pinned.
     @ViewBuilder
     private func startPill(_ day: GymDay) -> some View {
@@ -610,44 +574,6 @@ struct GymSessionView: View {
         await save()
         if !model.demo, let names = day?.exercises.map(\.name) {
             muscles = (try? await model.api.gymMuscles(names: names)) ?? muscles
-        }
-    }
-
-    /// The exercises in order, a superset's together under its mark.
-    private func exerciseCards(_ day: GymDay, started: Bool) -> some View {
-        let all = day.exercises
-        let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
-        let groups: [String?] = list.map { $0.exercise.superset }
-        return VStack(spacing: 12) {
-            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
-                let items = Array(list[run])
-                if let letter = ExerciseOrder.letter(groups[run.lowerBound]), items.count == 2 {
-                    // A pair clasped as in the live workout: violet edges, "Superset A" on the seam.
-                    LiveSupersetClasp(letter: letter) {
-                        card(day, items[0].exercise, started: started)
-                    } second: {
-                        card(day, items[1].exercise, started: started)
-                    }
-                } else if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
-                    SupersetGroup(letter: letter, spacing: 12) {
-                        ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
-                    }
-                } else {
-                    ForEach(items, id: \.key) { (item: KeyedExercise) in card(day, item.exercise, started: started) }
-                }
-            }
-        }
-    }
-
-    /// An exercise named by its name and which time it comes in the plan, not by
-    /// its first row (GymExercise.id): a set added or removed in an exercise above
-    /// moves the rows, and the weights typed here must stay.
-    private struct KeyedExercise {
-        let key: String
-        let exercise: GymExercise
-        init(_ all: [GymExercise], at index: Int) {
-            exercise = all[index]
-            key = exercise.name + "#" + String(all[..<index].filter { $0.name == all[index].name }.count)
         }
     }
 
@@ -755,6 +681,91 @@ struct GymSessionView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// A day's exercises as cards in order, a superset's together: a pair clasped as
+/// in the live workout (violet edges, "Superset A" on the seam), more under their
+/// mark. The planned detail and the builder's proposal (GymBuilderView) share it.
+struct GymExerciseCards<Card: View>: View {
+    let day: GymDay
+    @ViewBuilder let card: (GymExercise) -> Card
+
+    var body: some View {
+        let all = day.exercises
+        let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
+        let groups: [String?] = list.map { $0.exercise.superset }
+        VStack(spacing: 12) {
+            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
+                let items = Array(list[run])
+                if let letter = ExerciseOrder.letter(groups[run.lowerBound]), items.count == 2 {
+                    LiveSupersetClasp(letter: letter) {
+                        card(items[0].exercise)
+                    } second: {
+                        card(items[1].exercise)
+                    }
+                } else if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+                    SupersetGroup(letter: letter, spacing: 12) {
+                        ForEach(items, id: \.key) { (item: KeyedExercise) in card(item.exercise) }
+                    }
+                } else {
+                    ForEach(items, id: \.key) { (item: KeyedExercise) in card(item.exercise) }
+                }
+            }
+        }
+    }
+
+    /// An exercise named by its name and which time it comes in the plan, not by
+    /// its first row (GymExercise.id): a set added or removed in an exercise above
+    /// moves the rows, and the weights typed here must stay.
+    private struct KeyedExercise {
+        let key: String
+        let exercise: GymExercise
+        init(_ all: [GymExercise], at index: Int) {
+            exercise = all[index]
+            key = exercise.name + "#" + String(all[..<index].filter { $0.name == all[index].name }.count)
+        }
+    }
+}
+
+/// What you'll work: the figure, the Primary muscles filled, the Secondary
+/// outlined. The planned detail and the builder's proposal share it.
+struct GymWorkedCard: View {
+    let load: [String: Double]
+
+    var body: some View {
+        let primary = GymSessionView.names(load.filter { $0.value >= BodyMap.primary })
+        // A group already primary (one of its muscles) is not secondary again.
+        let secondary = GymSessionView.names(load.filter { $0.value >= BodyMap.secondary && $0.value < BodyMap.primary }).filter { !primary.contains($0) }
+        VStack(alignment: .leading, spacing: 8) {
+            SectionLabel(text: "Co procvičíš")
+            VStack(alignment: .leading, spacing: 12) {
+                BodyMap(load: load, height: 200)
+                if !primary.isEmpty { muscleTags("Hlavně", primary, filled: true) }
+                if !secondary.isEmpty { muscleTags("Pomocně", secondary, filled: false) }
+            }
+            .padding(18)
+            .cardSurface(cornerRadius: 20)
+        }
+    }
+
+    private func muscleTags(_ title: String, _ names: [String], filled: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                // The figure's colours: rust for primary, amber for secondary.
+                Circle().fill(filled ? Palette.rust : Palette.amberBar).frame(width: 7, height: 7)
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            FlowLayout(spacing: 6) {
+                ForEach(names, id: \.self) { name in
+                    Text(verbatim: name).font(Typo.caption.weight(filled ? .semibold : .medium)).foregroundStyle(filled ? Palette.ink : Palette.muted)
+                        .padding(.horizontal, 13).frame(minHeight: 32)
+                        .background(filled ? Palette.rust.opacity(0.16) : .clear, in: Capsule())
+                        .overlay { if !filled { Capsule().stroke(Palette.amberBar.opacity(0.7), lineWidth: 1.5) } }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -950,7 +961,8 @@ struct TechniqueSheet: View {
     @State private var error: String?
     /// 0: how it's done, 1: the history.
     @State private var page: Int
-    @State private var showVideo = false
+    /// The technique video playing over the card (617 review p9).
+    @State private var playing = false
     @State private var confirmRemove = false
     @State private var writingNote = false
     /// The thumb: true, false or nil, saved at once (src/exercise-feedback.js).
@@ -982,17 +994,17 @@ struct TechniqueSheet: View {
                     Text(verbatim: plan).font(Typo.small).foregroundStyle(Palette.muted)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 24)
-            taste.padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 24)
+            taste.padding(.horizontal, PageGrid.margin)
             Picker("Zobrazit", selection: $page) {
                 Text("Jak na to").tag(0)
                 Text("Historie").tag(1)
             }
             .pickerStyle(.segmented)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             TabView(selection: $page) {
-                PageScroll { howTo.padding(.horizontal, 24).padding(.bottom, 24) }.tag(0)
-                PageScroll { historyPage.padding(.horizontal, 24).padding(.bottom, 24) }.tag(1)
+                PageScroll { howTo.padding(.horizontal, PageGrid.margin).padding(.bottom, 24) }.tag(0)
+                PageScroll { historyPage.padding(.horizontal, PageGrid.margin).padding(.bottom, 24) }.tag(1)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
@@ -1005,7 +1017,7 @@ struct TechniqueSheet: View {
                         .overlay { Capsule().stroke(Palette.cardEdge, lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 8)
+                .padding(.horizontal, PageGrid.margin).padding(.top, 8).padding(.bottom, 8)
                 .background(Palette.background)
             }
         }
@@ -1020,6 +1032,9 @@ struct TechniqueSheet: View {
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
         .sheet(isPresented: $writingNote) { ExerciseNoteSheet(exercise: exercise) }
+        .fullScreenCover(isPresented: $playing) {
+            if let id = videoId { ExerciseVideoPlayer(id: id) }
+        }
         .task {
             if history == nil { fetched = await model.gymHistory() }
         }
@@ -1143,17 +1158,44 @@ struct TechniqueSheet: View {
         return out
     }
 
-    /// The video under the photos: a tap opens it in place.
+    /// The video under the photos (617 review p9, Petr 2026-11-23): one block
+    /// with the video's frame and a play mark, "Technique video" and its source;
+    /// a tap plays it over the card. An exercise without a video has no block.
     @ViewBuilder private var video: some View {
-        if videoId != nil || technique?.searchUrl != nil {
-            if showVideo {
-                videoPage
-            } else {
-                Button { withAnimation(.snappy) { showVideo = true } } label: {
-                    Label(L10n.tr(videoId != nil ? "Video" : "Najít video"), systemImage: "play.rectangle").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+        if let id = videoId {
+            Button { playing = true } label: {
+                HStack(spacing: 14) {
+                    AsyncImage(url: URL(string: "https://i.ytimg.com/vi/" + id + "/mqdefault.jpg")) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(Palette.track)
+                    }
+                    .frame(width: 96, height: 54)
+                    .overlay(Color.black.opacity(0.25))
+                    .overlay {
+                        Image(systemName: "play.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 32, height: 32)
+                            .background(Color.black.opacity(0.55), in: Circle())
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Video techniky").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: technique?.video?.similar == true ? L10n.tr("YouTube, podobný cvik") : "YouTube")
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.tr("Video techniky"))
+            .accessibilityValue(technique?.video?.similar == true ? L10n.tr("YouTube, podobný cvik") : "YouTube")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(L10n.tr("Přehraje video"))
         }
     }
 
@@ -1222,33 +1264,6 @@ struct TechniqueSheet: View {
             ExercisePhotos(urls: ["hq1", "hq3"].compactMap { URL(string: "https://i.ytimg.com/vi/" + id + "/" + $0 + ".jpg") },
                            labeled: false, aspect: 16 / 9)
         }
-    }
-
-    @ViewBuilder private var videoPage: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let id = videoId {
-                YouTubePlayer(id: id)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                if technique?.video?.similar == true {
-                    Text("Podobný cvik").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.muted)
-                }
-                if let title = technique?.video?.title, !title.isEmpty {
-                    Text(verbatim: title).font(Typo.small).foregroundStyle(Palette.muted)
-                }
-                if let url = URL(string: "https://www.youtube.com/watch?v=" + id) {
-                    Link(destination: url) { Label("Otevřít v YouTube", systemImage: "arrow.up.right.square").font(Typo.bodyStrong) }
-                }
-            } else if technique != nil {
-                Text("K tomuhle cviku zatím video nemáme.").font(Typo.body).foregroundStyle(Palette.muted)
-                if let s = technique?.searchUrl, let url = URL(string: s) {
-                    Link(destination: url) { Label("Najít video", systemImage: "play.rectangle").font(Typo.bodyStrong) }
-                }
-            } else {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-            }
-        }
-        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -1415,7 +1430,7 @@ struct ExerciseInfoButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "info.circle").scaledFont(18, cap: .denseCap).foregroundStyle(Palette.muted)
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
         }
         .buttonStyle(.borderless)
         .accessibilityLabel(L10n.f("Jak na %@", name))
@@ -1461,6 +1476,25 @@ struct SupersetGroup<Content: View>: View {
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Palette.indigo).frame(width: 4)
         }
+    }
+}
+
+/// The technique video over the whole screen on black, so a tall video and a
+/// wide one both fit (617: a tall one played in a 16:9 frame with bars), with
+/// the X in a circle top right as the other sheets close (617 review p9).
+struct ExerciseVideoPlayer: View {
+    let id: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            YouTubePlayer(id: id).padding(.top, 56)
+            ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                .frame(width: 44, height: 44)
+                .padding(.trailing, 16).padding(.top, 6)
+        }
+        .preferredColorScheme(.dark)
     }
 }
 

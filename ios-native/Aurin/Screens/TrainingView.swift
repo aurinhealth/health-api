@@ -18,7 +18,7 @@ struct TrainingView: View {
                     PageScroll {
                         TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
-                            .padding(.bottom, 100)
+                            .padding(.bottom, PageGrid.tabBottom)
                     }
                     .refreshable { await model.refreshTraining() }
                     .tabTopBar {
@@ -55,7 +55,7 @@ struct TrainingView: View {
         .animation(.snappy, value: toast?.id)
         .task(id: toast?.id) {
             guard let current = toast else { return }
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == current.id { toast = nil }
             // Also when the screen went away or another toast came: a cancel still reaches the server.
             if let commit = current.settle(undo: false) { Task { await commit() } }
@@ -132,7 +132,7 @@ struct TrainingContent: View {
                 board
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageGrid.margin)
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
         .sheet(isPresented: $monthSheet) {
@@ -152,7 +152,6 @@ struct TrainingContent: View {
         TrainingCalendarCard(today: training.date, onPick: pickDay, jump: monthJump)
             .onChange(of: jumpDay) { _, jump in monthJump = jump }
             .padding(.top, 14)
-            .padding(.horizontal, -8)
 
         PlanSummaryCard(training: training)
             .padding(.top, 12)

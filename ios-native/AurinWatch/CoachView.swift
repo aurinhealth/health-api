@@ -31,6 +31,11 @@ struct CoachView: View {
                     } else {
                         input
                         if coach.turns.isEmpty {
+                            // Who answers (App Review 5.1.2, EU AI Act art. 50), as on the iPhone.
+                            Text(W.tr("Odpovídá AI, ne člověk.", "Answers come from AI, not a person."))
+                                .watchFont(12)
+                                .foregroundStyle(W.muted)
+                                .frame(maxWidth: .infinity)
                             ForEach(ideas, id: \.self) { idea in
                                 Button { coach.ask(idea, view: view) } label: {
                                     Text(idea)

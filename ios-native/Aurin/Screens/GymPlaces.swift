@@ -36,7 +36,7 @@ struct GymPlaceView: View {
             if scrolls {
                 DetailScreen(glow: Palette.Glow.training, title: place.name, showsCoach: false) { page }
             } else {
-                page.padding(.horizontal, 24).padding(.top, 30)
+                page.padding(.horizontal, PageGrid.margin).padding(.top, 30)
             }
         }
         .overlay(alignment: .bottom) { if let toast { toastView(toast) } }
@@ -99,7 +99,7 @@ struct GymPlaceView: View {
             Button(role: .destructive) { confirmDelete = true } label: { Label("Smazat", systemImage: "trash") }
         } label: {
             Image(systemName: "ellipsis.circle").scaledFont(20, cap: .denseCap).foregroundStyle(Palette.ink)
-                .frame(width: 40, height: 32).contentShape(Rectangle())
+                .frame(width: 40, height: 32).tapTarget(width: 40, height: 32)
         }
         .accessibilityLabel(L10n.tr("Upravit"))
     }
@@ -139,7 +139,7 @@ struct GymPlaceView: View {
                     }
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
         }
         .padding(.horizontal, -24)
     }
@@ -151,8 +151,8 @@ struct GymPlaceView: View {
             Text(title).font(.footnote.weight(.medium))
                 .foregroundStyle(chosen ? Palette.background : Palette.secondary)
                 .padding(.horizontal, 13).frame(height: 32)
+                .tapTarget(width: 44, height: 32)
                 .background(chosen ? Palette.ink : Palette.card, in: Capsule())
-                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(chosen ? .isSelected : [])
@@ -512,6 +512,7 @@ struct DumbbellWeightsEditor: View {
         Button { weights = Array(Set(values())).sorted() } label: {
             Text(title).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 12).frame(height: 30)
+                .tapTarget(width: 44, height: 30)
                 .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
         }
         .buttonStyle(.plain)

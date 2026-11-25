@@ -33,7 +33,8 @@ enum W {
         static let sleep = Color(hex: 0x262556)
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
-        static let food = Color(hex: 0x163047)
+        /// Rose, Food's tint as on the iPhone (watch concept 09).
+        static let food = Color(hex: 0x3E1B25)
         /// Indigo, the coach's colour as on the iPhone (watch audit D4).
         static let coach = Color(hex: 0x25233F)
     }

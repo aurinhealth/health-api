@@ -116,12 +116,15 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-15"), "dnes večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-14"), "zítra večer")
         XCTAssertEqual(RecoveryTime.part(thursday, today: "2026-10-13"), "čtvrtek")
-        parts.hour = 14
-        XCTAssertEqual(RecoveryTime.short(Calendar.current.date(from: parts) ?? Date()), "Čt odpoledne")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
         XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
-        let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
-        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle, svaly")
+        // Regenerace's page (concept B): a past day can't read as one ahead.
+        XCTAssertEqual(RecoveryTime.pastDay("2026-10-11", today: "2026-10-15"), "minulou neděli")
+        XCTAssertEqual(RecoveryTime.pastDay("2026-10-14", today: "2026-10-15"), "včera")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13", partOfDay: true), "ve čtvrtek večer")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-13"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-14", partOfDay: true), "zítra večer")
+        parts.hour = 14
         // A yellow or red morning: hard training waits for a greener one.
         let time = DemoData.today.recoveryTime
         XCTAssertEqual(time.flatMap { RecoveryTime.hardLine($0, today: "2026-10-08", zone: "red") }, "tvrdý trénink ne dřív než po zelenějším ránu")
@@ -187,13 +190,13 @@ final class SnapshotTests: XCTestCase {
     /// never "78 min, 47 TSS" (611 retest, point 3).
     func testDayTimelinePlannedLine() {
         let today = DemoData.today
-        XCTAssertEqual(DayTimelineRows.plannedLine(today.plan[1], strainNow: nil), "45 min")
+        XCTAssertEqual(DayTimelineRows.plannedLine(today.plan[1], strainNow: nil), "45\u{00A0}min")
         let ride = TodaySnapshot.PlanItem(kind: "workout", time: nil, title: "Tempo", detail: "78 min, 47 TSS", done: false, status: "planned",
                                           session: today.plan[0].session)
-        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: nil), "42\u{00A0}min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(8.7, digits: 1)))
         // Today: where it takes the day's strain, as Training's card counts it.
-        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42 min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
-        XCTAssertEqual(Fmt.duration(78), "1 h 18")
+        XCTAssertEqual(DayTimelineRows.plannedLine(ride, strainNow: 5), "42\u{00A0}min, " + L10n.f("Námaha %@ odh.", Fmt.decimal(NextSession.dayStrain(5, adding: 8.7), digits: 1)))
+        XCTAssertEqual(Fmt.duration(78), "1\u{00A0}h\u{00A0}18\u{00A0}min")
     }
 
     /// A nap sits among what was done in the order of the day.
@@ -238,6 +241,42 @@ final class SnapshotTests: XCTestCase {
     /// The athlete status sheet (concept b-podstranky-03): four rows in one card.
     func testAthleteStatusSheet() throws {
         try render("today-status", height: 560) { AthleteStatusSheet(current: .active).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
+    /// Regenerace (concept B, 2026-11-24): three gym days in one line with
+    /// the day the muscles are rested, the morning's signs in words, a
+    /// yellow morning as its own reason and in the headline's condition.
+    func testRecoveryTimeReasons() {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let iso = ISO8601DateFormatter()
+        let cal = Calendar.current
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 23, hour: 18)) ?? Date()
+        let friday = cal.date(from: DateComponents(year: 2026, month: 11, day: 27, hour: 19)) ?? Date()
+        let saturday = cal.date(from: DateComponents(year: 2026, month: 11, day: 28, hour: 9)) ?? Date()
+        let tomorrow = cal.date(from: DateComponents(year: 2026, month: 11, day: 24, hour: 9)) ?? Date()
+        let gym = { (date: String, ready: Date) in RecoveryTime.Cause(kind: "gym", title: "Gym, upper body", detail: nil, date: date, hours: 96, readyAt: iso.string(from: ready)) }
+        let time = RecoveryTime(readyAt: iso.string(from: saturday), from: iso.string(from: now), lightAt: iso.string(from: tomorrow), hours: 111, progress: 0, causes: [
+            gym("2026-11-23", friday), gym("2026-11-22", friday.addingTimeInterval(-86400)), gym("2026-11-20", tomorrow),
+            RecoveryTime.Cause(kind: "sleep", title: nil, detail: nil, date: nil, hours: 8, minutes: 263, need: 538),
+            RecoveryTime.Cause(kind: "restingHR", title: nil, detail: nil, date: nil, hours: 2, value: 59, high: 57)
+        ])
+        XCTAssertEqual(RecoveryTimeContent.headline(time, today: "2026-11-23", zone: "yellow", now: now), "Saturday morning")
+        XCTAssertEqual(RecoveryTimeContent.condition(time, zone: "yellow", now: now), "Estimate, if that morning's readiness is green.")
+        XCTAssertEqual(RecoveryTimeContent.hardRow(time, today: "2026-11-23", zone: "yellow", now: now), "Saturday morning, if green")
+        XCTAssertEqual(RecoveryTimeContent.hardRow(time, today: "2026-11-23", zone: "green", now: now), "Saturday morning")
+        let reasons = RecoveryTimeContent.reasons(time, today: "2026-11-23", zone: "yellow", now: now)
+        XCTAssertEqual(reasons.map(\.title), ["Gym, upper body, 3 workouts", "Short sleep", "Resting heart rate", "Yellow readiness today"])
+        XCTAssertEqual(reasons.map(\.detail), ["Last Friday, yesterday and today. Muscles rested by Friday",
+                                               "4\u{00A0}h\u{00A0}23\u{00A0}min of 8\u{00A0}h\u{00A0}58\u{00A0}min needed",
+                                               "59 bpm, above your usual range", "Hard training needs a green morning"])
+        // Past the time on a yellow morning: no day, the green morning decides.
+        let later = saturday.addingTimeInterval(3600)
+        XCTAssertEqual(RecoveryTimeContent.headline(time, today: "2026-11-28", zone: "yellow", now: later), "Next green morning")
+        XCTAssertEqual(RecoveryTimeContent.reasons(time, today: "2026-11-28", zone: "green", now: later).count, 3)
     }
 
     func testRecoveryTimeScreen() throws {
@@ -463,7 +502,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(result.chatId, 12)
         XCTAssertEqual(result.actions?.count, 2)
         XCTAssertEqual(result.actions?[0].title, "Přesunout „Dlouhý běh“ na So 10. října")
-        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1 h, Pá 9. října")
+        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda, 1\u{00A0}h, Pá 9. října")
         try render("coach-action", height: 300) {
             VStack { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
         }
@@ -657,7 +696,7 @@ final class SnapshotTests: XCTestCase {
         try render("settings-privacy", height: 1400) { NavigationStack { PrivacySettingsView() }.environment(AppModel(demo: true)) }
         try render("settings-health-withdraw", height: 900) { HealthPauseSheet(paused: {}).environment(AppModel(demo: true)) }
         XCTAssertEqual(SettingsGoalsCard.sleepText(420), "7")
-        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7 h 30")
+        XCTAssertEqual(SettingsGoalsCard.sleepText(450), "7\u{00A0}h\u{00A0}30\u{00A0}min")
         XCTAssertEqual(SettingsGoalsCard.drinkText(3200), "3,2")
         try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
         try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
@@ -689,6 +728,14 @@ final class SnapshotTests: XCTestCase {
                                                    names[2]: ["upper_back": 1, "lats": 0.8, "biceps": 0.5], names[3]: ["side_delts": 1, "front_delts": 0.8, "triceps": 0.4]]
         try render("gym-planned", glow: Palette.Glow.training, height: 2200, window: true) {
             NavigationStack { GymSessionView(date: AppModel.localDate(Date()), preview: plan, muscles: worked) }.environment(AppModel(demo: true))
+        }
+        // The builder's proposal in the planned detail's look: hero "Not saved yet", chips,
+        // the coach's reasons, the same exercise cards, What you'll work, pinned Save to plan.
+        let proposal = GymProposal(draftId: 1, planName: plan.planName ?? "Upper body",
+                                   rationale: "Těžší hlavní cviky, doplňky ve středním rozsahu. Nohy dnes odpočívají, dva dny před dlouhou jízdou.",
+                                   rows: Array(plan.values.dropFirst(GymDay.firstSetRow)), muscles: worked)
+        try render("gym-builder-proposal", glow: Palette.Glow.gym, height: 2200, window: true) {
+            NavigationStack { GymBuilderView(date: AppModel.localDate(Date()), preview: proposal) }.environment(AppModel(demo: true))
         }
         // The done workout as concept wgym: header, Workout details, exercise rows, muscles, quiet actions.
         var done = DemoData.gym
@@ -745,11 +792,18 @@ final class SnapshotTests: XCTestCase {
         // VoiceOver reads the tab header's month with its year and week (Today audit 25).
         XCTAssertEqual(Fmt.monthTitleSpoken("2026-11-05"), "listopad 2026, týden 45")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
-        XCTAssertEqual(Fmt.duration(75), "1 h 15")
-        XCTAssertEqual(Fmt.duration(125), "2 h 05")
-        XCTAssertEqual(Fmt.duration(120), "2 h")
-        XCTAssertEqual(Fmt.duration(42), "42 min")
-        XCTAssertEqual(L10n.plural("dní", 24), "dní")
+        XCTAssertEqual(Fmt.duration(75), "1\u{00A0}h\u{00A0}15\u{00A0}min")
+        XCTAssertEqual(Fmt.duration(125), "2\u{00A0}h\u{00A0}5\u{00A0}min")
+        XCTAssertEqual(Fmt.duration(120), "2\u{00A0}h")
+        XCTAssertEqual(Fmt.duration(42), "42\u{00A0}min")
+        XCTAssertEqual(Fmt.durationParts(263).number, "4\u{00A0}h\u{00A0}23")
+        XCTAssertEqual(Fmt.durationParts(263).unit, "min")
+        XCTAssertNil(Fmt.durationParts(240).unit)
+        // Water never as "1.0 l", read as "1.01" (617 #19).
+        XCTAssertEqual(Fmt.litres(1000).number, "1")
+        XCTAssertEqual(Fmt.litres(2500).number, Fmt.decimal(2.5, digits: 1))
+        XCTAssertEqual(Fmt.litres(1750).number, Fmt.decimal(1.75, digits: 2))
+                XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
     func testSignInScreen() throws {
@@ -1130,7 +1184,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testRoundTwoScreens() throws {
-        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _ in }) }
+        try render("plan-editor", height: 700) { EditExercisesSheet(day: DemoData.gym, catalog: [], current: 0, save: { _, _ in }) }
         try render("body-map-legend", height: 360) {
             BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
         }
@@ -1158,7 +1212,7 @@ final class SnapshotTests: XCTestCase {
         let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
                                     minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
         XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1 h 30, 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo, " + ClockText.format("07:00") + ", 1\u{00A0}h\u{00A0}30\u{00A0}min, 42,3 km")
         // The concept's figures: gym is the lifting figure, not a dumbbell.
         XCTAssertEqual(SportDisc.symbol("strength"), "figure.strengthtraining.traditional")
         XCTAssertEqual(SportDisc.State(status: "planned"), .ahead)
@@ -1179,7 +1233,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(off.session.plannedId, "planned:2")
         let missed = try XCTUnwrap(planDay.activities.last)
         XCTAssertEqual(PlanState(missed.session), .missed)
-        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno, 45 min")
+        XCTAssertEqual(CalendarActivityRow.detail(missed), "Nesplněno, 45\u{00A0}min")
         // October 2026 starts on a Thursday: three empty cells first.
         let grid = ISODay.monthGrid("2026-10-15")
         XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])
@@ -1249,7 +1303,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertNil(LibrarySport.find("rowing"))
         XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
         XCTAssertEqual(DrinkFigureKind.from("dragon"), .whale, "an unknown figure falls back to the whale")
-        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3 l do cíle")
+        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3\u{00A0}l do cíle")
         XCTAssertEqual(DrinksCard.remaining(ml: 2600, target: 2500), "cíl splněn")
     }
 
@@ -1371,8 +1425,8 @@ final class SnapshotTests: XCTestCase {
         // The sport page (602 points 135 to 145): one length format, the name without its length, zones by % FTP.
         XCTAssertEqual(LengthControl.short(45), "45\u{00A0}min")
         XCTAssertEqual(LengthControl.short(60), "1\u{00A0}h")
-        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30")
-        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(LengthControl.short(90), "1\u{00A0}h\u{00A0}30\u{00A0}min")
+        XCTAssertEqual(LengthControl.short(65), "1\u{00A0}h\u{00A0}5\u{00A0}min")
         XCTAssertEqual(LibraryWorkoutCard.shownName("Endurance with cadence drills, 60 min"), "Endurance with cadence drills")
         XCTAssertEqual(LibraryWorkoutCard.shownName("Over-unders 3 × 10"), "Over-unders 3 × 10")
         XCTAssertEqual(LibraryStepsBar.zone(50), 0)

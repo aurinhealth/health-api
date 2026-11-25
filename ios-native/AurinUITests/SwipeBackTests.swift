@@ -39,10 +39,30 @@ final class SwipeBackTests: XCTestCase {
         for _ in 0..<3 where card == nil { app.swipeUp(); card = onScreen(cards) }
         guard let card else { return XCTFail("\(identifier) is not on screen") }
         card.tap()
-        XCTAssertTrue(waitUntil { !card.isHittable }, "\(identifier) did not open")
+        // The detail's "Zpět" tells it opened: the card itself, bound by index,
+        // can lose its activation point under the pushed page (CI, #1259).
+        let back = app.buttons.matching(identifier: "Zpět")
+        XCTAssertTrue(waitUntil { self.onScreen(back) != nil }, "\(identifier) did not open")
         wait(1.5)
         edgeSwipe()
-        expect(waitUntil { card.isHittable }, "the edge swipe did not go back from \(identifier)")
+        // One more swipe if the first did not take: on CI the simulator now and
+        // then drops a synthesized edge drag right after the push (redesign run
+        // 45391506777; the same page passed on its own PR). A swipe that never
+        // goes back, the bug of builds 602 to 611, still fails here.
+        if !waitUntil(3, { self.onScreen(back) == nil }) {
+            wait(1)
+            edgeSwipe()
+        }
+        let wentBack = waitUntil { self.onScreen(back) == nil && self.onScreen(cards) != nil }
+        if !wentBack {
+            // What is still on screen, in the log: which "Zpět" is hittable and where.
+            for element in back.allElementsBoundByIndex where element.isHittable {
+                print("SwipeBack: hittable Zpět at \(element.frame), label \(element.label)")
+            }
+            print("SwipeBack: card on screen: \(onScreen(cards) != nil)")
+            print(app.debugDescription)
+        }
+        expect(wentBack, "the edge swipe did not go back from \(identifier)")
     }
 
     /// A finger from the very left edge to two thirds across.

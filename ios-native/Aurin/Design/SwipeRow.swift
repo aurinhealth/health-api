@@ -69,6 +69,7 @@ struct SwipeRow<Content: View>: View {
         Button(action: run) {
             Image(systemName: symbol).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                 .frame(width: 56, height: 36)
+                .tapTarget(width: 56, height: 36)
                 .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)

@@ -253,7 +253,7 @@ struct AdjustmentNote: View {
                 Text(keep).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     .padding(.horizontal, 12).frame(height: 30)
                     .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                    .contentShape(Capsule())
+                    .tapTarget(width: 44, height: 30)
             }
             .buttonStyle(.plain)
             .tapTarget(width: 60, height: 30)
@@ -378,6 +378,20 @@ struct GymSetRow: View {
     /// Live (large): SF Pro with tabular digits, read from afar; the gym day keeps the serif.
     private var numberFont: Font { large ? Typo.tabular(.title2) : Typo.number(22) }
 
+    /// What VoiceOver calls the set: "Set 2", "Warm-up set", "Drop set".
+    private var spokenSet: String {
+        if drop { return L10n.tr("Drop série") }
+        if label == "W" { return L10n.tr("Zahřívací série") }
+        if label.isEmpty { return L10n.tr(side == "L" ? "Levá strana série" : "Pravá strana série") }
+        let set = L10n.f("Série %@", label)
+        guard let side else { return set }
+        return set + ", " + L10n.tr(side == "P" ? "pravá strana" : "levá strana")
+    }
+
+    private func spokenField(_ field: Field) -> String {
+        L10n.f(field == .kg ? "Váha, %@" : "Opakování, %@", spokenSet)
+    }
+
     var body: some View {
         HStack(spacing: large ? 6 : 8) {
             HStack(spacing: 6) {
@@ -421,6 +435,7 @@ struct GymSetRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(state == .done ? "Vrátit sérii" : "Série hotová"))
+            .accessibilityValue(spokenSet)
             }
         }
         .padding(.horizontal, large ? 8 : 10)
@@ -431,6 +446,15 @@ struct GymSetRow: View {
         .onAppear { editKg = kg; editReps = reps }
         .onChange(of: kg) { _, value in if focus == nil { editKg = value } }
         .onChange(of: reps) { _, value in if focus == nil { editReps = value } }
+        // A done set fixed: saved a moment after typing, not only on leaving the
+        // field (the number pad has no Done): the sets after it take the new weight
+        // at once, also when the next set is ticked with the keyboard still up (Petr 2026-11-24).
+        .task(id: state == .done && focus != nil ? editKg + "|" + editReps : nil) {
+            guard state == .done, focus != nil, let onEdit, editKg != kg || editReps != reps else { return }
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            onEdit(editKg, editReps)
+        }
         // Leaving the field keeps what was typed.
         .onChange(of: focus) { old, now in
             guard old != nil, now == nil, let onEdit, editKg != kg || editReps != reps else { return }
@@ -456,6 +480,7 @@ struct GymSetRow: View {
                         RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     }
                 }
+                .accessibilityLabel(spokenField(field))
         } else if field == .kg, state == .current, let onKgTap {
             Button(action: onKgTap) {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
@@ -465,7 +490,9 @@ struct GymSetRow: View {
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(L10n.tr("Naložit kotouče"))
+            .accessibilityLabel(spokenField(field))
+            .accessibilityValue(binding?.wrappedValue.nilIfBlank ?? value)
+            .accessibilityHint(L10n.tr("Naložit kotouče"))
         } else if let binding, state == .current {
             TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
@@ -474,10 +501,13 @@ struct GymSetRow: View {
                 .foregroundStyle(Palette.ink)
                 .frame(width: kgWidth, height: fieldHeight)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .accessibilityLabel(spokenField(field))
         } else {
             Text(value.isEmpty ? "–" : value).font(numberFont)
                 .foregroundStyle(state == .next ? Palette.faint : Palette.ink)
                 .frame(width: kgWidth)
+                .accessibilityLabel(spokenField(field))
+                .accessibilityValue(value.isEmpty ? L10n.tr("Nevyplněno") : value)
         }
     }
 }
@@ -564,6 +594,15 @@ struct MinimizedGym {
     var waiting = false
     /// The part as the lock screen showed it, so it stays there while hidden.
     var activity: GymLiveActivity.Part? = nil
+    /// The weight and reps typed for the set at hand, as its fields held them.
+    var draft: Draft? = nil
+
+    struct Draft: Equatable {
+        let row: Int
+        let kg: String
+        let reps: String
+        let machineLb: Bool
+    }
 }
 
 /// The bar over the tab bar while the workout is hidden, as a music app's
@@ -617,7 +656,7 @@ struct MinimizedGymBar: View {
                     GeometryReader { geo in
                         Capsule().fill(Palette.amber).frame(width: geo.size.width * min(1, max(0, left)))
                     }
-                    .frame(height: 3).padding(.horizontal, 24)
+                    .frame(height: 3).padding(.horizontal, PageGrid.margin)
                     .accessibilityHidden(true)
                 }
             }
@@ -706,6 +745,13 @@ struct SwipeToDelete: ViewModifier {
                 }
             } : nil)
             .onChange(of: enabled) { _, on in if !on { offset = 0 } }
+            // Without a swipe (VoiceOver, Switch Control): the same delete as an action.
+            // An exercise names its own action where it is used.
+            .accessibilityActions {
+                if enabled, !exercise {
+                    Button(L10n.tr("Smazat sérii")) { delete() }
+                }
+            }
     }
 
     private func delete() {

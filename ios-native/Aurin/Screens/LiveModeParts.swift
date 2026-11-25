@@ -83,10 +83,10 @@ struct LiveStatsPanel: View {
 
     private func cell(_ title: String, _ value: String, _ unit: String?) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .lastTextBaseline, spacing: 2) {
                 Text(value).font(Typo.number(25)).monospacedDigit().foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-                if let unit { Text(unit).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1) }
+                if let unit { Text(unit).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -513,7 +513,7 @@ struct StartCountdown: View {
                 }
                 Text("Klepnutím kamkoli začneš hned").font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 24)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
         }
         .overlay(alignment: .topLeading) {
             Button(action: onCancel) {

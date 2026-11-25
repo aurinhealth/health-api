@@ -35,13 +35,14 @@ struct RootView: View {
     /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
     @State private var visited: Set<AppTab> = []
     @State private var scrolledTabs: Set<AppTab> = []
+    /// The open tab's widgets are being edited: "Synced" steps aside for "+" and "Hotovo" (617 #22).
+    @State private var editingWidgets = false
     /// iPhone Duo open, or a wide window beside another app: two columns (WideLayout).
     @State private var wide = false
     private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
     /// Not capped yet: the screens below cap it (textSizes).
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if model.updateRequired {
@@ -149,6 +150,9 @@ struct RootView: View {
                             .environment(\.scrollDragReport, {
                                 if tab == model.tab { barHeld = false }
                             })
+                            .environment(\.widgetEditingReport, { (editing: Bool) in
+                                if tab == model.tab, editing != editingWidgets { editingWidgets = editing }
+                            })
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
@@ -157,6 +161,8 @@ struct RootView: View {
                     ScreenTrail.visit(model.tab, paths[model.tab]?.last)
                 }
                 .onChange(of: model.tab) { old, tab in
+                    // Tabs stay built when switched, so a tab left mid-edit does not hide "Synced" elsewhere.
+                    editingWidgets = false
                     ScreenTrail.visit(tab, model.paths[tab]?.last)
                     visited.insert(old)
                     // A tab built earlier: only its data is checked, like on its first visit.
@@ -168,12 +174,12 @@ struct RootView: View {
                 }
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
-                        if let status = model.syncStatus, !model.offline {
+                        if let status = model.syncStatus, !model.offline, !editingWidgets {
                             SyncPill(status: status) {
                                 model.dismissSyncFailure()
                                 Task { await model.refresh(announce: true) }
                             }
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            .motionTransition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
@@ -190,11 +196,13 @@ struct RootView: View {
                     .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Zdroje dat (Aurin posílá) (SyncViews.swift).
-                if let report = model.syncReport, !showSyncStatus {
+                // Over a workout only a failed one (its Zkusit znovu), above the pinned
+                // Zavřít, never on it (Petr 2026-11-24); "sent" is left out there.
+                if let report = model.syncReport, !showSyncStatus, !model.immersive || report.failed {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, model.immersive ? 100 : toastInset)
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // A food read from its label went to the owner for the common catalogue (AppModel.suggestNewFood).
@@ -202,7 +210,7 @@ struct RootView: View {
                     ThanksToast(text: thanks) { model.thanks = nil }
                         .padding(.horizontal, 16)
                         .padding(.bottom, toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // An AI lookup that ended after "Co přidáme?" closed: a tap shows it in Jídlo (AppModel+PendingFood.swift).
@@ -214,7 +222,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
                 }
                 // A deletion with its "Vrátit" (AppModel.deleteLater).
@@ -225,7 +233,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
                 // "+" open: the page blurs and dims a little under its card
@@ -255,7 +263,7 @@ struct RootView: View {
                             .padding(.horizontal, 16)
                             .padding(.bottom, 4)
                             .dynamicTypeSize(Self.textSizes)
-                            .transition(reduceMotion ? .opacity : .scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+                            .motionTransition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
                         }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
@@ -265,7 +273,7 @@ struct RootView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 4)
                                 .dynamicTypeSize(Self.textSizes)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         // Details have no tab bar; a hidden workout stays reachable there.
                         if !barHidden && tabsShown {
@@ -279,10 +287,10 @@ struct RootView: View {
                                 .padding(.bottom, 8)
                                 .dynamicTypeSize(Self.textSizes)
                                 .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
                     .zIndex(showAdd ? 4 : 0)
                     // Open, the card and the bar are all VoiceOver reads; escape closes.
@@ -375,7 +383,7 @@ struct RootView: View {
             // toast took its place.
             .task(id: model.undoToast?.id) {
                 guard let current = model.undoToast else { return }
-                try? await Task.sleep(for: .seconds(6))
+                try? await Task.sleep(for: PlanToast.shownFor)
                 if model.undoToast?.id == current.id { model.undoToast = nil }
                 // Its own task: hiding the toast ends this one, which cut the
                 // deletion short and left "zrušeno" on top.
@@ -611,7 +619,7 @@ struct OfflineBanner: View {
 
 /// The sync after opening the app: "Synchronizuji…" with a spinner,
 /// "Synchronizováno" for a moment, or a failure a tap tries again. It sits
-/// where a detail's pinned bar has its title (PinnedTopBar hides the title).
+/// where a detail's pinned bar has its title (PageHeader hides the title).
 struct SyncPill: View {
     let status: AppModel.SyncStatus
     let retry: () -> Void

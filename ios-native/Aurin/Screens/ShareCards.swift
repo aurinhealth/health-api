@@ -107,8 +107,7 @@ struct ShareStyle {
     }
 
     func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: u * size) }
-    func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", fixedSize: u * size) }
-    func italic(_ size: CGFloat) -> Font { .custom("Newsreader-Italic", fixedSize: u * size) }
+    func italic(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Italic", fixedSize: u * size) }
     func sans(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font { .system(size: u * size, weight: weight) }
 
     /// The header: the mark and Aurin on the left, the date on the right.
@@ -150,7 +149,7 @@ struct ShareStyle {
 
     func title(_ text: String, sub: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: u * 1) {
-            Text(verbatim: text).font(news(10)).foregroundStyle(t.ink).lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: text).font(serif(10)).foregroundStyle(t.ink).lineLimit(2).minimumScaleFactor(0.6)
             if let sub { Text(verbatim: sub).font(sans(3.8)).foregroundStyle(t.muted) }
         }
         .padding(.horizontal, u * 7)
@@ -222,6 +221,14 @@ extension View {
 }
 
 /// A number with its label and unit.
+/// A length on a shared image as a number and its unit: "7 h 12" "min", "45" "min",
+/// "2 h" "" (Fmt.durationParts, Petr 2026-11-23).
+func shareLength(_ minutes: Double?) -> (value: String, unit: String) {
+    guard let minutes else { return ("–", "") }
+    let parts = Fmt.durationParts(Int(minutes.rounded()))
+    return (parts.number, parts.unit ?? "")
+}
+
 struct ShareStat: Identifiable {
     let label: String
     let value: String
@@ -273,7 +280,7 @@ extension ShareDay {
         }
         if options.shows("Spánek"), let sleepMinutes {
             let need = sleepNeed.map(Double.init)
-            out.append(ShareMetric(key: "Spánek", label: "Spánek", value: Fmt.hoursMinutes(sleepMinutes),
+            out.append(ShareMetric(key: "Spánek", label: "Spánek", value: shareLength(sleepMinutes).value, unit: shareLength(sleepMinutes).unit,
                                    sub: need.map { L10n.f("%@ %% potřeby", Fmt.int(min(999, sleepMinutes / max(1, $0) * 100))) },
                                    tone: .indigo, progress: need.map { sleepMinutes / max(1, $0) }))
             if options.sleep.contains("HRV"), let hrv {
@@ -296,7 +303,7 @@ extension ShareDay {
         if options.shows("Trénink"), !workouts.isEmpty {
             let minutes = workouts.compactMap(\.minutes).reduce(0, +)
             if minutes > 0 {
-                out.append(ShareMetric(key: "Trénink", label: "Trénink", value: Fmt.hoursMinutes(minutes), unit: "h",
+                out.append(ShareMetric(key: "Trénink", label: "Trénink", value: shareLength(minutes).value, unit: shareLength(minutes).unit,
                                        sub: workouts.count == 1 ? workouts[0].title : workouts.map { L10n.tr($0.sportName) }.joined(separator: ", "),
                                        tone: .amber))
             }
@@ -541,15 +548,15 @@ struct ShareTimeline: View {
             switch stat {
             case "HRV": return day.hrv.map { ShareStat(label: "HRV", value: Fmt.int($0), unit: "ms") }
             case "Tep": return day.restingHR.map { ShareStat(label: "Tep", value: Fmt.int($0), unit: "bpm") }
-            case "Hluboký": return day.deepMinutes.map { ShareStat(label: "Hluboký", value: Fmt.hoursMinutes($0), unit: "h") }
-            case "REM": return day.remMinutes.map { ShareStat(label: "REM", value: Fmt.hoursMinutes($0), unit: "h") }
+            case "Hluboký": return day.deepMinutes.map { ShareStat(label: "Hluboký", value: shareLength($0).value, unit: shareLength($0).unit) }
+            case "REM": return day.remMinutes.map { ShareStat(label: "REM", value: shareLength($0).value, unit: shareLength($0).unit) }
             case "Skóre": return day.sleepScore.map { ShareStat(label: "Skóre", value: String($0), unit: "") }
             default: return nil
             }
         }
         return span(s.t.indigo, ShareText.clock(day.sleepStart), ShareText.clock(day.sleepEnd), height: 26) {
             s.label("Spánek")
-            s.value(Fmt.hoursMinutes(day.sleepMinutes), size: 9)
+            s.value(shareLength(day.sleepMinutes).value, shareLength(day.sleepMinutes).unit, size: 9)
             if !chips.isEmpty {
                 FlowLayout(spacing: u * 1.6) {
                     ForEach(chips) { chip($0.label, $0.value, $0.unit) }
@@ -714,7 +721,7 @@ struct ShareActivityCard: View {
             Image(systemName: workout.symbol).font(.system(size: u * 5.4, weight: .semibold)).foregroundStyle(s.t.amber)
                 .frame(width: u * 11, height: u * 11)
                 .background(s.t.amber.opacity(0.18), in: Circle())
-            Text(verbatim: workout.title).font(s.news(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+            Text(verbatim: workout.title).font(s.serif(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
         }
     }
 
@@ -778,7 +785,7 @@ struct ShareActivityCard: View {
             .frame(maxWidth: .infinity)
             .padding(.top, u * 20)
             VStack(alignment: .leading, spacing: u * 4) {
-                Text(verbatim: workout.title).font(s.news(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+                Text(verbatim: workout.title).font(s.serif(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
                     .sharePiece("title", s)
                 HStack(spacing: u * (list.count < 3 ? 12 : 6)) {
                     ForEach(list) { s.number($0.label, $0.value, $0.unit, size: list.count < 3 ? 11 : 8).sharePiece($0.id, s) }
@@ -1001,7 +1008,9 @@ struct ShareFoodCard: View {
     /// Grams, and water in litres (fluid ounces in imperial).
     private func amount(_ key: String, _ value: Double) -> (String, String) {
         if key == "Voda" {
-            return Units.imperial ? (Fmt.decimal(Units.volume(value), digits: 0), "fl oz") : (Fmt.decimal(value / 1000, digits: 1), "l")
+            if Units.imperial { return (Fmt.decimal(Units.volume(value), digits: 0), "fl oz") }
+            let litres = Fmt.litres(value)
+            return (litres.number, litres.unit)
         }
         return (Fmt.int(value), "g")
     }

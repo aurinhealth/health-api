@@ -238,14 +238,10 @@ final class GymStore: ObservableObject {
         write([WatchGym.doneKey: data])
     }
 
-    /// How a set went (mockup 8B), tapped during the rest: the next set of
-    /// the exercise starts from `next` (in kg) when not done yet, and the
-    /// letter goes to the iPhone's sheet.
-    func rate(row: Int, letter: String, next kg: Double) {
+    /// How a set went (mockup 8B), tapped during the rest: the letter goes
+    /// to the iPhone's sheet.
+    func rate(row: Int, letter: String) {
         guard var gym else { return }
-        if let next = gym.nextInExercise(after: row), next.work, next.plannedKg == gym.lift(row: row)?.plannedKg {
-            gym.update(row: next.row) { $0.kg = kg }
-        }
         gym.update(row: row) { $0.intensity = letter }
         self.gym = gym
         editSheet { $0.setIntensity(row: row, letter) }

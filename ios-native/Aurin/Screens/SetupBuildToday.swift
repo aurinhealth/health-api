@@ -86,7 +86,7 @@ struct SetupBuildToday: View {
                 Spacer()
                 Spacer()
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
         }
         .coordinateSpace(.named("build"))
         .accessibilityElement(children: .ignore)

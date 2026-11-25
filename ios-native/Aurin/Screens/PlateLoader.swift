@@ -207,7 +207,7 @@ struct PlateLoaderSheet: View {
             barMenu.padding(.top, 18)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageGrid.margin)
         .presentationDetents([.height(600)])
         .presentationDragIndicator(.visible)
         .glassSheetBackground()

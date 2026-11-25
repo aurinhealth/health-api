@@ -24,6 +24,11 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.hrv?.low, 55)
         XCTAssertEqual(s.strain.score, 8.4)
         XCTAssertEqual(s.strain.low, 11.4)
+        // What the workouts still planned add, the dotted part of the iPhone's
+        // dial, not the day's planned total 13.1 (watch review 2026-11-25): the
+        // sample day's gym has no TSS, so nothing.
+        XCTAssertEqual(s.strain.planned, today.strainStillPlanned)
+        XCTAssertEqual(s.strain.planned, 0)
 
         // A morning with last night: its HRV is this morning's (Today audit 20).
         XCTAssertFalse(s.awaitingNight)
@@ -97,5 +102,16 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(S.standing(4.5, low: 3, high: 6, at: morning, calendar: calendar), .onTarget)
         XCTAssertEqual(S.standing(7.2, low: 3, high: 6, at: morning, calendar: calendar), .off)
         XCTAssertNil(S.standing(4.5, low: nil, high: 6, at: morning, calendar: calendar))
+    }
+
+    /// The iPhone's backup time reaches the watch, and older settings without it still decode.
+    func testAlarmBackupInSettings() throws {
+        var settings = WatchSettings()
+        settings.alarmOnWatch = true
+        settings.alarmBackup = Date(timeIntervalSince1970: 1_800_000_000)
+        let back = try XCTUnwrap(WatchSettings.decode(try XCTUnwrap(settings.encoded())))
+        XCTAssertEqual(back.alarmBackup, settings.alarmBackup)
+        let old = try XCTUnwrap(#"{"pages":["readiness"],"alarmOnWatch":true}"#.data(using: .utf8))
+        XCTAssertNil(try XCTUnwrap(WatchSettings.decode(old)).alarmBackup)
     }
 }

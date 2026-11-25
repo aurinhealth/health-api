@@ -291,7 +291,7 @@ struct MissedPillCard: View {
         guard pill?.number != nil else { return }
         Task {
             // Neutral on the lock screen, like the reminder itself (Notifications concept v3, N6).
-            await Reminders.snoozePill(date: date, title: L10n.tr("Denní připomínka"), body: L10n.tr("Označ, až to bude hotové"))
+            await Reminders.snoozePill(date: date, title: L10n.tr("Denní připomínka"), body: L10n.tr("Označ, až to bude hotové."))
         }
     }
 }
@@ -312,6 +312,7 @@ struct PillButton: View {
             Button(action: action) {
                 Text("Vzato").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 16).frame(height: 32)
+                    .tapTarget(width: 44, height: 32)
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
