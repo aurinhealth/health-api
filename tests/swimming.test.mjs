@@ -173,11 +173,13 @@ test("drills have no pace target: technique at an easy effort", async () => {
   const technique = SWIMMING_WORKOUTS.find(w => w.family === "swim-technique");
   const structure = JSON.parse(technique.structure_json);
   const rows = stepRows(structure, { sport: "swim", swimPace: 110 }).flatMap(b => b.steps);
-  const drills = rows.filter(r => r.free);
+  const drills = rows.filter(r => r.drill);
   assert.ok(drills.length >= 4);
   assert.ok(drills.every(r => r.paceSlow == null && r.paceFast == null && r.percentLow == null && r.meters === 50));
   // The other swimming keeps its pace.
-  assert.ok(rows.some(r => !r.rest && !r.free && r.paceSlow));
+  assert.ok(rows.some(r => !r.rest && !r.drill && r.paceSlow));
+  // A drill is not an interval (free would mean all-out).
+  assert.ok(drills.every(r => r.intensity !== "interval"));
   // Intervals.icu: a drill line has its metres and name, no % Pace.
   assert.match(intervalsText(structure, { sport: "swim" }), /- 50mtr catch-up[^\n%]*\n/);
 });
