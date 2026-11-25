@@ -212,20 +212,11 @@ struct ReadinessHome: View {
         return s.date == yesterday ? W.tr("Včera", "Yesterday") : W.dayName(s.date).capitalized
     }
 
-    /// The day's sentence under the number, the iPhone's verdict
-    /// (ReadinessText.verdict, src/day-verdict.js): only this morning's, an
-    /// older day's would read as advice for today.
+    /// The line under the number, the iPhone's (ReadinessText.numbersLine):
+    /// what the numbers say, never what to do. Only this morning's.
     private var sentence: String? {
         guard s.readiness != nil else { return nil }
-        return switch s.verdict {
-        case "hard": W.tr("Dobrý den na tvrdý trénink", "Good day for a hard workout")
-        case "steady": W.tr("Dnes s mírou", "Keep it steady today")
-        case "easy": W.tr("Dnes v klidu", "Take it easy today")
-        case "legs": W.tr("Dej nohám pauzu", "Give your legs a break")
-        case "no_intensity": W.tr("Dnes bez intenzity", "No intensity today")
-        case "rest": W.tr("Dnes odpočinek", "Rest today")
-        default: nil
-        }
+        return WatchSnapshot.numbersText(s.numbersLine, off: s.numbersOff ?? [], english: W.english)
     }
 
     /// The iPhone's pill (ReadinessText.pill): "in your usual range" in
