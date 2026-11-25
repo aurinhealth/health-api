@@ -140,9 +140,9 @@ export function swapOffer(state = {}, date) {
 // card on Today with "Vrátit původní" (/app/api/coach/eased) until the day ends.
 export function easedCard(state = {}, date) {
   const e = state?.eased;
-  if (!e || e.day !== date || e.status !== 'eased' || !e.items?.length) return null;
+  if (!e || e.day !== date || e.status !== 'eased' || !e.items?.length || (state.dismissed || []).includes(date + ':eased')) return null;
   const item = e.items[0], named = (name, minutes) => (name || L('Trénink', 'Session')) + (minutes ? ', ' + minutes + ' min' : '');
-  return { kind: 'eased', id: date + ':eased', headline: L('Dnešní trénink jsem zlehčil', "I eased today's session"), date, from: named(item.fromName, item.fromMinutes), to: named(item.toName, item.toMinutes), why: item.why || null, count: e.items.length };
+  return { kind: 'eased', id: date + ':eased', headline: L('Dnešní trénink jsem zlehčil', "I eased today's session"), date, from: named(item.fromName, item.fromMinutes), to: named(item.toName, item.toMinutes), message: item.why || null, count: e.items.length };
 }
 
 // The morning push about it: what changed, no health values.

@@ -192,7 +192,8 @@ test('C1: the plans eased this morning show on Today with the original, and the 
   const db = scopedDb(createD1(), 1);
   await update(db, { eased: { day: date, status: 'eased', items } }, { date });
   const state = await stateOf(db, { date });
-  assert.deepEqual(easedCard(state, date), { kind: 'eased', id: date + ':eased', headline: easedCard(state, date).headline, date, from: 'VO2 5×4, 75 min', to: 'Endurance, 45 min', why: 'nízká připravenost', count: 1 });
+  assert.deepEqual(easedCard(state, date), { kind: 'eased', id: date + ':eased', headline: easedCard(state, date).headline, date, from: 'VO2 5×4, 75 min', to: 'Endurance, 45 min', message: 'nízká připravenost', count: 1 });
+  assert.equal(easedCard({ ...state, dismissed: [date + ':eased'] }, date), null, 'Nechat hides it');
   assert.equal(easedCard(state, '2026-11-26'), null, 'today only');
   assert.equal(easedCard({ eased: { ...state.eased, status: 'restored' } }, date), null, 'gone once restored');
   assert.match(easedPush(state.eased).body, /Endurance, 45 min/);
