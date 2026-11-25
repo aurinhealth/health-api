@@ -381,7 +381,7 @@ function triWeeks(n, { taper = 1, ride, run, swim, brick, race: hasRace = true, 
   // Without a race the last weeks are the peak and nothing tapers.
   const race = hasRace ? n - 1 : n, taperFrom = hasRace ? race - taper : n, peakFrom = taperFrom - 3, buildFrom = Math.round(taperFrom * .4);
   return Array.from({ length: n }, (_, i) => {
-    const t = Math.min(1, i / Math.max(1, peakFrom)), light = i < taperFrom && (i + 1) % 4 === 0;
+    const t = Math.min(1, i / Math.max(1, peakFrom)), light = i < taperFrom - 1 && (i + 1) % 4 === 0;
     const phase = i === race ? "race" : i >= taperFrom ? "taper" : light ? "recovery" : i >= peakFrom ? "peak" : i >= buildFrom ? "build" : "base";
     const lvl = (a, b) => Math.max(1, Math.round(a + (b - a) * t));
     const tag = (k, sport) => ({ ...k, sport });
@@ -521,22 +521,22 @@ const TEMPLATES = () => [
     description: L("12 týdnů, tři až čtyři plavání: jednou týdně práh, orientace v bazénu a dlouhé plavání, které roste k délce závodu. Posledních osm týdnů jednou týdně volná voda, nikdy ne sám. Týden ladění formy.", "12 weeks, three to four swims: threshold once a week, sighting in the pool and a long swim that grows towards the race. Open water once a week in the last eight weeks, never alone. A taper week.") },
   { id: "gym-cycling", sport: "gym", weeks: GYM_CYCLING(), days: [2, 4], level: "intermediate",
     name: L("Posilovna ke kolu", "Strength for cyclists"), goal: L("Silnější nohy a stabilní trup na kolo", "Stronger legs and a stable trunk for the bike"),
-    description: L("18 týdnů, dva tréninky týdně: od stability a práce na jedné noze k těžké síle s málo opakováními. Zátěž podle RPE, nohy šetří den před náročnou jízdou.", "18 weeks, two sessions a week: from stability and single-leg work to heavy strength with few repetitions. Load by RPE; the legs are spared the day before a hard ride.") },
+    description: L("18 týdnů, obvykle dva tréninky týdně: od stability a práce na jedné noze k těžké síle s málo opakováními. Zátěž podle RPE, nohy šetří den před náročnou jízdou.", "18 weeks, usually two sessions a week: from stability and single-leg work to heavy strength with few repetitions. Load by RPE; the legs are spared the day before a hard ride.") },
   { id: "gym-muscle", sport: "gym", weeks: GYM_MUSCLE(), days: [3, 4], level: "intermediate",
     name: L("Svaly", "Muscle"), goal: L("Víc svalů, celé tělo", "More muscle, the whole body"),
-    description: L("10 týdnů, tři tréninky celého těla týdně, 8–12 opakování a série přibývají. Čtvrtý týden a poslední jsou lehčí.", "10 weeks, three full-body sessions a week, 8–12 repetitions with sets growing. Week four and the last week are lighter.") },
+    description: L("10 týdnů, obvykle tři tréninky celého těla týdně, 8–12 opakování a série přibývají. Čtvrtý týden a poslední jsou lehčí.", "10 weeks, usually three full-body sessions a week, 8–12 repetitions with sets growing. Week four and the last week are lighter.") },
   { id: "gym-strength", sport: "gym", weeks: GYM_STRENGTH(), days: [3, 4], level: "intermediate", tests: true,
     name: L("Síla", "Strength"), goal: L("Těžší dřep, bench a mrtvý tah", "A heavier squat, bench and deadlift"),
-    description: L("12 týdnů, tři tréninky týdně. Na začátku a na konci test síly, mezi tím objem a pak síla s málo opakováními, každý čtvrtý týden lehčí.", "12 weeks, three sessions a week. A strength test at the start and the end, volume first and then heavy strength with few repetitions, every fourth week lighter.") },
+    description: L("12 týdnů, obvykle tři tréninky týdně. Na začátku a na konci test síly, mezi tím objem a pak síla s málo opakováními, každý čtvrtý týden lehčí.", "12 weeks, usually three sessions a week. A strength test at the start and the end, volume first and then heavy strength with few repetitions, every fourth week lighter.") },
   { id: "gym-running", sport: "gym", weeks: GYM_RUNNING(), days: [2, 3], level: "beginner",
     name: L("Posilovna k běhu", "Strength for runners"), goal: L("Silné nohy a trup na běh", "Strong legs and trunk for running"),
-    description: L("10 týdnů, dva tréninky týdně: práce na jedné noze, lýtka, zadní strana stehen a trup. Nohy šetří den před klíčovým během.", "10 weeks, two sessions a week: single-leg work, calves, hamstrings and the trunk. The legs are spared the day before a key run.") },
+    description: L("10 týdnů, obvykle dva tréninky týdně: práce na jedné noze, lýtka, zadní strana stehen a trup. Nohy šetří den před klíčovým během.", "10 weeks, usually two sessions a week: single-leg work, calves, hamstrings and the trunk. The legs are spared the day before a key run.") },
   { id: "gym-swimming", sport: "gym", weeks: GYM_SWIMMING(), days: [2, 3], level: "beginner",
     name: L("Posilovna k plavání", "Strength for swimmers"), goal: L("Tahy, ramena, trup a odraz", "Pulling, shoulders, trunk and push-off"),
-    description: L("10 týdnů, dva tréninky týdně: stahování a přítahy, vnější rotace ramene, lopatky, trup a výskoky pro odraz od stěny. Hodí se i k triatlonu.", "10 weeks, two sessions a week: pulldowns and rows, shoulder external rotation, the shoulder blades, the trunk and jumps for the push-off from the wall. Suits triathletes too.") },
+    description: L("10 týdnů, obvykle dva tréninky týdně: stahování a přítahy, vnější rotace ramene, lopatky, trup a výskoky pro odraz od stěny. Hodí se i k triatlonu.", "10 weeks, usually two sessions a week: pulldowns and rows, shoulder external rotation, the shoulder blades, the trunk and jumps for the push-off from the wall. Suits triathletes too.") },
   { id: "gym-home", sport: "gym", weeks: GYM_HOME(), days: [3, 4], level: "beginner", equipment: "bodyweight",
     name: L("Doma bez vybavení", "At home, no equipment"), goal: L("Jen s vlastní vahou", "Body weight only"),
-    description: L("8 týdnů, tři tréninky týdně jen s vlastní vahou, ať máš vybrané jakékoli vybavení. Přibývají série a opakování.", "8 weeks, three sessions a week with body weight only, whatever equipment you have chosen. Sets and repetitions grow.") },
+    description: L("8 týdnů, obvykle tři tréninky týdně jen s vlastní vahou, ať máš vybrané jakékoli vybavení. Přibývají série a opakování.", "8 weeks, usually three sessions a week with body weight only, whatever equipment you have chosen. Sets and repetitions grow.") },
   { id: "ride-granfondo", sport: "ride", weeks: RIDE_GRANFONDO, days: [3, 6], level: "intermediate", race: { km: 160, options: [100, 160, 200], ride: "granfondo" },
     name: L("Gran fondo", "Gran fondo"), goal: L("Dlouhý závod 100–200 km", "A long race of 100–200 km"),
     description: L("12 týdnů: dlouhé jízdy až do pěti hodin, sweet spot a práh, lehčí týdny 4 a 8, týden ladění formy před závodem.", "12 weeks: long rides up to five hours, sweet spot and threshold, lighter weeks 4 and 8, a taper week before the race.") },
@@ -1616,7 +1616,7 @@ export function templateSummary(t, sports = null) {
   return {
     id: t.id, sport: t.sport, name: t.name, goal: t.goal, description: t.description, level: t.level, weeksCount: t.weeks.length, days: t.days,
     race: t.race ? { km: t.race.km, options: t.race.options || null, kind: t.race.ride || t.race.tri || null, ...(t.race.tri ? raceLegsSummary(TRI_RACES[t.race.tri]) : {}) } : null, ...(t.perSport ? { perSport: t.perSport, sports: planSports(t), ...(t.choose ? { choose: true } : {}) } : {}), tests: Boolean(t.tests),
-    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase, t.sport), load: w.load, keys: w.gym?.test ? [TEST_KEYS(), L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`)] : w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : [...w.q.filter(k => !sports || !k.sport || sports.includes(k.sport)).map(k => keyLabel(k.sport || t.sport, k)), ...(t.sport === "swim" && w.long?.family ? [keyLabel(t.sport, w.long)] : [])], longMinutes: w.sports ? (w.sports.ride || w.sports.run)?.long?.minutes ?? null : w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race),
+    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase, t.sport), load: w.load, keys: w.gym?.test ? [TEST_KEYS()] : w.gym ? [`${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : [...w.q.filter(k => !sports || !k.sport || sports.includes(k.sport)).map(k => keyLabel(k.sport || t.sport, k)), ...(t.sport === "swim" && w.long?.family ? [keyLabel(t.sport, w.long)] : [])], longMinutes: w.sports ? (w.sports.ride || w.sports.run)?.long?.minutes ?? null : w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race),
       ...(w.sports ? { long: Object.fromEntries(Object.keys(w.sports).map(s => [s, s === "swim" ? (w.sports.swim.long ? keyLabel("swim", w.sports.swim.long) : null) : w.sports[s].long?.minutes ?? null])), brick: w.brick ?? null } : {}) }))
   };
 }

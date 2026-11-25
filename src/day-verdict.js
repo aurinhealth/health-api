@@ -95,7 +95,9 @@ export function numbersLineText(key) {
   }[key] || null;
 }
 
-// What is off in a yellow or red line (p7, Petr 2026-11-23): "Short sleep and a
+// What is off in a green, yellow or red line (p7, Petr 2026-11-23; green since
+// the review of 2026-11-25, "in your usual range or better" was false with a
+// short night): "Short sleep and a
 // high resting heart rate." instead of "Some of your numbers are below your
 // usual range". From the body's components (recovery-model.js): the night under
 // 85 % of its need (or a short_night flag), HRV under its usual range, the
@@ -104,7 +106,7 @@ export function numbersLineText(key) {
 export const NUMBERS_OFF_KEYS = ["sleep", "hrv", "restingHR"];
 
 export function numbersOff(line, components = {}, flags = []) {
-  if (line !== "steady" && line !== "easy") return [];
+  if (line !== "hard" && line !== "steady" && line !== "easy") return [];
   const c = components || {};
   const off = [];
   if ((flags || []).includes("short_night") || (c.sleep && Number(c.sleep.performance) < 85)) off.push("sleep");

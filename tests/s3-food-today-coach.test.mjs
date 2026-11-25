@@ -27,12 +27,14 @@ test("the numbers line: one key per day, paused on rest, signs before the zone",
   for (const key of NUMBERS_LINE_KEYS) assert.ok(numbersLineText(key), key);
 });
 
-// p7 (Petr 2026-11-23): a yellow or red line names what is off, nothing for the other lines.
+// p7 (Petr 2026-11-23): a yellow or red line names what is off; green too since the review of
+// 2026-11-25 ("in your usual range or better" was false with a short night). Nothing for the others.
 test("numbersOff names the short night, low HRV and high resting heart rate", () => {
   const components = { sleep: { performance: 49 }, hrv: { value: 86, low: 67, high: 100 }, restingHR: { value: 59, high: 55 } };
   assert.deepEqual(numbersOff("steady", components, []), ["sleep", "restingHR"]);
   assert.deepEqual(numbersOff("easy", { hrv: { value: 40, low: 50 } }, ["short_night"]), ["sleep", "hrv"]);
-  assert.deepEqual(numbersOff("hard", components, []), []);
+  assert.deepEqual(numbersOff("hard", components, []), ["sleep", "restingHR"]);
+  assert.deepEqual(numbersOff("usual", components, []), []);
   assert.deepEqual(numbersOff("steady", {}, []), []);
 });
 
