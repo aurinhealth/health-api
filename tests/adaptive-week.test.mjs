@@ -32,3 +32,17 @@ test('a week without recent sessions keeps to the sports the athlete does, never
   assert.deepEqual(fallbackSports({ sport: 'running' }), ['run', 'gym']);
   assert.deepEqual(fallbackSports(null), ['gym', 'run']);
 });
+
+test('replan: the proposal sees the planned workouts from today on as gone, the done ones and earlier days stay', async () => {
+  const { withoutPlannedFrom, sessionsOn } = await import('../src/adaptive-week.js');
+  const ride = { type: 'Ride', durationHours: 1 }, run = { type: 'Run', durationHours: .5 };
+  const week = { days: [
+    { date: '2026-11-23', daily: { training: { completed: [run], planned: [ride] } } },
+    { date: '2026-11-24', daily: { training: { completed: [run], planned: [ride] } } },
+    { date: '2026-11-25', daily: { training: { planned: [ride, run] } } },
+    { date: '2026-11-26' }
+  ] };
+  const out = withoutPlannedFrom(week, '2026-11-24');
+  assert.deepEqual(out.days.map(d => sessionsOn(d).length), [2, 1, 0, 0]);
+  assert.deepEqual(week.days.map(d => sessionsOn(d).length), [2, 2, 2, 0], 'the week passed in is unchanged');
+});

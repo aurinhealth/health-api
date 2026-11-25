@@ -1,5 +1,5 @@
 import {METAGYM_KUTNA_HORA,OTHER_STATION_IDS} from './gym-equipment.js';
-import {cardioFavourites as cardioFavouritesOf,cardioLength as cardioLengthOf,cardioMode,normalizeMyRoutines,routineLength} from './stretching.js';
+import {cardioFavourites as cardioFavouritesOf,cardioLength as cardioLengthOf,cardioMode,FREE_ROUTINE,normalizeMyRoutines,routineLength} from './stretching.js';
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
@@ -110,7 +110,7 @@ export function normalizeTraining(input={}){
   // The athlete's own warm-ups and stretchings, the one used by default (else auto)
   // and the length of the automatic ones (5–30 min, else sized to the session).
   const myRoutines=normalizeMyRoutines(input.myRoutines);
-  const pick=kind=>myRoutines[kind].some(r=>r.id===input[kind+'Routine'])?input[kind+'Routine']:'auto';
+  const pick=kind=>input[kind+'Routine']===FREE_ROUTINE||myRoutines[kind].some(r=>r.id===input[kind+'Routine'])?input[kind+'Routine']:'auto';
   const length=v=>routineLength(v)||'auto';
   return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,cardio,cardioType,cardioLength,cardioFavourites,stretching,
     myRoutines,warmupRoutine:pick('warmup'),stretchingRoutine:pick('stretching'),warmupLength:length(input.warmupLength),stretchingLength:length(input.stretchingLength)};

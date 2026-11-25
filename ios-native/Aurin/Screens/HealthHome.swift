@@ -1127,7 +1127,7 @@ struct AurinAgePage: View {
         }
         .task(id: period) {
             guard loaded[period] == nil, !model.demo else { return }
-            if let series = try? await model.api.healthSeries(metric: "aurinAge", period: period) { loaded[period] = series }
+            if let series = await model.healthSeries(metric: "aurinAge", period: period) { loaded[period] = series }
         }
     }
 

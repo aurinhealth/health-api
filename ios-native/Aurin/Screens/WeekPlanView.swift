@@ -125,6 +125,7 @@ struct WeekPlanView: View {
     @State private var addSport: String?
     @State private var working: String?
     @State private var error: String?
+    @Environment(\.scenePhase) private var scenePhase
     @State private var toast: PlanToast?
     /// Removed, waiting for the toast to go without Undo.
     @State private var hidden: Set<String> = []
@@ -132,6 +133,8 @@ struct WeekPlanView: View {
     /// Generate from Plan settings: the weeks are being built; a failure says so.
     @State private var generating = false
     @State private var generateFailed = false
+    /// The day Generate replans from (Plan settings: the first day changed); Try again keeps it.
+    @State private var generateFrom: String?
 
     private var today: String { model.demo ? (model.training?.date ?? AppModel.localDate(Date())) : AppModel.localDate(Date()) }
     private var monday: String { FreeTime.monday(today) }
@@ -175,11 +178,14 @@ struct WeekPlanView: View {
         }
         .navBarVisibility(.hidden)
         .task { await load() }
+        // The app going away settles the toast: a removal waiting for it is sent
+        // now, not lost with the app (review 2026-11-24 point 9, as MissedWorkoutBlock).
+        .onChange(of: scenePhase) { _, phase in if phase != .active, let toast { settle(toast, undo: false) } }
         .sheet(isPresented: $settings) {
-            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { generate in
+            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { from in
                 Task {
                     await reload()
-                    if generate { await runGenerate() }
+                    if let from { generateFrom = from; await runGenerate() }
                 }
             }
         }
@@ -591,7 +597,7 @@ struct WeekPlanView: View {
     private func runGenerate() async {
         guard !model.demo else { return }
         withAnimation(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil }
-        let ok = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, calendar: model.calendar)
+        let ok = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, from: generateFrom, calendar: model.calendar)
         await reload()
         withAnimation(.snappy) {
             generating = false

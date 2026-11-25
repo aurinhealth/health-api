@@ -31,6 +31,21 @@ final class ExerciseOrderTests: XCTestCase {
         XCTAssertEqual(ExerciseOrder.grouped(["A", nil, "A", "B", nil, "B"]), [0, 2, 1, 3, 5, 4])
     }
 
+    /// The builder edits its proposal as a day's sheet (the detail's cards, Edit exercises) and takes it back.
+    func testProposalAsDayAndBack() {
+        let catalog = [exercise("Row", fatigue: nil, muscles: ["lats": 1])]
+        var p = GymProposal(draftId: 1, planName: "Plán", rationale: nil,
+                            rows: [row("Squat"), row("Bench", superset: "A"), row("Row", superset: "A")], muscles: ["Squat": ["quads": 1], "Bench": ["chest": 1]])
+        var day = p.day
+        XCTAssertEqual(day.exercises.map(\.name), ["Squat", "Bench", "Row"])
+        XCTAssertEqual(day.exercises.map(\.superset), [nil, "A", "A"])
+        day.deleteExercise(at: 1)
+        p.take(day, catalog: catalog)
+        XCTAssertEqual(p.exercises.map { $0.name }, ["Squat", "Row"])
+        XCTAssertNil(p.muscles["Bench"])
+        XCTAssertEqual(p.muscles["Row"], ["lats": 1])
+    }
+
     func testProposalInsertAndMove() {
         let catalog = [exercise("Squat", fatigue: 1.3), exercise("Curl", fatigue: 0.45), exercise("Row", fatigue: 0.9)]
         var p = GymProposal(draftId: 1, planName: "Plán", rationale: nil,
