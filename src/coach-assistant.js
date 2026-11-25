@@ -575,7 +575,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   let parsed=null;if(actions){try{parsed=JSON.parse(text);}catch{/* cut off or plain text */}}
   const raw=String(text||''),plain=!/^\s*[{[]/.test(raw);
   let answer=String((typeof parsed?.answer==='string'?parsed.answer:null)??(plain?raw:partialCoachAnswer(raw))).trim();
-  answer=answer.replace(/ · /g,", ");// no middle-dot separators in what the athlete reads
+  answer=answer.replace(/ · /g,", ").replace(/ — /g,", ");// no middle-dot separators or em dashes in what the athlete reads
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];
@@ -586,7 +586,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 // A text part OpenAI caches up to its end (callOpenAI, cacheBreakpoints).
 export const cachedText=text=>({type:'input_text',text,prompt_cache_breakpoint:{mode:'explicit'}});
 // The parts of the coach's context that differ between two messages a minute apart.
-export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations','confirmedInChat','undoneInChat'];
+export const COACH_MOMENT_KEYS=['now','history','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations','confirmedInChat','undoneInChat'];
 // The memory of the chats and the coach's earlier proposals: they change when a
 // message saves a memory or proposes a change, so they go after the cached data.
 // gymDay, sport and the two notes below follow the words of the message.
