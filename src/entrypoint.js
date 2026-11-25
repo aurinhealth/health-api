@@ -1800,6 +1800,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!summaryDue(today,localHour()))return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
       const state=await getAthleteState(env.DB),start=summaryWeek(today,mondayOfDate(today));
       if(state.posted?.week?.key===start)return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
+      // Once a week even when the chat opens twice at once: the claim is one atomic row (push_log).
+      const claimed=await env.DB.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,'coach-week-post',?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(env.DB.userId??env.USER_ID,start).run().then(r=>Boolean(Number(r?.meta?.changes)));
+      if(!claimed)return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
       const summary=await weekSummaryFor(env,ctx,internalAuth,start,today);
       // A week without a plan and without a workout has nothing to sum up.
       const posted=summary.workouts.done||summary.workouts.planned?await postWeekSummary(env.DB,summary,state):null;
