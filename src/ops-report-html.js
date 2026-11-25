@@ -11,6 +11,9 @@ export const money = value => {
   return v >= 0.01 || v === 0 ? usd(v) : `${(v * 100).toFixed(1)} ¢`;
 };
 
+// "Ty 1.32 $ (106 % z 1.25 $, AI zablokované)": the share of the account's own cap.
+export const monthText = m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %${m.limit ? ` z ${usd(m.limit)}` : ""}${m.share >= 100 ? ", AI zablokované" : ""})` : ""}`;
+
 // A request the user waited this long for is red; below it orange.
 export const RED_MS = 8000;
 const RED_ROWS = 1000000;
@@ -95,7 +98,7 @@ export function opsReportHtml({ date, rows = [], room = null, stuck = null, acco
     const near = ai.named.filter(m => m.share != null && m.share >= 80);
     for (const m of near) important.push(`${m.who} má za měsíc ${m.share} % stropu AI.`);
     const body = ai.users.map(u => rowHtml([cell(escape(u.who)), cell(escape(money(u.cost)), { align: "right", nowrap: true, pad: "7px 0 7px 12px" }), cell(escape(u.features.map(f => `${f.name} ${f.calls}×`).join(", ")), { align: "right", muted: true, pad: "7px 0 7px 12px" })]));
-    const monthLine = [...ai.named.map(m => `${m.who} ${money(m.cost)}${m.share != null ? ` (${m.share} %)` : ""}`), ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${ai.others.count === 1 ? "účet" : ai.others.count <= 4 ? "účty" : "účtů"} dohromady ${money(ai.others.cost)}` : ""].filter(Boolean).join(", ");
+    const monthLine = [...ai.named.map(monthText), ai.others.count ? `${ai.named.length ? "ostatní " : ""}${ai.others.count} ${ai.others.count === 1 ? "účet" : ai.others.count <= 4 ? "účty" : "účtů"} dohromady ${money(ai.others.cost)}` : ""].filter(Boolean).join(", ");
     const top = Math.min(100, Math.max(0, ...ai.named.map(m => m.share || 0)));
     const bar = ai.limit && ai.named.length ? `<div style="height:8px;background:#e4e4e7;border-radius:4px;margin:6px 0 0"><div style="width:${top}%;height:8px;background:${top >= 80 ? "#ef4444" : top >= 50 ? "#f59e0b" : "#22c55e"};border-radius:4px"></div></div>` : "";
     parts.push(heading(`AI včera: ${money(ai.total)}, ${ai.calls} dotazů${ai.cachedShare != null ? `, ${ai.cachedShare} % vstupu z cache` : ""}`, near.length ? "orange" : "green")

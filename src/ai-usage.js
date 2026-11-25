@@ -169,7 +169,7 @@ export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = 
   const [monthSpent, weekSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId, since: plan.since }).catch(failed), weekLimit == null ? 0 : aiSpentThisWeek(env, { exceptId, since: plan.paidSince }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
   const raise = (monthLimit != null && monthSpent >= monthLimit) || (weekLimit != null && weekSpent >= weekLimit) ? await packRaise(env) : 0;
   if (monthLimit != null && monthSpent >= monthLimit + raise) throw limitError(await monthLimitMessage(env));
-  if (weekLimit != null && weekSpent >= weekLimit + raise) throw limitError(L("Tento týden toho bylo s AI hodně. Kouč a AI funkce budou zase k dispozici v pondělí.", "That's a lot of AI for this week. The coach and AI features are back on Monday."));
+  if (weekLimit != null && weekSpent >= weekLimit + raise) throw limitError(L("Tento týden jsi vyčerpal týdenní limit AI. Kouč a AI funkce budou zase k dispozici v pondělí.", "You've used this week's AI allowance. The coach and AI features are back on Monday."));
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra.", "That's a lot of AI for today. You can carry on tomorrow."));
 }
 
@@ -191,12 +191,13 @@ async function packRaise(env) {
   return (left + used) * PACK_NET_USD_PER_MESSAGE;
 }
 
-// "Back on 1 December": the cap ends with the account's month. No amount.
+// Why and until when: the month's AI allowance is used up, back on 1 December
+// (the cap ends with the account's month). No amount.
 async function monthLimitMessage(env) {
   const [y, m] = (await limitToday(env)).slice(0, 7).split("-").map(Number);
   const next = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1));
   const en = next.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-  return L(`Kouč a AI funkce budou zase k dispozici od 1. ${next.getUTCMonth() + 1}.`, `The coach and AI features are back on ${en}.`);
+  return L(`Tento měsíc jsi vyčerpal limit AI. Kouč a AI funkce budou zase k dispozici od 1. ${next.getUTCMonth() + 1}.`, `You've used this month's AI allowance. The coach and AI features are back on ${en}.`);
 }
 
 // A call's cost is known only after it, so parallel requests would all pass
