@@ -980,6 +980,17 @@ async function coachPush(env, ctx) {
   // Read only when a check is due and after it is claimed, so it runs once, not every 5 minutes.
   if (paywallOn(env) && !proActive(env, await subscriptionRow(env).catch(() => null))) return { sent: 0, reason: 'no-pro' };
   let nudge = zoneDue ? coachNudge({ date, hour, zone: state.zone }) : null;
+  // The coach's own chat messages (concept 09 pages 7 and 8): the week's summary on
+  // Sunday evening and the race week's first morning; the chat posts them when it opens.
+  if (!nudge && eveningDue && summaryDue(date, hour) && new Date(date + 'T12:00:00Z').getUTCDay() === 0 && state.posted?.week?.key !== mondayOfDate(date)) {
+    const summary = await weekSummaryFor(env, ctx, internalHeaders(), mondayOfDate(date), date).catch(() => null);
+    if (summary && (summary.workouts.done || summary.workouts.planned)) nudge = { kind: 'week_summary', title: L('Tvůj týden', 'Your week'), body: summary.headline };
+  }
+  if (!nudge && morningDue) {
+    const race = await raceWeekFor(env, ctx).catch(() => null);
+    // Once per race: an athlete who does not open the chat is not reminded every morning.
+    if (race?.race?.date && state.posted?.race?.key !== race.race.date && await claim('coach-race', race.race.date)) nudge = { kind: 'race_week', title: L('Závodní týden', 'Race week'), body: race.text.split('\n\n')[0] };
+  }
   if (!nudge && (morningDue || eveningDue) && state.status === 'active') {
     // The coach's inputs when a card has just made them, else only what the push reads.
     const inputs = await cachedOnly(env, 'coach-inputs:' + date) || await loadPushInputs(env, ctx, internalHeaders(), date);
