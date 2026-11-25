@@ -362,3 +362,27 @@ struct CoachSourceLines: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+/// The answers to a coach question as chips that wrap (concept 09, 3 and 4):
+/// a tap sends the chip's text as the athlete's message, no chip stays selected.
+struct CoachChips: View {
+    let chips: [String]
+    var tap: (String) -> Void
+
+    var body: some View {
+        FlowLayout(spacing: 8) {
+            ForEach(chips, id: \.self) { chip in
+                Button { tap(chip) } label: {
+                    Text(verbatim: chip)
+                        .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .cardSurface(cornerRadius: 22)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

@@ -119,6 +119,8 @@ struct CoachView: View {
         var failed: String? = nil
         /// What the answer was made from, small under it (a live answer only).
         var sources: AssistantResult.Sources? = nil
+        /// The chips of the server's question under this message (ChatDetail.question): one tap answers.
+        var chips: [String] = []
     }
 
     /// The answer sent to Nahlásit problém.
@@ -148,7 +150,8 @@ struct CoachView: View {
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
                                            openPlan: openPlan,
-                                           found: bubble.id == found)
+                                           found: bubble.id == found,
+                                           answer: sending ? nil : { chip in answer(chip, to: bubble.serverId) })
                                     .id(bubble.id)
                             }
                             // Until the first step arrives: the two lights turning and what the coach does;
@@ -445,7 +448,8 @@ struct CoachView: View {
 
     // MARK: Actions
 
-    private func send() async {
+    /// `reply`: the coach message whose question chip the text is (a free answer).
+    private func send(reply: Int? = nil) async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let picture = photo
         // The demo has no account to ask with: a ready answer from the sample day.
@@ -454,7 +458,8 @@ struct CoachView: View {
             await demoAnswer(text)
             return
         }
-        guard !text.isEmpty || picture != nil, !sending, !usedUp else { return }
+        // A chip of the server's question is a free answer, also with the week's messages used up.
+        guard !text.isEmpty || picture != nil, !sending, !usedUp || reply != nil else { return }
         input = ""
         photo = nil
         error = nil
@@ -462,6 +467,8 @@ struct CoachView: View {
         aiNoteSeen = true
         // A message that failed before goes out again as this one (Try again), not twice.
         messages.removeAll { $0.mine && $0.failed != nil }
+        // The question's chips go once the athlete answers, with a chip or in words.
+        for i in messages.indices { messages[i].chips = [] }
         // A stored answer has a higher id than any before it: how "Načíst odpověď" knows it came.
         let newestStored = messages.compactMap(\.serverId).max() ?? 0
         let mine = Bubble(mine: true, text: text, photo: picture)
@@ -500,7 +507,7 @@ struct CoachView: View {
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext, ghost: ghost) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext, ghost: ghost, reply: reply) {
                 switch event {
                 case .progress(let p): progress = p
                 case .chat(let chat): savedIn = chat
@@ -595,6 +602,13 @@ struct CoachView: View {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    /// A chip of the server's question: its text goes as the athlete's message, in this chat.
+    private func answer(_ chip: String, to message: Int?) {
+        guard let message, !sending else { return }
+        input = chip
+        Task { await send(reply: message) }
     }
 
     /// Try again under a message that got no answer: it goes out once more.
@@ -882,6 +896,7 @@ struct CoachView: View {
                 var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content), serverId: m.serverId,
                                     at: ChatsPanel.date(m.createdAt), rating: m.rating)
                 if let id = m.serverId {
+                    if id == chat.question?.messageId { bubble.chips = chat.question?.chips ?? [] }
                     bubble.actions = actions.filter { $0.messageId == id }
                     for a in bubble.actions {
                         guard let draft = a.draftId, let state = a.draftStatus, state != "draft" else { continue }
@@ -915,6 +930,8 @@ struct BubbleView: View {
     var openPlan: () -> Void = {}
     /// The message a chat search opened: ringed for a moment.
     var found = false
+    /// A tap on a chip of the server's question; nil while an answer is on its way.
+    var answer: ((String) -> Void)? = nil
     /// The messages are long text: they follow the iPhone's text size past the
     /// screens' cap, the cards around them stay capped (audit 20.b1).
     @Environment(\.fullTypeSize) private var fullTypeSize
@@ -966,6 +983,9 @@ struct BubbleView: View {
             }
             if !bubble.mine, let sources = bubble.sources {
                 CoachSourceLines(sources: sources)
+            }
+            if !bubble.mine, !bubble.chips.isEmpty, let answer {
+                CoachChips(chips: bubble.chips, tap: answer)
             }
             if let failed = bubble.failed {
                 CoachFailedLine(text: failed, retry: retry)

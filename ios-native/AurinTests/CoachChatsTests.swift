@@ -48,6 +48,17 @@ import SwiftUI
         XCTAssertNil(try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano."}"#.utf8)).sources)
     }
 
+    /// A reopened chat brings the chips of the server's question and the card of the coach's own message.
+    func testChatQuestionAndCardDecode() throws {
+        let json = #"{"id":7,"title":"Check-in after a break","messages":[{"id":120,"role":"assistant","content":"Five days without a workout. How are you?","createdAt":"2026-11-23 07:00:00"}],"actions":[],"question":{"messageId":120,"chips":["All good","Rest","Sick","Injured"]},"card":{"kind":"week_summary","messageId":120,"key":"2026-11-16"}}"#
+        let chat = try JSONDecoder().decode(ChatDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(chat.question, ChatDetail.Question(messageId: 120, chips: ["All good", "Rest", "Sick", "Injured"]))
+        XCTAssertEqual(chat.card, ChatDetail.Card(kind: "week_summary", messageId: 120, key: "2026-11-16"))
+        let plain = try JSONDecoder().decode(ChatDetail.self, from: Data(#"{"id":4,"title":"t","messages":[]}"#.utf8))
+        XCTAssertNil(plain.question)
+        XCTAssertNil(plain.card)
+    }
+
     /// Copy gives the answer without the Markdown marks.
     func testCopiedAnswerIsPlainText() {
         let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"

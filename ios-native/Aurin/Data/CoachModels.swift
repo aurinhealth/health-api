@@ -422,6 +422,22 @@ struct ChatDetail: Decodable, Equatable {
     let messages: [ChatMessage]
     /// The proposals made in this chat.
     var actions: [CoachAction]? = nil
+    /// The chips of the server's question under the last coach message, until one is tapped (src/coach-questions.js).
+    var question: Question? = nil
+    /// The coach's own message from the rules (the week's summary, the race week) with its card under it.
+    var card: Card? = nil
+
+    struct Question: Decodable, Equatable {
+        let messageId: Int
+        let chips: [String]
+    }
+
+    struct Card: Decodable, Equatable {
+        /// "week_summary" (key: the week's Monday) or "race_week" (key: the race's day).
+        let kind: String
+        let messageId: Int
+        let key: String
+    }
 }
 
 /// GET /app/api/coaches?date= (src/coach-engine.js), the coach's home.
