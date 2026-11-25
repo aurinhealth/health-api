@@ -106,6 +106,8 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
+    // The recipe library of the food version (src/recipes.js): off here until it ships.
+    "RECIPES_ENABLED": "false",
     // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn):
     // on since the evals passed (run 92, D01–D16 × 3, 48/48; Petr "vydej" 2026-11-16).
     "COACH_FIRST": "true",
@@ -222,6 +224,8 @@
         "CHAT_V1": "true",
         // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn).
         "COACH_FIRST": "true",
+        // The recipe library (src/recipes.js): here only until the food version ships.
+        "RECIPES_ENABLED": "true",
         // Coach writes today's gym session first (src/gym-compose.js coachFirstGymOn); off on the live server until its evals pass.
         "COACH_FIRST_GYM": "true",
         "USER_DATA_ROUTING": "true",

@@ -201,6 +201,7 @@ import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
 import { missedWorkout, missedWorkoutView, missedDecisions } from "./missed-workout.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
+import { handleRecipesApi } from "./recipes.js";
 import { handleCycleApi } from "./routes-cycle.js";
 import { handleJournalApi, journalForCoach } from "./routes-journal.js";
 import { saunaRisks } from "./journal-store.js";
@@ -3092,6 +3093,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
+  {const r=await handleRecipesApi(request,env,url,session);if(r!==undefined)return r;}
   {const r=await handleFoodApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleCycleApi(request,env,ctx,url,session);if(r!==undefined)return r;}
   {const r=await handleJournalApi(request,env,ctx,url,session,{mornings:(from,to)=>journalMornings(env,ctx,from,to)});if(r!==undefined)return r;}
