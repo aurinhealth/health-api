@@ -63,13 +63,15 @@ export function aiDailyLimitUsd(env, share = 1) {
 // every account that bought Pro, whatever the plan (Petr 2026-11-16: the same
 // for all who pay; the morning report weighs spending against what Pro brings
 // in), AI_UNPAID_LIMIT_USD
-// an account that has not bought Pro, the free week as one period (1.25).
-// Unset, the unpaid one is the monthly one times share.
+// an account that has not bought Pro, the free week as one period (1.25),
+// AI_TESTFLIGHT_LIMIT_USD a TestFlight tester (plan "tester"): 1.25 lasted
+// about 22 coach messages, their allowance is 15 a week (Petr 2026-11-25);
+// unset, a tester has the unpaid one. Unset, the unpaid one is the monthly one times share.
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
 export function aiMonthlyLimitUsd(env, share = 1, plan = null) {
   if (ownerUnlimited(env)) return null;
   const limit = n(env.AI_MONTHLY_LIMIT_USD), full = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
-  const own = plan === "unpaid" ? n(env.AI_UNPAID_LIMIT_USD) : null;
+  const own = plan === "tester" ? n(env.AI_TESTFLIGHT_LIMIT_USD) ?? n(env.AI_UNPAID_LIMIT_USD) : plan === "unpaid" ? n(env.AI_UNPAID_LIMIT_USD) : null;
   const base = own != null && own >= 0 ? Math.min(own, full) : full * share;
   // The App Review demo account gets a small fixed budget (app-review.js).
   return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;

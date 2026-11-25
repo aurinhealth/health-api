@@ -362,10 +362,10 @@ export async function aiData(env, date, now = Date.now()) {
   };
   const who = id => isOwner(id) ? "Ty" : `Účet #${id}, ${groupOf(id)}`;
   // The monthly cap the account's AI stops at (aiMonthlyLimitUsd): the owner,
-  // Pro bought or a gift the paid one, anything else the unpaid one.
+  // Pro bought or a gift the paid one, a tester its own, anything else the unpaid one.
   const monthLimitOf = id => {
-    const sub = subs.get(id), paid = isOwner(id) || (sub && ["paid", "gift"].includes(groupOfSubscription(sub, now)));
-    return aiMonthlyLimitUsd(env, paid ? 1 : unpaidLimitShare(env), paid ? "paid" : "unpaid");
+    const sub = subs.get(id), group = sub ? groupOfSubscription(sub, now) : null, paid = isOwner(id) || ["paid", "gift"].includes(group);
+    return aiMonthlyLimitUsd(env, paid ? 1 : unpaidLimitShare(env), paid ? "paid" : group === "testflight" ? "tester" : "unpaid");
   };
   return {
     rows: rows.map(r => ({ who: who(Number(r.user_id)), feature: r.feature, calls: r.calls, cost: r.cost, input: r.input, cached: r.cached })),
