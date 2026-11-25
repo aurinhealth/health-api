@@ -182,7 +182,7 @@ import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraft
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
-import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep } from "./coach-steps.js";
+import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
 import { heatAdvice } from "./heat-advice.js";
@@ -2718,8 +2718,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Each proposal points to the answer it came with (messageId), so a reopened chat shows it there.
       // A ghost chat left while its answer was written keeps no proposal either.
       for(const action of ghost&&!chatId?[]:actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{}),...(ghost?{ghost:true}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
+      // "From …" and "From memory: …" under the answer, from the steps and the memory the server sent (coach-steps.js sourceLines, AI-5).
+      const sources=answer.status==='ok'&&!answer.fallback&&check?.status!=='fallback'?sourceLines(steps.list,{used:answer.memory?.used,memories:coachCtx.preferenceMemory||[]}):null;
       delete answer.memory;
-      return {...answer,chatId,messageId,actions:proposals,...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      return {...answer,chatId,messageId,actions:proposals,...(sources?{sources}:{}),...(confirmedInChat.some(c=>c.done)?{confirmedInChat:confirmedInChat.filter(c=>c.done).map(c=>({...c.action,draftId:c.draftId}))}:{}),coachAllowance,memorySaved:memory||saves[0]?.text||null,memoryChanges:{saved:memory||saves[0]?.text||null,saves:memory?[{text:memory,group:null}]:saves,forgotten:[],updated:[]},memoryProposals:changes,...(sportChanges?{sportChanges}:{}),...(check?{check}:{}),...(steps.list.length?{steps:steps.list}:{}),costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     // A message whose answer failed goes back to the allowance, unless part of
     // the answer already reached the chat.

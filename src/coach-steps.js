@@ -16,8 +16,9 @@ const short = (text, n = 140) => { const t = String(text || '').replace(/\s+/g, 
 // SF Symbol, the title, the sentence, running or done, and `view`: the app's
 // own component the step's sheet shows under the sentence (hrv: the HRV
 // detail's range bar and "HRV by night" chart), none for text-only steps.
-export const coachStep = (id, icon, title, text = null, status = 'done', view = null) =>
-  ({ id, icon, title, ...(text ? { text } : {}), status, ...(view ? { view } : {}) });
+// `source` names what the step read, for the "From …" line under the answer (sourceLines).
+export const coachStep = (id, icon, title, text = null, status = 'done', view = null, source = null) =>
+  ({ id, icon, title, ...(text ? { text } : {}), status, ...(view ? { view } : {}), ...(source ? { source } : {}) });
 
 // Last night and this morning's HRV against the athlete's usual range.
 export function bodySteps({ date, inputs = {} }) {
@@ -25,13 +26,14 @@ export function bodySteps({ date, inputs = {} }) {
   const c = r?.body?.components || {}, steps = [];
   const slept = num(c.sleep?.minutes), need = num(r?.need?.need);
   if (slept > 0) steps.push(coachStep('sleep', 'moon', L('Dívám se na tvůj poslední spánek', "Looking at last night's sleep"),
-    L(`Tuto noc ${hm(slept)} spánku.`, `Last night you slept ${hm(slept)}.`) + (need > 0 ? ' ' + L(`Tvoje potřeba spánku je kolem ${hm(need)}.`, `Your sleep need is about ${hm(need)}.`) : '')));
+    L(`Tuto noc ${hm(slept)} spánku.`, `Last night you slept ${hm(slept)}.`) + (need > 0 ? ' ' + L(`Tvoje potřeba spánku je kolem ${hm(need)}.`, `Your sleep need is about ${hm(need)}.`) : ''),
+    'done', null, L('tvého posledního spánku', "last night's sleep")));
   const hrv = num(c.hrv?.value), low = num(c.hrv?.low), high = num(c.hrv?.high);
   if (hrv > 0 && low != null && high != null && high > low) {
     const v = Math.round(hrv), lo = Math.round(low), hi = Math.round(high);
     const where = v < lo ? L('pod tvým obvyklým rozmezím', 'below your usual range') : v > hi ? L('nad tvým obvyklým rozmezím', 'above your usual range') : L('v tvém obvyklém rozmezí', 'inside your usual range');
     steps.push(coachStep('hrv', 'waveform.path.ecg', L('Porovnávám HRV s tvým obvyklým rozmezím', 'Comparing your HRV with your usual range'),
-      L(`Dnes ráno HRV ${v} ms, ${where} ${lo} až ${hi} ms.`, `This morning your HRV was ${v} ms, ${where} of ${lo} to ${hi} ms.`), 'done', 'hrv'));
+      L(`Dnes ráno HRV ${v} ms, ${where} ${lo} až ${hi} ms.`, `This morning your HRV was ${v} ms, ${where} of ${lo} to ${hi} ms.`), 'done', 'hrv', L('dnešní ranní HRV', "this morning's HRV")));
   }
   return steps;
 }
@@ -44,7 +46,7 @@ export function historyStep(history) {
   const label = { 30: L('posledních 30 dní', 'the last 30 days'), 90: L('posledních 90 dní', 'the last 90 days'), 365: L('posledních 12 měsíců', 'the last 12 months') }[year.days];
   const nights = year.sleep?.nights;
   return coachStep('history', 'calendar', L(`Procházím ${label}`, `Looking back over ${label}`),
-    nights ? L(`Spánek z ${nights} nocí.`, `Sleep from ${nights} ${nights === 1 ? 'night' : 'nights'}.`) : null);
+    nights ? L(`Spánek z ${nights} nocí.`, `Sleep from ${nights} ${nights === 1 ? 'night' : 'nights'}.`) : null, 'done', null, label);
 }
 
 // The ride or run the coach reviews (coach-ride-reviews.js), up to three.
@@ -53,14 +55,15 @@ export function reviewStep(activities = [], status = 'running') {
   const runs = activities.filter(a => /run|treadmill/i.test(a.type || '')).length;
   const title = runs === activities.length ? L('Prohlížím tvůj poslední běh', 'Reviewing your last run') : runs ? L('Prohlížím tvoje poslední aktivity', 'Reviewing your last activities') : L('Prohlížím tvoji poslední jízdu', 'Reviewing your last ride');
   const line = a => { const m = Math.round(num(a.durationHours) * 60); return short(a.name || a.type, 60) + (m > 0 ? ` ${m} min` : '') + (num(a.tss) > 0 ? `, ${Math.round(a.tss)} TSS` : ''); };
-  return coachStep('review', runs === activities.length ? 'figure.run' : 'bicycle', title, activities.slice(0, 3).map(line).join('; ') + '.', status);
+  const source = runs === activities.length ? L('tvého posledního běhu', 'your last run') : runs ? L('tvých posledních aktivit', 'your last activities') : L('tvé poslední jízdy', 'your last ride');
+  return coachStep('review', runs === activities.length ? 'figure.run' : 'bicycle', title, activities.slice(0, 3).map(line).join('; ') + '.', status, null, source);
 }
 
 // What is planned for today, by the plan's own names.
 export function todayStep(planned = []) {
   const line = p => { const m = Math.round(num(p.durationHours) * 60); return short(p.name || p.type, 60) + (m > 0 ? `, ${m} min` : ''); };
   return coachStep('today', 'calendar', L('Kontroluji dnešní plán', "Checking today's plan"),
-    planned.length ? L('Dnes v plánu: ', 'Planned for today: ') + planned.slice(0, 3).map(line).join('; ') + '.' : L('Na dnešek nemáš nic naplánováno.', 'Nothing is planned for today.'));
+    planned.length ? L('Dnes v plánu: ', 'Planned for today: ') + planned.slice(0, 3).map(line).join('; ') + '.' : L('Na dnešek nemáš nic naplánováno.', 'Nothing is planned for today.'), 'done', null, L('dnešního plánu', "today's plan"));
 }
 
 // The athlete's own notes to finished workouts (coach_reflections.notes, never
@@ -72,7 +75,9 @@ export function notesStep(notes = [], memories = []) {
   if (notes.length) parts.push(L(`Poznámky: ${notes.length}`, `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}`));
   if (memories.length) parts.push(L(`co si o tobě pamatuji: ${memories.length}`, `${memories.length} ${memories.length === 1 ? 'thing' : 'things'} I remember about you`));
   const newest = notes[0]?.text ? ' ' + L('Nejnovější: ', 'Newest: ') + '„' + short(notes[0].text) + '“' : '';
-  return coachStep('notes', 'doc.text', L('Čtu tvoje poznámky a co si pamatuji', 'Reading your notes and what I remember'), parts.join(', ') + '.' + newest);
+  // The memories get their own line (sourceLines), so only the workout notes are a source here.
+  return coachStep('notes', 'doc.text', L('Čtu tvoje poznámky a co si pamatuji', 'Reading your notes and what I remember'), parts.join(', ') + '.' + newest,
+    'done', null, notes.length ? L('tvých poznámek k tréninkům', 'your workout notes') : null);
 }
 
 export const writingStep = (status = 'running') => coachStep('writing', 'pencil', L('Píšu odpověď', 'Writing your answer'), null, status);
@@ -85,4 +90,23 @@ export const refineStep = (status = 'running') => coachStep('refine', 'arrow.tri
 export function stepList() {
   const byId = new Map();
   return { add(step) { if (step) byId.set(step.id, step); return step; }, get list() { return [...byId.values()]; } };
+}
+
+// The lines under an answer (redesign Coach chat, AI-5, 2026-11-16): "From
+// last night's sleep, this morning's HRV and today's plan" from the steps
+// that ran, and "From memory: …" from the items of preferenceMemory the answer
+// says it used (memory.used), kept only when the server really sent that item
+// to the model. The model writes no part of either line.
+const MAX_MEMORY_SOURCES = 2;
+const same = text => String(text || '').normalize('NFC').replace(/\s+/g, ' ').trim().replace(/[.!]+$/u, '').toLowerCase();
+const listed = parts => parts.length < 2 ? parts.join('') : parts.slice(0, -1).join(', ') + L(' a ', ' and ') + parts.at(-1);
+
+export function sourceLines(steps = [], { used = [], memories = [] } = {}) {
+  const read = [...new Set(steps.filter(s => s?.status === 'done' && s.source).map(s => s.source))];
+  const sent = new Map(memories.map(m => typeof m === 'string' ? m : m?.text).filter(Boolean).map(m => [same(m), String(m).trim().replace(/[.!]+$/u, '')]));
+  const kept = [...new Set((Array.isArray(used) ? used : []).map(same))].map(k => sent.get(k)).filter(Boolean).slice(0, MAX_MEMORY_SOURCES);
+  const lines = {};
+  if (read.length) lines.from = L('Z ', 'From ') + listed(read);
+  if (kept.length) lines.memory = L('Z paměti: ', 'From memory: ') + kept.join(', ');
+  return Object.keys(lines).length ? lines : null;
 }
