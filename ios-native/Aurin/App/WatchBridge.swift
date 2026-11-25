@@ -540,7 +540,7 @@ extension WatchBridge: WCSessionDelegate {
                 steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
                                             meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
                                             repeats: max(1, block.repeats ?? 1), first: i == 0,
-                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast)))
+                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast), hr: (s.hrLow, s.hrHigh)))
             }
         }
         // Without steps too: a brick's steady leg goes to the watch as one multisport workout.

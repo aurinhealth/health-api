@@ -729,6 +729,7 @@ extension WorkoutOpener {
 
 /// A planned ride, run or swim in Apple's Workout app (WorkoutKit), its steps by
 /// time (a pool swim by metres): zone 3 and up as work, the rest as recovery, repeats as one block.
+/// A ride or run step keeps its power, pace or heart-rate alert, as from the iPhone (WatchWorkout.swift).
 @MainActor
 enum WorkoutOpener {
     static func workout(_ plan: WatchPlan, sport: String, name: String) -> WorkoutPlan? {
@@ -762,13 +763,32 @@ enum WorkoutOpener {
             if !openWater, let meters = step.meters, CustomWorkout.supportsGoal(.distance(meters, .meters), activity: activity, location: location) {
                 current.append(IntervalStep(kind, goal: .distance(meters, .meters)))
             } else {
-                current.append(IntervalStep(kind, goal: .time(max(step.seconds, 5), .seconds)))
+                var interval = IntervalStep(kind, goal: .time(max(step.seconds, 5), .seconds))
+                if sport != "swim" { interval.step.alert = alert(step) }
+                current.append(interval)
             }
         }
         flush()
         guard !blocks.isEmpty else { return nil }
         let custom = CustomWorkout(activity: activity, location: location, displayName: name, blocks: blocks)
         return WorkoutPlan(.custom(custom))
+    }
+
+    /// The step's target as the iPhone sends it: watts, else the pace range, else the heart-rate zone.
+    private static func alert(_ s: WatchPlan.Step) -> (any WorkoutAlert)? {
+        if let low = s.wattsLow, low > 0 {
+            let high = max(low, s.wattsHigh ?? low)
+            return PowerRangeAlert(target: Measurement(value: low, unit: UnitPower.watts)...Measurement(value: high, unit: UnitPower.watts))
+        }
+        if let slow = s.paceSlow ?? s.paceFast, let fast = s.paceFast ?? s.paceSlow, slow > 0, fast > 0 {
+            // Pace (s/km) as speed: the slower pace is the lower speed.
+            let lowSpeed = 1000 / max(slow, fast), highSpeed = 1000 / min(slow, fast)
+            return SpeedRangeAlert(target: Measurement(value: lowSpeed, unit: UnitSpeed.metersPerSecond)...Measurement(value: highSpeed, unit: UnitSpeed.metersPerSecond), metric: .current)
+        }
+        if let low = s.hrLow, let high = s.hrHigh, low > 0, high > low {
+            return HeartRateRangeAlert(target: Measurement(value: low / 60, unit: UnitFrequency.hertz)...Measurement(value: high / 60, unit: UnitFrequency.hertz))
+        }
+        return nil
     }
 
     /// A brick as one multisport workout: the Workout app times each leg and
