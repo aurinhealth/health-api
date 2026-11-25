@@ -154,17 +154,20 @@ extension GymDay {
 
     /// Make superset (live workout, concept 08): the exercises picked (by id,
     /// at least two, none in a superset yet) move right after the first of
-    /// them and share a new letter, with as many work sets each.
-    mutating func makeSuperset(_ ids: [String]) {
+    /// them and share a new letter, with as many work sets each. `anchor`: the
+    /// exercise under way, which stays where it is and pairs with its sets left.
+    mutating func makeSuperset(_ ids: [String], anchor anchorId: String? = nil) {
         var (list, rest) = blocks
         let picked = exercises.indices.filter { ids.contains(exercises[$0].id) }
         guard picked.count >= 2, picked.allSatisfy({ ExerciseOrder.letter(exercises[$0].superset) == nil }) else { return }
         func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
         let used = Set(list.indices.compactMap(letter))
         let value = "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
-        let anchor = picked[0]
-        let moved = picked.dropFirst().map { list[$0] }
-        for i in picked.dropFirst().reversed() { list.remove(at: i) }
+        let first = picked.first { exercises[$0].id == anchorId } ?? picked[0]
+        let others = picked.filter { $0 != first }
+        let moved = others.map { list[$0] }
+        for i in others.reversed() { list.remove(at: i) }
+        let anchor = first - others.filter { $0 < first }.count
         list.insert(contentsOf: moved, at: anchor + 1)
         for i in anchor...(anchor + moved.count) {
             for r in list[i].indices {

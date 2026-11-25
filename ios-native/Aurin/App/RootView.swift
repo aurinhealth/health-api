@@ -197,10 +197,12 @@ struct RootView: View {
                     .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Zdroje dat (Aurin posílá) (SyncViews.swift).
-                if let report = model.syncReport, !showSyncStatus {
+                // Over a workout only a failed one (its Zkusit znovu), above the pinned
+                // Zavřít, never on it (Petr 2026-11-24); "sent" is left out there.
+                if let report = model.syncReport, !showSyncStatus, !model.immersive || report.failed {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, toastInset)
+                        .padding(.bottom, model.immersive ? 100 : toastInset)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }

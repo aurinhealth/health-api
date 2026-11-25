@@ -4833,7 +4833,7 @@
 "Zbývá udělat" = "Still to do";
 "Udělat supersérii" = "Make superset";
 "Táhni za úchyt a změníš pořadí. Mínus cvik odebere." = "Drag the handle to reorder. Tap the minus to remove.";
-"Vyber cviky, které jdou spolu. Přesunou se k sobě. Cvik, který jsi začal nebo už je v páru, vybrat nejde." = "Pick the exercises that go together. They will move next to each other. An exercise you have started or already paired cannot be picked.";
+"Vyber cviky, které jdou spolu. Přesunou se k sobě. Hotový cvik nebo cvik, který už je v páru, vybrat nejde." = "Pick the exercises that go together. They will move next to each other. A finished or already paired exercise cannot be picked.";
 "%@ z %@ sérií hotovo" = "%1$@ of %2$@ sets done";
 "Vyber dva nebo víc" = "Pick two or more";
 "Spojit %@ do supersérie" = "Pair %@ as superset";
