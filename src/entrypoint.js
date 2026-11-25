@@ -1434,10 +1434,11 @@ function coachSleep(env,ctx,internalAuth,date,days=30){
 function coachHistory(env,ctx,internalAuth,date){
   return cached(env,ctx,'coach-history:'+date,async()=>{
     const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path)).then(r=>r.json()).catch(()=>({}));
-    const fitness=await cached(env,ctx,'fitness:366',()=>internal('/app/api/fitness?days=366')).catch(()=>({}));
-    const intervals=fitness?.source==='aurin'?[]:fitness?.wellness||[];
-    const series=metric=>seriesRows(env.DB,env.USER_ID,{metric,range:'1y',date,intervals}).catch(()=>[]);
-    const [sleep,hrv,restingHR,steps,stored]=await Promise.all([coachSleep(env,ctx,internalAuth,date,365),series('hrv'),series('restingHR'),series('steps'),storedWeights(env.DB,env.USER_ID,shiftDate(date,-365)).catch(()=>null)]);
+    // Only HRV and resting HR merge in the Intervals.icu rows: the rest starts without waiting for them.
+    const fitnessLoading=cached(env,ctx,'fitness:366',()=>internal('/app/api/fitness?days=366')).catch(()=>({}));
+    const series=(metric,intervals=[])=>seriesRows(env.DB,env.USER_ID,{metric,range:'1y',date,intervals}).catch(()=>[]);
+    const merged=metric=>fitnessLoading.then(f=>series(metric,f?.source==='aurin'?[]:f?.wellness||[]));
+    const [fitness,sleep,hrv,restingHR,steps,stored]=await Promise.all([fitnessLoading,coachSleep(env,ctx,internalAuth,date,365),merged('hrv'),merged('restingHR'),series('steps'),storedWeights(env.DB,env.USER_ID,shiftDate(date,-365)).catch(()=>null)]);
     const wellness=[...hrv.map(r=>({id:r.id,hrv:r.hrv})),...restingHR.map(r=>({id:r.id,restingHR:r.restingHR})),...steps.map(r=>({id:r.id,steps:r.steps}))];
     const weights={...(stored?.intervals||{}),...(stored?.google||{}),...(stored?.manual||{})};
     return historyFacts({date,sessions:sleep?.sessions||[],wellness,fitness:fitness?.wellness||[],weights});
