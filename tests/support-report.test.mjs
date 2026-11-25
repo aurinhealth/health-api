@@ -213,3 +213,10 @@ test("the user's answer where it happened leads, and a watch problem names the w
   assert.deepEqual(reportWhere({ happenedOn: "iphone" }, { api: "7" }), ["Happened on (the user's answer): iPhone", "Sent from: iPhone app without diagnostics"]);
   assert.equal(reportScreen({ happenedOn: "watch" }), "Apple Watch");
 });
+
+test("without the session secret no report link is made and none opens", async () => {
+  const { env } = setup({ SESSION_SECRET: "" });
+  assert.equal(await reportViewLink(env, 3, 1), null);
+  const url = "https://x.test/support/report/3/1/9999999999/abcdefghijklmnopqrstuvwxyz";
+  assert.equal((await handleReportView(new Request(url), env, new URL(url), { reportDb: async () => env.DB })).status, 404);
+});

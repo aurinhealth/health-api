@@ -213,6 +213,7 @@ const viewSignature = (env, uid, id, exp) => signText(`support-report:${uid}:${i
 
 // The signed address of one report's screenshot and diagnostics, valid 30 days.
 export async function reportViewLink(env, uid, id, now = Date.now()) {
+  if (!sessionSecret(env)) return null;
   const exp = Math.floor(now / 1000) + VIEW_SECONDS;
   return `${appOrigin(env)}/support/report/${uid}/${id}/${exp}/${await viewSignature(env, uid, id, exp)}`;
 }
@@ -223,7 +224,8 @@ export async function handleReportView(request, env, url, { reportDb }) {
   const match = VIEW_PATH.exec(url.pathname);
   const headers = { "Cache-Control": "no-store", "X-Robots-Tag": "noindex", "Referrer-Policy": "no-referrer" };
   const missing = () => new Response("Not found.", { status: 404, headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" } });
-  if (!match || request.method !== "GET") return missing();
+  // Without the secret anyone could sign a link: nothing opens then.
+  if (!match || request.method !== "GET" || !sessionSecret(env)) return missing();
   const [, uid, id, exp, signature] = match;
   if (Number(exp) * 1000 < Date.now() || !timingSafeEqualString(signature, await viewSignature(env, uid, id, exp))) return missing();
   const db = await reportDb(Number(uid)).catch(() => null);
