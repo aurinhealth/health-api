@@ -307,3 +307,21 @@ async function packsBought(db, monthStart) {
     throw error;
   }
 }
+
+// OpenAI refused a call for money (insufficient_quota: the prepaid credit ran out or the
+// organisation's monthly limit was reached): AI stops for everyone until someone pays or
+// raises the limit, so the owner hears at once, not from the next morning's report.
+// Once per UTC day (claimed in ops_events of the central database, migration 0025).
+export async function alertAiQuota(env, now = new Date()) {
+  const db = central(env);
+  try {
+    if (!db) { console.error("OpenAI refused for credit or limit (insufficient_quota)"); return; }
+    const claimed = await db.prepare("INSERT INTO ops_events(day,kind,service,count) VALUES(?,'ai-quota','openai',1) ON CONFLICT(day,kind,service) DO NOTHING").bind(utcDay(now)).run();
+    if (!(Number(claimed?.meta?.changes) > 0)) return;
+    const to = String(env.OWNER_EMAIL || "").trim();
+    if (!to || !emailConfigured(env)) { console.error("OpenAI refused for credit or limit (insufficient_quota)"); return; }
+    await sendEmail(env, { to, subject: "Aurin: AI stojí, došel kredit nebo strop OpenAI", text: "OpenAI odmítlo požadavek s insufficient_quota: došel předplacený kredit, nebo útrata za měsíc došla na strop organizace. AI teď nefunguje nikomu.\n\nDobij kredit nebo zvyš strop: https://platform.openai.com/settings/organization/billing\n\nDalší takový e-mail přijde nejdřív zítra." });
+  } catch (error) {
+    console.error("AI quota alert failed", error?.message || error);
+  }
+}
