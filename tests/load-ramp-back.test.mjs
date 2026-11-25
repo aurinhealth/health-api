@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from "node:fs";
 import assert from 'node:assert/strict';
 import { gymLoadEstimate, gymAlternatives } from '../src/gym-catalog.js';
 import { generateStrengthPlan, templateStrengthPlan, painfulExercises, EXERCISES } from '../src/strength-generator.js';
@@ -150,4 +151,65 @@ test('C6: a revision makes at most one run long, and a longer run never gets sho
   assert.equal(out.filter(c => c.kind === 'long').length, 1);
   const run = { date: '2026-10-11', sport: 'run', minutes: 62, kind: 'endurance' };
   assert.equal(guardSessionChange({ ...run, minutes: 120 }, run, { runCap: { cap: 64, single: 200 } }).minutes, 62);
+});
+
+// C1: what leaves the phone on a day the coach eases the plan.
+import { coachEases } from '../src/week-ai.js';
+import { handleWorkoutTemplatesApi } from '../src/workout-templates.js';
+import { createD1 } from './helpers/d1.mjs';
+import { scopedDb } from '../src/tenancy.js';
+
+test('C1: the coach eases a hard or long plan, or cuts it for a named reason', () => {
+  const vo2 = { name: 'VO2 5×4', duration_minutes: 75 }, easy = g => ({ system: 'recovery', adaptations: ['nízká připravenost'], workout: { duration_minutes: 45, ...g } });
+  assert.equal(coachEases(vo2, easy()), true);
+  assert.equal(coachEases(vo2, { system: 'vo2max', adaptations: [], workout: { duration_minutes: 75 } }), false, 'kept');
+  assert.equal(coachEases({ name: 'Ride', intensity_factor: 0.9, duration_minutes: 60 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 60 } }), true, 'hard by its IF');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, easy({ duration_minutes: 90 })), true, 'cut to half for a reason');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 150 } }), false, 'shorter without a reason');
+  assert.equal(coachEases(vo2, { system: 'endurance', adaptations: ['střední připravenost'], workout: { duration_minutes: 90 } }), false, 'never longer than the plan');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 100 }, { system: 'threshold', adaptations: ['krátké okno'], workout: { duration_minutes: 70 } }), false, 'never harder than the plan');
+  assert.equal(coachEases(vo2, { system: 'long_endurance', adaptations: [], workout: { duration_minutes: 75 } }), false, 'never long where the plan was not');
+});
+
+test('C1: the .zwo and .fit files of today\'s plan hold the coach\'s version', async () => {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE IF NOT EXISTS health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
+  const event = { name: 'VO2 5×4', type: 'Ride', workout_doc: { steps: [{ duration: 600, power: { start: 50, end: 70, units: '%ftp' } }, { reps: 5, steps: [{ duration: 240, power: { value: 115, units: '%ftp' } }, { duration: 240, power: { value: 55, units: '%ftp' } }] }] } };
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,payload_json) VALUES(1,'intervals','planned-workout','planned:77',?)").run(JSON.stringify(event));
+  const easy = { name: 'Recovery spin', sport: 'ride', environment: 'indoor', duration_minutes: 45, structure_json: JSON.stringify([{ type: 'steady', minutes: 45, power: 55 }]) };
+  const get = async (path, todayVersion) => { const url = new URL('https://aurin.health' + path); return handleWorkoutTemplatesApi(new Request(url, { headers: { Origin: url.origin } }), { DB: scopedDb(raw, 1), RAW_DB: raw, USER_ID: 1 }, url, { signedIn: true, user: { name: 'Petr' } }, { todayVersion }); };
+  const zwo = await (await get('/app/api/my-workouts/from-planned.zwo?id=planned:77', async () => ({ workout: easy }))).text();
+  assert.match(zwo, /Recovery spin/);
+  assert.doesNotMatch(zwo, /VO2/);
+  const kept = await (await get('/app/api/my-workouts/from-planned.zwo?id=planned:77', async () => null)).text();
+  assert.match(kept, /VO2/);
+});
+
+test('C1: the plans eased this morning show on Today with the original, and the push says so', async () => {
+  const { easedCard, easedPush } = await import('../src/coach-push.js');
+  const { getAthleteState: stateOf, updateAthleteState: update } = await import('../src/athlete-state.js');
+  const date = '2026-11-25', items = [{ from: 'local-1', to: 'local-2', fromName: 'VO2 5×4', fromMinutes: 75, toName: 'Endurance', toMinutes: 45, why: 'nízká připravenost' }];
+  const db = scopedDb(createD1(), 1);
+  await update(db, { eased: { day: date, status: 'eased', items } }, { date });
+  const state = await stateOf(db, { date });
+  assert.deepEqual(easedCard(state, date), { kind: 'eased', id: date + ':eased', headline: easedCard(state, date).headline, date, from: 'VO2 5×4, 75 min', to: 'Endurance, 45 min', message: 'nízká připravenost', count: 1 });
+  assert.equal(easedCard({ ...state, dismissed: [date + ':eased'] }, date), null, 'Nechat hides it');
+  assert.equal(easedCard(state, '2026-11-26'), null, 'today only');
+  assert.equal(easedCard({ eased: { ...state.eased, status: 'restored' } }, date), null, 'gone once restored');
+  assert.match(easedPush(state.eased).body, /Endurance, 45 min/);
+  assert.doesNotMatch(easedPush(state.eased).body, /připravenost|readiness/, 'no health values in the push');
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.ok(src.indexOf('name: "coach-ease"') < src.indexOf('name: "coach-push"'), 'eased before the coach push tells it');
+  assert.match(src, /eased\.status==='restored'&&\(eased\.items\|\|\[\]\)\.some\(x=>x\.from===id\)\)return null/, 'after Vrátit původní the watch gets the plan too');
+});
+
+test('C1: the morning easing is off on the live server, skips races, tests, pairs and done sports, and saves the way back first', () => {
+  const src = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  const job = src.slice(src.indexOf('async function easeTodayPlans'), src.indexOf("// The coach's own push (coach-push.js)"));
+  assert.match(job, /env\.PLAN_EASE !== 'true'/);
+  assert.match(job, /event\.race \|\| event\.after \|\| event\.next/);
+  assert.match(job, /doneSports\.has\(eventSport\(event\)\)/);
+  assert.ok(job.indexOf('updateAthleteState(db, { eased') < job.indexOf('deletePlannedEvent(env, { eventId: id })'), 'the state is saved before the plan goes');
+  const wrangler = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+  assert.equal((wrangler.match(/"PLAN_EASE": "true"/g) || []).length, 1, 'staging only');
 });

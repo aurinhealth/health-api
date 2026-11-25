@@ -1,5 +1,5 @@
 // The morning check-in on Today: how the athlete feels, one tap (svěží,
-// normál, unavený, nemocný). Sensors miss sore legs or a bad week at work.
+// normál, unavený). Sensors miss sore legs or a bad week at work.
 // The answer NEVER changes the readiness (Petr 2026-10-14; redesign QA-2 and
 // T-HAB-1, 2026-11-16): "tired" is one advice signal of the day
 // (morning-advice.js adviceSignals) and the coach's fact of the day
@@ -7,6 +7,10 @@
 // readiness (readinessCheckin below).
 import { L } from "./lang.js";
 
+// "sick" is only still accepted from builds before the redesign (their old
+// card had a fourth answer, removed 2026-11-25 so every place asks the same
+// three); it is stored but never read (feelingOf). Drop it with the
+// redesign's MIN_APP_API raise.
 export const FEELINGS = ["fresh", "normal", "tired", "sick"];
 
 async function ensure(db) {

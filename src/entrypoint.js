@@ -10,7 +10,7 @@ import { takeChipAnswer, giveChipBack, questionChips } from './coach-questions.j
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
-import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent,localWorkout} from './local-workouts.js';
+import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent,localWorkout,restoreLocalWorkout} from './local-workouts.js';
 import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
 import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict,goalCheck} from './race-estimate.js';
@@ -58,7 +58,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary, planAroundCard } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary, planAroundCard, eventSport } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -99,7 +99,7 @@ import { recentNotes, earlierToday, chatSummary, coachNoteDays, queueDayNote, su
 import { FREE_PLANS, triRaceDay, openWaterMinutes, TRI_RACES, planSports, chosenSports, savePlanState, planChoice, planUndo, missedSession, planSessionsLeft, proposalView, phaseLabel, planWeek, planWorkoutId, planChanges, planRedMorning, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, environmentFor, openWaterDue, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery, askedSession } from './chat-ask.js';
-import { proposeWeekAI, adjustByChip, adjustByText, guardSessionChange, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { proposeWeekAI, adjustByChip, adjustByText, guardSessionChange, coachEases, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision, liveRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
@@ -167,7 +167,7 @@ import { handleSupportReport, handleReportView } from "./support-report.js";
 import { handleUnsubscribe } from "./product-emails.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, connectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, COACH_THREAD } from "./push.js";
-import { coachNudge, swapOffer, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
+import { coachNudge, swapOffer, easedCard, easedPush, hardSession, easierSwap, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { cachedPage } from './page-cache.js';
@@ -387,6 +387,8 @@ const USER_JOBS = [
   // The coach's push, after the morning push above: for everyone with a phone to notify,
   // whatever they connected (push: chosen by push_tokens, not by a service; no sync runs
   // for them). At most one a local day (push_log).
+  // Today's own plans the day coach eases, also in Wahoo and Intervals.icu (C1), before the coach's push tells it.
+  { name: "coach-ease", providers: ["intervals", "wahoo"], due: every5, run: (scoped, ctx) => easeTodayPlans(scoped, ctx) },
   { name: "coach-push", providers: [], push: true, due: every5, run: (scoped, ctx) => coachPush(scoped, ctx) },
   // Water Build-up: one push at 14:00 and one at 18:00 when the day is behind (water-goal.js).
   { name: "water-push", providers: [], push: true, due: every5, run: (scoped, ctx) => waterPush(scoped, ctx) },
@@ -968,6 +970,56 @@ async function raceWeekFor(env,ctx){
   return raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,ftp:thresholds?.ftp??null,swimCss:thresholds?.swimCss??null,weightKg:weightKg(weight),experience:level});
 }
 
+// Today's own plans (made in the app, sent to Wahoo and Intervals.icu) that
+// the day coach eases (C1; Petr 2026-11-25: everywhere the same, with "Vrátit
+// původní"): once a morning, when the night's data is in (the morning push, or
+// from 10:00), each is replaced by the coach's version, so Wahoo and
+// Intervals.icu get it too; the coach's push and Today say so, and
+// /app/api/coach/eased puts the plans back. A plan from the Intervals.icu
+// calendar stays as it is there (the watch and the files still get the
+// coach's version, coachTodayVersion).
+async function easeTodayPlans(env, ctx) {
+  // On with the app that shows the card and its "Vrátit původní" (PLAN_EASE; the redesign's release).
+  if (!env.DB || env.PLAN_EASE !== 'true') return { eased: 0, reason: 'off' };
+  const db = env.DB, hour = localHour(), date = localToday();
+  if (hour >= 11) return { eased: 0, reason: 'off' };
+  const logged = kind => db.prepare('SELECT 1 AS sent FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).first().then(Boolean).catch(() => false);
+  if (await logged('coach-ease') || !(hour >= 10 || await logged(MORNING_READINESS))) return { eased: 0, reason: 'not-due' };
+  const claimed = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,'coach-ease',?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, date).run().then(r => Boolean(Number(r?.meta?.changes)));
+  if (!claimed) return { eased: 0, reason: 'already' };
+  const [rows, done] = await Promise.all([
+    db.prepare("SELECT external_id,start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId, date, date + 'T23:59:59.999').all().then(r => r.results || []),
+    db.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, date, date + 'T23:59:59.999').all().then(r => r.results || []).catch(() => [])
+  ]);
+  const json = text => { try { return JSON.parse(text || '{}') || {}; } catch { return {}; } };
+  const doneSports = new Set(done.map(r => { const p = json(r.payload_json); return eventSport({ type: p.type || p.sport || p.activityType || '' }); }).filter(Boolean));
+  const items = [], used = new Set();
+  for (const row of rows) {
+    const id = String(row.external_id || '').replace(/^planned:/, ''), event = json(row.payload_json);
+    try {
+      // A race, a test or one of a joined pair stays as planned; so does a sport already done today.
+      if (!id.startsWith('local-') || event.race || event.after || event.next || /\brace\b|závod|zavod|\btest\b/i.test(String(event.name || '')) || doneSports.has(eventSport(event))) continue;
+      if ((await localWorkout(db, id))?.status !== 'scheduled') continue;
+      const planned = await plannedWorkoutOf(env, ctx, id);
+      if (!planned || ['race', 'test'].includes(planned.library?.family)) continue;
+      const version = await coachTodayVersion(env, ctx, id, { ...planned.workout, sport: planned.kind });
+      const to = version?.workout?.id;
+      // The coach's workout already on the day (another session): nothing is replaced, so nothing is lost.
+      if (!to || used.has(to) || await db.prepare('SELECT 1 FROM workout_schedule_links WHERE user_id=? AND workout_id=? AND scheduled_date=? LIMIT 1').bind(db.userId, to, date).first()) continue;
+      used.add(to);
+      const link = await db.prepare('SELECT sport,workout_id,family,scheduled_date,environment,intervals_external_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(db.userId, id).first();
+      const time = /T(\d{2}:\d{2})/.exec(String(event.start_date_local || row.start_time || ''))?.[1];
+      const scheduled = await scheduleWorkoutInIntervals(env, db, { workoutId: to, date, confirm: true, environment: link?.environment || planned.workout.environment || 'outdoor', startTime: time && time !== '00:00' ? time : null });
+      if (scheduled.status !== 'ok' || !scheduled.eventId) continue;
+      // Saved before the plan goes, so a stop on the way still leaves the way back.
+      items.push({ from: id, link: link || null, to: scheduled.eventId, fromName: version.from.name, fromMinutes: version.from.minutes, toName: version.workout.name || null, toMinutes: Math.round(Number(version.workout.duration_minutes)) || null, why: version.why });
+      await updateAthleteState(db, { eased: { day: date, status: 'eased', items } });
+      await deletePlannedEvent(env, { eventId: id });
+    } catch (error) { console.error('Plan not eased', id, error.message); }
+  }
+  return { eased: items.length };
+}
+
 // The coach's own push (coach-push.js), checked with the morning push: a time
 // zone change any time 7–21, the morning signs once after the morning push (or
 // from 10:00), the evening before a key session once from 17:00; at most one
@@ -1009,6 +1061,8 @@ async function coachPush(env, ctx) {
     const summary = await weekSummaryFor(env, ctx, internalHeaders(), mondayOfDate(date), date).catch(() => null);
     if (summary && (summary.workouts.done || summary.workouts.planned)) nudge = { kind: 'week_summary', title: L('Tvůj týden', 'Your week'), body: summary.headline };
   }
+  // The plans the coach eased this morning (easeTodayPlans), with "Vrátit původní" on Today.
+  if (!nudge && morningDue && state.eased?.day === date && state.eased.status === 'eased') nudge = easedPush(state.eased);
   if (!nudge && morningDue) {
     const race = await raceWeekFor(env, ctx).catch(() => null);
     // Once per race: an athlete who does not open the chat is not reminded every morning.
@@ -1767,7 +1821,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // old knee pain does not wait behind every other card (audit 4.6).
       // Chest symptoms: the latest day with a training since they were told, so the coach asks how it went.
       const since=heartSince(state),trainedOn=since?(inputs.week?.days||[]).filter(d=>d.date>since&&d.date<=date&&d.daily?.training?.completed?.length).map(d=>d.date).sort().pop()||null:null;
-      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date,{trainedOn})||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
+      const advice=(swap&&state.nudge.date!==date?swap:null)||statusCheck(state,date)||memoryCheck(state,date,{trainedOn})||easedCard(state,date)||easier||swap||(verdict==='hard'?null:proactiveAdvice({...inputs,state,readiness}));
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -1783,6 +1837,34 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const question=gapCheckin({date,weekDays:inputs.week?.days||[],sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
       return Response.json({status:'ok',question:await postGapCheckin(env.DB,question)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){console.error('Gap check-in failed',error.message);return Response.json({message:error.message},{status:500});}
+  }
+  // "Vrátit původní" of the plans the coach eased this morning (easeTodayPlans):
+  // the coach's sessions go, the plans come back, in Wahoo and Intervals.icu too.
+  if(url.pathname==='/app/api/coach/eased'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({})),state=await getAthleteState(env.DB),eased=state.eased,date=localToday();
+      if(body.action!=='restore')throw new Error(L('Neplatná volba.', 'Invalid choice.'));
+      if(!eased||eased.day!==date||eased.status!=='eased')return Response.json({status:'ok',eased:eased||null},{headers:{'Cache-Control':'no-store'}});
+      // Each plan on its own, so a second tap finishes what the first could not.
+      let left=0;
+      for(const item of eased.items||[]){
+        if(item.restored)continue;
+        try{
+          // The coach's session already done: it stays, and the plan does not come back beside it.
+          const coach=(await localWorkout(env.DB,item.to.replace(/^planned:/,'')).catch(()=>null))?.status;
+          if(coach&&coach!=='scheduled'&&coach!=='deleted'){item.restored=true;continue;}
+          if(coach==='scheduled')await deletePlannedEvent(env,{eventId:item.to});
+          if((await localWorkout(env.DB,item.from))?.status==='deleted')await restoreLocalWorkout(env,item.from,item.link?{...item.link,scheduled_date:item.link.scheduled_date||date}:null);
+          item.restored=true;
+        }catch(error){left++;console.error('Plan not restored',item.from,error.message);}
+      }
+      const next={...eased,status:left?'eased':'restored'};
+      if(left){await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);throw new Error(L('Část plánu se nepodařilo vrátit, zkus to za chvíli.','Part of the plan could not be restored, try again in a moment.'));}
+      await updateAthleteState(env.DB,{eased:next});await bumpCacheVersion(env.DB);
+      return Response.json({status:'ok',eased:next},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // The coach's push "… vyměním za lehkou jízdu 60 min?" (coach-push.js):
   // "Vyměnit" puts an easy session in place of the hard one, "Nechat" keeps it.
@@ -2184,7 +2266,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
-  {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
+  {const r=await handleWorkoutTemplatesApi(request,env,url,session,{todayVersion:(id,planned)=>coachTodayVersion(env,ctx,id,planned).catch(()=>null)});if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   // "Don't suggest rides" and Settings → Sports to suggest: one sport off or on (sport-choice.js).
   if(url.pathname==='/app/api/sports'&&request.method==='POST'){const body=await request.json().catch(()=>({}));if(!SPORT_KINDS.includes(body.sport)||typeof body.suggest!=='boolean')return Response.json({message:L('Neznámý sport.', 'Unknown sport.')},{status:400});return Response.json({status:'ok',...await saveSportChoice(env.DB,env.USER_ID,body.sport,body.suggest)},{headers:{'Cache-Control':'no-store'}});}
@@ -3891,6 +3973,48 @@ async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
   const focus=(planned?({quality:systemOf(sport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]:null)||roleFor(prefs,date,sport,plan?.roles)?.focus||null;
   return buildCyclingCoachV2({...inputs,availabilityMinutes:trainingBudget(prefs,date,chip?.minutes||null),...await capabilitiesWithLevel(env.DB,sport).then(c=>({capabilities:c.capabilities,experience:c.level})),sport,goal:focus?{focus}:null});
 }
+// A planned event's workout as the watch and the files get it: its library
+// workout in its place (indoor or outdoor), else the event itself, with the
+// athlete's steps and minutes. Null: no such event.
+async function plannedWorkoutOf(env,ctx,id){
+  const row=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
+  let event=null;try{event=JSON.parse(row?.payload_json||'null');}catch{event=null;}
+  const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
+  const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
+  if(!event&&!library)return null;
+  const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
+  let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+  w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
+  return {workout:w,library,thresholds,kind,event};
+}
+// Today's planned ride, run or swim as the day coach has it (load ramp-back
+// review 2026-11-25, C1). On a day the coach eases the plan (red readiness,
+// signs of illness, a pain, a break, the first days after Nemoc, 48 h after a
+// hard day…) the watch's "Open in Workout", the plan's detail and the .fit and
+// .zwo files get the coach's version, so none of them offers the intervals
+// the phone says to skip. Null: the plan stands (another day, the coach keeps
+// it, or the coach's version could not be made). planned: the plan's workout.
+async function coachTodayVersion(env,ctx,eventId,planned){
+  const id=String(eventId||'').replace(/^planned:/,''),date=localToday();
+  if(!id||!planned)return null;
+  // "Vrátit původní" today: the plan stands everywhere, the watch too.
+  const eased=(await getAthleteState(env.DB).catch(()=>null))?.eased;
+  if(eased?.day===date&&eased.status==='restored'&&(eased.items||[]).some(x=>x.from===id))return null;
+  const event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first().catch(()=>null);
+  if(String(event?.start_time||'').slice(0,10)!==date)return null;
+  // Only a ride, run or swim by the event's own type (a gym or yoga event reads as a ride in plannedEventWorkout).
+  let payload={};try{payload=JSON.parse(event.payload_json||'{}');}catch{}
+  const sport=eventSport(payload);
+  if(!['ride','run','swim'].includes(sport))return null;
+  const u=new URL('https://internal/app/api/workouts/generate');
+  // At most 4 s: a slow coach never holds the watch or the file, the plan goes out instead.
+  const call=handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:planned.environment==='indoor'?'indoor':planned.environment==='outdoor'?'outdoor':'auto'})}),env,ctx,u,{signedIn:true}).catch(()=>null);
+  const response=await Promise.race([call,new Promise(resolve=>setTimeout(()=>resolve(null),4000))]);
+  const g=response?.ok?await response.json().catch(()=>null):null;
+  if(g?.status!=='ok'||!g.workout)return null;
+  return coachEases(planned,g)?{workout:g.workout,from:{name:planned.name||null,kind:kindOfSystem(planned.primary_system||planned.name,'endurance'),minutes:Number(planned.duration_minutes)||null},why:(g.adaptations||[]).filter(Boolean).join(', ')||null}:null;
+}
+
 // The athlete's ratings since a day: library workouts (workout_feedback) and
 // the "Jak to šlo?" of any other session (coach_reflections).
 async function feedbackSince(env,since){
@@ -4023,18 +4147,16 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/planned'&&request.method==='GET'){
       const id=String(url.searchParams.get('id')||'').replace(/^planned:/,'');
       if(!id)return Response.json({status:'error',message:L('Chybí trénink.', 'The workout is missing.')},{status:400});
-      const row=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
-      let event=null;try{event=JSON.parse(row?.payload_json||'null');}catch{event=null;}
-      const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
-      const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
-      if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
-      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor',{poolLength:thresholds?.poolLength}):plannedEventWorkout(event),kind=w.sport==='run'||w.sport==='swim'?w.sport:'ride';
-      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=athleteSteps(structure,kind,w.environment,thresholds);w.duration_minutes=athleteMinutes(w,structure,kind,thresholds);
-      // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
+      const planned=await plannedWorkoutOf(env,ctx,id);
+      if(!planned)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
+      const {library,thresholds,kind}=planned;let w=planned.workout;
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
+      // Today (the watch and the detail send ?date=): the day coach's version when it eases the plan (C1).
+      const coachDay=day===localToday()?await coachTodayVersion(env,ctx,id,{...w,sport:kind}).catch(()=>null):null;
+      if(coachDay)w={...coachDay.workout,name:coachDay.workout.name};
+      // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
       const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null,minutes:w.duration_minutes,intervals:isHardSession(w,kind)})?.text||null:null;
-      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',source:coachDay?'coach':library?'library':'intervals',workout:w,...(coachDay?{coachToday:{from:coachDay.from,why:coachDay.why}}:{}),...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     // The library's day: the coach of the week plan's role and the day's time
     // and the search's filters, as the list and the AI's own workout use them.

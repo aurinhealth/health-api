@@ -319,6 +319,20 @@ export function adjustByChip(session, chip) {
   return out;
 }
 
+// Does the day coach's session (the generator's answer g for today) ease the
+// planned workout (load ramp-back review 2026-11-25, C1)? A hard plan becomes
+// easy, a long one not long, or, for a reason the coach names, under 80 % of
+// its length; never longer, and never hard or long where the plan was not.
+export function coachEases(planned, g) {
+  // An Intervals.icu event has no library system: its name, or its intensity (IF 0.85 and up is hard).
+  const named = kindOfSystem(planned?.primary_system || planned?.name, "endurance"), fi = Number(planned?.intensity_factor) > 3 ? Number(planned.intensity_factor) / 100 : Number(planned?.intensity_factor);
+  const from = !planned?.primary_system && !HARD_KINDS.has(named) && fi >= .85 ? "threshold" : named, to = kindOfSystem(g?.system || g?.workout?.primary_system, "endurance");
+  const before = Number(planned?.duration_minutes) || 0, after = Number(g?.workout?.duration_minutes) || 0, why = (g?.adaptations || []).filter(Boolean);
+  // Never longer or harder than the plan (Sonnet review): no hard or long session where none was planned, no more minutes.
+  if (!after || before && after > before || HARD_KINDS.has(to) && !HARD_KINDS.has(from) || to === "long" && from !== "long") return false;
+  return HARD_KINDS.has(from) && !HARD_KINDS.has(to) || from === "long" && to !== "long" || Boolean(why.length && before && after < before * .8);
+}
+
 // The checks of the week plan for one changed session ("Upravit s AI", a chip
 // or a sentence; C6): a sport resting for a pain gets nothing longer or
 // harder, a second long ride or run of the week is an endurance session, and a
