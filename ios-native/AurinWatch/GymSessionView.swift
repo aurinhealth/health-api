@@ -73,12 +73,6 @@ struct GymSessionView: View {
 
     struct Rated {
         let row: Int
-        /// Its weight, in kg: the next set starts from it.
-        let kg: Double
-        /// The letter it had before the tap, sent back when the tap is taken back.
-        let before: String?
-        /// The next set is of the same exercise: its weight follows the letter.
-        let sameExercise: Bool
         var letter: String?
     }
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -190,7 +184,7 @@ struct GymSessionView: View {
                 if WatchDemo.flag("-rest") {
                     restTotal = 150
                     restEnd = Date().addingTimeInterval(84)
-                    rated = Rated(row: 8, kg: 80, before: nil, sameExercise: true, letter: "M")
+                    rated = Rated(row: 8, letter: "M")
                 }
                 return
             }
@@ -648,7 +642,8 @@ struct GymSessionView: View {
         loaded = lift.fieldKey(in: exercise)
         row = lift.row
         kg = GymText.shown(lift.kg ?? 0, machineLb: gym.machineLb(row: lift.row))
-        reps = Double(lift.reps ?? 8)
+        // Last time's reps before a made-up 8 (watch review 2026-11-25).
+        reps = Double(lift.reps ?? lift.last?.reps ?? 8)
         // What the iPhone already has in its fields for this set, when it came
         // before the watch moved on to it (the iPhone sends it as it moves on).
         if let draft = store.phoneDraft, draft.date == gym.date, draft.row == lift.row {
@@ -693,7 +688,7 @@ struct GymSessionView: View {
         picked = nil
         let done = GymText.kgOf(kg, machineLb: gym.machineLb(row: lift.row))
         store.complete(row: lift.row, kg: done, reps: Int(reps))
-        rated = lift.work ? Rated(row: lift.row, kg: done, before: lift.intensity, sameExercise: next.map { !$0.newExercise } ?? false) : nil
+        rated = lift.work ? Rated(row: lift.row) : nil
         WKInterfaceDevice.current().play(.success)
         guard let next else {
             // The cardio or stretching after the exercises first, then the summary.
@@ -806,10 +801,6 @@ struct GymSessionView: View {
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
         }
-        if let hint = hint {
-            Text(hint.text).watchFont(12, .semibold).foregroundStyle(hint.color)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
         liveLine
         HStack(spacing: 4) {
             Button { shift(-15) } label: { Text("−15 s").frame(height: 30) }
@@ -844,14 +835,33 @@ struct GymSessionView: View {
         }
     }
 
+    /// An exercise in the summary: "3 sets, best 100 kg × 6"; both sides of a
+    /// set count once, and the best set is the heaviest, its own reps with it.
+    static func summaryLine(_ done: [WatchGym.Lift]) -> String {
+        let sets = Set(done.map(\.number)).count
+        let setsText = W.tr("\(sets) \((1...4).contains(sets) ? "série" : "sérií")", "\(sets) \(sets == 1 ? "set" : "sets")")
+        guard let best = done.max(by: { ($0.kg ?? 0, $0.reps ?? 0) < ($1.kg ?? 0, $1.reps ?? 0) }) else { return setsText }
+        let set: String? = if let kg = best.kg, kg > 0 {
+            GymText.weight(kg) + (best.reps.map { " × \($0)" } ?? "")
+        } else {
+            best.reps.map { "\($0) " + repsUnit(nil) }
+        }
+        return setsText + (set.map { W.tr(", nejlépe ", ", best ") + $0 } ?? "")
+    }
+
     /// "Next, set 3 of 4, 60 kg × 8".
     private func nextLine(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, _ gym: WatchGym) -> String {
         let set = label(lift, in: e)
-        let weight = GymText.weight(lift.kg ?? 0, machineLb: e.pounds == true) + " × \(lift.reps ?? 0)"
+        // A bodyweight set or one without a weight: its reps alone, never "0 kg × 0".
+        let weight: String? = if let kg = lift.kg, kg > 0 {
+            GymText.weight(kg, machineLb: e.pounds == true) + (lift.reps.map { " × \($0)" } ?? "")
+        } else {
+            lift.reps.map { "\($0) " + Self.repsUnit(nil) }
+        }
         let sameExercise = gym.exercises.indices.contains(exercise) && gym.exercises[exercise].name == e.name
         var what: String = e.title
         if sameExercise { what = set.prefix(1).lowercased() + String(set.dropFirst()) }
-        return W.tr("Další, ", "Next, ") + what + ", " + weight
+        return W.tr("Další, ", "Next, ") + what + (weight.map { ", " + $0 } ?? "")
     }
 
     /// "Start set 3", or "Start" before a warm-up or a drop set.
@@ -897,36 +907,15 @@ struct GymSessionView: View {
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// One 2.5 kg (5 lb) step: up after Easy, down after Failure.
-    private static var step: Double { W.imperial ? W.kg(5) : 2.5 }
-
-    /// The weight the next set starts from after the letter, in kg.
-    private static func nextKg(_ kg: Double, _ letter: String?) -> Double {
-        switch letter {
-        case "E": return kg + step
-        case "F": return max(0, kg - step)
-        default: return kg
-        }
-    }
-
-    /// Why the next set moved: "+2.5 kg, it was easy".
-    private var hint: (text: String, color: Color)? {
-        guard rated?.sameExercise == true else { return nil }
-        let amount = GymText.weight(Self.step)
-        switch rated?.letter {
-        case "E": return ("+" + amount + W.tr(", šlo to lehce", ", it was easy"), W.green)
-        case "F": return ("−" + amount + W.tr(" po selhání", " after failure"), W.amber)
-        default: return nil
-        }
-    }
-
-    /// A tap rates the set; the same tap again takes it back.
+    /// A tap rates the set, another letter changes it. The weight of the next
+    /// set stays as planned: no step up or down without an approved method
+    /// (watch review 2026-11-25), and the iPhone's sheet keeps the same.
     private func rate(_ letter: String) {
-        guard var current = rated else { return }
-        current.letter = current.letter == letter ? nil : letter
+        guard var current = rated, current.letter != letter else { return }
+        current.letter = letter
         rated = current
         WKInterfaceDevice.current().play(.click)
-        store.rate(row: current.row, letter: current.letter ?? current.before ?? "M", next: Self.nextKg(current.kg, current.letter))
+        store.rate(row: current.row, letter: letter)
     }
 
     /// The rest to Training mode on the iPhone, unless it came from there.
@@ -1532,12 +1521,11 @@ struct GymSummary: View {
                 partRows
                 if let gym = store.gym {
                     Divider()
-                    ForEach(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }, id: \.name) { e in
-                        let done = e.lifts.filter { $0.done && $0.work }
+                    ForEach(Array(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }.enumerated()), id: \.offset) { _, e in
                         HStack {
                             Text(e.title).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text("\(done.count) × \(done.last?.reps ?? 0), " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
+                            Text(Self.summaryLine(e.lifts.filter { $0.done && $0.work }))
                                 .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .watchFont(12)
