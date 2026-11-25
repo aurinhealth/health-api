@@ -653,10 +653,12 @@ export const swimRaceId = (meters, minutes) => `race-swim-${meters}-${minutes}`;
 const swimRaceShare = meters => meters <= 750 ? 97 : meters <= 1500 ? 95 : meters <= 1900 ? 93 : meters <= 3800 ? 90 : 88;
 // A swim race on its own in open water: its share of CSS, about 3 % slower
 // without walls to push off (sighting, waves); without a CSS 2:00 /100 m.
-export const openWaterMinutes = (meters, swimCss = null) => {
+// The race pace in s per 100 m, unrounded (coach-race-week.js shows it).
+export const openWaterPace = (meters, swimCss = null) => {
   const css = Number(swimCss) >= 60 && Number(swimCss) <= 240 ? Number(swimCss) : 120;
-  return Math.round(meters / 100 * css * 100 / swimRaceShare(meters) * 1.03 / 60);
+  return css * 100 / swimRaceShare(meters) * 1.03;
 };
+export const openWaterMinutes = (meters, swimCss = null) => Math.round(meters / 100 * openWaterPace(meters, swimCss) / 60);
 // The run after the ride: about 6 % slower than the same race fresh; after a
 // swim about 3 %; a duathlon's first run held back about 2 % for what follows.
 const TRI_RUN = 1.06, RUN_AFTER = { ride: TRI_RUN, swim: 1.03, none: 1.02 };
