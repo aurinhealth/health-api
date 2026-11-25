@@ -764,7 +764,8 @@ export const COACH_EVAL_SCENARIOS = [
   // "From memory: …" under the answer (AI-5): the answer names the memory items it leaned on
   // word for word (memory.used); the server shows only items it sent, so a made-up one is lost.
   { id: 'S104', title: 'Z paměti: dlouhé jízdy v sobotu', message: 'Kdy mám tento týden udělat dlouhou jízdu?', athlete: { memories: [LONG_SATURDAY, KNEE] },
-    checks: r => [quality('memory.used má sobotní jízdy', (r.memory.used || []).includes(LONG_SATURDAY), JSON.stringify(r.memory.used || [])),
+    // The answer may keep the plan's Friday: only a Saturday it speaks of must name the memory (run 113).
+    checks: r => [quality('mluví-li o sobotě, memory.used má sobotní jízdy', !says(r, /sobot|saturday/i) || (r.memory.used || []).includes(LONG_SATURDAY), JSON.stringify(r.memory.used || [])),
       safety('memory.used jen z paměti, doslova', (r.memory.used || []).every(t => [LONG_SATURDAY, KNEE].includes(t)), JSON.stringify(r.memory.used || []))] },
   { id: 'S105', title: 'Z paměti: dotaz, který paměť nepotřebuje', message: 'Jaké mám FTP?', athlete: { memories: [LONG_SATURDAY] },
     checks: r => [quality('memory.used prázdné', !(r.memory.used || []).length, JSON.stringify(r.memory.used || []))] },
