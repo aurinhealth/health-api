@@ -49,6 +49,13 @@ test("the monthly brake follows the plan and stays under what it nets", async ()
   db.sqlite.prepare("UPDATE subscriptions SET store_environment = 'Sandbox' WHERE user_id = 7").run();
   assert.equal((await aiAllowance(envFor(db, 7))).monthLimitUsd, 1.25);
   assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true }))).monthLimitUsd, 5);
+  // An account listed in AI_PAID_LIMIT_USER_IDS has the owner's limits (Petr 2026-11-25); the other testers keep theirs.
+  db.sqlite.prepare("UPDATE subscriptions SET store_environment = 'Sandbox' WHERE user_id = 12").run();
+  const listed = { AI_PAID_LIMIT_USER_IDS: "3, 7" };
+  assert.equal((await aiAllowance(envFor(db, 7, listed))).monthLimitUsd, 5);
+  assert.equal((await aiPlan(envFor(db, 7, listed))).plan, "paid");
+  assert.equal((await aiAllowance(envFor(db, 12, listed))).monthLimitUsd, 1.25, "another tester keeps the unpaid brake");
+  assert.equal((await aiAllowance(envFor(db, 10, listed))).monthLimitUsd, 1.25);
   assert.equal((await aiAllowance(envFor(db, 8, { USER_IS_OWNER: true, ENVIRONMENT: "staging" }))).monthLimitUsd, null);
   // Unset, every plan has the monthly brake (times the unpaid share), as before.
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "5" }, 0.5, "unpaid"), 2.5);

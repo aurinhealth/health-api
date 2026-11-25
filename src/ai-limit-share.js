@@ -6,6 +6,7 @@
 // The owner's account has a paying account's limits whatever it bought: it
 // tests the live server from TestFlight every day (Petr 2026-11-25).
 import { ensureStoreColumns } from "./app-store.js";
+import { isReviewAccount } from "./app-review.js";
 import { packMessagesLeft } from "./coach-packs.js";
 
 const groupOnce = new WeakMap();
@@ -84,6 +85,16 @@ function purchaseGroup(env) {
 
 const noAccount = env => !env?.DB || !(Number(env.USER_ID) > 0) || env.COACH_EVAL === true;
 
+// AI_PAID_LIMIT_USER_IDS (wrangler.jsonc, ids separated by commas or spaces):
+// accounts that get a paying account's AI limits whatever they bought, like the
+// owner (a tester close to the owner, Petr 2026-11-25). Never the App Review
+// account. Their spending stays in the group of their purchase.
+export function paidLimitAccount(env, id = env?.USER_ID) {
+  if (!(Number(id) > 0) || isReviewAccount(env)) return false;
+  return String(env?.AI_PAID_LIMIT_USER_IDS || "").split(/[,\s]+/).some(listed => listed !== "" && Number(listed) === Number(id));
+}
+const paidLimits = env => noAccount(env) || env.USER_IS_OWNER === true || paidLimitAccount(env);
+
 // The group the request's AI spending is counted in (ai-total.js).
 export function aiGroup(env) {
   if (noAccount(env)) return Promise.resolve("system");
@@ -93,7 +104,7 @@ export function aiGroup(env) {
 }
 
 // Whether the account pays (or has Pro as a gift): the whole limits.
-export const aiPaid = async env => noAccount(env) || env.USER_IS_OWNER === true || ["paid", "gift"].includes(await purchaseGroup(env));
+export const aiPaid = async env => paidLimits(env) || ["paid", "gift"].includes(await purchaseGroup(env));
 
 // The plan the account's monthly AI brake follows (aiMonthlyLimitUsd,
 // ai-usage.js), from its subscription now: "paid" (Pro bought, any plan or
@@ -109,7 +120,7 @@ export const aiPaid = async env => noAccount(env) || env.USER_IS_OWNER === true 
 export const FREE_WEEK_DAYS = 7;
 const planOnce = new WeakMap();
 export function aiPlan(env) {
-  if (noAccount(env) || env.USER_IS_OWNER === true) return Promise.resolve({ plan: "paid" });
+  if (paidLimits(env)) return Promise.resolve({ plan: "paid" });
   if (!planOnce.has(env)) planOnce.set(env, subscriptionRow(env).then(row => {
     const group = groupOfSubscription(row);
     const paidSince = Number(row?.store_signed_at) > 0 ? new Date(Number(row.store_signed_at)).toISOString().slice(0, 10) : null;
