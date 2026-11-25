@@ -240,7 +240,8 @@ extension WatchSnapshot {
     /// against the iPhone's.
     static func numbersText(_ key: String?, off: [String], english: Bool) -> String? {
         let tr = { (czech: String, en: String) in english ? en : czech }
-        if key == "steady" || key == "easy" {
+        // Green with a part off names it too, as on the iPhone (review 2026-11-25).
+        if key == "hard" || key == "steady" || key == "easy" {
             let parts = off.compactMap { key -> String? in
                 switch key {
                 case "sleep": tr("krátký spánek", "short sleep")
