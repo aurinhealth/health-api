@@ -32,6 +32,14 @@ struct AssistantResult: Decodable, Equatable {
     /// The cards of the last answer that "potvrzuju" in this message confirmed
     /// (src/coach-chat-confirm.js), each with its draftId.
     var confirmedInChat: [CoachAction]? = nil
+    /// "From last night's sleep and this morning's HRV" and "From memory: …"
+    /// under the answer (src/coach-steps.js sourceLines); the live answer only.
+    var sources: Sources? = nil
+
+    struct Sources: Decodable, Equatable {
+        let from: String?
+        let memory: String?
+    }
 
     struct Check: Decodable, Equatable {
         let status: String?

@@ -37,6 +37,17 @@ import SwiftUI
         XCTAssertEqual(chat.messages[1].serverId, 91)
     }
 
+    /// The lines under a live answer: what it was made from and from memory, each optional.
+    func testAnswerSourcesDecode() throws {
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano.","actions":[],"sources":{"from":"From last night's sleep and this morning's HRV","memory":"From memory: knee hurts on long runs"}}"#.utf8))
+        XCTAssertEqual(result.sources?.from, "From last night's sleep and this morning's HRV")
+        XCTAssertEqual(result.sources?.memory, "From memory: knee hurts on long runs")
+        let memoryOnly = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano.","sources":{"memory":"From memory: no swims"}}"#.utf8))
+        XCTAssertNil(memoryOnly.sources?.from)
+        XCTAssertEqual(memoryOnly.sources?.memory, "From memory: no swims")
+        XCTAssertNil(try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano."}"#.utf8)).sources)
+    }
+
     /// Copy gives the answer without the Markdown marks.
     func testCopiedAnswerIsPlainText() {
         let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"

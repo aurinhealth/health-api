@@ -345,3 +345,20 @@ struct PlanAroundBlock: View {
 
     static let names = ["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna", "strength": "Posilovna"]
 }
+
+/// Under a coach answer (concept 09, 3): "From last night's sleep and this
+/// morning's HRV", then "From memory: …", small and secondary. The server
+/// writes both from what it read; the model writes no part of them.
+struct CoachSourceLines: View {
+    let sources: AssistantResult.Sources
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if let from = sources.from, !from.isEmpty { Text(verbatim: from) }
+            if let memory = sources.memory, !memory.isEmpty { Text(verbatim: memory) }
+        }
+        .font(Typo.caption).foregroundStyle(Palette.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}

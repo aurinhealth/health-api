@@ -117,6 +117,8 @@ struct CoachView: View {
         var rating: String? = nil
         /// The athlete's message got no answer: why, and Try again under it.
         var failed: String? = nil
+        /// What the answer was made from, small under it (a live answer only).
+        var sources: AssistantResult.Sources? = nil
     }
 
     /// The answer sent to Nahlásit problém.
@@ -520,6 +522,7 @@ struct CoachView: View {
                         $0.steps = CoachStep.shown(result.steps ?? $0.steps, check: result.check?.status)
                         $0.serverId = result.messageId
                         $0.at = Date()
+                        $0.sources = result.sources
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
                         $0.memory = (result.sportChanges?.chips ?? []) + (result.memoryChanges?.chips ?? []) + (result.memoryProposals?.proposals ?? [])
@@ -960,6 +963,9 @@ struct BubbleView: View {
                         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .contextMenu { AnswerActions.menu(text: bubble.text, rating: bubble.rating, rate: rate) }
                 }
+            }
+            if !bubble.mine, let sources = bubble.sources {
+                CoachSourceLines(sources: sources)
             }
             if let failed = bubble.failed {
                 CoachFailedLine(text: failed, retry: retry)
