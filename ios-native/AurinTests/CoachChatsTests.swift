@@ -78,6 +78,24 @@ import SwiftUI
         XCTAssertNil(first.minutes.was)
     }
 
+    /// The race week's cards: fuel rows, and the pacing by km with pace or watts, or by metres for a swim.
+    func testRaceWeekDecode() throws {
+        let json = #"{"race":{"name":"Half marathon","date":"2026-12-20","sport":"run","km":21.1,"daysLeft":6,"estimate":"1 h 48 min"},"text":"6 days to go. The work is done.
+
+A little race pace keeps the legs sharp.","chips":["Fuel and drinks","Pacing plan"],"fuel":{"rows":[{"when":"breakfast","title":"A breakfast you know","text":"about 100 g of carbs, two hours before the start"},{"when":"race","title":"Gel at 30, 60 and 90 min","text":"about 40 g of carbs per hour","perHour":40,"gelsAt":[30,60,90]}],"note":"Estimates, not medical advice. Nothing new on race day.","from":"From your weight, the race length and your estimated time"},"pacing":{"targetSeconds":6480,"averagePace":307,"line":"Start easy, finish strong.","segments":[{"fromKm":1,"toKm":5,"pace":312,"cue":"Start calm, save your legs","paceText":"5:12 /km"},{"fromKm":17,"toKm":21.1,"pace":302,"cue":"Feeling strong? Pick up the pace","paceText":"5:02 /km"}],"from":"From your threshold pace. An estimate, not a promise."}}"#
+        let week = try JSONDecoder().decode(RaceWeek.self, from: Data(json.utf8))
+        XCTAssertEqual(week.race.date, "2026-12-20")
+        XCTAssertEqual(week.chips, ["Fuel and drinks", "Pacing plan"])
+        XCTAssertEqual(week.fuel?.rows.map(\.title), ["A breakfast you know", "Gel at 30, 60 and 90 min"])
+        XCTAssertEqual(week.pacing?.segments.last?.paceText, "5:02 /km")
+        XCTAssertEqual(RaceWeekCard.range(try XCTUnwrap(week.pacing?.segments.first)), L10n.f("km %@ až %@", "1", "5"))
+        let swim = try JSONDecoder().decode(RaceWeek.Pacing.self, from: Data(#"{"line":"Start easy, finish strong.","segments":[{"fromM":0,"toM":100,"pace":95,"paceText":"1:35 /100 m","cue":"Fast start, find clear water"}],"sight":"Lift your eyes every 8 to 10 strokes.","from":"From your CSS."}"#.utf8))
+        XCTAssertEqual(RaceWeekCard.range(swim.segments[0]), L10n.f("%@ až %@ m", "0", "100"))
+        XCTAssertNil(swim.climb)
+        let ride = try JSONDecoder().decode(RaceWeek.Pacing.Segment.self, from: Data(#"{"fromKm":26,"toKm":75,"watts":180,"wattsTo":205,"wattsText":"180–205 W","cue":"Settle into your rhythm"}"#.utf8))
+        XCTAssertEqual(ride.wattsText, "180–205 W")
+    }
+
     /// Copy gives the answer without the Markdown marks.
     func testCopiedAnswerIsPlainText() {
         let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"

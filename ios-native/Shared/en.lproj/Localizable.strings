@@ -5343,3 +5343,5 @@
 "Minulý týden %@" = "Was %@";
 "%@ z %@ hotovo" = "%1$@ of %2$@ done";
 "Naplánovat příští týden" = "Plan next week";
+"km %@ až %@" = "km %1$@ to %2$@";
+"%@ až %@ m" = "%1$@ to %2$@ m";

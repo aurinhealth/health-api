@@ -125,6 +125,11 @@ struct CoachView: View {
         var chips: [String] = []
         /// The coach's Sunday message: the week's card under it (ChatDetail.card).
         var week: WeekSummary? = nil
+        /// The race-week message: its chips (without the tapped ones) open the
+        /// fuel or pacing card here; a bubble with `raceCard` is that card.
+        var raceWeek: RaceWeek? = nil
+        var raceCard: Int? = nil
+        var raceTapped: Set<Int> = []
     }
 
     /// The answer sent to Nahlásit problém.
@@ -155,7 +160,8 @@ struct CoachView: View {
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
                                            openPlan: openPlan,
                                            found: bubble.id == found,
-                                           answer: sending ? nil : { chip in answer(chip, to: bubble.serverId) })
+                                           answer: sending ? nil : { chip in answer(chip, to: bubble.serverId) },
+                                           raceChip: { chip in showRace(chip, from: bubble.id) })
                                     .id(bubble.id)
                             }
                             // Until the first step arrives: the two lights turning and what the coach does;
@@ -937,9 +943,23 @@ struct CoachView: View {
         case "week_summary":
             guard let summary = try? await model.api.weekSummary(start: card.key) else { return }
             editMessage(card.messageId) { $0.week = summary }
+        case "race_week":
+            // Only while it is still this race's week.
+            guard let race = try? await model.api.raceWeek(), race.race.date == card.key else { return }
+            editMessage(card.messageId) { $0.raceWeek = race }
         default:
             break
         }
+    }
+
+    /// A chip under the race-week message: the chip as the athlete's bubble and
+    /// its card under it, on the phone only (no AI, no message counted).
+    private func showRace(_ chip: String, from bubble: UUID) {
+        guard let i = messages.firstIndex(where: { $0.id == bubble }), let race = messages[i].raceWeek,
+              let n = race.chips?.firstIndex(of: chip) else { return }
+        messages[i].raceTapped.insert(n)
+        messages.append(Bubble(mine: true, text: chip))
+        messages.append(Bubble(mine: false, text: "", raceWeek: race, raceCard: n))
     }
 
     /// A coach message by its id on the server.
@@ -970,6 +990,8 @@ struct BubbleView: View {
     var found = false
     /// A tap on a chip of the server's question; nil while an answer is on its way.
     var answer: ((String) -> Void)? = nil
+    /// A tap on a chip under the race-week message.
+    var raceChip: (String) -> Void = { _ in }
     /// The messages are long text: they follow the iPhone's text size past the
     /// screens' cap, the cards around them stay capped (audit 20.b1).
     @Environment(\.fullTypeSize) private var fullTypeSize
@@ -1051,6 +1073,14 @@ struct BubbleView: View {
             }
             if let week = bubble.week {
                 WeekSummaryCard(summary: week)
+            }
+            if let race = bubble.raceWeek {
+                if let card = bubble.raceCard {
+                    RaceWeekCard(week: race, chip: card)
+                } else {
+                    let chips = (race.chips ?? []).enumerated().filter { !bubble.raceTapped.contains($0.offset) }.map { $0.element }
+                    if !chips.isEmpty { CoachChips(chips: chips, tap: raceChip) }
+                }
             }
             // Under everything the answer brought (cards, memory lines), as at Bevel.
             if last, !bubble.mine, !bubble.text.isEmpty {

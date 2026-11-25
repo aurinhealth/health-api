@@ -330,6 +330,13 @@ extension APIClient {
         return r.summary
     }
 
+    /// The race week's cards (fuel, pacing); nil outside the race week.
+    func raceWeek() async throws -> RaceWeek? {
+        struct Response: Decodable { let raceWeek: RaceWeek? }
+        let r: Response = try await get("/app/api/coach/race-week")
+        return r.raceWeek
+    }
+
     /// What the coach remembers about the athlete.
     func coachMemories() async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")

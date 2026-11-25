@@ -500,3 +500,56 @@ struct WeekSummary: Decodable, Equatable {
         let text: String
     }
 }
+
+/// GET /app/api/coach/race-week (src/coach-race-week.js): the main race's last
+/// six days, with the fuel and pacing cards behind the message's chips. From the
+/// rules, no AI; null outside a run, ride or swim race's race week.
+struct RaceWeek: Decodable, Equatable {
+    let race: Race
+    let text: String?
+    /// "Fuel and drinks", then "Pacing plan" when there is one, in the app's language.
+    let chips: [String]?
+    let fuel: Fuel?
+    let pacing: Pacing?
+
+    struct Race: Decodable, Equatable {
+        let name: String?
+        let date: String?
+        let sport: String
+        let km: Double
+        let daysLeft: Int?
+        let estimate: String?
+    }
+
+    struct Fuel: Decodable, Equatable {
+        let rows: [Row]
+        let note: String?
+        let from: String?
+
+        struct Row: Decodable, Equatable {
+            let title: String
+            let text: String?
+        }
+    }
+
+    struct Pacing: Decodable, Equatable {
+        /// "Start easy, finish strong."
+        let line: String?
+        let segments: [Segment]
+        /// A ride: the long climbs; a swim: how often to sight.
+        let climb: String?
+        let sight: String?
+        let from: String?
+
+        /// A run or ride by km with its pace or watts, a swim by metres with its pace.
+        struct Segment: Decodable, Equatable {
+            let fromKm: Double?
+            let toKm: Double?
+            let fromM: Double?
+            let toM: Double?
+            let paceText: String?
+            let wattsText: String?
+            let cue: String?
+        }
+    }
+}

@@ -97,3 +97,87 @@ struct WeekSummaryCard: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// Behind a chip of the race-week message (concept 09, 8): "Fuel and drinks"
+/// (chip 0) or "Pacing plan" (chip 1), shown on the phone, no message sent.
+struct RaceWeekCard: View {
+    let week: RaceWeek
+    /// Which of week.chips the athlete tapped.
+    let chip: Int
+
+    var body: some View {
+        if chip == 0, let fuel = week.fuel {
+            card(from: fuel.from) {
+                ForEach(Array(fuel.rows.enumerated()), id: \.offset) { _, row in
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: row.title).font(Typo.body).foregroundStyle(Palette.ink)
+                        if let text = row.text, !text.isEmpty { Text(verbatim: text).font(Typo.caption).foregroundStyle(Palette.muted) }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
+                }
+                if let note = fuel.note, !note.isEmpty { footnote(note) }
+            }
+        } else if chip == 1, let pacing = week.pacing {
+            card(from: pacing.from) {
+                if let line = pacing.line, !line.isEmpty {
+                    Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.secondary)
+                }
+                ForEach(Array(pacing.segments.enumerated()), id: \.offset) { _, segment in
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: Self.range(segment)).font(Typo.body).foregroundStyle(Palette.ink)
+                            if let cue = segment.cue, !cue.isEmpty { Text(verbatim: cue).font(Typo.caption).foregroundStyle(Palette.muted) }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 8)
+                        if let value = segment.paceText ?? segment.wattsText {
+                            Text(verbatim: value).font(Typo.heading(20)).foregroundStyle(Palette.ink)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                ForEach([pacing.climb, pacing.sight].compactMap { $0 }, id: \.self) { footnote($0) }
+            }
+        }
+    }
+
+    /// The chip's words as the title, the race under it, the rows, then "From …" under the card.
+    private func card<Rows: View>(from: String?, @ViewBuilder rows: () -> Rows) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: week.chips?[safe: chip] ?? "").font(Typo.heading(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    let race = [week.race.name, week.race.date.map { Fmt.weekdayDayMonth($0) }].compactMap { $0 }.joined(separator: ", ")
+                    if !race.isEmpty { Text(verbatim: race).font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                rows()
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardSurface(cornerRadius: 26)
+            if let from, !from.isEmpty {
+                Text(verbatim: from).font(Typo.caption).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func footnote(_ text: String) -> some View {
+        Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 4)
+    }
+
+    /// "km 1 to 5", "km 17 to 21.1" or "0 to 100 m".
+    static func range(_ s: RaceWeek.Pacing.Segment) -> String {
+        let number = { (v: Double) in v.rounded() == v ? String(Int(v)) : Fmt.decimal(v) }
+        if let from = s.fromKm, let to = s.toKm { return L10n.f("km %@ až %@", number(from), number(to)) }
+        if let from = s.fromM, let to = s.toM { return L10n.f("%@ až %@ m", number(from), number(to)) }
+        return ""
+    }
+}
