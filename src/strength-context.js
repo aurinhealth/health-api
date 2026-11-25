@@ -209,6 +209,8 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // Runs load the legs too: the gym spares them before a hard or long run.
   const runs = activities.filter(x => x.running && x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), plannedRuns = events.filter(x => x.running && x.date >= date && n(x.durationHours) > 0 && n(x.durationHours) <= 6).sort((a,b) => String(a.start).localeCompare(String(b.start)));
   context.running = { recentActivities: runs, plannedWorkouts: plannedRuns, nextRun: plannedRuns[0] || null, lastRun: runs[0] || null };
+  // Swims for the day's food (nutrition-intelligence.js classifyDay).
+  context.swimming = { plannedWorkouts: events.filter(x => !x.cycling && !x.running && /\bswim/i.test(`${x.type} ${x.name}`) && x.date >= date && n(x.durationHours) > 0 && n(x.durationHours) <= 6) };
   context.sports={recentActivities:activities.filter(x=>x.date<=date).sort((a,b)=>String(b.start).localeCompare(String(a.start)))};
   // One recovery week for everything: the gym deloads in the week the plan
   // and the ride/run coach treat as a recovery week (src/week-planner.js).

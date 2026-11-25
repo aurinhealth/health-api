@@ -246,7 +246,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       let structure = [];
       try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
       const sport = w?.sport || "ride";
-      if (!w || !["ride", "run"].includes(sport) || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
+      if (!w || !["ride", "run"].includes(sport) || !structure.length) return json({ message: L("Tenhle trénink jako soubor .zwo nejde.", "This workout can't be made into a .zwo file.") }, 404);
       const template = templateFromStructure(sport, w.name, structure);
       return new Response(zwoFile(template), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
     }
@@ -479,7 +479,7 @@ ${endurance ? intervalGraph(template) : ""}
 <p class="note">${endurance ? t(share.sport === "swim" ? "Tempo na 100 m ti aplikace přepočte podle tvého CSS." : share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "swim" ? "The app turns the paces per 100 m into yours from your CSS." : share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
 <a class="button" id="open" href="aurin://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
 <p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
-<a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}
+<a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo", "Download .zwo")}</a>` : ""}
 <p class="note"><a href="mailto:support@aurin.health?subject=${encodeURIComponent("Report workout " + share.id)}">${t("Nahlásit nevhodný obsah", "Report inappropriate content")}</a></p>`;
   // Without the app the scheme does nothing: the page stays, so it shows the way to the app.
   const script = `<script>document.getElementById("open").addEventListener("click",function(){setTimeout(function(){if(!document.hidden){${store ? `location.href=${JSON.stringify(store)}` : `document.getElementById("noapp").hidden=false`}}},1500)})</script>`;
