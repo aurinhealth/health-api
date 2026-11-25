@@ -179,7 +179,7 @@ struct MonthSheet<Content: View>: View {
                 switcher
                 content
                 if month != thisMonth {
-                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withAnimation(.snappy(duration: 0.25)) { month = thisMonth } }
+                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { withMotion(.snappy(duration: 0.25)) { month = thisMonth } }
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -212,7 +212,7 @@ struct MonthSheet<Content: View>: View {
     private func move(_ by: Int) {
         let next = ISODay.addMonths(month, by)
         guard next >= first, next <= last else { return }
-        withAnimation(.snappy(duration: 0.25)) { month = next }
+        withMotion(.snappy(duration: 0.25)) { month = next }
     }
 }
 

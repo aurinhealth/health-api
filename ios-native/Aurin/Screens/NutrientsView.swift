@@ -180,7 +180,7 @@ struct NutrientsContent: View {
     }
 
     private func tab(_ title: String, on: Bool, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.easeOut(duration: 0.2), action) } label: {
+        Button { withMotion(.easeOut(duration: 0.2), action) } label: {
             HStack(spacing: 5) {
                 Text(L10n.tr(title))
                 if !enabled { Image(systemName: "lock").font(.caption2) }

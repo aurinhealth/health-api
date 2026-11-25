@@ -30,7 +30,7 @@ struct LoginView: View {
             VStack(spacing: 0) {
                 HStack(spacing: 10) {
                     if page == Self.signIn {
-                        Button { withAnimation { page = Self.signIn - 1 } } label: {
+                        Button { withMotion { page = Self.signIn - 1 } } label: {
                             Image(systemName: "chevron.left").scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card.opacity(0.7), in: Circle())
                         }
@@ -54,7 +54,7 @@ struct LoginView: View {
                     Spacer()
                     if page < Self.signIn {
                         // Straight to the sign-in, for someone who has an account.
-                        Button("Přeskočit") { withAnimation { page = Self.signIn } }
+                        Button("Přeskočit") { withMotion { page = Self.signIn } }
                             .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     }
                 }
@@ -80,7 +80,7 @@ struct LoginView: View {
                         PrimaryButton(title: L10n.tr(page == 0 ? "Pojďme na to" : "Pokračovat")) {
                             guard Date().timeIntervalSince(turnedAt) > 0.5 else { return }
                             turnedAt = Date()
-                            withAnimation { page += 1 }
+                            withMotion { page += 1 }
                         }
                     }
                     .padding(.horizontal, PageGrid.margin)

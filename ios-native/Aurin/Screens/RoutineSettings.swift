@@ -57,7 +57,7 @@ struct GymRestGroup: View {
         let shown = open == title
         return VStack(spacing: 0) {
             Button {
-                withAnimation(.snappy(duration: 0.25)) { open = shown ? nil : title }
+                withMotion(.snappy(duration: 0.25)) { open = shown ? nil : title }
             } label: {
                 HStack(spacing: 4) {
                     Text(title).font(.body).foregroundStyle(Palette.ink)
@@ -72,7 +72,7 @@ struct GymRestGroup: View {
             }
             .buttonStyle(.plain)
             if shown {
-                RestLengthGrid(value: value) { withAnimation(.snappy(duration: 0.25)) { open = nil } }
+                RestLengthGrid(value: value) { withMotion(.snappy(duration: 0.25)) { open = nil } }
                     .padding(.horizontal, 16).padding(.bottom, 14)
                     .transition(.opacity)
             }

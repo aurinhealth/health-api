@@ -76,7 +76,7 @@ struct WatchSettingsView: View {
     private func move(_ moved: String, before target: String) {
         guard moved != target, moved != "readiness", let from = order.firstIndex(of: moved),
               let to = order.firstIndex(of: target) else { return }
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             order.remove(at: from)
             order.insert(moved, at: max(1, to))
         }

@@ -169,9 +169,9 @@ struct CoachView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) {
-                        if let found { proxy.scrollTo(found, anchor: .center) } else { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                        if let found { proxy.scrollTo(found, anchor: .center) } else { withMotion { proxy.scrollTo("end", anchor: .bottom) } }
                     }
-                    .onChange(of: sending) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                    .onChange(of: sending) { withMotion { proxy.scrollTo("end", anchor: .bottom) } }
                 }
                 bottomArea
             }
@@ -182,7 +182,7 @@ struct CoachView: View {
             // leads, so no coach capsule here (PRAVIDLO-KOUC-VPRAVO-NAHORE).
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { withAnimation(.easeOut(duration: 0.25)) { showChats = true } } label: {
+                    Button { withMotion(.easeOut(duration: 0.25)) { showChats = true } } label: {
                         Image(systemName: "clock.arrow.circlepath").scaledFont(16, weight: .medium)
                     }
                     // Not while an answer streams in: it writes into the current conversation.
@@ -245,7 +245,7 @@ struct CoachView: View {
         }
         .overlay {
             if showChats {
-                ChatsPanel(current: chatId, close: { withAnimation(.easeOut(duration: 0.25)) { showChats = false } },
+                ChatsPanel(current: chatId, close: { withMotion(.easeOut(duration: 0.25)) { showChats = false } },
                            newChat: { newChat() },
                            ghost: ghost,
                            newGhost: {
@@ -862,7 +862,7 @@ struct CoachView: View {
             let bubble = messages[index].id
             found = bubble
             try? await Task.sleep(for: .seconds(2.5))
-            if found == bubble { withAnimation(.easeOut(duration: 0.4)) { found = nil } }
+            if found == bubble { withMotion(.easeOut(duration: 0.4)) { found = nil } }
         } catch {
             self.error = error.localizedDescription
         }

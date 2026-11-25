@@ -272,7 +272,7 @@ struct PlayedCard: View {
             try await model.api.manualWorkout(name: name, date: played.date, sport: "other", type: played.type,
                                               minutes: Int(minutes), completed: true, rpe: rpe, notes: "")
             error = nil
-            withAnimation(.snappy) { done = true }
+            withMotion(.snappy) { done = true }
             await model.reloadToday()
         } catch { self.error = error.localizedDescription }
     }
@@ -289,7 +289,7 @@ struct PlayedCard: View {
             events[weekday].removeAll { $0.type == played.type }
             try await model.api.saveWeekPlan(start: monday, prefs: OtherSports.edited(OtherSports.uncapped(prefs), events: events))
             error = nil
-            withAnimation(.snappy) { done = true }
+            withMotion(.snappy) { done = true }
             await model.reloadToday()
         } catch { self.error = error.localizedDescription }
     }

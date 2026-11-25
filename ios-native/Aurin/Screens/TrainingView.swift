@@ -455,8 +455,8 @@ struct TodaySessions: View {
                 .accessibilityAdjustableAction { direction in
                     let now = current ?? 0
                     switch direction {
-                    case .increment: withAnimation { current = min(sessions.count - 1, now + 1) }
-                    case .decrement: withAnimation { current = max(0, now - 1) }
+                    case .increment: withMotion { current = min(sessions.count - 1, now + 1) }
+                    case .decrement: withMotion { current = max(0, now - 1) }
                     @unknown default: break
                     }
                 }

@@ -89,9 +89,9 @@ struct DrinkPresetRow: View {
                 busy = nil
                 // The tick only when it was saved; the error shows on top.
                 guard saved else { return }
-                withAnimation(.easeOut(duration: 0.2)) { done = p.id }
+                withMotion(.easeOut(duration: 0.2)) { done = p.id }
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
-                withAnimation(.easeOut(duration: 0.2)) { if done == p.id { done = nil } }
+                withMotion(.easeOut(duration: 0.2)) { if done == p.id { done = nil } }
             }
         } label: {
             // Text only, "Water 250 ml", 44 pt tall (redesign J, Plus thread 2026-11-14).

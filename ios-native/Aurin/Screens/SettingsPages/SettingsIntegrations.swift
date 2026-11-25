@@ -250,7 +250,7 @@ struct IntegrationDetailView: View {
         await store.load()
         let status = store.sync ?? SyncStatus(status: nil, updatedAt: nil, results: nil, googleStatus: nil)
         let line = status.pageLine(source: current.id, name: current.name ?? current.id, failed: failed)
-        withAnimation { syncLine = (line.text, line.problem, Date()) }
+        withMotion { syncLine = (line.text, line.problem, Date()) }
     }
 
     /// "Aurin čte": Google's permissions, Apple Health's switches, or what the service gives.

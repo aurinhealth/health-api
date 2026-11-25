@@ -76,7 +76,7 @@ struct ReportProblemView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     Spacer(minLength: 8)
                     Button {
-                        withAnimation { self.preview = nil; screenshot = nil; photo = nil }
+                        withMotion { self.preview = nil; screenshot = nil; photo = nil }
                     } label: {
                         Image(systemName: "trash").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.rust)
                             .frame(width: 36, height: 36)
@@ -299,13 +299,13 @@ struct ReportProblemView: View {
     private func send() async {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard message.count >= 3 else { return }
-        guard !model.demo else { withAnimation { sent = true }; return }
+        guard !model.demo else { withMotion { sent = true }; return }
         sending = true
         defer { sending = false }
         do {
             _ = try await model.api.reportProblem(message: message, screenshot: screenshot, diagnostics: includeDiagnostics ? diagnostics : placeOnly)
             error = nil
-            withAnimation { sent = true }
+            withMotion { sent = true }
         } catch {
             self.error = error.localizedDescription
         }

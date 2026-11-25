@@ -361,7 +361,7 @@ struct WeatherDetails: View {
                     if index > 0 { Divider().overlay(Palette.hairline) }
                     WeatherDayRow(day: day, title: index == 0 ? L10n.tr("Dnes") : WeatherText.weekday(day.date),
                                   low: low, high: high, open: open == day.date) {
-                        withAnimation(reduceMotion ? nil : .snappy) { open = open == day.date ? nil : day.date }
+                        withMotion(reduceMotion ? nil : .snappy) { open = open == day.date ? nil : day.date }
                     }
                 }
             }

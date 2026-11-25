@@ -115,7 +115,7 @@ struct WidgetBoard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Přidat widget")
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) { editing = false }
+                    withMotion(.easeInOut(duration: 0.25)) { editing = false }
                 } label: {
                     Text("Hotovo")
                         .font(.subheadline.weight(.semibold))
@@ -181,7 +181,7 @@ struct WidgetBoard: View {
     }
 
     private func startEditing() {
-        withAnimation(.easeInOut(duration: 0.25)) { editing = true }
+        withMotion(.easeInOut(duration: 0.25)) { editing = true }
     }
 
     private func save(_ list: [PlacedWidget]) {
@@ -193,12 +193,12 @@ struct WidgetBoard: View {
         var list = items.filter { $0.kind != kind }
         list.append(PlacedWidget(kind: kind, size: size))
         gallery = false
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { save(list) }
+        withMotion(.spring(response: 0.35, dampingFraction: 0.8)) { save(list) }
     }
 
     private func remove(_ kind: WidgetKind) {
         if kind == .journal { UserDefaults.standard.set(true, forKey: WidgetLayoutStore.journalRemovedKey) }
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+        withMotion(.spring(response: 0.3, dampingFraction: 0.85)) {
             save(items.filter { $0.kind != kind })
         }
     }
@@ -210,7 +210,7 @@ struct WidgetBoard: View {
         let to = from + offset
         guard to >= 0, to < list.count else { return }
         list.swapAt(from, to)
-        withAnimation { save(list) }
+        withMotion { save(list) }
     }
 
     /// The tabs whose data the widgets need and nobody has loaded yet.
@@ -237,7 +237,7 @@ extension View {
                 Color.clear
                     .contentShape(Rectangle())
                     .onLongPressGesture(minimumDuration: 0.5) {
-                        withAnimation(.easeInOut(duration: 0.25)) { editing.wrappedValue = true }
+                        withMotion(.easeInOut(duration: 0.25)) { editing.wrappedValue = true }
                     }
                     .accessibilityHidden(true)
             }
@@ -348,7 +348,7 @@ struct WidgetDropDelegate: DropDelegate {
               let to = items.firstIndex(where: { $0.kind == target }) else { return }
         var list = items
         list.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { items = list }
+        withMotion(.spring(response: 0.3, dampingFraction: 0.8)) { items = list }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {

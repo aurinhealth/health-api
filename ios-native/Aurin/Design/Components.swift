@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The rounded paper card every widget sits on.
 struct Card<Content: View>: View {
@@ -560,7 +561,7 @@ private struct PageHeader: ViewModifier {
             .environment(\.scrollReport, { (offset: CGFloat) in
                 parent?(offset)
                 let now = offset > 24
-                if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
+                if now != scrolled { withMotion(.easeOut(duration: 0.2)) { scrolled = now } }
             })
         #if compiler(>=6.2)
         if #available(iOS 26, *) {
@@ -722,11 +723,11 @@ private struct TabTopBar<Bar: View>: ViewModifier {
             .environment(\.scrollReport, { (offset: CGFloat) in
                 parent?(offset)
                 let now = offset > 56
-                if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
+                if now != scrolled { withMotion(.easeOut(duration: 0.2)) { scrolled = now } }
             })
             .environment(\.widgetEditingReport, { (editing: Bool) in
                 parentEditing?(editing)
-                if editing != editingWidgets { withAnimation(.easeOut(duration: 0.2)) { editingWidgets = editing } }
+                if editing != editingWidgets { withMotion(.easeOut(duration: 0.2)) { editingWidgets = editing } }
             })
             .overlay(alignment: .top) {
                 if scrolled && !editingWidgets {
@@ -838,6 +839,16 @@ private extension View {
             self
         }
     }
+}
+
+/// `withAnimation` that keeps to Omezit pohyb (Reduce Motion, 617 #35): a
+/// spring, a bounce or a long move becomes a short ease, so nothing swings or
+/// overshoots; without it the animation stays as asked. Every animated state
+/// change in the app goes through it (with motionTransition for what appears).
+@MainActor @discardableResult
+func withMotion<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
+    let calm = UIAccessibility.isReduceMotionEnabled && animation != nil
+    return try withAnimation(calm ? .easeInOut(duration: 0.2) : animation, body)
 }
 
 extension View {

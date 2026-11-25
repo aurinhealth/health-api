@@ -25,10 +25,10 @@ struct AnswerActions: View {
             // Thumbs first, then copy (concept 09, 1/2).
             icon(copied ? "checkmark" : "doc.on.doc", tint: copied ? Palette.green : Palette.muted, label: copied ? "Zkopírováno" : "Kopírovat") {
                 Self.copy(text)
-                withAnimation(.easeOut(duration: 0.15)) { copied = true }
+                withMotion(.easeOut(duration: 0.15)) { copied = true }
                 Task {
                     try? await Task.sleep(for: .seconds(2))
-                    withAnimation(.easeOut(duration: 0.2)) { copied = false }
+                    withMotion(.easeOut(duration: 0.2)) { copied = false }
                 }
             }
             Spacer(minLength: 8)

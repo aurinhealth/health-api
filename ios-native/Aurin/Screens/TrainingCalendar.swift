@@ -50,7 +50,7 @@ struct TrainingCalendarCard: View {
         .onChange(of: jump) { _, jump in
             guard let date = jump?.date, date != day else { return }
             direction = date > day ? 1 : -1
-            withAnimation(.snappy(duration: 0.3)) { selected = date }
+            withMotion(.snappy(duration: 0.3)) { selected = date }
         }
         .task(id: week.first) { await model.loadCalendar(from: week.first ?? today, to: week.last ?? today) }
     }
@@ -62,7 +62,7 @@ struct TrainingCalendarCard: View {
         let next = ISODay.shift(day, 7 * by)
         guard next <= ISODay.shift(today, Self.daysAhead) || by < 0 else { return }
         direction = by
-        withAnimation(.snappy(duration: 0.3)) { selected = next }
+        withMotion(.snappy(duration: 0.3)) { selected = next }
     }
 }
 

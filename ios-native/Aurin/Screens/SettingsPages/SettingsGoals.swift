@@ -165,7 +165,7 @@ struct GoalsSettingsView: View {
     /// The main goal: losing weight starts at a pace (half a kilo, or a quarter
     /// under 50 kg); away from it a losing pace becomes maintain.
     private func pick(_ type: String) {
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             goalType = type
             if type == "lose", !goal.hasPrefix("lose_") {
                 // Back to the saved pace, else half a kilo.

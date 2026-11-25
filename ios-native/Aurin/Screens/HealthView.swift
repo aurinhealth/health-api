@@ -126,7 +126,7 @@ struct HealthContent: View {
             // "Edit overview" as on Food, under the day rather than inside the
             // swiped page, which cut it in half (point 56).
             if page == nil && !editing {
-                WidgetEditButton(title: "Upravit přehled") { withAnimation(.easeInOut(duration: 0.25)) { editing = true } }
+                WidgetEditButton(title: "Upravit přehled") { withMotion(.easeInOut(duration: 0.25)) { editing = true } }
                     .padding(.top, 28)
             }
         }

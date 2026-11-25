@@ -285,7 +285,7 @@ struct PlateLoaderSheet: View {
                 RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Self.metal).frame(width: 14, height: 44)
                 ForEach(Array(plates.enumerated()), id: \.offset) { offset, plate in
                     Button {
-                        withAnimation(.snappy) { _ = plates.remove(at: offset) }
+                        withMotion(.snappy) { _ = plates.remove(at: offset) }
                     } label: {
                         plateShape(plate)
                     }
@@ -328,7 +328,7 @@ struct PlateLoaderSheet: View {
         let count = plates.filter { $0 == plate }.count
         let look = PlateLoad.look(plate)
         return Button {
-            withAnimation(.snappy) { plates = PlateLoad.adding(plate, to: plates) }
+            withMotion(.snappy) { plates = PlateLoad.adding(plate, to: plates) }
         } label: {
             Text(verbatim: PlateLoad.text(plate))
                 .scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(.white)

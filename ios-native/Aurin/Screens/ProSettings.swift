@@ -546,9 +546,9 @@ struct CoachPacksView: View {
             guard let messages = ProStore.packs[chosen], try await store.buyPack(chosen) != nil else { return }
             if !model.demo { packs = try? await model.api.coachPacks() }
             error = nil
-            withAnimation { added = messages }
+            withMotion { added = messages }
             try? await Task.sleep(for: .seconds(3))
-            withAnimation { added = nil }
+            withMotion { added = nil }
         } catch {
             self.error = error.localizedDescription
         }

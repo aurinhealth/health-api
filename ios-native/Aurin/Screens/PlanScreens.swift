@@ -87,7 +87,7 @@ struct PlanPreviewContent: View {
                         }
                         if !allWeeks && template.weeks.count > 4 {
                             Rectangle().fill(Palette.hairline).frame(height: 1)
-                            Button { withAnimation(.snappy) { allWeeks = true } } label: {
+                            Button { withMotion(.snappy) { allWeeks = true } } label: {
                                 Text(L10n.plural("+ další %lld týdnů", template.weeks.count - 4))
                                     .font(Typo.caption).foregroundStyle(Palette.muted)
                                     .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -718,7 +718,7 @@ struct ActivePlanContent: View {
                 if weeks.count < active.template.weeks.count {
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                     let rest = active.template.weeks.count - weeks.count
-                    Button { withAnimation(.snappy) { allWeeks = true } } label: {
+                    Button { withMotion(.snappy) { allWeeks = true } } label: {
                         Text(L10n.plural("+ další %lld týdnů", rest))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)

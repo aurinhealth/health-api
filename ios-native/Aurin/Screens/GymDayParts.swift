@@ -172,7 +172,7 @@ struct GymPartsCard: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Části tréninku")
                 Spacer()
-                Button(changing ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit")) { withAnimation(.snappy) { changing.toggle() } }
+                Button(changing ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit")) { withMotion(.snappy) { changing.toggle() } }
                     .font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
                     .buttonStyle(.plain)
             }
@@ -282,12 +282,12 @@ struct GymPartsCard: View {
         }
         if part == .exercises { onExercises(); return }
         if part.isCardio { editing = part; return }
-        withAnimation(.snappy) { if unfolded.contains(part) { unfolded.remove(part) } else { unfolded.insert(part) } }
+        withMotion(.snappy) { if unfolded.contains(part) { unfolded.remove(part) } else { unfolded.insert(part) } }
     }
 
     private func arrow(_ part: GymDayPart, up: Bool) -> some View {
         Button {
-            withAnimation(.snappy) { update { $0.step(part, by: up ? -1 : 1, day: day) } }
+            withMotion(.snappy) { update { $0.step(part, by: up ? -1 : 1, day: day) } }
         } label: {
             Image(systemName: up ? "chevron.up" : "chevron.down").scaledFont(12, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30)

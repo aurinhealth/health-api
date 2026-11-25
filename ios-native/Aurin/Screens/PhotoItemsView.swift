@@ -158,7 +158,7 @@ struct PhotoItemsView: View {
     }
 
     private func remove(_ id: UUID) {
-        withAnimation(.snappy) { items.removeAll { $0.id == id } }
+        withMotion(.snappy) { items.removeAll { $0.id == id } }
     }
 
     /// The macros some food on the plate has no value for, each named once.

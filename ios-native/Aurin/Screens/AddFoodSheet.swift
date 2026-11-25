@@ -695,7 +695,7 @@ struct FoodAmountView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Button { withAnimation(.easeOut(duration: 0.2)) { edit.toggle() } } label: {
+                Button { withMotion(.easeOut(duration: 0.2)) { edit.toggle() } } label: {
                     HStack {
                         Label("Upravit hodnoty a značku", systemImage: "slider.horizontal.3").font(Typo.bodyStrong)
                         Spacer()
@@ -761,7 +761,7 @@ struct FoodAmountView: View {
         .navBarVisibility(.hidden)
         .onAppear(perform: fill)
         .sheet(isPresented: $reporting) {
-            FoodReportSheet(product: product) { withAnimation { reportedNow = true } }
+            FoodReportSheet(product: product) { withMotion { reportedNow = true } }
                 .presentationDetents([.medium, .large])
                 .glassSheetBackground()
         }

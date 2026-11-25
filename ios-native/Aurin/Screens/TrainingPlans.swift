@@ -790,7 +790,7 @@ struct TrainingPlansSheet: View {
     private func sportTile(_ item: (id: String, symbol: String, color: Color)) -> some View {
         let on = sport == item.id
         let title = item.id == "triathlon" ? "Multi" : L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna"][item.id] ?? "")
-        return Button { withAnimation(.snappy) { sport = item.id } } label: {
+        return Button { withMotion(.snappy) { sport = item.id } } label: {
             VStack(spacing: 6) {
                 Image(systemName: item.symbol).scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(on ? Palette.onAccent : item.color)

@@ -532,7 +532,7 @@ struct SetupFlowView: View {
     private var yearRow: some View {
         Button {
             if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) }
-            withAnimation(.easeInOut(duration: 0.25)) { yearWheel.toggle() }
+            withMotion(.easeInOut(duration: 0.25)) { yearWheel.toggle() }
         } label: {
             HStack(spacing: 6) {
                 Text("Narození").font(.body).foregroundStyle(Palette.ink)
@@ -621,14 +621,14 @@ struct SetupFlowView: View {
 
     /// The next page, never past the last one.
     private func step() {
-        withAnimation { index = min(index + 1, pages.count - 1) }
+        withMotion { index = min(index + 1, pages.count - 1) }
     }
 
     /// "Zpět": one page back, with the same pause as forward.
     private func turn(by delta: Int) {
         guard !turning else { return }
         turning = true
-        withAnimation { index = max(0, index + delta) }
+        withMotion { index = max(0, index + delta) }
         settle()
     }
 
@@ -884,7 +884,7 @@ struct SetupFlowView: View {
         SetupProOffer.pending = true
         // A field typed by hand still has the keyboard: it goes before the animation.
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        withAnimation(.easeInOut(duration: 0.3)) { building = true }
+        withMotion(.easeInOut(duration: 0.3)) { building = true }
     }
 
     /// What "O tobě" said, as it flies into Today: sex, year, height, weight.

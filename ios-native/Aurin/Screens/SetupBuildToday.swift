@@ -182,11 +182,11 @@ struct SetupBuildToday: View {
         Task { await SetupProOffer.prefetch(model) }
         shown = true
         await wait(1200)
-        withAnimation(.easeInOut(duration: 0.35)) { step = .targets }
+        withMotion(.easeInOut(duration: 0.35)) { step = .targets }
         await wait(450)
         poured = true
         await wait(1300)
-        withAnimation(.easeInOut(duration: 0.35)) { step = .building }
+        withMotion(.easeInOut(duration: 0.35)) { step = .building }
         for _ in 0..<8 where model.today == nil { try? await Task.sleep(for: .milliseconds(500)) }
         await wait(500)
         // The card goes down to its place on Today, then Today.

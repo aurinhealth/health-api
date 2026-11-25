@@ -296,7 +296,7 @@ struct WeekPlanView: View {
 
     @ViewBuilder private var pillPair: some View {
         pill(showNext ? L10n.tr("Skrýt příští týden") : L10n.tr("Ukázat příští týden")) {
-            withAnimation(.snappy) { showNext.toggle() }
+            withMotion(.snappy) { showNext.toggle() }
         }
         pill(L10n.tr("Nastavení plánu")) { settings = true }
     }
@@ -374,7 +374,7 @@ struct WeekPlanView: View {
         let open = unfolded.contains(week.monday)
         return VStack(spacing: 8) {
             Button {
-                withAnimation(.snappy) {
+                withMotion(.snappy) {
                     var set = unfolded
                     if open { set.remove(week.monday) } else { set.insert(week.monday) }
                     openWeeks = set
@@ -402,7 +402,7 @@ struct WeekPlanView: View {
             if open {
                 if week.monday == monday && week.hasEarlier {
                     pill(showEarlier ? L10n.tr("Skrýt dřívější dny") : L10n.tr("Ukázat dřívější dny")) {
-                        withAnimation(.snappy) { showEarlier.toggle() }
+                        withMotion(.snappy) { showEarlier.toggle() }
                     }
                 }
                 dayRows(week, earlier: week.monday != monday || showEarlier)
@@ -456,7 +456,7 @@ struct WeekPlanView: View {
             let open = opened == a.id
             VStack(spacing: 8) {
                 Button {
-                    withAnimation(.snappy) { opened = open ? nil : a.id }
+                    withMotion(.snappy) { opened = open ? nil : a.id }
                 } label: { WeekPlanRow(activity: a, open: open) }
                 .buttonStyle(.plain)
                 if open {
@@ -492,11 +492,11 @@ struct WeekPlanView: View {
             }
             .padding(14)
             .cardSurface(cornerRadius: 20)
-            pill(L10n.tr("Zrušit")) { withAnimation(.snappy) { adding = nil; addSport = nil } }
+            pill(L10n.tr("Zrušit")) { withMotion(.snappy) { adding = nil; addSport = nil } }
                 .disabled(working == "add")
         } else {
             pill(L10n.tr("Přidat trénink")) {
-                withAnimation(.snappy) { adding = week.monday; addSport = nil; opened = nil }
+                withMotion(.snappy) { adding = week.monday; addSport = nil; opened = nil }
             }
             .disabled(model.demo)
         }
@@ -533,13 +533,13 @@ struct WeekPlanView: View {
 
     private func jump(_ date: String, _ proxy: ScrollViewProxy) {
         let week = date >= nextMonday ? nextMonday : monday
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             openWeeks = unfolded.union([week])
             if date < today { showEarlier = true }
         }
         Task {
             try? await Task.sleep(for: .milliseconds(120))
-            withAnimation(.snappy) { proxy.scrollTo(date, anchor: .top) }
+            withMotion(.snappy) { proxy.scrollTo(date, anchor: .top) }
         }
     }
 
@@ -600,12 +600,12 @@ struct WeekPlanView: View {
     /// Gone from the list at once; it leaves the plan when the toast goes without Undo.
     private func remove(_ a: CalendarActivity) {
         guard !model.demo else { return }
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             hidden.insert(a.id)
             opened = nil
         }
         show(PlanToast(title: L10n.tr("Trénink odebrán"), note: nil, cancelled: true, undo: {
-            withAnimation(.snappy) { _ = hidden.remove(a.id) }
+            withMotion(.snappy) { _ = hidden.remove(a.id) }
         }, commit: {
             do {
                 if a.sport == "strength" {
@@ -628,7 +628,7 @@ struct WeekPlanView: View {
         do {
             try await WeekPlanGenerator.add(model, sport: sport, date: date, available: available)
             error = nil
-            withAnimation(.snappy) { adding = nil; addSport = nil }
+            withMotion(.snappy) { adding = nil; addSport = nil }
             await reload()
         } catch {
             self.error = error.localizedDescription
@@ -637,10 +637,10 @@ struct WeekPlanView: View {
 
     private func runGenerate() async {
         guard !model.demo else { return }
-        withAnimation(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil; affects = nil }
+        withMotion(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil; affects = nil }
         let result = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, from: generateFrom, days: generateDays, calendar: model.calendar)
         await reload()
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             generating = false
             generateFailed = !result.ok
             affects = result.ok ? result.affects : nil
@@ -679,7 +679,7 @@ struct WeekPlanView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("week-plan.recalculate")
-                Button { withAnimation(.snappy) { self.affects = nil } } label: {
+                Button { withMotion(.snappy) { self.affects = nil } } label: {
                     Text(verbatim: L10n.tr("Nechat, jak je")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(minHeight: 44)
                         .background(Palette.track, in: Capsule())
@@ -704,7 +704,7 @@ struct WeekPlanView: View {
     /// One toast at a time: a new one settles the one before (its remove goes through).
     private func show(_ next: PlanToast) {
         if let toast { settle(toast, undo: false) }
-        withAnimation(.snappy) { toast = next }
+        withMotion(.snappy) { toast = next }
         Task {
             try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == next.id { settle(next, undo: false) }
@@ -712,7 +712,7 @@ struct WeekPlanView: View {
     }
 
     private func settle(_ t: PlanToast, undo: Bool) {
-        if toast?.id == t.id { withAnimation(.snappy) { toast = nil } }
+        if toast?.id == t.id { withMotion(.snappy) { toast = nil } }
         if let action = t.settle(undo: undo) { Task { await action() } }
     }
 

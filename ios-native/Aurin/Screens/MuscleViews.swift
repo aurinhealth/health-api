@@ -337,7 +337,7 @@ struct MusclesView: View {
     /// 44 pt to tap, the chosen one filled in ink (concept .mfil).
     private func pill(_ state: Freshness, count: Int) -> some View {
         let on = filter == state
-        return Button { withAnimation(.snappy(duration: 0.2)) { filter = on ? nil : state } } label: {
+        return Button { withMotion(.snappy(duration: 0.2)) { filter = on ? nil : state } } label: {
             HStack(spacing: 6) {
                 Circle().fill(state.color).frame(width: 8, height: 8)
                 Text(verbatim: state.title).font(Typo.caption).lineLimit(1)
@@ -369,7 +369,7 @@ struct MuscleFigureSpinner: View {
     var body: some View {
         GeometryReader { geo in
             Muscle3DView(figure: figure, colors: data.figureColors, selected: selected, focus: focus) { id, at in
-                withAnimation(.snappy(duration: 0.25)) {
+                withMotion(.snappy(duration: 0.25)) {
                     selected = id
                     point = at
                 }
@@ -404,7 +404,7 @@ struct MuscleFigureSpinner: View {
 
     /// The camera moves in on the muscle, then its detail opens; back on Svaly the whole figure shows again.
     private func open(_ id: String) {
-        withAnimation(.easeOut(duration: 0.15)) { focus = id }
+        withMotion(.easeOut(duration: 0.15)) { focus = id }
         Task {
             try? await Task.sleep(for: .milliseconds(450))
             model.push(.muscle(id))

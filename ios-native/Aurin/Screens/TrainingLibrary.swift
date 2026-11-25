@@ -101,7 +101,7 @@ struct LibraryHome: View {
             HStack {
                 SectionLabel(text: "Sporty")
                 Spacer()
-                Button { withAnimation(.snappy) { editing.toggle() } } label: {
+                Button { withMotion(.snappy) { editing.toggle() } } label: {
                     Text(verbatim: L10n.tr(editing ? "Hotovo" : "Upravit"))
                         .font(Typo.body.weight(editing ? .semibold : .regular)).foregroundStyle(Palette.ink)
                         .frame(minHeight: 44).contentShape(Rectangle())
@@ -1223,7 +1223,7 @@ struct WorkoutLibrarySection: View {
             guard !Task.isCancelled, !touched, run == proposeRun else { break }
             guard let fresh = try? await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: 0, background: true),
                   !touched, run == proposeRun else { continue }
-            withAnimation(.snappy) { proposal = fresh }
+            withMotion(.snappy) { proposal = fresh }
         }
         if run == proposeRun, proposal?.aiPending == true { proposal?.aiPending = nil }
     }

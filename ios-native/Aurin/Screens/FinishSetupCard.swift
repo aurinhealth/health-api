@@ -239,7 +239,7 @@ struct FinishSetupCard: View {
     }
 
     private func hide() {
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy) { FinishSetup.close() }
+        withMotion(reduceMotion ? .easeInOut(duration: 0.2) : .snappy) { FinishSetup.close() }
     }
 
     private func row(_ title: String, _ note: String, done: Bool, translated: Bool = false, opens: Bool = true) -> some View {

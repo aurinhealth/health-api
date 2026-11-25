@@ -301,7 +301,7 @@ struct PaywallView: View {
         guard source != nil, !arrived else { return }
         // Until Continue has its place (at most about half a second).
         for _ in 0..<30 where continueFrame == .zero { try? await Task.sleep(for: .milliseconds(16)) }
-        withAnimation(.smooth(duration: 0.7)) { arrived = true }
+        withMotion(.smooth(duration: 0.7)) { arrived = true }
         try? await Task.sleep(for: .milliseconds(720))
         arrivedSettled = true
         started = Date()
@@ -410,7 +410,7 @@ struct PaywallView: View {
     }
 
     private func go(_ next: Int) {
-        if reduceMotion { step = next } else { withAnimation(.easeInOut(duration: 0.45)) { step = next } }
+        if reduceMotion { step = next } else { withMotion(.easeInOut(duration: 0.45)) { step = next } }
         started = Date()
     }
 

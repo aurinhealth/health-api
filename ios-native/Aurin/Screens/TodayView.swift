@@ -353,7 +353,7 @@ private struct DaySlide: ViewModifier {
             .onChange(of: date) { old, new in
                 shift = new > old ? 40 : -40
                 // After this frame, so the move starts from the side.
-                Task { @MainActor in withAnimation(.snappy(duration: 0.3)) { shift = 0 } }
+                Task { @MainActor in withMotion(.snappy(duration: 0.3)) { shift = 0 } }
             }
     }
 }
@@ -520,7 +520,7 @@ struct WeekStrip: View {
         .onAppear { centered = Self.monday(shown) }
         .onChange(of: shown) { _, day in
             let week = Self.monday(day)
-            if week != centered { withAnimation(.easeOut(duration: 0.25)) { centered = week } }
+            if week != centered { withMotion(.easeOut(duration: 0.25)) { centered = week } }
         }
         // The readiness dots of the months in sight, once each (a month a call).
         .task(id: months) {
@@ -1257,14 +1257,14 @@ struct ConnectionProblemCard: View {
         }
         .onChange(of: model.todayRevision) { checked = nil }
         .onReceive(NotificationCenter.default.publisher(for: ConnectionProblems.name)) { note in
-            if let found = note.object as? [ConnectionsResponse.Provider] { withAnimation { checked = found } }
+            if let found = note.object as? [ConnectionsResponse.Provider] { withMotion { checked = found } }
         }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await load() } }
     }
 
     private func load() async {
         guard !model.demo, let response = try? await model.api.connections() else { return }
-        withAnimation { checked = response.providers.filter(\.needsAttention) }
+        withMotion { checked = response.providers.filter(\.needsAttention) }
     }
 
     /// The service's connect screen (ServiceConnectSheet), the same as in Zdroje dat.

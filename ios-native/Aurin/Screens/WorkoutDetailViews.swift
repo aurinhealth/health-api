@@ -1805,7 +1805,7 @@ struct ManualWorkoutSheet: View {
     @ViewBuilder private var startRow: some View {
         Button {
             if !startMoved { start = startAt }
-            withAnimation(.snappy) { pickingStart.toggle() }
+            withMotion(.snappy) { pickingStart.toggle() }
         } label: {
             HStack {
                 Text("Začátek").foregroundStyle(Palette.ink)

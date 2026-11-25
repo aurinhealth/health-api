@@ -145,7 +145,7 @@ struct RootView: View {
                                 }
                                 guard tab == model.tab else { return }
                                 if !compact { barHeld = false }
-                                if compact != compactBar, !barHeld { withAnimation(.snappy) { compactBar = compact } }
+                                if compact != compactBar, !barHeld { withMotion(.snappy) { compactBar = compact } }
                             })
                             .environment(\.scrollDragReport, {
                                 if tab == model.tab { barHeld = false }
@@ -280,7 +280,7 @@ struct RootView: View {
                             TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
                                    onExpand: {
                                        barHeld = true
-                                       withAnimation(.snappy) { compactBar = false }
+                                       withMotion(.snappy) { compactBar = false }
                                    }, addOpen: showAdd, onAdd: { showAdd ? closeAdd() : openAdd() })
                                 .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                                 .padding(.horizontal, 20)
@@ -475,8 +475,8 @@ struct RootView: View {
         closeSheets { Task { await open(id) } }
     }
 
-    private func openAdd() { withAnimation(.snappy) { showAdd = true } }
-    private func closeAdd() { withAnimation(.snappy) { showAdd = false } }
+    private func openAdd() { withMotion(.snappy) { showAdd = true } }
+    private func closeAdd() { withMotion(.snappy) { showAdd = false } }
 
     /// The sheet on top of the tabs, for ScreenTrail; nil on the tab itself.
     private var openSheet: String? {
@@ -546,7 +546,7 @@ struct RootView: View {
         // A tab kept from before shows where it was scrolled.
         let compact = model.tab != tab && scrolledTabs.contains(tab) && (model.paths[tab] ?? []).isEmpty
         if model.tab != tab { barHeld = false }
-        withAnimation(.snappy) { compactBar = compact }
+        withMotion(.snappy) { compactBar = compact }
         if model.tab == tab {
             model.paths[tab] = []
         } else {

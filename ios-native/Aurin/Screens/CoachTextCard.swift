@@ -131,7 +131,7 @@ struct CoachTextCard: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 12) {
             if text != nil || advice != nil {
-                Button { withAnimation(.snappy) { folded.toggle() } } label: {
+                Button { withMotion(.snappy) { folded.toggle() } } label: {
                     // 44 pt to tap, laid out as the header's own height.
                     header(chevron: true).frame(minHeight: 44).contentShape(Rectangle()).padding(.vertical, -11)
                 }
@@ -142,7 +142,7 @@ struct CoachTextCard: View {
                 .accessibilityHint(Text(verbatim: L10n.tr(folded ? "Rozbalit" : "Sbalit")))
 
                 if folded {
-                    Button { withAnimation(.snappy) { folded = false } } label: {
+                    Button { withMotion(.snappy) { folded = false } } label: {
                         sentence
                             .font(Typo.coach(17))
                             .foregroundStyle(Palette.ink)
@@ -208,7 +208,7 @@ struct CoachTextCard: View {
             if !basis.isEmpty, screen == "today" {
                 Divider().overlay(Palette.hairline)
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) { showWhy.toggle() }
+                    withMotion(.easeInOut(duration: 0.2)) { showWhy.toggle() }
                 } label: {
                     // No magnifier: a decoration (617 #42).
                     HStack(spacing: 6) {

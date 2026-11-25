@@ -160,7 +160,7 @@ struct WorkoutRatingCard: View {
                     .background(Palette.background.opacity(0.5), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             if !exercises.isEmpty {
-                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                Button { withMotion(.snappy) { open.toggle() } } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "hand.thumbsup").scaledFont(15, cap: .denseCap)
                         Text("Ohodnotit cviky").font(.subheadline.weight(.medium))

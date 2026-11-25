@@ -22,7 +22,7 @@ struct MealDetailView: View {
                 if let meal {
                     MealDetailContent(meal: meal, back: { dismiss() }, add: { adding = true },
                                       selection: selecting ? $selected : nil,
-                                      startSelecting: { id in selected = [id]; withAnimation(.easeOut(duration: 0.2)) { selecting = true } })
+                                      startSelecting: { id in selected = [id]; withMotion(.easeOut(duration: 0.2)) { selecting = true } })
                         .padding(.bottom, selecting ? 190 : 100)
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
@@ -80,7 +80,7 @@ struct MealDetailView: View {
             await model.refreshFood()
             await model.refresh()
         }
-        withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+        withMotion(.easeOut(duration: 0.2)) { selecting = false }
         selected = []
         return nil
     }
@@ -112,7 +112,7 @@ struct SelectionBar: ViewModifier {
                                      selected = all ? [] : Set(allIds)
                                  },
                                  leading: ChromeAction(systemImage: "xmark", label: "Zrušit", text: "Zrušit") {
-                                     withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+                                     withMotion(.easeOut(duration: 0.2)) { selecting = false }
                                      selected = []
                                  },
                                  pinTitle: true, back)
@@ -120,7 +120,7 @@ struct SelectionBar: ViewModifier {
             content.floatingBack(title: title,
                                  trailing: onAdd == nil ? nil : ChromeAction(systemImage: "plus", label: add ?? "Přidat") { onAdd?() },
                                  extra: allIds.isEmpty ? nil : ChromeAction(systemImage: "checkmark.circle", label: "Vybrat", text: "Vybrat") {
-                                     withAnimation(.easeOut(duration: 0.2)) { selecting = true }
+                                     withMotion(.easeOut(duration: 0.2)) { selecting = true }
                                  }, coach: CoachEntry(view: "food"), back)
         }
     }

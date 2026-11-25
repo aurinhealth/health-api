@@ -328,7 +328,7 @@ struct AurinToggleStyle: ToggleStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) { configuration.isOn.toggle() }
+            withMotion(.spring(response: 0.28, dampingFraction: 0.78)) { configuration.isOn.toggle() }
         } label: {
             HStack(spacing: 12) {
                 configuration.label

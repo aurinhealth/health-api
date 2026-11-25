@@ -290,7 +290,7 @@ struct GymSessionView: View {
                     .accessibilityHint(L10n.tr("Proč tenhle trénink"))
                     .padding(.top, 14)
                 }
-                GymPartsCard(day: day, date: date, total: planEntry.minutes) { withAnimation(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
+                GymPartsCard(day: day, date: date, total: planEntry.minutes) { withMotion(.snappy) { proxy.scrollTo(Self.exercisesID, anchor: .top) } }
                     .padding(.top, 22)
                 HStack(alignment: .firstTextBaseline) {
                     SectionLabel(text: "Cviky")
@@ -829,7 +829,7 @@ struct ExerciseCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
-                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                Button { withMotion(.snappy) { open.toggle() } } label: {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(exercise.name).font(Typo.bodyStrong.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(2)
                         Text(verbatim: started ? L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount) : Self.summary(exercise))
@@ -842,7 +842,7 @@ struct ExerciseCard: View {
                 .accessibilityHint(L10n.tr(open ? "Sbalí cvik" : "Otevře cvik"))
                 round("arrow.up.arrow.down", label: "Nahradit cvik", action: onAlternatives)
                 round("info", label: "Technika", action: onTechnique)
-                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                Button { withMotion(.snappy) { open.toggle() } } label: {
                     Image(systemName: open ? "chevron.up" : "chevron.down").font(.caption2.weight(.bold)).foregroundStyle(Palette.faint)
                         .frame(width: 28, height: 44).contentShape(Rectangle())
                 }

@@ -70,7 +70,7 @@ struct EditExercisesSheet: View {
                     Section {
                         HStack(spacing: 10) {
                             footerButton("Přidat cvik") { adding = true }.disabled(catalog.isEmpty)
-                            footerButton("Udělat supersérii") { withAnimation(.snappy) { picking = [] } }
+                            footerButton("Udělat supersérii") { withMotion(.snappy) { picking = [] } }
                                 // Also to take a superset apart (Unpair is there).
                                 .disabled(leftIndices.filter(pickable).count < 2
                                           && !leftIndices.contains { ExerciseOrder.letter(day.exercises[$0].superset) != nil })
@@ -89,7 +89,7 @@ struct EditExercisesSheet: View {
                 if let picking {
                     PrimaryButton(title: picking.count < 2 ? L10n.tr("Vyber dva nebo víc") : L10n.f("Spojit %@ do supersérie", String(picking.count))) {
                         day.makeSuperset(Array(picking), anchor: currentName.flatMap { name in day.exercises.first { $0.name == name }?.id })
-                        withAnimation(.snappy) { self.picking = nil }
+                        withMotion(.snappy) { self.picking = nil }
                     }
                     .disabled(picking.count < 2)
                     .opacity(picking.count < 2 ? 0.5 : 1)
@@ -99,7 +99,7 @@ struct EditExercisesSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if picking != nil {
-                    ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { withAnimation(.snappy) { picking = nil } } }
+                    ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { withMotion(.snappy) { picking = nil } } }
                 } else {
                     if day.values != original.values {
                         ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }

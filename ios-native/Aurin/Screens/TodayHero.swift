@@ -127,7 +127,7 @@ struct TodayMorningQuestion: View {
                 Text("Jak se dnes cítíš?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .accessibilityAddTraits(.isHeader)
                 Spacer(minLength: 8)
-                Button { withAnimation(.snappy) { closedOn = date } } label: {
+                Button { withMotion(.snappy) { closedOn = date } } label: {
                     Image(systemName: "xmark").scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
