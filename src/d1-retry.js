@@ -12,7 +12,11 @@ import { beginWait, noteD1, viaBatcher } from "./request-timing.js";
 
 const TRANSIENT = /D1 DB is overloaded|Requests queued for too long|generating too much load on D1|exceeded its CPU time limit and was reset|Network connection lost|storage caused object to be reset|transient issue|Cannot resolve D1 DB|internal error; reference/i;
 const NEVER_RAN = /D1 DB is overloaded|Requests queued for too long|generating too much load on D1/i;
-export const D1_RETRY_DELAYS_MS = [150, 500];
+// The third try waits longer: under a burst (load test 2026-11-25, 120 app opens on two
+// databases) a few reads were still refused after 650 ms. Each wait is spread over
+// half to one and a half of its length, so requests refused together don't all come back together.
+export const D1_RETRY_DELAYS_MS = [150, 500, 1500];
+const spread = ms => Math.round(ms * (0.5 + Math.random()));
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 const messageOf = error => String(error?.message ?? error ?? "");
@@ -46,7 +50,7 @@ export async function withD1Retry(run, { read = true, delays = D1_RETRY_DELAYS_M
     catch (error) {
       if (attempt >= delays.length || !transientD1Error(error, { read })) throw error;
       console.warn(JSON.stringify({ d1_retry: attempt + 1, read, why: messageOf(error).slice(0, 160) }));
-      await sleep(delays[attempt]);
+      await sleep(spread(delays[attempt]));
     }
   }
 }

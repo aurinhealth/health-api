@@ -18,6 +18,10 @@ on:
         description: "Rounds of each burst, 1–5"
         required: false
         default: "3"
+      probe:
+        description: "invocations = only count the USER_JOBS calls one request may make, no accounts"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -45,6 +49,7 @@ jobs:
           LOAD_TEST_ACCOUNTS: ${{ inputs.accounts }}
           LOAD_TEST_BURSTS: ${{ inputs.bursts }}
           LOAD_TEST_ROUNDS: ${{ inputs.rounds }}
+          LOAD_TEST_PROBE: ${{ inputs.probe }}
         run: node scripts/load-test.mjs
 
       - name: Keep the measurements

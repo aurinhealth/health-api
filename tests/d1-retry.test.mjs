@@ -25,7 +25,12 @@ test("a read is tried again after a database blip, a write only when it never ra
   assert.equal(calls, 3);
   calls = 0;
   await assert.rejects(withD1Retry(async () => { calls++; throw overloaded(); }, noSleep), /overloaded/);
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
+  // The waits grow and are spread, so requests refused together come back apart.
+  const waits = [];
+  await assert.rejects(withD1Retry(async () => { throw overloaded(); }, { sleep: async ms => { waits.push(ms); } }), /overloaded/);
+  assert.equal(waits.length, 3);
+  [150, 500, 1500].forEach((ms, i) => assert.ok(waits[i] >= ms / 2 && waits[i] <= ms * 1.5, `wait ${i}: ${waits[i]}`));
   calls = 0;
   await assert.rejects(withD1Retry(async () => { calls++; throw reset(); }, { read: false, ...noSleep }), /reset/);
   assert.equal(calls, 1);

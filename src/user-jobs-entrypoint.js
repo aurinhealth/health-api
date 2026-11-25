@@ -4,6 +4,7 @@
 // of sharing one cron run's (entrypoint.js fanOutUserJobs).
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { runUserJobsInvocation, runIntervalsWebhookInvocation } from "./entrypoint.js";
+import { probeCalls } from "./load-test.js";
 
 export class UserJobs extends WorkerEntrypoint {
   // { ok: true }, or { ok: false, error } when the user's own jobs failed:
@@ -11,6 +12,11 @@ export class UserJobs extends WorkerEntrypoint {
   async run(message) {
     return runUserJobsInvocation(this.env, this.ctx, message);
   }
+
+  // The load test's probe of how many calls one invocation may make through this
+  // binding (src/load-test.js, staging only): ping answers, fan calls ping n times itself.
+  async ping() { return { ok: true }; }
+  async fan(n) { return probeCalls(() => this.env.USER_JOBS.ping(), n); }
 
   // One athlete's Intervals.icu webhook changes ({ athlete, parts, kinds, deleted }).
   async intervalsWebhook(message) {

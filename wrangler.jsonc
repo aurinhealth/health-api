@@ -91,10 +91,13 @@
   // The owner is the first admin; existing single-user data belongs to this account.
   "vars": {
     // Provisioned by scripts/provision-user-shards.mjs in the deploy jobs.
-    // 20 groups of at most 10 accounts; capacity is also checked in bytes.
+    // Databases of at most 25 accounts each (capacity is also checked in bytes); the ones
+    // above the first 20 wait in reserve and open by themselves (tenancy.js openReserveShards).
+    // 60 = 1,500 places, ready before a sudden wave (2026-11-25): an empty D1 costs nothing
+    // (100,000 included in Workers Paid), each one adds about 4 s to a live deploy.
     "USER_DATA_ROUTING": "true",
     "FOOD_CATALOG_ROUTING": "true",
-    "USER_DATA_SHARD_COUNT": "30",
+    "USER_DATA_SHARD_COUNT": "60",
     // OWNER_EMAIL (the owner's sign-in address, src/tenancy.js) is not here: the deploy
     // passes it from the GitHub environment's secret OWNER_EMAIL (deploy-worker.yml),
     // and wrangler dev reads it from .dev.vars. Problem reports go to CONTACT_EMAIL,

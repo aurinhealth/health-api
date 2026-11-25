@@ -33,16 +33,26 @@ const slowRank = (message, cron) => Number(String(message || "").match(cron ? /(
 export async function recordOpsEvent(db, kind, service, message = "", count = 1) {
   if (!db || !count) return;
   try {
+    // Migration 0025 made the table; it is created here only when a query finds it missing,
+    // so a busy moment (every request slow) costs no CREATE TABLE write per event.
+    return await writeOpsEvent(db, kind, service, message, count);
+  } catch (error) {
+    if (!/no such table/i.test(String(error?.message))) { original.call(console, "Ops event write failed", error.message); return; }
+  }
+  try {
     await ensureOpsEvents(db);
-    const name = String(service || "-"), cron = name.startsWith("cron ");
-    let kept = text(message);
-    if (kind === "slow") {
-      const before = await db.prepare("SELECT last_message FROM ops_events WHERE day=? AND kind='slow' AND service=?").bind(day(), name).first();
-      if (before && slowRank(before.last_message, cron) > slowRank(kept, cron)) kept = null;
-    }
-    await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=COALESCE(excluded.last_message,ops_events.last_message)")
-      .bind(day(), kind, name, count, kept).run();
+    await writeOpsEvent(db, kind, service, message, count);
   } catch (error) { original.call(console, "Ops event write failed", error.message); }
+}
+async function writeOpsEvent(db, kind, service, message, count) {
+  const name = String(service || "-"), cron = name.startsWith("cron ");
+  let kept = text(message);
+  if (kind === "slow") {
+    const before = await db.prepare("SELECT last_message FROM ops_events WHERE day=? AND kind='slow' AND service=?").bind(day(), name).first();
+    if (before && slowRank(before.last_message, cron) > slowRank(kept, cron)) kept = null;
+  }
+  await db.prepare("INSERT INTO ops_events(day,kind,service,count,last_message) VALUES(?,?,?,?,?) ON CONFLICT(day,kind,service) DO UPDATE SET count=count+excluded.count,last_message=COALESCE(excluded.last_message,ops_events.last_message)")
+    .bind(day(), kind, name, count, kept).run();
 }
 
 // Sync code logs its failures with console.error and goes on. Inside
