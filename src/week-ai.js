@@ -19,6 +19,7 @@ import { withFocus } from "./athlete-focus.js";
 import { availabilityOn } from "./training-availability.js";
 import { indoorMinutes, allowedSport } from "./adaptive-week.js";
 import { HARD_KINDS } from "./session-intensity.js";
+import { capRunVolume } from "./week-planner.js";
 import { MAX_MINUTES as LONGEST } from "./workout-model.js";
 import { weekInstructions, sessionInstructions } from './private/week-ai.js';
 export { weekInstructions, sessionInstructions };
@@ -35,6 +36,7 @@ export const MIN_MINUTES = { ride: 30, run: 20, swim: 15, gym: 30 };
 // for may go up to the longest ride or run (workout-model.js: 8 h, 6 h).
 export const MAX_MINUTES = { ride: 300, run: 150, swim: 90, gym: 90 };
 const DEFAULT_MINUTES = { ride: 60, run: 45, swim: 40, gym: 60 };
+const SECOND_LONG_MINUTES = { ride: 90, run: 60 };
 
 export const KIND_LABELS = () => ({
   recovery: L("Lehce / regenerace", "Easy / recovery"),
@@ -70,6 +72,7 @@ const easedNote = why => L("Lehčí trénink: ", "An easier session: ") + {
   fatigue: L("forma (TSB) je pod −30, tělo potřebuje ubrat.", "your form (TSB) is below −30, so the body needs less."),
   form: L("forma (TSB) je pod −20, tento týden jen jeden tvrdý den.", "your form (TSB) is below −20, so just one hard day this week."),
   long: L("vedle je dlouhý trénink.", "there's a long session next to it."),
+  secondLong: L("dlouhý trénink tohoto sportu už v týdnu je.", "the week already has a long session of this sport."),
   tired: L("poslední dny je tělo unavené, potřebuje ubrat.", "your body has been tired the last few days and needs less."),
   recovery: L("tento týden je odpočinkový.", "this is a recovery week.")
 }[why];
@@ -119,9 +122,20 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     used.set(date, (used.get(date) || 0) + minutes);
     perDay.set(date, (perDay.get(date) || 0) + 1);
     const reason = String(raw?.reason || "").trim().slice(0, 200) || null;
-    out.push({ date, sport, minutes, environment, kind, reason: sport === "gym" ? gymNote(reason) : sessionNote(reason), ...(raw?.plan ? { plan: raw.plan, label: raw.label || null } : {}) });
+    const item = { date, sport, minutes, environment, kind, reason: sport === "gym" ? gymNote(reason) : sessionNote(reason), ...(raw?.plan ? { plan: raw.plan, label: raw.label || null } : {}) };
+    if (raw?.requested) Object.defineProperty(item, "requested", { value: true });
+    out.push(item);
   }
   out.sort((a, b) => a.date.localeCompare(b.date) || WEEK_SPORTS.indexOf(a.sport) - WEEK_SPORTS.indexOf(b.sport));
+  // One long ride and one long run a week, as the rules plan it (week-planner.js
+  // planWeekRoles): a second one the AI adds is an endurance session of a usual
+  // length; a day of the plan or one the athlete asked for keeps its own
+  // (load ramp-back review 2026-11-25, C6).
+  const longs = new Set(out.filter(x => x.kind === "long" && (x.plan || x.requested)).map(x => x.sport));
+  for (const x of out) {
+    if (x.kind !== "long" || !["ride", "run"].includes(x.sport) || x.plan || x.requested) continue;
+    if (longs.has(x.sport)) { x.kind = "endurance"; x.minutes = Math.min(x.minutes, SECOND_LONG_MINUTES[x.sport]); x.reason = easedNote("secondLong"); } else longs.add(x.sport);
+  }
   // Hard days: none on a red morning (today), below TSB −30 or in a recovery
   // week, one at TSB −20 to −30; two at most, the fixed ones included, never
   // next to another or to a ride's or run's long session.
@@ -246,16 +260,31 @@ const WEEK_SCHEMA = {
 // facts: { start, today, availabilityByDate, existingSessions, rulesProposal,
 // readiness, recoveryWeek, weather, coach (coachContext), note, weekDays,
 // and for a correction previousProposal and correction }.
-export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], split = null, ask = callOpenAI } = {}) {
+// paused: sports resting for a pain (athlete-state.js pausedSports), left out
+// as the rules leave them out; runCap: the week's running cap of the rules
+// (week-planner.js weeklyRunCap, with what is already committed), so the AI's
+// runs share it as the rules' do (C6).
+export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], split = null, paused = [], runCap = null, ask = callOpenAI } = {}) {
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
   // A sport the athlete turned off (Settings → Sports to suggest) stays out,
   // unless they asked for it this time or the training plan has it.
   const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null)
-    .filter(d => d?.requested || d?.plan || allowedSport(focus, d?.sport));
-  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
+    .filter(d => (d?.requested || d?.plan || allowedSport(focus, d?.sport)) && !paused.includes(d?.sport));
+  const checked = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
+  const days = runCap ? cappedRuns(checked, runCap) : checked;
   // A summary written for days the checks then eased would promise them still.
-  return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(markBrick(days, { split, planDays })) };
+  return { summary: checked.eased || days.capped ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(markBrick(days, { split, planDays })) };
+}
+
+// The AI's runs within the week's running cap and the one-run cap, shared as
+// the rules share theirs (week-planner.js capRunVolume); a run that would get
+// less than 20 min goes.
+function cappedRuns(days, runCap) {
+  const targets = capRunVolume({ status: "ok", items: days.map(x => ({ ...x, role: x.kind === "long" ? "long" : HARD_KINDS.has(x.kind) ? "quality" : "endurance" })) }, runCap, runCap.committed || 0);
+  const out = targets.items.map(({ role: _role, tss: _tss, capped: _c, cappedFrom: _f, intensity: _i, ...x }) => x);
+  if (targets.items.some(x => x.capped) || out.length < days.length) Object.defineProperty(out, "capped", { value: true });
+  return out;
 }
 
 // ---- One session: "Upravit s AI" ----
@@ -287,6 +316,26 @@ export function adjustByChip(session, chip) {
   else if (chip === "outdoor") out.environment = "outdoor";
   if (sport === "run" && out.kind === "sweet_spot") out.kind = chip === "harder" ? "threshold" : "tempo";
   if (sport === "swim" && (out.kind === "sweet_spot" || out.kind === "tempo")) out.kind = "threshold";
+  return out;
+}
+
+// The checks of the week plan for one changed session ("Upravit s AI", a chip
+// or a sentence; C6): a sport resting for a pain gets nothing longer or
+// harder, a second long ride or run of the week is an endurance session, and a
+// longer run stays within the one-run and the week's running cap (runCap,
+// week-planner.js weeklyRunCap; others: the week's other sessions).
+export function guardSessionChange(changed, current, { paused = [], others = [], runCap = null } = {}) {
+  const out = { ...changed }, longer = (Number(out.minutes) || 0) > (Number(current.minutes) || 0);
+  if (paused.includes(out.sport) && (longer || out.kind === "long" && current.kind !== "long" || HARD_KINDS.has(out.kind) && !HARD_KINDS.has(current.kind)))
+    return { ...out, minutes: Math.min(out.minutes, current.minutes), kind: current.kind || "endurance", note: L("Kvůli bolesti teď tenhle sport nepřidávám: trénink není delší ani těžší.", "Because of the pain I don't add to this sport now: the session is neither longer nor harder.") };
+  if (out.kind === "long" && current.kind !== "long" && SECOND_LONG_MINUTES[out.sport] && others.some(o => o.sport === out.sport && o.kind === "long" && o.date !== out.date)) {
+    out.kind = "endurance"; out.minutes = Math.min(out.minutes, Math.max(SECOND_LONG_MINUTES[out.sport], current.minutes || 0)); out.note = easedNote("secondLong");
+  }
+  if (out.sport === "run" && runCap && (Number(out.minutes) || 0) > (Number(current.minutes) || 0)) {
+    const week = others.filter(o => o.sport === "run").reduce((n, o) => n + (Number(o.minutes) || 0), 0);
+    const limit = Math.max(current.minutes || 0, Math.min(runCap.single ?? Infinity, (runCap.cap ?? Infinity) - week));
+    if (out.minutes > limit) { out.minutes = Math.floor(limit / 5) * 5 || current.minutes; out.note = L("Delší běh by přesáhl, o kolik běh po týdnu roste: nejvýš " + out.minutes + " min.", "A longer run would grow your running faster than it should: at most " + out.minutes + " min."); }
+  }
   return out;
 }
 

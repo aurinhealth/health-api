@@ -148,7 +148,7 @@ test("one run grows at most 10 % past the longest of the last 30 days, +5 min al
   assert.equal(cap.single, 65, "60 × 1.1 = 66, down to 65");
   assert.equal(weeklyRunCap([runDay("2026-10-01", 100)], "2026-10-05").single, 110);
   assert.equal(weeklyRunCap([runDay("2026-10-01", 30)], "2026-10-05").single, 35, "a short longest run still grows by 5 min");
-  assert.equal(weeklyRunCap([], "2026-10-05").single, null, "no runs: only the week's cap");
+  assert.equal(weeklyRunCap([], "2026-10-05").single, 30, "no runs in 30 days: one run starts at 30 min");
   // The marathon plan's 70-min long run after a longest of 60: 65, and says why.
   const targets = { status: "ok", items: [{ sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "run", role: "endurance", minutes: 40, tss: 40, intensity: .78 }, { sport: "run", role: "race", minutes: 200, tss: 300, intensity: .85 }] };
   const capped = capRunVolume(targets, { ...cap, cap: 400 }, 0);

@@ -493,6 +493,9 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
 // above the more of last week and the 4-week average; 60 min is always
 // allowed for a fresh start. `history` is days with completed activities.
 export const RUN_FLOOR_MINUTES = 60;
+// No run in the last 30 days: one run starts at 30 min, as the day coach
+// starts it (cycling-coach-v2.js), not up to the whole week's 60 (C7).
+export const FIRST_RUN_MINUTES = 30;
 const dayShift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 export const isRunActivity = a => /run/i.test(String(a?.type || a?.sport || "")) && !/walk/i.test(String(a?.type || ""));
 const runMinutes = list => (list || []).filter(isRunActivity).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
@@ -504,7 +507,7 @@ export function weeklyRunCap(history = [], weekStart) {
   const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
   const month = (history || []).filter(d => d.date >= dayShift(weekStart, -30) && d.date < weekStart);
   const longest = Math.round(Math.max(0, ...month.flatMap(d => (d.daily?.training?.completed || []).filter(isRunActivity).map(a => (Number(a.durationHours) || 0) * 60))));
-  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : null };
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : FIRST_RUN_MINUTES };
 }
 // Proposed runs share what is left under the cap, at least 20 min each: a run
 // that would get less is left out (the shortest first) and the rest share again.
