@@ -4,8 +4,8 @@ import Foundation
 // My form: technique of one squat set from body points. Apple Vision finds the
 // points in each frame; this file only does the maths, so it is tested without
 // a camera. Each video is read from its own view only: the side view gives depth,
-// knee and trunk angles, the front or back view gives knee tracking and hip shift
-// (an estimate: 2D front views agree poorly with 3D). The limits below are first
+// knee and trunk angles, the front or back view gives knee tracking (an estimate:
+// 2D front views agree poorly with 3D, so it stays out of release 1 until our test passes). The limits below are first
 // guesses until the accuracy test on real videos sets them. Not shown in the app yet.
 
 enum FormJoint: Hashable, CaseIterable, Sendable {
@@ -42,8 +42,6 @@ struct FormRep: Equatable, Sendable {
     // Front or back view only, labelled an estimate.
     var leftKnee: FormKneeTracking?
     var rightKnee: FormKneeTracking?
-    /// Hip midpoint off the midpoint of the feet at the bottom, share of hip width (+ = to the image's right).
-    var hipShift: Double?
 }
 
 struct FormResult: Equatable, Sendable {
@@ -141,9 +139,6 @@ enum FormAnalysis {
             }
             r.leftKnee = track(lh, b.points[.leftKnee], b.points[.leftAnkle])
             r.rightKnee = track(rh, b.points[.rightKnee], b.points[.rightAnkle])
-            if let la = b.points[.leftAnkle], let ra = b.points[.rightAnkle] {
-                r.hipShift = (middle - Double(la.x + ra.x) / 2) / width
-            }
         }
         return r
     }

@@ -35,8 +35,8 @@ final class FormAnalysisTests: XCTestCase {
         return frames
     }
 
-    /// Front or back view, one rep; knees move `kneeIn` towards the middle and the hips `shift` sideways at the bottom.
-    private func faceOnSquat(front: Bool, kneeIn: CGFloat, shift: CGFloat = 0) -> [FormFrame] {
+    /// Front or back view, one rep; knees move `kneeIn` towards the middle at the bottom.
+    private func faceOnSquat(front: Bool, kneeIn: CGFloat) -> [FormFrame] {
         var frames: [FormFrame] = []
         let steps: [Double] = (0..<20).map { _ in 0.0 } + (0..<45).map { Double($0) / 45 } + (0...30).map { 1 - Double($0) / 30 } + (0..<20).map { _ in 0.0 }
         for (i, step) in steps.enumerated() {
@@ -45,8 +45,8 @@ final class FormAnalysisTests: XCTestCase {
             let hipY: CGFloat = 0.5 - 0.2 * depth, kneeY: CGFloat = 0.3, ankleY: CGFloat = 0.1
             func side(_ s: CGFloat) -> (CGPoint, CGPoint, CGPoint, CGPoint) {
                 let x = 0.5 + s * 0.1
-                return (CGPoint(x: x + shift * depth, y: hipY + 0.3),
-                        CGPoint(x: x + shift * depth, y: hipY),
+                return (CGPoint(x: x, y: hipY + 0.3),
+                        CGPoint(x: x, y: hipY),
                         CGPoint(x: x - s * kneeIn * depth, y: kneeY),
                         CGPoint(x: x, y: ankleY))
             }
@@ -92,11 +92,6 @@ final class FormAnalysisTests: XCTestCase {
         let caving = FormAnalysis.squat(faceOnSquat(front: false, kneeIn: 0.08)).reps.first
         XCTAssertEqual(caving?.leftKnee, .inward)
         XCTAssertEqual(caving?.rightKnee, .inward)
-    }
-
-    func testHipShiftIsMeasuredFromTheFeet() {
-        let rep = FormAnalysis.squat(faceOnSquat(front: true, kneeIn: 0, shift: 0.04)).reps.first
-        XCTAssertEqual(rep?.hipShift ?? 0, 0.2, accuracy: 0.05)
     }
 
     func testAnObliqueVideoGivesNoNumbers() {
