@@ -10,7 +10,7 @@ import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity, openReserveShards, reserveCapacity, RESERVE_OPEN_BELOW, RESERVE_SHARD_USERS } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 import { ensureStoreColumns } from "./app-store.js";
-import { unpaidLimitShare, groupOfSubscription, newAccountSince } from "./ai-limit-share.js";
+import { unpaidLimitShare, groupOfSubscription, newAccountSince, paidLimitAccount } from "./ai-limit-share.js";
 import { GROUP_NAMES, aiSpendByGroup } from "./ai-total.js";
 import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
 import { opsReportHtml, money, monthText } from "./ops-report-html.js";
@@ -362,9 +362,9 @@ export async function aiData(env, date, now = Date.now()) {
   };
   const who = id => isOwner(id) ? "Ty" : `Účet #${id}, ${groupOf(id)}`;
   // The monthly cap the account's AI stops at (aiMonthlyLimitUsd): the owner,
-  // Pro bought or a gift the paid one, anything else the unpaid one.
+  // Pro bought, a gift or AI_PAID_LIMIT_EMAILS the paid one, anything else the unpaid one.
   const monthLimitOf = id => {
-    const sub = subs.get(id), paid = isOwner(id) || (sub && ["paid", "gift"].includes(groupOfSubscription(sub, now)));
+    const sub = subs.get(id), paid = isOwner(id) || paidLimitAccount({ ...env, USER_EMAIL: users.get(id)?.email }) || (sub && ["paid", "gift"].includes(groupOfSubscription(sub, now)));
     return aiMonthlyLimitUsd(env, paid ? 1 : unpaidLimitShare(env), paid ? "paid" : "unpaid");
   };
   return {
