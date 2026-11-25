@@ -209,6 +209,7 @@ final class WatchStore: NSObject, ObservableObject {
         let kind: String
         let name: String?
         let counted: Double
+        var at = Date()
     }
 
     @Published private(set) var drink: Drink?
@@ -229,7 +230,8 @@ final class WatchStore: NSObject, ObservableObject {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        let message = WatchAPI.owned([WatchSnapshot.waterKey: drink.ml, WatchSnapshot.drinkKindKey: drink.kind])
+        let message = WatchAPI.owned([WatchSnapshot.waterKey: drink.ml, WatchSnapshot.drinkKindKey: drink.kind,
+                                        WatchSnapshot.drinkAtKey: drink.at.timeIntervalSince1970])
         if session.isReachable {
             session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
                 WCSession.default.transferUserInfo(message)
