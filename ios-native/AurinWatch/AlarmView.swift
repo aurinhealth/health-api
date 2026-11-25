@@ -292,6 +292,7 @@ private struct AlarmDial<Content: View>: View {
 /// the iPhone's backup said in words, and Wrist taps on a page of its own.
 private struct AlarmSettings: View {
     @ObservedObject private var alarm = WatchAlarm.shared
+    @ObservedObject private var store = WatchStore.shared
 
     static let haptics: [(id: String, cs: String, en: String)] = [
         ("gentle", "Jemné", "Gentle"), ("rising", "Stoupající", "Rising"), ("strong", "Výrazné", "Strong")
@@ -303,8 +304,7 @@ private struct AlarmSettings: View {
                 Section {
                     Toggle(W.tr("Budit na hodinkách", "Wake me on the watch"), isOn: $alarm.onWatch)
                 } footer: {
-                    Text(W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on.")
-                         + (alarm.onWatch ? W.tr(" Když zaspíš, iPhone zazvoní o 5 min později.", " If you sleep through, your iPhone rings 5 min later.") : ""))
+                    Text(Self.footer(onWatch: alarm.onWatch, next: alarm.next, backup: store.settings.alarmBackup))
                 }
                 if alarm.onWatch {
                     Section {
@@ -323,6 +323,24 @@ private struct AlarmSettings: View {
                 }
             }
         }
+    }
+
+    /// What the watch really has set: its own session and the iPhone's backup, each with its time.
+    static func footer(onWatch: Bool, next: Date?, backup: Date?, now: Date = Date()) -> String {
+        guard onWatch else { return W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on.") }
+        var text = next.map { W.tr("Hodinky zabzučí v \(time($0)).", "Your watch taps you at \(time($0)).") }
+            ?? W.tr("Otevři Aurin večer, ať se budík nastaví.", "Open Aurin in the evening so the alarm gets set.")
+        if let backup, backup > now {
+            text += W.tr(" Když zaspíš, iPhone zazvoní v \(time(backup)).", " If you sleep through, your iPhone rings at \(time(backup)).")
+        }
+        return text
+    }
+
+    /// "6:45".
+    static func time(_ date: Date) -> String {
+        let format = DateFormatter()
+        format.dateFormat = "H:mm"
+        return format.string(from: date)
     }
 
     static func name(_ id: String) -> String {

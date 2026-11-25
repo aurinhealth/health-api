@@ -103,4 +103,15 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(S.standing(7.2, low: 3, high: 6, at: morning, calendar: calendar), .off)
         XCTAssertNil(S.standing(4.5, low: nil, high: 6, at: morning, calendar: calendar))
     }
+
+    /// The iPhone's backup time reaches the watch, and older settings without it still decode.
+    func testAlarmBackupInSettings() throws {
+        var settings = WatchSettings()
+        settings.alarmOnWatch = true
+        settings.alarmBackup = Date(timeIntervalSince1970: 1_800_000_000)
+        let back = try XCTUnwrap(WatchSettings.decode(try XCTUnwrap(settings.encoded())))
+        XCTAssertEqual(back.alarmBackup, settings.alarmBackup)
+        let old = try XCTUnwrap(#"{"pages":["readiness"],"alarmOnWatch":true}"#.data(using: .utf8))
+        XCTAssertNil(try XCTUnwrap(WatchSettings.decode(old)).alarmBackup)
+    }
 }

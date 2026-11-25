@@ -160,13 +160,19 @@ final class WatchBridge: NSObject {
             sentSnapshot = snapshot
             if let data = snapshot.encoded() { context[WatchSnapshot.contextKey] = data }
         }
-        // The iPhone's backup for the watch's alarm follows the wake times.
-        Task { await updateAlarmBackup(alarm) }
+        // The iPhone's backup for the watch's alarm follows the wake times;
+        // a moved backup goes to the watch, which says when it rings.
+        let backup = SystemAlarm.backupTime
+        Task {
+            await updateAlarmBackup(alarm)
+            if SystemAlarm.backupTime != backup { sendContext() }
+        }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
         var settings = Self.settings
         (settings.restSets, settings.restExercises) = Self.restSettings
         (settings.lastGym, settings.lastGymExercises) = Self.lastGym
+        settings.alarmBackup = backup
         context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         // The same Today again (a refresh with nothing new; only the time it
@@ -426,6 +432,7 @@ extension WatchBridge: WCSessionDelegate {
             if let onWatch {
                 await alarmOnWatch(onWatch)
                 replyHandler(["ok": true])
+                sendContext()
                 return
             }
             if alarmStopped || alarmSnoozed != nil {
