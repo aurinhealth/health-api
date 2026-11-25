@@ -221,7 +221,14 @@ struct ActivityTypeOption: Decodable, Hashable, Identifiable {
     let type: String
     let name: String
     let group: String
+    /// An other sport's group as the plan and the muscles count it ("Team sport"); nil for the rest.
+    var category: Category? = nil
     var id: String { type }
+
+    struct Category: Decodable, Hashable {
+        let kind: String
+        let name: String
+    }
 }
 
 /// GET /app/api/activity/delete?id= (src/activity-edits.js deleteOptions).

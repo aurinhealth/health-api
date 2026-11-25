@@ -465,6 +465,7 @@
 "Pražský půlmaraton" = "Chicago Marathon";
 "Výživa" = "Nutrition";
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit." = "Everything Aurin keeps for you goes and can't be restored.";
+"Zaniknou i koupené zprávy koučovi, které jsi ještě nevyužil." = "Coach messages you bought and haven't used yet go too.";
 "Smazat účet Aurin" = "Delete your Aurin account";
 "Probrat" = "Discuss";
 "Probuzení" = "Woke up";
@@ -5310,4 +5311,19 @@
 "Nevyplněno" = "Empty";
 "Můžeš to vrátit." = "You can undo it.";
 "Rozpracováno" = "In progress";
+"%@: zápas" = "%@ match";
+"%@: trénink" = "%@ training";
+"Tvoje další sporty" = "Your other sports";
+"Přidat sport" = "Add a sport";
+"Fotbal, box, jízda na koni… Jejich trénink nebo zápas si dáš na den v Nastavení plánu a plán se mu přizpůsobí." = "Football, boxing, horse riding… Put a practice or match on a day in Plan settings and the plan works around it.";
+"Zápas" = "Match";
+"Opakovat každý týden" = "Repeat every week";
+"Zápas, turnaj nebo závod je pro plán tvrdý den, trénink středně náročný." = "A match, fight, race or tournament is a hard day for the plan, a practice a moderate one.";
+"Včerejší zápas" = "Yesterday's match";
+"Včerejší trénink" = "Yesterday's training";
+"Z hodinek nic nepřišlo, jak to šlo?" = "Nothing came from your watch. How did it go?";
+"Neproběhl" = "Didn't happen";
+"Tvůj vlastní, změníš v Nastavení plánu" = "Your own, change it in Plan settings";
+"Odebrat z tohoto dne" = "Remove from this day";
+"Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
