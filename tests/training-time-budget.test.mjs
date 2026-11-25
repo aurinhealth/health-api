@@ -59,7 +59,7 @@ async function api(minutes) {
     }),
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({}),
-    handleWorkoutTemplatesApi: async () => undefined,
+    handleWorkoutTemplatesApi: async () => undefined, handleRecipesApi: async () => undefined,
     searchWorkoutLibrary, parseWorkoutSearchFilters, fewMatches, stepRows, athleteSteps, athleteMinutes, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
   });
   vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
