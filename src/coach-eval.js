@@ -755,7 +755,7 @@ export const COACH_EVAL_SCENARIOS = [
   // with dataSince. Sleep recorded only for the last 7 months: the coach says so and gives that
   // average without asking (Petr 2026-11-25); 30 days fully covered gives its average.
   { id: 'S102', title: 'Průměr spánku za rok, data jen 7 měsíců', message: 'Jaký je můj průměrný spánek za poslední rok?', context: date => ({ history: historyFacts({ date, sessions: Array.from({ length: 212 }, (_, i) => ({ date: shift(date, -i), durationMin: i < 30 ? 405 : 425 })) }) }),
-    checks: r => [quality('řekne, že celý rok nemá, jen od března nebo 7 měsíců', says(r, /břez|bře\b|24\.\s*3\.|7\s*měs|sedm měs|212|march|7 months/i)),
+    checks: r => [quality('řekne, že celý rok nemá, jen od března nebo 7 měsíců', says(r, /(?:nem[aá]m|ne(?:ní|mám)? za cel|jen|pouze|only|not a full)[^.]{0,80}(?:břez|bře\b|24\.\s*3\.|7\s*měs|sedm měs|march|7 months)|(?:od|since)\s+(?:24\.\s*3\.|24\.\s*břez|břez|march)/i)),
       quality('dá průměr za dostupné období (7 h 02 min)', says(r, /7\s*h\s*0?2\b|7:02/i)),
       quality('neptá se, jestli to chce', !says(r, /chce[šs]\??$|m[áa]m ti (?:ho|je|to) (?:uk[áa]zat|poslat)|do you want/im))] },
   { id: 'S103', title: 'Průměr spánku za 30 dní', message: 'Kolik jsem v průměru spal za posledních 30 dní?', context: date => ({ history: historyFacts({ date, sessions: Array.from({ length: 212 }, (_, i) => ({ date: shift(date, -i), durationMin: i < 30 ? 405 : 425 })) }) }),
