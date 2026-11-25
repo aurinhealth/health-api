@@ -313,6 +313,16 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["dismiss": JSONValue.string(id)])
     }
 
+    /// The coach's own message the chat posts when it opens: "race-week",
+    /// "week-summary" or "gap-checkin" (src/entrypoint.js). The new chat's id,
+    /// nil when there was nothing to post (or it was posted before).
+    func postedCoachChat(_ kind: String) async throws -> Int? {
+        struct Posted: Decodable { let chatId: Int }
+        struct Response: Decodable { let posted: Posted?; let question: Posted? }
+        let r: Response = try await send("/app/api/coach/" + kind, method: "POST", body: JSONObject())
+        return (r.posted ?? r.question)?.chatId
+    }
+
     /// What the coach remembers about the athlete.
     func coachMemories() async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")

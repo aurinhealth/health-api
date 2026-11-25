@@ -52,6 +52,8 @@ struct CoachView: View {
     /// False once another conversation is opened from the panel: it is not about `subject`.
     @State private var aboutSubject = true
     @State private var showMemory = false
+    /// The coach's own message was asked for on this opening (openPosted).
+    @State private var askedPosted = false
     /// The message a search result opened the chat at: scrolled to and ringed for a moment.
     @State private var found: UUID?
     /// This week's messages to the coach (src/coach-allowance.js); nil for the owner.
@@ -275,6 +277,7 @@ struct CoachView: View {
             packsOnSale = status?.packsBuyable == true
             if allowance?.usedUp == true { usedUp = true }
         }
+        .task { await openPosted() }
         // Closing the coach leaves a temporary chat too.
         .onDisappear { leaveGhost() }
     }
@@ -296,6 +299,20 @@ struct CoachView: View {
         .background(Palette.card.opacity(0.75), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Palette.ink.opacity(0.3), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3])))
         .accessibilityElement(children: .combine)
+    }
+
+    /// The opening asks the server for the coach's own message, in this order:
+    /// the race week, the week's summary, the question after a training gap.
+    /// The first one posted (a new chat, once) opens as History would open it.
+    private func openPosted() async {
+        guard !model.demo, !askedPosted, openChat == nil, subject == nil else { return }
+        askedPosted = true
+        for kind in ["race-week", "week-summary", "gap-checkin"] {
+            guard let id = try? await model.api.postedCoachChat(kind) else { continue }
+            // Only on the empty opening: a question the athlete already sent stays in its chat.
+            if messages.isEmpty, chatId == nil, !sending, !ghost { await open(id) }
+            return
+        }
     }
 
     /// Leaving a temporary chat (another chat, a new one, or closing the coach)
