@@ -41,6 +41,7 @@ import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildHealthSeries,SERIES_METRICS,SERIES_RANGES} from './health-series.js';
 import {seriesRows} from './health-series-store.js';
+import {historyFacts,asksHistory} from './coach-history.js';
 import {vo2maxView,aurinAgeView,estimateSeries,profileAge,withNorm,fitnessNormOf} from './health-estimates.js';
 import {buildDays,DAYS_MAX} from './app-days.js';
 import {buildFood} from './app-food.js';
@@ -51,7 +52,7 @@ import {athleteFocus,mainKindsOf,SPORT_KINDS,normalizeFocus,withGoalType} from '
 import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { getTrainingProfile } from './training-profile.js';
 import { loadProfiles, refreshSuggestions, pinUsualWake, loadEffectiveProfile } from './profile-suggestions.js';
-import {syncWeights} from './weight-sync.js';
+import {syncWeights,storedWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
@@ -180,7 +181,7 @@ import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraft
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
-import { stepList, bodySteps, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep } from "./coach-steps.js";
+import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
 import { heatAdvice } from "./heat-advice.js";
@@ -1421,8 +1422,27 @@ function coachWeeks(env,ctx,weeks){
   return Promise.all(weeks.map(w=>cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(r=>r.json().catch(()=>({}))))));
 }
 // The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
-function coachSleep(env,ctx,internalAuth,date){
-  return app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-30),shiftDate(date,1)));
+function coachSleep(env,ctx,internalAuth,date,days=30){
+  return app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-days)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-days),shiftDate(date,1)));
+}
+// 30 days, 90 days and a year for a chat question about a longer stretch
+// (coach-history.js), kept for the day like the other inputs (a sync bumps the
+// cache version). Reads: a year of nights (one row a night and source), HRV and
+// resting HR (one row a day and source each), steps from the hourly summary
+// and the weigh-ins; fitness through /app/api/fitness (Intervals.icu or the
+// watch's workouts).
+function coachHistory(env,ctx,internalAuth,date){
+  return cached(env,ctx,'coach-history:'+date,async()=>{
+    const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path)).then(r=>r.json()).catch(()=>({}));
+    // Only HRV and resting HR merge in the Intervals.icu rows: the rest starts without waiting for them.
+    const fitnessLoading=cached(env,ctx,'fitness:366',()=>internal('/app/api/fitness?days=366')).catch(()=>({}));
+    const series=(metric,intervals=[])=>seriesRows(env.DB,env.USER_ID,{metric,range:'1y',date,intervals}).catch(()=>[]);
+    const merged=metric=>fitnessLoading.then(f=>series(metric,f?.source==='aurin'?[]:f?.wellness||[]));
+    const [fitness,sleep,hrv,restingHR,steps,stored]=await Promise.all([fitnessLoading,coachSleep(env,ctx,internalAuth,date,365),merged('hrv'),merged('restingHR'),series('steps'),storedWeights(env.DB,env.USER_ID,shiftDate(date,-365)).catch(()=>null)]);
+    const wellness=[...hrv.map(r=>({id:r.id,hrv:r.hrv})),...restingHR.map(r=>({id:r.id,restingHR:r.restingHR})),...steps.map(r=>({id:r.id,steps:r.steps}))];
+    const weights={...(stored?.intervals||{}),...(stored?.google||{}),...(stored?.manual||{})};
+    return historyFacts({date,sessions:sleep?.sessions||[],wellness,fitness:fitness?.wellness||[],weights});
+  });
 }
 // `training`: trainingSetup(env.DB) already started alongside the other reads (loadCoachInputsFresh).
 async function coachProfile(env,profile,training=null){
@@ -2555,6 +2575,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       onProgress(L('Kouč čte tvoje data…', 'The coach is reading your data…'));
       if(task!=='simple'){
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
+        // Started alongside the other reads, awaited where its step shows.
+        const historyLoading=asksHistory(message)?coachHistory(env,ctx,internalAuth,date).catch(error=>{console.error('Coach history failed',error.message);return null;}):null;
         const [loaded,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
           loadCoachInputs(env,ctx,internalAuth,date,{performance:true}),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
           getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekForecast(env,ctx,prefs.location,mondayOfDate(date))})),
@@ -2576,8 +2598,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // The forecast for the open week too, when it is not this one.
         const openWeekWeather=task!=='adjustment'&&selected.appContext.weekStart!==thisWeek?await weekForecast(env,ctx,prefs.location,selected.appContext.weekStart).catch(()=>({})):{};
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
+        // "Za poslední rok?": averages over 30 days, 90 days and a year (coach-history.js), read only for such a question.
+        const history=await historyLoading;
+        step(historyStep(history));
         for(const s of bodySteps({date,inputs}))step(s);
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,experienceLevels,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
+        if(history)coachCtx.history=history;
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
@@ -3479,7 +3505,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if (url.pathname === "/app/api/fitness" && request.method === "GET") {
     try {
-      const days = Math.max(42, Math.min(180, Number(url.searchParams.get("days") || 90)));
+      const days = Math.max(42, Math.min(366, Number(url.searchParams.get("days") || 90)));
       // Up to the user's today (in Sydney or after midnight in Prague, UTC is still yesterday).
       const {from,to} = fitnessDays(days);
       const apiKey = String(env.INTERVALS_API_KEY || "");

@@ -36,6 +36,17 @@ export function bodySteps({ date, inputs = {} }) {
   return steps;
 }
 
+// A question about a longer stretch (coach-history.js): the longest period read
+// and how many nights of sleep it holds.
+export function historyStep(history) {
+  const year = history?.periods?.at(-1);
+  if (!year) return null;
+  const label = { 30: L('posledních 30 dní', 'the last 30 days'), 90: L('posledních 90 dní', 'the last 90 days'), 365: L('posledních 12 měsíců', 'the last 12 months') }[year.days];
+  const nights = year.sleep?.nights;
+  return coachStep('history', 'calendar', L(`Procházím ${label}`, `Looking back over ${label}`),
+    nights ? L(`Spánek z ${nights} nocí.`, `Sleep from ${nights} ${nights === 1 ? 'night' : 'nights'}.`) : null);
+}
+
 // The ride or run the coach reviews (coach-ride-reviews.js), up to three.
 export function reviewStep(activities = [], status = 'running') {
   if (!activities.length) return null;
