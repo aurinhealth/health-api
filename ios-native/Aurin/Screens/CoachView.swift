@@ -473,8 +473,8 @@ struct CoachView: View {
 
     // MARK: Actions
 
-    /// `reply`: the coach message whose question chip the text is (a free answer).
-    private func send(reply: Int? = nil) async {
+    /// `replyTo`: the coach message whose question chip the text is (a free answer).
+    private func send(replyTo: Int? = nil) async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let picture = photo
         // The demo has no account to ask with: a ready answer from the sample day.
@@ -484,7 +484,7 @@ struct CoachView: View {
             return
         }
         // A chip of the server's question is a free answer, also with the week's messages used up.
-        guard !text.isEmpty || picture != nil, !sending, !usedUp || reply != nil else { return }
+        guard !text.isEmpty || picture != nil, !sending, !usedUp || replyTo != nil else { return }
         input = ""
         photo = nil
         error = nil
@@ -532,7 +532,7 @@ struct CoachView: View {
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext, ghost: ghost, reply: reply) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext, ghost: ghost, reply: replyTo) {
                 switch event {
                 case .progress(let p): progress = p
                 case .chat(let chat): savedIn = chat
@@ -633,7 +633,7 @@ struct CoachView: View {
     private func answer(_ chip: String, to message: Int?) {
         guard let message, !sending else { return }
         input = chip
-        Task { await send(reply: message) }
+        Task { await send(replyTo: message) }
     }
 
     /// Try again under a message that got no answer: it goes out once more.
