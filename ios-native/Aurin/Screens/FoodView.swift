@@ -204,8 +204,7 @@ struct FoodContent: View {
                 SectionLabel(text: "Jídla")
                 Spacer()
                 NavigationLink { MealSlotsSettingsView(title: "Časy jídel") } label: {
-                    Text("Časy jídel").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                    Text("Časy jídel").linkPill()
                 }
                 .buttonStyle(.plain)
             }

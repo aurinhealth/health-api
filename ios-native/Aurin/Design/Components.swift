@@ -285,6 +285,19 @@ extension View {
     }
 }
 
+extension View {
+    /// A text link in a section's title row ("Plán týdne", "Časy jídel",
+    /// "Upravit") as a glass pill, 32 pt high and 44 pt to tap, so it reads as
+    /// a button (617 #35, designer 31).
+    func linkPill() -> some View {
+        font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 12).frame(height: 32)
+            .chromeGlass(in: Capsule())
+            .tapTarget(width: 44, height: 32)
+    }
+}
+
 /// The glass of the app's own bars and their buttons: Liquid Glass on iOS 26
 /// (it follows Nastavení → Displej a jas → Liquid Glass and Omezit
 /// průhlednost), a blurred light material before it.

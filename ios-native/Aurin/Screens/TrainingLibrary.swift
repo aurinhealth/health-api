@@ -102,9 +102,7 @@ struct LibraryHome: View {
                 SectionLabel(text: "Sporty")
                 Spacer()
                 Button { withMotion(.snappy) { editing.toggle() } } label: {
-                    Text(verbatim: L10n.tr(editing ? "Hotovo" : "Upravit"))
-                        .font(Typo.body.weight(editing ? .semibold : .regular)).foregroundStyle(Palette.ink)
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                    Text(verbatim: L10n.tr(editing ? "Hotovo" : "Upravit")).linkPill()
                 }
                 .buttonStyle(.plain)
             }

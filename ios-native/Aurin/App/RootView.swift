@@ -297,7 +297,7 @@ struct RootView: View {
                     .accessibilityAddTraits(showAdd ? .isModal : [])
                 }
             }
-            .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showSettings) { SettingsView().fullTextSize() }
             .onChange(of: openSheet) { _, sheet in
                 if let sheet { ScreenTrail.visit(sheet) } else { ScreenTrail.visit(model.tab, model.paths[model.tab]?.last) }
             }

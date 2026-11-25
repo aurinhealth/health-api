@@ -167,8 +167,7 @@ struct TrainingContent: View {
             SectionLabel(text: isToday ? L10n.tr("Dnes") : Fmt.weekdayDayMonth(shownDay))
             Spacer(minLength: 8)
             WeekPlanLink {
-                Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                Text(verbatim: L10n.tr("Plán týdne")).linkPill()
             }
         }
         .padding(.top, top - 12)

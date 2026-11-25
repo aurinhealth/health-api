@@ -643,5 +643,6 @@ struct HealthValueInfo: View {
             }
         }
         .presentationBackground(Palette.background)
+        .fullTextSize()
     }
 }
