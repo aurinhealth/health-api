@@ -48,7 +48,7 @@ struct DialDetail: View {
                     .watchFont(13)
                     .foregroundStyle(W.muted)
                     .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .lineLimit(3)
                     .minimumScaleFactor(0.8)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 2)
@@ -319,9 +319,12 @@ struct StrainDetail: View {
 
     private var sentence: String {
         guard let score = strain.score, let low = strain.low, let high = strain.high else { return W.tr("Námaha", "Strain") }
-        if score > high { return W.tr("Nad cílem", "Above target") }
-        if score >= low { return W.tr("V cíli", "On target") }
-        return strain.nextTitle != nil ? W.tr("Prostor na trénink", "Room for the workout") : W.tr("Prostor na víc", "Room for more")
+        // With a workout still planned: where the day ends, as the iPhone's dial says it.
+        let planned = strain.nextTitle == nil ? 0 : strain.planned ?? 0
+        let end = score + planned, withPlan = planned > 0.05
+        if end > high { return withPlan ? W.tr("Skončí nad cílem", "Ends above target") : W.tr("Nad cílem", "Above target") }
+        if end >= low { return withPlan ? W.tr("Skončí v cíli", "Ends on target") : W.tr("V cíli", "On target") }
+        return withPlan ? W.tr("Skončí pod cílem", "Ends below target") : W.tr("Prostor na víc", "Room for more")
     }
 
     /// "Strength at 17:30 adds 4.2 (estimate)": the estimate said once (concept 03 point 6).

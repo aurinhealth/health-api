@@ -22,9 +22,10 @@ extension AppModel {
     }
 
     /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
-    func addDrinkToday(ml: Int, kind: String) {
+    /// A drink now, or one from the watch at the time it was drunk (on its own day).
+    func addDrinkToday(ml: Int, kind: String, at: Date = Date()) {
         guard !demo else { return }
-        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(Date())))
+        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(at), at: at))
     }
 
     /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.

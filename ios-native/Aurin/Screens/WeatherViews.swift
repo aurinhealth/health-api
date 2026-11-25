@@ -775,6 +775,7 @@ struct WeatherPlaceView: View {
                         Image(systemName: "location.fill")
                             .scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                             .frame(width: 32, height: 32).background(Palette.blue, in: Circle())
+                            .tapTarget(width: 32, height: 32)
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Aktuální poloha").font(.body.weight(.semibold)).foregroundStyle(Palette.blue)
                             Text(verbatim: following ? (current.map { $0 + ", " } ?? "") + L10n.tr("aktualizuje se samo") : L10n.tr("poloha iPhonu, aktualizuje se sama"))

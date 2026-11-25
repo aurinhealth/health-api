@@ -4,7 +4,9 @@ import UserNotifications
 /// zdravotní údaje on, the banner, the lock screen and the notification held
 /// down show only what came ("Kouč odpověděl"), and the push's own texts come
 /// in `private` (src/push.js hidesValues) for the app once opened and the
-/// watch. Also compiled into AurinMorning (project.yml).
+/// watch. The hidden morning push carries no values at all: only an empty
+/// `private.readiness` that marks it as the morning (security audit
+/// 2026-11-24). Also compiled into AurinMorning (project.yml).
 struct NotificationText: Equatable {
     var title: String
     var subtitle: String

@@ -33,7 +33,8 @@ enum W {
         static let sleep = Color(hex: 0x262556)
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
-        static let food = Color(hex: 0x163047)
+        /// Rose, Food's tint as on the iPhone (watch concept 09).
+        static let food = Color(hex: 0x3E1B25)
         /// Indigo, the coach's colour as on the iPhone (watch audit D4).
         static let coach = Color(hex: 0x25233F)
     }
@@ -172,12 +173,18 @@ enum W {
         return "\(m / 60):" + String(format: "%02d", m % 60)
     }
 
-    /// 432 minutes as "7h 12m" ("7 h 12 min" in Czech).
-    static func duration(minutes: Double) -> String {
+    /// 432 minutes as "7 h 12 min", 45 as "45 min", 540 as "9 h": durations
+    /// read so everywhere, in both languages (Petr 2026-11-23).
+    nonisolated static func duration(minutes: Double) -> String {
         let m = Int(minutes.rounded())
-        // "9h of sleep", not "9h 0m".
-        if m % 60 == 0 { return english ? "\(m / 60)h" : "\(m / 60) h" }
-        return english ? "\(m / 60)h \(m % 60)m" : "\(m / 60) h \(m % 60) min"
+        if m < 60 { return "\(m) min" }
+        return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
+    }
+
+    /// A run's pace in the user's unit: ("4:20", "/km"), or per mile in imperial.
+    static func runPace(_ secondsPerKm: Double) -> (value: String, unit: String) {
+        let s = Int((imperial ? secondsPerKm * 1.609344 : secondsPerKm).rounded())
+        return ("\(s / 60):" + String(format: "%02d", s % 60), imperial ? "/mi" : "/km")
     }
 
     static func minutesChange(_ value: Double) -> String {

@@ -26,6 +26,17 @@ struct ReadinessHome: View {
         case why, sleep, restingHR, hrv, strain, alarm, coach
     }
 
+    /// Whether a detail may open, from the dials and from a complication: an
+    /// older day's would read as today's, and before last night comes HRV and
+    /// resting HR would show the night before's (watch review 2026-11-25).
+    static func canOpen(_ page: Page, _ s: WatchSnapshot, now: Date = WatchDemo.now) -> Bool {
+        switch page {
+        case .alarm, .coach: return true
+        case .sleep, .strain: return s.date == WatchStore.localDate(now)
+        case .why, .hrv, .restingHR: return s.date == WatchStore.localDate(now) && !s.awaitingNight
+        }
+    }
+
     enum Stale {
         /// The watch is getting today (from the iPhone or the server).
         case loading
@@ -80,7 +91,7 @@ struct ReadinessHome: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             NavigationLink(value: Page.coach) { WatchCoachLights() }
-                .accessibilityLabel(W.tr("Kouč", "Coach"))
+                .accessibilityLabel(W.tr("Kouč, AI", "Coach, AI"))
         }
     }
 
@@ -267,8 +278,7 @@ struct ReadinessHome: View {
                     .accessibilityValue(dial.said)
                 }
                 .buttonStyle(.plain)
-                // Before the night comes its detail would show the night before's HRV.
-                .disabled(dial.page == .hrv && s.awaitingNight)
+                .disabled(!Self.canOpen(dial.page, s))
             }
         }
         .fixedSize(horizontal: false, vertical: true)

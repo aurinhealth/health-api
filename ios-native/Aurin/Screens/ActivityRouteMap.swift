@@ -82,6 +82,7 @@ struct ActivityRouteMap: View {
                     Text(m.rawValue).font(.footnote.weight(.medium))
                         .foregroundStyle(on ? Palette.onButton : Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 34)
+                        .tapTarget(width: 44, height: 34)
                         .background(on ? Palette.button : Palette.card, in: Capsule())
                 }
                 .buttonStyle(.plain)

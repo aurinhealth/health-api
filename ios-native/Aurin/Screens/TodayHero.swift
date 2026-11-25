@@ -304,8 +304,9 @@ struct TodayDials: View {
             RangeDial(value: c.value, scale: c.scale, band: c.band, bandColor: Palette.green.opacity(0.85),
                       dotColor: c.color == Palette.muted ? Palette.ink.opacity(0.45) : c.color, size: min(dial, 96), lineWidth: 6) {
                 VStack(spacing: 0) {
+                    // "10 000" at a large text size shrinks inside the ring (redesign review 16).
                     Text(verbatim: c.number).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.4)
                     if let unit = c.unit, c.number != "–" {
                         Text(verbatim: unit).font(Typo.tiny).foregroundStyle(Palette.muted)
                     }

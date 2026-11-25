@@ -133,6 +133,15 @@ struct WatchRoot: View {
             .navigationDestination(for: RaceDay.self) { race in
                 RaceDetail(race: race).onAppear { WatchReport.visit("training/race") }
             }
+            .navigationDestination(for: FoodPage.Page.self) { page in
+                Group {
+                    switch page {
+                    case .water: WaterPage()
+                    case .drinks: DrinksList()
+                    }
+                }
+                .onAppear { WatchReport.visit("food/\(page)") }
+            }
             .navigationDestination(for: ReadinessHome.Page.self) { page in
                 Group {
                     if let s = store.snapshot {
@@ -180,7 +189,7 @@ struct WatchRoot: View {
         } else {
             page = "readiness"
         }
-        if let detail, store.snapshot != nil { path.append(detail) }
+        if let detail, let snapshot = store.snapshot, ReadinessHome.canOpen(detail, snapshot) { path.append(detail) }
     }
 }
 

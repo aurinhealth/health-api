@@ -6,6 +6,7 @@ import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weather
 import { triathlonSplit } from "./triathlon-split.js";
 import { planSports } from "./training-plans.js";
 import { pausedSports } from "./athlete-state.js";
+import { isHardSession } from "./session-intensity.js";
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /swim/i.test(a.type || '') ? 'swim' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
@@ -14,6 +15,37 @@ export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?
 // 2026-11-24 point 1): the proposal is built as if they were gone already, so
 // a failed request leaves the week as it was.
 export const withoutPlannedFrom = (week, today) => ({ ...week, days: (week?.days || []).map(d => d.date >= today && d.daily?.training?.planned?.length ? { ...d, daily: { ...d.daily, training: { ...d.daily.training, planned: [] } } } : d) });
+// Generate for the days the athlete changed (Petr 2026-11-25): only their
+// planned workouts count as gone, the rest of the week stays and counts in.
+export const withoutPlannedOn = (week, dates) => { const on = new Set(dates); return { ...week, days: (week?.days || []).map(d => on.has(d.date) && d.daily?.training?.planned?.length ? { ...d, daily: { ...d.daily, training: { ...d.daily.training, planned: [] } } } : d) }; };
+// Whether the changed days touch the workouts kept around them, so the app
+// offers to recalculate the rest (triathlon coach 2026-11-25): a new key
+// workout next to a kept hard day or right after a heavy leg gym (48 h between
+// hard days), the week's only key workout gone, or the week's planned minutes
+// down by more than 35 % or up by more than 25 % (and by 60 min at least).
+// null when nothing fires; a beginner without a key workout gets no key rule.
+const minutesOf = a => Number(a.minutes) || (Number(a.durationHours) || 0) * 60;
+const heavyLegGym = a => sportOf(a) === 'gym' && /leg|lower|nohy|squat|drep|dřep|deadlift|mrtv/i.test(String(a.name || '')) && minutesOf(a) >= 45;
+const longSession = a => (sportOf(a) === 'ride' && minutesOf(a) >= 90) || (sportOf(a) === 'run' && minutesOf(a) >= 75);
+const keySession = a => isHardSession(a) || longSession(a);
+const keyItem = x => ['quality', 'long'].includes(x.role);
+export function replanAffects({ week, items = [], dates = [], today }) {
+  const on = new Set(dates), days = (week?.days || []).filter(d => d.date >= today);
+  const byDate = new Map((week?.days || []).map(d => [d.date, d]));
+  const planned = d => d?.daily?.training?.planned || [], done = d => d?.daily?.training?.completed || [];
+  const kept = d => [...(on.has(d.date) ? [] : planned(d)), ...done(d)];
+  const fresh = items.filter(x => on.has(x.date));
+  for (const x of fresh.filter(keyItem)) for (const n of [-1, 1]) {
+    const d = byDate.get(shift(x.date, n));
+    if (d && d.date >= today && kept(d).some(a => isHardSession(a) || (n === -1 && heavyLegGym(a)))) return { kind: 'hard_in_a_row', dates: [shift(x.date, n), x.date].sort() };
+  }
+  const before = days.flatMap(d => [...planned(d), ...done(d)]);
+  if (before.some(keySession) && !days.flatMap(kept).some(keySession) && !fresh.some(keyItem)) return { kind: 'key_lost', dates: [...on].sort() };
+  const was = days.flatMap(planned).reduce((n, a) => n + minutesOf(a), 0);
+  const now = days.flatMap(d => on.has(d.date) ? [] : planned(d)).reduce((n, a) => n + minutesOf(a), 0) + fresh.reduce((n, x) => n + (Number(x.minutes) || 0), 0);
+  if (was > 0 && Math.abs(now - was) >= 60 && (now < was * 0.65 || now > was * 1.25)) return { kind: now < was ? 'volume_down' : 'volume_up', dates: [...on].sort() };
+  return null;
+}
 // A first week from the athlete's own "hours a week now" (onboarding review
 // point 10, triathlon coach 2026-11-10), only until the history gives an
 // estimate: 80 % of the stated hours (at most 15), 2 to 5 easy sessions and

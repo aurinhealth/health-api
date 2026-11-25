@@ -150,7 +150,7 @@ private struct AlarmDay: View {
                 }
             }
         } else if set {
-            Text(Self.hours(sleepMinutes) + W.tr(" spánku", " of sleep"))
+            Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
                 .watchFont(12)
                 .foregroundStyle(W.muted)
         } else {
@@ -163,8 +163,7 @@ private struct AlarmDay: View {
     }
 
     private var title: String {
-        let name = first ? W.tr("Zítra", "Tomorrow") : W.dayName(morning).capitalized(with: W.locale)
-        return name + (weekend ? W.tr(", víkend", ", weekend") : "")
+        return Self.dayWord(morning) + (weekend ? W.tr(", víkend", ", weekend") : "")
     }
 
     private var bedMinutes: Int {
@@ -208,7 +207,7 @@ private struct AlarmDay: View {
             }
             saved = wake
             WKInterfaceDevice.current().play(.success)
-            let text = W.tr("Uloženo: ", "Saved: ") + Self.scopeName(scope) + " " + W.clock(minutes: Double(wake))
+            let text = W.tr("Uloženo: ", "Saved: ") + Self.scopeName(scope, morning: morning) + " " + W.clock(minutes: Double(wake))
             result = .saved(text)
             AccessibilityNotification.Announcement(text).post()
             try? await Task.sleep(for: .seconds(2))
@@ -216,19 +215,23 @@ private struct AlarmDay: View {
         }
     }
 
-    /// "weekdays", "weekend" or "tomorrow" in "Saved, weekdays 6:45".
-    static func scopeName(_ scope: String) -> String {
+    /// "This morning" after midnight, "Tomorrow", or the day's name: the
+    /// first morning is today's once the evening is over (watch review 2026-11-25).
+    static func dayWord(_ morning: String, now: Date = Date()) -> String {
+        if morning == WatchStore.localDate(now) { return W.tr("Dnes ráno", "This morning") }
+        if let next = Calendar.current.date(byAdding: .day, value: 1, to: now), morning == WatchStore.localDate(next) {
+            return W.tr("Zítra", "Tomorrow")
+        }
+        return W.dayName(morning).capitalized(with: W.locale)
+    }
+
+    /// "weekdays", "weekend" or the morning ("tomorrow") in "Saved, weekdays 6:45".
+    static func scopeName(_ scope: String, morning: String) -> String {
         switch scope {
-        case "once": W.tr("zítra", "tomorrow")
+        case "once": dayWord(morning).lowercased(with: W.locale)
         case "weekend": W.tr("víkend", "weekend")
         default: W.tr("všední dny", "weekdays")
         }
-    }
-
-    /// "7 h 20 min", as durations read everywhere (Petr 2026-11-23).
-    static func hours(_ minutes: Int) -> String {
-        let h = minutes / 60, m = minutes % 60
-        return m == 0 ? "\(h) h" : "\(h) h \(m) min"
     }
 
     /// "6:45" or "06:45" as minutes after midnight.
@@ -292,6 +295,7 @@ private struct AlarmDial<Content: View>: View {
 /// the iPhone's backup said in words, and Wrist taps on a page of its own.
 private struct AlarmSettings: View {
     @ObservedObject private var alarm = WatchAlarm.shared
+    @ObservedObject private var store = WatchStore.shared
 
     static let haptics: [(id: String, cs: String, en: String)] = [
         ("gentle", "Jemné", "Gentle"), ("rising", "Stoupající", "Rising"), ("strong", "Výrazné", "Strong")
@@ -303,8 +307,7 @@ private struct AlarmSettings: View {
                 Section {
                     Toggle(W.tr("Budit na hodinkách", "Wake me on the watch"), isOn: $alarm.onWatch)
                 } footer: {
-                    Text(W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on.")
-                         + (alarm.onWatch ? W.tr(" Když zaspíš, iPhone zazvoní o 5 min později.", " If you sleep through, your iPhone rings 5 min later.") : ""))
+                    Text(Self.footer(onWatch: alarm.onWatch, next: alarm.next, backup: store.settings.alarmBackup))
                 }
                 if alarm.onWatch {
                     Section {
@@ -323,6 +326,24 @@ private struct AlarmSettings: View {
                 }
             }
         }
+    }
+
+    /// What the watch really has set: its own session and the iPhone's backup, each with its time.
+    static func footer(onWatch: Bool, next: Date?, backup: Date?, now: Date = Date()) -> String {
+        guard onWatch else { return W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on.") }
+        var text = next.map { W.tr("Hodinky zabzučí v \(time($0)).", "Your watch taps you at \(time($0)).") }
+            ?? W.tr("Otevři Aurin večer, ať se budík nastaví.", "Open Aurin in the evening so the alarm gets set.")
+        if let backup, backup > now {
+            text += W.tr(" Když zaspíš, iPhone zazvoní v \(time(backup)).", " If you sleep through, your iPhone rings at \(time(backup)).")
+        }
+        return text
+    }
+
+    /// "6:45".
+    static func time(_ date: Date) -> String {
+        let format = DateFormatter()
+        format.dateFormat = "H:mm"
+        return format.string(from: date)
     }
 
     static func name(_ id: String) -> String {

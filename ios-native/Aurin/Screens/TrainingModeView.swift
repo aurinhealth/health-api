@@ -802,7 +802,7 @@ struct TrainingModeView: View {
                     Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 14).frame(minHeight: 36)
                         .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                        .contentShape(Capsule())
+                        .tapTarget(width: 44, height: 36)
                 }
                 .buttonStyle(.plain)
                 .tapTarget(width: 44, height: 44)
@@ -830,7 +830,7 @@ struct TrainingModeView: View {
                     Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 14).frame(minHeight: 36)
                         .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
-                        .contentShape(Capsule())
+                        .tapTarget(width: 44, height: 36)
                 }
                 .buttonStyle(.plain)
                 .tapTarget(width: 44, height: 44)

@@ -839,3 +839,20 @@ private extension View {
         }
     }
 }
+
+extension View {
+    /// A transition that moves, or with Omezit pohyb (Reduce Motion) only
+    /// fades: the one way for toasts, bars and strips (redesign review 14).
+    func motionTransition(_ transition: AnyTransition) -> some View {
+        modifier(MotionTransition(transition: transition))
+    }
+}
+
+private struct MotionTransition: ViewModifier {
+    let transition: AnyTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transition(reduceMotion ? .opacity : transition)
+    }
+}
