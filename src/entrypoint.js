@@ -183,7 +183,7 @@ import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchSchedul
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
-import { weekSummary, summaryWeek } from "./coach-week-summary.js";
+import { weekSummary, summaryWeek, summaryDue, postWeekSummary } from "./coach-week-summary.js";
 import { raceWeek, RACE_WEEK_DAYS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
@@ -928,6 +928,14 @@ async function morningPushNote(env, result) {
   if (!env.DB || result?.reason === 'outside-window' || !inMorningWindow(localHour())) return;
   const note = { at: new Date().toISOString(), reason: result?.reason || (result?.sent ? 'sent' : 'not-sent'), ...(result?.score !== undefined ? { score: result.score } : {}), ...(result?.missing ? { missing: result.missing } : {}), ...(result?.message ? { message: result.message } : {}), ...(result?.sent !== undefined ? { sent: result.sent } : {}) };
   await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'morning_push',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.DB.userId ?? env.USER_ID, note.reason, JSON.stringify(note)).run().catch(() => null);
+}
+
+// The week's summary (coach-week-summary.js): this and the week before, the
+// sleep of five weeks and the load balance at the week's end.
+async function weekSummaryFor(env,ctx,internalAuth,start,today){
+  const end=shiftDate(start,6),[weeks,sleep,fitness]=await Promise.all([coachWeeks(env,ctx,[shiftDate(start,-7),start]),coachSleep(env,ctx,internalAuth,end,USUAL_SLEEP_SPAN),
+    cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>({}))]);
+  return weekSummary({start,today,days:weeks.flatMap(w=>w.days||[]),sleep:sleep.sessions||[],load:loadBalance(fitness?.wellness||[],end<today?end:today)});
 }
 
 // The coach's own push (coach-push.js), checked with the morning push: a time
@@ -1778,11 +1786,25 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const today=localToday(),asked=url.searchParams.get('start'),start=validTrainingDay(asked)?mondayOfDate(asked):summaryWeek(today,mondayOfDate(today));
       if(start>today)throw new Error(L('Ten týden ještě nezačal.', 'That week has not started yet.'));
-      const end=shiftDate(start,6),[weeks,sleep,fitness]=await Promise.all([coachWeeks(env,ctx,[shiftDate(start,-7),start]),coachSleep(env,ctx,internalAuth,end,USUAL_SLEEP_SPAN),
-        cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>({}))]);
-      const summary=weekSummary({start,today,days:weeks.flatMap(w=>w.days||[]),sleep:sleep.sessions||[],load:loadBalance(fitness?.wellness||[],end<today?end:today)});
-      return Response.json({status:'ok',summary},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',summary:await weekSummaryFor(env,ctx,internalAuth,start,today)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // The Sunday message (coach-week-summary.js postWeekSummary): the redesign app
+  // asks when the coach chat opens; from Sunday 18:00 to Monday's end the server
+  // posts the week's summary once as a new chat. No AI.
+  if(url.pathname==='/app/api/coach/week-summary'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const today=localToday();
+      if(!summaryDue(today,localHour()))return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
+      const state=await getAthleteState(env.DB),start=summaryWeek(today,mondayOfDate(today));
+      if(state.posted?.week?.key===start)return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
+      const summary=await weekSummaryFor(env,ctx,internalAuth,start,today);
+      // A week without a plan and without a workout has nothing to sum up.
+      const posted=summary.workouts.done||summary.workouts.planned?await postWeekSummary(env.DB,summary,state):null;
+      return Response.json({status:'ok',posted},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){console.error('Week summary message failed',error.message);return Response.json({message:error.message},{status:500});}
   }
   // The coach's race-week message (coach-race-week.js): fuel, drinks and
   // pacing from the rules, no AI; null outside a running race's last six days.
@@ -2854,6 +2876,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const lastCoach=chat.messages.filter(m=>m.role==='assistant').at(-1);
       const chips=lastCoach&&chat.messages.at(-1)===lastCoach?await questionChips(env.DB,chat.id,lastCoach.id).catch(()=>[]):[];
       if(chips.length)chat.question={messageId:lastCoach.id,chips};
+      // The coach's own messages from the rules show their card under the text (the week, the race week).
+      const posted=Object.entries((await getAthleteState(env.DB).catch(()=>null))?.posted||{}).find(([,p])=>p.chatId===chat.id);
+      if(posted)chat.card={kind:posted[0]==='week'?'week_summary':'race_week',messageId:posted[1].messageId,key:posted[1].key};
     }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
