@@ -95,7 +95,7 @@ extension DemoData {
         "Ráno běh, v sobotu dlouhý běh: dřep jen krátce, 4×3.":
             "Run this morning, long run on Saturday: squats kept short, 4×3.",
         // Food
-        "Tréninkový den: o 350 kcal víc. Zbývá 1270 kcal, odpolední svačina kolem 360 kcal.":
+        "Tréninkový den: o 350 kcal víc. Zbývá 1 270 kcal, odpolední svačina kolem 360 kcal.":
             "Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.",
         "Snídaně": "Breakfast",
         "Dopolední svačina": "Morning snack",

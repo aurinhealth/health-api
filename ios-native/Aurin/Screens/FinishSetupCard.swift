@@ -78,7 +78,7 @@ struct FinishSetupCard: View {
                     // Not now: the card goes, the rows stay in Settings.
                     Button { hide() } label: {
                         Image(systemName: "xmark").scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
-                            .tapTarget(width: 28, height: 28)
+                            .tapTarget(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Skrýt kartu"))

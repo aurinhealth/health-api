@@ -342,6 +342,7 @@ struct PaywallView: View {
         VStack(spacing: 0) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).font(.caption2).foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
             // Not at the end of the setup: the sheet's button would allow the AI without saying so.
             if allowAI == nil {
             Button { allPlans = true } label: {
@@ -962,10 +963,10 @@ struct PlanCard: View {
         }
     }
 
-    /// The name on the card: "Platíš měsíčně" (the year paid monthly), "Ročně", "Měsíčně".
+    /// The name on the card: "Ročně, placeno měsíčně" (one name with the main offer), "Ročně", "Měsíčně".
     var name: String {
         switch offer.kind {
-        case .yearMonthly: return L10n.tr("Platíš měsíčně")
+        case .yearMonthly: return L10n.tr("Ročně, placeno měsíčně")
         case .yearOnce: return L10n.tr("Ročně")
         case .monthly: return L10n.tr("Měsíčně")
         }

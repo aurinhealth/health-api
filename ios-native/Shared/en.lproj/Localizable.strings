@@ -4483,6 +4483,7 @@
 "Plán od %@" = "Plan from %@";
 "závod dnes" = "race today";
 "do závodu" = "days to go";
+"%@ do závodu" = "%@ to go";
 "Zátěž a přehled jsou u dneška" = "Load and overview are on today";
 "Obvyklé od" = "Usual from";
 "Obvyklé do" = "Usual to";
@@ -5345,3 +5346,4 @@
 "Každý bod je jeden den. Čárkovaně průměr období." = "Each point is one day. The dashed line is the period's average.";
 "Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The dashed line is the period's average. Today is only part of the day so far.";
 "Celkem ve dnech plánu" = "Total on plan days";
+"Auto (dnes %@)" = "Auto (tonight %@)";
