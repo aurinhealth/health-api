@@ -170,15 +170,16 @@ struct NotificationsSettingsView: View {
             SettingsGroup(title: "Soukromí") {
                 SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: privacyCaption, isOn: $hideValues)
             }
-            if !model.demo, let newsEmails {
+            if !model.demo {
+                // Always there (the alert and the setup point here); off and disabled until the server answers.
                 SettingsGroup(title: "E-mail") {
                     SettingsToggle(title: "Novinky e-mailem", subtitle: "O nových funkcích Aurinu. Odhlásit se dá i odkazem v každém e-mailu.",
-                                   isOn: Binding(get: { newsEmails }, set: { wanted in
+                                   isOn: Binding(get: { newsEmails ?? false }, set: { wanted in
                                        self.newsEmails = wanted
                                        Task {
                                            do { try await model.api.setProductEmails(wanted) } catch { self.newsEmails = !wanted }
                                        }
-                                   }))
+                                   }), disabled: newsEmails == nil)
                 }
             }
         }
