@@ -37,8 +37,12 @@ enum SessionKeychain {
                 keep(cookie)
             }
         }
+        // A fresh install (the app's defaults are gone, the Keychain is not):
+        // the sign-in from before the app was deleted goes instead of coming
+        // back (Gemini review 2026-11-25).
         for server in ServerChoice.allCases {
-            if let host = server.url.host() { restore(host) }
+            guard let host = server.url.host() else { continue }
+            if moved { restore(host) } else { SecItemDelete(query(host) as CFDictionary) }
         }
         observer = NotificationCenter.default.addObserver(forName: .NSHTTPCookieManagerCookiesChanged, object: HTTPCookieStorage.shared, queue: nil) { _ in
             sync()

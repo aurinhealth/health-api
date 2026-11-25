@@ -84,7 +84,8 @@ struct JournalAnswerButtons: View {
     let choose: (Int) -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
+        // 12 pt apart and 44 pt to tap each (Petr 2026-11-23, 617 #35).
+        HStack(spacing: 12) {
             button(0, symbol: "xmark", label: "Ne")
             button(1, symbol: "checkmark", label: "Ano")
         }
@@ -94,6 +95,7 @@ struct JournalAnswerButtons: View {
         Button { choose(value) } label: {
             Image(systemName: symbol).scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.secondary)
                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                .tapTarget(width: 34, height: 34)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
@@ -158,7 +160,7 @@ struct JournalHealthCard: View {
                     }
                     Spacer(minLength: 8)
                     Button { model.push(.journal(card.date)) } label: {
-                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Color.black.opacity(0.85))
+                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onAccent)
                             .padding(.horizontal, 18).frame(height: 40).background(Palette.amber, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -330,6 +332,7 @@ struct JournalView: View {
                 } label: {
                     Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                        .tapTarget(width: 36, height: 36)
                 }
                 .accessibilityLabel(L10n.tr("Další možnosti"))
             }
@@ -432,19 +435,33 @@ struct JournalDayEditor: View {
                 .buttonStyle(.plain)
                 .disabled(d.state == "future")
                 .accessibilityLabel(Fmt.dayMonth(d.date))
+                .accessibilityValue(Self.spokenState(d.state))
                 .accessibilityAddTraits(d.date == date ? .isSelected : [])
             }
         }
     }
 
-    /// Done: a green ✓; open items: an amber ring; nothing yet: a faint ring.
+    /// The day's state in words, not only its colour (redesign review 17).
+    static func spokenState(_ state: String) -> String {
+        switch state {
+        case "done": L10n.tr("Hotovo")
+        case "partial": L10n.tr("Rozpracováno")
+        case "future": ""
+        default: L10n.tr("Nevyplněno")
+        }
+    }
+
+    /// Done: a green ✓; open items: an amber ring with a dot in it (told
+    /// apart by its shape too, redesign review 17); nothing yet: a faint ring.
     @ViewBuilder private func mark(_ state: String) -> some View {
         switch state {
         case "done":
             Image(systemName: "checkmark").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green)
                 .frame(width: 26, height: 26).background(Palette.green.opacity(0.18), in: Circle())
         case "partial":
-            Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24).frame(width: 26, height: 26)
+            Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24)
+                .overlay { Circle().fill(Palette.amber).frame(width: 8, height: 8) }
+                .frame(width: 26, height: 26)
         case "future":
             Circle().stroke(Palette.ink.opacity(0.08), lineWidth: 1).frame(width: 24, height: 24).frame(width: 26, height: 26)
         default:
@@ -756,6 +773,7 @@ struct JournalFollowUps: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(on ? Palette.onButton : Palette.ink)
                         .padding(.horizontal, 10).frame(height: 30)
+                        .tapTarget(width: 44, height: 30)
                         .background(on ? Palette.button : Palette.track, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -768,6 +786,7 @@ struct JournalFollowUps: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
+                .tapTarget(width: 30, height: 30)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
@@ -845,7 +864,7 @@ struct JournalValueSheet: View {
                 }
                 .disabled(busy)
             }
-            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 8)
         }
         .presentationDetents([.medium, .large], selection: $detent)
         .glassSheetBackground()

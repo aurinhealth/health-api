@@ -35,6 +35,9 @@ struct TodaySnapshot: Decodable, Equatable {
     /// A key workout of the calendar missed this week, with the day the coach
     /// proposes for it (src/missed-workout.js); nil when none, on another day or from an older server.
     var missedWorkout: MissedWorkout? = nil
+    /// "Did you play?": yesterday's practice or match of the week plan that
+    /// nothing recorded (src/week-planner.js playedCheck); nil when none or from an older server.
+    var played: Played? = nil
     /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
     /// nil when nothing is left to recover from, on another day or from an older server.
     var recoveryTime: RecoveryTime? = nil
@@ -64,6 +67,16 @@ struct TodaySnapshot: Decodable, Equatable {
         let date: String
         /// "green", "yellow", "red"; nil without a readiness or after the day.
         let zone: String?
+    }
+
+    struct Played: Decodable, Equatable {
+        let date: String
+        /// The Log workout type ("Soccer") and its name ("Fotbal").
+        let type: String
+        let name: String
+        /// "training" or "match".
+        let kind: String
+        let minutes: Int
     }
 
     struct MissedWorkout: Decodable, Equatable {
@@ -157,6 +170,9 @@ struct TodaySnapshot: Decodable, Equatable {
         /// The redesign's line under the number (D-DNES-2): what the numbers say,
         /// a key of src/day-verdict.js NUMBERS_LINE_KEYS, never advice; nil on an earlier day.
         var numbersLine: String? = nil
+        /// What makes a yellow or red line, keys of src/day-verdict.js
+        /// NUMBERS_OFF_KEYS ("sleep", "hrv", "restingHR"); nil from an older server.
+        var numbersOff: [String]? = nil
         /// What shaped the number (src/readiness.js): "short_night" (under 3 h,
         /// capped at yellow), "no_night" (no number without the night), etc.
         var flags: [String]? = nil

@@ -118,6 +118,7 @@ struct StretchingCard: View {
                     Label("Spustit", systemImage: "play.fill").font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 36)
+                        .tapTarget(width: 44, height: 36)
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -207,12 +208,10 @@ struct StretchingCard: View {
 /// "i" of a stretch: its photos, how long and how to do it.
 struct StretchInfoSheet: View {
     let item: GymStretching.Item
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+        SheetFrame(title: item.name, fitted: false) {
+            VStack(alignment: .leading, spacing: 16) {
                     if !item.photoURLs.isEmpty { ExercisePhotos(urls: item.photoURLs, labeled: false) }
                     Text(verbatim: item.duration).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     VStack(alignment: .leading, spacing: 10) {
@@ -232,15 +231,9 @@ struct StretchInfoSheet: View {
                         Text("Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet.")
                             .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                }
-                .padding(20)
             }
-            .background(Palette.background)
-            .navigationTitle(item.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
         }
-        .presentationDetents([.large])
+        .presentationBackground(Palette.background)
     }
 }
 
@@ -632,34 +625,25 @@ struct GymRoutineMoves: Decodable, Equatable {
     func moves(_ kind: GymRoutineKind) -> [Move] { kind == .warmup ? warmup : stretching }
 }
 
-/// Cíl, Zkušenost, Kardio and Druh kardia: each saved as soon as it changes;
-/// Rozcvička and Protažení open their own page (GymRoutineSettingsView).
+/// Cíl and Zkušenost; Rozcvička, Kardio and Protažení each open the same kind
+/// of page (GymRoutineSettingsView, GymCardioSettingsView), the row showing
+/// what a workout gets by default.
 struct GymPreferencesGroup: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
-    @State private var cardio = "start"
-    @State private var cardioType = "exercise_bike"
-    /// Délka kardia: 0 = no limit; the favourite times offered in the workout.
-    @State private var cardioLength = 0
-    @State private var favourites = GymCardio.favourites
-    @State private var addingTime = false
     @State private var choosingGoal = false
     @State private var error: String?
 
     static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
-    static let cardioModes = [("none", "Ne"), ("start", "Začátek"), ("end", "Konec"), ("both", "Obojí")]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             group
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            cardioGroups.padding(.top, 18)
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
-        .onChange(of: cardio) { _, value in cardioChanged(value) }
-        .onChange(of: cardioType) { _, value in cardioTypeChanged(value) }
     }
 
     private var group: some View {
@@ -673,10 +657,8 @@ struct GymPreferencesGroup: View {
             SettingsDivider()
             routineLink(.warmup)
             SettingsDivider()
-            SettingsPicker(title: "Kardio", selection: $cardio, options: Self.cardioModes)
-            SettingsDivider()
-            // Open with Ne too: cardio added during a workout starts with it.
-            SettingsPicker(title: "Druh kardia", selection: $cardioType, options: cardioOptions)
+            NavigationLink { GymCardioSettingsView() } label: { SettingsRow(title: "Kardio", value: cardioValue) }
+                .buttonStyle(.plain)
             SettingsDivider()
             routineLink(.stretching)
             SettingsDivider()
@@ -688,66 +670,8 @@ struct GymPreferencesGroup: View {
         .disabled(prefs == nil && !model.demo)
     }
 
-    /// Délka kardia (no limit … 60 min) and Oblíbené časy (chips in the workout).
-    private var cardioGroups: some View {
-        VStack(alignment: .leading, spacing: 26) {
-            SettingsGroup(title: L10n.tr("Délka kardia"), footer: L10n.tr("Bez limitu čas jen běží a zastavíš ho, až budeš hotový.")) {
-                CardioLengthSlider(minutes: $cardioLength) { value in
-                    save(["cardioLength": .number(Double(value))], unchanged: (prefs?.cardioLength ?? 0) == value)
-                }
-                .padding(16)
-            }
-            SettingsGroup(title: L10n.tr("Oblíbené časy")) {
-                ForEach(favourites, id: \.self) { minutes in
-                    HStack {
-                        Text(verbatim: "\(minutes) min").font(.body).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Button { saveFavourites(favourites.filter { $0 != minutes }) } label: {
-                            Image(systemName: "star.fill").scaledFont(15, weight: .medium).foregroundStyle(Palette.muted)
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(Text("Odebrat z oblíbených"))
-                    }
-                    .padding(.leading, 16).padding(.trailing, 6)
-                    .frame(minHeight: 50)
-                    SettingsDivider()
-                }
-                Button { addingTime = true } label: {
-                    HStack {
-                        Text("Přidat čas").font(.body).foregroundStyle(Palette.ink)
-                        Spacer(minLength: 8)
-                        Image(systemName: "plus").scaledFont(15, weight: .medium).foregroundStyle(Palette.muted)
-                    }
-                    .padding(.leading, 16).padding(.trailing, 20).frame(minHeight: 50)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(favourites.count >= 6)
-            }
-            .sheet(isPresented: $addingTime) {
-                CardioTimeSheet { value in saveFavourites(favourites + [value]) }
-            }
-        }
-        .disabled(prefs == nil && !model.demo)
-    }
-
-    /// At most six, each once, shortest first (src/stretching.js cardioFavourites).
-    private func saveFavourites(_ list: [Int]) {
-        let next = Array(Set(list.filter { (1...60).contains($0) })).sorted().prefix(6).map { $0 }
-        favourites = next
-        save(["cardioFavourites": .array(next.map { .number(Double($0)) })], unchanged: prefs?.cardioFavourites == next)
-    }
-
     private func goalChanged(_ value: String) {
         save(["goal": .string(value)], unchanged: prefs?.goal == value)
-    }
-
-    /// The active place's cardio machines (the sample day: all of them).
-    private var cardioOptions: [(String, String)] {
-        let options = prefs?.cardioOptions ?? GymCardio.all.map { GymPreferences.CardioOption(id: $0, name: GymCardio.name($0)) }
-        return options.map { ($0.id, $0.name) }
     }
 
     private func routineLink(_ kind: GymRoutineKind) -> some View {
@@ -757,21 +681,21 @@ struct GymPreferencesGroup: View {
         .buttonStyle(.plain)
     }
 
-    /// "Automaticky", an own routine's name or "Vypnuto".
+    /// "Auto", "Auto, 10 min", "Volný čas", an own routine's name or "Vypnuto".
     private func routineValue(_ kind: GymRoutineKind) -> String {
-        guard let prefs else { return L10n.tr("Automaticky") }
+        guard let prefs else { return L10n.tr("Auto") }
         if !prefs.isOn(kind) { return L10n.tr("Vypnuto") }
-        return prefs.routine(kind).flatMap { id in prefs.routines(kind).first { $0.id == id }?.name } ?? L10n.tr("Automaticky")
+        if prefs.routine(kind) == LivePartDraft.freeId { return L10n.tr("Volný čas") }
+        if let id = prefs.routine(kind), let own = prefs.routines(kind).first(where: { $0.id == id }) { return own.name }
+        return prefs.length(kind).map { L10n.f("Auto, %@", "\($0) min") } ?? L10n.tr("Auto")
     }
 
-    private func cardioChanged(_ value: String) {
-        let saved: String? = prefs?.cardioMode
-        save(["cardio": .string(value)], unchanged: saved == value)
-    }
-
-    private func cardioTypeChanged(_ value: String) {
-        let saved: String? = prefs?.cardioType
-        save(["cardioType": .string(value)], unchanged: saved == value)
+    /// "Na konci, 20 min", "Na začátku" (no limit) or "Vypnuto".
+    private var cardioValue: String {
+        let mode = prefs?.cardioMode ?? "start"
+        let name = L10n.tr(GymCardioSettingsView.modes.first { $0.0 == mode }?.1 ?? "Na začátku")
+        guard mode != "none", let length = prefs?.cardioLength, length > 0 else { return name }
+        return L10n.f("%@, %@", name, "\(length) min")
     }
 
     /// "Cíl  Auto, Síla a svaly ⌃⌄": opens the sheet with the goals.
@@ -810,10 +734,6 @@ struct GymPreferencesGroup: View {
     private func apply(_ value: GymPreferences) {
         prefs = value
         goal = value.goal
-        cardio = value.cardioMode
-        cardioType = value.cardioType ?? value.cardioOptions?.first?.id ?? "exercise_bike"
-        cardioLength = value.cardioLength ?? 0
-        favourites = value.cardioFavourites ?? GymCardio.favourites
     }
 
     private func save(_ change: JSONObject, unchanged: Bool) {

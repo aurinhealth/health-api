@@ -390,7 +390,8 @@ struct ChromeButton: View {
     var body: some View {
         button
             .disabled(!enabled)
-            .opacity(enabled ? 1 : 0.45)
+            // Greyed but readable (617 #40: a disabled "Save" was hard to read).
+            .opacity(enabled ? 1 : 0.6)
     }
 
     @ViewBuilder private var button: some View {
@@ -414,6 +415,8 @@ struct ChromeButton: View {
                     .foregroundStyle(tint ?? Palette.ink)
                     .frame(width: 40, height: 40)
                     .contentShape(Circle())
+                    // 44 pt to tap around the 40 pt glass disc (617 #35).
+                    .tapTarget(width: 40, height: 40)
             }
             .buttonStyle(.plain)
             .chromeGlass(in: Circle())
@@ -521,12 +524,16 @@ private struct PinnedBarBackground: View {
     return window.safeAreaInsets.top < 20
 }
 
-/// The pinned bar of a drill-down page: back on the left, the page's action
-/// on the right, both glass. Scrolled down, the title shows in the middle;
-/// on iOS 26 the page fades out under the bar (the system's soft edge),
-/// before it a light blur goes behind it.
-private struct PinnedTopBar: ViewModifier {
+/// The page header of every subpage (617 #14): back on the left, the page's
+/// action or the coach's capsule [coach, i] on the right, both glass, in one
+/// pinned 44 pt row. The title stands in the middle of the screen, not between
+/// the buttons; scrolled down it shows (always with pinTitle). On iOS 26 the
+/// page fades out under the bar (the system's soft edge) with the paper behind
+/// it, before it a light blur goes behind it.
+private struct PageHeader: ViewModifier {
     var title: String?
+    /// The title in small spaced capitals ("RESTING HR"), as the detail pages draw it.
+    var spacedTitle = false
     var trailing: ChromeAction?
     /// Selecting (Vybrat): "Zrušit" instead of back, the title always shown.
     var leading: ChromeAction?
@@ -583,8 +590,8 @@ private struct PinnedTopBar: ViewModifier {
     private func pinned(_ page: some View) -> some View {
         page.overlay(alignment: .top) {
             bar
-                // On the line of the page's own title row (24 pt down, 36 pt high).
-                .padding(.top, 22)
+                // On the line of the page's own title row (24 pt down, 36 pt high); the row is 44 pt.
+                .padding(.top, 20)
                 .padding(.bottom, 10)
                 .background {
                     PinnedBarBackground()
@@ -600,14 +607,6 @@ private struct PinnedTopBar: ViewModifier {
                     ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
                 } else {
                     FloatingBackButton(action: back)
-                }
-                Spacer(minLength: 0)
-                if let title {
-                    Text(L10n.tr(title))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1).minimumScaleFactor(0.85)
-                        .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
                 }
                 Spacer(minLength: 0)
                 if let extra {
@@ -628,8 +627,34 @@ private struct PinnedTopBar: ViewModifier {
                     Color.clear.frame(width: 40, height: 40)
                 }
             }
+            .frame(minHeight: 44)
+            .background {
+                // Centred on the screen whatever stands on either side; kept clear
+                // of the buttons (the capsule [coach, i] is the widest).
+                if let title {
+                    titleText(title)
+                        .padding(.horizontal, 96)
+                        .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
+                }
+            }
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, PageGrid.margin)
+    }
+
+    @ViewBuilder private func titleText(_ title: String) -> some View {
+        if spacedTitle {
+            Text(verbatim: L10n.tr(title).uppercased(with: Fmt.locale))
+                .scaledFont(13, weight: .medium, cap: .denseCap)
+                .tracking(3)
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
+        } else {
+            Text(L10n.tr(title))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.85)
+        }
     }
 
     private func withCompanion(_ coach: CoachEntry) -> CoachEntry {
@@ -675,9 +700,9 @@ final class FrameBox {
 extension View {
     /// Pins the back button (and the page's action) in a bar over the page.
     func floatingBack(title: String? = nil, trailing: ChromeAction? = nil, extra: ChromeAction? = nil,
-                      leading: ChromeAction? = nil, pinTitle: Bool = false, coach: CoachEntry? = nil,
+                      leading: ChromeAction? = nil, pinTitle: Bool = false, spacedTitle: Bool = false, coach: CoachEntry? = nil,
                       _ action: @escaping () -> Void) -> some View {
-        modifier(PinnedTopBar(title: title, trailing: trailing, leading: leading, extra: extra, pinTitle: pinTitle, coach: coach, back: action))
+        modifier(PageHeader(title: title, spacedTitle: spacedTitle, trailing: trailing, leading: leading, extra: extra, pinTitle: pinTitle, coach: coach, back: action))
     }
 }
 
@@ -688,6 +713,7 @@ extension View {
 private struct TabTopBar<Bar: View>: ViewModifier {
     let bar: Bar
     @Environment(\.scrollReport) private var parent
+    @Environment(\.widgetEditingReport) private var parentEditing
     @State private var scrolled = false
     @State private var editingWidgets = false
 
@@ -699,12 +725,13 @@ private struct TabTopBar<Bar: View>: ViewModifier {
                 if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
             })
             .environment(\.widgetEditingReport, { (editing: Bool) in
+                parentEditing?(editing)
                 if editing != editingWidgets { withAnimation(.easeOut(duration: 0.2)) { editingWidgets = editing } }
             })
             .overlay(alignment: .top) {
                 if scrolled && !editingWidgets {
                     HStack(spacing: 10) { bar }
-                        .padding(.horizontal, 18)
+                        .padding(.horizontal, PageGrid.margin)
                         .padding(.top, 6)
                         .padding(.bottom, 10)
                         .background { PinnedBarBackground() }
@@ -810,5 +837,22 @@ private extension View {
         } else {
             self
         }
+    }
+}
+
+extension View {
+    /// A transition that moves, or with Omezit pohyb (Reduce Motion) only
+    /// fades: the one way for toasts, bars and strips (redesign review 14).
+    func motionTransition(_ transition: AnyTransition) -> some View {
+        modifier(MotionTransition(transition: transition))
+    }
+}
+
+private struct MotionTransition: ViewModifier {
+    let transition: AnyTransition
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transition(reduceMotion ? .opacity : transition)
     }
 }

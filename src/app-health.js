@@ -199,7 +199,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const avg = (from, to) => mean(weights.filter(p => p.date > from && p.date <= to).map(p => p.value));
   const nowAvg = avg(shift(date, -7), date), monthAgo = avg(shift(date, -37), shift(date, -30));
   const fat = series("bodyFat", 60, 1, intervals);
-  // Muscle mass (lean body mass, kg) from a scale, the last reading of each day.
+  // Lean body mass (kg, everything but fat, not muscle alone) from a scale, the last reading of each day.
   const leanByDay = new Map();
   for (const r of Array.isArray(muscle) ? muscle : []) {
     const t = new Date(r.sample_time), d = Number.isFinite(+t) ? localDate(t) : null, v = num(r.value_numeric);

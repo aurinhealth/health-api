@@ -979,6 +979,11 @@ struct ZoneList: View {
         return colors[min(i, colors.count - 1)]
     }
 
+    /// "Z4" on the light amber stays dark: white on it is only 3.5 : 1 (redesign review 18).
+    static func label(_ i: Int) -> Color {
+        i > 3 ? Palette.onAccent : i == 3 ? Color(light: 0x1B1A17, dark: 0x0A0B0C) : Palette.ink
+    }
+
     var body: some View {
         let top = max(rows.map(\.percent).max() ?? 1, 1)
         VStack(spacing: 0) {
@@ -986,7 +991,7 @@ struct ZoneList: View {
                 VStack(spacing: 10) {
                     HStack(spacing: 12) {
                         Text(verbatim: "Z\(r.id + 1)").scaledFont(13, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(r.id >= 3 ? Palette.onAccent : Palette.ink)
+                            .foregroundStyle(Self.label(r.id))
                             .frame(width: 30, height: 30)
                             .background(Self.color(r.id), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         VStack(alignment: .leading, spacing: 1) {
@@ -1772,6 +1777,7 @@ struct ManualWorkoutSheet: View {
                 Image(systemName: symbol).scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
+                    .tapTarget(width: 36, height: 36)
                     .background(color.opacity(0.16), in: Circle())
                 Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                     .lineLimit(2).minimumScaleFactor(0.92).multilineTextAlignment(.center)
@@ -1839,10 +1845,9 @@ struct ManualWorkoutSheet: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    /// "55 min", "1 h 30", "4 h".
+    /// "55 min", "1 h 30 min", "4 h" (Fmt.duration).
     nonisolated static func length(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes) min" }
-        return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
+        Fmt.duration(minutes)
     }
 
     // MARK: Heart rate or effort
@@ -1980,7 +1985,7 @@ struct PowerTermsButton: View {
         Button { open = true } label: {
             Label("Co znamenají TSS, NP, IF a FTP", systemImage: "info.circle")
                 .font(Typo.caption).foregroundStyle(Palette.muted)
-                .frame(minHeight: 32).contentShape(Rectangle())
+                .frame(minHeight: 32).tapTarget(width: 44, height: 32)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $open) { PowerTermsSheet() }

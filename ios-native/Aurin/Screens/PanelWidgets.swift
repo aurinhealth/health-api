@@ -167,7 +167,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .activeCalories: return "Aktivní výdej"
         case .weight: return "Váha"
         case .bodyFat: return "Tělesný tuk"
-        case .muscle: return "Svalová hmota"
+        case .muscle: return "Beztuková hmota"
         case .journal: return "Deník"
         case .cycle: return "Cyklus"
         case .healthMonitor: return "Health monitor"

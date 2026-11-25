@@ -43,11 +43,11 @@ struct LiveGymView: View {
             if let day {
                 if summary {
                     PageScroll {
-                        summaryView(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 40)
+                        summaryView(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 40)
                     }
                 } else {
                     PageScroll {
-                        live(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
+                        live(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
                     }
                     if let restEnd {
                         restBar(until: restEnd).padding(.horizontal, 16).padding(.bottom, 12)
@@ -63,7 +63,7 @@ struct LiveGymView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -119,6 +119,7 @@ struct LiveGymView: View {
                     Text("Dokončit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 16).frame(height: 34)
                         .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 34)
                 }
                 .buttonStyle(.plain)
             }
@@ -259,11 +260,13 @@ struct LiveGymView: View {
             Button { restEnd = end.addingTimeInterval(30) } label: {
                 Text("+30 s").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             Button { restEnd = nil } label: {
                 Text("Přeskočit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
         }

@@ -66,7 +66,7 @@ struct JournalMoodSheet: View {
                     SecondaryButton(title: "Smazat odpověď") { submit(nil) }.disabled(busy)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 8)
             .background(Palette.background)
             .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
@@ -85,6 +85,7 @@ struct JournalMoodSheet: View {
             Text(verbatim: Self.text(Self.labelWords[i])).font(.subheadline.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 13).frame(minHeight: 36)
+                .tapTarget(width: 44, height: 36)
                 .background(on ? Palette.button : Palette.card, in: Capsule())
                 .opacity(!on && full ? 0.45 : 1)
         }

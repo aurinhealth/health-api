@@ -58,6 +58,9 @@ struct MuscleFatigue: Decodable {
         let estimated: Bool?
         /// What tired it, the biggest part first (at most three).
         let from: [Cause]?
+        /// Its own last training day in the 4 weeks (src/muscle-fatigue.js); nil
+        /// without one, or from a server before the 617 review.
+        var lastDate: String? = nil
     }
 
     /// One gym exercise (with its sets) or a ride, run or walk.

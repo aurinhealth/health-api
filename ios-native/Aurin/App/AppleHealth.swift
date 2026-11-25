@@ -233,8 +233,17 @@ final class AppleHealth {
         }
         setCategories(chosen)
         // The account's Connect, on the server too: uploads are kept only after it (src/apple-health.js).
-        // An older server does not know it and keeps them anyway.
-        _ = try? await api.send("/app/api/health/apple", method: "PUT", body: [String: String]()) as JSONValue
+        // A failed one fails the Connect with its reason, instead of a first sync the server
+        // refuses (409) and that quietly switches reading off again (redesign review point 7).
+        do {
+            let _: JSONValue = try await api.send("/app/api/health/apple", method: "PUT", body: [String: String]())
+        } catch APIError.message("Method not allowed") {
+            // A server from before the Connect (#1256 not yet released there) keeps the uploads anyway.
+        } catch {
+            message = error.localizedDescription
+            ErrorLog.add(path: "Apple Health connect", status: nil, message: error.localizedDescription)
+            return false
+        }
         UserDefaults.standard.set(account, forKey: Self.ownerKey)
         enabled = true
         // A new category needs its history, not just the last days.
@@ -439,10 +448,7 @@ final class AppleHealth {
                     if let api = AppleHealth.shared.api {
                         // Woken in the background: the widgets follow the new data,
                         // after HealthKit heard back (BackgroundRefresh.healthWake).
-                        if UIApplication.shared.applicationState == .active {
-                            // HealthKit says something new came: no 10-minute wait.
-                            if await AppleHealth.shared.run(api: api, force: true).changed { AppleHealth.shared.newInApp += 1 }
-                        }
+                        if UIApplication.shared.applicationState == .active { AppleHealth.shared.followInApp(api: api) }
                         else { await BackgroundRefresh.healthWake(api: api) }
                     }
                     completion()
@@ -457,6 +463,34 @@ final class AppleHealth {
             reader.store.enableBackgroundDelivery(for: type, frequency: often) { _, _ in }
         }
     }
+
+    /// HealthKit says something new came while the app is open (review 2026-11-24
+    /// point 4): at most one sync every 2 minutes instead of one per wake, and
+    /// without force, so a wake with nothing new sends nothing. Wakes during a
+    /// sync or inside the 2 minutes wait for one sync after them, so a workout
+    /// saved meanwhile is not left until the next open. The tabs follow once
+    /// per sync that brought something new.
+    func followInApp(api: APIClient) {
+        // A wake while this one's sync reads and sends: one more round after it,
+        // as the sync may have read before the new data was there.
+        guard followUp == nil else { wokenAgain = true; return }
+        followUp = Task { @MainActor in
+            defer { followUp = nil }
+            repeat {
+                wokenAgain = false
+                while running != nil || lastSync.map({ Date().timeIntervalSince($0) < Self.inAppGap }) == true {
+                    let wait = running != nil ? 5 : max(5, Self.inAppGap - Date().timeIntervalSince(lastSync ?? .distantPast))
+                    try? await Task.sleep(for: .seconds(wait))
+                    if Task.isCancelled { return }
+                }
+                guard UIApplication.shared.applicationState == .active else { return }
+                if await run(api: api, within: Self.inAppGap).changed { newInApp += 1 }
+            } while wokenAgain
+        }
+    }
+    @ObservationIgnored private var followUp: Task<Void, Never>?
+    @ObservationIgnored private var wokenAgain = false
+    private static let inAppGap: TimeInterval = 120
 
     private func stopObservers() {
         for query in observers { reader.store.stop(query) }
@@ -482,7 +516,7 @@ final class AppleHealth {
     }
 
     /// The sync with what it did; one already running is awaited, not skipped.
-    func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
+    func run(api: APIClient, force: Bool = false, within gap: TimeInterval = 600) async -> SyncOutcome {
         if let running { return await running.value }
         guard enabled, Self.readsForAccount, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
         // No health data leaves the phone before the account's consent to it.
@@ -490,7 +524,7 @@ final class AppleHealth {
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
-        if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
+        if !force, let lastSync, Date().timeIntervalSince(lastSync) < gap { return SyncOutcome(ok: true, changed: false) }
         let task = Task { await perform(api: api, force: force) }
         running = task
         runningSince = Date()
@@ -1144,11 +1178,33 @@ final class HealthReader: @unchecked Sendable {
         }
     }
 
-    /// The day's average (resting heart rate, VO2max, breathing, oxygen).
+    /// One device per day (617 review #12): Apple Health's own day average mixes
+    /// every app that writes the value (an Apple Watch and a Fitbit synced into
+    /// Health), and each device measures it its own way. As src/source-priority.js
+    /// does between services: the "home" source, the one with the most days in the
+    /// window, holds; another fills only the days it has nothing.
+    static func oneSource<T>(_ items: [T], day: (T) -> String, source: (T) -> String) -> [String: [T]] {
+        var byDay: [String: [String: [T]]] = [:]
+        for item in items { byDay[day(item), default: [:]][source(item), default: []].append(item) }
+        var days: [String: Int] = [:]
+        for sources in byDay.values { for key in sources.keys { days[key, default: 0] += 1 } }
+        // Ties by name, so the choice never changes between two syncs.
+        let home = days.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }?.key
+        return byDay.compactMapValues { sources in
+            if let home, let own = sources[home] { return own }
+            return sources.max { a, b in a.value.count != b.value.count ? a.value.count < b.value.count : a.key > b.key }?.value
+        }
+    }
+
+    private static func sourceOf(_ sample: HKSample) -> String { sample.sourceRevision.source.bundleIdentifier }
+
+    /// The day's average (resting heart rate, VO2max, walking heart rate), from one device.
     private func daily(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
-        await statistics(HKQuantityType(id), options: .discreteAverage, from: from, to: to, step: DateComponents(day: 1)).compactMap { s -> AppleRecord? in
-            guard let value = s.averageQuantity()?.doubleValue(for: unit) else { return nil }
-            let date = day(s.startDate)
+        let list = await samples(HKQuantityType(id), from: from, to: to).compactMap { $0 as? HKQuantitySample }
+        let byDay = Self.oneSource(list, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) })
+        return byDay.keys.sorted().compactMap { date -> AppleRecord? in
+            guard let values = byDay[date]?.map({ $0.quantity.doubleValue(for: unit) }), !values.isEmpty else { return nil }
+            let value = values.reduce(0, +) / Double(values.count)
             return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
         }
     }
@@ -1161,10 +1217,9 @@ final class HealthReader: @unchecked Sendable {
     /// evening's samples) waits for the morning.
     private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, precision: Double = 10, from: Date, to: Date) async -> [AppleRecord] {
         let list = await samples(HKQuantityType(id), from: from.addingTimeInterval(-9 * 3600), to: to).compactMap { $0 as? HKQuantitySample }
-        var byDay: [String: [Double]] = [:]
-        for q in list {
-            byDay[wakeDay(q.startDate), default: []].append(q.quantity.doubleValue(for: unit))
-        }
+        // One device a night (617 review #12).
+        let byDay = Self.oneSource(list, day: { self.wakeDay($0.startDate) }, source: { Self.sourceOf($0) })
+            .mapValues { $0.map { $0.quantity.doubleValue(for: unit) } }
         let last = day(to)
         return byDay.keys.sorted().compactMap { date -> AppleRecord? in
             guard date <= last, let values = byDay[date], !values.isEmpty else { return nil }
@@ -1195,7 +1250,9 @@ final class HealthReader: @unchecked Sendable {
         let unit = HKUnit.secondUnit(with: .milli)
         async let sdnnRead = samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to)
         async let beatsRead = samples(HKSeriesType.heartbeat(), from: from, to: to)
-        let sdnn = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        // One device a day (617 review #12): an Apple Watch and a Fitbit synced into Health never averaged.
+        let sdnnAll = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        let sdnn = Self.oneSource(sdnnAll, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) }).values.flatMap { $0 }
         let beats = await beatsRead.compactMap { $0 as? HKHeartbeatSeriesSample }.filter { calendar.component(.hour, from: $0.startDate) < 10 }
         var rmssd: [String: [Double]] = [:]
         let values = await concurrently(beats) { await self.rmssdOf($0) }

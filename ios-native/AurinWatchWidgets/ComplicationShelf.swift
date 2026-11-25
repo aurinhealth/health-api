@@ -49,11 +49,12 @@ enum ComplicationShelf {
     }
 
     private static func write(_ data: Data, _ service: String) {
-        let update: [String: Any] = [kSecValueData as String: data]
+        // Only on this watch, never in a backup (Gemini review 2026-11-25).
+        let update: [String: Any] = [kSecValueData as String: data, kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
         if SecItemUpdate(query(service) as CFDictionary, update as CFDictionary) == errSecItemNotFound {
             var item = query(service)
             item[kSecValueData as String] = data
-            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             SecItemAdd(item as CFDictionary, nil)
         }
     }

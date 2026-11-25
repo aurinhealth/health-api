@@ -54,7 +54,7 @@ struct DrinkHistoryView: View {
         .overlay(alignment: .bottom) {
             if selecting {
                 BulkActionBar(count: selected.count, copy: { moving = "Kopírovat" }, move: { moving = "Přesunout" }, delete: { confirmDelete = true })
-                    .padding(.horizontal, 24).padding(.bottom, 92)
+                    .padding(.horizontal, PageGrid.margin).padding(.bottom, 92)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -114,6 +114,7 @@ struct DrinkHistoryView: View {
             Text(L10n.tr(title)).font(Typo.bodyStrong)
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 34)
+                .tapTarget(width: 44, height: 34)
                 .background(on ? Palette.button : .clear, in: Capsule())
                 .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1) }
         }

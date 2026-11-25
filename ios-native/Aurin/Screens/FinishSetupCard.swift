@@ -119,11 +119,11 @@ struct FinishSetupCard: View {
             .sheet(isPresented: $editingTime) {
                 let monday = WeekPlanView.monday(), day = APIClient.localToday()
                 // Done or Generate saved the days; only Generate replans.
-                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { generate in
+                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { days in
                     time = true
-                    guard generate else { return }
+                    guard let days else { return }
                     Task {
-                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, calendar: model.calendar)
+                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, days: days.isEmpty ? nil : days, calendar: model.calendar)
                         await model.refreshTraining()
                     }
                 }
@@ -140,7 +140,7 @@ struct FinishSetupCard: View {
             ScrollView {
                 SetupGoalPage(focus: $focus).padding(24)
                 if let goalError {
-                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, 24)
+                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, PageGrid.margin)
                 }
             }
             .background { ScreenBackground(glow: Palette.Glow.today) }

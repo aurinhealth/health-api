@@ -77,6 +77,27 @@ enum WeekPlanText {
         L10n.f("Přeplánuje %@ až %@. Hotové tréninky zůstanou.", Fmt.dayMonthShort(today), Fmt.dayMonthShort(end))
     }
 
+    /// Why the coach offers Recalculate after Generate (rules in src/adaptive-week.js replanAffects); planning words only.
+    static func affects(_ a: WeekProposalResponse.ReplanAffects) -> String {
+        switch a.kind {
+        case "hard_in_a_row" where a.dates.count == 2:
+            return L10n.f("%@ a %@ jsou teď dva náročné dny po sobě.", Fmt.weekdayDayMonthShort(a.dates[0]), Fmt.weekdayDayMonthShort(a.dates[1]))
+        case "key_lost": return L10n.tr("Týden teď nemá žádný klíčový trénink.")
+        case "volume_down": return L10n.tr("Týden má teď o dost méně tréninku než v plánu.")
+        case "volume_up": return L10n.tr("Týden má teď o dost víc tréninku než v plánu.")
+        default: return L10n.tr("Změna se dotkne i ostatních tréninků.")
+        }
+    }
+
+    /// "I'd recalculate Nov 26 to Dec 6 and keep your sports."
+    static func recalculateAdvice(from: String, to: String) -> String {
+        L10n.f("Přepočítal bych %@ až %@ a nechal tvoje sporty.", Fmt.dayMonthShort(from), Fmt.dayMonthShort(to))
+    }
+
+    static func recalculateWarning(from: String, to: String) -> String {
+        L10n.f("Tréninky %@ až %@ se nahradí novými, i s tvými úpravami. Sporty dnů a hotové tréninky zůstanou.", Fmt.dayMonthShort(from), Fmt.dayMonthShort(to))
+    }
+
     /// "Today" or "Fr", over the day's number.
     static func dayWord(_ date: String, today: String) -> String {
         date == today ? L10n.tr("Dnes") : Fmt.weekdayShort(date)
@@ -125,6 +146,7 @@ struct WeekPlanView: View {
     @State private var addSport: String?
     @State private var working: String?
     @State private var error: String?
+    @Environment(\.scenePhase) private var scenePhase
     @State private var toast: PlanToast?
     /// Removed, waiting for the toast to go without Undo.
     @State private var hidden: Set<String> = []
@@ -132,6 +154,14 @@ struct WeekPlanView: View {
     /// Generate from Plan settings: the weeks are being built; a failure says so.
     @State private var generating = false
     @State private var generateFailed = false
+    /// The days Generate plans again (Plan settings: the days changed; nil: the whole plan); Try again keeps them.
+    @State private var generateDays: [String]?
+    /// The first day Generate plans from when it plans all (Recalculate: tomorrow); Try again keeps it.
+    @State private var generateFrom: String?
+    /// Generate's days touched the workouts kept around them: the coach offers Recalculate / Keep as is
+    /// until either, the next Generate or leaving the screen (Petr 2026-11-25).
+    @State private var affects: WeekProposalResponse.ReplanAffects?
+    @State private var confirmRecalculate = false
 
     private var today: String { model.demo ? (model.training?.date ?? AppModel.localDate(Date())) : AppModel.localDate(Date()) }
     private var monday: String { FreeTime.monday(today) }
@@ -156,6 +186,7 @@ struct WeekPlanView: View {
                         }
                         if hasPlan && !generating { caption.padding(.top, 8) }
                         if hasPlan && !generating { pills.padding(.top, 14) }
+                        if let affects, !generating, !generateFailed { recalculateCard(affects).padding(.top, 18) }
                         content.padding(.top, 22)
                     }
                     .padding(.horizontal, 20)
@@ -175,11 +206,14 @@ struct WeekPlanView: View {
         }
         .navBarVisibility(.hidden)
         .task { await load() }
+        // The app going away settles the toast: a removal waiting for it is sent
+        // now, not lost with the app (review 2026-11-24 point 9, as MissedWorkoutBlock).
+        .onChange(of: scenePhase) { _, phase in if phase != .active, let toast { settle(toast, undo: false) } }
         .sheet(isPresented: $settings) {
-            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { generate in
+            WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { days in
                 Task {
                     await reload()
-                    if generate { await runGenerate() }
+                    if let days { generateDays = days.isEmpty ? nil : days; generateFrom = nil; await runGenerate() }
                 }
             }
         }
@@ -380,7 +414,8 @@ struct WeekPlanView: View {
     @ViewBuilder private func dayRows(_ week: WeekPlanWeek, earlier: Bool) -> some View {
         ForEach(week.days.filter { earlier || $0 >= today }, id: \.self) { date in
             let list = week.sessions(on: date)
-            if !list.isEmpty {
+            let own = ownEvents(week, date: date, sessions: list)
+            if !list.isEmpty || !own.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(spacing: 1) {
                         Text(verbatim: WeekPlanText.dayWord(date, today: today))
@@ -393,12 +428,21 @@ struct WeekPlanView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
                     VStack(spacing: 8) {
+                        ForEach(Array(own.enumerated()), id: \.offset) { _, event in OtherSportRow(event: event) }
                         ForEach(list) { activity in row(activity, week: week) }
                     }
                 }
                 .id(date)
             }
         }
+    }
+
+    /// The athlete's own practice or match that day (Plan settings), until a workout of that sport is recorded.
+    private func ownEvents(_ week: WeekPlanWeek, date: String, sessions: [CalendarActivity]) -> [OtherSportEvent] {
+        let events = OtherSports.events(weekPlans[week.monday]?.prefs)[ISODay.weekdayIndex(date)]
+        // Recorded by a watch under its own type or a general one (Hockey for IceSkate, Other): the record stands for it.
+        let recorded = sessions.filter { $0.status == "done" && !["ride", "run", "swim", "strength", "walk"].contains($0.sport) }
+        return recorded.isEmpty ? events : []
     }
 
     @ViewBuilder private func row(_ a: CalendarActivity, week: WeekPlanWeek) -> some View {
@@ -505,8 +549,11 @@ struct WeekPlanView: View {
         await model.loadCalendar(from: monday, to: ISODay.shift(nextMonday, 6))
         guard !model.demo else { return }
         plans = try? await model.api.trainingPlans()
-        if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
-        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
+        let a = try? await model.api.weekPlan(start: monday), b = try? await model.api.weekPlan(start: nextMonday)
+        // The names of the athlete's own practice and match rows, before they show.
+        if [a, b].contains(where: { OtherSports.events($0?.prefs).contains { !$0.isEmpty } }) { await OtherSports.loadNames(model.api) }
+        if let a { weekPlans[monday] = a }
+        if let b { weekPlans[nextMonday] = b }
     }
 
     private func reload() async {
@@ -590,14 +637,66 @@ struct WeekPlanView: View {
 
     private func runGenerate() async {
         guard !model.demo else { return }
-        withAnimation(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil }
-        let ok = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, calendar: model.calendar)
+        withAnimation(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil; affects = nil }
+        let result = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, from: generateFrom, days: generateDays, calendar: model.calendar)
         await reload()
         withAnimation(.snappy) {
             generating = false
-            generateFailed = !ok
+            generateFailed = !result.ok
+            affects = result.ok ? result.affects : nil
             openWeeks = [monday, nextMonday]
         }
+    }
+
+    /// Recalculate: every planned workout from tomorrow to next Sunday again; the
+    /// sports set per day stay (they are the plan's settings), the finished ones too.
+    private func recalculate() async {
+        generateDays = nil
+        generateFrom = ISODay.shift(today, 1)
+        await runGenerate()
+    }
+
+    // MARK: Recalculate
+
+    /// The coach's card after Generate when the days planned again touch the rest:
+    /// the reason, the advice in green, Recalculate and Keep as is.
+    private func recalculateCard(_ affects: WeekProposalResponse.ReplanAffects) -> some View {
+        let from = ISODay.shift(today, 1), to = ISODay.shift(nextMonday, 6)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                TwoLights(size: 18).accessibilityHidden(true)
+                Text("Kouč").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            }
+            (Text(verbatim: WeekPlanText.affects(affects) + " ")
+             + Text(verbatim: WeekPlanText.recalculateAdvice(from: from, to: to)).font(Typo.sentenceItalic(21)).foregroundColor(Palette.green))
+                .font(Typo.coach(21)).foregroundStyle(Palette.ink).lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 10) {
+                Button { confirmRecalculate = true } label: {
+                    Text(verbatim: L10n.tr("Přepočítat")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(minHeight: 50)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("week-plan.recalculate")
+                Button { withAnimation(.snappy) { self.affects = nil } } label: {
+                    Text(verbatim: L10n.tr("Nechat, jak je")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(minHeight: 44)
+                        .background(Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .disabled(model.offline || model.demo)
+            .confirmationDialog(L10n.tr("Přepočítat plán?"), isPresented: $confirmRecalculate, titleVisibility: .visible) {
+                Button(L10n.tr("Přepočítat"), role: .destructive) { Task { await recalculate() } }
+                Button(L10n.tr("Zrušit"), role: .cancel) {}
+            } message: {
+                Text(verbatim: WeekPlanText.recalculateWarning(from: from, to: to))
+            }
+        }
+        .padding(16)
+        .cardSurface(cornerRadius: 22)
+        .transition(.opacity)
     }
 
     // MARK: Toast
@@ -607,7 +706,7 @@ struct WeekPlanView: View {
         if let toast { settle(toast, undo: false) }
         withAnimation(.snappy) { toast = next }
         Task {
-            try? await Task.sleep(for: .seconds(5))
+            try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == next.id { settle(next, undo: false) }
         }
     }
@@ -631,6 +730,28 @@ struct WeekPlanView: View {
 /// One workout of the week. Done: the Training row (sport, result under the
 /// name, time, % of plan, chevron). Planned: the pale sport, its time of day,
 /// its length and a chevron that opens it in place.
+/// "Football match", "your own", 1 h 30 min: a practice or match the athlete set
+/// in Plan settings. The plan works around it; it changes there, not here.
+struct OtherSportRow: View {
+    let event: OtherSportEvent
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SportDisc(sport: "other", type: event.type, state: .ahead, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: OtherSports.title(event)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
+                Text(verbatim: L10n.tr("Tvůj vlastní, změníš v Nastavení plánu")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Text(verbatim: planDuration(event.minutes)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(minHeight: 60)
+        .cardSurface(cornerRadius: 18)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct WeekPlanRow: View {
     let activity: CalendarActivity
     /// nil for a row that opens its detail; else whether it is open in place.

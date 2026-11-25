@@ -36,7 +36,8 @@ struct AppleHealthConnectSheet: View {
                 .disabled(working || chosen.isEmpty)
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                // X top right, as every sheet (617 #15).
+                ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }

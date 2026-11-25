@@ -166,7 +166,7 @@ struct AddFoodSheet: View {
                         .padding(.top, 14)
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }
@@ -381,6 +381,7 @@ struct AddFoodSheet: View {
             Text(title).font(.footnote.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 32)
+                .tapTarget(width: 44, height: 32)
                 .background(on ? Palette.button : Palette.card, in: Capsule())
         }
         .buttonStyle(.plain)

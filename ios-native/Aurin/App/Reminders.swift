@@ -188,12 +188,12 @@ enum Reminders {
         }
         // Water through the chosen part of the day while below the day's target.
         if isOn(waterKey), has(days(waterKey), weekday), let target = today.nutrition.water.target, (today.nutrition.water.ml ?? 0) < target {
-            let amount = Units.imperial ? Units.volumeText(target) : Fmt.decimal(target / 1000) + " l"
+            let amount = Units.imperial ? Units.volumeText(target) : Fmt.litresText(target)
             let times = waterTimes(from: minute(waterFromKey, 10 * 60), to: minute(waterToKey, 16 * 60),
                                    mode: UserDefaults.standard.string(forKey: waterModeKey) ?? "every",
                                    every: minute(waterEveryKey, 3 * 60), count: minute(waterCountKey, 4))
             for at in times {
-                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"),
+                add(&planned, "water.\(at)", at: at, title: L10n.tr("Čas na vodu"),
                     body: hidesValues ? L10n.tr("Dej si sklenici vody.") : L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
@@ -250,7 +250,7 @@ enum Reminders {
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
                 addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Denní připomínka"),
-                        body: L10n.tr("Označ, až to bude hotové"), category: pillCategory, info: ["date": date])
+                        body: L10n.tr("Označ, až to bude hotové."), category: pillCategory, info: ["date": date])
             }
         }
         // The missed pill (same screen, Vynechaný prášek): an hour after the
@@ -270,13 +270,13 @@ enum Reminders {
                 // Past midnight (a pill usually logged at 23:30): the next day's early hours.
                 guard let fireDay = calendar.date(byAdding: .day, value: at / 1440, to: day) else { continue }
                 addOnce(&planned, "pillMissed." + date, day: fireDay, at: at % 1440, title: L10n.tr("Denní připomínka"),
-                        body: L10n.tr("Ještě není označeno"), category: pillCategory, info: ["date": date])
+                        body: L10n.tr("Ještě není označeno."), category: pillCategory, info: ["date": date])
             }
         }
         // Sunday evening (or the chosen days): a look at the coming week's plan.
         if isOn(weekKey) {
             addRepeating(&planned, "week", at: minute(weekTimeKey, 19 * 60), days: days(weekKey),
-                         title: L10n.tr("Plán na příští týden"), body: L10n.tr("Zkontroluj tréninky a volný čas na další týden."))
+                         title: L10n.tr("Plán na příští týden"), body: L10n.tr("Zkontroluj tréninky a volný čas."))
         }
     }
 
