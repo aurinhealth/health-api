@@ -74,7 +74,8 @@ export function liveRevision(revision, days = [], today) {
 export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDate = {}, readiness = null, paused = [], runCap = null, weekEnd = null } = {}) {
   const byId = new Map(upcoming.map(u => [u.eventId, u])), out = [], seen = new Set();
   let runRoom = runCap?.cap != null ? runCap.cap - (Number(runCap.committed) || 0) : Infinity;
-  const longOf = (sport, date, except) => [...done, ...upcoming].some(x => x !== except && x.sport === sport && x.kind === "long" && x.date && gap(x.date, date) <= 6);
+  // The long sessions of the plan and those the changes so far made long.
+  const chosen = [], longOf = (sport, date, except) => [...done, ...upcoming, ...chosen].some(x => x !== except && x.eventId !== except?.eventId && x.sport === sport && x.kind === "long" && x.date && gap(x.date, date) <= 6);
   const kindOn = new Map();
   for (const d of done) if (d.kind && HARD_KINDS.has(d.kind)) kindOn.set(d.date, d.kind);
   for (const u of upcoming) if (u.kind && HARD_KINDS.has(u.kind)) kindOn.set(u.date, u.kind);
@@ -99,9 +100,10 @@ export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDa
     if (u.sport === "run" && minutes > (u.minutes || 0)) {
       const room = weekEnd && u.date > weekEnd ? Infinity : runRoom;
       minutes = Math.max(u.minutes || 0, Math.floor(Math.min(minutes, runCap?.single ?? Infinity, (u.minutes || 0) + Math.max(0, room)) / 5) * 5);
-      if (!weekEnd || u.date <= weekEnd) runRoom -= minutes - (u.minutes || 0);
     }
     if (kind === u.kind && Math.abs(minutes - (u.minutes || 0)) < 5) continue;
+    if (u.sport === "run" && (!weekEnd || u.date <= weekEnd)) runRoom -= Math.max(0, minutes - (u.minutes || 0));
+    if (kind === "long" && u.kind !== "long") chosen.push({ eventId: u.eventId, sport: u.sport, date: u.date, kind });
     seen.add(u.eventId);
     if (HARD_KINDS.has(kind)) kindOn.set(u.date, kind); else if (kindOn.get(u.date) && !HARD_KINDS.has(kind)) kindOn.delete(u.date);
     out.push({ eventId: u.eventId, date: u.date, sport: u.sport, environment: u.environment || "outdoor", from: { name: u.name, minutes: u.minutes, kind: u.kind || null }, kind, minutes, reason: undone ? null : String(c.reason || "").trim().slice(0, 240) || null });

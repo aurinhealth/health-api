@@ -138,3 +138,16 @@ test('C6: the week revision keeps the pause, one long a week and the running cap
   assert.equal(sanitizeChanges([{ eventId: 'a', kind: 'endurance', minutes: 120 }], upcoming, { runCap: { cap: 200, single: 110, committed: 170 }, weekEnd: '2026-10-11', availabilityByDate: { '2026-10-10': 180, '2026-10-09': 180 } })[0].minutes, 80, 'the week has 30 min of running left');
   assert.equal(sanitizeChanges([{ eventId: 'a', kind: 'long', minutes: 50 }], upcoming, {}).length, 0, 'no second long run');
 });
+
+test('C7: asked again after the coach\'s concern, a long ride in the week back stands', () => {
+  const r = coach({ week: week([{ date: day(-3), type: 'Ride', name: 'Endurance', tss: 60, durationHours: 1.25 }]), returns: { ride: day(-3), last: { ride: day(-3) } }, goal: { focus: 'long_endurance', asked: true, chat: true, insisted: true }, availabilityMinutes: 240 });
+  assert.ok(r.session.durationMinutes > 90, String(r.session.durationMinutes));
+});
+
+test('C6: a revision makes at most one run long, and a longer run never gets shorter', () => {
+  const upcoming = [{ eventId: 'a', date: '2026-10-09', sport: 'run', name: 'Easy', minutes: 50, kind: 'endurance' }, { eventId: 'b', date: '2026-10-11', sport: 'run', name: 'Easy', minutes: 50, kind: 'endurance' }];
+  const out = sanitizeChanges([{ eventId: 'a', kind: 'long', minutes: 90 }, { eventId: 'b', kind: 'long', minutes: 90 }], upcoming, { availabilityByDate: { '2026-10-09': 180, '2026-10-11': 180 } });
+  assert.equal(out.filter(c => c.kind === 'long').length, 1);
+  const run = { date: '2026-10-11', sport: 'run', minutes: 62, kind: 'endurance' };
+  assert.equal(guardSessionChange({ ...run, minutes: 120 }, run, { runCap: { cap: 64, single: 200 } }).minutes, 62);
+});

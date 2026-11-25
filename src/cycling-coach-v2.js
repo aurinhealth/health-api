@@ -588,9 +588,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
     }
     // The first day back and the rest of the first week alike: no long
-    // session and the length capped, whatever the plan or the ask (C7).
-    if((offBreak||breakWeek)&&!novice){
-      returning=true;
+    // session and the length capped, whatever the plan or the ask (C7); asked
+    // again after the coach's concern (insisted), the athlete's call stands.
+    if((offBreak||breakWeek)&&!novice)returning=true;
+    if((offBreak||breakWeek)&&!novice&&!insisted){
       if(kind==="long_endurance")kind="endurance";
       capAt(short?45:90,L("návrat po pauze","returning after a break"));
     }

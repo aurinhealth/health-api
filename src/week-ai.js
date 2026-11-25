@@ -334,7 +334,7 @@ export function guardSessionChange(changed, current, { paused = [], others = [],
   if (out.sport === "run" && runCap && (Number(out.minutes) || 0) > (Number(current.minutes) || 0)) {
     const week = others.filter(o => o.sport === "run").reduce((n, o) => n + (Number(o.minutes) || 0), 0);
     const limit = Math.max(current.minutes || 0, Math.min(runCap.single ?? Infinity, (runCap.cap ?? Infinity) - week));
-    if (out.minutes > limit) { out.minutes = Math.floor(limit / 5) * 5 || current.minutes; out.note = L("Delší běh by přesáhl, o kolik běh po týdnu roste: nejvýš " + out.minutes + " min.", "A longer run would grow your running faster than it should: at most " + out.minutes + " min."); }
+    if (out.minutes > limit) { out.minutes = Math.max(current.minutes || 0, Math.floor(limit / 5) * 5); out.note = L("Delší běh by přesáhl, o kolik běh po týdnu roste: nejvýš " + out.minutes + " min.", "A longer run would grow your running faster than it should: at most " + out.minutes + " min."); }
   }
   return out;
 }

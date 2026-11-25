@@ -1910,7 +1910,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
         const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
         // A sport resting for a pain and the rules' running cap hold for the AI's week too (C6).
-        const paused=pausedSports(state).flatMap(s=>s==='gym'?['gym','strength']:[s]),runCap=rules.targets?.runCap||weeklyRunCap(history||[],start);
+        const paused=pausedSports(state).flatMap(s=>s==='gym'?['gym','strength']:[s]),runCap=rules.targets?.runCap||(await computeWeekTargets(env,ctx,start,null).catch(()=>null))?.runCap||weeklyRunCap(history||[],start);
         const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard,split:rules.split||null,paused,runCap});
         return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       }catch(error){
@@ -1944,7 +1944,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The week plan's checks for this one session too (C6): a sport resting
       // for a pain, one long ride or run a week, the running cap.
       const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system),minutes:Math.max(0,Math.min(600,Math.round(Number(o.minutes)||0)))||null}));
-      const runCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?weeklyRunCap(await planningHistory(env,today,30).catch(()=>[]),mondayOfDate(date)):null;
+      // The week the session lands in: its runs done and in the calendar (the rules' cap) and the other drafts.
+      const landing=mondayOfDate(changed.date||date),weekCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?(await computeWeekTargets(env,ctx,landing,null).catch(()=>null))?.runCap||weeklyRunCap(await planningHistory(env,landing<today?landing:today,30).catch(()=>[]),landing):null;
+      const runCap=weekCap?{...weekCap,cap:weekCap.cap-(Number(weekCap.committed)||0)}:null;
       changed=guardSessionChange(changed,current,{paused:pausedSports(await getAthleteState(env.DB).catch(()=>({}))),others,runCap});
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
