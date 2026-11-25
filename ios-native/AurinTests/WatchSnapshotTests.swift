@@ -24,6 +24,10 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.hrv?.low, 55)
         XCTAssertEqual(s.strain.score, 8.4)
         XCTAssertEqual(s.strain.low, 11.4)
+        // What the evening's gym adds, the dotted part of the iPhone's dial, not
+        // the day's planned total (watch review 2026-11-25), and the watch's demo day the same.
+        XCTAssertEqual(try XCTUnwrap(s.strain.planned), 4.85, accuracy: 0.01)
+        XCTAssertEqual(s.strain.planned, today.strainStillPlanned)
 
         // A morning with last night: its HRV is this morning's (Today audit 20).
         XCTAssertFalse(s.awaitingNight)

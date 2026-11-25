@@ -61,7 +61,7 @@ enum WatchDemo {
                                        nights: series([442, 455, 468, 411, 424, 437, 432])),
             restingHR: WatchSnapshot.Metric(value: 48, low: 49.5, high: 53.5, series: series(rhr)),
             hrv: WatchSnapshot.Metric(value: 64, low: 55, high: 61, series: series(hrv)),
-            strain: WatchSnapshot.Strain(score: 8.4, low: 11.4, high: 14.4, training: 5.1, movement: 3.3, planned: 13.1,
+            strain: WatchSnapshot.Strain(score: 8.4, low: 11.4, high: 14.4, training: 5.1, movement: 3.3, planned: 4.8,
                                          nextTitle: tr("Silový trénink", "Strength training"), nextTime: "17:30"),
             steps: 6420,
             week: week,

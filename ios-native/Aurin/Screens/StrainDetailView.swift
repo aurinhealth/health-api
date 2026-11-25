@@ -42,6 +42,21 @@ struct StrainDetailView: View {
     }
 }
 
+extension TodaySnapshot {
+    /// The TSS of today's workouts that are "done" or still "planned".
+    func sessionTss(_ status: String) -> Double {
+        plan.compactMap { $0.kind == "workout" ? $0.session : nil }
+            .filter { $0.status == status }.compactMap(\.tss).reduce(0, +)
+    }
+
+    /// What the workouts still planned today add to the strain: the dotted part
+    /// of the dial, and the same number the Apple Watch shows.
+    var strainStillPlanned: Double {
+        let done = sessionTss("done")
+        return Swift.max(0, StrainDetailContent.strain(tss: done + sessionTss("planned")) - StrainDetailContent.strain(tss: done))
+    }
+}
+
 struct StrainDetailContent: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
@@ -64,12 +79,9 @@ struct StrainDetailContent: View {
     /// and what the sessions still planned would add.
     private var parts: (training: Double, movement: Double, planned: Double) {
         let score = today.strain.score ?? 0
-        let doneTss = sessions.filter { $0.status == "done" }.compactMap(\.tss).reduce(0, +)
-        let openTss = sessions.filter { $0.status == "planned" }.compactMap(\.tss).reduce(0, +)
-        let trainingPart = today.strain.training ?? Swift.min(score, Self.strain(tss: doneTss))
+        let trainingPart = today.strain.training ?? Swift.min(score, Self.strain(tss: today.sessionTss("done")))
         let movement = today.strain.movement ?? (score - trainingPart)
-        let planned = past ? 0 : Self.strain(tss: doneTss + openTss) - Self.strain(tss: doneTss)
-        return (trainingPart, Swift.max(0, movement), Swift.max(0, planned))
+        return (trainingPart, Swift.max(0, movement), past ? 0 : today.strainStillPlanned)
     }
 
     var body: some View {
