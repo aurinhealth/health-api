@@ -119,11 +119,11 @@ struct FinishSetupCard: View {
             .sheet(isPresented: $editingTime) {
                 let monday = WeekPlanView.monday(), day = APIClient.localToday()
                 // Done or Generate saved the days; only Generate replans.
-                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { from in
+                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { days in
                     time = true
-                    guard let from else { return }
+                    guard let days else { return }
                     Task {
-                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, from: from, calendar: model.calendar)
+                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, days: days.isEmpty ? nil : days, calendar: model.calendar)
                         await model.refreshTraining()
                     }
                 }
