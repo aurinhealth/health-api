@@ -71,7 +71,7 @@ import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.
 import { loadRecoveryValidation } from "./recovery-validation.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
-import { explainWorkout, athleteSteps, athleteMinutes } from "./workout-explanation.js";
+import { explainWorkout, athleteSteps, athleteMinutes, fuelPlan, systemOfIntensity } from "./workout-explanation.js";
 import { libraryBricks } from "./brick-workouts.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, dailyOwnWorkout, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
@@ -3815,7 +3815,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // Horko (heat-advice.js) for today's ride or run outdoors, over its time (?date=&time= from the app) and length.
       const day=url.searchParams.get('date'),time=url.searchParams.get('time');
       const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null,minutes:w.duration_minutes,intervals:isHardSession(w,kind)})?.text||null:null;
-      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+      // Carbs per hour for the card and the detail (Carbs B): the same table as the
+      // calendars and the coach, capped by the athlete's level in the sport.
+      const fuel=kind==='swim'?null:fuelPlan(w.duration_minutes,w.primary_system||systemOfIntensity(w.intensity_factor,kind),kind,await capabilitiesWithLevel(env.DB,kind).then(c=>c.level,()=>null));
+      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),...(fuel?{fuel}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     // The library's day: the coach of the week plan's role and the day's time
     // and the search's filters, as the list and the AI's own workout use them.

@@ -381,6 +381,16 @@ struct PlannedWorkout: Decodable, Equatable {
     let workout: Workout
     /// Today's ride or run outdoors on a hot day: how to adjust it (src/heat-advice.js).
     var heat: String? = nil
+    /// Carbs per hour during a ride or run over 45 min (src/workout-explanation.js fuelPlan).
+    var fuel: Fuel? = nil
+
+    struct Fuel: Decodable, Equatable {
+        let perHour: Double
+        /// 120 g/h for an experienced rider's ride over 3 h, with "practise" first.
+        var upTo: Double? = nil
+        var practise: String? = nil
+        var note: String? = nil
+    }
 
     struct Step: Decodable, Equatable {
         let durationSeconds: Double?
