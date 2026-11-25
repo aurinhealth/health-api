@@ -334,7 +334,14 @@ final class AppModel {
     }
 
     func path(_ tab: AppTab) -> Binding<[AppRoute]> {
-        Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
+        Binding(get: {
+            // The UI test's swipe log: does the stack redraw while a swipe goes back?
+            if SwipeBack.logging, tab == .today { SwipeBack.log("path read \((self.paths[tab] ?? []).count)") }
+            return self.paths[tab] ?? []
+        }, set: {
+            if SwipeBack.logging { SwipeBack.log("path set \($0.count) (was \((self.paths[tab] ?? []).count))") }
+            self.paths[tab] = $0
+        })
     }
 
     /// A detail on top of the current tab's screens.

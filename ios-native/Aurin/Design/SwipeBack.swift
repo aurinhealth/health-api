@@ -39,7 +39,7 @@ import UIKit
         guard logging else { return }
         let line = message()
         NSLog("SwipeBack: %@", line)
-        lines = Array((lines + [line]).suffix(40))
+        lines = Array((lines + [line]).suffix(80))
         guard let window = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
         let view = board ?? UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
@@ -89,6 +89,13 @@ import UIKit
             }
         } else if pop.state == .ended {
             Self.log("ended without a transition")
+        }
+        // Where the stack is once the pop has settled.
+        if pop.state == .ended || pop.state == .cancelled, let navigation = Self.navigation(of: pop) {
+            Self.log("coordinator \(navigation.transitionCoordinator.map { "interactive \($0.isInteractive), cancelled \($0.isCancelled), \(Int($0.percentComplete * 100)) %" } ?? "none")")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                Self.log("after: \(navigation.viewControllers.count) pages")
+            }
         }
     }
 
