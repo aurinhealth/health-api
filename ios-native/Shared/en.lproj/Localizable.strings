@@ -5260,8 +5260,8 @@
 "Kouč je zapnutý, připomínky vypnuté." = "Coach is on, reminders are off.";
 "Připomínky jsou zapnuté, kouč vypnutý." = "Reminders are on, Coach is off.";
 "Kouč i připomínky jsou vypnuté." = "Coach and reminders are off.";
-"Oznámení neukazují čísla." = "Notifications show no numbers.";
-"Oznámení ukazují tvoje čísla." = "Notifications show your numbers.";
+"Oznámení neukazují zdravotní údaje." = "Notifications show no health values.";
+"Oznámení ukazují tvoje zdravotní údaje." = "Notifications show your health values.";
 "Nejvýš 2 připomenutí, když jídlo chybí" = "Up to 2 nudges if a meal isn't logged";
 "Oznámení jsou vypnutá" = "Notifications are off";
 "Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče." = "Turn them on in iPhone Settings to get reminders and coach messages.";
