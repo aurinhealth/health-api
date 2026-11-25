@@ -155,7 +155,26 @@ test("the nutrition plan uses the athlete's own latest weight, not a fixed 88 kg
   const heavy = buildNutritionPlan(context, { weightTrend: { latestKg: 95, samples: 10, weeklyRateKg: -0.3 } });
   assert.equal(light.macros.proteinGrams, 120);
   assert.equal(heavy.macros.proteinGrams, 190);
-  assert.equal(buildNutritionPlan(context).macros.proteinGrams, 176);
+  // No weight at all: a neutral 70 kg, said so, never the owner's 88 kg.
+  assert.equal(buildNutritionPlan(context).macros.proteinGrams, 140);
+  assert.equal(buildNutritionPlan(context).weightSource, "default");
+  assert.equal(light.weightSource, "athlete");
+});
+
+test("the food day type comes from the day's ride, run or swim, not a ride on a later day", async () => {
+  const { buildNutritionPlan } = await import("../src/nutrition-intelligence.js");
+  const day = (extra) => buildNutritionPlan({ date: "2026-10-05", cycling: { plannedWorkouts: [], recentActivities: [] }, ...extra }, { weightKg: 70 });
+  const laterRide = { date: "2026-10-07", name: "Long ride", durationHours: 4 };
+  const later = day({ cycling: { plannedWorkouts: [laterRide], nextRide: laterRide, recentActivities: [] } });
+  assert.equal(later.dayType, "rest");
+  assert.equal(later.training.plannedCyclingCalories, 0);
+  assert.equal(day({ running: { plannedWorkouts: [{ date: "2026-10-05", name: "Long run", durationHours: 1.75 }] } }).dayType, "long");
+  assert.equal(day({ running: { plannedWorkouts: [{ date: "2026-10-05", name: "Tempo", durationHours: 0.75, intensity: true }] } }).dayType, "hard");
+  const swim = day({ swimming: { plannedWorkouts: [{ date: "2026-10-05", name: "Steady swim", durationHours: 0.75 }] } });
+  assert.equal(swim.dayType, "easy");
+  // 7 MET × 3.5 × 70 / 200 × 45 min
+  assert.equal(swim.training.plannedRunSwimCalories, 386);
+  assert.equal(day({ strength: { plannedWorkout: { rows: [["WORK", "Squat", 1, 60, 8]] } } }).dayType, "training");
 });
 
 test("the gym plan's nutrition gets the app's calorie target: same kcal, app protein and fat, carbs fill the rest", async () => {
