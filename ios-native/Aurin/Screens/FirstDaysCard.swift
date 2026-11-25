@@ -82,7 +82,7 @@ struct FirstDaysCard: View {
                     .buttonStyle(PressableCardStyle())
                     Divider().overlay(Palette.hairline)
                     Button(action: openCoach) {
-                        row("Zeptej se kouče", "Zná tvůj spánek, trénink i jídlo.", done: coach)
+                        row("Zeptej se kouče", model.noWearable ? "Zná tvůj trénink a jídlo." : "Zná tvůj spánek, trénink i jídlo.", done: coach)
                     }
                     .buttonStyle(PressableCardStyle())
                 }
