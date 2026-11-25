@@ -137,3 +137,27 @@ test('a weak or listed ETag still gets 304', async () => {
 test('build: a recipe without id or diet is a problem, not a crash', () => {
   assert.deepEqual(build([{ id: 'z', title: { cs: 'a', en: 'a' } }]).problems, ['z: id, title or diet missing']);
 });
+
+test('saved and hidden recipes: set, replace, remove, refuse unknown, origin', async () => {
+  const { createD1 } = await import('./helpers/d1.mjs');
+  const e = { ...env(), DB: createD1(), USER_ID: 7 };
+  const put = (body, origin = 'https://x.test') => withLang('en', () => handleRecipesApi(new Request('https://x.test/app/api/recipes/marks', { method: 'PUT', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), e, new URL('https://x.test/app/api/recipes/marks'), { signedIn: true }));
+  assert.deepEqual(await (await call(e, '/app/api/recipes/marks')).json(), { status: 'ok', saved: [], hidden: [] });
+  assert.deepEqual((await (await put({ id: 'a1', mark: 'saved' })).json()).saved, ['a1']);
+  const hidden = await (await put({ id: 'a1', mark: 'hidden' })).json();
+  assert.deepEqual([hidden.saved, hidden.hidden], [[], ['a1']]);
+  assert.deepEqual((await (await put({ id: 'a1', mark: null })).json()).hidden, []);
+  assert.equal((await put({ id: 'nope', mark: 'saved' })).status, 404);
+  assert.equal((await put({ id: 'a1', mark: 'liked' })).status, 400);
+  assert.equal((await put({ id: 'a1', mark: 'saved' }, 'https://evil.test')).status, 403);
+  e.USER_ID = 8;
+  assert.deepEqual((await (await call(e, '/app/api/recipes/marks')).json()).saved, []);
+  assert.equal((await withLang('en', () => handleRecipesApi(new Request('https://x.test/app/api/recipes/a1', { method: 'PUT' }), e, new URL('https://x.test/app/api/recipes/a1'), { signedIn: true }))).status, 404);
+});
+
+test('"I don\'t eat" in the profile: cleaned, at most 40', async () => {
+  const { normalizeDiet, AVOID_MAX } = await import('../src/diet.js');
+  assert.deepEqual(normalizeDiet({ dietAvoid: ['Gluten', 'pork', 'usda_sr_legacy:169251', 'u:coriander_leaves', 'x', 'drop table', 'pork', 7] }).dietAvoid, ['gluten', 'pork', 'usda_sr_legacy:169251', 'u:coriander_leaves']);
+  assert.deepEqual(normalizeDiet({}).dietAvoid, []);
+  assert.equal(normalizeDiet({ dietAvoid: Array.from({ length: 60 }, (_, i) => 'u:item' + i) }).dietAvoid.length, AVOID_MAX);
+});

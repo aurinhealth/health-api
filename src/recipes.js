@@ -8,6 +8,8 @@
 // GET /app/api/recipes?slot=&diet=&exclude=&q=&limit=&cursor=  the list
 // GET /app/api/recipes/index    the whole index for the app to keep (ETag = version)
 // GET /app/api/recipes/<id>     one recipe in the app's language
+// GET /app/api/recipes/marks   the user's saved and hidden recipes
+// PUT /app/api/recipes/marks   {id, mark: "saved" | "hidden" | null}
 // "exclude" takes EU allergens, ingredient keys and the groups of foods people
 // often don't eat ("I don't eat": pork, mushrooms, ...), comma separated.
 import { L, lang } from './lang.js';
@@ -92,14 +94,51 @@ export async function recipeDetail(bucket, index, id) {
   return pick(JSON.parse(text));
 }
 
+// Saved ("Save recipe") and hidden ("Don't suggest again") recipes, one row
+// per recipe; hiding a saved recipe replaces the mark. Kept while health data
+// is paused (they say nothing about the body), deleted with the account.
+export const MARKS = ['saved', 'hidden'];
+export const MAX_MARKS = 2000;
+async function ensureMarks(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS recipe_marks (
+    user_id INTEGER NOT NULL, recipe_id TEXT NOT NULL, mark TEXT NOT NULL, created_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, recipe_id))`).run();
+}
+const missingTable = error => /no such table/i.test(String(error?.message || error));
+export async function recipeMarks(db, userId) {
+  const rows = await db.prepare('SELECT recipe_id, mark FROM recipe_marks WHERE user_id=? ORDER BY created_at DESC').bind(userId).all()
+    .then(r => r.results || []).catch(error => { if (missingTable(error)) return []; throw error; });
+  return Object.fromEntries(MARKS.map(m => [m, rows.filter(r => r.mark === m).map(r => r.recipe_id)]));
+}
+export async function setRecipeMark(db, userId, index, { id, mark } = {}) {
+  if (!index.byId.has(String(id))) throw Object.assign(new Error(L('Recept nebyl nalezen.', "The recipe wasn't found.")), { status: 404 });
+  if (mark != null && !MARKS.includes(mark)) throw Object.assign(new Error(L('Neznámé označení.', 'Unknown mark.')), { status: 400 });
+  await ensureMarks(db);
+  if (mark == null) { await db.prepare('DELETE FROM recipe_marks WHERE user_id=? AND recipe_id=?').bind(userId, String(id)).run(); return recipeMarks(db, userId); }
+  const count = (await db.prepare('SELECT COUNT(*) AS n FROM recipe_marks WHERE user_id=?').bind(userId).first())?.n || 0;
+  if (count >= MAX_MARKS) throw Object.assign(new Error(L('Označených receptů je moc, nějaké nejdřív odeber.', 'Too many marked recipes; remove some first.')), { status: 400 });
+  await db.prepare('INSERT INTO recipe_marks(user_id,recipe_id,mark,created_at) VALUES(?,?,?,?) ON CONFLICT(user_id,recipe_id) DO UPDATE SET mark=excluded.mark,created_at=excluded.created_at')
+    .bind(userId, String(id), mark, new Date().toISOString()).run();
+  return recipeMarks(db, userId);
+}
+
 const json = (body, status = 200, headers = {}) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
 export async function handleRecipesApi(request, env, url, session = {}) {
   const path = url.pathname;
   if (path !== '/app/api/recipes' && !path.startsWith('/app/api/recipes/')) return undefined;
-  if (!recipesOn(env) || request.method !== 'GET') return json({ message: L('Nenalezeno.', 'Not found.') }, 404);
+  const marks = path === '/app/api/recipes/marks';
+  if (!recipesOn(env) || !(request.method === 'GET' || (marks && request.method === 'PUT'))) return json({ message: L('Nenalezeno.', 'Not found.') }, 404);
   if (!session.signedIn) return json({ message: L('Přihlas se do aplikace.', 'Sign in to the app.') }, 401);
+  if (marks && request.method === 'GET') return json({ status: 'ok', ...await recipeMarks(env.DB, env.USER_ID) });
   const bucket = env.FOOD_CATALOG_R2, index = bucket ? await recipeIndex(bucket).catch(() => null) : null;
   if (!index) return json({ message: L('Recepty teď nejdou načíst.', "Recipes can't be loaded right now.") }, 503);
+  if (marks) {
+    if (request.headers.get('Origin') !== url.origin) return json({ message: L('Neplatný původ požadavku.', 'Invalid request origin.') }, 403);
+    try {
+      const body = await request.json().catch(() => ({}));
+      return json({ status: 'ok', ...await setRecipeMark(env.DB, env.USER_ID, index, body) });
+    } catch (error) { if (error.status) return json({ message: error.message }, error.status); throw error; }
+  }
   if (path === '/app/api/recipes/index') {
     // Compression on the way out may turn the tag weak (W/"..."); the app may send several.
     const etag = `"${index.version}-${lang()}"`, sent = String(request.headers.get('If-None-Match') || '').split(',').map(t => t.trim().replace(/^W\//, ''));

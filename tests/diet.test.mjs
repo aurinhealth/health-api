@@ -129,7 +129,7 @@ test("the ChatGPT plan keeps the diet's carbs", () => {
 
 test("the profile keeps only known diet values", () => {
   assert.deepEqual(normalizeDiet({ dietEating: "carnivore", dietStyle: "paleo", proteinPerKg: 5, netCarbLimit: 33, customSet: "x", customCarbs: -4, customFatPerKg: 0.2, nutrientTargets: { fe: "25", "bad key": 4, zn: -1 } }),
-    { dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: 35, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: { fe: 25 } });
+    { dietEating: "everything", dietStyle: "balanced", proteinPerKg: null, netCarbLimit: 35, customSet: "fat", customCarbs: null, customFatPerKg: null, nutrientTargets: { fe: 25 }, dietAvoid: [] });
   assert.equal(normalizeDiet({ proteinPerKg: "2.27" }).proteinPerKg, 2.3);
   assert.deepEqual(withoutProDiet({ dietStyle: "custom", proteinPerKg: 2.4, nutrientTargets: { fe: 20 }, dietEating: "vegan" }),
     { dietStyle: "balanced", proteinPerKg: null, nutrientTargets: {}, dietEating: "vegan" });
