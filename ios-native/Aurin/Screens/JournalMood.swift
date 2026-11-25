@@ -85,6 +85,7 @@ struct JournalMoodSheet: View {
             Text(verbatim: Self.text(Self.labelWords[i])).font(.subheadline.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 13).frame(minHeight: 36)
+                .tapTarget(width: 44, height: 36)
                 .background(on ? Palette.button : Palette.card, in: Capsule())
                 .opacity(!on && full ? 0.45 : 1)
         }

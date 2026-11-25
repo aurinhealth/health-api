@@ -332,6 +332,7 @@ struct JournalView: View {
                 } label: {
                     Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                        .tapTarget(width: 36, height: 36)
                 }
                 .accessibilityLabel(L10n.tr("Další možnosti"))
             }
@@ -772,6 +773,7 @@ struct JournalFollowUps: View {
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(on ? Palette.onButton : Palette.ink)
                         .padding(.horizontal, 10).frame(height: 30)
+                        .tapTarget(width: 44, height: 30)
                         .background(on ? Palette.button : Palette.track, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -784,6 +786,7 @@ struct JournalFollowUps: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
+                .tapTarget(width: 30, height: 30)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))

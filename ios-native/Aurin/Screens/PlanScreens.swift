@@ -1290,7 +1290,7 @@ struct PlanSessionList: View {
         if s.editable == true {
             Menu { actions(s) } label: {
                 Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                    .frame(width: 32, height: 32).contentShape(Rectangle())
+                    .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
             }
             .accessibilityLabel(L10n.tr("Upravit trénink"))
         } else {

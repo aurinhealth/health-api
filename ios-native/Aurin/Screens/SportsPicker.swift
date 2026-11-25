@@ -141,7 +141,7 @@ struct SportsPicker: View {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .scaledFont(24).foregroundStyle(on ? Palette.green : Palette.faint)
                     .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
+                    .tapTarget(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityHidden(true)

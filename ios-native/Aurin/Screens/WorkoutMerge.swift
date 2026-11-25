@@ -47,6 +47,7 @@ struct MergeProposalCard: View {
                 Button(action: merge) {
                     Text("Sloučit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 36).background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 36)
                 }
                 .buttonStyle(.plain)
                 Button(action: keepBoth) {
