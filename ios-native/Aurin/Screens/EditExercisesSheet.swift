@@ -342,6 +342,7 @@ struct ExercisePicker: View {
             Text(title).font(.footnote.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 12).frame(height: 30)
+                .tapTarget(width: 44, height: 30)
                 .background(on ? Palette.button : Palette.track, in: Capsule())
         }
         .buttonStyle(.borderless)

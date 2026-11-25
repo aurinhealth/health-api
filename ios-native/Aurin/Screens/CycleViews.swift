@@ -312,6 +312,7 @@ struct PillButton: View {
             Button(action: action) {
                 Text("Vzato").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 16).frame(height: 32)
+                    .tapTarget(width: 44, height: 32)
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)

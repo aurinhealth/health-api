@@ -108,8 +108,8 @@ struct RestLengthGrid: View {
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity).frame(height: 36)
+                .tapTarget(width: 44, height: 36)
                 .background(on ? Palette.ink : Palette.ink.opacity(0.08), in: Capsule())
-                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(GymRestSettingsView.label(seconds))

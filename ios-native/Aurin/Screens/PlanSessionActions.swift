@@ -136,7 +136,7 @@ struct WeekSessionsHeader: View {
                     .scaledFont(17, weight: .regular, cap: .denseCap)
                     .foregroundStyle(Palette.muted)
                     .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
+                    .tapTarget(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr("Co znamenají barvy"))

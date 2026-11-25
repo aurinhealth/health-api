@@ -362,6 +362,7 @@ struct BarcodeScanSheet: View {
                             Button { edit(product) } label: {
                                 Label("Upravit produkt", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                                     .padding(.horizontal, 12).frame(height: 30)
+                                    .tapTarget(width: 44, height: 30)
                                     .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                             }
                             .buttonStyle(.plain)

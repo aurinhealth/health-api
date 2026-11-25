@@ -844,7 +844,7 @@ struct ExerciseHistorySheet: View {
                         Button { pinned.wrappedValue.toggle() } label: {
                             Image(systemName: pinned.wrappedValue ? "star.fill" : "star")
                                 .scaledFont(17, cap: .denseCap).foregroundStyle(pinned.wrappedValue ? Palette.amber : Palette.faint)
-                                .frame(width: 32, height: 32).contentShape(Rectangle())
+                                .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(L10n.tr(pinned.wrappedValue ? "Odepnout" : "Připnout nahoru"))

@@ -115,7 +115,7 @@ struct ActivityTypeSheet: View {
             Button { toggleFavorite(option.type) } label: {
                 Image(systemName: favorite ? "star.fill" : "star")
                     .scaledFont(17, cap: .denseCap).foregroundStyle(favorite ? Palette.amber : Palette.faint)
-                    .frame(width: 32, height: 32).contentShape(Rectangle())
+                    .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(favorite ? "Odebrat z oblíbených" : "Přidat do oblíbených"))

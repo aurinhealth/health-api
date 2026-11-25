@@ -1777,6 +1777,7 @@ struct ManualWorkoutSheet: View {
                 Image(systemName: symbol).scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
+                    .tapTarget(width: 36, height: 36)
                     .background(color.opacity(0.16), in: Circle())
                 Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                     .lineLimit(2).minimumScaleFactor(0.92).multilineTextAlignment(.center)
@@ -1984,7 +1985,7 @@ struct PowerTermsButton: View {
         Button { open = true } label: {
             Label("Co znamenají TSS, NP, IF a FTP", systemImage: "info.circle")
                 .font(Typo.caption).foregroundStyle(Palette.muted)
-                .frame(minHeight: 32).contentShape(Rectangle())
+                .frame(minHeight: 32).tapTarget(width: 44, height: 32)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $open) { PowerTermsSheet() }

@@ -118,6 +118,7 @@ struct StretchingCard: View {
                     Label("Spustit", systemImage: "play.fill").font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 36)
+                        .tapTarget(width: 44, height: 36)
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)

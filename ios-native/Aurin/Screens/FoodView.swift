@@ -647,6 +647,7 @@ struct PendingFoodRow: View {
                 Button(action: add) {
                     Text("Přidat").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 32)
+                        .tapTarget(width: 44, height: 32)
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
