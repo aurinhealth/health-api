@@ -92,14 +92,14 @@ export async function storeData(env, date) {
 // read a year as 365 rows instead of counting the history again. Counts only,
 // no account in it. Days before the first snapshot cannot be made up later.
 const STATS = ["accounts", "new_week", "paid_monthly", "paid_yearly", "gift", "trials", "ai_users_week", "ai_usd",
-  "trials_started", "paid_started", "converted", "trials_cancelled", "paid_cancelled", "failed", "expired", "refund_requests", "refunds"];
+  "trials_started", "paid_started", "converted", "renewed", "renew_on", "to_yearly", "to_monthly", "trials_cancelled", "paid_cancelled", "failed", "expired", "refund_requests", "refunds"];
 
 export async function saveDailyStats(db, date, stats, counts) {
   if (!stats && !counts) return false;
   const values = {
     accounts: stats?.accounts, new_week: stats?.newWeek, paid_monthly: stats?.paidMonthly, paid_yearly: stats?.paidYearly, gift: stats?.gift,
     trials: stats?.trial, ai_users_week: stats?.aiUsersWeek, ai_usd: stats ? Math.round((Number(stats.totalYesterdayUsd) || 0) * 100) / 100 : null,
-    trials_started: counts?.trialsStarted, paid_started: counts?.paidStarted, converted: counts?.converted, trials_cancelled: counts?.trialsCancelled,
+    trials_started: counts?.trialsStarted, paid_started: counts?.paidStarted, converted: counts?.converted, renewed: counts?.renewed, renew_on: counts?.renewOn, to_yearly: counts?.toYearly, to_monthly: counts?.toMonthly, trials_cancelled: counts?.trialsCancelled,
     paid_cancelled: counts?.paidCancelled, failed: counts?.failed, expired: counts?.expired, refund_requests: counts?.refundRequests, refunds: counts?.refunds
   };
   await db.prepare(`CREATE TABLE IF NOT EXISTS daily_stats (day TEXT PRIMARY KEY, ${STATS.map(name => `${name} ${name === "ai_usd" ? "REAL" : "INTEGER"}`).join(", ")})`).run();

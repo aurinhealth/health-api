@@ -48,6 +48,7 @@ test("the daily snapshot keeps one row per day and the charts read them oldest f
   const db = createD1();
   assert.deepEqual(await dailyStats(db), []);
   await saveDailyStats(db, "2026-12-02", { accounts: 10, newWeek: 3, paidMonthly: 1, paidYearly: 2, gift: 0, trial: 4, aiUsersWeek: 6, totalYesterdayUsd: 0.4567 }, storeCounts([event("SUBSCRIBED", { free_trial: 1 })]));
+  assert.deepEqual((await dailyStats(db)).map(row => [row.trials_started, row.renewed]), [[1, 0]], "renewals are kept for the charts");
   await saveDailyStats(db, "2026-12-01", { accounts: 9 }, null);
   await saveDailyStats(db, "2026-12-02", { accounts: 11 }, null);
   const days = await dailyStats(db);
