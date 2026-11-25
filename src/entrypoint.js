@@ -58,7 +58,7 @@ import {forwardWatchWorkouts, forwardToGoogle} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,compactWellness,callOpenAI} from './coach-assistant.js';
 import { consentStatus } from './consent.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary, planAroundCard } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates, requestedMuscles, chatV1On, actionSummary, planAroundCard, eventSport } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -3895,12 +3895,17 @@ async function defaultDayCoach(env,inputs,date,sport,{prefs,plan,targets}){
 // it, or the coach's version could not be made). planned: the plan's workout.
 async function coachTodayVersion(env,ctx,eventId,planned){
   const id=String(eventId||'').replace(/^planned:/,''),date=localToday();
-  const sport=planned?.sport==='run'||planned?.sport==='swim'?planned.sport:planned?.sport==='ride'||!planned?.sport?'ride':null;
-  if(!id||!planned||!sport)return null;
-  const event=await env.DB.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first().catch(()=>null);
+  if(!id||!planned)return null;
+  const event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first().catch(()=>null);
   if(String(event?.start_time||'').slice(0,10)!==date)return null;
+  // Only a ride, run or swim by the event's own type (a gym or yoga event reads as a ride in plannedEventWorkout).
+  let payload={};try{payload=JSON.parse(event.payload_json||'{}');}catch{}
+  const sport=eventSport(payload);
+  if(!['ride','run','swim'].includes(sport))return null;
   const u=new URL('https://internal/app/api/workouts/generate');
-  const response=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:planned.environment==='indoor'?'indoor':planned.environment==='outdoor'?'outdoor':'auto'})}),env,ctx,u,{signedIn:true}).catch(()=>null);
+  // At most 4 s: a slow coach never holds the watch or the file, the plan goes out instead.
+  const call=handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify({date,sport,environment:planned.environment==='indoor'?'indoor':planned.environment==='outdoor'?'outdoor':'auto'})}),env,ctx,u,{signedIn:true}).catch(()=>null);
+  const response=await Promise.race([call,new Promise(resolve=>setTimeout(()=>resolve(null),4000))]);
   const g=response?.ok?await response.json().catch(()=>null):null;
   if(g?.status!=='ok'||!g.workout)return null;
   return coachEases(planned,g)?{workout:g.workout,from:{name:planned.name||null,kind:kindOfSystem(planned.primary_system||planned.name,'endurance'),minutes:Number(planned.duration_minutes)||null},why:(g.adaptations||[]).filter(Boolean).join(', ')||null}:null;

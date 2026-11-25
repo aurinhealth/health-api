@@ -165,6 +165,9 @@ test('C1: the coach eases a hard or long plan, or cuts it for a named reason', (
   assert.equal(coachEases({ name: 'Ride', intensity_factor: 0.9, duration_minutes: 60 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 60 } }), true, 'hard by its IF');
   assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, easy({ duration_minutes: 90 })), true, 'cut to half for a reason');
   assert.equal(coachEases({ name: 'Endurance', duration_minutes: 180 }, { system: 'endurance', adaptations: [], workout: { duration_minutes: 150 } }), false, 'shorter without a reason');
+  assert.equal(coachEases(vo2, { system: 'endurance', adaptations: ['střední připravenost'], workout: { duration_minutes: 90 } }), false, 'never longer than the plan');
+  assert.equal(coachEases({ name: 'Endurance', duration_minutes: 100 }, { system: 'threshold', adaptations: ['krátké okno'], workout: { duration_minutes: 70 } }), false, 'never harder than the plan');
+  assert.equal(coachEases(vo2, { system: 'long_endurance', adaptations: [], workout: { duration_minutes: 75 } }), false, 'never long where the plan was not');
 });
 
 test('C1: the .zwo and .fit files of today\'s plan hold the coach\'s version', async () => {
