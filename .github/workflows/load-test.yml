@@ -1,0 +1,56 @@
+name: Load test
+
+# Bursts of app opens on the test server (scripts/load-test.mjs, src/load-test.js):
+# made-up accounts with the sample athlete and no AI consent, deleted at the end.
+# Started by hand from main; staging.aurin.health only, never the live server.
+on:
+  workflow_dispatch:
+    inputs:
+      accounts:
+        description: "Test accounts, 1–50 (each staging user database holds 25)"
+        required: false
+        default: "40"
+      bursts:
+        description: "App opens at the same moment, one burst after another"
+        required: false
+        default: "10,20,40,80,120"
+      rounds:
+        description: "Rounds of each burst, 1–5"
+        required: false
+        default: "3"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: load-test
+  cancel-in-progress: false
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+
+      - name: Run the load test
+        env:
+          LOAD_TEST_ACCOUNTS: ${{ inputs.accounts }}
+          LOAD_TEST_BURSTS: ${{ inputs.bursts }}
+          LOAD_TEST_ROUNDS: ${{ inputs.rounds }}
+        run: node scripts/load-test.mjs
+
+      - name: Keep the measurements
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: load-test
+          path: load-test.json
+          if-no-files-found: ignore

@@ -134,6 +134,7 @@ import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
 import { checkedCoachAnswer, coachCheckOn } from "./coach-checker.js";
 import { limitBody, publicBodyLimit, SIGNED_IN_BODY_LIMIT } from "./body-limit.js";
 import { accountRateLimit } from "./account-rate-limit.js";
+import { loadTestPrincipal, handleLoadTest } from "./load-test.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleSignOut, endConnectSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -565,6 +566,7 @@ const worker = {
     let principal = await resolvePrincipal(request, env);
     // The coach evaluation workflow acts as the owner, on the test server only.
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
+    if (!principal && url.pathname === "/automation/load-test") principal = await loadTestPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     // Nobody signed in: the body is read only up to a limit (body-limit.js, SEC-013).
     let publicLimited = false;
@@ -667,6 +669,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
+    if (url.pathname === "/automation/load-test") return handleLoadTest(request, env, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.

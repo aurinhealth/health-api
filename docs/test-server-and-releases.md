@@ -157,3 +157,13 @@ needs `OPENAI_API_KEY` set on `health-api-staging`; the tokens count on the owne
 The test server's AI brake (`AI_TOTAL_DAILY_LIMIT_USD`, 5 USD a day, an e-mail at 3 USD) holds the owner
 there too. A full run of all scenarios costs about 0.65 USD, so a few fit in a day; past the brake the
 remaining scenarios fail fast until the next UTC day (01:00 in Prague in winter).
+
+## Load test
+
+"Load test" (`load-test.yml`, started by hand from main) opens up to 50 made-up accounts
+`sample+loadNN@test.aurin.health` on the test server (`src/load-test.js`, only to the workflow's own
+GitHub token), each with the sample athlete and AI consent taken back, so it spends no AI. It then sends
+bursts of app opens at the same moment (`scripts/load-test.mjs`: the Apple Health upload, then the
+screens together) and lists time, errors and the D1 work from Server-Timing per request in the job
+summary. The accounts are deleted at the end, also after a failure. Each staging user database must have
+room for them (`user_data_shards.max_users`).

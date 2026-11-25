@@ -74,6 +74,8 @@ const PUBLIC_PATHS = new Set([
   "/automation/strength",
   // The coach evaluation on the test server: its own GitHub token (coach-eval.js).
   "/automation/coach-eval",
+  // The load test on the test server: its own GitHub token (load-test.js).
+  "/automation/load-test",
   // Wahoo's webhook: checked against WAHOO_WEBHOOK_TOKEN (wahoo.js).
   "/webhooks/wahoo",
   // Intervals.icu's webhooks: checked against INTERVALS_WEBHOOK_SECRET (intervals-webhook.js).
