@@ -52,6 +52,25 @@ final class GymLiveActivityTests: XCTestCase {
         XCTAssertNil(GymSessionMath.carried(sets[0], in: sheet.exercises[0]))
     }
 
+    /// Petr 2026-11-24: 27.5 typed for the warm-up before the set, the lock screen kept the plan's 40.
+    func testTheSetAtHandShowsWhatItsFieldsHold() throws {
+        let sheet = day()
+        let warmup = sheet.exercises[0].sets[0]
+        let shown: GymLiveActivity.Shown = { set, exercise in
+            let carry = GymSessionMath.carried(set, in: exercise)
+            guard set.row == warmup.row else { return carry }
+            return TrainingModeView.typed(kg: "27,5", reps: "3", machineLb: false, else: carry)
+        }
+        let state = try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil, shown: shown))
+        XCTAssertEqual(state.weight, LiftWeight.shown("27.5").map { $0 + " kg" })
+        XCTAssertEqual(state.reps, "3")
+        // Reps left empty: the plan's.
+        let kgOnly: GymLiveActivity.Shown = { set, exercise in
+            set.row == warmup.row ? TrainingModeView.typed(kg: "30", reps: " ", machineLb: false, else: nil) : nil
+        }
+        XCTAssertEqual(try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil, shown: kgOnly)).load, "30 kg × 10")
+    }
+
     func testFocusAndAllDone() throws {
         var sheet = day()
         let focused = try XCTUnwrap(GymLiveActivity.state(sheet, focus: 1, restStart: nil, restEnd: nil))

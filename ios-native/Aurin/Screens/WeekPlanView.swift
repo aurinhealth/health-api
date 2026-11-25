@@ -386,7 +386,8 @@ struct WeekPlanView: View {
     @ViewBuilder private func dayRows(_ week: WeekPlanWeek, earlier: Bool) -> some View {
         ForEach(week.days.filter { earlier || $0 >= today }, id: \.self) { date in
             let list = week.sessions(on: date)
-            if !list.isEmpty {
+            let own = ownEvents(week, date: date, sessions: list)
+            if !list.isEmpty || !own.isEmpty {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(spacing: 1) {
                         Text(verbatim: WeekPlanText.dayWord(date, today: today))
@@ -399,12 +400,21 @@ struct WeekPlanView: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(Text(verbatim: Fmt.capitalized(Fmt.weekdayName(date)) + " " + Fmt.dayMonth(date)))
                     VStack(spacing: 8) {
+                        ForEach(Array(own.enumerated()), id: \.offset) { _, event in OtherSportRow(event: event) }
                         ForEach(list) { activity in row(activity, week: week) }
                     }
                 }
                 .id(date)
             }
         }
+    }
+
+    /// The athlete's own practice or match that day (Plan settings), until a workout of that sport is recorded.
+    private func ownEvents(_ week: WeekPlanWeek, date: String, sessions: [CalendarActivity]) -> [OtherSportEvent] {
+        let events = OtherSports.events(weekPlans[week.monday]?.prefs)[ISODay.weekdayIndex(date)]
+        // Recorded by a watch under its own type or a general one (Hockey for IceSkate, Other): the record stands for it.
+        let recorded = sessions.filter { $0.status == "done" && !["ride", "run", "swim", "strength", "walk"].contains($0.sport) }
+        return recorded.isEmpty ? events : []
     }
 
     @ViewBuilder private func row(_ a: CalendarActivity, week: WeekPlanWeek) -> some View {
@@ -511,8 +521,11 @@ struct WeekPlanView: View {
         await model.loadCalendar(from: monday, to: ISODay.shift(nextMonday, 6))
         guard !model.demo else { return }
         plans = try? await model.api.trainingPlans()
-        if let a = try? await model.api.weekPlan(start: monday) { weekPlans[monday] = a }
-        if let b = try? await model.api.weekPlan(start: nextMonday) { weekPlans[nextMonday] = b }
+        let a = try? await model.api.weekPlan(start: monday), b = try? await model.api.weekPlan(start: nextMonday)
+        // The names of the athlete's own practice and match rows, before they show.
+        if [a, b].contains(where: { OtherSports.events($0?.prefs).contains { !$0.isEmpty } }) { await OtherSports.loadNames(model.api) }
+        if let a { weekPlans[monday] = a }
+        if let b { weekPlans[nextMonday] = b }
     }
 
     private func reload() async {
@@ -637,6 +650,28 @@ struct WeekPlanView: View {
 /// One workout of the week. Done: the Training row (sport, result under the
 /// name, time, % of plan, chevron). Planned: the pale sport, its time of day,
 /// its length and a chevron that opens it in place.
+/// "Football match", "your own", 1 h 30 min: a practice or match the athlete set
+/// in Plan settings. The plan works around it; it changes there, not here.
+struct OtherSportRow: View {
+    let event: OtherSportEvent
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SportDisc(sport: "other", type: event.type, state: .ahead, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: OtherSports.title(event)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
+                Text(verbatim: L10n.tr("Tvůj vlastní, změníš v Nastavení plánu")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Text(verbatim: planDuration(event.minutes)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .frame(minHeight: 60)
+        .cardSurface(cornerRadius: 18)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct WeekPlanRow: View {
     let activity: CalendarActivity
     /// nil for a row that opens its detail; else whether it is open in place.
