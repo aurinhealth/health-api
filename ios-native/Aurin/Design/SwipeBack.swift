@@ -39,7 +39,7 @@ import UIKit
         guard logging else { return }
         let line = message()
         NSLog("SwipeBack: %@", line)
-        lines = Array((lines + [line]).suffix(12))
+        lines = Array((lines + [line]).suffix(40))
         guard let window = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first else { return }
         let view = board ?? UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
@@ -64,7 +64,7 @@ import UIKit
 
     /// Only for the UI test's log: did the finger reach the swipe at all.
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        Self.log("touch at \(touch.location(in: gestureRecognizer.view))")
+        Self.log("touch at \(Int(touch.location(in: gestureRecognizer.view).x))")
         return true
     }
 
@@ -79,7 +79,17 @@ import UIKit
     }
 
     @objc private func changed(_ pop: UIGestureRecognizer) {
-        Self.log("state \(pop.state.rawValue) at \(pop.location(in: pop.view))")
+        let velocity = (pop as? UIPanGestureRecognizer)?.velocity(in: pop.view).x ?? 0
+        Self.log("state \(pop.state.rawValue) at \(Int(pop.location(in: pop.view).x)) v \(Int(velocity))")
+        // Did the pop finish or snap back, and how far it had got.
+        if pop.state == .ended || pop.state == .cancelled, let navigation = Self.navigation(of: pop),
+           let coordinator = navigation.transitionCoordinator {
+            coordinator.notifyWhenInteractionChanges { context in
+                Self.log("pop cancelled \(context.isCancelled), at \(Int(context.percentComplete * 100)) %")
+            }
+        } else if pop.state == .ended {
+            Self.log("ended without a transition")
+        }
     }
 
     /// Switches the swipe on for the stack that shows `controller`.
@@ -94,15 +104,6 @@ import UIKit
             if Self.logging { pop.addTarget(self, action: #selector(changed)) }
         }
         pop.isEnabled = true
-        // iOS 26 adds a swipe back from anywhere on the page. With the bar
-        // hidden it never goes back here, but the edge swipe could wait for it
-        // to fail, and then a quick swipe ended before it was even asked (the
-        // UI test's log: no "shouldBegin" for the dropped swipe; TestFlight
-        // 602 to 611). Off, the edge swipe alone decides.
-        if #available(iOS 26, *), let content = controller.navigationController?.interactiveContentPopGestureRecognizer {
-            Self.log("enable: content swipe enabled \(content.isEnabled)")
-            content.isEnabled = false
-        }
     }
 }
 
