@@ -431,6 +431,15 @@ struct GymSetRow: View {
         .onAppear { editKg = kg; editReps = reps }
         .onChange(of: kg) { _, value in if focus == nil { editKg = value } }
         .onChange(of: reps) { _, value in if focus == nil { editReps = value } }
+        // A done set fixed: saved a moment after typing, not only on leaving the
+        // field (the number pad has no Done): the sets after it take the new weight
+        // at once, also when the next set is ticked with the keyboard still up (Petr 2026-11-24).
+        .task(id: state == .done && focus != nil ? editKg + "|" + editReps : nil) {
+            guard state == .done, focus != nil, let onEdit, editKg != kg || editReps != reps else { return }
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            onEdit(editKg, editReps)
+        }
         // Leaving the field keeps what was typed.
         .onChange(of: focus) { old, now in
             guard old != nil, now == nil, let onEdit, editKg != kg || editReps != reps else { return }
@@ -564,6 +573,15 @@ struct MinimizedGym {
     var waiting = false
     /// The part as the lock screen showed it, so it stays there while hidden.
     var activity: GymLiveActivity.Part? = nil
+    /// The weight and reps typed for the set at hand, as its fields held them.
+    var draft: Draft? = nil
+
+    struct Draft: Equatable {
+        let row: Int
+        let kg: String
+        let reps: String
+        let machineLb: Bool
+    }
 }
 
 /// The bar over the tab bar while the workout is hidden, as a music app's

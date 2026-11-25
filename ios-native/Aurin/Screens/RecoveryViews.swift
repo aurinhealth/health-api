@@ -485,31 +485,24 @@ extension RecoveryTime {
         }
         return time.ready.map { L10n.f("tvrdý trénink %@", part($0, today: today, now: now)) }
     }
-
-    /// The hard row's time: on a yellow or red morning with a greener morning on top.
-    static func hardWhen(_ time: RecoveryTime, today: String, zone: String?, now: Date) -> String {
-        let ahead = time.ready.flatMap { $0 > now ? part($0, today: today, now: now) : nil }
-        if waitsForGreener(zone) { return ahead.map { L10n.f("%@, po zelenějším ránu", $0) } ?? L10n.tr("ne dřív než po zelenějším ránu") }
-        return ahead ?? L10n.tr("už teď")
-    }
 }
 
-/// Regenerace from Today: half a day as an estimate, when easy and hard
-/// training are fine, and what makes it take that long.
+/// Regenerace from Today (concept B, 2026-11-24): when hard training is fine
+/// again as the biggest line, what fits until then, why it takes that long
+/// and what helps. Half a day at most, labelled as an estimate, no hours.
 struct RecoveryTimeView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.today, title: "Regenerace") {
+        DetailScreen(glow: Palette.Glow.today, title: "Regenerace", pinTitle: true) {
             if let today = model.today, let time = today.recoveryTime {
                 RecoveryTimeContent(time: time, today: today.date, zone: today.readiness.zone)
             } else if model.today == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else {
                 // Never "hard training now": today's readiness decides.
-                Text("Regenerace").font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
                 Text("Není se z čeho zotavovat. Co se dnes hodí, rozhodne dnešní připravenost.")
-                    .font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 8)
+                    .font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -523,81 +516,69 @@ struct RecoveryTimeContent: View {
     var zone: String? = nil
     var now = Date()
 
+    /// One line of "Proč to trvá": a group of sessions, a morning sign or the readiness.
+    struct Reason: Hashable {
+        let icon: String
+        let color: Color
+        let title: String
+        let detail: String
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Regenerace").font(Typo.heading(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
-            // Half a day at most, labelled as an estimate (Today audit 15).
-            if let ready = time.ready {
-                let when = RecoveryTime.part(ready, today: today, now: now)
-                Text(verbatim: when.prefix(1).uppercased(with: L10n.locale) + when.dropFirst())
-                    .font(Typo.heading(28, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 4)
-            }
-            if RecoveryTime.waitsForGreener(zone) {
-                Text("tvrdý trénink až po zelenějším ránu (odhad)").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 6)
-            } else if time.ready != nil {
-                Text("tělo připravené na tvrdý trénink (odhad)").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 6)
-            }
-            bar.padding(.top, 18)
+            SectionLabel(text: "Tvrdý trénink znovu").padding(.top, 20)
+            Text(verbatim: Self.headline(time, today: today, zone: zone, now: now))
+                .font(Typo.heading(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: Self.condition(time, zone: zone, now: now))
+                .font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 6)
+                .fixedSize(horizontal: false, vertical: true)
 
             // When the body is ready for each, not a plan of sessions.
-            SectionLabel(text: "Na co je tělo připravené").padding(.top, 30).padding(.bottom, 10)
+            SectionLabel(text: "Co můžeš dělat").padding(.top, 30).padding(.bottom, 10)
             Card {
                 VStack(spacing: 0) {
                     let lightLater = time.light.map { $0 > now } ?? false
                     row(icon: "figure.walk", color: Palette.green, title: L10n.tr("Lehký trénink"),
                         detail: L10n.tr(time.legsTired ? "klidné tempo, posilovna bez nohou" : "klidné tempo, jiné svaly"),
-                        trailing: lightLater ? time.light.map { RecoveryTime.part($0, today: today, now: now) } ?? "" : L10n.tr("už teď"),
+                        trailing: lightLater ? time.light.map { RecoveryTime.when($0, today: today, now: now, partOfDay: true) } ?? "" : L10n.tr("už teď"),
                         ready: !lightLater)
                     Divider().overlay(Palette.hairline)
                     row(icon: "flame.fill", color: Palette.amber, title: L10n.tr("Tvrdý trénink"),
                         detail: L10n.tr(time.legsTired ? "intervaly, těžké nohy" : "intervaly, těžká posilovna"),
-                        trailing: RecoveryTime.hardWhen(time, today: today, zone: zone, now: now))
+                        trailing: Self.hardRow(time, today: today, zone: zone, now: now))
                 }
             }
 
-            if !time.causes.isEmpty {
-                SectionLabel(text: "Co ji prodlužuje").padding(.top, 30).padding(.bottom, 10)
+            let reasons = Self.reasons(time, today: today, zone: zone, now: now)
+            if !reasons.isEmpty {
+                SectionLabel(text: "Proč to trvá").padding(.top, 30).padding(.bottom, 10)
                 Card {
                     VStack(spacing: 0) {
-                        ForEach(Array(time.causes.enumerated()), id: \.offset) { index, cause in
+                        ForEach(Array(reasons.enumerated()), id: \.offset) { index, reason in
                             if index > 0 { Divider().overlay(Palette.hairline) }
-                            causeRow(cause)
+                            row(icon: reason.icon, color: reason.color, title: reason.title, detail: reason.detail)
                         }
                     }
                 }
             }
-        }
-    }
 
-    /// From the session to ready, with now on it.
-    private var bar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Palette.track)
-                    Capsule().fill(Palette.green).frame(width: max(6, geo.size.width * time.liveProgress(now: now)))
+            // Only after a short night: tomorrow's signs come from the next one.
+            if let sleep = time.causes.first(where: { $0.kind == "sleep" }), let need = sleep.need, need > 0 {
+                SectionLabel(text: "Co pomůže").padding(.top, 30).padding(.bottom, 10)
+                Card {
+                    row(icon: "bed.double.fill", color: Palette.indigo, title: L10n.tr("Dnes se pořádně vyspi"),
+                        detail: L10n.f("%@ spánku může čekání zkrátit", Fmt.duration(need)))
                 }
             }
-            .frame(height: 6)
-            HStack {
-                if let start = time.start { Text(verbatim: RecoveryTime.short(start, ready: false)) }
-                Spacer()
-                if let ready = time.ready { Text(verbatim: RecoveryTime.short(ready)) }
-            }
-            .font(Typo.caption).foregroundStyle(Palette.muted)
-            // "teď" under the end of the fill, where now is on the bar.
-            GeometryReader { geo in
-                let x = geo.size.width * time.liveProgress(now: now)
-                Text("teď").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.green)
-                    .fixedSize()
-                    .position(x: min(max(x, 14), geo.size.width - 14), y: 8)
-            }
-            .frame(height: 16)
+
+            Text("Aktualizuje se každé ráno. Nejde o lékařské hodnocení.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 14)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .accessibilityElement(children: .combine)
     }
 
-    private func row(icon: String, color: Color, title: String, detail: String, trailing: String, ready: Bool = false) -> some View {
+    private func row(icon: String, color: Color, title: String, detail: String, trailing: String = "", ready: Bool = false) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(color)
                 .frame(width: 38, height: 38).background(color.opacity(0.16), in: Circle())
@@ -605,23 +586,82 @@ struct RecoveryTimeContent: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .layoutPriority(1)
             Spacer(minLength: 8)
             if ready {
                 Label(trailing, systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.green).lineLimit(1)
-            } else {
+            } else if !trailing.isEmpty {
                 Text(verbatim: trailing).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.trailing).lineLimit(2).minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 130, alignment: .trailing)
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 
-    private func causeRow(_ c: RecoveryTime.Cause) -> some View {
-        let (icon, color) = Self.look(c.kind)
-        // A session: when it alone is recovered from; a sign: that it adds time.
-        let trailing = c.isSession ? (c.ready.map { RecoveryTime.part($0, today: today, now: now) } ?? "") : L10n.tr("prodlužuje")
-        return row(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c, today: today), trailing: trailing)
+    private static func capitalized(_ s: String) -> String {
+        s.prefix(1).uppercased(with: L10n.locale) + s.dropFirst()
+    }
+
+    /// "Saturday morning" / "V sobotu dopoledne"; once passed: a green morning or now.
+    static func headline(_ time: RecoveryTime, today: String, zone: String?, now: Date) -> String {
+        if let ready = time.ready, ready > now { return capitalized(RecoveryTime.when(ready, today: today, now: now, partOfDay: true)) }
+        return L10n.tr(RecoveryTime.waitsForGreener(zone) ? "Další zelené ráno" : "Už teď")
+    }
+
+    /// Under the headline: always an estimate; on a yellow or red morning the condition.
+    static func condition(_ time: RecoveryTime, zone: String?, now: Date) -> String {
+        let ahead = time.ready.map { $0 > now } ?? false
+        switch (ahead, RecoveryTime.waitsForGreener(zone)) {
+        case (true, true): return L10n.tr("Odhad, pokud bude to ráno připravenost zelená.")
+        case (false, true): return L10n.tr("Tělo se z tréninku zotavilo. Tvrdý trénink čeká na zelené ráno.")
+        default: return L10n.tr("Odhad z tvých tréninků, spánku a tepu.")
+        }
+    }
+
+    /// The hard row's time, with the same condition as the headline.
+    static func hardRow(_ time: RecoveryTime, today: String, zone: String?, now: Date) -> String {
+        let greener = RecoveryTime.waitsForGreener(zone)
+        guard let ready = time.ready, ready > now else { return L10n.tr(greener ? "po zeleném ránu" : "už teď") }
+        let when = RecoveryTime.when(ready, today: today, now: now, partOfDay: true)
+        return greener ? L10n.f("%@, při zelené", when) : when
+    }
+
+    /// The sessions grouped by what they were (three "Gym, upper body" in one
+    /// line), each with its days and when it is rested; then the morning's
+    /// signs; then a yellow or red readiness.
+    static func reasons(_ time: RecoveryTime, today: String, zone: String?, now: Date) -> [Reason] {
+        var groups: [[RecoveryTime.Cause]] = []
+        for c in time.causes where c.isSession {
+            if let i = groups.firstIndex(where: { $0[0].kind == c.kind && $0[0].title == c.title }) { groups[i].append(c) } else { groups.append([c]) }
+        }
+        var out: [Reason] = groups.map { group in
+            let first = group[0]
+            let (icon, color) = look(first.kind)
+            let title = group.count > 1 ? (first.title ?? "") + ", " + L10n.plural("%lld tréninků", group.count) : first.title ?? ""
+            let names = group.compactMap(\.date).sorted().map { RecoveryTime.pastDay($0, today: today) }
+            var days = names.count < 2 ? names.first ?? "" : L10n.f("%@ a %@", names.dropLast().joined(separator: ", "), names.last ?? "")
+            if group.count == 1, let detail = first.detail { days += ", " + detail }
+            var parts = [capitalized(days)]
+            if let ready = group.compactMap(\.ready).max(), ready > now {
+                let when = RecoveryTime.when(ready, today: today, now: now)
+                parts.append(L10n.f(first.kind == "gym" ? "Svaly budou odpočaté %@" : "Únava odezní %@", when))
+            }
+            return Reason(icon: icon, color: color, title: title, detail: parts.joined(separator: ". "))
+        }
+        for c in time.causes where !c.isSession {
+            let (icon, color) = look(c.kind)
+            out.append(Reason(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c, today: today)))
+        }
+        if RecoveryTime.waitsForGreener(zone) {
+            out.append(Reason(icon: "gauge.with.dots.needle.33percent", color: zone == "red" ? Palette.rust : Palette.amber,
+                              title: L10n.tr(zone == "red" ? "Dnes červená připravenost" : "Dnes žlutá připravenost"),
+                              detail: L10n.tr("Tvrdý trénink potřebuje zelené ráno")))
+        }
+        return out
     }
 
     static func look(_ kind: String) -> (String, Color) {
@@ -639,7 +679,7 @@ struct RecoveryTimeContent: View {
 
     static func title(_ c: RecoveryTime.Cause) -> String {
         switch c.kind {
-        case "sleep": return L10n.tr("Spánek")
+        case "sleep": return L10n.tr("Krátký spánek")
         case "hrv": return "HRV"
         case "restingHR": return L10n.tr("Klidový tep")
         default: return c.title ?? ""
@@ -650,15 +690,14 @@ struct RecoveryTimeContent: View {
         switch c.kind {
         case "sleep":
             let slept = c.minutes.map(Fmt.duration) ?? ""
-            guard let m = c.minutes, let need = c.need, need > 0 else { return slept }
-            return slept + ", " + L10n.f("%d %% potřeby", Int((Double(m) / Double(need) * 100).rounded()))
+            guard c.minutes != nil, let need = c.need, need > 0 else { return slept }
+            return L10n.f("%@ z potřebných %@", slept, Fmt.duration(need))
         case "hrv":
             return (c.value.map { "\($0) ms, " } ?? "") + L10n.tr("pod obvyklým rozmezím")
         case "restingHR":
             return (c.value.map { "\($0) bpm, " } ?? "") + L10n.tr("nad obvyklým rozmezím")
         default:
-            // "neděle, svaly", "včera, 74 TSS": no hours (Today audit 15).
-            return [c.date.map { RecoveryTime.dayName($0, today: today) }, c.kind == "gym" ? L10n.tr("svaly") : c.detail].compactMap { $0 }.joined(separator: ", ")
+            return [c.date.map { RecoveryTime.pastDay($0, today: today) }, c.detail].compactMap { $0 }.joined(separator: ", ")
         }
     }
 }

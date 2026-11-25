@@ -2452,17 +2452,31 @@
 "dopoledne" = "morning";
 "odpoledne" = "afternoon";
 "večer" = "evening";
-"tělo připravené na tvrdý trénink (odhad)" = "ready for hard training (estimate)";
 "tvrdý trénink ne dřív než po zelenějším ránu" = "hard training not before a greener morning";
 "tvrdý trénink %@, po zelenějším ránu" = "hard training %@, after a greener morning";
-"%@, po zelenějším ránu" = "%@, after a greener morning";
-"tvrdý trénink až po zelenějším ránu (odhad)" = "hard training only after a greener morning (estimate)";
-"ne dřív než po zelenějším ránu" = "not before a greener morning";
 "Není se z čeho zotavovat. Co se dnes hodí, rozhodne dnešní připravenost." = "Nothing left to recover from. Today's readiness decides what fits.";
-"prodlužuje" = "adds time";
 "svaly" = "muscles";
-"Co ji prodlužuje" = "What makes it longer";
-"Na co je tělo připravené" = "Your body is ready for";
+"Tvrdý trénink znovu" = "Hard training again";
+"Co můžeš dělat" = "What you can do";
+"Proč to trvá" = "Why it takes this long";
+"Co pomůže" = "What helps";
+"Dnes se pořádně vyspi" = "A full night tonight";
+"%@ spánku může čekání zkrátit" = "%@ of sleep can shorten the wait";
+"Aktualizuje se každé ráno. Nejde o lékařské hodnocení." = "Updates every morning. Not a medical assessment.";
+"Další zelené ráno" = "Next green morning";
+"Už teď" = "Now";
+"Odhad, pokud bude to ráno připravenost zelená." = "Estimate, if that morning's readiness is green.";
+"Tělo se z tréninku zotavilo. Tvrdý trénink čeká na zelené ráno." = "Your body has recovered from training. Hard training waits for a green morning.";
+"Odhad z tvých tréninků, spánku a tepu." = "Estimate from your training, sleep and heart rate.";
+"po zeleném ránu" = "after a green morning";
+"%@, při zelené" = "%@, if green";
+"Svaly budou odpočaté %@" = "Muscles rested by %@";
+"Únava odezní %@" = "Recovered by %@";
+"Dnes červená připravenost" = "Red readiness today";
+"Dnes žlutá připravenost" = "Yellow readiness today";
+"Tvrdý trénink potřebuje zelené ráno" = "Hard training needs a green morning";
+"Krátký spánek" = "Short sleep";
+"%@ z potřebných %@" = "%@ of %@ needed";
 "Z1–Z2, posilovna bez nohou" = "Z1–Z2, gym without legs";
 "Z1–Z2, jiné svaly" = "Z1–Z2, other muscles";
 "intervaly, těžké nohy" = "intervals, legs";
@@ -4191,6 +4205,7 @@
 "Zahodit" = "Discard";
 
 "Zatím neuloženo, z %@" = "Not saved yet, from %@";
+"Zatím neuloženo" = "Not saved yet";
 
 /* Each part of the workout waits for its own Start (Režim tréninku). */
 "Na řadě" = "Up next";
@@ -4488,7 +4503,7 @@
 "Zapsané dny za posledních 30" = "Days logged in the last 30";
 "Průměrný cíl" = "Average target";
 "Snězeno dnes, zatím" = "Eaten today, so far";
-"Každá tečka je jeden zapsaný den. Mezera je den bez zápisu." = "Each dot is one logged day. A gap is a day without a log.";
+"Každá tečka je jeden zapsaný den. Mezera je den bez zápisu. Dnešek přibude, až skončí." = "Each dot is one logged day. A gap is a day without a log. Today joins once it's over.";
 "Proti cíli, %@" = "Against your target, %@";
 "Nad cílem" = "Over target";
 "V cíli" = "At target";
@@ -4818,7 +4833,7 @@
 "Zbývá udělat" = "Still to do";
 "Udělat supersérii" = "Make superset";
 "Táhni za úchyt a změníš pořadí. Mínus cvik odebere." = "Drag the handle to reorder. Tap the minus to remove.";
-"Vyber cviky, které jdou spolu. Přesunou se k sobě. Cvik, který jsi začal nebo už je v páru, vybrat nejde." = "Pick the exercises that go together. They will move next to each other. An exercise you have started or already paired cannot be picked.";
+"Vyber cviky, které jdou spolu. Přesunou se k sobě. Hotový cvik nebo cvik, který už je v páru, vybrat nejde." = "Pick the exercises that go together. They will move next to each other. A finished or already paired exercise cannot be picked.";
 "%@ z %@ sérií hotovo" = "%1$@ of %2$@ sets done";
 "Vyber dva nebo víc" = "Pick two or more";
 "Spojit %@ do supersérie" = "Pair %@ as superset";
@@ -5296,3 +5311,4 @@
 "Tvůj vlastní, změníš v Nastavení plánu" = "Your own, change it in Plan settings";
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
+"Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";

@@ -42,4 +42,22 @@ final class GymSupersetTogetherTests: XCTestCase {
         // A round each: Calf raise gets Leg curl's second set.
         XCTAssertEqual(d.exercises[2].workCount, 2)
     }
+
+    /// Petr 2026-11-24: after set 1 of 3 of the exercise under way, paired with one not started:
+    /// the one under way stays (its done set too), the other follows it.
+    @MainActor
+    func testTheExerciseUnderWayPairsWithItsSetsLeft() {
+        var d = day([row("Leg curl", "1", done: true),
+                     row("Bulgarian split squat", "1", done: true), row("Bulgarian split squat", "2"), row("Bulgarian split squat", "3"),
+                     row("Calf raise", "1"), row("Calf raise", "2"), row("Calf raise", "3"),
+                     row("Decline sit-up", "1"), row("Decline sit-up", "2"), row("Decline sit-up", "3")])
+        d.makeSuperset([d.exercises[3].id, d.exercises[1].id], anchor: d.exercises[1].id)
+        XCTAssertEqual(d.exercises.map(\.name), ["Leg curl", "Bulgarian split squat", "Decline sit-up", "Calf raise"])
+        XCTAssertEqual(ExerciseOrder.letter(d.exercises[1].superset), ExerciseOrder.letter(d.exercises[2].superset))
+        XCTAssertNotNil(ExerciseOrder.letter(d.exercises[1].superset))
+        XCTAssertEqual(d.exercises[1].doneCount, 1)
+        XCTAssertEqual(d.exercises[2].workCount, 3)
+        // Next after Bulgarian set 2: Decline sit-up, then back.
+        XCTAssertEqual(TrainingModeView.supersetTurn(d.exercises, from: 1)?.index, 2)
+    }
 }

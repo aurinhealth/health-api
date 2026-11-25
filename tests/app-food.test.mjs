@@ -154,6 +154,11 @@ test("Food: the target in its parts (base, workouts done, planned)", () => {
     workouts: [{ kind: "done", kcal: 333 }, { kind: "done", kcal: 382 }] } });
   assert.equal(two.items.reduce((s, i) => s + i.counted, 0), two.workouts);
 
+  // A watch workout named only by its type reads as the type in words (retest 618 R6).
+  const watch = targetParts({ ...n, calorieBreakdown: { ...n.calorieBreakdown, workouts: [{ kind: "done", type: "WeightTraining", name: "WeightTraining", kcal: 300 }, { kind: "done", type: "Workout", kcal: 100 }] } });
+  assert.deepEqual(watch.items.map(i => i.name), ["Posilovna", null]);
+  assert.equal(p.items[0].name, "Morning ride", "an own name stays");
+
   assert.equal(targetParts({ ...n, ownTarget: true }), null, "an own goal has no parts");
   assert.equal(targetParts({}), null);
 });

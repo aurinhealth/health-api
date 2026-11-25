@@ -1,10 +1,10 @@
 import SwiftUI
 import WatchKit
 
-/// The alarm, from the button at the top left of Readiness: the next morning
-/// on a 24-hour dial (the moon at bedtime, the sun at the wake time), the
-/// crown moves the wake time in 5 minutes, then "Just tomorrow" or every work
-/// (weekend) day saves it on the iPhone. Swiping left shows the next mornings
+/// The alarm, from the button at the top left of Readiness (watch concept 08):
+/// the next morning on a 24-hour dial, the night from bedtime to the wake
+/// time in the iPhone's sleep colours (amber to mint), the crown moves the wake
+/// time in 5 minutes, then every work (weekend) day or "Just once" saves it on the iPhone. Swiping left shows the next mornings
 /// with their work day or weekend time, the dots under them say how many.
 /// The gear holds the watch's own settings.
 struct AlarmView: View {
@@ -22,7 +22,6 @@ struct AlarmView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .navigationTitle(W.tr("Budík", "Alarm"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { settings = true } label: { Image(systemName: "gearshape.fill") }
@@ -81,10 +80,10 @@ private struct AlarmDay: View {
             Text(title)
                 .watchFont(12, .medium)
                 .foregroundStyle(W.secondary)
-            AlarmDial(bed: bedMinutes, wake: Int(minutes), on: set) {
+            AlarmDial(bed: bedMinutes, wake: Int(minutes), on: set, size: edited || result != nil ? 92 : 116) {
                 Text(set ? W.clock(minutes: minutes) : "–")
-                    .font(W.serif(34))
-                    .foregroundStyle(W.ink)
+                    .font(W.serif(edited ? 28 : 34))
+                    .foregroundStyle(W.num)
                     .contentTransition(.numericText())
                 Text(set ? W.tr("budík", "alarm") : W.tr("Bez budíku", "No alarm"))
                     .watchFont(12)
@@ -130,7 +129,7 @@ private struct AlarmDay: View {
         } else if case .failed(let scope) = result {
             Text(W.tr("Neuloženo. iPhone musí být poblíž.", "Not saved. Your iPhone needs to be nearby."))
                 .watchFont(12, .medium)
-                .foregroundStyle(W.amber)
+                .foregroundStyle(W.ink)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
@@ -142,15 +141,16 @@ private struct AlarmDay: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         } else if edited {
-            HStack(spacing: 4) {
-                if first && alarm.evening != nil {
-                    choice(W.tr("Jen zítra", "Just once"), scope: "once", primary: false)
-                }
+            // Under each other across the width, 38 pt each (watch concept 08, point 3).
+            VStack(spacing: 4) {
                 choice(weekend ? W.tr("Celý víkend", "All weekend") : W.tr("Všední dny", "All weekdays"),
                        scope: weekend ? "weekend" : "work", primary: true)
+                if first && alarm.evening != nil {
+                    choice(W.tr("Jen jednou", "Just once"), scope: "once", primary: false)
+                }
             }
         } else if set {
-            Text(W.duration(minutes: Double(sleepMinutes)) + W.tr(" spánku", " of sleep"))
+            Text(Self.hours(sleepMinutes) + W.tr(" spánku", " of sleep"))
                 .watchFont(12)
                 .foregroundStyle(W.muted)
         } else {
@@ -180,12 +180,11 @@ private struct AlarmDay: View {
     private func choice(_ label: String, scope: String, primary: Bool) -> some View {
         Button { save(scope) } label: {
             Text(label)
-                .watchFont(12, .semibold)
+                .watchFont(15, .semibold)
                 .foregroundStyle(primary ? .black : W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, minHeight: 38)
                 // The main choice white, as every main button (watch audit D2).
                 .background(primary ? W.ink : W.tile, in: Capsule())
         }
@@ -226,6 +225,12 @@ private struct AlarmDay: View {
         }
     }
 
+    /// "7 h 20 min", as durations read everywhere (Petr 2026-11-23).
+    static func hours(_ minutes: Int) -> String {
+        let h = minutes / 60, m = minutes % 60
+        return m == 0 ? "\(h) h" : "\(h) h \(m) min"
+    }
+
     /// "6:45" or "06:45" as minutes after midnight.
     static func minutes(_ text: String) -> Int? {
         let parts = text.prefix(5).split(separator: ":").compactMap { Int($0) }
@@ -233,44 +238,42 @@ private struct AlarmDay: View {
     }
 }
 
-/// The night on a 24-hour dial with midnight at the top.
+/// The night on a 24-hour dial with midnight at the top: from bedtime to the
+/// wake time from amber to mint, as the sleep planner and the night's arc on
+/// the iPhone, a dot at bedtime (watch concept 08, point 1).
 private struct AlarmDial<Content: View>: View {
     let bed: Int
     let wake: Int
     let on: Bool
+    var size: CGFloat = 116
     @ViewBuilder var content: Content
 
-    private let size: CGFloat = 116
-
     var body: some View {
+        let ring = size - 14
+        let start = angle(bed)
+        let span = (angle(wake) - start + 360).truncatingRemainder(dividingBy: 360)
         ZStack {
-            Circle().fill(W.disc)
-            Circle().stroke(W.track, lineWidth: 7).frame(width: size - 18, height: size - 18)
+            Circle().stroke(W.track, lineWidth: 6).frame(width: ring, height: ring)
             if on {
-                Night(start: angle(bed), end: angle(wake))
-                    .stroke(W.indigo, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                    .frame(width: size - 18, height: size - 18)
-                mark("moon.fill", at: bed, color: W.indigo)
-                mark("sun.max.fill", at: wake, color: W.amber)
+                Night(start: start, end: start + span)
+                    .stroke(AngularGradient(colors: [W.lightAmber, W.lightMint], center: .center,
+                                            startAngle: .degrees(start), endAngle: .degrees(start + max(span, 1))),
+                            style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: ring, height: ring)
+                let radians = start * .pi / 180
+                Circle().fill(W.num)
+                    .overlay(Circle().stroke(W.rim, lineWidth: 2))
+                    .frame(width: 10, height: 10)
+                    .offset(x: cos(radians) * ring / 2, y: sin(radians) * ring / 2)
             }
             VStack(spacing: 0) { content }
         }
         .frame(width: size, height: size)
+        .animation(.easeOut(duration: 0.2), value: size)
         .accessibilityElement(children: .combine)
     }
 
     private func angle(_ minutes: Int) -> Double { Double(minutes) / 1440 * 360 - 90 }
-
-    private func mark(_ symbol: String, at minutes: Int, color: Color) -> some View {
-        let radians = angle(minutes) * .pi / 180
-        let r = (size - 18) / 2
-        return Image(systemName: symbol)
-            .watchFont(12, .bold)
-            .foregroundStyle(.black)
-            .frame(width: 16, height: 16)
-            .background(color, in: Circle())
-            .offset(x: cos(radians) * r, y: sin(radians) * r)
-    }
 
     private struct Night: Shape {
         let start: Double
@@ -278,53 +281,73 @@ private struct AlarmDial<Content: View>: View {
 
         func path(in rect: CGRect) -> Path {
             var path = Path()
-            let to = end >= start ? end : end + 360
             path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2,
-                        startAngle: .degrees(start), endAngle: .degrees(to), clockwise: false)
+                        startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
             return path
         }
     }
 }
 
-/// Under the gear: whether the watch wakes (then the iPhone doesn't) and how it taps.
+/// Under the gear (watch concept 08, point 4): whether the watch wakes, with
+/// the iPhone's backup said in words, and Wrist taps on a page of its own.
 private struct AlarmSettings: View {
     @ObservedObject private var alarm = WatchAlarm.shared
 
-    private let haptics: [(id: String, cs: String, en: String)] = [
+    static let haptics: [(id: String, cs: String, en: String)] = [
         ("gentle", "Jemné", "Gentle"), ("rising", "Stoupající", "Rising"), ("strong", "Výrazné", "Strong")
     ]
 
     var body: some View {
-        List {
-            Section {
-                Toggle(W.tr("Budit na hodinkách", "Wake me on the watch"), isOn: $alarm.onWatch)
-            } footer: {
-                Text(alarm.onWatch ? nextText : W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on."))
-            }
-            if alarm.onWatch {
-                Section(W.tr("Vibrace", "Taps")) {
-                    ForEach(haptics, id: \.id) { item in
-                        Button {
-                            alarm.haptic = item.id
-                            WKInterfaceDeviceTap.play(item.id)
+        NavigationStack {
+            List {
+                Section {
+                    Toggle(W.tr("Budit na hodinkách", "Wake me on the watch"), isOn: $alarm.onWatch)
+                } footer: {
+                    Text(W.tr("Zvoní iPhone, když má budík zapnutý.", "Your iPhone rings when its alarm is on.")
+                         + (alarm.onWatch ? W.tr(" Když zaspíš, iPhone zazvoní o 5 min později.", " If you sleep through, your iPhone rings 5 min later.") : ""))
+                }
+                if alarm.onWatch {
+                    Section {
+                        NavigationLink {
+                            AlarmTaps()
                         } label: {
                             HStack {
-                                Text(W.tr(item.cs, item.en))
-                                Spacer()
-                                if alarm.haptic == item.id { Image(systemName: "checkmark").foregroundStyle(W.indigo) }
+                                Text(W.tr("Vibrace", "Wrist taps"))
+                                Spacer(minLength: 4)
+                                Text(Self.name(alarm.haptic)).foregroundStyle(W.secondary)
                             }
                         }
+                    } footer: {
+                        Text(W.tr("Měj hodinky v noci na ruce, hodinky na nabíječce tě nevzbudí.", "Wear your watch to bed, a charging watch can't wake you."))
                     }
                 }
             }
         }
     }
 
-    private var nextText: String {
-        guard let next = alarm.next else {
-            return W.tr("iPhone nezvoní. Bez času budíku hodinky nebudí.", "Your iPhone stays quiet. The watch needs a wake time.")
+    static func name(_ id: String) -> String {
+        haptics.first { $0.id == id }.map { W.tr($0.cs, $0.en) } ?? ""
+    }
+}
+
+/// Wrist taps: Gentle, Rising, Strong; a tap plays it.
+private struct AlarmTaps: View {
+    @ObservedObject private var alarm = WatchAlarm.shared
+
+    var body: some View {
+        List(AlarmSettings.haptics, id: \.id) { item in
+            Button {
+                alarm.haptic = item.id
+                WKInterfaceDeviceTap.play(item.id)
+            } label: {
+                HStack {
+                    Text(W.tr(item.cs, item.en))
+                    Spacer()
+                    if alarm.haptic == item.id { Image(systemName: "checkmark").foregroundStyle(W.green) }
+                }
+            }
         }
-        return W.tr("iPhone nezvoní. Další buzení: ", "Your iPhone stays quiet. Next: ") + W.dateFormatter("EEEE H:mm").string(from: next)
+        .navigationTitle(W.tr("Vibrace", "Wrist taps"))
     }
 }
 
@@ -335,31 +358,64 @@ enum WKInterfaceDeviceTap {
     }
 }
 
-/// The alarm rings: good morning, the time, Snooze and Stop.
+/// The alarm rings (watch concept 08, point 6): Good morning, the time big
+/// in the serif, Snooze with its 9 min under it and Stop, 46 pt high. Snoozed
+/// (new): when it rings again and Stop alarm.
 struct AlarmRinging: View {
     @ObservedObject private var alarm = WatchAlarm.shared
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: "sun.max.fill").watchFont(22).foregroundStyle(W.amber)
-            Text(W.tr("Dobré ráno", "Good morning")).font(W.serif(22)).foregroundStyle(W.ink)
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(context.date, format: .dateTime.hour().minute())
-                    .font(W.serif(40))
-                    .foregroundStyle(W.ink)
-            }
-            HStack(spacing: 6) {
-                // Double Tap snoozes, never stops: a half-awake tap can't end the alarm.
-                Button(W.tr("Odložit", "Snooze")) { alarm.snoozeNow() }
+        VStack(alignment: .leading, spacing: 4) {
+            if let until = alarm.snoozedUntil, !alarm.ringing {
+                Text(W.tr("Odloženo", "Snoozed")).watchFont(13, .semibold).foregroundStyle(W.indigo)
+                clock
+                Text(W.tr("Zazvoní znovu za ", "Rings again in ") + Self.minutesLeft(until))
+                    .watchFont(14).foregroundStyle(W.secondary)
+                Spacer(minLength: 6)
+                Button { alarm.stop() } label: {
+                    Text(W.tr("Vypnout budík", "Stop alarm")).watchFont(15, .semibold).foregroundStyle(W.ink)
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Text(W.tr("Dobré ráno", "Good morning")).font(W.serif(20)).foregroundStyle(W.num)
+                clock
+                Spacer(minLength: 6)
+                HStack(spacing: 6) {
+                    // Double Tap snoozes, never stops: a half-awake tap can't end the alarm.
+                    Button { alarm.snoozeNow() } label: {
+                        VStack(spacing: 0) {
+                            Text(W.tr("Odložit", "Snooze")).watchFont(15, .semibold).foregroundStyle(W.ink)
+                            Text("9 min").watchFont(12).foregroundStyle(W.secondary)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 46)
+                    }
                     .buttonStyle(.bordered)
                     .doubleTap()
-                Button { alarm.stop() } label: {
-                    Text(W.tr("Vypnout", "Stop")).foregroundStyle(.black)
+                    Button { alarm.stop() } label: {
+                        Text(W.tr("Vypnout", "Stop")).watchFont(17, .semibold).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                    }
+                    .mainButton()
                 }
-                .mainButton()
             }
-            .watchFont(14, .semibold)
         }
-        .containerBackground(W.glow(W.Glow.strain), for: .navigation)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .containerBackground(W.glow(W.Glow.sleep), for: .navigation)
+    }
+
+    private var clock: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(context.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+                .font(W.serif(W.small ? 52 : 60))
+                .foregroundStyle(W.num)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    /// "9 min" until the snoozed alarm rings again.
+    static func minutesLeft(_ until: Date) -> String {
+        "\(max(1, Int((until.timeIntervalSinceNow / 60).rounded(.up)))) min"
     }
 }

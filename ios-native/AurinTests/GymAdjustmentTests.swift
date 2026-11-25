@@ -13,6 +13,39 @@ final class GymAdjustmentTests: XCTestCase {
         GymExercise(name: "DB curl", superset: nil, sets: sets)
     }
 
+    /// Petr 2026-11-24 (DB Romanian deadlift): set 1 ticked at the plan's 30,
+    /// fixed to 32.5 afterwards, set 2 done at 32.5 × 8 (M): set 3, planned H,
+    /// starts from 32.5 on the screen and the lock screen, not the plan's 30.
+    @MainActor
+    func testAFixedWeightCarriesToTheSetsAfter() throws {
+        var day = GymDay(date: "2026-11-24", values: [], cancelled: nil)
+        day.ensureHeader(date: "2026-11-24")
+        day.appendExercise("DB Romanian deadlift", suggestion: GymSuggestion(
+            warmups: [GymSuggestion.Planned(kg: 22.5, reps: 5), GymSuggestion.Planned(kg: 45, reps: 3)],
+            work: [GymSuggestion.Planned(kg: 30, reps: 5), GymSuggestion.Planned(kg: 30, reps: 5), GymSuggestion.Planned(kg: 30, reps: 5)], line: ""))
+        let rows = day.exercises[0].sets.map(\.row)
+        for (row, letter) in zip(rows.suffix(3), ["M", "M", "H"]) {
+            day.set(row: row, column: 4, "5–8")
+            day.set(row: row, column: 14, letter)
+        }
+        day.complete(row: rows[0], kg: "22.5", reps: "5", rpe: "")
+        day.complete(row: rows[1], kg: "27.5", reps: "3", rpe: "")
+        day.complete(row: rows[2], kg: "30", reps: "8", rpe: "")
+        day.edit(row: rows[2], kg: "32.5", reps: "8")
+        let set2 = try XCTUnwrap(day.exercises[0].sets.first { $0.row == rows[3] })
+        XCTAssertEqual(GymSessionMath.carried(set2, in: day.exercises[0])?.kg, "32.5")
+        day.complete(row: rows[3], kg: "32.5", reps: "8", rpe: "")
+        let exercise = day.exercises[0]
+        let set3 = try XCTUnwrap(exercise.sets.first { $0.row == rows[4] })
+        XCTAssertEqual(set3.intensity, "H")
+        XCTAssertEqual(exercise.sets.first { $0.row == rows[3] }?.intensity, "M")
+        XCTAssertNil(GymSessionMath.adjustment(set3, after: try XCTUnwrap(GymSessionMath.previous(set3, in: exercise))))
+        XCTAssertEqual(GymSessionMath.carried(set3, in: exercise)?.kg, "32.5")
+        XCTAssertEqual(GymSessionMath.carried(set3, in: exercise, firstTry: true)?.kg, "32.5")
+        XCTAssertEqual(try XCTUnwrap(GymLiveActivity.state(day, focus: nil, restStart: nil, restEnd: nil)).weight,
+                       LiftWeight.shown("32.5").map { $0 + " kg" })
+    }
+
     func testFailureShortOfTheRepsGoesLighter() {
         let done = set(2, "2", kg: "12.5", reps: "7", done: true, letter: "F")
         let next = set(3, "3", kg: nil, reps: nil, done: false, letter: "M")
