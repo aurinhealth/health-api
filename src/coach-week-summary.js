@@ -10,6 +10,7 @@ import { L } from './lang.js';
 import { shiftDate } from './dashboard-shared.js';
 import { sportOf } from './adaptive-week.js';
 import { compactActivity } from './coach-assistant.js';
+import { isNap } from './sleep-sessions.js';
 
 export const SUMMARY_SPORTS = ['ride', 'run', 'swim', 'gym'];
 // The week's sleep against the usual is worth a sentence from this difference.
@@ -30,9 +31,10 @@ function totals(days) {
   return { done: sports.reduce((n, s) => n + s.done, 0), planned: sports.reduce((n, s) => n + s.planned, 0), minutes: sports.reduce((n, s) => n + s.minutes, 0), sports };
 }
 
-// A planned session whose day has no done workout of its sport, up to today.
+// A planned session whose day has no done workout of its sport, before today.
 function missedOf(days, today) {
-  return days.filter(d => d.date <= today).flatMap(d => {
+  // Today's session can still be done: only the days before count as missed.
+  return days.filter(d => d.date < today).flatMap(d => {
     const sports = new Set(done(d).map(sportOf));
     return planned(d).filter(p => !sports.has(sportOf(p))).map(p => ({ date: d.date, sport: sportOf(p), name: String(p.name || '').slice(0, 80) || null }));
   });
@@ -40,7 +42,7 @@ function missedOf(days, today) {
 
 const avg = list => list.length ? Math.round(list.reduce((n, x) => n + x, 0) / list.length) : null;
 function sleepOf(sleep, start, end) {
-  const nights = (Array.isArray(sleep) ? sleep : []).filter(s => s && s.nap !== true && Number(s.durationMin) > 0);
+  const nights = (Array.isArray(sleep) ? sleep : []).filter(s => s && !isNap(s) && Number(s.durationMin) > 0);
   const week = avg(nights.filter(s => s.date >= start && s.date <= end).map(s => Number(s.durationMin)));
   const usual = avg(nights.filter(s => s.date >= shiftDate(start, -USUAL_SLEEP_DAYS) && s.date < start).map(s => Number(s.durationMin)));
   if (week == null) return null;

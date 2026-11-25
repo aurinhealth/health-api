@@ -1429,9 +1429,9 @@ function coachWeeks(env,ctx,weeks){
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   return Promise.all(weeks.map(w=>cached(env,ctx,'week-lite:'+w,()=>internal('/app/api/week?lite=1&start='+w).then(r=>r.json().catch(()=>({}))))));
 }
-// The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
 // The Sunday summary's nights: its week and the four weeks before (coach-week-summary.js).
 const USUAL_SLEEP_SPAN=35;
+// The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
 function coachSleep(env,ctx,internalAuth,date,days=30){
   return app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-days)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-days),shiftDate(date,1)));
 }
@@ -1778,7 +1778,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const today=localToday(),asked=url.searchParams.get('start'),start=validTrainingDay(asked)?mondayOfDate(asked):summaryWeek(today,mondayOfDate(today));
       if(start>today)throw new Error(L('Ten týden ještě nezačal.', 'That week has not started yet.'));
       const end=shiftDate(start,6),[weeks,sleep,fitness]=await Promise.all([coachWeeks(env,ctx,[shiftDate(start,-7),start]),coachSleep(env,ctx,internalAuth,end,USUAL_SLEEP_SPAN),
-        cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json()))]);
+        cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>({}))]);
       const summary=weekSummary({start,today,days:weeks.flatMap(w=>w.days||[]),sleep:sleep.sessions||[],load:loadBalance(fitness?.wellness||[],end<today?end:today)});
       return Response.json({status:'ok',summary},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
