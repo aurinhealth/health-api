@@ -59,6 +59,25 @@ import SwiftUI
         XCTAssertNil(plain.card)
     }
 
+    /// The Sunday summary's card: the week against the one before, by sport, the load and sleep in words.
+    func testWeekSummaryDecode() throws {
+        let json = #"{"start":"2026-11-16","end":"2026-11-22","headline":"Good week: 5 of 6 planned workouts done.","workouts":{"done":5,"planned":6,"was":{"done":6,"planned":6}},"minutes":{"total":400,"was":365},"sports":[{"sport":"ride","done":2,"planned":2,"minutes":230,"km":96},{"sport":"gym","done":1,"planned":1,"minutes":55}],"missed":[{"date":"2026-11-19","sport":"run","name":"Tempo run"}],"load":{"state":"ready","level":"above","text":"The last 7 days were harder than your usual 4 weeks."},"sleep":null,"from":"From your workouts and sleep this week"}"#
+        let summary = try JSONDecoder().decode(WeekSummary.self, from: Data(json.utf8))
+        XCTAssertEqual(summary.workouts.was?.done, 6)
+        XCTAssertEqual(summary.minutes.was, 365)
+        XCTAssertEqual(summary.sports?.map(\.sport), ["ride", "gym"])
+        XCTAssertEqual(summary.sports?.first?.km, 96)
+        XCTAssertNil(summary.sports?.last?.km)
+        XCTAssertEqual(summary.load?.text, "The last 7 days were harder than your usual 4 weeks.")
+        XCTAssertNil(summary.sleep)
+        XCTAssertEqual(WeekSummaryCard.count(5, of: 6), L10n.f("%@ z %@", "5", "6"))
+        XCTAssertEqual(WeekSummaryCard.count(3, of: 0), "3")
+        // A first week has nothing to compare with.
+        let first = try JSONDecoder().decode(WeekSummary.self, from: Data(#"{"start":"2026-11-16","end":"2026-11-22","workouts":{"done":1,"planned":0},"minutes":{"total":40},"sports":[],"missed":[]}"#.utf8))
+        XCTAssertNil(first.workouts.was)
+        XCTAssertNil(first.minutes.was)
+    }
+
     /// Copy gives the answer without the Markdown marks.
     func testCopiedAnswerIsPlainText() {
         let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"

@@ -123,6 +123,8 @@ struct CoachView: View {
         var sources: AssistantResult.Sources? = nil
         /// The chips of the server's question under this message (ChatDetail.question): one tap answers.
         var chips: [String] = []
+        /// The coach's Sunday message: the week's card under it (ChatDetail.card).
+        var week: WeekSummary? = nil
     }
 
     /// The answer sent to Nahlásit problém.
@@ -925,6 +927,25 @@ struct CoachView: View {
             let photo = Self.withoutPhotoMark(m.content)
             return Bubble(mine: true, text: photo.text, photoMark: photo.marked)
         }
+        if let card = chat.card { Task { await loadCard(card) } }
+    }
+
+    /// The card of the coach's own message from the rules, loaded under it.
+    private func loadCard(_ card: ChatDetail.Card) async {
+        guard !model.demo else { return }
+        switch card.kind {
+        case "week_summary":
+            guard let summary = try? await model.api.weekSummary(start: card.key) else { return }
+            editMessage(card.messageId) { $0.week = summary }
+        default:
+            break
+        }
+    }
+
+    /// A coach message by its id on the server.
+    private func editMessage(_ serverId: Int, _ change: (inout Bubble) -> Void) {
+        guard let i = messages.firstIndex(where: { !$0.mine && $0.serverId == serverId }) else { return }
+        change(&messages[i])
     }
 }
 
@@ -1027,6 +1048,9 @@ struct BubbleView: View {
             }
             if let food = bubble.food {
                 FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
+            }
+            if let week = bubble.week {
+                WeekSummaryCard(summary: week)
             }
             // Under everything the answer brought (cards, memory lines), as at Bevel.
             if last, !bubble.mine, !bubble.text.isEmpty {

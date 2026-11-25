@@ -451,3 +451,52 @@ struct CoachesSnapshot: Decodable, Equatable {
         let recommendation: String?
     }
 }
+
+/// GET /app/api/coach/week-summary?start= (src/coach-week-summary.js): the
+/// numbers of the coach's Sunday message, from the rules, against the week before.
+struct WeekSummary: Decodable, Equatable {
+    let start: String
+    let end: String
+    let headline: String?
+    let workouts: Workouts
+    let minutes: Minutes
+    let sports: [Sport]?
+    /// The load in words only, never the ratio (Petr 2026-11-16).
+    let load: Load?
+    let sleep: Sleep?
+    /// "From your workouts and sleep this week".
+    let from: String?
+
+    struct Workouts: Decodable, Equatable {
+        let done: Int
+        let planned: Int
+        let was: Was?
+
+        struct Was: Decodable, Equatable {
+            let done: Int
+            let planned: Int
+        }
+    }
+
+    struct Minutes: Decodable, Equatable {
+        let total: Int
+        let was: Int?
+    }
+
+    /// ride, run, swim or gym; km for the ones with a distance.
+    struct Sport: Decodable, Equatable {
+        let sport: String
+        let done: Int
+        let planned: Int
+        let minutes: Int
+        let km: Double?
+    }
+
+    struct Load: Decodable, Equatable {
+        let text: String
+    }
+
+    struct Sleep: Decodable, Equatable {
+        let text: String
+    }
+}

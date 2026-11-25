@@ -323,6 +323,13 @@ extension APIClient {
         return (r.posted ?? r.question)?.chatId
     }
 
+    /// The card under the coach's Sunday message: the week from its Monday.
+    func weekSummary(start: String) async throws -> WeekSummary {
+        struct Response: Decodable { let summary: WeekSummary }
+        let r: Response = try await get("/app/api/coach/week-summary?start=" + start)
+        return r.summary
+    }
+
     /// What the coach remembers about the athlete.
     func coachMemories() async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")
