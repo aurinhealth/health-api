@@ -89,6 +89,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
   if (patch.zone !== undefined) state.zone = patch.zone;
   if (patch.nudge !== undefined) state.nudge = patch.nudge;
+  // The coach's question after a training gap (coach-gap-checkin.js): the gap it was asked for.
+  if (validDay(patch.gapAsked)) state.gapAsked = patch.gapAsked;
   // Sessions cancelled when switching to Nemoc, Zranění or Pauza: the coach
   // offers them back afterwards. Kept 21 days, at most 14.
   if (Array.isArray(patch.cancelled)) {
