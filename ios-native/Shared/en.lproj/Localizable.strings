@@ -5339,3 +5339,9 @@
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
+"Tvůj týden" = "Your week";
+"Minulý týden %@" = "Was %@";
+"%@ z %@ hotovo" = "%1$@ of %2$@ done";
+"Naplánovat příští týden" = "Plan next week";
+"km %@ až %@" = "km %1$@ to %2$@";
+"%@ až %@ m" = "%1$@ to %2$@ m";
