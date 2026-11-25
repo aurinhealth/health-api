@@ -5281,3 +5281,17 @@
 "Historii jídla se nepodařilo načíst." = "Couldn't load your food history.";
 "Delší historii se nepodařilo načíst, ukazuje se 30 dní." = "Couldn't load the longer history, so this shows 30 days.";
 "Jídlo se tu ukazuje od %@." = "Food shows here from %@.";
+"%@: zápas" = "%@ match";
+"%@: trénink" = "%@ training";
+"Tvoje další sporty" = "Your other sports";
+"Přidat sport" = "Add a sport";
+"Fotbal, box, jízda na koni… Jejich trénink nebo zápas si dáš na den v Nastavení plánu a plán se mu přizpůsobí." = "Football, boxing, horse riding… Put a practice or match on a day in Plan settings and the plan works around it.";
+"Zápas" = "Match";
+"Opakovat každý týden" = "Repeat every week";
+"Zápas, turnaj nebo závod je pro plán tvrdý den, trénink středně náročný." = "A match, fight, race or tournament is a hard day for the plan, a practice a moderate one.";
+"Tvůj vlastní" = "Your own";
+"Hrál jsi včera zápas?" = "Did you play the match yesterday?";
+"Byl jsi včera na tréninku?" = "Did you go to practice yesterday?";
+"1 velmi lehké, 10 na maximum" = "1 very easy, 10 all out";
+"Nehrál jsem" = "Didn't play";
+"Nebyl jsem" = "Didn't go";

@@ -35,6 +35,9 @@ struct TodaySnapshot: Decodable, Equatable {
     /// A key workout of the calendar missed this week, with the day the coach
     /// proposes for it (src/missed-workout.js); nil when none, on another day or from an older server.
     var missedWorkout: MissedWorkout? = nil
+    /// "Did you play?": yesterday's practice or match of the week plan that
+    /// nothing recorded (src/week-planner.js playedCheck); nil when none or from an older server.
+    var played: Played? = nil
     /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
     /// nil when nothing is left to recover from, on another day or from an older server.
     var recoveryTime: RecoveryTime? = nil
@@ -64,6 +67,16 @@ struct TodaySnapshot: Decodable, Equatable {
         let date: String
         /// "green", "yellow", "red"; nil without a readiness or after the day.
         let zone: String?
+    }
+
+    struct Played: Decodable, Equatable {
+        let date: String
+        /// The Log workout type ("Soccer") and its name ("Fotbal").
+        let type: String
+        let name: String
+        /// "training" or "match".
+        let kind: String
+        let minutes: Int
     }
 
     struct MissedWorkout: Decodable, Equatable {

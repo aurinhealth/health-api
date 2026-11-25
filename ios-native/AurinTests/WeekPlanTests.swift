@@ -117,4 +117,38 @@ final class WeekPlanTests: XCTestCase {
         XCTAssertGreaterThan(WeekPlanSport.maxMinutes("run"), 180)
         XCTAssertEqual(WeekPlanPrefs.sports, ["ride", "run", "swim", "gym"])
     }
+
+    /// Other sports in Plan settings: a practice or match per day, two at most, and Generate replans from the day before it.
+    func testOtherSportsOnADay() throws {
+        var choice = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        choice.toggle("gym", day: 5)
+        choice.toggleEvent("Soccer", day: 5)
+        XCTAssertEqual(choice.events[5], [OtherSportEvent(type: "Soccer", kind: "training", minutes: 75)])
+        XCTAssertEqual(choice.days[5], ["gym"], "the day's own sports stay")
+        choice.setEvent("Soccer", day: 5, kind: "match")
+        XCTAssertEqual(choice.events[5][0].minutes, 90, "a usual length follows the kind")
+        choice.setEvent("Soccer", day: 5, minutes: 400)
+        XCTAssertEqual(choice.events[5][0].minutes, 300)
+        choice.toggleEvent("Boxing", day: 5)
+        choice.toggleEvent("Tennis", day: 5)
+        XCTAssertEqual(choice.events[5].map(\.type), ["Boxing", "Tennis"], "a third replaces the first")
+        choice.toggleEvent("Boxing", day: 5)
+        XCTAssertEqual(choice.events[5].map(\.type), ["Tennis"])
+
+        let empty = WeekPlanChoice(days: Array(repeating: [], count: 7), rest: [])
+        var match = empty
+        match.toggleEvent("Soccer", day: 5)
+        let from = WeekPlanGenerator.replanFrom(weeks: ["2026-11-23"], today: "2026-11-24", choices: ["2026-11-23": match],
+                                                original: ["2026-11-23": empty], usual: Array(repeating: 60, count: 7), usualBefore: Array(repeating: 60, count: 7))
+        XCTAssertEqual(from, "2026-11-27", "the day before a match changes too")
+
+        let prefs = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"days":[[],[],[],[],[],["gym"],[]],"events":[[],[],[],[],[],[{"type":"Soccer","kind":"match","minutes":95}],[]],"availability":[{"minutes":30,"ownMinutes":60,"calendarMinutes":30}],"source":"week","calendar":true}"#.utf8))
+        XCTAssertEqual(OtherSports.events(prefs)[5], [OtherSportEvent(type: "Soccer", kind: "match", minutes: 95)])
+        let sent = OtherSports.uncapped(OtherSports.edited(prefs, events: Array(repeating: [], count: 7)))
+        XCTAssertEqual(OtherSports.events(sent)[5], [])
+        guard case .object(let o) = sent, case .array(let days)? = o["availability"], case .object(let day) = days[0] else { return XCTFail("no availability") }
+        XCTAssertEqual(day["minutes"], .number(60), "the day's own time goes back, not the calendar's cap")
+        XCTAssertNil(day["calendarMinutes"])
+        XCTAssertNil(o["source"])
+    }
 }

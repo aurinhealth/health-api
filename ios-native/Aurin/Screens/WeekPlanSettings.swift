@@ -10,19 +10,48 @@ import SwiftUI
 // (today when nothing changed) to next Sunday, the finished workouts stay
 // (WeekPlanGenerator).
 
-/// One week's choices: the sports per weekday (empty: the coach picks) and the rest days.
+/// One week's choices: the sports per weekday (empty: the coach picks), the rest
+/// days and the athlete's other sports (a football practice or match) per weekday.
 struct WeekPlanChoice: Equatable {
     var days: [[String]]
     var rest: Set<Int>
+    var events = Array(repeating: [OtherSportEvent](), count: 7)
 
     init(prefs: JSONValue?) {
         days = WeekPlanPrefs.days(prefs)
         rest = Set(WeekPlanPrefs.minutes(prefs).enumerated().filter { $0.element == 0 }.map(\.offset))
+        events = OtherSports.events(prefs)
     }
 
-    init(days: [[String]], rest: Set<Int>) {
+    init(days: [[String]], rest: Set<Int>, events: [[OtherSportEvent]]? = nil) {
         self.days = days
         self.rest = rest
+        if let events { self.events = events }
+    }
+
+    /// A tap on an other sport of a day: on (a practice of its usual length) or off;
+    /// two a day at most, a third replaces the first. The day's own sports stay.
+    mutating func toggleEvent(_ type: String, day: Int) {
+        var list = events[day]
+        if let i = list.firstIndex(where: { $0.type == type }) {
+            list.remove(at: i)
+        } else {
+            list.append(OtherSportEvent(type: type))
+            while list.count > OtherSports.maxPerDay { list.removeFirst() }
+        }
+        events[day] = list
+    }
+
+    /// Training or match, and the length, of a day's other sport.
+    mutating func setEvent(_ type: String, day: Int, kind: String? = nil, minutes: Int? = nil) {
+        guard let i = events[day].firstIndex(where: { $0.type == type }) else { return }
+        if let kind, kind != events[day][i].kind {
+            // A length left at the old kind's usual takes the new kind's usual.
+            let usual = events[day][i].minutes == OtherSports.usualMinutes(events[day][i].kind)
+            events[day][i].kind = kind
+            if usual { events[day][i].minutes = OtherSports.usualMinutes(kind) }
+        }
+        if let minutes { events[day][i].minutes = min(OtherSports.maxMinutes, max(OtherSports.minMinutes, minutes)) }
     }
 
     /// A tap on a sport of a day: on or off; one or two sports, a third replaces the first.
@@ -76,6 +105,14 @@ struct WeekPlanSettingsView: View {
     @State private var original: [String: WeekPlanChoice] = [:]
     @State private var usual = Array(repeating: -1, count: 7)
     @State private var usualBefore = Array(repeating: -1, count: 7)
+    /// The usual week's other sports ("Repeat every week"), and as loaded.
+    @State private var usualEvents = Array(repeating: [OtherSportEvent](), count: 7)
+    @State private var usualEventsBefore = Array(repeating: [OtherSportEvent](), count: 7)
+    /// Settings → Sports: the sports the coach plans (Ride, Run, Swim, Gym order) and the other sports.
+    @State private var sports = WeekPlanPrefs.sports
+    @State private var otherSports: [String] = []
+    /// The other sport whose Training or Match, Length and Repeat show under the tiles.
+    @State private var editing: String?
     @State private var saving = false
     @State private var error: String?
     /// The day the tiles under the weeks set.
@@ -87,7 +124,7 @@ struct WeekPlanSettingsView: View {
 
     private var nextMonday: String { ISODay.shift(monday, 7) }
     private var weeks: [String] { [monday, nextMonday] }
-    private var dirty: Bool { choices != original || usual != usualBefore }
+    private var dirty: Bool { choices != original || usual != usualBefore || usualEvents != usualEventsBefore }
     /// A change of days or rest the planned workouts do not follow until Generate.
     private var conflicting: Bool { choices != original }
     /// Generate replans from the first day whose sports, rest or usual time changed,
@@ -224,7 +261,7 @@ struct WeekPlanSettingsView: View {
         return Button { withAnimation(.snappy) { selected = on ? nil : date } } label: {
             VStack(spacing: 5) {
                 Text(verbatim: Fmt.weekdayShort(date)).scaledFont(11, weight: .medium, cap: .denseCap).foregroundStyle(Palette.muted)
-                dayDisc(sports: choice.days[i], rest: choice.rest.contains(i), size: 36)
+                dayDisc(sports: choice.days[i], rest: choice.rest.contains(i), size: 36, events: choice.events[i].map(\.type))
                 Text(verbatim: ISODay.day(date)).font(Typo.number(17)).foregroundStyle(Palette.ink)
             }
             .padding(.vertical, 6)
@@ -243,14 +280,26 @@ struct WeekPlanSettingsView: View {
 
     /// What VoiceOver says a day holds: the sports, Day off or Coach picks the sport.
     private func dayValue(_ choice: WeekPlanChoice, _ i: Int) -> String {
-        if choice.rest.contains(i) { return L10n.tr("Volno") }
-        if choice.days[i].isEmpty { return L10n.tr("Sport vybere kouč") }
-        return choice.days[i].map(WeekPlanSport.name).joined(separator: ", ")
+        let own = choice.events[i].map { OtherSports.title($0) }
+        if choice.rest.contains(i) { return ([L10n.tr("Volno")] + own).joined(separator: ", ") }
+        if choice.days[i].isEmpty { return (own + [L10n.tr("Sport vybere kouč")]).joined(separator: ", ") }
+        return (choice.days[i].map(WeekPlanSport.name) + own).joined(separator: ", ")
     }
 
     /// Empty: a dashed ring (the coach picks); rest: grey with a dot; else the sport's disc (two side by side).
-    @ViewBuilder private func dayDisc(sports: [String], rest: Bool, size: CGFloat) -> some View {
-        if rest {
+    /// The day's other sports (a match) come first: they are fixed, the coach plans around them.
+    @ViewBuilder private func dayDisc(sports: [String], rest: Bool, size: CGFloat, events: [String] = []) -> some View {
+        if let first = events.first {
+            if events.count + sports.count > 1 {
+                HStack(spacing: -size * 0.08) {
+                    OtherSports.disc(first, size: size * 0.54)
+                    if events.count > 1 { OtherSports.disc(events[1], size: size * 0.54) } else { WeekPlanSport.disc(sports[0], size: size * 0.54) }
+                }
+                .frame(width: size, height: size)
+            } else {
+                OtherSports.disc(first, size: size)
+            }
+        } else if rest {
             Circle().fill(Palette.track).frame(width: size, height: size)
                 .overlay { Circle().fill(Palette.faint).frame(width: 5, height: 5) }
         } else if let first = sports.first {
@@ -269,27 +318,45 @@ struct WeekPlanSettingsView: View {
         }
     }
 
-    /// The selected day: "THURSDAY, NOV 12" and Coach, Ride, Run, Swim, Gym, Rest.
+    /// The selected day: "THURSDAY, NOV 12" and one row of tiles: Coach, the sports
+    /// the coach plans (Settings order, a sport turned off is left out), the other
+    /// sports, Day off; the row scrolls when they do not fit. A tapped other sport
+    /// shows Training or Match, its length and Repeat every week under the row.
     private func dayPicker(_ date: String) -> some View {
         let week = date >= nextMonday ? nextMonday : monday
         let i = ISODay.weekdayIndex(date)
         let choice = choices[week] ?? WeekPlanChoice(prefs: nil)
+        let wide = sports.count + otherSports.count + 2 > 6
         return VStack(alignment: .leading, spacing: 8) {
             Text(verbatim: (Fmt.weekdayName(date) + ", " + Fmt.dayMonthShort(date)).uppercased(with: Fmt.locale))
                 .font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 .accessibilityAddTraits(.isHeader)
-            HStack(spacing: 6) {
-                optionTile(L10n.tr("Kouč"), on: choice.days[i].isEmpty && !choice.rest.contains(i), hint: "Sport vybere kouč") {
-                    dayDisc(sports: [], rest: false, size: 30)
-                } action: { update(week) { $0.auto(i) } }
-                ForEach(WeekPlanPrefs.sports, id: \.self) { sport in
-                    optionTile(WeekPlanSport.name(sport), on: choice.days[i].contains(sport), hint: nil) {
-                        WeekPlanSport.disc(sport, size: 30)
-                    } action: { update(week) { $0.toggle(sport, day: i) } }
-                }
-                optionTile(L10n.tr("Volno"), on: choice.rest.contains(i), hint: nil) {
-                    dayDisc(sports: [], rest: true, size: 30)
-                } action: { update(week) { $0.makeRest(i) } }
+            tileRow(wide) {
+                    optionTile(L10n.tr("Kouč"), on: choice.days[i].isEmpty && !choice.rest.contains(i), hint: "Sport vybere kouč", fixed: wide) {
+                        dayDisc(sports: [], rest: false, size: 30)
+                    } action: { update(week) { $0.auto(i) } }
+                    ForEach(sports, id: \.self) { sport in
+                        optionTile(WeekPlanSport.name(sport), on: choice.days[i].contains(sport), hint: nil, fixed: wide) {
+                            WeekPlanSport.disc(sport, size: 30)
+                        } action: { update(week) { $0.toggle(sport, day: i) } }
+                    }
+                    ForEach(otherSports, id: \.self) { type in
+                        let on = choice.events[i].contains { $0.type == type }
+                        optionTile(OtherSports.name(type), on: on, hint: nil, fixed: wide) {
+                            OtherSports.disc(type, size: 30)
+                        } action: {
+                            update(week) { $0.toggleEvent(type, day: i) }
+                            let added = (choices[week]?.events[i] ?? []).contains { $0.type == type }
+                            if added { editing = type } else if editing == type { editing = nil }
+                            if !added { setRepeat(type, day: i, week: week, on: false) }
+                        }
+                    }
+                    optionTile(L10n.tr("Volno"), on: choice.rest.contains(i), hint: nil, fixed: wide) {
+                        dayDisc(sports: [], rest: true, size: 30)
+                    } action: { update(week) { $0.makeRest(i) } }
+            }
+            if let editing, let event = choice.events[i].first(where: { $0.type == editing }) {
+                eventEditor(event, day: i, week: week)
             }
             Text(verbatim: L10n.tr("Vyber jeden nebo dva sporty na den. Třetí nahradí první."))
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -297,7 +364,70 @@ struct WeekPlanSettingsView: View {
         .disabled(saving)
     }
 
-    private func optionTile<Disc: View>(_ title: String, on: Bool, hint: String?, @ViewBuilder disc: () -> Disc,
+    /// The tiles side by side; more than fit (other sports added) scroll sideways.
+    @ViewBuilder private func tileRow<Tiles: View>(_ wide: Bool, @ViewBuilder tiles: () -> Tiles) -> some View {
+        let row = HStack(spacing: 6) { tiles() }
+        if wide {
+            ScrollView(.horizontal, showsIndicators: false) { row }
+                .scrollClipDisabled()
+        } else {
+            row
+        }
+    }
+
+    /// Training or Match, Length and Repeat every week of the day's other sport.
+    private func eventEditor(_ event: OtherSportEvent, day i: Int, week: String) -> some View {
+        let repeats = usualEvents[i].contains { $0.type == event.type }
+        return VStack(alignment: .leading, spacing: 10) {
+            Picker(OtherSports.name(event.type), selection: Binding(get: { event.kind }, set: { kind in
+                update(week) { $0.setEvent(event.type, day: i, kind: kind) }
+                if repeats { setRepeat(event.type, day: i, week: week, on: true) }
+            })) {
+                Text(verbatim: L10n.tr("Trénink")).tag("training")
+                Text(verbatim: L10n.tr("Zápas")).tag("match")
+            }
+            .pickerStyle(.segmented)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Délka")
+                Spacer()
+                Text(verbatim: planDuration(event.minutes)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+            }
+            Slider(value: Binding(get: { Double(event.minutes) }, set: { value in
+                update(week) { $0.setEvent(event.type, day: i, minutes: Int(value)) }
+            }), in: Double(OtherSports.minMinutes)...Double(OtherSports.maxMinutes), step: 5, onEditingChanged: { active in
+                if !active && repeats { setRepeat(event.type, day: i, week: week, on: true) }
+            })
+            .tint(Palette.ink)
+            .accessibilityLabel(Text(verbatim: L10n.tr("Délka")))
+            .accessibilityValue(Text(verbatim: planDuration(event.minutes)))
+            Toggle(isOn: Binding(get: { repeats }, set: { setRepeat(event.type, day: i, week: week, on: $0) })) {
+                Text(verbatim: L10n.tr("Opakovat každý týden")).font(.body).foregroundStyle(Palette.ink)
+            }
+            .tint(Palette.green)
+            .frame(minHeight: 44)
+            Text(verbatim: L10n.tr("Zápas, turnaj nebo závod je pro plán tvrdý den, trénink středně náročný."))
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// Repeat every week: the usual week holds the day's other sport as this week has it
+    /// (both weeks shown follow the usual week where they hold no change of their own).
+    private func setRepeat(_ type: String, day i: Int, week: String, on: Bool) {
+        var list = usualEvents[i].filter { $0.type != type }
+        if on, let event = choices[week]?.events[i].first(where: { $0.type == type }) {
+            list.append(event)
+            while list.count > OtherSports.maxPerDay { list.removeFirst() }
+        }
+        // The other week shown follows the usual week where it held the same.
+        for other in weeks where other != week && choices[other]?.events[i] == usualEvents[i] {
+            choices[other]?.events[i] = list
+        }
+        usualEvents[i] = list
+    }
+
+    private func optionTile<Disc: View>(_ title: String, on: Bool, hint: String?, fixed: Bool = false, @ViewBuilder disc: () -> Disc,
                                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
@@ -305,7 +435,8 @@ struct WeekPlanSettingsView: View {
                 Text(verbatim: title).scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity, minHeight: 64)
+            .frame(width: fixed ? 58 : nil)
+            .frame(maxWidth: fixed ? nil : .infinity, minHeight: 64)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(on ? Palette.ink : .clear, lineWidth: 2) }
             .contentShape(Rectangle())
@@ -397,9 +528,16 @@ struct WeekPlanSettingsView: View {
             let usualPlan = try await model.api.weekPlan(start: nil)
             let thisPlan = try await model.api.weekPlan(start: monday)
             let nextPlan = try await model.api.weekPlan(start: nextMonday)
+            // The other sports for the tiles (Settings → Sports); without them the row is as before.
+            otherSports = OtherSports.list((try? await model.api.profile()) ?? [:])
+            if !otherSports.isEmpty { await OtherSports.loadNames(model.api) }
+            let chosen = (thisPlan.sports ?? []).map { $0 == "strength" ? "gym" : $0 }
+            sports = chosen.isEmpty ? WeekPlanPrefs.sports : WeekPlanPrefs.sports.filter { chosen.contains($0) }
             usualPrefs = usualPlan.prefs
             usual = WeekPlanPrefs.minutes(usualPlan.prefs)
             usualBefore = usual
+            usualEvents = OtherSports.events(usualPlan.prefs)
+            usualEventsBefore = usualEvents
             weekPrefs = [monday: thisPlan.prefs, nextMonday: nextPlan.prefs]
             choices = [monday: WeekPlanChoice(prefs: thisPlan.prefs), nextMonday: WeekPlanChoice(prefs: nextPlan.prefs)]
             original = choices
@@ -422,10 +560,10 @@ struct WeekPlanSettingsView: View {
         defer { saving = false }
         let from = replanFrom
         do {
-            if usual != usualBefore {
+            if usual != usualBefore || usualEvents != usualEventsBefore {
                 let days = WeekPlanPrefs.days(usualPrefs)
-                try await model.api.saveWeekPlan(start: nil, prefs: WeekPlanPrefs.edited(usualPrefs, minutes: usual, days: days,
-                                                                                         weeklyActivities: WeekPlanPrefs.weeklyActivities(usualPrefs)))
+                let prefs = WeekPlanPrefs.edited(usualPrefs, minutes: usual, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(usualPrefs))
+                try await model.api.saveWeekPlan(start: nil, prefs: OtherSports.edited(prefs, events: usualEvents))
             }
             for week in weeks {
                 guard let choice = choices[week], choice != original[week] else { continue }
@@ -434,8 +572,8 @@ struct WeekPlanSettingsView: View {
                 let base = WeekPlanPrefs.source(prefs) == "week" ? WeekPlanPrefs.minutes(prefs) : usual
                 let before = (original[week]?.rest ?? []).subtracting(choice.rest)
                 let minutes = choice.minutes(base: base, usual: usual, before: before)
-                try await model.api.saveWeekPlan(start: week, prefs: WeekPlanPrefs.edited(prefs, minutes: minutes, days: choice.days,
-                                                                                         weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs)))
+                let edited = WeekPlanPrefs.edited(prefs, minutes: minutes, days: choice.days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))
+                try await model.api.saveWeekPlan(start: week, prefs: OtherSports.edited(edited, events: choice.events))
             }
             error = nil
             dismiss()
@@ -548,7 +686,9 @@ enum WeekPlanGenerator {
             (0..<7).compactMap { i -> String? in
                 let date = ISODay.shift(week, i)
                 guard date >= today, let now = choices[week], let before = original[week] else { return nil }
-                let day = now.days[i] != before.days[i] || now.rest.contains(i) != before.rest.contains(i)
+                // A practice or match added, changed or taken out changes the days around it too (the day before it).
+                let own = now.events[i] != before.events[i] || now.events[(i + 1) % 7] != before.events[(i + 1) % 7]
+                let day = now.days[i] != before.days[i] || now.rest.contains(i) != before.rest.contains(i) || own
                 return day || usual[i] != usualBefore[i] ? date : nil
             }
         }
