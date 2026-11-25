@@ -301,8 +301,9 @@ struct ReadinessHome: View {
         return d
     }
 
-    /// The day's strain on 0 to 21 against today's target: green within it,
-    /// amber over it, light under it (the morning is always under it).
+    /// The day's strain on 0 to 21 against today's target, by the complications'
+    /// rule (WatchSnapshot.Strain.standing): green within it, light under it
+    /// before 18:00, amber over it or still under it from 18:00.
     private var strain: Dial {
         let score = s.strain.score
         let number = score.map { W.number($0, digits: 1) } ?? "–"
@@ -310,7 +311,13 @@ struct ReadinessHome: View {
                      unit: W.tr("z 21", "of 21"), said: score == nil ? "–" : number + W.tr(" z 21", " of 21"))
         guard let low = s.strain.low, let high = s.strain.high else { return d }
         d.band = low...max(low, high)
-        if let score { d.dot = score > high ? W.amber : score >= low ? W.green : W.ink }
+        if let score {
+            switch WatchSnapshot.Strain.standing(score, low: low, high: high, at: WatchDemo.now) {
+            case .onTarget: d.dot = W.green
+            case .off: d.dot = W.amber
+            case .neutral, nil: d.dot = W.ink
+            }
+        }
         d.said += ", " + W.tr("cíl ", "target ") + W.number(low) + W.tr(" až ", " to ") + W.number(high)
         return d
     }
@@ -325,8 +332,9 @@ struct ReadinessHome: View {
         let pad = (high - low) * 1.2
         d.scale = max(0, min(low - pad, value - 5))...max(high + pad, value + 5)
         d.band = low...high
-        // Light under the usual range (concept 02, the worse morning), green within or above it.
-        d.dot = value < low ? W.ink : W.green
+        // Light under the usual range (concept 02, the worse morning), green within or above it
+        // (the complications' rule, WatchSnapshot.Metric.worse).
+        d.dot = WatchSnapshot.Metric.worse(value, low: low, high: high, higherIsBetter: true) == true ? W.ink : W.green
         d.said += ", " + W.tr("obvykle ", "usual ") + W.number(low) + W.tr(" až ", " to ") + W.number(high)
         return d
     }

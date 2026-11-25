@@ -174,6 +174,14 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var high: Double?
         /// Up to 90 days, oldest first.
         var series: [Day]
+
+        /// A value against the athlete's usual range, one rule for the watch
+        /// app and its complications: beyond it the better way counts as
+        /// usual, only the worse way is off. Nil without a range.
+        static func worse(_ value: Double, low: Double?, high: Double?, higherIsBetter: Bool) -> Bool? {
+            guard let low, let high, high > low else { return nil }
+            return higherIsBetter ? value < low : value > high
+        }
     }
 
     struct Strain: Codable, Equatable, Sendable {
