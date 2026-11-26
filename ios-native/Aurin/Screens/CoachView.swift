@@ -1124,7 +1124,7 @@ struct ActionCard: View {
     /// a card over more days or one that deletes needs the tap.
     static func yesConfirms(_ a: CoachAction, today: String = AppModel.localDate(Date())) -> Bool {
         guard a.draftId != nil, a.date == today else { return false }
-        return !["rest", "activity_delete", "activity_merge", "plan", "week_sport", "status", "plan_around"].contains(a.type)
+        return !["rest", "activity_delete", "activity_merge", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
     }
 
     private var health: Bool { action.type == "status" || action.type == "plan_around" }
@@ -1221,7 +1221,9 @@ struct ActionCard: View {
     /// The workout's icon in its sport colour and the card's title in serif.
     private var header: some View {
         HStack(spacing: 12) {
-            if let sport = action.sport {
+            if action.type == "other_event", let type = action.otherType {
+                OtherSports.disc(type, size: 40)
+            } else if let sport = action.sport {
                 Image(systemName: SportIcon.symbol(sport == "gym" ? "strength" : sport))
                     .scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.Sport.color(sport))
@@ -1238,6 +1240,8 @@ struct ActionCard: View {
 
     /// "Set Sick" on a status card (kouc-4), else Confirm.
     private var confirmTitle: String {
+        // "Add for Saturday" (the concept's card).
+        if action.type == "other_event", let date = action.date { return OtherSports.addFor(date) }
         guard action.type == "status" else { return L10n.tr("Potvrdit") }
         switch action.status {
         case "sick": return L10n.tr("Nastavit Nemoc")

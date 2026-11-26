@@ -5412,3 +5412,11 @@
 "Použít lehčí týden" = "Use the easier week";
 "bylo %@" = "was %@";
 "Celkem %@. Plán měl %@." = "%@ in all. Your plan had %@.";
+"Přidat na dnešek" = "Add for today";
+"Přidat na pondělí" = "Add for Monday";
+"Přidat na úterý" = "Add for Tuesday";
+"Přidat na středu" = "Add for Wednesday";
+"Přidat na čtvrtek" = "Add for Thursday";
+"Přidat na pátek" = "Add for Friday";
+"Přidat na sobotu" = "Add for Saturday";
+"Přidat na neděli" = "Add for Sunday";

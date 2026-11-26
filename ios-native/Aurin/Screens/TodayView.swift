@@ -310,6 +310,19 @@ struct TodayContent: View {
                                   coachThings(plain: true)
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
+            } else if coachShown, !model.demo, let played = today.played {
+                // Yesterday's practice or match nothing recorded (other sports): its
+                // own block in the one coach card, as a missed workout's.
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) {
+                                  PlayedCard(played: played, plain: true).id(played.date + played.type)
+                                  if !TodayCoachAction.planned(today).isEmpty {
+                                      Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
+                                      TodayCoachAction(today: today)
+                                  }
+                                  coachThings(plain: true)
+                              }))
+                    .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
                               tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
@@ -323,7 +336,8 @@ struct TodayContent: View {
             }
 
             // "Did you play?": yesterday's practice or match nothing recorded (other sports).
-            if !model.demo, let played = today.played {
+            // Its own card when the coach card holds something else or is off.
+            if !model.demo, let played = today.played, !coachShown || firstWords != nil || today.missedWorkout != nil {
                 PlayedCard(played: played).id(played.date + played.type).padding(.top, 12)
             }
 
