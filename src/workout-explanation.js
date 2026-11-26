@@ -363,26 +363,28 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
 // app's fuelling advice and the calendars (Intervals.icu carbs_per_hour); null
 // when water is enough. Harder and longer sessions burn more glycogen. Up to
 // 45 min nothing is needed during the session (Burke et al. 2011, IOC;
-// Thomas et al. 2016, ACSM). The one source for every g/h the app shows.
+// Thomas et al. 2016, ACSM). Lengths 60 / 90 / 150 min (Petr 2026-11-26, team
+// cycling coach + nutritionist); above 90 g/h see LONG_RIDE_TOP (Hearris 2022,
+// Podlogar 2022, Norte 2026). The one source for every g/h the app shows.
 const CARBS = {
-  //               ≤45  ≤75  ≤120 ≤180  >180 min
+  //               ≤45  ≤60  ≤90  ≤150  >150 min
   ride: {
-    recovery:     [0,   0,   30,  40,   50],
-    endurance:    [0,   40,  50,  60,   75],
-    tempo:        [0,   50,  60,  70,   80],
-    sweet_spot:   [0,   60,  70,  80,   90],
-    threshold:    [0,   60,  75,  85,   90],
-    vo2max:       [0,   60,  75,  85,   90],
-    anaerobic:    [0,   55,  70,  80,   90],
-    sprint:       [0,   40,  50,  60,   70]
+    recovery:     [0,   0,   0,   30,   40],
+    endurance:    [0,   30,  45,  60,   75],
+    tempo:        [0,   30,  55,  70,   80],
+    sweet_spot:   [0,   40,  60,  75,   90],
+    threshold:    [0,   40,  60,  80,   90],
+    vo2max:       [0,   40,  60,  80,   90],
+    anaerobic:    [0,   40,  55,  75,   90],
+    sprint:       [0,   30,  40,  50,   70]
   },
   run: {
-    recovery:     [0,   0,   0,   30,   40],
+    recovery:     [0,   0,   0,   0,    30],
     endurance:    [0,   0,   30,  45,   60],
-    tempo:        [0,   20,  40,  50,   60],
-    threshold:    [0,   25,  45,  55,   60],
-    vo2max:       [0,   25,  45,  55,   60],
-    anaerobic:    [0,   20,  40,  50,   60],
+    tempo:        [0,   0,   40,  50,   60],
+    threshold:    [0,   0,   40,  55,   60],
+    vo2max:       [0,   0,   40,  55,   60],
+    anaerobic:    [0,   0,   40,  50,   60],
     sprint:       [0,   0,   30,  40,   50]
   }
 };
@@ -393,9 +395,9 @@ const CARBS = {
 // alone, as before. The run keeps its own table.
 export const CARB_CAPS = { beginner: 60, regular: 75, experienced: 90 };
 export function carbsPerHour(minutes, system, sport = "ride", experience = null) {
-  if (sport === "swim") return null;
+  if (sport === "swim" || sport === "gym") return null;
   const m = n(minutes, 0), table = CARBS[sport === "run" ? "run" : "ride"];
-  const row = table[system] || table.endurance, i = [45, 75, 120, 180].findIndex(limit => m <= limit);
+  const row = table[system] || table.endurance, i = [45, 60, 90, 150].findIndex(limit => m <= limit);
   const rate = row[i < 0 ? 4 : i] || null;
   return rate && CARB_CAPS[experience] ? Math.min(rate, CARB_CAPS[experience]) : rate;
 }
