@@ -71,3 +71,33 @@ test("the wrapper passes through what is open and keeps the cron jobs", async ()
   await app.scheduled({ cron: "* * * * *" }, env, {});
   assert.deepEqual(calls, ["/privacy", "cron"]);
 });
+
+test("the owner's overview and its passkey sign-in open only with Cloudflare Access's token for the owner", async () => {
+  const keys = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = { ...(await crypto.subtle.exportKey("jwk", keys.publicKey)), kid: "owner-k" };
+  const b64 = v => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const token = async claims => { const data = b64({ alg: "RS256", kid: "owner-k" }) + "." + b64(claims); return data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keys.privateKey, new TextEncoder().encode(data))).toString("base64url"); };
+  const live = { ...env, OWNER_EMAIL: "owner@example.com", ACCESS_TEAM_DOMAIN: "owner-team.cloudflareaccess.com", ACCESS_AUD: "aud-owner" };
+  const claims = { iss: "https://owner-team.cloudflareaccess.com", aud: ["aud-owner"], email: "owner@example.com", exp: Math.floor(Date.now() / 1000) + 60 };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json({ keys: [jwk] });
+  try {
+    const owner = "CF_Authorization=" + await token(claims), stranger = "CF_Authorization=" + await token({ ...claims, email: "someone@example.com" });
+    const session = await cookie();
+    const post = (path, Cookie) => new Request(BASE + path, { method: "POST", headers: { Cookie, Origin: BASE, "Content-Type": "application/json" }, body: "{}" });
+    for (const path of ["/auth/passkey/options", "/auth/passkey/verify"]) {
+      assert.equal(await closedToBrowser(post(path, owner), live), null, path);
+      assert.equal((await closedToBrowser(post(path, stranger), live)).status, 410, path + " for another e-mail");
+      assert.equal((await closedToBrowser(post(path, owner), env)).status, 410, path + " without Access set up");
+    }
+    for (const path of ["/app/owner", "/app/owner/data"]) {
+      assert.equal(await closedToBrowser(new Request(BASE + path, { headers: { Cookie: session + "; " + owner } }), live), null, path);
+      assert.equal((await closedToBrowser(new Request(BASE + path, { headers: { Cookie: session + "; " + stranger } }), live)).status, 302, path + " for another e-mail");
+    }
+    // The header Access adds inside /app/owner counts the same.
+    assert.equal(await closedToBrowser(new Request(BASE + "/app/owner/data", { headers: { Cookie: session, "Cf-Access-Jwt-Assertion": await token(claims) } }), live), null);
+    // Nothing else opens with it.
+    assert.equal((await closedToBrowser(post("/auth/email/start", owner), live)).status, 410);
+    assert.equal((await closedToBrowser(new Request(BASE + "/app/api/today", { headers: { Cookie: session + "; " + owner } }), live)).status, 302);
+  } finally { globalThis.fetch = realFetch; }
+});

@@ -135,10 +135,19 @@ export function ownerPageResponse() {
 const accessKeys = new Map();
 const bytes = text => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((text.length + 3) % 4)), c => c.charCodeAt(0));
 export async function accessAllowed(request, env, fetchImpl = fetch) {
+  if (!String(env.ACCESS_TEAM_DOMAIN || "").trim() && !String(env.ACCESS_AUD || "").trim()) return true;
+  return ownerAccess(request, env, fetchImpl);
+}
+
+// True only with Access set up and its valid token for the owner. Access adds the token as a
+// header inside /app/owner*; the passkey sign-in the page calls (/auth/passkey/*) lies outside, where
+// the browser still sends Access's CF_Authorization cookie (web-app-closed.js lets the owner through).
+export async function ownerAccess(request, env, fetchImpl = fetch) {
   const team = String(env.ACCESS_TEAM_DOMAIN || "").trim(), aud = String(env.ACCESS_AUD || "").trim();
-  if (!team && !aud) return true;
+  if (!team || !aud) return false;
   try {
-    const [head, body, signature] = String(request.headers.get("Cf-Access-Jwt-Assertion") || "").split(".");
+    const token = request.headers.get("Cf-Access-Jwt-Assertion") || (/(?:^|;\s*)CF_Authorization=([^;]+)/.exec(request.headers.get("Cookie") || "") || [])[1] || "";
+    const [head, body, signature] = String(token).split(".");
     const header = JSON.parse(new TextDecoder().decode(bytes(head))), claims = JSON.parse(new TextDecoder().decode(bytes(body)));
     const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     if (header.alg !== "RS256" || claims.iss !== "https://" + team || !audiences.includes(aud) || !(claims.exp > Date.now() / 1000)) return false;
