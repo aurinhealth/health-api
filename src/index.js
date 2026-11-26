@@ -776,19 +776,19 @@ function googleInfo(type, p) {
 // GOOGLE SYNC QUEUE
 // ======================================================
 
+// Only the types something reads. Google's minute rows of distance (no value
+// read), floors, active minutes, active zone minutes, sedentary periods, the
+// oxygen samples and the sleep breathing summary had no reader (the daily oxygen
+// and breathing values do) and cost ~8,500 D1 row writes a day per user
+// (2026-11-26). Google keeps them: a type comes back here when a feature needs it.
 const GOOGLE_SYNC_CONFIGS = [
   ["active-energy-burned", "active_energy_burned", "interval", "google-wearables", 7],
-  ["active-minutes", "active_minutes", "interval", "google-wearables", 7],
-  ["active-zone-minutes", "active_zone_minutes", "interval", "google-wearables", 7],
   ["steps", "steps", "interval", "google-wearables", 7],
-  ["distance", "distance", "interval", "google-wearables", 7],
-  ["floors", "floors", "interval", "google-wearables", 7],
   // Heart rate is ~36k samples a day, stored as 5-minute rows; the nightly run
   // re-reads only the last 3 days (late watch syncs included) instead of a week:
   // fewer Google pages and D1 reads every night.
   ["heart-rate", "heart_rate", "sample", "google-wearables", 3],
   ["heart-rate-variability", "heart_rate_variability", "sample", "google-wearables", 7],
-  ["oxygen-saturation", "oxygen_saturation", "sample", "google-wearables", 7],
   ["daily-resting-heart-rate", "daily_resting_heart_rate", "daily", "google-wearables", 30],
   ["daily-heart-rate-variability", "daily_heart_rate_variability", "daily", "google-wearables", 30],
   ["daily-oxygen-saturation", "daily_oxygen_saturation", "daily", "google-wearables", 30],
@@ -796,8 +796,6 @@ const GOOGLE_SYNC_CONFIGS = [
   ["daily-vo2-max", "daily_vo2_max", "daily", "google-wearables", 30],
   ["daily-heart-rate-zones", "daily_heart_rate_zones", "daily", "google-wearables", 30],
   ["daily-sleep-temperature-derivations", "daily_sleep_temperature_derivations", "daily", "google-wearables", 30],
-  ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
-  ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
   ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
   // Normal app sync only needs the recent sleep history requested by the app.
   // Older sleep history can be backfilled separately without blocking daily sync.
