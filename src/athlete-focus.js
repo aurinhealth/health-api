@@ -180,7 +180,9 @@ export function athleteFocus(profile, today) {
     ...(f.weeklyHours ? { weeklyHours: f.weeklyHours } : {}),
     // Whenever the coach may suggest a swim: a main sport, a chosen side sport, or no list chosen.
     ...(f.swims100 === false && (mains.includes("swim") || !f.sports || f.sports.includes("swim")) ? { cannotSwim100m: true } : {}),
-    event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft, ...raceOf(f) } : null
+    event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft, ...raceOf(f) } : null,
+    // The main race in the last 21 days (R6, the easy days after it).
+    ...(f.eventDate && daysLeft != null && daysLeft < 0 && daysLeft >= -21 ? { pastRace: { date: f.eventDate, daysAgo: -daysLeft, ...raceOf(f) } } : {})
   };
 }
 

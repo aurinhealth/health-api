@@ -138,3 +138,11 @@ test("the first gym session after Nemoc holds the weights with a set less, then 
   assert.doesNotMatch(plan({ athleteState: { status: "active", recoveredAt: day(-10), memories: [] } }).planName, /po nemoci/);
   assert.doesNotMatch(plan({ athleteState: { status: "active", recoveredAt: day(-20), memories: [] } }).planName, /po nemoci/);
 });
+
+test("R6: easy days after the main race as a suggestion, the race not the longest run", () => {
+  const raced = week([{ date: day(-2), type: "Ride", name: "Race", tss: 200, durationHours: 3 }]);
+  const after = coach({ week: raced, focus: { pastRace: { date: day(-2), daysAgo: 2, sport: "ride", km: 90 } } });
+  assert.ok(!hard.includes(after.recommendation.session.kind), after.recommendation.session.kind);
+  assert.ok(after.recommendation.adaptations.some(a => /2\. den po závodě z 2/.test(a)));
+  assert.equal(coach({ week: raced, focus: { pastRace: { date: day(-3), daysAgo: 3, sport: "ride", km: 90 } } }).recommendation.session.kind, "threshold", "3 h race: 2 days only");
+});

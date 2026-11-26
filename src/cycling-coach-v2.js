@@ -593,6 +593,16 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // pain blocks hard training (pain-words.js; audit 2026-11-07, point 4).
     const sore=athleteState?.memoryOff?[]:sorePartsFor(sport,athleteState?.memories);
     if(sore.length&&quality()){kind="endurance";adaptations.push(L("bolest "+sore.map(a=>a.label[0]).join(" a ")+" z toho, co si kouč pamatuje: bez intenzity","pain in the "+sore.map(a=>a.label[1]).join(" and ")+" the coach remembers: no intensity"));}
+    // R6 (Petr 2026-11-26): easy days after the main race, only a
+    // recommendation the athlete's "harder" ends (insisted): run 5 and 10 km
+    // none, half marathon 5 days, marathon 14, ultra 21; a ride under 2 h none,
+    // 2 to 4 h 2 days, longer 3. Coach practice.
+    const pr=focus?.pastRace;
+    if(pr&&pr.sport===sport&&!insisted&&(sport==="run"||sport==="ride")){
+      const raceHours=completedAll.filter(a=>a.date===pr.date).reduce((t,a)=>t+n(a.durationHours,0),0)||(sport==="ride"?n(pr.km,0)/30:0);
+      const easyDays=sport==="run"?(pr.km<=15?0:pr.km<=30?5:pr.km<=45?14:21):raceHours<2?0:raceHours<=4?2:3;
+      if(pr.daysAgo>=1&&pr.daysAgo<=easyDays&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(pr.daysAgo+". den po závodě z "+easyDays+": lehce (doporučení, jde změnit na těžší)","day "+pr.daysAgo+" of "+easyDays+" after your race: easy (a suggestion, you can ask for harder)"));}
+    }
     if(quality()&&!insisted){
       const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?(breakGap>=28?L("po pauze delší než 4 týdny: intenzita až po 3 trénincích a týdnu","back after more than 4 weeks off: intensity after 3 sessions and a week"):L("po pauze delší než 2 týdny: intenzita až po 2 trénincích","back after more than 2 weeks off: intensity after 2 sessions")):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
@@ -666,7 +676,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // The coach's week reaches back 7 to 13 days: the 30 days come from
     // sportReturns (coach-pick.js, longestRun), read with the breaks.
     const lastRun=returns?.last?.run?diffDays(targetDate,returns.last.run):null,ran=within(14).length||(lastRun!=null&&lastRun>=1&&lastRun<=14);
-    const longest=ran?Math.max(0,n(returns?.longestRun,0),...within(30).map(a=>n(a.durationHours,0)*60)):0;
+    // R6: the main race does not count as the longest run.
+    const raceDay=focus?.pastRace?.date,notRace=d=>d!==raceDay;
+    const fromReturns=Array.isArray(returns?.runs)?Math.max(0,...returns.runs.filter(r=>notRace(r.day)).map(r=>n(r.minutes,0))):n(returns?.longestRun,0);
+    const longest=ran?Math.max(0,fromReturns,...within(30).filter(a=>notRace(a.date)).map(a=>n(a.durationHours,0)*60)):0;
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
     if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za posledních 30 dní měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 30 days was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }

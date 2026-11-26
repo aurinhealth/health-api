@@ -249,13 +249,14 @@ export async function sportReturns(db, userId, today) {
   const rows = found.results || [];
   const dates = { ride: [], run: [], swim: [] }, month = new Date(Date.parse(today + "T00:00:00Z") - 30 * 86400000).toISOString().slice(0, 10);
   let longestRun = 0;
+  const runs = [];
   for (const r of rows) {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { /* no type */ }
     const kind = activityKindOf(p.type || p.exercise?.exerciseType || p.name), day = String(p.start_date_local || r.start_time || "").slice(0, 10);
     if (dates[kind] && day) dates[kind].push(day);
     // The longest run of the 30 days before today, for the one-run cap (R9).
     const minutes = (Date.parse(r.end_time) - Date.parse(r.start_time)) / 60000;
-    if (kind === "run" && day >= month && day < today && minutes > 0 && minutes < 600) longestRun = Math.max(longestRun, Math.round(minutes));
+    if (kind === "run" && day >= month && day < today && minutes > 0 && minutes < 600) { longestRun = Math.max(longestRun, Math.round(minutes)); runs.push({ day, minutes: Math.round(minutes) }); }
   }
   const before = list => list.filter(d => d < today).sort().at(-1) || null;
   // R2 (Petr 2026-11-26): the break's length before the return and the
@@ -271,7 +272,7 @@ export async function sportReturns(db, userId, today) {
     if (prev) gap[kind] = between(prev); else if (older) gap[kind] = Math.max(28, between(from));
     since[kind] = days.filter(d => d >= back && d < today).length;
   }
-  return { ...backs, gap, since, last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun };
+  return { ...backs, gap, since, last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun, runs };
 }
 
 export async function pickState(db, userId, date) {
