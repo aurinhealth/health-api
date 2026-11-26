@@ -18,6 +18,8 @@ final class WatchBridge: NSObject {
     private(set) var lastSent: Date?
     /// The profile's wake times for the watch's alarm (Settings → Sleep).
     private var profile: JSONObject?
+    /// Stav sportovce when it pauses the gym (sick, injured), for the watch.
+    private var paused: String?
     private var healthLoaded: Date?
     private var loadingHealth = false
     /// The gym days the watch works on (WatchGymBridge.swift).
@@ -49,6 +51,15 @@ final class WatchBridge: NSObject {
     /// This week's sessions for the watch's Training page.
     func update(_ training: TrainingSnapshot) {
         self.training = training
+        send()
+    }
+
+    /// Stav sportovce after it loaded or changed: Sick and Injured take the
+    /// watch's own gym away.
+    func update(status: AthleteStatus?) {
+        let paused = status.flatMap { ["sick", "injured"].contains($0.status) ? $0.status : nil }
+        guard paused != self.paused else { return }
+        self.paused = paused
         send()
     }
 
@@ -175,6 +186,7 @@ final class WatchBridge: NSObject {
         (settings.restSets, settings.restExercises) = Self.restSettings
         (settings.lastGym, settings.lastGymExercises) = Self.lastGym
         settings.alarmBackup = backup
+        settings.trainingPaused = paused
         context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         // The same Today again (a refresh with nothing new; only the time it
