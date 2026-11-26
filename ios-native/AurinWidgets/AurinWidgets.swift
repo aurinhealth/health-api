@@ -78,12 +78,13 @@ enum W {
         }
     }
 
-    /// The readiness zone in a word: "dobrá", "střední", "nízká".
+    /// The readiness zone in words of the usual range, as Today's verdict:
+    /// "obvyklé", "část pod", "pod obvyklým" (Petr 2026-11-26).
     static func zoneWord(_ zone: String?) -> String? {
         switch zone {
-        case "green": return L10n.tr("dobrá")
-        case "yellow": return L10n.tr("střední")
-        case "red": return L10n.tr("nízká")
+        case "green": return L10n.tr("obvyklé")
+        case "yellow": return L10n.tr("část pod")
+        case "red": return L10n.tr("pod obvyklým")
         default: return nil
         }
     }

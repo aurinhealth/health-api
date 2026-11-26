@@ -45,6 +45,7 @@ struct CoachNotificationView: View {
                     // The zone in a word, not only the ring's colour (watch audit C1b).
                     Text(W.zoneWord(today?.zone) ?? W.tr("připravenost", "readiness"))
                         .watchFont(12, .semibold).foregroundStyle(W.zoneColor(today?.zone))
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             } else {
                 Image(systemName: "bubble.left.and.text.bubble.right")
