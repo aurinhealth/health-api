@@ -183,7 +183,7 @@ import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraft
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
-import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
+import { gapCheckin, postGapCheckin, welcomeBack, welcomeAnswer, easierWeek } from "./coach-gap-checkin.js";
 import { weekSummary, summaryWeek } from "./coach-week-summary.js";
 import { raceWeek, postRaceWeek, RACE_WEEK_DAYS, RACE_WEEK_SPORTS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
@@ -1828,6 +1828,31 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const question=gapCheckin({date,weekDays:inputs.week?.days||[],sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
       return Response.json({status:'ok',question:await postGapCheckin(env.DB,question)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){console.error('Gap check-in failed',error.message);return Response.json({message:error.message},{status:500});}
+  }
+  // Welcome back (Petr 2026-11-26, one flow): the gap question on the screen
+  // the app opens first after a gap, not in a new chat. GET asks nothing of the
+  // athlete and saves nothing; POST {answer} saves it once per gap (gapAsked)
+  // and gives the coach's sentence and, after "Took a break" of 14 days or
+  // more, the easier week (R2). "keep" on that week keeps the plan (elsewhere).
+  if(url.pathname==='/app/api/coach/welcome-back'&&(request.method==='GET'||request.method==='POST')){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const date=localToday(),[state,inputs]=await Promise.all([getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,date)]);
+      const weekDays=inputs.week?.days||[],readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
+      const question=welcomeBack({date,weekDays,sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
+      const weekFor=q=>q&&q.days>=14?easierWeek({date,weekDays,since:q.key}):null;
+      if(request.method==='GET')return Response.json({status:'ok',question,week:question?.ended?weekFor(question):null},{headers:{'Cache-Control':'no-store'}});
+      const body=await request.json().catch(()=>({}));
+      // "keep" comes after the question was answered: the gap it was asked for.
+      const asked=body.answer==='keep'&&state.gapAsked?{key:state.gapAsked,days:0}:question;
+      const answer=welcomeAnswer(asked,String(body.answer||''));
+      if(!answer)return Response.json({status:'ok',question:null},{headers:{'Cache-Control':'no-store'}});
+      const {status,...patch}=answer.patch;
+      await updateAthleteState(env.DB,{...patch,...(status?{status}:{})});
+      if(status)await syncedPlans(env).catch(()=>null);
+      return Response.json({status:'ok',coach:answer.coach,week:answer.easierWeek?weekFor(asked):null},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){console.error('Welcome back failed',error.message);return Response.json({message:error.message},{status:500});}
   }
   // "Vrátit původní" of the plans the coach eased this morning (easeTodayPlans):
   // the coach's sessions go, the plans come back, in Wahoo and Intervals.icu too.
