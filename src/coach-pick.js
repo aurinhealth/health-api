@@ -244,17 +244,21 @@ export async function recentKinds(db, userId, today) {
 const RETURNS_DAYS = 90;
 export async function sportReturns(db, userId, today) {
   const from = new Date(Date.parse(today + "T00:00:00Z") - RETURNS_DAYS * 86400000).toISOString().slice(0, 10);
-  const [found, older] = await Promise.all([db.prepare("SELECT start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
+  const [found, older] = await Promise.all([db.prepare("SELECT start_time, end_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
     .bind(userId, from).all().catch(() => ({ results: [] })), activityBefore(db, userId, from)]);
   const rows = found.results || [];
-  const dates = { ride: [], run: [], swim: [] };
+  const dates = { ride: [], run: [], swim: [] }, month = new Date(Date.parse(today + "T00:00:00Z") - 30 * 86400000).toISOString().slice(0, 10);
+  let longestRun = 0;
   for (const r of rows) {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { /* no type */ }
     const kind = activityKindOf(p.type || p.exercise?.exerciseType || p.name), day = String(p.start_date_local || r.start_time || "").slice(0, 10);
     if (dates[kind] && day) dates[kind].push(day);
+    // The longest run of the 30 days before today, for the one-run cap (R9).
+    const minutes = (Date.parse(r.end_time) - Date.parse(r.start_time)) / 60000;
+    if (kind === "run" && day >= month && day < today && minutes > 0 && minutes < 600) longestRun = Math.max(longestRun, Math.round(minutes));
   }
   const before = list => list.filter(d => d < today).sort().at(-1) || null;
-  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS, start: older ? from : null })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])) };
+  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS, start: older ? from : null })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun };
 }
 
 export async function pickState(db, userId, date) {

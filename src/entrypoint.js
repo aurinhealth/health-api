@@ -2005,7 +2005,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system),minutes:Math.max(0,Math.min(600,Math.round(Number(o.minutes)||0)))||null}));
       // The week the session lands in: its runs done and in the calendar (the rules' cap) and the other drafts.
       const landing=mondayOfDate(changed.date||date),weekCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?(await computeWeekTargets(env,ctx,landing,null).catch(()=>null))?.runCap||weeklyRunCap(await planningHistory(env,landing<today?landing:today,30).catch(()=>[]),landing):null;
-      const runCap=weekCap?{...weekCap,cap:weekCap.cap-(Number(weekCap.committed)||0)}:null;
+      const runCap=weekCap?{...weekCap,cap:weekCap.cap==null?null:weekCap.cap-(Number(weekCap.committed)||0)}:null;
       changed=guardSessionChange(changed,current,{paused:pausedSports(await getAthleteState(env.DB).catch(()=>({}))),others,runCap});
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}

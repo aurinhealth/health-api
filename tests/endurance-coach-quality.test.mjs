@@ -47,7 +47,13 @@ test("the time available is a limit: an easy run does not fill two hours and run
   assert.ok(recovery.recommendation.session.durationMinutes <= 40);
   const easy = coach({ sport: "run", week: runs, goal: { focus: "endurance" }, availabilityMinutes: 120 });
   assert.equal(easy.recommendation.session.durationMinutes, 50);
-  assert.ok(easy.rationale.some(r => /Nejdelší běh za poslední 2 týdny měl 45 min, dnes proto nejvýš 50 min/.test(r)));
+  assert.ok(easy.rationale.some(r => /Nejdelší běh za posledních 30 dní měl 45 min, dnes proto nejvýš 50 min/.test(r)));
+  // R9: the longest run of 30 days counts, also one older than the coach's week.
+  const month = coach({ sport: "run", week: runs, goal: { focus: "endurance" }, availabilityMinutes: 120, returns: { longestRun: 70 } });
+  assert.equal(month.recommendation.session.durationMinutes, 75);
+  // Without a run in 14 days the 30 min start stays.
+  const back = coach({ sport: "run", goal: { focus: "endurance" }, availabilityMinutes: 120, returns: { longestRun: 70 } });
+  assert.equal(back.recommendation.session.durationMinutes, 30);
   // A ride is not limited that way, but a recovery ride stays short.
   assert.ok(coach({ goal: { focus: "recovery" }, availabilityMinutes: 180 }).recommendation.session.durationMinutes <= 60);
 });
@@ -109,30 +115,29 @@ test("the week plan is a recovery week only after a heavy week or three solid we
   assert.deepEqual(weekLoadsBefore(wellness, "2026-10-05"), [210, 140, 70]);
 });
 
-test("a week's running grows at most 10 % over the recent weeks", async () => {
+test("a week's running grows at most 10 % only in a return after a break (R9)", async () => {
   const { weeklyRunCap, capRunVolume } = await import("../src/week-planner.js");
   const { weekProposal } = await import("../src/adaptive-week.js");
   const runDay = (date, minutes, type = "Run") => ({ date, daily: { training: { completed: [{ type, durationHours: minutes / 60 }] } } });
-  // Last week 80 min, four-week average 49 min: the larger counts, +10 %.
+  // Running in the last 14 days: no weekly cap (Frandsen 2025), the one-run cap stays.
   const history = [runDay("2026-09-08", 40), runDay("2026-09-15", 45), runDay("2026-09-22", 30), runDay("2026-09-29", 50), runDay("2026-10-01", 30), runDay("2026-10-02", 90, "Ride"), runDay("2026-10-03", 60, "Walk")];
-  const cap = weeklyRunCap(history, "2026-10-05");
-  assert.deepEqual(cap, { cap: 90, base: 80, weeks: [80, 30, 45, 40], longest: 50, single: 55 });
-  // Nothing run yet: a fresh start of 60 min a week is always allowed.
+  assert.deepEqual(weeklyRunCap(history, "2026-10-05"), { cap: null, base: 80, weeks: [80, 30, 45, 40], longest: 50, single: 55 });
+  // Back after 14+ days without a run, or a first start: the weekly cap holds.
+  assert.equal(weeklyRunCap([runDay("2026-09-08", 40), runDay("2026-09-15", 45)], "2026-10-05").cap, 60);
   assert.equal(weeklyRunCap([], "2026-10-05").cap, 60);
   const targets = { status: "ok", items: [{ sport: "run", role: "endurance", minutes: 60, tss: 61, intensity: .78 }, { sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "ride", minutes: 90, tss: 70 }] };
-  const capped = capRunVolume(targets, cap, 30);
+  const capped = capRunVolume(targets, { cap: 90, base: 80, weeks: [] }, 30);
   assert.deepEqual(capped.items.map(x => x.sport + ":" + x.minutes), ["run:30", "run:30", "ride:90"]);
   assert.equal(capped.items[0].tss, Math.round(30 / 60 * .78 * .78 * 100));
   assert.equal(capped.runCap.limited, true); assert.equal(capped.runCap.committed, 30);
-  // Under the cap nothing changes.
+  // Under the cap, or without one, nothing changes.
   assert.deepEqual(capRunVolume(targets, { cap: 200, base: 180, weeks: [] }, 0).items, targets.items);
-  // The week proposal applies it with the athlete's history, not without.
+  assert.deepEqual(capRunVolume(targets, { cap: null, base: 80, weeks: [] }, 30).items, targets.items);
+  // The week proposal applies the athlete's history: no weekly cap while running.
   const prefs = { days: [["run"], [], ["run"], [], [], ["run"], []], availability: Array.from({ length: 7 }, () => ({ minutes: 180, preferredSports: [] })), sessions: {} };
   const fitness = { wellness: [{ id: "2026-10-04", ctl: 60, tsb: 0 }] };
   const proposal = weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness, history });
-  const runs = proposal.items.filter(x => x.sport === "run");
-  assert.ok(runs.reduce((n, x) => n + x.minutes, 0) <= 90 + 5, JSON.stringify(runs));
-  assert.equal(proposal.targets.runCap.limited, true);
+  assert.equal(proposal.targets.runCap.limited, false);
   assert.equal(weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness }).targets.runCap, undefined);
 });
 

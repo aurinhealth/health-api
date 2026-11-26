@@ -489,9 +489,13 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   return { status: "ok", ctl: Math.round(fitness), base, target, recovery, rampHold: hold, recoveryReason: rule.reason ?? (plan?.light ? "plan" : null), weekLoads: weekLoads || null, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
 }
 // Running grows slowly: tendons and bones adapt later than heart and lungs.
-// A week's running (done, planned and proposed together) stays within 10 %
-// above the more of last week and the 4-week average; 60 min is always
-// allowed for a fresh start. `history` is days with completed activities.
+// Only in a return after a break (no run in the 14 days before the week, a
+// first start too), a week's running (done, planned and proposed together)
+// stays within 10 % above the more of last week and the 4-week average; 60 min
+// is always allowed for a fresh start. Otherwise `cap` is null: Frandsen 2025
+// (5 205 runners) found no link between the week-to-week change and injuries,
+// only the one run below (R9, Petr 2026-11-26). `history` is days with
+// completed activities.
 export const RUN_FLOOR_MINUTES = 60;
 // No run in the last 30 days: one run starts at 30 min, as the day coach
 // starts it (cycling-coach-v2.js), not up to the whole week's 60 (C7).
@@ -507,14 +511,15 @@ export function weeklyRunCap(history = [], weekStart) {
   const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
   const month = (history || []).filter(d => d.date >= dayShift(weekStart, -30) && d.date < weekStart);
   const longest = Math.round(Math.max(0, ...month.flatMap(d => (d.daily?.training?.completed || []).filter(isRunActivity).map(a => (Number(a.durationHours) || 0) * 60))));
-  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : FIRST_RUN_MINUTES };
+  const recent = (history || []).some(d => d.date >= dayShift(weekStart, -14) && d.date < weekStart && runMinutes(d.daily?.training?.completed) > 0);
+  return { cap: recent ? null : Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : FIRST_RUN_MINUTES };
 }
 // Proposed runs share what is left under the cap, at least 20 min each: a run
 // that would get less is left out (the shortest first) and the rest share again.
 export function capRunVolume(targets, runCap, committed = 0) {
   if (!runCap || !["ok", "estimated"].includes(targets?.status)) return targets;
   if (runCap.single) targets = { ...targets, items: targets.items.map(x => x.sport !== "run" || x.role === "race" || x.minutes <= runCap.single ? x : { ...x, minutes: runCap.single, tss: Math.round(runCap.single / 60 * (x.intensity || RUN_IF[x.role] || .78) ** 2 * 100), capped: true, cappedFrom: x.minutes }) };
-  const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
+  const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = runCap.cap == null ? Infinity : Math.max(0, runCap.cap - committed);
   const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
   if (!runs.length || proposed <= room) return { ...targets, runCap: info };
   // Rounded to 5 min, or down when rounding would pass the room.

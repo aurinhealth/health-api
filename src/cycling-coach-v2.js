@@ -649,11 +649,15 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(cap&&requestedMinutes>cap.minutes){rationale.push(L("Délka "+cap.minutes+" min z "+requestedMinutes+" min: "+cap.text+".","Duration "+cap.minutes+" of "+requestedMinutes+" min: "+cap.text+"."));requestedMinutes=cap.minutes;}
   // Running load grows slowly: tendons and joints adapt later than the heart
   // and lungs. Without a race, no run is more than 10 % longer than the
-  // longest one of the last two weeks (30 min after a break).
+  // longest one of the last 30 days, as Frandsen 2025 measured it (R9, Petr
+  // 2026-11-26); 30 min after 14 days without a run.
   if(run&&kind!=="race"&&!plannedInfo?.minutes){
-    const longest=Math.max(0,...completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=1&&d<=14;}).map(a=>n(a.durationHours,0)*60));
+    const within=days=>completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=1&&d<=days;});
+    // The coach's week reaches back 7 to 13 days: the 30 days come from
+    // sportReturns (coach-pick.js, longestRun), read with the breaks.
+    const longest=within(14).length?Math.max(0,n(returns?.longestRun,0),...within(30).map(a=>n(a.durationHours,0)*60)):0;
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
-    if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za poslední 2 týdny měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 2 weeks was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
+    if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za posledních 30 dní měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 30 days was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }
   if(testDays===1&&!plannedInfo?.minutes)requestedMinutes=Math.min(requestedMinutes,short?30:60);
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);
