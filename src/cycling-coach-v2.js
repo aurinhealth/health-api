@@ -277,7 +277,7 @@ export function engineForAI(engine,{cycleShared=false}={}){
   return out;
 }
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null,sickReturn=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null,sickReturn=null,injuryTrial=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"||sport==="swim"?sport:"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:sport==="swim"?isSwim:isRide,hardOf=sport==="run"?isHardRun:sport==="swim"?isHardSwim:isHard,run=sport==="run",swim=sport==="swim",short=run||swim;
@@ -606,6 +606,18 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       const raceHours=completedAll.filter(a=>a.date===pr.date).reduce((t,a)=>t+n(a.durationHours,0),0)||(sport==="ride"?n(pr.km,0)/30:0);
       const easyDays=sport==="run"?(pr.km<=15?0:pr.km<=30?5:pr.km<=45?14:21):raceHours<2?0:raceHours<=4?2:3;
       if(pr.daysAgo>=1&&pr.daysAgo<=easyDays&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(pr.daysAgo+". den po závodě z "+easyDays+": lehce (doporučení, jde změnit na těžší)","day "+pr.daysAgo+" of "+easyDays+" after your race: easy (a suggestion, you can ask for harder)"));}
+    }
+    // R4 (Petr 2026-11-26): the trial session after Zranění, firm: easy and
+    // at most 30 min of walking and jogging, a 45 min ride, a 20 min swim;
+    // after "Build up slowly" the next 2 sessions easy (coach-gap-checkin.js).
+    if(injuryTrial?.mode==="trial"||injuryTrial?.mode==="ask"){
+      if(quality()||kind==="long_endurance")kind="endurance";
+      capAt({run:30,ride:45,swim:20}[sport]||30,L("zkušební trénink po zranění","trial session after an injury"));
+      adaptations.push(sport==="run"?L("zkušební trénink po zranění: nejvýš 30 min, střídej chůzi a klus","trial session after an injury: up to 30 min, alternate walking and jogging"):L("zkušební trénink po zranění: lehce a krátce","trial session after an injury: easy and short"));
+    } else if(injuryTrial?.mode==="slow"&&!insisted){
+      if(quality()||kind==="long_endurance")kind="endurance";
+      capAt(short?45:90,L("návrat po zranění","returning after an injury"));
+      adaptations.push(L("návrat po zranění: lehce, bez dlouhého tréninku","returning after an injury: easy, no long session"));
     }
     // R5 (Petr 2026-11-26): the easy days after Nemoc in the Journal
     // (morning-checkin.js journalSickReturn), a recommendation like R6.

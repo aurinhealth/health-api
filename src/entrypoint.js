@@ -183,7 +183,7 @@ import { chatUndo, lastUndoInChat, chatConfirmation, confirmationOnly, openDraft
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
-import { gapCheckin, postGapCheckin, welcomeBack, welcomeAnswer, easierWeek } from "./coach-gap-checkin.js";
+import { gapCheckin, postGapCheckin, welcomeBack, welcomeAnswer, easierWeek, injuryTrial, trialQuestion } from "./coach-gap-checkin.js";
 import { weekSummary, summaryWeek } from "./coach-week-summary.js";
 import { raceWeek, postRaceWeek, RACE_WEEK_DAYS, RACE_WEEK_SPORTS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
@@ -1616,7 +1616,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
   const regeneration=doses?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),doses,athleteState?.status).recoveryTime??null:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile,training),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,feeling,recoveryTime:regeneration,returns,journal,upcomingTest:nextTest,sickReturn};
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile,training),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,feeling,recoveryTime:regeneration,returns,journal,upcomingTest:nextTest,sickReturn,injuryTrial:injuryTrial(athleteState,returns?.days,date)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1845,7 +1845,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const date=localToday(),[state,inputs]=await Promise.all([getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,date)]);
       const weekDays=inputs.week?.days||[],readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
-      const question=welcomeBack({date,weekDays,sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
+      const question=welcomeBack({date,weekDays,sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state})||trialQuestion(injuryTrial(state,inputs.returns?.days,date));
       const weekFor=q=>q&&q.days>=14?easierWeek({date,weekDays,since:q.key}):null;
       if(request.method==='GET')return Response.json({status:'ok',question,week:question?.ended?weekFor(question):null},{headers:{'Cache-Control':'no-store'}});
       const body=await request.json().catch(()=>({}));

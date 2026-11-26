@@ -272,7 +272,7 @@ export async function sportReturns(db, userId, today) {
     if (prev) gap[kind] = between(prev); else if (older) gap[kind] = Math.max(28, between(from));
     since[kind] = days.filter(d => d >= back && d < today).length;
   }
-  return { ...backs, gap, since, last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun, runs };
+  return { ...backs, gap, since, days: [...new Set(Object.values(dates).flat())].filter(d => d < today).sort(), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun, runs };
 }
 
 export async function pickState(db, userId, date) {

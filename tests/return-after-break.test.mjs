@@ -190,3 +190,51 @@ test("R4 gym: after more than 21 days the first 2 sessions held, after more than
   assert.equal(kg(-30), 25, "27 kg rounded down to the 2.5 kg step");
   assert.equal(kg(-70), 22.5, "24 kg rounded down");
 });
+
+test("R4: one trial session after Zranění, then a plan card, never a pain question", async () => {
+  const { injuryTrial, trialQuestion, welcomeAnswer } = await import("../src/coach-gap-checkin.js");
+  const { updateAthleteState, getAthleteState } = await import("../src/athlete-state.js");
+  const raw = createD1(), db = scopedDb(raw, 5);
+  await updateAthleteState(db, { status: "injured" }, { date: day(-5) });
+  await updateAthleteState(db, { status: "active" }, { date: day(-3) });
+  let state = await getAthleteState(db, { date });
+  assert.equal(state.injuryBack, day(-3));
+  assert.deepEqual(injuryTrial(state, [day(-10)], date), { mode: "trial" }, "nothing since the status ended");
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "ask" });
+  const q = trialQuestion(injuryTrial(state, [day(-1)], date));
+  assert.equal(q.text, "Jak pokračovat po zkušebním tréninku?");
+  assert.deepEqual(q.answers.map(a => a.label), ["Pomalu přidávat", "Zopakovat zkušební trénink", "Nechat Zranění"]);
+  assert.equal(trialQuestion({ mode: "trial" }), null);
+  assert.deepEqual(welcomeAnswer(q, "injured").patch, { status: "injured" });
+  assert.deepEqual(welcomeAnswer(q, "later").patch, { trial: "repeat" }, "closed: the trial again");
+  await updateAthleteState(db, welcomeAnswer(q, "slow").patch, { date });
+  state = await getAthleteState(db, { date });
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "slow" });
+  assert.equal(injuryTrial(state, [day(-1), date, day(1)], day(2)), null, "2 sessions after the choice: as usual");
+  await updateAthleteState(db, { trial: "repeat" }, { date });
+  state = await getAthleteState(db, { date });
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "trial" }, "repeat: a trial again");
+  assert.equal(injuryTrial(state, [], day(40)), null, "six weeks on: nothing");
+  // The status that ends on its own date counts the same.
+  assert.equal((await import("../src/athlete-state.js")).effectiveAthleteState({ status: "injured", statusUntil: day(-2), trial: { choice: "slow", on: day(-9) } }, date).injuryBack, day(-2));
+  // The day coach: capped and easy, firm.
+  const run = coach({ sport: "run", injuryTrial: { mode: "trial" }, availabilityMinutes: 90 });
+  assert.ok(!hard.includes(run.recommendation.session.kind));
+  assert.ok(run.recommendation.session.durationMinutes <= 30, String(run.recommendation.session.durationMinutes));
+  assert.ok(run.recommendation.adaptations.some(a => /střídej chůzi a klus/.test(a)));
+  assert.ok(coach({ injuryTrial: { mode: "trial" }, availabilityMinutes: 120 }).recommendation.session.durationMinutes <= 45);
+  assert.ok(coach({ sport: "swim", injuryTrial: { mode: "trial" }, availabilityMinutes: 60 }).recommendation.session.durationMinutes <= 20);
+  assert.ok(!hard.includes(coach({ injuryTrial: { mode: "slow" } }).recommendation.session.kind));
+});
+
+test("R8: the fixed physio or doctor sentence with Zranění and a pain remembered 7 days", async () => {
+  const { memoryCheck } = await import("../src/athlete-state.js");
+  const line = "Aurin není zdravotnický prostředek. Když bolest trvá, zhoršuje se nebo tě znepokojuje, poraď se s fyzioterapeutem nebo lékařem.";
+  assert.ok(withLang("cs", () => trainingStatus({ status: "injured" })).guidance[0].endsWith(line));
+  assert.ok(!withLang("cs", () => trainingStatus({ status: "sick" })).guidance.join(" ").includes("zdravotnický prostředek"));
+  assert.ok(withLang("en", () => trainingStatus({ status: "injured" })).guidance[0].endsWith("Aurin isn't a medical device. If the pain lasts, gets worse or worries you, check in with a physio or doctor."));
+  const state = { memories: ["bolí mě koleno"], memoryMeta: { "bolí mě koleno": { at: day(-7), check: day(0), group: "health" } } };
+  assert.equal(withLang("cs", () => memoryCheck(state, date)).message, line);
+  const cold = { memories: ["jsem nachlazený"], memoryMeta: { "jsem nachlazený": { at: day(-7), check: day(0), group: "health" } } };
+  assert.equal(withLang("cs", () => memoryCheck(cold, date))?.message ?? null, null, "no pain, no sentence");
+});

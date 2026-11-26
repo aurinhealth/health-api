@@ -1,10 +1,10 @@
 import { reflectionSignals, fillWellness } from './coach-reflection.js';
 
-import { ATHLETE_STATUSES } from './training-status.js';
+import { ATHLETE_STATUSES, PRO_LINE } from './training-status.js';
 import { validDay } from './training-availability.js';
 import { L, plural } from './lang.js';
 import { localToday } from "./user-time.js";
-import { PASSING_WORDS, checkDays, heartSymptom } from './pain-words.js';
+import { PASSING_WORDS, PAIN_WORDS, checkDays, heartSymptom } from './pain-words.js';
 import { knownStation } from './gym-equipment.js';
 import { MEMORY_RULE } from './private/athlete-state.js';
 export { MEMORY_RULE };
@@ -13,7 +13,7 @@ const clean = v => String(v || '').trim().slice(0, 500);
 // statusUntil is the first calendar day on which the status no longer applies.
 export function effectiveAthleteState(state,date=localToday()){
   return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date
-    ? {...state,status:'active',note:'',statusUntil:null,ended:{status:state.status,on:state.statusUntil},...(state.status==='sick'?{recoveredAt:state.statusUntil,sickFrom:sickStart(state)}:{})} : state;
+    ? {...state,status:'active',note:'',statusUntil:null,ended:{status:state.status,on:state.statusUntil},...(state.status==='sick'?{recoveredAt:state.statusUntil,sickFrom:sickStart(state)}:{}),...(state.status==='injured'?{injuryBack:state.statusUntil,trial:null}:{})} : state;
 }
 // The first day of Nemoc (changedAt is when it was set), so the return can
 // follow how long it lasted (cycling-coach-v2.js).
@@ -42,6 +42,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     if(until&&(!validDay(until)||until<=date))throw new Error(L('Konec platnosti musí být v budoucnu.','The end date must be in the future.'));
     // The day Nemoc ends: the first days back stay easy (cycling-coach-v2.js).
     if (state.status === 'sick' && patch.status === 'active') { state.recoveredAt = date; state.sickFrom = sickStart(state); }
+    // The day Zranění ends: one trial session first (R4, coach-gap-checkin.js injuryTrial).
+    if (state.status === 'injured' && patch.status === 'active') { state.injuryBack = date; state.trial = null; }
     // changedAt stays when the status is saved again (a new note or end date):
     // Nemoc set again kept counting from that day, so it read shorter (C13).
     if (patch.status !== state.status || !state.changedAt) state.changedAt = new Date().toISOString();
@@ -98,6 +100,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   if (validDay(patch.gapAsked)) state.gapAsked = patch.gapAsked;
   // "Trained elsewhere" or "Keep as is" on Welcome back: the gap's last session day; the R2 rules after a break do not apply to it (cycling-coach-v2.js).
   if (validDay(patch.elsewhere)) state.elsewhere = patch.elsewhere;
+  // R4: the plan after the trial session, only a plan choice (not for the AI).
+  if (patch.trial === 'slow' || patch.trial === 'repeat') state.trial = { choice: patch.trial, on: date };
   // The coach's own chat messages from the rules (coach-week-summary.js, coach-race-week.js):
   // the week or race each was posted for and where, so it is posted once and the chat shows its card.
   if (['week', 'race'].includes(patch.posted?.kind) && validDay(patch.posted.key) && Number.isInteger(patch.posted.chatId) && Number.isInteger(patch.posted.messageId))
@@ -162,7 +166,8 @@ export const pastMemoryList = state => [...(state.pastMemories || [])].reverse()
 export function memoryCheck(state, date = localToday()) {
   if (state?.memoryOff) return null;
   const due = memoryList(state).filter(m => m.check && m.check <= date && !heartSymptom(m.text)).sort((a, b) => a.check.localeCompare(b.check))[0];
-  return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: null } : null;
+  const pain = due && PAIN_WORDS.test(due.text) && due.since && due.since <= shiftDate(date, -7);
+  return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: pain ? PRO_LINE() : null } : null;
 }
 // Nemoc or Zranění without an end day: after 3 days of Nemoc, 7 of Zranění,
 // the coach asks whether the athlete is better, again every 3 or 7 days until

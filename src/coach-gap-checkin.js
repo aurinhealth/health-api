@@ -127,10 +127,44 @@ export function welcomeBack(args) {
   };
 }
 
+// R4 (Petr 2026-11-26, lawyer's wording): after Zranění ends one trial
+// session (the day coach caps it: run 30 min walking and jogging, ride 45,
+// swim 20); the day after it one card on the plan, never on the pain:
+// build up slowly (the next 2 sessions easy), repeat the trial session or
+// stay on Injured. Closing the card repeats the trial. Six weeks after the
+// status ended nothing applies. sessionDays: ride, run and swim days.
+export function injuryTrial(state, sessionDays = [], date) {
+  const back = state?.injuryBack;
+  if (state?.status !== 'active' || typeof back !== 'string' || back > date || days(back, date) > 42) return null;
+  const choice = state.trial?.on >= back ? state.trial : null, from = choice?.on || back;
+  const done = [...new Set(sessionDays)].filter(d => d >= from && d < date).length;
+  if (choice?.choice === 'slow') return done < 2 ? { mode: 'slow' } : null;
+  return done ? { mode: 'ask' } : { mode: 'trial' };
+}
+export function trialQuestion(trial) {
+  if (trial?.mode !== 'ask') return null;
+  return {
+    key: 'trial', trial: true, days: 0,
+    title: L('Po zkušebním tréninku', 'After the trial session'),
+    text: L('Jak pokračovat po zkušebním tréninku?', 'How should we go on after the trial session?'),
+    answers: [
+      { id: 'slow', label: L('Pomalu přidávat', 'Build up slowly') },
+      { id: 'repeat', label: L('Zopakovat zkušební trénink', 'Repeat the trial session') },
+      { id: 'injured', label: L('Nechat Zranění', 'Stay on Injured') }
+    ]
+  };
+}
+
 // The coach's one sentence after an answer, and what to save: the gap is asked
 // first (gapAsked), "Trained elsewhere" and "Keep as is" mark it (elsewhere),
 // Sick and Injured switch the status on as the Status card does.
 export function welcomeAnswer(question, answer) {
+  if (question?.trial) {
+    if (!['slow', 'repeat', 'injured', 'later'].includes(answer)) return null;
+    return { patch: answer === 'injured' ? { status: 'injured' } : { trial: answer === 'slow' ? 'slow' : 'repeat' }, easierWeek: false,
+      coach: answer === 'slow' ? L('Dobře. Další 2 tréninky lehce a kratší, pak plán jede dál.', 'Okay. The next 2 sessions easy and shorter, then your plan goes on.')
+        : answer === 'repeat' ? L('Dobře. Příští trénink bude zase zkušební.', 'Okay. Your next session is a trial session again.') : null };
+  }
   if (!question || !WELCOME_ANSWERS.includes(answer)) return null;
   const patch = { gapAsked: question.key };
   if (answer === 'elsewhere' || answer === 'keep') patch.elsewhere = question.key;
