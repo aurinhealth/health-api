@@ -37,7 +37,9 @@ const NEAR = '[^\\S\\n]*(?:[^\\s,.;!?]+[^\\S\\n]+){0,4}';
 const CHEST = new RegExp('(?<!\\p{L})(?:' + CHEST_PART + E + NEAR + CHEST_FEEL + '|' + CHEST_FEEL.replace(E, '') + E + NEAR + CHEST_PART + E + ')', 'iu');
 const GYM_CHEST = /(?:chest|hrud\p{L}*)\s+(?:press|day|fly|flies|workouts?|exercises?|strap|páteř\p{L}*|pater\p{L}*)|(?:bench|tlak\p{L}*)\s+(?:\p{L}+\s+){0,2}(?:na\s+)?hrudník\p{L}*/giu;
 export const heartSymptom = text => { const t = String(text || ''); return HEART.test(t) || CHEST.test(t.replace(GYM_CHEST, ' ')); };
-export const checkDays = text => heartSymptom(text) ? 1 : !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
+// Chest or heart symptoms get no check day: the coach does not ask about them
+// again (R10, Petr 2026-11-26); the athlete clears the memory themselves.
+export const checkDays = text => heartSymptom(text) ? null : !PASSING_WORDS.test(text) ? null : PREGNANCY_WORDS.test(text) ? 90 : ILLNESS_WORDS.test(text) ? 3 : 7;
 
 // The body parts a remembered pain can name, the sports whose intensity it
 // holds back (audit 2026-11-07, point 4: a sore knee gets no run or ride
