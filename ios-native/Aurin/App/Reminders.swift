@@ -71,19 +71,27 @@ enum Reminders {
     static func mealKey(_ id: String) -> String { "remind.meal." + id }
     static func mealTimeKey(_ id: String) -> String { "remind.meal." + id + ".time" }
 
-    /// Off by default: the reminders added later that nobody asked for yet, and
+    /// Off by default: the reminders added later that nobody asked for yet,
     /// water for a new install (Notifications concept v3: water has its own
-    /// widget and control; adoptNewDefaults keeps it on where it already was).
-    private static let offByDefault = Set([weightKey, waterKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
+    /// widget and control) and the meal nudges for a new install (b09: the
+    /// Food page offers them after the first logged meal). adoptNewDefaults
+    /// keeps water and meals on where they already were.
+    private static let offByDefault = Set([weightKey, waterKey, mealsKey]).union(meals.filter { !$0.on }.map { mealKey($0.id) })
 
     /// Once, at launch: a phone that already used Aurin before water went off
     /// by default keeps its water reminders on (and the server's water push),
     /// unless it turned them off itself.
     static func adoptNewDefaults(_ defaults: UserDefaults = .standard) {
+        let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
+        // b09 (2026-11-26): meals went off for new installs; a phone that used Aurin keeps them on.
+        let mealsDone = "remind.defaults.meals"
+        if !defaults.bool(forKey: mealsDone) {
+            defaults.set(true, forKey: mealsDone)
+            if usedBefore, defaults.object(forKey: mealsKey) == nil { defaults.set(true, forKey: mealsKey) }
+        }
         let done = "remind.defaults.v3"
         guard !defaults.bool(forKey: done) else { return }
         defaults.set(true, forKey: done)
-        let usedBefore = ["push.sentChoices", "push.sentToken", FirstDays.sinceKey, bedtimeKey, mealsKey, workoutKey].contains { defaults.object(forKey: $0) != nil }
         if usedBefore, defaults.object(forKey: waterKey) == nil { defaults.set(true, forKey: waterKey) }
         // The week plan comes on for new installs only (concept v3); a phone that used Aurin keeps it off.
         if usedBefore, defaults.object(forKey: weekKey) == nil { defaults.set(false, forKey: weekKey) }
