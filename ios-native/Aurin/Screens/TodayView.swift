@@ -8,6 +8,9 @@ struct TodayView: View {
     @State private var sharing = false
     /// The free week once after the setup (SetupProOffer), when Today has loaded.
     @State private var proOffer = false
+    @State private var welcome: WelcomeBack?
+    @State private var welcomeWeek: EasierWeek?
+    @State private var askedWelcome = false
     /// The AI features are off: the free week's button allows them.
     @State private var proNeedsAI = false
 
@@ -58,10 +61,23 @@ struct TodayView: View {
         }
         // Decision B (part O): once, when Today is ready after the setup's animation.
         .task(id: model.today != nil && !model.needsSetup) { await offerPro() }
+        // Welcome back after a training gap: the gap question, once per gap (src/coach-gap-checkin.js).
+        .task(id: model.today != nil && !model.needsSetup) { await askWelcomeBack() }
+        .sheet(item: $welcome) { q in WelcomeBackSheet(question: q, week: welcomeWeek) }
         .fullScreenCover(isPresented: $proOffer) {
             PaywallView(close: { proOffer = false },
                         allowAI: proNeedsAI ? { [model] in try await model.api.allowAI(); model.setAIOff(false) } : nil)
         }
+    }
+
+    /// Asked once per app run, never in the demo or before the setup.
+    private func askWelcomeBack() async {
+        guard !askedWelcome, model.today != nil, !model.needsSetup, !model.demo, !model.offline else { return }
+        askedWelcome = true
+        guard let reply = try? await model.api.welcomeBack(), let question = reply.0 else { return }
+        let week = reply.1
+        welcomeWeek = week
+        welcome = question
     }
 
     /// The answer came under the animation, so the offer follows Today in

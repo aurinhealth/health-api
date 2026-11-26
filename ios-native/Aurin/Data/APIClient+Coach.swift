@@ -481,3 +481,52 @@ extension APIClient {
         let _: PinnedExercises = try await send("/app/api/gym/pinned", method: "PUT", body: ["pinned": names])
     }
 }
+
+/// Welcome back after a training gap (src/coach-gap-checkin.js welcomeBack,
+/// Petr 2026-11-26): one question per gap with our statuses in a fixed order,
+/// none preselected, and the easier week after "Took a break" of 14 days or more.
+struct WelcomeBack: Decodable, Identifiable {
+    struct Answer: Decodable, Hashable { let id: String; let label: String }
+    let key: String
+    let days: Int
+    var ended: Bool? = nil
+    let title: String
+    let text: String
+    let answers: [Answer]
+    var outcomes: String? = nil
+    var later: String? = nil
+    var note: String? = nil
+    var id: String { key }
+}
+
+/// The plan's sessions from today with the R2 changes; `was` is the plan's own.
+struct EasierWeek: Decodable, Equatable {
+    struct Row: Decodable, Equatable, Hashable {
+        struct Was: Decodable, Equatable, Hashable { let name: String?; let minutes: Int? }
+        let date: String
+        let sport: String?
+        let name: String?
+        let minutes: Int?
+        var was: Was? = nil
+    }
+    let rows: [Row]
+    let minutes: Int
+    let planMinutes: Int
+}
+
+extension APIClient {
+    /// The question after a gap, or nil (GET /app/api/coach/welcome-back); the
+    /// week comes along when a Rest with an end date ended (no question then).
+    func welcomeBack() async throws -> (WelcomeBack?, EasierWeek?) {
+        struct Response: Decodable { let question: WelcomeBack?; let week: EasierWeek? }
+        let r: Response = try await get("/app/api/coach/welcome-back")
+        return (r.question, r.week)
+    }
+
+    /// Saves the answer once per gap: elsewhere, break, sick, injured, later or keep.
+    func answerWelcomeBack(_ answer: String) async throws -> (String?, EasierWeek?) {
+        struct Response: Decodable { let coach: String?; let week: EasierWeek? }
+        let r: Response = try await send("/app/api/coach/welcome-back", method: "POST", body: ["answer": JSONValue.string(answer)])
+        return (r.coach, r.week)
+    }
+}
