@@ -1545,6 +1545,8 @@
 "minule %@ %@ × %@" = "last time %@ %@ × %@";
 "minule %@ opakování" = "last time %@ reps";
 "Tenhle cvik tu ještě nemáš. Začni lehčí váhou a najdi, co dáš na %@ opakování." = "No history for this exercise yet. Start light and find the weight you can do for %@ reps.";
+"Dnes %@ %@ podle tvých posledních tréninků." = "Today %@ %@, from your recent workouts.";
+"Tenhle cvik zatěžuje místo, které tě bolí. Když to bolí, vynech ho." = "This exercise loads a spot that hurts. If it hurts, leave it out.";
 "Minule %@ × %@ a šlo to. Dnes zkus %@ %@." = "Last time %@ × %@ and it went well. Today try %@ %@.";
 "Minule %@ × %@. Dnes zůstaň na %@ %@ a dotáhni všechna opakování." = "Last time %@ × %@. Today stay at %@ %@ and get all the reps.";
 "Minule %@ opakování a šlo to. Dnes zkus o jedno víc." = "Last time %@ reps and it went well. Today try one more.";
