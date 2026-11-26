@@ -10,17 +10,19 @@ import { KEEP_TYPE_SQL } from '../src/activity-type.js';
 import { BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE } from '../src/heart-rate-compaction.js';
 import { closedDay } from '../src/api-cache.js';
 import { localDate, localToday } from '../src/user-time.js';
+import { HOURLY_TYPES, hourlyFrom, hourlySlots, hourlyId, hourlyRow, minuteRows } from '../src/google-hourly.js';
+import { activityTelemetryEnergy } from '../src/activity-energy-check.js';
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../staging/schema.sql', import.meta.url), 'utf8');
 // Execute the actual persistence functions against SQLite, without provider
 // HTTP calls. Batch tests inject only the provider's field extraction.
-function setup() {
+function setup({ hourly = false } = {}) {
   const raw = createD1();
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
   const afterSync = [], sinces = [], bumps = [];
-  const context = vm.createContext({ closedDay, localDate, localToday, bumpCacheVersion: async () => { bumps.push(1); }, healthPointJson, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
+  const context = vm.createContext({ HOURLY_TYPES: hourly ? HOURLY_TYPES : {}, hourlyFrom, hourlySlots, hourlyId, hourlyRow, closedDay, localDate, localToday, bumpCacheVersion: async () => { bumps.push(1); }, healthPointJson, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']
@@ -189,4 +191,53 @@ test('Google heart rate is stored as 5-minute rows; a re-read writes nothing, a 
   // A workout's own minutes keep every sample.
   await context.saveGooglePointsBatch(env, 'google-wearables', 'heart-rate', [{ name: 'w1', info: { sample: '2026-10-10T07:00:00Z', start: null, end: null, value: 120, unit: 'bpm' } }], { raw: true });
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE data_type = 'heart-rate'").get().n, 1);
+});
+
+test('Google steps, energy and zone minutes from the first hourly hour on are one row an hour with its minutes', async () => {
+  const { raw, env, context } = setup({ hourly: true });
+  raw.sqlite.exec(`INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(1,'google_hourly','ok','{"from":"2026-10-10T10:00:00Z"}',datetime('now'))`);
+  const at = m => new Date(Date.parse('2026-10-10T09:59:00Z') + m * 60000).toISOString().replace('.000Z', 'Z');
+  // A point a minute 09:59–11:59, every third minute 0 steps.
+  const steps = Array.from({ length: 121 }, (_, m) => ({ name: 'steps-' + m, info: { sample: null, start: at(m), end: at(m + 1), value: m % 3 ? 10 : 0, unit: 'count' }, steps: { count: m % 3 ? 10 : 0 } }));
+  const writes = [], originalBatch = raw.batch.bind(raw);
+  raw.batch = async statements => { const results = await originalBatch(statements); writes.push(results.reduce((n, r) => n + Number(r.meta?.changes || 0), 0)); return results; };
+  const rows = () => raw.sqlite.prepare("SELECT external_id, start_time, end_time, value_numeric, payload_json FROM health_datapoints WHERE data_type = 'steps' ORDER BY start_time").all();
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', steps);
+  const first = rows();
+  // The minute before the first hourly hour stays a minute row; then an hour a row.
+  assert.deepEqual(first.map(r => r.external_id), ['steps-0', 'steps1h:2026-10-10T10:00:00Z', 'steps1h:2026-10-10T11:00:00Z']);
+  assert.deepEqual(first.slice(1).map(r => [r.start_time, r.end_time, r.value_numeric]), [['2026-10-10T10:00:00Z', '2026-10-10T11:00:00Z', 400], ['2026-10-10T11:00:00Z', '2026-10-10T12:00:00Z', 400]]);
+  const m = JSON.parse(first[1].payload_json).m;
+  assert.equal(m.length, 60);
+  assert.deepEqual(m.slice(0, 4), [10, 10, 0, 10], 'zero minutes are kept as 0');
+  // The same pages again write nothing; a late change of one minute rewrites only its hour.
+  writes.length = 0;
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', steps.slice(0, 61));
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', steps.slice(61));
+  assert.equal(writes.reduce((a, b) => a + b, 0), 0);
+  steps[70] = { ...steps[70], info: { ...steps[70].info, value: 500 } };
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', [steps[70]]);
+  assert.equal(writes.reduce((a, b) => a + b, 0), 1);
+  assert.equal(rows()[2].value_numeric, 890);
+  assert.deepEqual(JSON.parse(rows()[2].payload_json).m, JSON.parse(first[2].payload_json).m.map((v, k) => k === 9 ? 500 : v), 'the other minutes stay');
+
+  // Zone minutes: a row per hour and zone, as long as its minutes.
+  const zone = (m, z) => ({ name: 'zone-' + m, info: { sample: null, start: at(m), end: at(m + 1), value: null, unit: 'min' }, timeInHeartRateZone: { heartRateZoneType: z } });
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'time-in-heart-rate-zone', [zone(1, 'LIGHT'), zone(2, 'LIGHT'), zone(3, 'MODERATE'), zone(4, 'LIGHT')]);
+  const zones = raw.sqlite.prepare("SELECT external_id, start_time, end_time, value_numeric, json_extract(payload_json, '$.timeInHeartRateZone.heartRateZoneType') z FROM health_datapoints WHERE data_type = 'time-in-heart-rate-zone' ORDER BY external_id").all();
+  assert.deepEqual(zones.map(r => [r.external_id, r.start_time, r.end_time, r.value_numeric, r.z]), [
+    ['zone1h:LIGHT:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:03:00Z', null, 'LIGHT'],
+    ['zone1h:MODERATE:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:01:00Z', null, 'MODERATE']
+  ]);
+});
+
+test('an hour row of Google energy gives the walk calories its minutes back', () => {
+  const m = Array.from({ length: 60 }, (_, k) => k < 30 ? 0 : 2);
+  const row = { start_time: '2026-10-10T10:00:00Z', end_time: '2026-10-10T11:00:00Z', value_numeric: 60, payload_json: JSON.stringify({ activeEnergyBurned: { kcal: 60 }, m }) };
+  const minutes = minuteRows([row]);
+  assert.equal(minutes.length, 60);
+  assert.deepEqual([minutes[30].start_time, minutes[30].end_time, minutes[30].value_numeric], ['2026-10-10T10:30:00Z', '2026-10-10T10:31:00Z', 2]);
+  assert.deepEqual(activityTelemetryEnergy({ start: '2026-10-10T10:15:00Z', end: '2026-10-10T10:45:00Z' }, minutes), { kcal: 30, coverage: 1, source: 'google-active-energy-intervals' });
+  // Without its minutes the hour row is too coarse for a walk.
+  assert.equal(activityTelemetryEnergy({ start: '2026-10-10T10:15:00Z', end: '2026-10-10T10:45:00Z' }, [row]), null);
 });
