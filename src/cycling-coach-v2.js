@@ -132,7 +132,7 @@ function runTemplate(kind,minutes){
 function swimTemplate(kind,minutes){
   const m=Math.max(15,Math.round(minutes||40));
   const templates=L({
-    recovery:{name:"Volné plavání",kind:"recovery",target:"o 12 s na 100 m pomaleji než práh (CSS) a víc",structure:[Math.min(m,30)+" min volně, klidně s piškotem"]},
+    recovery:{name:"Volné plavání",kind:"recovery",target:"o 12 s na 100 m pomaleji než práh (CSS) a víc",structure:[Math.min(m,30)+" min volně, klidně s piškotem (ne při bolesti ramene)"]},
     endurance:{name:"Plynulé plavání",kind:"endurance",target:"o 6–10 s na 100 m pomaleji než práh (CSS)",structure:["200 m rozplavání","2–4× 50 m drily","delší úseky plynule","100 m vyplavání"]},
     tempo:{name:"Plynulé úseky",kind:"tempo",target:"o 3–5 s na 100 m pomaleji než práh",structure:["200 m rozplavání","4–6× 200 m, 20 s pauza","100 m vyplavání"]},
     sweet_spot:{name:"Práh (CSS)",kind:"sweet_spot",target:"prahové tempo (CSS)",structure:["200 m rozplavání","8× 100 m, 15 s pauza","100 m vyplavání"]},
@@ -142,7 +142,7 @@ function swimTemplate(kind,minutes){
     openers:{name:"Aktivace před závodem",kind:"openers",target:"lehce, krátce závodní tempo",structure:["300 m lehce","4× 50 m závodní tempo, 30 s pauza","100 m volně"]},
     race:{name:"Závod",kind:"race",target:"rozplavání 5–10 min",structure:["5–10 min rozplavání","start"]}
   },{
-    recovery:{name:"Easy swim",kind:"recovery",target:"12 s per 100 m slower than threshold (CSS) or more",structure:[Math.min(m,30)+" min easy, a pull buoy is fine"]},
+    recovery:{name:"Easy swim",kind:"recovery",target:"12 s per 100 m slower than threshold (CSS) or more",structure:[Math.min(m,30)+" min easy, a pull buoy is fine (not with a sore shoulder)"]},
     endurance:{name:"Steady swim",kind:"endurance",target:"6–10 s per 100 m slower than threshold (CSS)",structure:["200 m warm-up","2–4× 50 m drills","longer repeats, steady","100 m cool-down"]},
     tempo:{name:"Steady repeats",kind:"tempo",target:"3–5 s per 100 m slower than threshold",structure:["200 m warm-up","4–6× 200 m, 20 s rest","100 m cool-down"]},
     sweet_spot:{name:"Threshold (CSS)",kind:"sweet_spot",target:"threshold pace (CSS)",structure:["200 m warm-up","8× 100 m, 15 s rest","100 m cool-down"]},
@@ -593,6 +593,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // pain blocks hard training (pain-words.js; audit 2026-11-07, point 4).
     const sore=athleteState?.memoryOff?[]:sorePartsFor(sport,athleteState?.memories);
     if(sore.length&&quality()){kind="endurance";adaptations.push(L("bolest "+sore.map(a=>a.label[0]).join(" a ")+" z toho, co si kouč pamatuje: bez intenzity","pain in the "+sore.map(a=>a.label[1]).join(" and ")+" the coach remembers: no intensity"));}
+    // R7 (Petr 2026-11-26): a sore shoulder in the pool: no paddles or pull
+    // buoy, which load it, and a pause from swimming offered; a longer easy
+    // swim the athlete chooses stays theirs.
+    if(sport==="swim"&&sore.some(a=>a.id==="shoulder"))adaptations.push(L("bolest ramene: bez packelí a piškotu; plavání můžeš na pár dní vynechat","sore shoulder: no paddles or pull buoy; you can also take a few days off swimming"));
     // R6 (Petr 2026-11-26): easy days after the main race, only a
     // recommendation the athlete's "harder" ends (insisted): run 5 and 10 km
     // none, half marathon 5 days, marathon 14, ultra 21; a ride under 2 h none,

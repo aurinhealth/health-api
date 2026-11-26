@@ -164,3 +164,12 @@ test("R5: as many easy days as sick days after Nemoc, at least 2, at most 7", as
   assert.ok(easy.recommendation.adaptations.some(a => /1\. den z 3 po nemoci/.test(a)));
   assert.equal(coach({ sickReturn: { day: 1, of: 3 }, goal: { focus: "threshold", asked: true, chat: true, insisted: true } }).recommendation.session.kind, "threshold", "insisted: the athlete's call");
 });
+
+test("R7: a sore shoulder in the pool: no paddles or pull buoy, a pause offered, long easy swims stay", () => {
+  const swim = args => coach({ sport: "swim", athleteState: { status: "active", memories: ["bolí mě rameno"] }, ...args });
+  const easy = swim();
+  assert.ok(!hard.includes(easy.recommendation.session.kind), easy.recommendation.session.kind);
+  assert.ok(easy.recommendation.adaptations.some(a => /bez packelí a piškotu; plavání můžeš na pár dní vynechat/.test(a)));
+  assert.equal(swim({ goal: { focus: "long_endurance" } }).recommendation.session.kind, "long_endurance", "a longer swim stays");
+  assert.ok(!coach({ sport: "swim" }).recommendation.adaptations.some(a => /packelí/.test(a)), "no shoulder pain, no note");
+});

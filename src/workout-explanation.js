@@ -212,14 +212,14 @@ function swimRows(structure, { swimPace }) {
 }
 
 const SWIM_HOW_CS = {
-  recovery: ["Úplně volně, dýchej pravidelně, klidně s piškotem.", "Mysli na dlouhý záběr a uvolněná ramena."],
+  recovery: ["Úplně volně, dýchej pravidelně, klidně s piškotem, jen ne při bolesti ramene.", "Mysli na dlouhý záběr a uvolněná ramena."],
   endurance: ["Plynule, tempo o 6–10 s na 100 m pomaleji než práh; mluvit by po úseku šlo.", "Všechny úseky stejně rychle, první nepřepal."],
   threshold: ["Úseky v prahovém tempu (CSS): těžké, ale udržitelné, poslední úsek stejně rychlý jako první.", "Krátké pauzy u stěny, nezačínej rychleji, než máš."],
   vo2max: ["Rychle, ale s technikou: když se záběr rozpadá, zpomal.", "Delší pauzy u stěny jsou součást tréninku."],
   sprint: ["Krátce naplno, s plnou pauzou.", "Silný záběr a rychlé nohy, hlava dole."]
 };
 const SWIM_HOW_EN = {
-  recovery: ["Completely easy, breathe regularly, a pull buoy is fine.", "Think of a long stroke and relaxed shoulders."],
+  recovery: ["Completely easy, breathe regularly, a pull buoy is fine unless your shoulder hurts.", "Think of a long stroke and relaxed shoulders."],
   endurance: ["Steady, 6–10 s per 100 m slower than threshold; you could talk after a repeat.", "Every repeat at the same speed, don't overcook the first."],
   threshold: ["Repeats at threshold pace (CSS): hard but sustainable, the last one as fast as the first.", "Short rests at the wall; don't start faster than your pace."],
   vo2max: ["Fast but with technique: if your stroke falls apart, slow down.", "The longer rests at the wall are part of the session."],

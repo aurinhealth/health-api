@@ -43,7 +43,7 @@ function catalog(t) {
   // CSS: threshold repeats with short rests.
   add("swim-css", "threshold", [[6, 100], [8, 100], [10, 100], [4, 200], [5, 200], [6, 200], [3, 400]],
     ([r, m]) => t(`Práh ${r}×${m} m`, `Threshold ${r}×${m} m`),
-    ([r, m]) => [...WU, drills(2), set(r, m, 100, m >= 400 ? 30 : m >= 200 ? 20 : 15, t("prahové tempo (CSS)", "threshold pace (CSS)")), swim(200, 86, t("volně, piškot", "easy, pull buoy")), ...CD],
+    ([r, m]) => [...WU, drills(2), set(r, m, 100, m >= 400 ? 30 : m >= 200 ? 20 : 15, t("prahové tempo (CSS)", "threshold pace (CSS)")), swim(200, 86, t("volně, piškot (ne při bolesti ramene)", "easy, pull buoy (not with a sore shoulder)")), ...CD],
     t("Úseky v prahovém tempu s krátkou pauzou: naučí tě držet rychlost i unavený.", "Repeats at threshold pace with short rests teach you to hold speed when tired."), ["css"]);
   // Speed: short fast repeats with full rests.
   add("swim-speed", "vo2max", [[8, 50], [10, 50], [12, 50], [6, 100], [8, 100]],
@@ -57,7 +57,7 @@ function catalog(t) {
   // Recovery: easy swimming, partly with a pull buoy.
   add("swim-recovery", "recovery", [[600], [800], [1000], [1200]],
     ([m]) => t(`Volné plavání ${m} m`, `Easy swim ${m} m`),
-    ([m]) => [swim(m / 2, 84, t("volně", "easy")), swim(m / 2, 84, t("volně, piškot", "easy, pull buoy"))],
+    ([m]) => [swim(m / 2, 84, t("volně", "easy")), swim(m / 2, 84, t("volně, piškot (ne při bolesti ramene)", "easy, pull buoy (not with a sore shoulder)"))],
     t("Lehké plavání: uvolní ramena a záda po náročnějších dnech.", "Easy swimming loosens shoulders and back after harder days."), ["recovery"]);
   // Continuous swims: the goal of the swim plans ("400 m without stopping", "1,500 m").
   // 2–4 km: the long swim of the open-water race plan (about 80 % of the race).
