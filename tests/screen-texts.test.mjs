@@ -48,6 +48,7 @@ test("the AI is asked once per day state; the same state answers from the cache"
   const load = async () => { loaded++; return today(); };
   const first = await screenText(env, { screen: "today", load, ask });
   assert.equal(first.source, "ai");
+  assert.equal(first.aiGenerated, true, "AI Act art. 50(2): machine-readable mark");
   assert.equal(first.text, "Spal jsi 6 h 40, o 50 minut méně než potřebuješ.");
   assert.equal(first.advice, "Drž tep pod 135.");
   assert.deepEqual(first.chips, ["Klidový tep 49"]);
@@ -75,6 +76,7 @@ test("busy AI slots: the screen gives its own words at once and asks again next 
   const ask = async (_env, req) => { asked++; seen = req; if (busy) throw Object.assign(new Error("Other AI requests are still running."), { busy: true }); return { text: JSON.stringify({ text: "Spal jsi 6 h 40.", advice: "" }) }; };
   const first = await screenText(env, { screen: "today", load: async () => today(), ask });
   assert.equal(first.source, "rules");
+  assert.equal(first.aiGenerated, undefined, "rule text is not marked as AI");
   assert.equal(seen.slotWaitMs, SLOT_WAIT_MS);
   assert.ok(SLOT_WAIT_MS <= 5000);
   // Not marked as failed: the next opening asks the AI again.

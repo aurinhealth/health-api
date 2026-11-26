@@ -96,7 +96,7 @@ export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = 
     const reason = String(parsed?.reason || "").trim().slice(0, 300);
     if (!chosen || !reason) return generated;
     const rest = [generated.workout, ...(generated.alternatives || [])].filter(w => w.id !== chosen.id).slice(0, 3);
-    return { ...generated, workout: { ...chosen, ai: { reason } }, alternatives: rest, ai: { reason } };
+    return { ...generated, workout: { ...chosen, ai: { reason, aiGenerated: true } }, alternatives: rest, ai: { reason, aiGenerated: true } };
   } catch (error) {
     if (!error?.ai) console.error("Workout pick AI failed", error?.message || error);
     return generated;

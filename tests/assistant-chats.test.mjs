@@ -130,3 +130,10 @@ test('search finds a word only in the athlete\'s own chats, newest message per c
   assert.ok(s.startsWith('…')&&s.endsWith('…')&&s.includes('target')&&s.length<170,s);
   assert.equal(searchSnippet('[Fotka] **Protein** after gym','protein'),'Protein after gym');
 });
+
+test('a stored coach answer keeps the model that wrote it, the athlete\'s message none (AI Act art. 50(2))',async()=>{
+  const raw=createD1(),db=scopedDb(raw,1);
+  const {chatId}=await appendChatTurnIds(db,null,'Jak dnes?','Lehce.',{model:'gpt-6.2-sol'});
+  const rows=(await raw.prepare('SELECT role,model FROM assistant_messages WHERE chat_id=? ORDER BY id').bind(chatId).all()).results;
+  assert.deepEqual(rows.map(r=>[r.role,r.model]),[['user',null],['assistant','gpt-6.2-sol']]);
+});

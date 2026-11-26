@@ -70,7 +70,7 @@ export function assistantStreamResponse(work,{waitUntil=null}={}){
     start(controller){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
       const done=(async()=>{
-        try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}),chatId=>send({type:'chat',chatId}),step=>send({type:'step',step}));send({type:'done',result});}
+        try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer,aiGenerated:true}),message=>send({type:'progress',message}),chatId=>send({type:'chat',chatId}),step=>send({type:'step',step}));send({type:'done',result});}
         // The reason with the text (617 #6: a suggested question got only "Couldn't get an
         // answer"), and the log says which kind and step failed, so it can be found.
         catch(error){console.error('Streaming assistant failed',failureReason(error),error?.name||'',error?.status??'',error?.message);send({type:'error',message:coachFailureText(error),reason:failureReason(error)});}

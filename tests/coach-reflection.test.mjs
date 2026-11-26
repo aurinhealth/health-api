@@ -79,6 +79,7 @@ test("the note is stored per user; AI writes it when a key is set", async () => 
     const e = env("sk-test");
     const r = await createReflection(e, { date: DATE, workoutId: "w1", rpe: 7, notes: "těžké nohy" }, load);
     assert.equal(r.source, "ai");
+    assert.equal(r.aiGenerated, true, "AI Act art. 50(2)");
     assert.match(request.url, /openai\.com/);
     assert.match(request.body.input, /unusual_before/);
     assert.match(request.body.input, /těžké nohy/);
@@ -95,6 +96,7 @@ test("an AI failure or a missing key falls back to the rule-based note", async (
   try {
     assert.equal((await createReflection(env("sk-test"), { date: DATE, rpe: 7 }, load)).source, "rules");
     assert.equal((await createReflection(env(undefined), { date: DATE, rpe: 7 }, load)).source, "rules");
+    assert.equal((await createReflection(env(undefined), { date: DATE, rpe: 7 }, load)).aiGenerated, undefined, "rule note is not marked as AI");
   } finally { globalThis.fetch = original; }
 });
 

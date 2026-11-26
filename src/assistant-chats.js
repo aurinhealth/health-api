@@ -21,6 +21,9 @@ export async function ensureAssistantChats(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS assistant_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
   if (!withGhost.has(db)) {
     await db.prepare('ALTER TABLE assistant_chats ADD COLUMN ghost INTEGER NOT NULL DEFAULT 0').run().catch(() => { /* already there */ });
+    // The model that wrote an answer (AI Act art. 50(2): the stored record
+    // says the text is AI-generated and by which model; review 2026-11-25).
+    await db.prepare('ALTER TABLE assistant_messages ADD COLUMN model TEXT').run().catch(() => { /* already there */ });
     withGhost.add(db);
   }
 }
@@ -64,7 +67,7 @@ const newChat = (db, message, ghost) => db.prepare('INSERT INTO assistant_chats(
 
 // The same, with the id of the stored answer: the copy and thumbs under it
 // point to it (saveAnswerFeedback), and the coach's proposals too.
-export async function appendChatTurnIds(db, chatId, message, answer, { ghost = false } = {}) {
+export async function appendChatTurnIds(db, chatId, message, answer, { ghost = false, model = null } = {}) {
   await ensureAssistantChats(db);
   let chat = await ownedChat(db, chatId);
   if (ghost && ghostChatGone(chat, chatId)) return { chatId: null, messageId: null };
@@ -72,8 +75,8 @@ export async function appendChatTurnIds(db, chatId, message, answer, { ghost = f
     const created = await newChat(db, message, ghost);
     chat = { id: created.meta?.last_row_id };
   }
-  const insert = (role, content) => db.prepare('INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,?,?)').bind(chat.id, db.userId, role, String(content || '').slice(0, MAX_CONTENT));
-  const results = await db.batch([insert('user', message), insert('assistant', answer), db.prepare('UPDATE assistant_chats SET updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(db.userId, chat.id)]);
+  const insert = (role, content, by = null) => db.prepare('INSERT INTO assistant_messages(chat_id,user_id,role,content,model) VALUES(?,?,?,?,?)').bind(chat.id, db.userId, role, String(content || '').slice(0, MAX_CONTENT), by);
+  const results = await db.batch([insert('user', message), insert('assistant', answer, model ? String(model).slice(0, 80) : null), db.prepare('UPDATE assistant_chats SET updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(db.userId, chat.id)]);
   const messageId = Number(results?.[1]?.meta?.last_row_id) || null;
   return { chatId: chat.id, messageId };
 }

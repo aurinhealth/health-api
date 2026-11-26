@@ -132,7 +132,7 @@ export async function adjustGymPlan(env, { rows, request, history = [], taste = 
   const r = ask ? await ask(env, { feature: "gym-adjust", ...params }) : await callOpenAI(env, { feature: "gym-adjust", ...params });
   const data = JSON.parse(r.text), out = fitGymMinutes(snapGymDumbbells(fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history, today), dumbbells), minutes);
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));
-  return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };
+  return { rows: out, answer: String(data.answer || '').trim().slice(0, 400), aiGenerated: true };
 }
 
 export { MAX_EXERCISES };

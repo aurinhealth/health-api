@@ -117,7 +117,7 @@ export async function readFoodPhotoWithAI(env, { image, mode = "label", language
     format: FOOD_PHOTO_SCHEMA, maxOutputTokens: 1500,
     model: env.OPENAI_VISION_MODEL || lightModel(env)
   });
-  return { result: photoResultFromAnswer(r.text, kind), model: r.model };
+  return { result: { ...photoResultFromAnswer(r.text, kind), aiGenerated: true }, model: r.model };
 }
 
 // ---- The number under a barcode, when the camera cannot decode the bars ----
