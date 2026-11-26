@@ -87,7 +87,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment, MAX_MINUTES } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, addWeekEvent, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree, pruneCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-checkin.js';
@@ -2830,6 +2830,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         for(const s of bodySteps({date,inputs}))step(s);
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,experience,experienceLevels,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:chatSport,appContext:selected.appContext,message,dayMinutes:availabilityOn(prefs,date).minutes??null,now:localNow(),availabilityByDate:safety.availabilityByDate});
         if(history)coachCtx.history=history;
+        // The athlete's other sports and their practices and matches ahead (Plan settings);
+        // only an app that shows the card (API level 4) gets one to add.
+        const ownSports=(inputs.profile?.otherSports||[]).filter(isOtherSport);
+        if(ownSports.length){
+          coachCtx.otherSports={sports:ownSports.map(type=>({type,name:typeName(type)})),planned:selected.week.days.filter(d=>d.date>=date).flatMap(d=>((plans.get(mondayOfDate(d.date))?.events||[])[(new Date(d.date+'T12:00:00Z').getUTCDay()+6)%7]||[]).map(e=>({date:d.date,type:e.type,name:typeName(e.type),kind:e.kind,minutes:e.minutes})))};
+          if(Number(appApiLevel(request)??body.appApi)>=4)coachCtx.otherEventCards=true;
+        }
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
@@ -3029,6 +3036,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
       // "Plan around your knee?" is a card of the redesign app (API level 3) only.
       if(!(Number(appApiLevel(request))>=3))chat.actions=chat.actions.filter(a=>a.type!=='plan_around');
+      if(!(Number(appApiLevel(request))>=4))chat.actions=chat.actions.filter(a=>a.type!=='other_event');
       // The chips of a server question under the chat's last coach message, until one is tapped (coach-questions.js).
       const lastCoach=chat.messages.filter(m=>m.role==='assistant').at(-1);
       const chips=lastCoach&&chat.messages.at(-1)===lastCoach?await questionChips(env.DB,chat.id,lastCoach.id).catch(()=>[]):[];
@@ -3091,6 +3099,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
           result={status:'ok',date:a.date,values,...await gymUndo(env,draft,latest.values,values,row.id)};
+        }
+        else if(a.type==='other_event'){
+          if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Do minulého dne už nelze přidat sport.', 'You can\'t add a sport to a past day.'));
+          result={date:a.date,prefs:await addWeekEvent(env.DB,a.date,{type:a.otherType,kind:a.eventKind,minutes:a.minutes})};await bumpCacheVersion(env.DB);
         }
         else if(a.type==='week_sport'){
           assertTrainingAllowed(await getAthleteState(env.DB));
@@ -3173,7 +3185,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),other_event:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }

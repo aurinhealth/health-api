@@ -199,6 +199,18 @@ export async function addWeekSport(db,date,sport) {
   return saveWeekPlan(db,prefs,date);
 }
 
+// The athlete's own practice or match on `date`, that week only (the coach's
+// card in the chat); a sport the day already holds gets the new kind and length.
+export async function addWeekEvent(db, date, event) {
+  const [clean] = sanitizeEvents([[event]]);
+  if (!validDay(date) || !clean.length) throw new Error(L('Neplatný den nebo sport.', 'Invalid day or sport.'));
+  const prefs = await getWeekPlan(db, date, { calendar: false }), weekday = (new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7;
+  const day = (prefs.events?.[weekday] || []).filter(e => e.type !== clean[0].type);
+  if (day.length >= MAX_EVENTS_PER_DAY) throw new Error(L('Ten den už má dva vlastní sporty.', 'That day already has two of your own sports.'));
+  prefs.events = Array.from({ length: 7 }, (_, i) => i === weekday ? [...day, clean[0]] : prefs.events?.[i] || []);
+  return saveWeekPlan(db, prefs, date);
+}
+
 export async function resetWeekPlan(db, date) {
   await ensureWeekOverrides(db);
   await db.prepare('DELETE FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).run();
