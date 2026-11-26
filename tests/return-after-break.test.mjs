@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { readinessCheckin } from "../src/morning-checkin.js";
+import { readinessCheckin, journalSickReturn } from "../src/morning-checkin.js";
 import { saveJournalEntry, getJournalSettings } from "../src/journal-store.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { rankOptions } from "../src/coach-pick.js";
@@ -145,4 +145,22 @@ test("R6: easy days after the main race as a suggestion, the race not the longes
   assert.ok(!hard.includes(after.recommendation.session.kind), after.recommendation.session.kind);
   assert.ok(after.recommendation.adaptations.some(a => /2\. den po závodě z 2/.test(a)));
   assert.equal(coach({ week: raced, focus: { pastRace: { date: day(-3), daysAgo: 3, sport: "ride", km: 90 } } }).recommendation.session.kind, "threshold", "3 h race: 2 days only");
+});
+
+test("R5: as many easy days as sick days after Nemoc, at least 2, at most 7", async () => {
+  const raw = createD1(), db = scopedDb(raw, 5), settings = await getJournalSettings(db);
+  assert.equal(await journalSickReturn(db, date), null, "no journal table yet");
+  for (const o of [-6, -5, -4]) await saveJournalEntry(db, settings, { date: day(o), key: "sick", answer: 1 });
+  // Sick -6..-4, -3 still sick (the day after a tick), -2 is easy day 1 of 3.
+  assert.deepEqual(await journalSickReturn(db, day(-3)), null, "the day after the last tick is still a sick day");
+  assert.deepEqual(await journalSickReturn(db, day(-2)), { day: 1, of: 3 });
+  assert.deepEqual(await journalSickReturn(db, date), { day: 3, of: 3 });
+  assert.equal(await journalSickReturn(db, day(1)), null, "after the easy days, as usual");
+  const one = scopedDb(raw, 7), s7 = await getJournalSettings(one);
+  await saveJournalEntry(one, s7, { date: day(-3), key: "sick", answer: 1 });
+  assert.deepEqual(await journalSickReturn(one, date), { day: 2, of: 2 }, "one sick day still gives 2");
+  const easy = coach({ sickReturn: { day: 1, of: 3 } });
+  assert.ok(!hard.includes(easy.recommendation.session.kind), easy.recommendation.session.kind);
+  assert.ok(easy.recommendation.adaptations.some(a => /1\. den z 3 po nemoci/.test(a)));
+  assert.equal(coach({ sickReturn: { day: 1, of: 3 }, goal: { focus: "threshold", asked: true, chat: true, insisted: true } }).recommendation.session.kind, "threshold", "insisted: the athlete's call");
 });

@@ -90,7 +90,7 @@ import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, addWeekEvent, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvTrend, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes, playedCheck } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree, pruneCalendarFree } from './calendar-free.js';
-import { getCheckin, readinessCheckin, saveCheckin, feelingOf } from './morning-checkin.js';
+import { getCheckin, readinessCheckin, saveCheckin, feelingOf, journalSickReturn } from './morning-checkin.js';
 import { HISTORY_DAYS, nutritionDayOf, nutritionDayOfToday, saveNutritionDay, loadFoodHistory, buildFoodHistory } from './nutrition-days.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { saveSportChoice, sportExclusion, suggestedSports } from './sport-choice.js';
@@ -1603,7 +1603,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const training=trainingSetup(env.DB);
   const extras=Promise.all([dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
     date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null,sportReturns(env.DB,env.USER_ID,date).catch(()=>null),
-    getAthleteState(env.DB),journalForCoach(env.DB,date).catch(()=>null),getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),feelingOf(env.DB,date).catch(()=>null)]);
+    getAthleteState(env.DB),journalForCoach(env.DB,date).catch(()=>null),getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),feelingOf(env.DB,date).catch(()=>null),journalSickReturn(env.DB,date).catch(()=>null)]);
   // Awaited below; a failure before that is not left unhandled.
   weeksLoading.catch(()=>{});extras.catch(()=>{});training.catch(()=>{});
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
@@ -1612,11 +1612,11 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
     coachSleep(env,ctx,internalAuth,date).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
-  const [daily,fitness,gym,sleep,[profile,fluids,checkin,doses,returns,athleteState,journal,nextTest,feeling],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
+  const [daily,fitness,gym,sleep,[profile,fluids,checkin,doses,returns,athleteState,journal,nextTest,feeling,sickReturn],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
   applyEnergyBudget(daily,profile,health);
   // Regenerace of today, as Today shows it (recovery-time.js).
   const regeneration=doses?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),doses,athleteState?.status).recoveryTime??null:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile,training),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,feeling,recoveryTime:regeneration,returns,journal,upcomingTest:nextTest};
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:await coachProfile(env,profile,training),athleteState,cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,feeling,recoveryTime:regeneration,returns,journal,upcomingTest:nextTest,sickReturn};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities

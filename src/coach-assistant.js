@@ -274,7 +274,7 @@ export function recoveryForCoach(r) {
   };
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null,feeling=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, experience=null, experienceLevels=null, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,appContext=null,message='',dayMinutes=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null,returns=null,sickReturn=null,feeling=null}) {
   const strengthSince=shiftDay(date,-14);
   const rw=raceWeek({focus,thresholdPace:thresholds?.runThresholdPace??null,ftp:thresholds?.ftp??null,swimCss:thresholds?.swimCss??null,weightKg:daily?.weight?.current??null,experience});
   const race=rw?{race:rw.race,fuel:rw.fuel.rows.map(r=>({when:r.when,title:r.title,text:r.text})),...(rw.pacing?{pacing:{line:rw.pacing.line,segments:rw.pacing.segments.map(x=>({from:x.fromKm??x.fromM,to:x.toKm??x.toM,unit:x.fromKm!=null?'km':'m',value:x.paceText||x.wattsText,cue:x.cue})),...(rw.pacing.climb?{climb:rw.pacing.climb}:{})}}:{})}:null;
@@ -293,7 +293,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   const engine = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,experience,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime,returns
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,experience,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime,returns,sickReturn
   });
   // One place for every caller (chat, week planning, coach evaluation): a
   // strength athlete's day is a gym day unless a ride, run or swim is asked or planned.

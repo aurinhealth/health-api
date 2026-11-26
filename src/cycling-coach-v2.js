@@ -277,7 +277,7 @@ export function engineForAI(engine,{cycleShared=false}={}){
   return out;
 }
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null,sickReturn=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"||sport==="swim"?sport:"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:sport==="swim"?isSwim:isRide,hardOf=sport==="run"?isHardRun:sport==="swim"?isHardSwim:isHard,run=sport==="run",swim=sport==="swim",short=run||swim;
@@ -603,6 +603,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       const easyDays=sport==="run"?(pr.km<=15?0:pr.km<=30?5:pr.km<=45?14:21):raceHours<2?0:raceHours<=4?2:3;
       if(pr.daysAgo>=1&&pr.daysAgo<=easyDays&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(pr.daysAgo+". den po závodě z "+easyDays+": lehce (doporučení, jde změnit na těžší)","day "+pr.daysAgo+" of "+easyDays+" after your race: easy (a suggestion, you can ask for harder)"));}
     }
+    // R5 (Petr 2026-11-26): the easy days after Nemoc in the Journal
+    // (morning-checkin.js journalSickReturn), a recommendation like R6.
+    if(sickReturn&&!insisted&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(sickReturn.day+". den z "+sickReturn.of+" po nemoci: lehce (doporučení, jde změnit na těžší)","day "+sickReturn.day+" of "+sickReturn.of+" after being sick: easy (a suggestion, you can ask for harder)"));}
     if(quality()&&!insisted){
       const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?(breakGap>=28?L("po pauze delší než 4 týdny: intenzita až po 3 trénincích a týdnu","back after more than 4 weeks off: intensity after 3 sessions and a week"):L("po pauze delší než 2 týdny: intenzita až po 2 trénincích","back after more than 2 weeks off: intensity after 2 sessions")):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
