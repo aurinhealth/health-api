@@ -1,4 +1,5 @@
 import { activityTelemetryEnergy } from './activity-energy-check.js';
+import { minuteRows } from './google-hourly.js';
 import { pickBuckets, BUCKET_SECONDS } from './heart-rate-compaction.js';
 
 // A workout typed in afterwards (Zapsat trénink): the heart rate the watch
@@ -18,7 +19,7 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
       WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 20 AND 250 GROUP BY bucket`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n FROM health_datapoints
       WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
-    db.prepare(`SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
+    db.prepare(`SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
       AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);
   // Per 5 minutes the samples (a workout's own) or the stored row, which holds the
@@ -28,7 +29,7 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
   const count = parts.reduce((s, r) => s + r.n, 0);
   const avgHr = count ? Math.round(parts.reduce((s, r) => s + r.avg * r.n, 0) / count) : null;
   const maxHr = parts.length ? Math.round(Math.max(...parts.map(r => r.max || r.avg))) : null;
-  const measured = activityTelemetryEnergy({ start: iso(from), end: iso(to) }, energy);
+  const measured = activityTelemetryEnergy({ start: iso(from), end: iso(to) }, minuteRows(energy));
   const minutes = (to - from) / 60000;
   const kcal = measured?.kcal ?? heartRateKcal({ avgHr, minutes, weightKg, age: profile.age, sex: profile.sex });
   return { avgHr, maxHr, samples: count, kcal, kcalSource: measured ? 'energy' : kcal != null ? 'heart-rate' : null };

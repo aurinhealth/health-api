@@ -21,6 +21,7 @@ import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync, ownActiveTime } from "./apple-health.js";
+import { HOURLY_TYPES, hourlyFrom, hourlySlots, hourlyId, hourlyRow, minuteRows } from "./google-hourly.js";
 import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE, WORKOUT_HEART_RATE_TYPE, WORKOUT_HEART_RATE_STEP } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { bumpCacheVersion, closedDay } from "./api-cache.js";
@@ -880,16 +881,25 @@ async function saveGooglePointsBatch(env, family, type, points, { raw = false } 
   // 2026-10-31 with ~140 rows really changed an hour), so the stored rows are
   // read first, ~90 ids a query on the unique index, and only new or changed
   // points are written.
-  const rows = points.map(point => {
+  // Steps, active energy and zone minutes: one row an hour (google-hourly.js).
+  let hourly = null, minutePoints = points;
+  if (family === "google-wearables" && HOURLY_TYPES[type]) {
+    const split = hourlySlots(type, points, point => googleInfo(type, point), await hourlyFrom(env.DB, env.USER_ID));
+    hourly = split.hours;
+    minutePoints = split.rest;
+  }
+  const rows = minutePoints.map(point => {
     const i = googleInfo(type, point);
     return { point, i, id: point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`, payload: healthPointJson(point) };
   });
   const stored = new Map();
-  const ids = [...new Set(rows.map(r => r.id))];
+  const ids = [...new Set([...rows.map(r => r.id), ...[...(hourly?.values() || [])].map(entry => hourlyId(type, entry))])];
   const reads = [];
   for (let k = 0; k < ids.length; k += 90) reads.push(env.DB.prepare(`SELECT external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints
     WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id IN (${ids.slice(k, k + 90).map(() => '?').join(',')})`).bind(env.USER_ID, family, type, ...ids.slice(k, k + 90)));
   for (let k = 0; k < reads.length; k += 50) for (const result of await env.DB.batch(reads.slice(k, k + 50))) for (const row of result?.results || []) stored.set(row.external_id, row);
+  for (const entry of hourly?.values() || []) rows.push(hourlyRow(type, entry, stored.get(hourlyId(type, entry))?.payload_json));
+  if (!rows.length) return 0;
   // As the upsert's own check (IS NOT): a number stored from a numeric string is equal.
   const same = (a, b) => (a ?? null) === (b ?? null) || (typeof a === 'number' && b !== '' && b != null && Number(b) === a);
   const changedRows = rows.filter(({ id, i, payload }) => {
@@ -2079,7 +2089,7 @@ async function energyForDate(env, date) {
   const edited=a=>mark(a.payload,'Kcal')!=null;
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
-    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
+    const telemetry=minuteRows((await env.DB.prepare("SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,new Date(Date.parse(dayStart)-3600000).toISOString(),dayEnd).all().catch(()=>({results:[]}))).results||[]);
     for(const activity of walking){
       const checked=walkingEnergyCheck(activity,weight?.value_numeric),measured=activityTelemetryEnergy(activity,telemetry);
       activity.reportedCalories=activity.calories;
