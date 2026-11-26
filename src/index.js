@@ -1051,8 +1051,9 @@ export async function workoutHeartRate(env,token,fetchImpl=fetch){
     // About one value a minute is enough for the chart and the zones.
     if(points(stored?.payload_json)>=(end-start)/60e3)continue;
     const t0=Math.floor(start/1000),bins=Array.from({length:Math.ceil((end-start)/1000/step)},()=>[0,0]);
+    // A 6-hour workout at a sample a second is ~22 pages of 1,000.
     let pageToken=null;
-    for(let i=0;i<10;i++){
+    for(let i=0;i<25;i++){
       const params=new URLSearchParams({dataSourceFamily:'users/me/dataSourceFamilies/google-wearables',filter:`heart_rate.sample_time.physical_time >= "${iso(start)}" AND heart_rate.sample_time.physical_time < "${iso(end)}"`,pageSize:'1000'});
       if(pageToken)params.set('pageToken',pageToken);
       const response=await fetchImpl('https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});

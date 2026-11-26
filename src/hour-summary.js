@@ -70,9 +70,15 @@ export async function rebuildHourSummary(db, userId, from, to) {
     ]);
     return changed.length + old.size;
   }
-  const statements = changed.map(r => db.prepare(`INSERT INTO health_hour_summary (user_id, hour, source_family, ${COLUMNS.join(', ')}) VALUES (?, ?, ?, ${COLUMNS.map(() => '?').join(', ')})
-      ON CONFLICT (user_id, hour, source_family) DO UPDATE SET ${COLUMNS.map(c => `${c} = excluded.${c}`).join(', ')}`).bind(userId, r.hour, r.source_family, ...COLUMNS.map(c => r[c] ?? null)));
-  for (const r of old.values()) statements.push(db.prepare('DELETE FROM health_hour_summary WHERE user_id = ? AND hour = ? AND source_family = ?').bind(userId, r.hour, r.source_family));
+  // Each hour is summed again inside its own statement, so a sync that wrote the
+  // hour meanwhile is not overwritten with the sums read above, and an hour is
+  // deleted only while it still has no raw row.
+  const plusHour = hour => new Date(Date.parse(hour) + 3600e3).toISOString().replace('.000Z', 'Z');
+  const statements = changed.map(r => db.prepare(`INSERT INTO health_hour_summary (user_id, hour, source_family, ${COLUMNS.join(', ')}) SELECT ?, * FROM (${aggregate}) WHERE source_family = ?
+      ON CONFLICT (user_id, hour, source_family) DO UPDATE SET ${COLUMNS.map(c => `${c} = excluded.${c}`).join(', ')}`).bind(userId, userId, r.hour, plusHour(r.hour), r.source_family));
+  for (const r of old.values()) statements.push(db.prepare(`DELETE FROM health_hour_summary WHERE user_id = ? AND hour = ? AND source_family = ?
+      AND NOT EXISTS (SELECT 1 FROM health_datapoints WHERE user_id = ? AND source_family = ? AND data_type IN (${SUMMARY_TYPES.map(t => `'${t}'`).join(', ')}) AND start_time >= ? AND start_time < ?)`)
+    .bind(userId, r.hour, r.source_family, userId, r.source_family, r.hour, plusHour(r.hour)));
   if (statements.length) await db.batch(statements);
   return statements.length;
 }
