@@ -17,7 +17,7 @@ test('race week of a half: the numbers come from the rules, the fuel from carbsP
   assert.equal(w.race.estimate, '1 h 48 min');
   const race = w.fuel.rows.find(r => r.when === 'race');
   assert.equal(race.perHour, perHour);
-  assert.deepEqual(race.gelsAt, [40, 80], 'a 25 g gel every 1500 / 40 g/h minutes');
+  assert.deepEqual(race.gelsAt, [30, 60, 90], 'a 25 g gel every 1500 / 50 g/h minutes');
   assert.equal(w.fuel.rows[0].text, 'about 560 g of carbs (8 g per kg), early dinner, little fibre');
   assert.equal(w.fuel.rows.find(r => r.when === 'breakfast').text, 'about 110 g of carbs, two hours before the start');
   assert.match(w.fuel.note, /^Estimates, not medical advice/);

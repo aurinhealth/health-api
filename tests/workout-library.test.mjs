@@ -133,10 +133,10 @@ test("the planned event reads like IcuSync: kinds, one focus line with watts, ca
   const w = byId("pfd-vo2-5x4x112-90");
   const event = buildIntervalsEvent(w, "2026-10-19", "indoor", { thresholds: { ftp: 260, indoorFtp: 260 }, startTime: "20:00" });
   assert.equal(event.start_date_local, "2026-10-19T20:00:00");
-  assert.equal(event.carbs_per_hour, 75);
+  assert.equal(event.carbs_per_hour, 60);
   const [focus, , steps] = event.description.split("\n");
   assert.match(focus, /^Zaměření: VO2max na trenažéru, 90 min\. Hlavní část: 5× 4 min na 112 % FTP \(≈ 291 W\)/);
-  assert.match(focus, /Sacharidy cca 75 g\/h\.$/);
+  assert.match(focus, /Sacharidy cca 60 g\/h\.$/);
   assert.equal(steps, "Warmup");
   assert.doesNotMatch(event.description, /ERG|ventilátor/);
   assert.match(event.description, /Main Set 5x\n- 4m 112% .*intensity=interval/);
@@ -152,12 +152,20 @@ test("carbs per hour grow with the kind of session and its length", () => {
     assert.equal(carbsPerHour(30, system), null, system);
     assert.equal(carbsPerHour(45, system), null, system);
   }
-  assert.equal(carbsPerHour(60, "endurance"), 40);
-  assert.equal(carbsPerHour(90, "sweet_spot"), 70);
+  // Lengths 60 / 90 / 150 min (Petr 2026-11-26).
+  assert.equal(carbsPerHour(60, "endurance"), 30);
+  assert.equal(carbsPerHour(60, "threshold"), 40);
+  assert.equal(carbsPerHour(90, "sweet_spot"), 60);
+  assert.equal(carbsPerHour(120, "endurance"), 60);
+  assert.equal(carbsPerHour(170, "endurance"), 75);
   assert.equal(carbsPerHour(240, "endurance"), 75);
   assert.equal(carbsPerHour(45, "recovery"), null);
   assert.equal(carbsPerHour(60, "endurance", "run"), null);
+  assert.equal(carbsPerHour(75, "endurance", "run"), 30);
   assert.equal(carbsPerHour(150, "endurance", "run"), 45);
+  // A gym session or a swim needs no carbs per hour, never the ride table.
+  assert.equal(carbsPerHour(90, "endurance", "gym"), null);
+  assert.equal(carbsPerHour(90, "endurance", "swim"), null);
 });
 
 test("the day's ride fuelling gives the same g/h as the workout card", () => {
