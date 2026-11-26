@@ -191,7 +191,7 @@ async function signIn(){$("signin-error").textContent="";try{
 $("signin-button").onclick=signIn;
 async function load(){const r=await fetch("/app/owner/data",{headers:{Accept:"application/json"}});
  if(r.status===401||r.status===403){$("signin").hidden=false;$("main").hidden=true;$("loading").hidden=true;return;}
- if(!r.ok){$("loading").textContent=r.status===404?"Tento účet k přehledu nemá přístup.":"Přehled se nenačetl. Zkus to za chvíli.";$("signin").hidden=true;return;}
+ if(!r.ok){$("loading").textContent=r.status===404?"Stránka nenalezena.":"Nepovedlo se načíst. Zkus to za chvíli.";$("signin").hidden=true;return;}
  const d=await r.json();$("signin").hidden=true;$("main").hidden=false;$("loading").hidden=true;render(d);}
 function render(d){const n=d.numbers,pct=n.trialsDone?Math.round(n.trialsPaid/n.trialsDone*100):0;
  const k=[[num(n.accounts),"účtů, +"+n.newWeek+" za 7 dní"],[n.trials,"ve zkušebním období, "+n.trialsEnding+" končí do 3 dní"],[n.monthly+n.yearly,"platí ("+n.monthly+" měsíčně, "+n.yearly+" ročně)"+(n.gifts?", dárky "+n.gifts:"")],["~"+num(n.earnsUsd)+" USD","měsíčně po odečtení Applu a DPH (odhad)"],[n.renew30+" / "+n.end30,"příštích 30 dní se obnoví / skončí"],[n.trialsPaid+" z "+n.trialsDone,"ukončených trialů zaplatilo"+(n.trialsDone>=30?" ("+pct+" %)":"")],[n.aiWeek,"lidí použilo AI za 7 dní"],[n.refundRequests+" / "+n.refunds,"žádosti o vrácení peněz / vráceno tento měsíc"]];
@@ -240,11 +240,11 @@ const SCRIPT_TAG = `<script>${SCRIPT}</script>`;
 const chart = (id, title, note, legend = "") => `<div class="chart"><h3>${title}</h3><p>${note}</p><svg id="${id}" viewBox="0 0 340 160" width="100%" role="img" aria-label="${title}"></svg>${legend}</div>`;
 const legend = items => `<div class="legend">${items.map(([color, name]) => `<span><i style="background:var(--${color})"></i>${name}</span>`).join("")}</div>`;
 
-const PAGE = `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Přehled uživatelů Aurin</title><style>${CSS}</style></head><body><div class="wrap">
-<header><h1>Přehled uživatelů Aurin</h1><p class="note">Jen pro tebe. Účty jsou jen čísla, žádné e-maily ani zdravotní hodnoty, žádný export. Bez tebe a účtu pro App Review, nákupy z TestFlightu se jako placení nepočítají. Historie předplatných se ukládá od 25. 11. 2026.</p></header>
-<section class="screen signin" id="signin" hidden><p class="note">Přihlas se svým přístupovým klíčem (passkey) z Aurinu.</p><p><button id="signin-button">Přihlásit přístupovým klíčem</button></p><p class="note" id="signin-error" role="alert"></p></section>
+const PAGE = `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Aurin</title><style>${CSS}</style></head><body><div class="wrap">
+<section class="screen signin" id="signin" hidden><p><button id="signin-button">Přihlásit</button></p><p class="note" id="signin-error" role="alert"></p></section>
 <p class="note" id="loading">Načítám…</p>
 <div id="main" hidden>
+<header><h1>Přehled uživatelů Aurin</h1><p class="note">Jen pro tebe. Účty jsou jen čísla, žádné e-maily ani zdravotní hodnoty, žádný export. Bez tebe a účtu pro App Review, nákupy z TestFlightu se jako placení nepočítají. Historie předplatných se ukládá od 25. 11. 2026.</p></header>
 <nav class="tabs" aria-label="Záložky"><a href="#prehled" data-tab="prehled">Přehled</a><a href="#uzivatele" data-tab="uzivatele">Uživatelé</a></nav>
 <section class="screen" id="tab-prehled"><div class="kpis" id="kpis"></div><div class="grid2">
 ${chart("c1", "Registrace za týden", "Posledních 12 týdnů")}
