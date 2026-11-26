@@ -159,6 +159,11 @@ test("R5: as many easy days as sick days after Nemoc, at least 2, at most 7", as
   const one = scopedDb(raw, 7), s7 = await getJournalSettings(one);
   await saveJournalEntry(one, s7, { date: day(-3), key: "sick", answer: 1 });
   assert.deepEqual(await journalSickReturn(one, date), { day: 2, of: 2 }, "one sick day still gives 2");
+  await saveJournalEntry(one, s7, { date: day(-2), key: "sick", answer: 0 });
+  assert.equal(await journalSickReturn(one, date), null, "a ✕ the day after starts the easy days a day earlier");
+  assert.deepEqual(await journalSickReturn(one, day(-1)), { day: 2, of: 2 });
+  await saveJournalEntry(one, s7, { date, key: "sick", answer: 1 });
+  assert.equal(await journalSickReturn(one, date), null, "ticked today: a sick day");
   const easy = coach({ sickReturn: { day: 1, of: 3 } });
   assert.ok(!hard.includes(easy.recommendation.session.kind), easy.recommendation.session.kind);
   assert.ok(easy.recommendation.adaptations.some(a => /1\. den z 3 po nemoci/.test(a)));

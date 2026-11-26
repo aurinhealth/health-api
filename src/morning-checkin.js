@@ -48,17 +48,20 @@ export async function journalSickReturn(db, date) {
   if (!db || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return null;
   const shift = n => new Date(Date.parse(date + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
   let rows = [];
-  try { rows = (await db.prepare("SELECT date,answer FROM journal_entries WHERE user_id=? AND item_key='sick' AND date>=? AND date<?").bind(db.userId, shift(-21), date).all()).results || []; }
+  try { rows = (await db.prepare("SELECT date,answer FROM journal_entries WHERE user_id=? AND item_key='sick' AND date>=? AND date<=?").bind(db.userId, shift(-21), date).all()).results || []; }
   catch (error) { if (/no such table/i.test(String(error?.message || error))) return null; throw error; }
-  const sick = new Set(rows.filter(r => Number(r.answer) === 1).map(r => r.date));
-  for (let back = 2; back <= 8; back++) {
-    const last = shift(-back);
-    if (!sick.has(last)) continue;
-    if ([...Array(back - 1)].some((_, i) => sick.has(shift(-1 - i)))) return null;
+  const answer = new Map(rows.map(r => [r.date, Number(r.answer)]));
+  const sick = d => answer.get(d) === 1;
+  // Ticked today: still a sick day (readinessCheckin).
+  if (sick(date)) return null;
+  for (let back = 1; back <= 8; back++) {
+    if (!sick(shift(-back))) continue;
     let count = 0;
-    while (sick.has(shift(-back - count))) count++;
-    const of = Math.min(7, Math.max(2, count)), day = back - 1;
-    return day <= of ? { day, of } : null;
+    while (sick(shift(-back - count))) count++;
+    // The day after the last tick is sick too, unless it was ✕-ed.
+    const first = answer.get(shift(-back + 1)) === 0 ? back - 1 : back - 2;
+    const of = Math.min(7, Math.max(2, count)), day = first + 1;
+    return first >= 0 && day <= of ? { day, of } : null;
   }
   return null;
 }
