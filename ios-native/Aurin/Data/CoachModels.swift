@@ -308,7 +308,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
         case "other_event":
-            return L10n.f(eventKind == "match" ? "%@: zápas" : "%@: trénink", otherName ?? "")
+            return L10n.f(eventKind == "match" ? "%@: zápas" : "%@: trénink", otherName ?? otherType ?? "")
         case "week_sport":
             let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
             return title.map { L10n.tr($0) } ?? type

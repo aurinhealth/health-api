@@ -90,19 +90,27 @@ struct DayCircle: View {
             SportDisc(sport: mark.sport, type: mark.type, state: mark.state, size: 30)
                 .overlay(alignment: .bottomTrailing) {
                     if let second = mark.second {
-                        SportDisc(sport: second, state: .ahead, size: 13)
+                        SportDisc(sport: second, type: mark.secondType, state: .ahead, size: 13)
                             .background(Circle().fill(Palette.background).padding(-2))
                             .offset(x: 4, y: 3)
                     }
                 }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date) + ", " + mark.label)
+        .accessibilityLabel(Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date) + ", " + spoken(mark))
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
 extension DayCircle {
+    /// VoiceOver names the own sport ("Tenis, v plánu"), not the generic Other.
+    @MainActor func spoken(_ mark: Look) -> String {
+        guard let own else { return mark.label }
+        let name = OtherSports.name(own)
+        if mark.secondType == own { return mark.label + ", " + name }
+        return mark.type == own && mark.sport == "other" ? name + ", " + L10n.tr("v plánu") : mark.label
+    }
+
     /// What a day's disc shows: its first session's sport, done (full), still
     /// ahead (pale) or missed (grey); a rest dot without any session.
     struct Look: Equatable {
@@ -110,6 +118,7 @@ extension DayCircle {
         var type: String? = nil
         var state: SportDisc.State = .rest
         var second: String? = nil
+        var secondType: String? = nil
         var label: String
 
         init(day: CalendarDay?, date: String, today: String, own: String? = nil) {
@@ -127,7 +136,8 @@ extension DayCircle {
             sport = first.sport
             type = first.type
             state = SportDisc.State(status: first.status)
-            second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport ?? (own == nil ? nil : "other")
+            second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport
+            if second == nil, let own { second = "other"; secondType = own }
             label = L10n.tr(SportStyle.name(first.sport)) + ", " + L10n.tr(state == .done ? "hotovo" : state == .missed ? "nesplněno" : "v plánu")
         }
 
