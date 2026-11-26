@@ -28,22 +28,53 @@ const zone = "CASE WHEN json_valid(payload_json) THEN lower(json_extract(payload
 const minutes = 'ROUND((julianday(end_time) - julianday(start_time)) * 86400) / 60.0';
 const zoneSum = z => `SUM(CASE WHEN data_type = 'time-in-heart-rate-zone' AND ${primary} AND ${zone} = '${z}' AND ${minutes} > 0 AND ${minutes} <= 1440 THEN ${minutes} END)`;
 
+const COLUMNS = ['steps', 'energy', 'zone_light', 'zone_moderate', 'zone_vigorous', 'zone_peak', 'wear_minutes'];
+const MAX_ROW_WRITES = 50;
+const same = (a, b) => (a ?? null) === (b ?? null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 1e-9);
+
+// The summary's rows of a user and range, from the raw rows (binds user, start, end).
+const aggregate = `SELECT substr(start_time, 1, 13) || ':00:00Z' AS hour, source_family,
+    SUM(CASE WHEN data_type = 'steps' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.steps.count')) END) AS steps,
+    SUM(CASE WHEN data_type = 'active-energy-burned' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.activeEnergyBurned.kcal')) END) AS energy,
+    ${ZONES.map(z => `${zoneSum(z)} AS zone_${z}`).join(', ')},
+    SUM(CASE WHEN data_type = 'time-in-heart-rate-zone' AND source_family = 'google-wearables' THEN value_numeric END) AS wear_minutes
+  FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'apple-health') AND data_type IN (${SUMMARY_TYPES.map(t => `'${t}'`).join(', ')})
+    AND start_time >= ? AND start_time < ? GROUP BY 1, 2`;
+
 // Rebuilds the hours from `from` (a day or an hour, UTC) up to `to` (exclusive).
+// Only the hours whose sums changed are written, and only the hours left with no
+// raw row are deleted: every sync rebuilds from its oldest changed hour on, and
+// deleting and inserting all of them again cost D1 row writes for hours that
+// stayed the same (2026-11-26).
 export async function rebuildHourSummary(db, userId, from, to) {
   await tables(db);
   const start = hourOf(from).padEnd(13, 'T00'), end = to ? hourOf(to).padEnd(13, 'T00') : '9999';
-  const [, written] = await db.batch([
-    db.prepare('DELETE FROM health_hour_summary WHERE user_id = ? AND hour >= ? AND hour < ?').bind(userId, start, end),
-    db.prepare(`INSERT INTO health_hour_summary (user_id, hour, source_family, steps, energy, zone_light, zone_moderate, zone_vigorous, zone_peak, wear_minutes)
-      SELECT user_id, substr(start_time, 1, 13) || ':00:00Z', source_family,
-        SUM(CASE WHEN data_type = 'steps' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.steps.count')) END),
-        SUM(CASE WHEN data_type = 'active-energy-burned' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.activeEnergyBurned.kcal')) END),
-        ${ZONES.map(zoneSum).join(', ')},
-        SUM(CASE WHEN data_type = 'time-in-heart-rate-zone' AND source_family = 'google-wearables' THEN value_numeric END)
-      FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'apple-health') AND data_type IN (${SUMMARY_TYPES.map(t => `'${t}'`).join(', ')})
-        AND start_time >= ? AND start_time < ? GROUP BY 2, 3`).bind(userId, start, end)
+  const [fresh, stored] = await db.batch([
+    db.prepare(aggregate).bind(userId, start, end),
+    db.prepare(`SELECT hour, source_family, ${COLUMNS.join(', ')} FROM health_hour_summary WHERE user_id = ? AND hour >= ? AND hour < ?`).bind(userId, start, end)
   ]);
-  return Number(written?.meta?.changes || 0);
+  const key = r => r.hour + '|' + r.source_family;
+  const old = new Map((stored?.results || []).map(r => [key(r), r]));
+  const changed = [];
+  for (const r of fresh?.results || []) {
+    const was = old.get(key(r));
+    old.delete(key(r));
+    if (!was || !COLUMNS.every(c => same(was[c], r[c]))) changed.push(r);
+  }
+  // Many changed hours (a first fill, a new day of source choice): the range is
+  // written again in two statements, as D1 allows 1,000 queries a request.
+  if (changed.length + old.size > MAX_ROW_WRITES) {
+    await db.batch([
+      db.prepare('DELETE FROM health_hour_summary WHERE user_id = ? AND hour >= ? AND hour < ?').bind(userId, start, end),
+      db.prepare(`INSERT INTO health_hour_summary (user_id, hour, source_family, ${COLUMNS.join(', ')}) SELECT ?, * FROM (${aggregate})`).bind(userId, userId, start, end)
+    ]);
+    return changed.length + old.size;
+  }
+  const statements = changed.map(r => db.prepare(`INSERT INTO health_hour_summary (user_id, hour, source_family, ${COLUMNS.join(', ')}) VALUES (?, ?, ?, ${COLUMNS.map(() => '?').join(', ')})
+      ON CONFLICT (user_id, hour, source_family) DO UPDATE SET ${COLUMNS.map(c => `${c} = excluded.${c}`).join(', ')}`).bind(userId, r.hour, r.source_family, ...COLUMNS.map(c => r[c] ?? null)));
+  for (const r of old.values()) statements.push(db.prepare('DELETE FROM health_hour_summary WHERE user_id = ? AND hour = ? AND source_family = ?').bind(userId, r.hour, r.source_family));
+  if (statements.length) await db.batch(statements);
+  return statements.length;
 }
 
 async function readMark(db, userId) {
