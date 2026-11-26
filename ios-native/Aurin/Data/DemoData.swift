@@ -3,7 +3,7 @@ import Foundation
 /// Sample day in the shape of /app/api/today, for previews, the screenshot
 /// tests and the "-demo" launch argument.
 enum DemoData {
-    static var today: TodaySnapshot { L10n.isEnglish ? todayEnglish : todayCzech }
+    static var today: TodaySnapshot { easierDayToday ?? (L10n.isEnglish ? todayEnglish : todayCzech) }
 
     /// The sample day under a Stav sportovce other than active, as the server
     /// answers it (day-verdict.js rest, app-today.js readinessSummary): the
@@ -204,8 +204,7 @@ extension DemoData {
     /// "-scene easier-day" (the App Store's screenshots): the sample Today with the
     /// coach's easier-day offer (src/night-check.js) in its card.
     static var easierDay: CoachCheckIn.Advice? {
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-scene"), i + 1 < args.count, args[i + 1] == "easier-day" else { return nil }
+        guard easierDayScene else { return nil }
         let en = L10n.isEnglish
         return CoachCheckIn.Advice(
             id: "demo-easier-day", headline: en ? "An easier day fits today" : "Dnes se hodí lehčí den", reasons: [],
@@ -216,4 +215,42 @@ extension DemoData {
                    .init(id: "hrv", label: "HRV", value: en ? "−18 % vs usual" : "−18 % proti obvyklému")],
             date: "2026-10-08", from: "Tempo, 60 min", to: en ? "Easy ride, 60 min" : "Lehká jízda, 60 min")
     }
+
+    private static var easierDayScene: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-scene"), i + 1 < args.count else { return false }
+        return args[i + 1] == "easier-day"
+    }
+
+    /// The same sample day as the easier-day card reads it: readiness under the
+    /// usual range, HRV under it (−18 %) and the resting heart rate over it (+6),
+    /// a Tempo ride planned instead of the gym, and the coach's words to match.
+    private static let easierDayToday: TodaySnapshot? = {
+        guard easierDayScene,
+              var day = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        day["readiness"] = ["score": 58, "zone": "yellow", "verdict": "easy", "numbersLine": "easy", "numbersOff": ["hrv", "restingHR"]]
+        func lastValue(_ key: String, _ value: Int) {
+            guard var part = day[key] as? [String: Any], var series = part["series"] as? [[String: Any]], !series.isEmpty else { return }
+            series[series.count - 1]["value"] = value
+            part["series"] = series
+            part["value"] = value
+            if key == "hrv" { part["trend"] = "down" }
+            day[key] = part
+        }
+        lastValue("hrv", 48)
+        lastValue("restingHR", 56)
+        day["summary"] = ["headline": "Jak dnes začít",
+                          "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je pod obvyklým rozmezím a klidový tep nad ním.",
+                          "recommendation": "Tempo dnes vyměň za lehkou jízdu, ať se tělo dotáhne."]
+        if var plan = day["plan"] as? [[String: Any]],
+           let gym = plan.firstIndex(where: { ($0["sport"] as? String) == "strength" && ($0["done"] as? Bool) == false }) {
+            plan[gym] = ["kind": "workout", "time": "17:30", "title": "Tempo", "detail": "60 min, 62 TSS", "done": false, "sport": "ride", "status": "planned",
+                         "session": ["id": "planned:2026-10-08:Tempo", "kind": "planned", "status": "planned", "date": "2026-10-08", "time": "17:30",
+                                     "title": "Tempo", "sport": "ride", "minutes": 60, "tss": 62, "eventId": "planned:2026-10-08:Tempo"]]
+            day["plan"] = plan
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: day, options: .withoutEscapingSlashes) else { return nil }
+        let text = String(decoding: data, as: UTF8.self)
+        return decode(L10n.isEnglish ? inEnglish(text) : text)
+    }()
 }
