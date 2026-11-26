@@ -281,6 +281,22 @@ final class APIClient: @unchecked Sendable {
         return (me.internalTester ?? false, me.user?.isOwner ?? false)
     }
 
+    /// E-mails about new Aurin features (src/consent.js productEmails): true or
+    /// false as chosen, nil when the account was never asked.
+    func productEmails() async throws -> Bool? {
+        struct Consent: Decodable { let productEmails: Bool? }
+        struct Me: Decodable { let consent: Consent? }
+        let me: Me = try await get("/app/api/me")
+        return me.consent?.productEmails
+    }
+
+    /// The same wrapped, so a failed read (nil from try?) differs from never asked (.some(nil)).
+    func productEmailsChoice() async throws -> Bool?? { .some(try await productEmails()) }
+
+    func setProductEmails(_ wanted: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["productEmails": JSONValue.bool(wanted)])
+    }
+
     func setAI(_ allowed: Bool) async throws {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
     }

@@ -1202,7 +1202,6 @@
 "Datum narození" = "Date of birth";
 "Zadat" = "Set";
 "Účet" = "Account";
-"E-mail" = "Email";
 "E-mail %@, zkopírovat" = "Email %@, copy";
 "Tep a aktivita" = "Heart rate and activity";
 "max %@" = "max %@";
@@ -5263,6 +5262,14 @@
 "Připomínka prášku" = "Pill reminder";
 "Na zamčené obrazovce jako Denní připomínka" = "Shows as Daily reminder on the lock screen";
 "Skrýt zdravotní údaje v oznámeních" = "Hide health values in notifications";
+"Posílat mi e-mailem novinky o Aurinu" = "Email me Aurin news";
+"Občas, o nových funkcích. Vypneš je v Nastavení → Oznámení nebo odkazem v každém e-mailu." = "Now and then, about new features. Turn it off in Settings → Notifications or with the link in every email.";
+"Novinky e-mailem" = "News by email";
+"O nových funkcích Aurinu. Odhlásit se dá i odkazem v každém e-mailu." = "About new Aurin features. Every email also has an unsubscribe link.";
+"Novinky e-mailem?" = "Aurin news by email?";
+"Ano, posílat" = "Yes, send them";
+"Ne, díky" = "No, thanks";
+"Občas ti napíšeme o nových funkcích Aurinu. Vypneš to v Nastavení → Oznámení nebo odkazem v každém e-mailu." = "Now and then we'll email you about new Aurin features. Turn it off in Settings → Notifications or with the link in every email.";
 "Widgety na zamčené obrazovce ukážou čísla po odemknutí Face ID." = "Lock screen widgets show numbers after Face ID.";
 "Kouč i připomínky jsou zapnuté." = "Coach and reminders are on.";
 "Kouč je zapnutý, připomínky vypnuté." = "Coach is on, reminders are off.";
@@ -5347,6 +5354,7 @@
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
+"E-mail" = "Email";
 "Obvyklá teplota se ukáže po 7 nocích." = "Your usual shows after 7 nights.";
 "neuvedeno" = "not given";
 "Každý bod je jeden den. Čárkovaně průměr období." = "Each point is one day. The dashed line is the period's average.";
