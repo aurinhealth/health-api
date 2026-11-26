@@ -170,7 +170,8 @@ struct PlanCardBody: View {
 
     /// "days to go, Dec 20".
     private func countdown(_ days: Int) -> String {
-        let word = days == 0 ? L10n.tr("závod dnes") : L10n.tr("do závodu")
+        // "dní do závodu": the unit as on the Training race card (review 2026-11-25).
+        let word = days == 0 ? L10n.tr("závod dnes") : L10n.f("%@ do závodu", L10n.plural("dní", days))
         guard days > 0, let date = card.raceDate else { return word }
         return word + ", " + Fmt.dayMonth(date)
     }

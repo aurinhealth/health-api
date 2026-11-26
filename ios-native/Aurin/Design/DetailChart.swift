@@ -112,7 +112,8 @@ struct DetailChart: View {
     private func plot(_ list: [ChartPoint]) -> some View {
         let segments = measurements ? list.map { _ in 0 } : ChartBuckets.segments(list, weekly: weekly)
         let dated = list.enumerated().compactMap { i, p in ISODay.date(p.date).map { Dated(point: p, date: $0, segment: segments[i]) } }
-        let average = measurements ? nil : ChartBuckets.mean(list.map(\.value))
+        // One point has no average: the Avg pill would hide the only dot (review 2026-11-25).
+        let average = measurements || list.count < 2 ? nil : ChartBuckets.mean(list.map(\.value))
         let values = list.map(\.value) + list.compactMap(\.low) + list.compactMap(\.high)
         let lo = values.min() ?? 0, hi = values.max() ?? 1
         let pad = max((hi - lo) * 0.18, hi == lo ? max(abs(hi) * 0.1, 1) : 0)

@@ -397,6 +397,14 @@ export function carbsPerHour(minutes, system, sport = "ride", experience = null)
   return rate && CARB_CAPS[experience] ? Math.min(rate, CARB_CAPS[experience]) : rate;
 }
 
+// A calendar event has no training system, only its intensity factor (planned-detail.js):
+// the CARBS row it falls in, as Coggan's IF bands. Unknown: endurance, as carbsPerHour.
+export function systemOfIntensity(intensity, sport = "ride") {
+  const f = n(intensity, 0);
+  if (!f) return null;
+  return f < .6 ? "recovery" : f < .76 ? "endurance" : f < .84 ? "tempo" : f < .9 ? (sport === "run" ? "tempo" : "sweet_spot") : "threshold";
+}
+
 // The fuel line of a ride or run as the app shows it ("Carbs 60 g/h"), the
 // same number as the text, the calendars and the coach: perHour, and upTo 120
 // only on a ride over 3 h of an experienced rider, with the line to practise

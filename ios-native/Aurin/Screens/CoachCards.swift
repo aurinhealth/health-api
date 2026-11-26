@@ -65,6 +65,11 @@ struct WeekSummaryCard: View {
         planned > 0 ? L10n.f("%@ z %@", String(done), String(planned)) : String(done)
     }
 
+    /// "2 of 2 done", or "2 done" for a sport nothing was planned in.
+    static func done(_ done: Int, of planned: Int) -> String {
+        planned > 0 ? L10n.f("%@ z %@ hotovo", String(done), String(planned)) : L10n.f("%@ hotovo", String(done))
+    }
+
     private func stat(_ name: String, _ value: String, was: String?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(verbatim: name).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -77,7 +82,7 @@ struct WeekSummaryCard: View {
 
     /// "Ride, 2 of 2 done, 96 km" and its time.
     private func sportRow(_ s: WeekSummary.Sport) -> some View {
-        let line = [L10n.f("%@ z %@ hotovo", String(s.done), String(s.planned)), s.km.map { Units.distanceText($0) }].compactMap { $0 }.joined(separator: ", ")
+        let line = [Self.done(s.done, of: s.planned), s.km.map { Units.distanceText($0) }].compactMap { $0 }.joined(separator: ", ")
         return HStack(spacing: 12) {
             Image(systemName: SportIcon.symbol(s.sport == "gym" ? "strength" : s.sport))
                 .scaledFont(15, weight: .semibold, cap: .denseCap)

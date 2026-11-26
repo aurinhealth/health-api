@@ -277,7 +277,7 @@ struct LiveSetCard<Table: View>: View {
                 .disabled(onFold == nil)
                 .accessibilityHint(onFold == nil ? "" : L10n.tr("Sbalí cvik"))
             }
-            pair(L10n.tr("Historie"), onHistory, L10n.tr("Technika"), onTechnique)
+            pair(L10n.tr("Jak na to"), onTechnique, L10n.tr("Historie"), onHistory)
             // A full line between the buttons and the sets (608: they blended in).
             Rectangle().fill(Palette.cardEdge).frame(height: 1.5).padding(.bottom, 4)
             table

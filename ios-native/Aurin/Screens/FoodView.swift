@@ -704,7 +704,10 @@ struct MealRow: View {
     var add: () -> Void = {}
 
     private var empty: Bool { meal.entries.isEmpty }
-    private var goal: FoodSnapshot.Suggestion? { meal.target ?? meal.suggestion }
+    /// An empty meal still ahead shows the server's share of what is left
+    /// (suggestion), so the open meals add up to "to go" (review 2026-11-25:
+    /// 270 + 660 against 1 270 left); a meal with food keeps its target.
+    private var goal: FoodSnapshot.Suggestion? { empty ? meal.suggestion ?? meal.target : meal.target ?? meal.suggestion }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

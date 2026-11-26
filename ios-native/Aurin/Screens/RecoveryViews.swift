@@ -496,7 +496,7 @@ struct RecoveryTimeView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.today, title: "Regenerace", pinTitle: true) {
             if let today = model.today, let time = today.recoveryTime {
-                RecoveryTimeContent(time: time, today: today.date, zone: today.readiness.zone)
+                RecoveryTimeContent(time: time, today: today.date, zone: today.readiness.zone, tonightNeed: today.tonight?.need)
             } else if model.today == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else {
@@ -514,6 +514,9 @@ struct RecoveryTimeContent: View {
     let time: RecoveryTime
     let today: String
     var zone: String? = nil
+    /// Tonight's sleep need, the planner's number (review 2026-11-25: the
+    /// last night's 8 h 5 min stood beside tonight's 8 h 30 min).
+    var tonightNeed: Int? = nil
     var now = Date()
 
     /// One line of "Proč to trvá": a group of sessions, a morning sign or the readiness.
@@ -564,7 +567,7 @@ struct RecoveryTimeContent: View {
             }
 
             // Only after a short night: tomorrow's signs come from the next one.
-            if let sleep = time.causes.first(where: { $0.kind == "sleep" }), let need = sleep.need, need > 0 {
+            if let sleep = time.causes.first(where: { $0.kind == "sleep" }), let need = tonightNeed ?? sleep.need, need > 0 {
                 SectionLabel(text: "Co pomůže").padding(.top, 30).padding(.bottom, 10)
                 Card {
                     row(icon: "bed.double.fill", color: Palette.indigo, title: L10n.tr("Dnes se pořádně vyspi"),

@@ -1291,7 +1291,7 @@
 "není v tarifu" = "not in your plan";
 "Přejít na Aurin Pro" = "Upgrade to Aurin Pro";
 "Otázky k předplatnému? Přečti si podmínky a ceny." = "Questions about your subscription? Read the terms and pricing.";
-"Všechny tarify" = "See all plans";
+"Všechny tarify" = "All plans";
 "Uplatnit promo kód" = "Redeem promo code";
 "Obnovit nákup" = "Restore purchase";
 "Začni naplno s Aurin Pro" = "Go all in with Aurin Pro";
@@ -2714,7 +2714,7 @@
 "Hodnota" = "Value";
 "Spánek v minutách" = "Sleep in minutes";
 "Zbývající kalorie" = "Calories left";
-"Zátěž dne" = "Day strain";
+"Námaha dne" = "Day strain";
 "Hodnota z Aurinu" = "Aurin value";
 "Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách." = "Returns today's number from Aurin for Shortcuts automations.";
 "Hodnota z Aurinu: ${metric}" = "Aurin value: ${metric}";
@@ -3215,7 +3215,7 @@
 "Čas na rovině bez větru, s tvou váhou a silničním kolem. Kopce a terén ho prodlouží." = "Time on the flat without wind, with your weight and a road bike. Climbs and terrain make it longer.";
 "Půlmaraton" = "Half marathon";
 "Maraton" = "Marathon";
-"Ptáš se na" = "You're asking about";
+"Téma otázky" = "You're asking about";
 "Série %@ z %@" = "Set %@ of %@";
 "Potvrzeno." = "Confirmed.";
 "Návrh už neplatí." = "This proposal no longer applies.";
@@ -3405,7 +3405,7 @@
 "Dřep" = "Squat";
 "Minulá noc" = "Last night";
 "Špatná noc. Dneska nohy?" = "Bad night. Legs today?";
-"Připravenost je 61 po 5 h 40 spánku. " = "Readiness is 61 after 5 h 40 of sleep. ";
+"Připravenost je 61 po 5 h 40 min spánku. " = "Readiness is 61 after 5 h 40 min of sleep. ";
 "Nohy nech, jen lehčeji:" = "Keep legs, go lighter:";
 " dřep 3 × 8 se 70 kg." = " squat 3 × 8 at 70 kg.";
 "Nohy, lehčeji" = "Legs, lighter";
@@ -3447,6 +3447,7 @@
 "Vyfoť talíř nebo naskenuj kód." = "Snap a photo or scan a barcode.";
 "Zeptej se kouče" = "Ask the coach something";
 "Zná tvůj spánek, trénink i jídlo." = "It knows your sleep, training and food.";
+"Zná tvůj trénink a jídlo." = "It knows your training and food.";
 "S historií z hodinek budou čísla hotová zítra. Bez ní potřebuje připravenost asi 14 nocí, než se ustálí." = "With your watch’s history the numbers are ready tomorrow. Without it, readiness needs about 14 nights to settle.";
 /* An iPhone without a watch or ring (audit 14.2–14.6). */
 "Bez hodinek nebo prstenu" = "No watch or ring";
@@ -3484,7 +3485,7 @@
 "Záloha na iPhonu" = "Backup on iPhone";
 "Hodinky zvoní první. Když je nevypneš, za 5 minut zazvoní iPhone. Čas budíku je stejný jako v Nastavení → Spánek." = "The watch rings first. If you don't stop it, your iPhone rings 5 minutes later. The wake time is the one in Settings → Sleep.";
 "Snímky z videa: %@" = "Frames from the video: %@";
-"Ranní běh: 8,2 km za 42 minut, tempo 5:07/km. Den po 14 km to nebylo úplně lehké a nohy se ještě zotavují, tak dnes dřep jen lehce, 4×3. K odpolední svačině si dej sacharidy." = "This morning's run: 8.2 km in 42 minutes at 5:07/km. A day after 14 km that wasn't quite easy and your legs are still recovering, so tonight's squats stay light at 4×3. Have carbs with your afternoon snack.";
+"Ranní běh: 8,2 km za 42 minut, tempo 5:07/km. Den po 14 km to nebylo úplně lehké a nohy se ještě zotavují, tak dnes dřep jen krátce, 4×3. K odpolední svačině si dej sacharidy." = "This morning's run: 8.2 km in 42 minutes at 5:07/km. A day after 14 km that wasn't quite easy and your legs are still recovering, so tonight's squats stay short at 4×3. Have carbs with your afternoon snack.";
 "Zítra jen lehká jízda v Z2, ať máš v sobotu čerstvé nohy na dlouhý běh." = "Tomorrow just an easy Z2 ride, so your legs are fresh for Saturday's long run.";
 "Proč mám 78 po pouhých 7 hodinách spánku?" = "Why 78 after only 7 hours of sleep?";
 "HRV 64 je nad tvým obvyklým rozmezím 55–61 a klidový tep je nižší než obvykle. Tělo je dobře zotavené, jen spánku bylo o 53 minut méně." = "HRV 64 is above your usual 55–61 and your resting heart rate is lower than usual. You recovered well, but slept 53 minutes short.";
@@ -3495,8 +3496,8 @@
 "Co sníst před posilovnou?" = "What should I eat before the gym?";
 "Kolem 16:00 svačinu se sacharidy, asi 360 kcal, třeba toast s medem a jogurt. Po posilovně večeři se 40 g bílkovin. Zbývá ti 1 270 kcal." = "Around 4 PM, a 360 kcal carb snack like toast with honey and yogurt. After the gym, dinner with 40 g of protein. You have 1,270 kcal left.";
 "Do hodiny po tréninku si dej bílkoviny se sacharidy, třeba řecký jogurt s ovocem a müsli nebo kuře s rýží. Do dnešního cíle ti zbývá 1 270 kcal, tak se klidně pořádně najez." = "Within an hour after training, have protein with carbs, like Greek yogurt with fruit and granola or chicken with rice. You still have 1,270 kcal left today, so go ahead and eat properly.";
-"Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí a včerejším běhu ještě zotavují, tak dřep jen lehce, 4×3 s 80 kg. Sílu dej do horní části těla: tlak na lavici a přítahy, pak ramena a střed těla. Sobotní dlouhý běh chce čerstvé nohy." = "Readiness is 78, so you can go hard today. Your legs are still recovering from Monday and yesterday's run, so squats stay light, 4×3 with 80 kg. Put the effort into your upper body: bench press and rows, then shoulders and core. Saturday's long run needs fresh legs.";
-"V ukázce odpovídám podle vzorového dne: připravenost 78, spánek 7:12 a v 17:30 silový trénink celého těla. Po přihlášení ti odpovím podle tvých vlastních dat." = "In the demo I answer from the sample day: readiness 78, 7:12 of sleep and full-body strength at 5:30 PM. Once you sign in, I answer from your own data.";
+"Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí a ranním běhu ještě zotavují, tak dřep jen krátce, 4×3 s 80 kg. Sílu dej do horní části těla: tlak na lavici a přítahy, pak ramena a střed těla. Sobotní dlouhý běh chce čerstvé nohy." = "Readiness is 78, so you can go hard today. Your legs are still recovering from Monday and this morning's run, so squats stay short, 4×3 with 80 kg. Put the effort into your upper body: bench press and rows, then shoulders and core. Saturday's long run needs fresh legs.";
+"V ukázce odpovídám podle vzorového dne: připravenost 78, spánek 7 h 12 min a v 17:30 silový trénink celého těla. Po přihlášení ti odpovím podle tvých vlastních dat." = "In the demo I answer from the sample day: readiness 78, 7 h 12 min of sleep and full-body strength at 5:30 PM. Once you sign in, I answer from your own data.";
 "%@ z %@ splněno" = "%@ of %@ done";
 "Další trénink" = "Next workout";
 "Dnes už nic" = "Nothing left today";
@@ -4486,6 +4487,7 @@
 "Plán od %@" = "Plan from %@";
 "závod dnes" = "race today";
 "do závodu" = "days to go";
+"%@ do závodu" = "%@ to go";
 "Zátěž a přehled jsou u dneška" = "Load and overview are on today";
 "Obvyklé od" = "Usual from";
 "Obvyklé do" = "Usual to";
@@ -4638,6 +4640,7 @@
 "Zprávy na tento týden jsi vyčerpal. Nové přijdou v pondělí." = "You've used this week's messages. New ones arrive on Monday.";
 "Napiš kouči" = "Message the coach";
 "Kouč je AI. Může se splést, tak si důležité věci ověř." = "The coach is an AI. It can make mistakes, so check anything that matters.";
+"Kouč Aurin je AI" = "Aurin Coach is an AI";
 "nedostupné do zítřka" = "unavailable until tomorrow";
 "nedostupné do pondělí" = "unavailable until Monday";
 "Kouč, AI" = "Coach, AI";
@@ -4780,8 +4783,8 @@
 "Posilovna, doma nebo obojí" = "Gym, home or both";
 "Zapni oznámení" = "Turn on notifications";
 "Kouč, když je potřeba změnit plán, a kdy jít spát" = "The coach when your plan needs a change, and when to go to bed";
-"Připravenost v %@ a kouč, když se mění plán" = "Readiness at %@, and the coach when your plan changes";
-"Připravenost v %@ a dnes večer připomínka nasadit hodinky" = "Readiness at %@, and tonight a reminder to wear your watch";
+"Připravenost ráno po synchronizaci a kouč, když se mění plán" = "Readiness each morning once your data syncs, and the coach when your plan changes";
+"Připravenost ráno po synchronizaci a dnes večer připomínka nasadit hodinky" = "Readiness each morning once your data syncs, and tonight a reminder to wear your watch";
 "Tvoje sporty" = "Your sports";
 "Kouč skládá týden kolem tvých hlavních sportů." = "The coach builds your week around your main sports.";
 "Skrýt kartu" = "Hide card";
@@ -4811,8 +4814,8 @@
 "Klepnutím kamkoli začneš hned" = "Tap anywhere to start now";
 "Začít hned" = "Start now";
 "Detaily tréninku" = "Workout details";
-"Zátěž tréninku" = "Workout strain";
-"Zátěž dne z %@ na %@" = "Day strain from %1$@ to %2$@";
+"Námaha tréninku" = "Workout strain";
+"Námaha dne z %@ na %@" = "Day strain from %1$@ to %2$@";
 "%@, předtím %@" = "%1$@, was %2$@";
 "Trvání" = "Duration";
 "Aktivní čas" = "Active time";
@@ -5263,8 +5266,8 @@
 "Kouč je zapnutý, připomínky vypnuté." = "Coach is on, reminders are off.";
 "Připomínky jsou zapnuté, kouč vypnutý." = "Reminders are on, Coach is off.";
 "Kouč i připomínky jsou vypnuté." = "Coach and reminders are off.";
-"Oznámení neukazují čísla." = "Notifications show no numbers.";
-"Oznámení ukazují tvoje čísla." = "Notifications show your numbers.";
+"Oznámení neukazují zdravotní údaje." = "Notifications show no health values.";
+"Oznámení ukazují tvoje zdravotní údaje." = "Notifications show your health values.";
 "Nejvýš 2 připomenutí, když jídlo chybí" = "Up to 2 nudges if a meal isn't logged";
 "Oznámení jsou vypnutá" = "Notifications are off";
 "Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče." = "Turn them on in iPhone Settings to get reminders and coach messages.";
@@ -5342,6 +5345,15 @@
 "Odebrat z tohoto dne" = "Remove from this day";
 "Od plánu volno, tvůj vlastní sport zůstává." = "A day off from the plan, your own sport stays.";
 "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí." = "Your logged days don't have a saved target yet. Counting starts with today, once it's over.";
+"Obvyklá teplota se ukáže po 7 nocích." = "Your usual shows after 7 nights.";
+"neuvedeno" = "not given";
+"Každý bod je jeden den. Čárkovaně průměr období." = "Each point is one day. The dashed line is the period's average.";
+"Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The dashed line is the period's average. Today is only part of the day so far.";
+"Celkem ve dnech plánu" = "Total on plan days";
+"Auto (dnes %@)" = "Auto (tonight %@)";
+"Sacharidy %@ g/h, asi %@ g na celý trénink." = "Carbs %@ g/h, about %@ g for the whole workout.";
+"Sacharidy %@ g/h." = "Carbs %@ g/h.";
+"Pokud jsi zvyklý, až %@ g/h." = "If you are used to it, up to %@ g/h.";
 "Tvůj týden" = "Your week";
 "Minulý týden %@" = "Was %@";
 "%@ z %@ hotovo" = "%1$@ of %2$@ done";

@@ -889,10 +889,12 @@ struct DayCapsule: View {
                         Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Předchozí den")
+                    // Never "Thu, O…" beside the Today button (review 2026-11-25).
                     Text(verbatim: Fmt.dayShort(date, today: today))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
+                        .fixedSize()
                     Button { move(1) } label: {
                         Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
