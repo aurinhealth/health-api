@@ -103,6 +103,10 @@
     // and wrangler dev reads it from .dev.vars. Problem reports go to CONTACT_EMAIL,
     // the public address on the website (src/support-report.js).
     "CONTACT_EMAIL": "support@aurin.health",
+    // Cloudflare Access (Zero Trust, application "Owner page") guards aurin.health/app/owner;
+    // the Worker also checks Access's signed token for the owner (src/owner-overview.js).
+    "ACCESS_TEAM_DOMAIN": "jolly-snow-e77a.cloudflareaccess.com",
+    "ACCESS_AUD": "64218cc710fa75290d856304c974c3e2ef8191ceb94665ade286978cd262f5b0",
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
@@ -220,6 +224,9 @@
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.aurin.health",
+        // No Cloudflare Access on the test account: the owner page here needs only the owner's session.
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "",
         // Chat v1 (src/coach-actions.js chatV1On): on here, off on the live server until it ships.
         "CHAT_V1": "true",
         // Today's eased plans also in Wahoo and Intervals.icu, with "Vrátit původní" (src/entrypoint.js easeTodayPlans): on here, off on the live server until the redesign app with its card ships.
