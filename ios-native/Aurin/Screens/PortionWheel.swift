@@ -10,9 +10,18 @@ struct PortionWheel: View {
     /// Set to the unit the wheel shows, so the add button names the amount the same way.
     var kind: Binding<Kind>? = nil
 
+    init(product: FoodProduct, amount: Binding<Double>, kind: Binding<Kind>? = nil, open: Bool = false) {
+        self.product = product
+        _amount = amount
+        self.kind = kind
+        _wheelOpen = State(initialValue: open)
+    }
+
     @State private var unit = 0
     @State private var typed = ""
     @State private var ready = false
+    /// The wheel shows after a tap on the unit (617 #33), or open from the start (`open`).
+    @State private var wheelOpen: Bool
     @FocusState private var typing: Bool
 
     static let fractions: [(label: String, value: Double)] = [
@@ -66,19 +75,23 @@ struct PortionWheel: View {
                     .padding(.trailing, 14)
                     .frame(width: 120)
                 Rectangle().fill(Palette.card).frame(width: 2)
-                Menu {
-                    Picker("Jednotka", selection: unitChoice) {
-                        ForEach(units.indices, id: \.self) { Text(verbatim: units[$0].name).tag($0) }
-                    }
+                // One amount picker (617 #33): the unit side opens the wheel,
+                // whose last column is the unit; closed, only this row shows.
+                Button {
+                    typing = false
+                    withAnimation(.easeOut(duration: 0.2)) { wheelOpen.toggle() }
                 } label: {
                     HStack {
                         Text(verbatim: current.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                         Spacer(minLength: 8)
-                        Image(systemName: "chevron.down").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                        Image(systemName: wheelOpen ? "chevron.up" : "chevron.down").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
                     }
                     .padding(.horizontal, 16).frame(maxHeight: .infinity).contentShape(Rectangle())
                 }
-                .disabled(units.count == 1)
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.tr("Jednotka"))
+                .accessibilityValue(current.name)
+                .accessibilityHint(L10n.tr(wheelOpen ? "Zavře kolečko množství" : "Otevře kolečko množství"))
             }
             .frame(height: 50)
             .background(Palette.track, in: Capsule())
@@ -91,10 +104,13 @@ struct PortionWheel: View {
             let wholeColumn = WheelColumns.Column(rows: (0...current.most).map(String.init), width: 90, label: "Celé", selection: wholeChoice)
             let fractionColumn = WheelColumns.Column(rows: Self.parts.map(\.label), width: 56, label: "Zlomek", selection: partChoice)
             let unitColumn = WheelColumns.Column(rows: units.map(\.name), width: nil, label: "Jednotka", selection: unitChoice)
-            WheelColumns(columns: grams ? [wholeColumn, unitColumn] : [wholeColumn, fractionColumn, unitColumn])
-            .frame(height: 160)
-            // The wheel's own height is larger: its rows never run under the text below.
-            .clipped()
+            if wheelOpen {
+                WheelColumns(columns: grams ? [wholeColumn, unitColumn] : [wholeColumn, fractionColumn, unitColumn])
+                .frame(height: 160)
+                // The wheel's own height is larger: its rows never run under the text below.
+                .clipped()
+                .transition(.opacity)
+            }
         }
         .onAppear(perform: start)
         .onChange(of: typing) { if typing { typed = amount > 0 ? Self.plain(value) : "" } }

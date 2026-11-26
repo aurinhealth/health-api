@@ -43,11 +43,11 @@ struct LiveGymView: View {
             if let day {
                 if summary {
                     PageScroll {
-                        summaryView(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 40)
+                        summaryView(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, 40)
                     }
                 } else {
                     PageScroll {
-                        live(day).padding(.horizontal, 24).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
+                        live(day).padding(.horizontal, PageGrid.margin).padding(.top, 12).padding(.bottom, restEnd == nil ? 40 : 120)
                     }
                     if let restEnd {
                         restBar(until: restEnd).padding(.horizontal, 16).padding(.bottom, 12)
@@ -63,7 +63,7 @@ struct LiveGymView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -88,7 +88,7 @@ struct LiveGymView: View {
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         }
         .sheet(isPresented: $picking) {
-            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in add(name) }
+            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in Task { await add(name) } }
         }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             TechniqueSheet(exercise: item.name, showHistory: true, history: history, inWorkout: true)
@@ -119,6 +119,7 @@ struct LiveGymView: View {
                     Text("Dokončit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 16).frame(height: 34)
                         .background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 34)
                 }
                 .buttonStyle(.plain)
             }
@@ -221,7 +222,7 @@ struct LiveGymView: View {
             if let line = suggestion.line { GymCoachLine(text: line) }
             VStack(spacing: 0) {
                 ForEach(suggestion.picks) { (pick: GymNextPick) in
-                    Button { add(pick.name, suggestion: pick.suggestion) } label: {
+                    Button { Task { await add(pick.name, suggestion: pick.suggestion) } } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "dumbbell.fill").scaledFont(13, cap: .denseCap).foregroundStyle(Palette.muted)
                                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
@@ -259,11 +260,13 @@ struct LiveGymView: View {
             Button { restEnd = end.addingTimeInterval(30) } label: {
                 Text("+30 s").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
             Button { restEnd = nil } label: {
                 Text("Přeskočit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 12).frame(height: 34).background(Palette.track, in: Capsule())
+                    .tapTarget(width: 44, height: 34)
             }
             .buttonStyle(.plain)
         }
@@ -349,7 +352,12 @@ struct LiveGymView: View {
         history = await model.gymHistory()
         if !model.demo { catalog = (try? await model.api.gymExercises()) ?? [] }
         if repeatLast && sheet.exercises.isEmpty {
-            for name in history.lastWorkout(before: date) { add(name, save: false) }
+            // Today's loads from the server, which knows the day (load ramp-back review C2);
+            // an exercise a remembered pain leaves out stays out, unless that is all of them.
+            let names = history.lastWorkout(before: date)
+            let server = model.demo ? nil : await model.api.gymNext(date: date, exercises: names)
+            let kept = names.filter { server?.pain($0) != true }
+            for name in kept.isEmpty ? names : kept { await add(name, server: server, save: false) }
         }
         if fresh || repeatLast { persist() }
         await loadMuscles(day?.exercises.map(\.name) ?? [])
@@ -362,9 +370,13 @@ struct LiveGymView: View {
         if let more = try? await model.api.gymMuscles(names: missing) { muscles.merge(more) { $1 } }
     }
 
-    private func add(_ name: String, suggestion: GymSuggestion? = nil, save: Bool = true) {
+    /// server: today's loads already asked for (Repeat last); else asked for this one.
+    private func add(_ name: String, suggestion: GymSuggestion? = nil, server: GymNext? = nil, save: Bool = true) async {
+        let local = suggestion ?? GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
+        var today = server
+        if today == nil, !model.demo { today = await model.api.gymNext(date: date, exercises: [name]) }
+        let planned = today?.adjust(name, local) ?? local
         guard var next = day else { return }
-        let planned = suggestion ?? GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
         next.appendExercise(name, suggestion: planned)
         coach[name] = planned.line
         day = next

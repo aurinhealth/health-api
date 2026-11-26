@@ -22,12 +22,17 @@ test("a night under 3 hours counts and caps the day at yellow", () => {
   assert.ok(short.components.sleep, "the short night is in the score");
 });
 
-test("no night while nights are usually recorded: no number, HRV and resting HR still there", () => {
+test("no night while nights are usually recorded: no number, resting HR still there, no HRV", () => {
   const none = readinessFor({ date: DATE, google: wellness, sessions: nights });
   assert.equal(none.score, null);
   assert.equal(none.zone, null);
   assert.ok(none.flags.includes("no_night"));
-  assert.ok(none.components.hrv && none.components.restingHR);
+  assert.ok(none.components.restingHR);
+  // The day's HRV was measured awake (watch off at night): not against the nights' range.
+  assert.equal(none.components.hrv, undefined);
+  assert.equal(none.rows.find(r => r.id === DATE).hrv, undefined);
+  // A night recorded keeps it.
+  assert.ok(readinessFor({ date: DATE, google: wellness, sessions: [...nights, tonight(430)] }).components.hrv);
   // Nobody tracking sleep keeps the number from HRV and resting HR.
   assert.notEqual(readinessFor({ date: DATE, google: wellness, sessions: [] }).score, null);
 });
@@ -37,4 +42,17 @@ test("a nap or an afternoon sleep is not the night", () => {
   assert.equal(shortNight([{ date: DATE, startTime: DATE + "T13:00:00Z", endTime: DATE + "T14:30:00Z", durationMin: 90 }], DATE), null);
   assert.equal(shortNight([tonight(20)], DATE), null, "under 30 minutes is a fragment");
   assert.equal(shortNight([tonight(120), tonight(150)], DATE).durationMin, 150);
+});
+
+test("an awake HRV of a day without its night stays out of the baseline", () => {
+  // Day -5 had no night (watch left off) and a low HRV read awake.
+  const gap = day(-5);
+  const rows = wellness.map(r => (r.id === gap ? { ...r, hrv: 20 } : r));
+  const sessions = [...nights.filter(n => n.date !== gap), tonight(430)];
+  const withGap = readinessFor({ date: DATE, google: rows, sessions });
+  const clean = readinessFor({ date: DATE, google: wellness, sessions });
+  assert.equal(withGap.rows.find(r => r.id === gap).hrv, undefined);
+  assert.equal(withGap.components.hrv.baseline, clean.components.hrv.baseline);
+  // Without any sleep tracking every day keeps its HRV.
+  assert.equal(readinessFor({ date: DATE, google: rows, sessions: [] }).rows.find(r => r.id === gap).hrv, 20);
 });

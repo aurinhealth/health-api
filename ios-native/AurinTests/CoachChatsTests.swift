@@ -37,6 +37,66 @@ import SwiftUI
         XCTAssertEqual(chat.messages[1].serverId, 91)
     }
 
+    /// The lines under a live answer: what it was made from and from memory, each optional.
+    func testAnswerSourcesDecode() throws {
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano.","actions":[],"sources":{"from":"From last night's sleep and this morning's HRV","memory":"From memory: knee hurts on long runs"}}"#.utf8))
+        XCTAssertEqual(result.sources?.from, "From last night's sleep and this morning's HRV")
+        XCTAssertEqual(result.sources?.memory, "From memory: knee hurts on long runs")
+        let memoryOnly = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano.","sources":{"memory":"From memory: no swims"}}"#.utf8))
+        XCTAssertNil(memoryOnly.sources?.from)
+        XCTAssertEqual(memoryOnly.sources?.memory, "From memory: no swims")
+        XCTAssertNil(try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ano."}"#.utf8)).sources)
+    }
+
+    /// A reopened chat brings the chips of the server's question and the card of the coach's own message.
+    func testChatQuestionAndCardDecode() throws {
+        let json = #"{"id":7,"title":"Check-in after a break","messages":[{"id":120,"role":"assistant","content":"Five days without a workout. How are you?","createdAt":"2026-11-23 07:00:00"}],"actions":[],"question":{"messageId":120,"chips":["All good","Rest","Sick","Injured"]},"card":{"kind":"week_summary","messageId":120,"key":"2026-11-16"}}"#
+        let chat = try JSONDecoder().decode(ChatDetail.self, from: Data(json.utf8))
+        XCTAssertEqual(chat.question, ChatDetail.Question(messageId: 120, chips: ["All good", "Rest", "Sick", "Injured"]))
+        XCTAssertEqual(chat.card, ChatDetail.Card(kind: "week_summary", messageId: 120, key: "2026-11-16"))
+        let plain = try JSONDecoder().decode(ChatDetail.self, from: Data(#"{"id":4,"title":"t","messages":[]}"#.utf8))
+        XCTAssertNil(plain.question)
+        XCTAssertNil(plain.card)
+    }
+
+    /// The Sunday summary's card: the week against the one before, by sport, the load and sleep in words.
+    func testWeekSummaryDecode() throws {
+        let json = #"{"start":"2026-11-16","end":"2026-11-22","headline":"Good week: 5 of 6 planned workouts done.","workouts":{"done":5,"planned":6,"was":{"done":6,"planned":6}},"minutes":{"total":400,"was":365},"sports":[{"sport":"ride","done":2,"planned":2,"minutes":230,"km":96},{"sport":"gym","done":1,"planned":1,"minutes":55}],"missed":[{"date":"2026-11-19","sport":"run","name":"Tempo run"}],"load":{"state":"ready","level":"above","text":"The last 7 days were harder than your usual 4 weeks."},"sleep":null,"from":"From your workouts and sleep this week"}"#
+        let summary = try JSONDecoder().decode(WeekSummary.self, from: Data(json.utf8))
+        XCTAssertEqual(summary.workouts.was?.done, 6)
+        XCTAssertEqual(summary.minutes.was, 365)
+        XCTAssertEqual(summary.sports?.map(\.sport), ["ride", "gym"])
+        XCTAssertEqual(summary.sports?.first?.km, 96)
+        XCTAssertNil(summary.sports?.last?.km)
+        XCTAssertEqual(summary.load?.text, "The last 7 days were harder than your usual 4 weeks.")
+        XCTAssertNil(summary.sleep)
+        XCTAssertEqual(WeekSummaryCard.count(5, of: 6), L10n.f("%@ z %@", "5", "6"))
+        XCTAssertEqual(WeekSummaryCard.count(3, of: 0), "3")
+        // A sport's row never reads "2 of 0 done".
+        XCTAssertEqual(WeekSummaryCard.done(2, of: 2), L10n.f("%@ z %@ hotovo", "2", "2"))
+        XCTAssertEqual(WeekSummaryCard.done(2, of: 0), L10n.f("%@ hotovo", "2"))
+        // A first week has nothing to compare with.
+        let first = try JSONDecoder().decode(WeekSummary.self, from: Data(#"{"start":"2026-11-16","end":"2026-11-22","workouts":{"done":1,"planned":0},"minutes":{"total":40},"sports":[],"missed":[]}"#.utf8))
+        XCTAssertNil(first.workouts.was)
+        XCTAssertNil(first.minutes.was)
+    }
+
+    /// The race week's cards: fuel rows, and the pacing by km with pace or watts, or by metres for a swim.
+    func testRaceWeekDecode() throws {
+        let json = #"{"race":{"name":"Half marathon","date":"2026-12-20","sport":"run","km":21.1,"daysLeft":6,"estimate":"1 h 48 min"},"text":"6 days to go. The work is done.\n\nA little race pace keeps the legs sharp.","chips":["Fuel and drinks","Pacing plan"],"fuel":{"rows":[{"when":"breakfast","title":"A breakfast you know","text":"about 100 g of carbs, two hours before the start"},{"when":"race","title":"Gel at 30, 60 and 90 min","text":"about 40 g of carbs per hour","perHour":40,"gelsAt":[30,60,90]}],"note":"Estimates, not medical advice. Nothing new on race day.","from":"From your weight, the race length and your estimated time"},"pacing":{"targetSeconds":6480,"averagePace":307,"line":"Start easy, finish strong.","segments":[{"fromKm":1,"toKm":5,"pace":312,"cue":"Start calm, save your legs","paceText":"5:12 /km"},{"fromKm":17,"toKm":21.1,"pace":302,"cue":"Feeling strong? Pick up the pace","paceText":"5:02 /km"}],"from":"From your threshold pace. An estimate, not a promise."}}"#
+        let week = try JSONDecoder().decode(RaceWeek.self, from: Data(json.utf8))
+        XCTAssertEqual(week.race.date, "2026-12-20")
+        XCTAssertEqual(week.chips, ["Fuel and drinks", "Pacing plan"])
+        XCTAssertEqual(week.fuel?.rows.map(\.title), ["A breakfast you know", "Gel at 30, 60 and 90 min"])
+        XCTAssertEqual(week.pacing?.segments.last?.paceText, "5:02 /km")
+        XCTAssertEqual(RaceWeekCard.range(try XCTUnwrap(week.pacing?.segments.first)), L10n.f("km %@ až %@", "1", "5"))
+        let swim = try JSONDecoder().decode(RaceWeek.Pacing.self, from: Data(#"{"line":"Start easy, finish strong.","segments":[{"fromM":0,"toM":100,"pace":95,"paceText":"1:35 /100 m","cue":"Fast start, find clear water"}],"sight":"Lift your eyes every 8 to 10 strokes.","from":"From your CSS."}"#.utf8))
+        XCTAssertEqual(RaceWeekCard.range(swim.segments[0]), L10n.f("%@ až %@ m", "0", "100"))
+        XCTAssertNil(swim.climb)
+        let ride = try JSONDecoder().decode(RaceWeek.Pacing.Segment.self, from: Data(#"{"fromKm":26,"toKm":75,"watts":180,"wattsTo":205,"wattsText":"180–205 W","cue":"Settle into your rhythm"}"#.utf8))
+        XCTAssertEqual(ride.wattsText, "180–205 W")
+    }
+
     /// Copy gives the answer without the Markdown marks.
     func testCopiedAnswerIsPlainText() {
         let text = "## Dnes\n\nAno, **VO2max 5×4 min** sedí.\n\n- Drž 112–118 % FTP\n- Stop pod 105 %\n\n1. Rozjetí\n2. Intervaly\n\n---"

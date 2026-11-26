@@ -247,8 +247,13 @@ extension WatchBridge {
             guard !names.isEmpty else { return nil }
             let catalog = model.demo ? [] : ((try? await model.api.gymExercises()) ?? [])
             day.ensureHeader(date: date)
-            for name in names {
-                day.appendExercise(name, suggestion: GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }))
+            // Today's loads from the server, which knows the day (load ramp-back review C2):
+            // an exercise a remembered pain leaves out stays out, unless that is all of them.
+            let server = model.demo ? nil : await model.api.gymNext(date: date, exercises: names)
+            let kept = names.filter { server?.pain($0) != true }
+            for name in kept.isEmpty ? names : kept {
+                let local = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
+                day.appendExercise(name, suggestion: server?.adjust(name, local) ?? local)
             }
         case .rested:
             guard !model.demo else { return nil }

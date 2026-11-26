@@ -11,7 +11,7 @@ struct HealthView: View {
                 if let health = model.health {
                     PageScroll {
                         HealthContent(health: health)
-                            .padding(.bottom, 100)
+                            .padding(.bottom, PageGrid.tabBottom)
                     }
                     .refreshable { await model.refreshHealth() }
                     .tabTopBar {
@@ -63,9 +63,9 @@ struct DetailScreen<Content: View>: View {
                     BackSlot { dismiss() }
                     content
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
-                .padding(.bottom, 100)
+                .padding(.bottom, PageGrid.tabBottom)
             }
         }
         .floatingBack(title: title, pinTitle: pinTitle, coach: showsCoach ? CoachEntry(subject: coach, view: Self.coachView(glow), companion: info) : nil) { dismiss() }
@@ -112,11 +112,15 @@ struct HealthContent: View {
                         ConnectionProblemCard()
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
+                // Over the day pager, whose scroll view reaches 24 pt up for the
+                // cards' shadows and took the taps on the month and Settings
+                // (retest 618 R3); Today has the week strip in between.
+                .zIndex(1)
             }
             day
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, editing ? 16 : 0)
                 .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
             // "Edit overview" as on Food, under the day rather than inside the
@@ -293,7 +297,7 @@ struct ReadinessDetailContent: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 20)
-                if let line = ReadinessText.numbersLine(model.today?.readiness.numbersLine) {
+                if let line = ReadinessText.numbersLine(model.today?.readiness.numbersLine, off: model.today?.readiness.numbersOff) {
                     Text(verbatim: line + ".").font(Typo.heading(24, relativeTo: .title3)).foregroundStyle(Palette.ink)
                         .multilineTextAlignment(.center).frame(maxWidth: .infinity)
                         .padding(.top, 12)
@@ -342,8 +346,10 @@ struct ReadinessDetailContent: View {
 
             // The coach card at the bottom (concept 4); Ask Coach is its last
             // row, the coach itself is top right.
-            if let summary, let lead = summary.headline ?? summary.text {
-                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
+            // Reason and advice as on Today; the headline is a title, never
+            // the first words of the sentence (review 2026-11-25).
+            if let summary, case let words = TodayCoachWords.split(summary), let lead = words.text ?? summary.text {
+                CoachSentenceCard(lead: lead, key: words.advice).padding(.top, 24)
             }
         }
         .task { await model.loadQuarter(ending: health.date) }
@@ -591,7 +597,10 @@ struct WristTempWidget: View {
                         TileRange(value: deviation, low: -0.5, high: 0.5, text: TileRange.temperatureWord(deviation), edges: TileRange.temperatureEdges, tint: Palette.amber)
                     }
                 } else {
-                    NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
+                    // Skin at the wrist is not body temperature: no number
+                    // before the usual exists (review 2026-11-25: "36,3 °C").
+                    Text("Obvyklá teplota se ukáže po 7 nocích.").font(Typo.small).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if bars.count > 1 && (size != .small || wrist.deviation == nil) {
                     VStack(spacing: 6) {
@@ -631,7 +640,7 @@ struct MuscleWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Svalová hmota", color: Palette.brown)
+            WidgetHeader(title: "Beztuková hmota", color: Palette.brown)
             SizedWidgetBody(size: size, mediumChart: 44) {
                 NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
                 if let change = muscle.change, change != 0 {

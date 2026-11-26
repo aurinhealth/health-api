@@ -80,6 +80,7 @@ struct ReportProblemView: View {
                     } label: {
                         Image(systemName: "trash").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.rust)
                             .frame(width: 36, height: 36)
+                            .tapTarget(width: 36, height: 36)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Odebrat")

@@ -18,7 +18,7 @@ struct TrainingView: View {
                     PageScroll {
                         TrainingContent(training: training,
                                         showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
-                            .padding(.bottom, 100)
+                            .padding(.bottom, PageGrid.tabBottom)
                     }
                     .refreshable { await model.refreshTraining() }
                     .tabTopBar {
@@ -55,7 +55,7 @@ struct TrainingView: View {
         .animation(.snappy, value: toast?.id)
         .task(id: toast?.id) {
             guard let current = toast else { return }
-            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            try? await Task.sleep(for: PlanToast.shownFor)
             if toast?.id == current.id { toast = nil }
             // Also when the screen went away or another toast came: a cancel still reaches the server.
             if let commit = current.settle(undo: false) { Task { await commit() } }
@@ -132,7 +132,7 @@ struct TrainingContent: View {
                 board
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, PageGrid.margin)
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
         .sheet(isPresented: $monthSheet) {
@@ -152,7 +152,6 @@ struct TrainingContent: View {
         TrainingCalendarCard(today: training.date, onPick: pickDay, jump: monthJump)
             .onChange(of: jumpDay) { _, jump in monthJump = jump }
             .padding(.top, 14)
-            .padding(.horizontal, -8)
 
         PlanSummaryCard(training: training)
             .padding(.top, 12)
@@ -494,6 +493,7 @@ struct NextSession: View {
     var fill = false
     /// A ride's, run's or swim's steps, for its parts (loaded for the card).
     @State private var blocks: [PlannedWorkout.Block]?
+    @State private var fuel: PlannedWorkout.Fuel?
     /// The gym day, for its parts and their minutes.
     @State private var gymDay: GymDay?
     @State private var askLighter = false
@@ -601,9 +601,11 @@ struct NextSession: View {
             cells.append(.init(label: L10n.tr("Série"), value: String(lines.reduce(0) { $0 + Self.left($1) })))
         } else if sport == "swim", let blocks, let m = WorkoutCardParts.meters(blocks) {
             cells.append(.init(label: L10n.tr("Vzdálenost"), value: Fmt.int(m), unit: "m"))
+        } else if let fuel {
+            // Carbs per hour from 45 min (Carbs B), the server's number.
+            cells.append(.init(label: L10n.tr("Sacharidy"), value: Fmt.int(fuel.perHour), unit: "g/h"))
         } else if let blocks, (session.minutes ?? 0) < 45 {
-            // Carbs per hour stands here from 45 min once the server has it (Carbs B);
-            // a short workout shows its work minutes.
+            // A short workout shows its work minutes.
             let work = WorkoutCardParts.workMinutes(blocks, sport: sport)
             if work > 0 { cells.append(.init(label: L10n.tr("Práce"), value: String(work), unit: "min")) }
         }
@@ -654,13 +656,16 @@ struct NextSession: View {
     private func loadParts() async {
         // Another workout in this place (the first one done): never its parts.
         blocks = nil
+        fuel = nil
         gymDay = nil
         guard let model, !model.demo else { return }
         if isGym {
             guard session.date >= today else { return }
             gymDay = try? await model.gymDay(date: session.date)
         } else if let id = session.eventId {
-            blocks = (try? await model.api.plannedWorkout(eventId: id))?.workout.steps
+            let planned = try? await model.api.plannedWorkout(eventId: id)
+            blocks = planned?.workout.steps
+            fuel = planned?.fuel
         }
     }
 

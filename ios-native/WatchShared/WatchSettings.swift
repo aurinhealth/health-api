@@ -3,7 +3,7 @@ import Foundation
 /// Settings → Apple Watch on the iPhone (Screens/SettingsPages/SettingsWatch.swift),
 /// sent to the watch with Today: the pages by the crown and their order, what
 /// the end of a rest does, whether Training mode opens the gym on the watch,
-/// and whether the alarm rings on the watch.
+/// whether the alarm rings on the watch and when the iPhone's backup rings.
 struct WatchSettings: Codable, Equatable, Sendable {
     static let contextKey = "watchSettings"
     static let allPages = ["readiness", "training", "food"]
@@ -23,6 +23,12 @@ struct WatchSettings: Codable, Equatable, Sendable {
     /// Repeat last workout on a day without a plan; nil before the first.
     var lastGym: String? = nil
     var lastGymExercises: Int? = nil
+    /// When the iPhone's backup for the watch's alarm rings; nil when none is set.
+    var alarmBackup: Date? = nil
+    /// "sick" or "injured" while Stav sportovce pauses training: the watch then
+    /// offers no gym of its own (Repeat last, Empty), as the server builds none
+    /// (load ramp-back review 2026-11-25, C12); nil otherwise.
+    var trainingPaused: String? = nil
 
     init() {}
 
@@ -37,6 +43,8 @@ struct WatchSettings: Codable, Equatable, Sendable {
         restExercises = try c.decodeIfPresent(Int.self, forKey: .restExercises) ?? 120
         lastGym = try c.decodeIfPresent(String.self, forKey: .lastGym)
         lastGymExercises = try c.decodeIfPresent(Int.self, forKey: .lastGymExercises)
+        alarmBackup = try c.decodeIfPresent(Date.self, forKey: .alarmBackup)
+        trainingPaused = try c.decodeIfPresent(String.self, forKey: .trainingPaused)
     }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }

@@ -30,6 +30,8 @@ final class WatchAlarm: NSObject, ObservableObject {
     }
     /// The alarm rings now (AlarmRinging on the screen).
     @Published private(set) var ringing = false
+    /// Snoozed: when it rings again, for the Snoozed screen (watch concept 08).
+    @Published private(set) var snoozedUntil: Date?
     @Published private(set) var next: Date?
 
     private var session: WKExtendedRuntimeSession?
@@ -69,9 +71,11 @@ final class WatchAlarm: NSObject, ObservableObject {
         session?.invalidate()
         session = nil
         ringing = false
+        let wasSnoozed = snoozedUntil != nil
+        snoozedUntil = nil
         next = nil
         schedule()
-        if wasRinging { tellPhone([WatchSnapshot.alarmStoppedKey: true]) }
+        if wasRinging || wasSnoozed { tellPhone([WatchSnapshot.alarmStoppedKey: true]) }
     }
 
     func snoozeNow() {
@@ -79,9 +83,13 @@ final class WatchAlarm: NSObject, ObservableObject {
         session = nil
         ringing = false
         let until = Date().addingTimeInterval(Self.snooze)
+        snoozedUntil = until
         schedule(at: until)
         tellPhone([WatchSnapshot.alarmSnoozedKey: until])
     }
+
+    /// The Snoozed screen closed: the alarm still rings again.
+    func hideSnoozed() { snoozedUntil = nil }
 
     /// Settings → Apple Watch → Rings on, changed on the iPhone.
     func fromPhone(_ on: Bool) {
@@ -109,13 +117,28 @@ final class WatchAlarm: NSObject, ObservableObject {
     }
 
     private func ring(_ running: WKExtendedRuntimeSession) {
+        snoozedUntil = nil
         ringing = true
-        let type: WKHapticType = haptic == "gentle" ? .click : haptic == "strong" ? .failure : .notification
-        running.notifyUser(hapticType: type) { pointer in
-            pointer.pointee = type
+        let taps = Self.taps(haptic)
+        let count = TapCount()
+        running.notifyUser(hapticType: taps[0]) { pointer in
+            count.value += 1
+            pointer.pointee = taps[min(count.value, taps.count - 1)]
             return 2
         }
     }
+
+    /// The taps in turn, the last one repeated: Rising starts with a click and
+    /// gets stronger every two taps, the others stay the same.
+    static func taps(_ haptic: String) -> [WKHapticType] {
+        switch haptic {
+        case "gentle": [.click]
+        case "strong": [.failure]
+        default: [.click, .click, .directionUp, .directionUp, .notification, .notification, .failure]
+        }
+    }
+
+    private final class TapCount: @unchecked Sendable { var value = 0 }
 
     /// Rings on the watch or not, stopped or snoozed: the iPhone keeps its
     /// backup alarm five minutes after the watch's (WatchAlarmBridge).

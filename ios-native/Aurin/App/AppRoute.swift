@@ -55,6 +55,8 @@ enum AppRoute: Hashable {
     case muscles
     /// Svaly → one muscle (its id in /app/api/muscles): strength and how often.
     case muscle(String)
+    /// Svaly → a group with more muscles (Shoulders, Arms…): its FreshnessGroup id.
+    case muscleGroup(String)
     /// The exercise catalogue on one muscle chip (BodyFigure id).
     case exercises(String)
     /// Cycle tracking's calendar (Health → Cyklus).
@@ -137,6 +139,7 @@ enum AppRoute: Hashable {
         case "records": self = .insights
         case "muscles": self = .muscles
         case "muscle" where parts.count > 1: guard Self.isMuscleId(parts[1]) else { return nil }; self = .muscle(parts[1])
+        case "muscle-group" where parts.count > 1: guard Self.isMuscleId(parts[1]) else { return nil }; self = .muscleGroup(parts[1])
         case "cycle": self = .cycle
         case "journal": self = .journal(parts.count > 1 && Self.isDay(parts[1]) ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
@@ -220,6 +223,7 @@ struct RouteScreen: View {
         case .insights: InsightsView()
         case .muscles: MusclesView()
         case .muscle(let id): MuscleDetailView(id: id)
+        case .muscleGroup(let id): MuscleGroupView(id: id)
         case .exercises(let muscle): ExerciseLibraryView(muscle: muscle)
         case .cycle: CycleCalendarView()
         case .coachPick(let all): CoachPickView(all: all)

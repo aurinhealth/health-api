@@ -15,6 +15,10 @@ struct RootView: View {
     @State private var showSyncStatus = false
     /// Přidat jídlo and Vyfotit jídlo from the icon's menu.
     @State private var quickFood: FoodStart?
+    /// The meal a meal reminder's "Log lunch" adds to (Reminders); nil: the one of now.
+    @State private var quickMeal: String?
+    /// A "+" action's sheet, opened here once the card closed (PlusCard.present).
+    @State private var plusSheet: PlusSheet?
     @State private var quickActions = QuickActions.shared
     /// A food the owner fixed, opened from its push (FoodPush).
     @State private var foodPush = FoodPush.shared
@@ -31,13 +35,14 @@ struct RootView: View {
     /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
     @State private var visited: Set<AppTab> = []
     @State private var scrolledTabs: Set<AppTab> = []
+    /// The open tab's widgets are being edited: "Synced" steps aside for "+" and "Hotovo" (617 #22).
+    @State private var editingWidgets = false
     /// iPhone Duo open, or a wide window beside another app: two columns (WideLayout).
     @State private var wide = false
     private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
     /// Not capped yet: the screens below cap it (textSizes).
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if model.updateRequired {
@@ -145,6 +150,9 @@ struct RootView: View {
                             .environment(\.scrollDragReport, {
                                 if tab == model.tab { barHeld = false }
                             })
+                            .environment(\.widgetEditingReport, { (editing: Bool) in
+                                if tab == model.tab, editing != editingWidgets { editingWidgets = editing }
+                            })
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
@@ -153,6 +161,8 @@ struct RootView: View {
                     ScreenTrail.visit(model.tab, paths[model.tab]?.last)
                 }
                 .onChange(of: model.tab) { old, tab in
+                    // Tabs stay built when switched, so a tab left mid-edit does not hide "Synced" elsewhere.
+                    editingWidgets = false
                     ScreenTrail.visit(tab, model.paths[tab]?.last)
                     visited.insert(old)
                     // A tab built earlier: only its data is checked, like on its first visit.
@@ -164,12 +174,12 @@ struct RootView: View {
                 }
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
-                        if let status = model.syncStatus, !model.offline {
+                        if let status = model.syncStatus, !model.offline, !editingWidgets {
                             SyncPill(status: status) {
                                 model.dismissSyncFailure()
                                 Task { await model.refresh(announce: true) }
                             }
-                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                            .motionTransition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
@@ -186,11 +196,13 @@ struct RootView: View {
                     .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Zdroje dat (Aurin posílá) (SyncViews.swift).
-                if let report = model.syncReport, !showSyncStatus {
+                // Over a workout only a failed one (its Zkusit znovu), above the pinned
+                // Zavřít, never on it (Petr 2026-11-24); "sent" is left out there.
+                if let report = model.syncReport, !showSyncStatus, !model.immersive || report.failed {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, model.immersive ? 100 : toastInset)
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // A food read from its label went to the owner for the common catalogue (AppModel.suggestNewFood).
@@ -198,7 +210,7 @@ struct RootView: View {
                     ThanksToast(text: thanks) { model.thanks = nil }
                         .padding(.horizontal, 16)
                         .padding(.bottom, toastInset)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
                 // An AI lookup that ended after "Co přidáme?" closed: a tap shows it in Jídlo (AppModel+PendingFood.swift).
@@ -210,7 +222,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
                 }
                 // A deletion with its "Vrátit" (AppModel.deleteLater).
@@ -221,7 +233,7 @@ struct RootView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, toastInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
                 // "+" open: the page blurs and dims a little under its card
@@ -236,6 +248,19 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(3)
                 }
+                // Under the floating bar only: content fades out so it never shows between the icons;
+                // ~85 % so a hint of the next row stays for the glass (Petr 2026-11-25).
+                if !model.immersive && !barHidden && tabsShown && !showAdd {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(colors: [Palette.background.opacity(0), Palette.background.opacity(0.85)],
+                                       startPoint: .top, endPoint: .bottom).frame(height: 20)
+                        Color.clear.frame(height: 54 + (model.minimizedGym == nil ? 0 : 68))
+                            .background(Palette.background.opacity(0.85).ignoresSafeArea(edges: .bottom))
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
                 if !model.immersive {
                     VStack(spacing: 8) {
                         // The "+" card floats above the bar (PlusCard.swift).
@@ -243,12 +268,15 @@ struct RootView: View {
                             PlusCard(close: closeAdd, openCoach: {
                                 closeAdd()
                                 showCoach = true
+                            }, present: { sheet in
+                                closeAdd()
+                                plusSheet = sheet
                             })
                             .frame(maxWidth: wide ? WideLayout.tabBarWidth : .infinity)
                             .padding(.horizontal, 16)
                             .padding(.bottom, 4)
                             .dynamicTypeSize(Self.textSizes)
-                            .transition(reduceMotion ? .opacity : .scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
+                            .motionTransition(.scale(scale: 0.92, anchor: .bottom).combined(with: .opacity))
                         }
                         // A workout hidden with its arrow (TrainingModeView): back to it.
                         if let gym = model.minimizedGym {
@@ -258,7 +286,7 @@ struct RootView: View {
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 4)
                                 .dynamicTypeSize(Self.textSizes)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                         // Details have no tab bar; a hidden workout stays reachable there.
                         if !barHidden && tabsShown {
@@ -272,10 +300,10 @@ struct RootView: View {
                                 .padding(.bottom, 8)
                                 .dynamicTypeSize(Self.textSizes)
                                 .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .motionTransition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
                     .zIndex(showAdd ? 4 : 0)
                     // Open, the card and the bar are all VoiceOver reads; escape closes.
@@ -301,8 +329,24 @@ struct RootView: View {
             }
             .sheet(item: $coachChat) { ref in CoachView(openChat: ref.id).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
+            .sheet(item: $plusSheet) { sheet in
+                Group {
+                    switch sheet {
+                    case .food(let start): AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
+                    case .weight: WeightEntrySheet()
+                    case .workout: ManualWorkoutSheet()
+                    case .drink: DrinkSheet(kind: "water") { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) }
+                    case .period: PeriodLogSheet()
+                    case .status: AthleteStatusSheet(current: model.athleteStatus ?? .active)
+                    }
+                }
+                .dynamicTypeSize(Self.textSizes)
+            }
+            // What "+" adds goes to today, also while the screens show another day:
+            // set here once, as the card closes before its sheet opens.
+            .onChange(of: showAdd || plusSheet != nil) { _, open in model.writesToday = open }
             .sheet(item: $quickFood) { start in
-                AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
+                AddFoodSheet(meal: quickMeal ?? MealSlot.now(slots: model.food?.mealSlots), start: start)
                     .dynamicTypeSize(Self.textSizes)
                     // Food from the icon goes to today, like "+".
                     .onAppear { model.writesToday = true }
@@ -321,7 +365,7 @@ struct RootView: View {
                 .presentationBackground(Palette.background)
                 // Added from the push goes to today, like "+".
                 .onAppear { model.writesToday = true }
-                .onDisappear { model.writesToday = false }
+                .onDisappear { model.writesToday = false; model.addDay = nil }
             }
             .onChange(of: coachPush.chat, initial: true) { _, chat in
                 guard let chat else { return }
@@ -352,7 +396,7 @@ struct RootView: View {
             // toast took its place.
             .task(id: model.undoToast?.id) {
                 guard let current = model.undoToast else { return }
-                try? await Task.sleep(for: .seconds(6))
+                try? await Task.sleep(for: PlanToast.shownFor)
                 if model.undoToast?.id == current.id { model.undoToast = nil }
                 // Its own task: hiding the toast ends this one, which cut the
                 // deletion short and left "zrušeno" on top.
@@ -378,6 +422,12 @@ struct RootView: View {
                 CycleTrackingConsentSheet { Task { try? await model.saveCycleSettings(["enabled": .bool(true), "consent": .bool(true)]) } }
                     .dynamicTypeSize(Self.textSizes)
             }
+            .alert("Novinky e-mailem?", isPresented: Binding(get: { model.productEmailsAsk && !model.passkeyOffer && !model.needsSetup && !model.cycleConsentAsk }, set: { model.productEmailsAsk = $0 })) {
+                Button("Ano, posílat") { Task { try? await model.api.setProductEmails(true) } }
+                Button("Ne, díky", role: .cancel) { Task { try? await model.api.setProductEmails(false) } }
+            } message: {
+                Text("Občas ti napíšeme o nových funkcích Aurinu. Vypneš to v Nastavení → Oznámení nebo odkazem v každém e-mailu.")
+            }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
@@ -391,6 +441,8 @@ struct RootView: View {
                 }
                 // A fresh install takes back the settings the account kept.
                 if !model.demo { await SettingsBackup.restore(api: model.api) }
+                // Product news by e-mail, never asked (an account from before it): once, as an opt-in.
+                if !model.demo && !model.needsSetup, let chosen = try? await model.api.productEmailsChoice(), chosen == nil { model.productEmailsAsk = true }
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
@@ -456,18 +508,21 @@ struct RootView: View {
         if showShare { return "share" }
         if showSyncStatus { return "syncStatus" }
         if quickFood != nil { return "addFood" }
+        if let plusSheet { return plusSheet.id.hasPrefix("food") ? "addFood" : plusSheet.id }
         if fixedFood != nil { return "foodAmount" }
         return nil
     }
 
     /// Closes whatever sheet was open, then opens the next thing.
     private func closeSheets(then next: @escaping () -> Void) {
-        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || fixedFood != nil || coachChat != nil
+        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || plusSheet != nil || fixedFood != nil || coachChat != nil
         showAdd = false
         showSettings = false
         showCoach = false
         showSyncStatus = false
         quickFood = nil
+        quickMeal = nil
+        plusSheet = nil
         fixedFood = nil
         coachChat = nil
         // One sheet at a time: the new one opens once the old has closed.
@@ -499,6 +554,9 @@ struct RootView: View {
         case "liveGym": model.open(.liveGym(today, false))
         case "weekPlan": model.open(.weekPlan)
         case "sleep": model.open(.sleep)
+        case let meal where meal.hasPrefix("meal."):
+            quickMeal = String(meal.dropFirst(5))
+            quickFood = .search
         default: break
         }
     }
@@ -582,7 +640,7 @@ struct OfflineBanner: View {
 
 /// The sync after opening the app: "Synchronizuji…" with a spinner,
 /// "Synchronizováno" for a moment, or a failure a tap tries again. It sits
-/// where a detail's pinned bar has its title (PinnedTopBar hides the title).
+/// where a detail's pinned bar has its title (PageHeader hides the title).
 struct SyncPill: View {
     let status: AppModel.SyncStatus
     let retry: () -> Void

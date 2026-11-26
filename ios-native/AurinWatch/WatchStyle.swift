@@ -33,7 +33,8 @@ enum W {
         static let sleep = Color(hex: 0x262556)
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
-        static let food = Color(hex: 0x163047)
+        /// Rose, Food's tint as on the iPhone (watch concept 09).
+        static let food = Color(hex: 0x3E1B25)
         /// Indigo, the coach's colour as on the iPhone (watch audit D4).
         static let coach = Color(hex: 0x25233F)
     }
@@ -52,11 +53,13 @@ enum W {
     }
 
     /// The zone in a word, as the first page's pill: the colour never alone.
+    /// The numbers against their usual range, as the iPhone's verdict, not
+    /// high, moderate or low (Petr 2026-11-26, watch review decision 5).
     static func zoneWord(_ zone: String?) -> String? {
         switch zone {
-        case "green": tr("vysoká", "high")
-        case "yellow": tr("střední", "moderate")
-        case "red": tr("nízká", "low")
+        case "green": tr("obvyklé", "usual")
+        case "yellow": tr("část pod", "some below")
+        case "red": tr("pod obvyklým", "below usual")
         default: nil
         }
     }
@@ -152,9 +155,16 @@ enum W {
     /// The crown's step: 0.5 kg or 1 lb.
     static var weightStep: Double { imperial ? 1 : 0.5 }
 
-    /// "1,2 l" or "41 fl oz".
+    /// "1,2 l", "1.2 L" or "41 fl oz": litres as the iPhone writes them in each language.
     static func water(_ ml: Double) -> String {
-        imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " l"
+        imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " " + waterUnit
+    }
+
+    static var waterUnit: String { imperial ? "fl oz" : english ? "L" : "l" }
+
+    /// The Czech word for a count: 1 série, 2 až 4 série, 0 or 5 and more sérií.
+    nonisolated static func czech(_ count: Int, _ one: String, _ few: String, _ many: String) -> String {
+        "\(count) " + (count == 1 ? one : (2...4).contains(count) ? few : many)
     }
 
     /// A glass of a drink: "200 ml" or "7 fl oz".
@@ -172,12 +182,18 @@ enum W {
         return "\(m / 60):" + String(format: "%02d", m % 60)
     }
 
-    /// 432 minutes as "7h 12m" ("7 h 12 min" in Czech).
-    static func duration(minutes: Double) -> String {
+    /// 432 minutes as "7 h 12 min", 45 as "45 min", 540 as "9 h": durations
+    /// read so everywhere, in both languages (Petr 2026-11-23).
+    nonisolated static func duration(minutes: Double) -> String {
         let m = Int(minutes.rounded())
-        // "9h of sleep", not "9h 0m".
-        if m % 60 == 0 { return english ? "\(m / 60)h" : "\(m / 60) h" }
-        return english ? "\(m / 60)h \(m % 60)m" : "\(m / 60) h \(m % 60) min"
+        if m < 60 { return "\(m) min" }
+        return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) min"
+    }
+
+    /// A run's pace in the user's unit: ("4:20", "/km"), or per mile in imperial.
+    static func runPace(_ secondsPerKm: Double) -> (value: String, unit: String) {
+        let s = Int((imperial ? secondsPerKm * 1.609344 : secondsPerKm).rounded())
+        return ("\(s / 60):" + String(format: "%02d", s % 60), imperial ? "/mi" : "/km")
     }
 
     static func minutesChange(_ value: Double) -> String {

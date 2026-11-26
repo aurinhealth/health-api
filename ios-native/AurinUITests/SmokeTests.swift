@@ -101,6 +101,16 @@ final class SmokeTests: XCTestCase {
         hittable(app.buttons.matching(identifier: "Profil a nastavení")).tap()
         XCTAssertTrue(app.staticTexts["Prohlížíš ukázková data. Změny se neukládají."].waitForExistence(timeout: 8), "the settings did not open")
         shot("nastaveni")
+        // Settings → Oznámení (Notifications concept v3), when the row is reached.
+        let notifications = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Oznámení")).firstMatch
+        if !notifications.isHittable { app.swipeUp() }
+        if notifications.waitForExistence(timeout: 4), notifications.isHittable {
+            notifications.tap()
+            if app.staticTexts["Ranní připravenost"].waitForExistence(timeout: 8) {
+                pause()
+                shot("oznameni")
+            }
+        }
 
         // Dnes → the athlete's status (Aktivní, Nemoc, Zranění, Pauza).
         launch("-demo")

@@ -21,6 +21,8 @@ final class TodayRedesignTests: XCTestCase {
             XCTAssertFalse(line?.contains("Good day") ?? true, key)
         }
         XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers are in your usual range or better")
+        // Green with sleep under its range names it (review 2026-11-25).
+        XCTAssertEqual(ReadinessText.numbersLine("hard", off: ["sleep"]), "Short sleep")
         XCTAssertNil(ReadinessText.numbersLine(nil))
         XCTAssertNil(ReadinessText.numbersLine("legs"))
     }
@@ -51,13 +53,14 @@ final class TodayRedesignTests: XCTestCase {
             L10n.setLanguage("cs")
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
-        XCTAssertEqual(TodayDials.length(414), "6\u{00A0}h\u{00A0}54")
-        XCTAssertEqual(TodayDials.length(425), "7\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(TodayDials.length(414), "6\u{00A0}h\u{00A0}54\u{00A0}min")
+        XCTAssertEqual(TodayDials.length(425), "7\u{00A0}h\u{00A0}5\u{00A0}min")
         XCTAssertEqual(TodayDials.length(45), "45\u{00A0}min")
         XCTAssertEqual(TodayDials.length(420), "7\u{00A0}h")
         let dials = TodayDials(today: DemoData.today)
         // The need in the same "8 h 05" as the dial.
-        XCTAssertEqual(dials.sleep.note, "53 min short of 8\u{00A0}h\u{00A0}05")
+        XCTAssertEqual(dials.sleep.note, "of 8\u{00A0}h\u{00A0}5\u{00A0}min needed")
+        XCTAssertEqual(dials.sleep.spokenNote, "53\u{00A0}min short of 8\u{00A0}h\u{00A0}5\u{00A0}min")
         XCTAssertNotNil(dials.strain.note)
         XCTAssertTrue(dials.strain.note?.hasPrefix("target ") ?? false)
     }

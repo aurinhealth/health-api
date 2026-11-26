@@ -36,7 +36,7 @@ enum CycleHealth {
         var out = Setup()
         out.lastPeriod = starts.last
         let gaps = zip(starts, starts.dropFirst()).map { daysBetween($0, $1) }.filter { $0 >= 18 && $0 <= 50 }.suffix(6)
-        if gaps.count >= 2 { out.cycleLength = min(40, max(21, Int((Double(gaps.reduce(0, +)) / Double(gaps.count)).rounded()))) }
+        if gaps.count >= 2 { out.cycleLength = min(50, max(18, Int((Double(gaps.reduce(0, +)) / Double(gaps.count)).rounded()))) }
         out.contraception = await contraception()
         return out
     }

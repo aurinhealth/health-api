@@ -46,14 +46,14 @@ struct DayLeftLine: View {
 
     private func title(over: Bool) -> some View {
         let text = over ? L10n.tr("Po přidání")
-            : isToday ? L10n.tr("Po přidání zbývá dnes") : L10n.f("Po přidání zbývá %@", Fmt.onWeekday(day))
+            : isToday ? L10n.tr("Po přidání zbývá dnes") : L10n.f("Po přidání zbývá na %@", Fmt.weekdayDayMonthShort(day))
         return Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.ink).lineLimit(1)
     }
 
     @ViewBuilder private func amounts(left: Double, over: Bool) -> some View {
         if over {
             let text = isToday ? L10n.f("%@ kcal nad dnešním cílem", Fmt.int(-left))
-                : L10n.f("%@ kcal nad cílem %@", Fmt.int(-left), Fmt.onWeekday(day))
+                : L10n.f("%@ kcal nad cílem na %@", Fmt.int(-left), Fmt.weekdayDayMonthShort(day))
             Text(verbatim: text).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.amber).lineLimit(1)
         } else {
             (Text(verbatim: L10n.f("%@ kcal", Fmt.int(left))).font(Typo.small.weight(.bold))
@@ -94,19 +94,21 @@ struct DayLeftLine: View {
 
     /// The day's numbers as the phone has them: Food when it shows that day,
     /// else Today's for today.
+    /// Against the day's one set of goals (617 #3: "0 of 3,321" here, "of 3,319" on Food).
     private func intake(on day: String) -> DayIntake? {
+        guard let goals = model.goals(on: day) else { return nil }
         if let food = model.food, food.date == day {
-            return DayIntake(kcal: food.kcal ?? 0, kcalTarget: food.target,
-                             protein: food.macros.protein.eaten ?? 0, proteinTarget: food.macros.protein.target,
-                             carbs: food.macros.carbs.eaten ?? 0, carbsTarget: food.macros.carbs.target,
-                             carbsLimit: food.macros.carbs.limit == true)
+            return DayIntake(kcal: food.kcal ?? 0, kcalTarget: goals.kcal,
+                             protein: food.macros.protein.eaten ?? 0, proteinTarget: goals.protein,
+                             carbs: food.macros.carbs.eaten ?? 0, carbsTarget: goals.carbs,
+                             carbsLimit: goals.carbsLimit)
         }
         if let today = model.today, today.date == day {
             let n = today.nutrition
-            return DayIntake(kcal: n.kcal ?? 0, kcalTarget: n.target,
-                             protein: n.protein.eaten ?? 0, proteinTarget: n.protein.target,
-                             carbs: n.carbs.eaten ?? 0, carbsTarget: n.carbs.target,
-                             carbsLimit: n.carbs.limit == true)
+            return DayIntake(kcal: n.kcal ?? 0, kcalTarget: goals.kcal,
+                             protein: n.protein.eaten ?? 0, proteinTarget: goals.protein,
+                             carbs: n.carbs.eaten ?? 0, carbsTarget: goals.carbs,
+                             carbsLimit: goals.carbsLimit)
         }
         return nil
     }

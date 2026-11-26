@@ -313,13 +313,29 @@ enum GymCoach {
         }
         let goal = Self.target(last), hit = Self.allHit(last)
         let count = min(max(last.sets.count, 2), 5)
+        // After a break the server's rule (strength-intelligence.js progressionDecision,
+        // load ramp-back review 2026-11-25, C2): from 14 days the weight holds, after
+        // more than 21 days it goes down by 10 %.
+        let gap = MuscleFatigue.days(from: last.date, to: date)
         if let top = Self.topKg(last) {
-            let next = hit ? top + step : top
+            if gap > 21 {
+                let next = min(top, max(step, (top * 0.9 / step).rounded(.down) * step))
+                let work = Array(repeating: GymSuggestion.Planned(kg: next, reps: goal), count: count)
+                return GymSuggestion(warmups: warmups(for: next), work: work,
+                                     line: L10n.f("Naposledy před %@ dny. Dnes začni lehčeji, na %@ %@.", String(gap), shown(next), Units.weightUnit))
+            }
+            let next = hit && gap < 14 ? top + step : top
             let work = Array(repeating: GymSuggestion.Planned(kg: next, reps: goal), count: count)
-            let line = hit
+            let line = gap >= 14
+                ? L10n.f("Naposledy před %@ dny. Dnes zůstaň na %@ %@.", String(gap), shown(next), Units.weightUnit)
+                : hit
                 ? L10n.f("Minule %@ × %@ a šlo to. Dnes zkus %@ %@.", shown(top), repsList(last), shown(next), Units.weightUnit)
                 : L10n.f("Minule %@ × %@. Dnes zůstaň na %@ %@ a dotáhni všechna opakování.", shown(top), repsList(last), shown(next), Units.weightUnit)
             return GymSuggestion(warmups: warmups(for: next), work: work, line: line)
+        }
+        if gap >= 14 {
+            let work = Array(repeating: GymSuggestion.Planned(kg: nil, reps: goal), count: count)
+            return GymSuggestion(warmups: [], work: work, line: L10n.f("Naposledy před %@ dny. Dnes stejně jako minule.", String(gap)))
         }
         let reps = hit ? goal + 1 : goal
         let work = Array(repeating: GymSuggestion.Planned(kg: nil, reps: reps), count: count)
@@ -551,10 +567,10 @@ enum GymCoach {
         return (diff > 0 ? "+" : "−") + L10n.plural("%lld opakování", abs(diff))
     }
 
-    /// A workout's length as a big number: "52" min, or "1 h 02" (Fmt.duration).
+    /// A workout's length as a big number: "52" min, or "1 h 2" min (Fmt.durationParts).
     static func clock(_ minutes: Int) -> (value: String, unit: String?) {
-        if minutes < 60 { return (String(minutes), "min") }
-        return (Fmt.duration(minutes), nil)
+        let parts = Fmt.durationParts(minutes)
+        return (parts.number, parts.unit)
     }
 }
 
@@ -566,8 +582,10 @@ extension GymDay {
         set(row: 2, column: 3, name)
     }
 
-    /// Minutes from the start to the end of a workout logged in the app.
+    /// Minutes of a workout logged in the app: without its pauses when
+    /// Dokončit saved them, else from the start to the end.
     var loggedMinutes: Int? {
+        if let active = activeMinutes, active > 0, finishedAt != nil { return active }
         guard let start = startedAt, let end = finishedAt, end > start else { return nil }
         return Int((end.timeIntervalSince(start) / 60).rounded())
     }

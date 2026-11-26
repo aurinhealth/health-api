@@ -5,7 +5,7 @@ import { scopedDb } from "../src/tenancy.js";
 import { numbersLine, numbersLineText, NUMBERS_LINE_KEYS } from "../src/day-verdict.js";
 import { strainTarget } from "../src/app-today.js";
 import { buildFoodHistory, saveNutritionDay, loadFoodHistory, nutritionDayOf } from "../src/nutrition-days.js";
-import { carbsPerHour, fuelPlan } from "../src/workout-explanation.js";
+import { carbsPerHour, fuelPlan, systemOfIntensity } from "../src/workout-explanation.js";
 import { weeklyGoalKg, heavyTrainingCap } from "../src/energy-profile.js";
 import { HYDRATION_FACTORS, hydrationMl } from "../src/fluids.js";
 import { proBannerState, closeProBanner, ensureProBanner } from "../src/pro-banner.js";
@@ -78,6 +78,19 @@ test("carbs per hour: 60/75/90 by experience, up to 120 only on an experienced r
   assert.equal(fuelPlan(240, "endurance", "ride", "regular").upTo, undefined);
   assert.equal(fuelPlan(240, "endurance", "run", "experienced")?.upTo, undefined);
   assert.equal(fuelPlan(60, "endurance", "swim"), null);
+});
+
+test("a calendar event without a system takes the CARBS row of its intensity factor", () => {
+  assert.equal(systemOfIntensity(.55), "recovery");
+  assert.equal(systemOfIntensity(.7), "endurance");
+  assert.equal(systemOfIntensity(.8), "tempo");
+  assert.equal(systemOfIntensity(.87, "ride"), "sweet_spot");
+  assert.equal(systemOfIntensity(.87, "run"), "tempo", "the run table has no sweet spot");
+  assert.equal(systemOfIntensity(.95), "threshold");
+  assert.equal(systemOfIntensity(null), null);
+  // 90 min at IF 0.95: the threshold row, not the endurance one.
+  assert.equal(fuelPlan(90, systemOfIntensity(.95), "ride").perHour, 75);
+  assert.equal(fuelPlan(40, systemOfIntensity(.95), "ride"), null, "45 min or less: water is enough");
 });
 
 test("heavy training (10 h a week) loses at most 0.5 % of weight a week", () => {

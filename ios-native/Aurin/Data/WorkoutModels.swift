@@ -154,17 +154,20 @@ extension GymDay {
 
     /// Make superset (live workout, concept 08): the exercises picked (by id,
     /// at least two, none in a superset yet) move right after the first of
-    /// them and share a new letter, with as many work sets each.
-    mutating func makeSuperset(_ ids: [String]) {
+    /// them and share a new letter, with as many work sets each. `anchor`: the
+    /// exercise under way, which stays where it is and pairs with its sets left.
+    mutating func makeSuperset(_ ids: [String], anchor anchorId: String? = nil) {
         var (list, rest) = blocks
         let picked = exercises.indices.filter { ids.contains(exercises[$0].id) }
         guard picked.count >= 2, picked.allSatisfy({ ExerciseOrder.letter(exercises[$0].superset) == nil }) else { return }
         func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
         let used = Set(list.indices.compactMap(letter))
         let value = "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
-        let anchor = picked[0]
-        let moved = picked.dropFirst().map { list[$0] }
-        for i in picked.dropFirst().reversed() { list.remove(at: i) }
+        let first = picked.first { exercises[$0].id == anchorId } ?? picked[0]
+        let others = picked.filter { $0 != first }
+        let moved = others.map { list[$0] }
+        for i in others.reversed() { list.remove(at: i) }
+        let anchor = first - others.filter { $0 < first }.count
         list.insert(contentsOf: moved, at: anchor + 1)
         for i in anchor...(anchor + moved.count) {
             for r in list[i].indices {
@@ -378,6 +381,16 @@ struct PlannedWorkout: Decodable, Equatable {
     let workout: Workout
     /// Today's ride or run outdoors on a hot day: how to adjust it (src/heat-advice.js).
     var heat: String? = nil
+    /// Carbs per hour during a ride or run over 45 min (src/workout-explanation.js fuelPlan).
+    var fuel: Fuel? = nil
+
+    struct Fuel: Decodable, Equatable {
+        let perHour: Double
+        /// 120 g/h for an experienced rider's ride over 3 h, with "practise" first.
+        var upTo: Double? = nil
+        var practise: String? = nil
+        var note: String? = nil
+    }
 
     struct Step: Decodable, Equatable {
         let durationSeconds: Double?

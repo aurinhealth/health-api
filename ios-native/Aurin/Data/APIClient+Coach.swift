@@ -50,6 +50,16 @@ private struct CoachMemoriesResponse: Decodable {
 struct WeekProposalResponse: Decodable {
     let start: String?
     let proposal: Proposal?
+    /// The server took `replan` (an older one leaves it out).
+    var replan: Bool? = nil
+    /// With `replan` as a list of days: whether those days touch the workouts kept around them.
+    var affects: ReplanAffects? = nil
+
+    /// "hard_in_a_row" (dates: the two days), "key_lost", "volume_down" or "volume_up" (dates: the days changed).
+    struct ReplanAffects: Decodable, Equatable {
+        let kind: String
+        let dates: [String]
+    }
 
     struct Proposal: Decodable {
         let prefs: JSONValue?
@@ -303,6 +313,30 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["dismiss": JSONValue.string(id)])
     }
 
+    /// The coach's own message the chat posts when it opens: "race-week",
+    /// "week-summary" or "gap-checkin" (src/entrypoint.js). The new chat's id,
+    /// nil when there was nothing to post (or it was posted before).
+    func postedCoachChat(_ kind: String) async throws -> Int? {
+        struct Posted: Decodable { let chatId: Int }
+        struct Response: Decodable { let posted: Posted?; let question: Posted? }
+        let r: Response = try await send("/app/api/coach/" + kind, method: "POST", body: JSONObject())
+        return (r.posted ?? r.question)?.chatId
+    }
+
+    /// The card under the coach's Sunday message: the week from its Monday.
+    func weekSummary(start: String) async throws -> WeekSummary {
+        struct Response: Decodable { let summary: WeekSummary }
+        let r: Response = try await get("/app/api/coach/week-summary?start=" + start)
+        return r.summary
+    }
+
+    /// The race week's cards (fuel, pacing); nil outside the race week.
+    func raceWeek() async throws -> RaceWeek? {
+        struct Response: Decodable { let raceWeek: RaceWeek? }
+        let r: Response = try await get("/app/api/coach/race-week")
+        return r.raceWeek
+    }
+
     /// What the coach remembers about the athlete.
     func coachMemories() async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")
@@ -352,14 +386,26 @@ extension APIClient {
         return r.nudge
     }
 
+    /// "Vrátit původní" of the plans the coach eased this morning, in Wahoo
+    /// and Intervals.icu too (POST /app/api/coach/eased).
+    func restoreEasedPlans() async throws {
+        struct Response: Decodable { let status: String? }
+        let _: Response = try await send("/app/api/coach/eased", method: "POST", body: ["action": JSONValue.string("restore")])
+    }
+
     private func changeMemories(_ body: [String: JSONValue]) async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await send("/app/api/athlete-state", method: "POST", body: body)
         return r.memories ?? []
     }
 
     /// The sessions the coach would put into the rest of the week.
-    func weekProposal(start: String) async throws -> WeekProposalResponse {
-        try await send("/app/api/coach/week", method: "POST", body: ["start": JSONValue.string(start)])
+    /// With `replanFrom` the proposal counts the planned workouts from that day on
+    /// as gone (Vygenerovat plán deletes them only once it has the new ones); with
+    /// `replanDays` only those days' ones, and the answer says what that touches.
+    func weekProposal(start: String, replanFrom: String? = nil, replanDays: [String]? = nil) async throws -> WeekProposalResponse {
+        var body: JSONObject = ["start": .string(start)]
+        if let replanDays { body["replan"] = .array(replanDays.map { .string($0) }) } else if let replanFrom { body["replan"] = .string(replanFrom) }
+        return try await send("/app/api/coach/week", method: "POST", body: body)
     }
 
     /// The usual week's plan, or with `start` the plan of that one week.

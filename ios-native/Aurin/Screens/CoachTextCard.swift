@@ -22,6 +22,42 @@ enum CoachTextPlaces {
     static func foldedKey(_ screen: String) -> String { "coach-text-folded2-" + screen }
 }
 
+/// Today's rule-based card (617 #17, p6, as src/screen-texts.js todayFallback):
+/// one reason and one piece of advice, the day's numbers only under "Proč?"
+/// and in the dials. The coach's recommendation reads "Reason. Advice." or
+/// "Reason: advice": the last sentence is the advice in green, what is before
+/// it (or before its colon) the reason. A one-sentence recommendation without
+/// a colon gets the first fact as its reason; the fact list is not shown.
+enum TodayCoachWords {
+    static func split(_ summary: TodaySnapshot.Summary?) -> (text: String?, advice: String?) {
+        let rec = sentences(summary?.recommendation)
+        let first = sentences(summary?.text).first
+        guard let last = rec.last else { return (first, nil) }
+        if rec.count > 1 { return (rec.dropLast().joined(separator: " "), last) }
+        guard let colon = last.range(of: ": ") else { return (first, last) }
+        let advice = String(last[colon.upperBound...])
+        return (String(last[..<colon.lowerBound]) + ".", advice.prefix(1).uppercased() + advice.dropFirst())
+    }
+
+    /// Sentences split after ".", "!" or "?" and a space, so "4.5 km" stays whole.
+    static func sentences(_ text: String?) -> [String] {
+        guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return [] }
+        var out: [String] = [], current = ""
+        var previous: Character?
+        for ch in text {
+            if ch.isWhitespace, let p = previous, ".!?".contains(p) {
+                if !current.isEmpty { out.append(current) }
+                current = ""
+            } else if !(ch.isWhitespace && current.isEmpty) {
+                current.append(ch)
+            }
+            previous = ch
+        }
+        if !current.isEmpty { out.append(current) }
+        return out
+    }
+}
+
 /// The answers of this launch, so switching tabs does not ask again.
 @MainActor
 enum CoachTextMemory {
@@ -124,6 +160,8 @@ struct CoachTextCard: View {
                         .font(Typo.coach(21))
                         .foregroundStyle(Palette.ink)
                         .lineSpacing(3)
+                        // A safety net only: the server writes two sentences (617 #17, p6).
+                        .lineLimit(screen == "today" ? 5 : nil)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -176,8 +214,8 @@ struct CoachTextCard: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) { showWhy.toggle() }
                 } label: {
+                    // No magnifier: a decoration (617 #42).
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").scaledFont(13, weight: .semibold)
                         Text("Proč?").font(Typo.body)
                         Spacer()
                         Image(systemName: showWhy ? "chevron.up" : "chevron.down").scaledFont(12, weight: .semibold)

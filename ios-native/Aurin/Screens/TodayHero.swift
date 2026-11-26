@@ -8,7 +8,10 @@ extension ReadinessText {
     /// The line under the readiness number (D-DNES-2, Petr's step 3 decision 1):
     /// what the numbers say, never what to do; that stays in the coach's card.
     /// One key from the server (src/day-verdict.js NUMBERS_LINE_KEYS).
-    static func numbersLine(_ key: String?) -> String? {
+    static func numbersLine(_ key: String?, off: [String]? = nil) -> String? {
+        // Green with a part off (sleep under its usual range) names it too:
+        // "in your usual range or better" was false then (review 2026-11-25).
+        if key == "hard" || key == "steady" || key == "easy", let named = offLine(off ?? []) { return named }
         switch key {
         // Descriptive only (improvement pass 2026-11-20): "support a hard
         // workout" read as advice and said the opposite of the coach's card
@@ -21,6 +24,23 @@ extension ReadinessText {
         case "paused": return L10n.tr("Trénink je dnes pozastavený")
         default: return nil
         }
+    }
+
+    /// A green, yellow or red line names what is off (p7, Petr 2026-11-23): "Short
+    /// sleep and a high resting heart rate". Nil when nothing is named.
+    static func offLine(_ off: [String]) -> String? {
+        let parts = off.compactMap { key -> String? in
+            switch key {
+            case "sleep": return L10n.tr("krátký spánek")
+            case "hrv": return L10n.tr("nízká HRV")
+            case "restingHR": return L10n.tr("vysoký klidový tep")
+            default: return nil
+            }
+        }
+        guard let first = parts.first else { return nil }
+        let joined = parts.count == 1 ? first
+            : parts.dropLast().joined(separator: ", ") + " " + L10n.tr("a") + " " + parts[parts.count - 1]
+        return Fmt.capitalized(joined)
     }
 }
 
@@ -176,6 +196,8 @@ struct TodayDials: View {
         var note: String?
         var color: Color = Palette.muted
         var spokenValue: String? = nil
+        /// What VoiceOver reads instead of the note (the gap the colour shows).
+        var spokenNote: String? = nil
     }
 
     var body: some View {
@@ -207,32 +229,36 @@ struct TodayDials: View {
 
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
-    /// "6 h 54" (the length rule, as "2 h 05" elsewhere); a whole hour is
-    /// "7 h", as in the concept's "6 min short of 7 h".
+    /// "6 h 54 min" (Fmt.duration); a whole hour is "7 h", as in the
+    /// concept's "6 min short of 7 h".
     nonisolated static func length(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
-        let m = Int(minutes.rounded())
-        // No-break spaces: "6 h 54" never splits inside the dial.
-        if m < 60 { return "\(m)\u{00A0}min" }
-        return m % 60 == 0 ? "\(m / 60)\u{00A0}h" : "\(m / 60)\u{00A0}h\u{00A0}" + String(format: "%02d", m % 60)
+        return Fmt.duration(Int(minutes.rounded()))
     }
 
-    /// The night against its need: "6 min short of 7 h", amber below the need,
+    /// The night against its need: "of 7 h needed", amber below the need,
     /// red under three quarters of it (as on the watch).
     var sleep: Cell {
         let minutes = sleepFailed ? nil : today.sleep?.minutes
         guard let minutes else { return Cell(value: nil, scale: 0...480, number: "–") }
         let spoken = Fmt.hoursMinutesSpoken(minutes)
+        // In the dial "4 h 23" with a small "min" below, as "ms" under the HRV (Petr 2026-11-23).
+        let dial = Fmt.durationParts(Int(minutes.rounded()))
         guard let need = today.sleep?.need, need > 0 else {
-            return Cell(value: minutes, scale: 0...max(540, minutes), number: Self.length(minutes), spokenValue: spoken)
+            return Cell(value: minutes, scale: 0...max(540, minutes), number: dial.number, unit: dial.unit, spokenValue: spoken)
         }
         let n = Double(need), gap = Int((n - minutes).rounded())
-        let needText = Self.length(n)
-        let note = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
+        // A line under the dial, so the whole length (Petr 2026-11-23: "of 8 h 58 min needed").
+        let needText = Fmt.duration(Int(n.rounded()))
+        // Under the need "of 8 h 58 min needed", read with the dial as "4 h 23 of 8 h 58 min"
+        // like Strain's "1.6 of 21" (Petr 2026-11-23: a gap and a need in one line
+        // read as two lengths); over it the gap stays. VoiceOver says the gap.
+        let gapText = gap > 0 ? L10n.f("o %@ méně než %@", Fmt.duration(gap), needText)
             : gap < 0 ? L10n.f("o %@ víc než %@", Fmt.duration(-gap), needText)
             : L10n.f("přesně %@", needText)
-        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: Self.length(minutes),
-                    note: note, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red, spokenValue: spoken)
+        return Cell(value: minutes, scale: 0...max(n * 1.3, minutes), band: n...(n + 60), number: dial.number, unit: dial.unit,
+                    note: gap > 0 ? L10n.f("z potřebných %@", needText) : gapText, color: minutes >= n ? Palette.green : minutes >= n * 0.75 ? Palette.amber : Palette.red,
+                    spokenValue: spoken, spokenNote: gapText)
     }
 
     /// The day's strain adding up against today's target: "target 11 to 14".
@@ -245,7 +271,8 @@ struct TodayDials: View {
         let color: Color = score.map { RangeBar.side($0, t.low, t.high) == 0 ? Palette.green : $0 > t.high ? Palette.amber : Palette.muted } ?? Palette.muted
         return Cell(value: score, scale: 0...21, band: t.low...max(t.low, t.high), number: Fmt.decimal(score), unit: L10n.tr("z 21"),
                     note: (score ?? 0) > t.high
-                        ? L10n.f("%@ nad cílem %@ až %@", Fmt.decimal((score ?? 0) - t.high), Fmt.int(t.low), Fmt.int(t.high))
+                        // Against the shown "11", not 11.1: 13.5 is 2.5 over it (617 C11).
+                        ? L10n.f("%@ nad cílem %@ až %@", Fmt.decimal(max(0, (score ?? 0) - t.high.rounded())), Fmt.int(t.low), Fmt.int(t.high))
                         : L10n.f("cíl %@ až %@", Fmt.int(t.low), Fmt.int(t.high)), color: color)
     }
 
@@ -279,8 +306,9 @@ struct TodayDials: View {
             RangeDial(value: c.value, scale: c.scale, band: c.band, bandColor: Palette.green.opacity(0.85),
                       dotColor: c.color == Palette.muted ? Palette.ink.opacity(0.45) : c.color, size: min(dial, 96), lineWidth: 6) {
                 VStack(spacing: 0) {
+                    // "10 000" at a large text size shrinks inside the ring (redesign review 16).
                     Text(verbatim: c.number).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.4)
                     if let unit = c.unit, c.number != "–" {
                         Text(verbatim: unit).font(Typo.tiny).foregroundStyle(Palette.muted)
                     }
@@ -298,6 +326,6 @@ struct TodayDials: View {
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: [L10n.tr(title), c.spokenValue ?? [c.number, c.unit].compactMap { $0 }.joined(separator: " "), c.note].compactMap { $0 }.joined(separator: ", ")))
+        .accessibilityLabel(Text(verbatim: [L10n.tr(title), c.spokenValue ?? [c.number, c.unit].compactMap { $0 }.joined(separator: " "), c.spokenNote ?? c.note].compactMap { $0 }.joined(separator: ", ")))
     }
 }

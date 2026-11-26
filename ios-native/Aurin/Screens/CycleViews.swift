@@ -288,10 +288,10 @@ struct MissedPillCard: View {
 
     private func snooze() {
         snoozedUntil = Date().addingTimeInterval(30 * 60).timeIntervalSince1970
-        guard let pill, let number = pill.number else { return }
+        guard pill?.number != nil else { return }
         Task {
-            await Reminders.snoozePill(date: date, title: L10n.tr("Už máš dnešní prášek?"),
-                                       body: PushRegistration.hideValuesOn ? L10n.tr("Ještě není zapsaný.") : L10n.f("%@. prášek z %@", String(number), String(pill.of)))
+            // Neutral on the lock screen, like the reminder itself (Notifications concept v3, N6).
+            await Reminders.snoozePill(date: date, title: L10n.tr("Denní připomínka"), body: L10n.tr("Označ, až to bude hotové."))
         }
     }
 }
@@ -312,6 +312,7 @@ struct PillButton: View {
             Button(action: action) {
                 Text("Vzato").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                     .padding(.horizontal, 16).frame(height: 32)
+                    .tapTarget(width: 44, height: 32)
                     .background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -960,7 +961,7 @@ struct DateChoiceSheet: View {
     }
 }
 
-/// The cycle's length, 21–40 days.
+/// The cycle's length, 18–50 days (the gaps src/cycle-model.js learns from).
 struct LengthChoiceSheet: View {
     @Environment(\.dismiss) private var dismiss
     let initial: Int
@@ -971,7 +972,7 @@ struct LengthChoiceSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Délka cyklu").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
             Picker("", selection: $length) {
-                ForEach(21...40, id: \.self) { n in
+                ForEach(18...50, id: \.self) { n in
                     Text(verbatim: L10n.plural("%lld dní", n)).tag(n)
                 }
             }
@@ -989,7 +990,7 @@ struct LengthChoiceSheet: View {
         .padding(24)
         .presentationDetents([.medium])
         .glassSheetBackground()
-        .onAppear { length = min(40, max(21, initial)) }
+        .onAppear { length = min(50, max(18, initial)) }
     }
 }
 

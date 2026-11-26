@@ -208,6 +208,7 @@ struct CoachMemoryEditor: View {
                             Text(g.title).font(.subheadline.weight(.medium))
                                 .foregroundStyle(group == g.rawValue ? Palette.onButton : Palette.secondary)
                                 .padding(.horizontal, 14).frame(height: 34)
+                                .tapTarget(width: 44, height: 34)
                                 .background(group == g.rawValue ? Palette.button : Palette.card, in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -320,10 +321,12 @@ struct MemoryProposalCard: View {
                 Button { decide(true) } label: {
                     Text(chip.kind == .updated ? "Přepsat" : "Zapomenout").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 16).frame(height: 34).background(Palette.button, in: Capsule())
+                        .tapTarget(width: 44, height: 34)
                 }
                 Button { decide(false) } label: {
                     Text("Nechat").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 16).frame(height: 34).overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
+                        .tapTarget(width: 44, height: 34)
                 }
             }
             .buttonStyle(.plain)

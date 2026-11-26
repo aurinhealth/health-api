@@ -15,7 +15,7 @@ struct SleepDetailView: View {
         DetailScreen(glow: Palette.Glow.today, title: "Spánek",
                      coach: .sleep(line: health.sleep.night?.minutes.map { L10n.f("Dnes %@", Fmt.duration(Int($0))) }, date: health.date)) {
             SleepDetailContent(health: health, detail: detail, failed: failed, retry: { await load() },
-                               loadNight: model.demo ? nil : { date in try? await model.api.night(date: date) })
+                               loadNight: model.demo ? nil : { date in try await model.api.night(date: date) })
         }
         .task {
             guard detail == nil, health.sleep.night != nil else { return }
@@ -36,11 +36,13 @@ struct SleepDetailContent: View {
     var failed = false
     var retry: () async -> Void = {}
     /// An earlier night for the arrows; nil keeps the page on last night.
-    var loadNight: ((String) async -> NightDetail?)? = nil
+    var loadNight: ((String) async throws -> NightDetail)? = nil
 
     /// The night shown, the morning's date; nil is last night.
     @State private var picked: String?
     @State private var earlier: [String: NightDetail] = [:]
+    /// Earlier nights whose load failed: "Zkusit znovu" instead of the spinner.
+    @State private var failedNights: Set<String> = []
 
     private var date: String { picked ?? health.date }
     private var isLast: Bool { picked == nil || picked == health.date }
@@ -76,7 +78,9 @@ struct SleepDetailContent: View {
                 }
             } else if isLast {
                 Text("Dnešní noc ještě není nahraná.").font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-            } else if failed || loadNight == nil {
+            } else if failedNights.contains(date) {
+                RetryRow(message: "Tuhle noc se nepodařilo načíst.", retry: { await fetch(date) }).padding(.top, 16)
+            } else if loadNight == nil || earlier[date] != nil {
                 Text("Tuhle noc se nepodařilo načíst.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 16)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -161,8 +165,8 @@ struct SleepDetailContent: View {
         Button {
             guard let night else { return }
             picked = night == health.date ? nil : night
-            guard night != health.date, earlier[night] == nil, let loadNight else { return }
-            Task { if let loaded = await loadNight(night) { earlier[night] = loaded } }
+            guard night != health.date, earlier[night] == nil else { return }
+            Task { await fetch(night) }
         } label: {
             Image(systemName: symbol).scaledFont(14, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(night == nil || loadNight == nil ? Palette.faint.opacity(0.5) : Palette.ink)
@@ -172,6 +176,14 @@ struct SleepDetailContent: View {
         .buttonStyle(.plain)
         .disabled(night == nil || loadNight == nil)
         .accessibilityLabel(L10n.tr(label))
+    }
+
+    /// Loads an earlier night; a failure shows "Zkusit znovu" instead of a
+    /// spinner that never ends.
+    private func fetch(_ night: String) async {
+        guard let loadNight else { return }
+        failedNights.remove(night)
+        do { earlier[night] = try await loadNight(night) } catch { failedNights.insert(night) }
     }
 
     /// "Mon, Nov 9" / "po 9. 11." for the morning the night ends on.
@@ -458,7 +470,7 @@ struct StageTotals: View {
                 }
             }
             .frame(height: 10)
-            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8).frame(width: 62, alignment: .trailing)
+            Text(Fmt.hoursMinutesLong(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7).frame(width: 84, alignment: .trailing)
             Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
                 .frame(width: 40, alignment: .trailing)
         }
@@ -673,13 +685,8 @@ struct WeightEntrySheet: View {
     }
 
     var body: some View {
+        SheetFrame(title: "Zapsat váhu") {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .center) {
-                Text("Zapsat váhu").font(Typo.heading(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer()
-                ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
-            }
             // − and + by 0.1 (held, they repeat); a tap on the number types it (D-PLUS-3).
             HStack(alignment: .center, spacing: 12) {
                 stepButton(-1)
@@ -707,10 +714,8 @@ struct WeightEntrySheet: View {
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
                 .disabled(saving || value == nil)
-            Spacer(minLength: 0)
         }
-        .padding(24)
-        .presentationDetents([.height(340), .medium])
+        }
         .glassSheetBackground()
         .onAppear {
             // The last weigh-in to start from; nothing yet: type it.
@@ -770,6 +775,8 @@ struct WeightEntrySheet: View {
             // Without signal the weigh-in waits on the phone (AppModel outbox).
             try await model.addWeight(kg: value)
             dismiss()
+            // Said on the tab the sheet returns to, as after a food or a drink (617 C8).
+            model.thanks = L10n.f("Váha uložena: %@", Units.weightText(value, digits: 1))
         } catch {
             self.error = error.localizedDescription
         }

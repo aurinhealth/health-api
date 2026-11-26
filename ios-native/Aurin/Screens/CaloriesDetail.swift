@@ -177,6 +177,8 @@ struct CaloriesDetailContent: View {
     @State private var loaded: [Int: FoodHistory] = [:]
     @State private var period: ChartPeriod = .days30
     @State private var failed = false
+    /// Periods whose load failed: the 30 days stay with a sentence and "Zkusit znovu".
+    @State private var failedDays: Set<Int> = []
 
     private var isToday: Bool { food.date == AppModel.localDate(Date()) }
     private var shown: FoodHistory? { history ?? loaded[FoodHistory.days(for: period)] ?? loaded[30] }
@@ -195,6 +197,9 @@ struct CaloriesDetailContent: View {
             }
 
             if let history = shown {
+                if self.history == nil, failedDays.contains(FoodHistory.days(for: period)) {
+                    RetryRow(message: "Delší historii se nepodařilo načíst, ukazuje se 30 dní.", retry: { await load() })
+                }
                 historySections(history)
             } else if failed {
                 Card { LearningState(kind: .missing, text: L10n.tr("Historii teď nejde načíst. Zkus to za chvíli.")) }
@@ -234,8 +239,10 @@ struct CaloriesDetailContent: View {
         do {
             loaded[days] = try await model.api.foodHistory(days: days)
             failed = false
+            failedDays.remove(days)
         } catch {
             failed = loaded.isEmpty
+            failedDays.insert(days)
         }
     }
 
@@ -300,7 +307,7 @@ struct CaloriesDetailContent: View {
         Card {
             DetailChart(points: list, today: history.today, period: $period, unit: value.unit,
                         color: value == .calories ? Palette.green : value.color,
-                        note: "Každá tečka je jeden zapsaný den. Mezera je den bez zápisu.")
+                        note: "Každá tečka je jeden zapsaný den. Mezera je den bez zápisu. Dnešek přibude, až skončí.")
         }
 
         let count = TargetDays.count(history.list.suffix(FoodHistory.days(for: period)).filter { $0.date < history.today }, value: value)
@@ -319,7 +326,11 @@ struct CaloriesDetailContent: View {
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
         } else {
-            Card { LearningState(kind: .missing, text: L10n.tr("Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat.")) }
+            // Logged days without a kept target (before targets were kept) are
+            // no "no data yet": they are in the chart above (retest 618 R4).
+            Card { LearningState(kind: .missing, text: L10n.tr(list.isEmpty
+                ? "Zatím žádný zapsaný den s cílem. Zapiš jídlo a dny se tu začnou počítat."
+                : "Zapsané dny zatím nemají uložený cíl. Počítat se začnou od dneška, až den skončí.")) }
         }
 
         let rows = TrendMath.rows(list, today: history.today, lags: period == .days30 ? TrendLags.month : TrendLags.year)
@@ -430,6 +441,7 @@ struct FoodMonthSheet: View {
     let date: String
     @State private var month: String
     @State private var history: FoodHistory?
+    @State private var failed = false
     @AppStorage("foodMonthValue") private var valueRaw = FoodValue.calories.rawValue
 
     init(date: String) {
@@ -444,11 +456,20 @@ struct FoodMonthSheet: View {
     private var days: [String: FoodHistory.Day] {
         Dictionary((history?.list ?? []).map { ($0.date, $0) }, uniquingKeysWith: { a, _ in a })
     }
+    /// The first day the history holds; days before it (and every day before
+    /// the history loads) are unknown, not days without food.
+    private var firstKnown: String? { history?.list.first?.date }
+    private func known(_ day: String) -> Bool {
+        guard let firstKnown else { return false }
+        return day >= firstKnown && day <= today
+    }
 
     var body: some View {
         MonthSheet(month: $month, first: firstMonth, last: ISODay.monthStart(today),
                    options: FoodValue.allCases.map { ($0.rawValue, $0.title) }, selection: $valueRaw) {
-            if let summary {
+            if failed {
+                RetryRow(message: "Historii jídla se nepodařilo načíst.", retry: { await load() })
+            } else if let summary {
                 Text(verbatim: summary).font(Typo.heading(22, relativeTo: .title3)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -459,12 +480,13 @@ struct FoodMonthSheet: View {
                           },
                           move: { _ in },
                           spoken: { spoken($0) }) { day in
-                FoodDayRing(day: days[day], value: value, future: day > today)
+                FoodDayRing(day: days[day], value: value, future: !known(day))
             }
             .monthSheetCard()
             Text(verbatim: [L10n.tr("Kroužek je, kolik jsi ten den snědl z cíle."),
                             value == .calories ? L10n.tr("Červený je nad cílem.") : nil,
-                            L10n.tr("Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla.")].compactMap { $0 }.joined(separator: " "))
+                            L10n.tr("Tenký je den bez cíle, čárkovaný je den bez zapsaného jídla."),
+                            partialMonth.map { L10n.f("Jídlo se tu ukazuje od %@.", Fmt.dayMonth($0)) }].compactMap { $0 }.joined(separator: " "))
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
         .task { await load() }
@@ -475,7 +497,18 @@ struct FoodMonthSheet: View {
             history = FoodHistory.demo(today: today, target: model.food?.target ?? 2650, days: 90)
             return
         }
-        history = try? await model.api.foodHistory(days: 90)
+        do {
+            history = try await model.api.foodHistory(days: 90)
+            failed = false
+        } catch {
+            failed = history == nil
+        }
+    }
+
+    /// The history's first day when it starts inside the month shown.
+    private var partialMonth: String? {
+        guard let firstKnown, firstKnown > month, ISODay.monthStart(firstKnown) == month else { return nil }
+        return firstKnown
     }
 
     /// The month in one sentence (concept a-jidlo/001): the average over the
@@ -512,7 +545,7 @@ struct FoodMonthSheet: View {
     }
 
     private func spoken(_ day: String) -> String? {
-        guard day <= today else { return nil }
+        guard known(day) else { return nil }
         guard let d = days[day], d.logged, let eaten = value.eaten(d) else { return L10n.tr("bez zapsaného jídla") }
         let target = value.target(d)
         var text = Fmt.int(eaten) + " " + value.unit

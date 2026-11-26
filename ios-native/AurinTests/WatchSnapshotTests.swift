@@ -11,8 +11,8 @@ final class WatchSnapshotTests: XCTestCase {
         s.updated = Date(timeIntervalSince1970: 1_791_450_000)
         XCTAssertEqual(s.date, today.date)
         XCTAssertEqual(s.readiness, 78)
-        // The day's verdict, the line under the watch's number (Today audit 17).
-        XCTAssertEqual(s.verdict, "hard")
+        // The line under the watch's number: the iPhone's, never advice (watch review 2026-11-25).
+        XCTAssertEqual(s.numbersLine, "hard")
         XCTAssertEqual(s.sleep?.minutes, 432)
         XCTAssertEqual(s.sleep?.start, "23:33")
         XCTAssertEqual(s.sleep?.end, "7:02")
@@ -24,6 +24,11 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.hrv?.low, 55)
         XCTAssertEqual(s.strain.score, 8.4)
         XCTAssertEqual(s.strain.low, 11.4)
+        // What the workouts still planned add, the dotted part of the iPhone's
+        // dial, not the day's planned total 13.1 (watch review 2026-11-25): the
+        // sample day's gym has no TSS, so nothing.
+        XCTAssertEqual(s.strain.planned, today.strainStillPlanned)
+        XCTAssertEqual(s.strain.planned, 0)
 
         // A morning with last night: its HRV is this morning's (Today audit 20).
         XCTAssertFalse(s.awaitingNight)
@@ -39,6 +44,17 @@ final class WatchSnapshotTests: XCTestCase {
         // Through WatchConnectivity and back.
         let data = try XCTUnwrap(s.encoded())
         XCTAssertEqual(WatchSnapshot.decode(data), s)
+    }
+
+    /// The watch's line under the readiness number says what the iPhone's says, word for word.
+    func testNumbersLineMatchesIPhone() {
+        let english = L10n.language == "en"
+        let cases: [(String?, [String])] = [("hard", []), ("steady", []), ("easy", []), ("signs", []), ("usual", []), ("paused", []),
+                                            ("steady", ["sleep"]), ("easy", ["sleep", "restingHR"]), ("easy", ["sleep", "hrv", "restingHR"]),
+                                            ("hard", ["sleep"]), (nil, []), ("unknown", [])]
+        for (key, off) in cases {
+            XCTAssertEqual(WatchSnapshot.numbersText(key, off: off, english: english), ReadinessText.numbersLine(key, off: off), "\(key ?? "nil") \(off)")
+        }
     }
 
     @MainActor
@@ -97,5 +113,26 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(S.standing(4.5, low: 3, high: 6, at: morning, calendar: calendar), .onTarget)
         XCTAssertEqual(S.standing(7.2, low: 3, high: 6, at: morning, calendar: calendar), .off)
         XCTAssertNil(S.standing(4.5, low: nil, high: 6, at: morning, calendar: calendar))
+    }
+
+    /// The iPhone's backup time reaches the watch, and older settings without it still decode.
+    func testAlarmBackupInSettings() throws {
+        var settings = WatchSettings()
+        settings.alarmOnWatch = true
+        settings.alarmBackup = Date(timeIntervalSince1970: 1_800_000_000)
+        let back = try XCTUnwrap(WatchSettings.decode(try XCTUnwrap(settings.encoded())))
+        XCTAssertEqual(back.alarmBackup, settings.alarmBackup)
+        let old = try XCTUnwrap(#"{"pages":["readiness"],"alarmOnWatch":true}"#.data(using: .utf8))
+        XCTAssertNil(try XCTUnwrap(WatchSettings.decode(old)).alarmBackup)
+    }
+
+    /// HRV or resting HR: only the worse way out of the usual range is off.
+    func testMetricWorse() {
+        typealias M = WatchSnapshot.Metric
+        XCTAssertEqual(M.worse(50, low: 55, high: 72, higherIsBetter: true), true)
+        XCTAssertEqual(M.worse(80, low: 55, high: 72, higherIsBetter: true), false)
+        XCTAssertEqual(M.worse(64, low: 55, high: 72, higherIsBetter: true), false)
+        XCTAssertEqual(M.worse(60, low: 48, high: 56, higherIsBetter: false), true)
+        XCTAssertNil(M.worse(60, low: nil, high: 56, higherIsBetter: false))
     }
 }

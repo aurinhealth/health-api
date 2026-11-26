@@ -182,7 +182,7 @@ struct GymPartsCard: View {
                 ForEach(Array(shown.enumerated()), id: \.element) { index, part in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     row(part, first: index == 0, last: index == shown.count - 1)
-                    if !changing, unfolded.contains(part), let routine = parts.routine(part, day: day) {
+                    if !changing, unfolded.contains(part), let routine = parts.routine(part, day: day), !LivePartDraft.isFree(routine) {
                         moves(routine)
                     }
                 }
@@ -315,6 +315,8 @@ struct GymPartsCard: View {
             return (words + (parts.exerciseMinutes(day, total: total).map { ["\($0) min"] } ?? [])).joined(separator: ", ")
         case .warmup, .stretching:
             guard let routine = parts.routine(part, day: day) else { return parts.subtitle(part, day: day) }
+            // Free time: a clock with no moves and no planned length.
+            if LivePartDraft.isFree(routine) { return L10n.tr("Volný čas") }
             let count = L10n.plural(part == .warmup ? "%lld pohybů" : "%lld protažení", routine.items.count)
             return count + ", \(routine.minutes) min"
         default:
@@ -393,144 +395,57 @@ struct GymCardioSheet: View {
     }
 }
 
-/// Rozcvička or Protažení for the day: automatic with a length (Auto is sized to
-/// the workout) or one of the athlete's own; the moves it makes below. Hotovo
-/// keeps the choice for the day, Nastavení → Posilovna stays as it was.
+/// Edit warm-up or Edit stretching in the workout detail, before the start:
+/// the same editor as in the live workout (concept 08, section 4): This workout,
+/// My warm-ups or Free time, the moves with minus, plus and drag, an own move
+/// and Save as my warm-up. Hotovo keeps it for the day only.
 struct GymRoutineSheet: View {
     let part: GymDayPart
     let day: GymDay
     let date: String
-    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @AppStorage(GymDayParts.storageKey) private var stored = ""
-    @State private var mine: [GymPreferences.MyRoutine] = []
-    /// The own routine's id; nil for the automatic one.
-    @State private var routine: String?
-    /// The automatic one's minutes; nil for Auto.
-    @State private var length: Int?
-    @State private var moves: GymStretching?
-    @State private var loading = false
-    @State private var changed = false
-    @State private var error: String?
+    @State private var draft: LivePartDraft?
 
-    static let lengths = [0, 5, 10, 15]
-
-    private var kind: GymRoutineKind { part.kind }
     private var parts: GymDayParts { GymDayParts.resolved(day, stored: stored, date: date) }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(spacing: 0) {
-                        option(nil, title: L10n.tr("Automaticky"), minutes: nil)
-                        ForEach(mine) { own in
-                            SettingsDivider()
-                            option(own.id, title: own.name, minutes: own.minutes)
-                        }
-                    }
-                    .cardSurface(cornerRadius: 22)
-                    if routine == nil {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Délka").font(.body).foregroundStyle(Palette.ink)
-                            Picker("Délka", selection: Binding(get: { length ?? 0 }, set: { value in choose(nil, length: value == 0 ? nil : value) })) {
-                                ForEach(Self.lengths, id: \.self) { m in
-                                    Text(verbatim: m == 0 ? L10n.tr("Auto") : "\(m) min").tag(m)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                        .padding(16)
-                        .cardSurface(cornerRadius: 22)
-                    }
-                    if let moves, !moves.items.isEmpty {
-                        SectionLabel(text: "Dnes").padding(.top, 4)
-                        VStack(spacing: 0) {
-                            ForEach(Array(moves.items.enumerated()), id: \.offset) { index, item in
-                                if index > 0 { SettingsDivider() }
-                                HStack(spacing: 8) {
-                                    Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                                    Spacer(minLength: 6)
-                                    Text(verbatim: item.duration).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
-                                }
-                                .padding(.horizontal, 16).frame(minHeight: 46)
-                            }
-                        }
-                        .cardSurface(cornerRadius: 22)
-                        .opacity(loading ? 0.5 : 1)
-                    }
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            Group {
+                if draft != nil {
+                    LiveRoutineEditor(draft: Binding(get: { draft ?? .start(part, parts: parts, day: day) }, set: { draft = $0 }),
+                                      day: day, date: date, done: [], live: false)
                 }
-                .padding(20)
             }
             .background(Palette.background)
-            .navigationTitle(Text(kind.title))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // "Edit warm-up" over "Today only", as the concept's header.
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(part == .warmup ? "Upravit rozcvičku" : "Upravit protažení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text("Jen pro dnešek").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
+                }
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Hotovo") { save(); dismiss() }.disabled(loading)
+                    Button("Hotovo") { save(); dismiss() }.disabled(draft?.canSave == false)
                 }
             }
         }
-        .presentationDetents([.medium, .large])
-        .task { await load() }
+        .presentationDetents([.large])
+        // A change is not thrown away by a swipe down; Zrušit does that.
+        .interactiveDismissDisabled(changed)
+        .onAppear { if draft == nil { draft = .start(part, parts: parts, day: day) } }
     }
 
-    private func option(_ id: String?, title: String, minutes: Int?) -> some View {
-        Button { choose(id, length: id == nil ? length : nil) } label: {
-            HStack(spacing: 8) {
-                Text(verbatim: title).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer(minLength: 6)
-                if let minutes { Text(verbatim: "\(minutes) min").font(.subheadline).foregroundStyle(Palette.muted) }
-                if routine == id {
-                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
-                }
-            }
-            .padding(.horizontal, 16).frame(minHeight: 48)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(routine == id ? .isSelected : [])
-    }
+    private var changed: Bool { draft.map { $0 != LivePartDraft.start(part, parts: parts, day: day) } ?? false }
 
-    /// The day's choice so far, and the athlete's own routines to pick from.
-    private func load() async {
-        let current = parts.routines?[part.rawValue]
-        routine = current?.routine
-        length = current?.length
-        moves = parts.routine(part, day: day)
-        guard !model.demo, let prefs = try? await model.api.gymPreferences() else { return }
-        mine = prefs.routines(kind)
-        // A plan made with an own routine: that one is ticked.
-        if current == nil, let name = moves?.name, let own = mine.first(where: { $0.name == name }) { routine = own.id }
-    }
-
-    /// Another kind or length: the server builds it for the day's exercises.
-    private func choose(_ id: String?, length minutes: Int?) {
-        guard id != routine || minutes != length else { return }
-        routine = id
-        length = minutes
-        changed = true
-        guard !model.demo else { return }
-        loading = true
-        Task {
-            do {
-                moves = try await model.api.gymRoutine(date: date, kind: kind, length: minutes, routine: id)
-                error = nil
-            } catch {
-                self.error = error.localizedDescription
-            }
-            loading = false
-        }
-    }
-
+    /// Hotovo without a change keeps the plan's own (its length, later plan updates).
     private func save() {
-        guard changed, let moves else { return }
-        var next = parts
-        var routines = next.routines ?? [:]
-        routines[part.rawValue] = GymDayParts.Routine(routine: routine, length: length, moves: moves)
-        next.routines = routines
-        stored = GymDayParts.saving(next, date: date, into: stored)
+        guard let draft, draft.canSave, changed else { return }
+        stored = GymDayParts.saving(draft.applied(to: parts), date: date, into: stored)
     }
 }

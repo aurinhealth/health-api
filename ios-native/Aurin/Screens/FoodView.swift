@@ -15,7 +15,10 @@ struct FoodView: View {
         }
         .task { await model.refreshIfStale(.food) }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
-        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots)) }
+        .fullScreenCover(isPresented: $scanning) {
+            BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots))
+                .onDisappear { model.addDay = nil }
+        }
     }
 
     private var screen: some View {
@@ -24,7 +27,7 @@ struct FoodView: View {
             if let food = model.food {
                 PageScroll {
                     FoodContent(food: food, add: { adding = AddFoodTarget(meal: $0) }, scan: { scanning = true })
-                        .padding(.bottom, 100)
+                        .padding(.bottom, PageGrid.tabBottom)
                 }
                 .refreshable { await model.refreshFood() }
                 .tabTopBar {
@@ -133,7 +136,7 @@ struct FoodContent: View {
                     }
                     WeekStrip(date: model.headerDay(food.date), ahead: true).padding(.top, 14)
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 16)
             }
             VStack(alignment: .leading, spacing: 0) {
@@ -143,7 +146,7 @@ struct FoodContent: View {
                     content
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, PageGrid.margin)
             .padding(.top, editing ? 16 : 0)
             .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
         }
@@ -189,6 +192,11 @@ struct FoodContent: View {
                 .padding(.top, 20)
             }
 
+            // b09: meal reminders are off for a new install; after the first logged meal the page offers them once.
+            if page == nil, food.date == today, MealRemindersOffer.due(loggedToday: (food.kcal ?? 0) > 0 || food.meals.contains { !$0.entries.isEmpty }) {
+                MealRemindersOffer(today: model.today).padding(.top, 14)
+            }
+
             // The coach: today and the days ahead; a day gone by shows only its data.
             let day = page.map(\.selectedDate) ?? model.selectedDate
             if day.map({ $0 > today }) ?? true {
@@ -226,16 +234,19 @@ struct FoodContent: View {
             .cardSurface(cornerRadius: 22)
             .sheet(item: $adding) { item in AddFoodSheet(meal: item.meal, pending: item) }
 
-            // Also on a day gone by: it is added to the day shown (D-JIDLO-5).
-            Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : (food.mealSlots?.last ?? "dinner")) } label: {
-                Label("Přidat jídlo", systemImage: "plus")
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Palette.track, in: Capsule())
-                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+            // Every meal has its own +, so "Add food" under them only on a day
+            // without meal rows (617 p8). Also on a day gone by: it is added to the day shown (D-JIDLO-5).
+            if food.meals.isEmpty {
+                Button { add(food.date == today ? MealSlot.now(slots: food.mealSlots) : (food.mealSlots?.last ?? "dinner")) } label: {
+                    Label("Přidat jídlo", systemImage: "plus")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .background(Palette.track, in: Capsule())
+                        .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 14)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 14)
 
             // The drinks and anything added under Edit overview.
             board.environment(\.wideLayout, false).padding(.top, 24)
@@ -411,9 +422,9 @@ struct DrinksCard: View {
         ml >= target ? L10n.tr("cíl splněn") : L10n.f("ještě %@ do cíle", litres(target - ml))
     }
 
-    /// "1,3 l", or "44 fl oz" in imperial units.
+    /// "1,3 l", "1.3 L", or "44 fl oz" in imperial units (Fmt.litres).
     static func litres(_ ml: Double) -> String {
-        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.decimal(ml / 1000) + (L10n.isEnglish ? " L" : " l")
+        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.litresText(ml)
     }
 
     /// The big number: litres, or fluid ounces in imperial units.
@@ -641,6 +652,7 @@ struct PendingFoodRow: View {
                 Button(action: add) {
                     Text("Přidat").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.onButton)
                         .padding(.horizontal, 14).frame(height: 32)
+                        .tapTarget(width: 44, height: 32)
                         .background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -666,7 +678,7 @@ struct PendingFoodRow: View {
     private var closeButton: some View {
         Button(action: discard) {
             Image(systemName: "xmark").scaledFont(13, weight: .semibold).foregroundStyle(Palette.muted)
-                .frame(width: 32, height: 32).contentShape(Rectangle())
+                .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Zahodit")
@@ -688,8 +700,8 @@ struct PendingFoodRow: View {
 
 /// One meal of the day (redesign J): "Breakfast 07:40", its foods, "520 of
 /// 600 kcal" and +, and under it the carbs, protein and fat against the meal's
-/// targets in three columns. An empty meal shows its target ("630 kcal", Petr
-/// 2026-11-16) and "Nothing yet". A tap opens the meal with every food.
+/// targets in three columns. An empty meal shows its target ("0 / 630 kcal", Petr
+/// 2026-11-16, 617 p8) and "Nothing yet". A tap opens the meal with every food.
 struct MealRow: View {
     let meal: FoodSnapshot.Meal
     /// false without a day's target: only the name, the time and +.
@@ -697,7 +709,10 @@ struct MealRow: View {
     var add: () -> Void = {}
 
     private var empty: Bool { meal.entries.isEmpty }
-    private var goal: FoodSnapshot.Suggestion? { meal.target ?? meal.suggestion }
+    /// An empty meal still ahead shows the server's share of what is left
+    /// (suggestion), so the open meals add up to "to go" (review 2026-11-25:
+    /// 270 + 660 against 1 270 left); a meal with food keeps its target.
+    private var goal: FoodSnapshot.Suggestion? { empty ? meal.suggestion ?? meal.target : meal.target ?? meal.suggestion }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -745,7 +760,8 @@ struct MealRow: View {
             }
             Spacer(minLength: 6)
             if empty {
-                if showTargets, let goal { Text(verbatim: Fmt.int(goal.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted) }
+                // "0 / 670 kcal": the meal's goal, read as nothing of it eaten yet (617 p8).
+                if showTargets, let goal { Text(verbatim: "0 / " + Fmt.int(goal.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize() }
             } else {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(verbatim: Fmt.int(meal.kcal ?? 0)).font(Typo.number(26)).foregroundStyle(Palette.ink)
@@ -878,5 +894,61 @@ struct NextMealRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: MealSlot.addText(meal.type)))
+    }
+}
+
+/// "Meal reminders" on the Food page (b09, approved 2026-11-25): a new install
+/// has the meal nudges off, so after the first logged meal the page offers
+/// them once. Turn on and Not now both answer it for good (the switch in
+/// Settings → Notifications is then set either way).
+struct MealRemindersOffer: View {
+    let today: TodaySnapshot?
+    @State private var answered = false
+
+    /// Not answered yet (the meals switch never set) and a meal logged today.
+    /// Not with the sample data ("-demo"): its Food page is the screenshots' page.
+    static func due(loggedToday: Bool, _ defaults: UserDefaults = .standard) -> Bool {
+        loggedToday && defaults.object(forKey: Reminders.mealsKey) == nil && !ProcessInfo.processInfo.arguments.contains("-demo")
+    }
+
+    var body: some View {
+        if !answered {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Připomínky jídla").font(.headline).foregroundStyle(Palette.ink)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Nejvýš 2 připomenutí, když jídlo chybí").font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                Button { answer(true) } label: {
+                    Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity, minHeight: 46).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+                Button { answer(false) } label: {
+                    Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 46).background(Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardSurface(cornerRadius: 22)
+        }
+    }
+
+    private func answer(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: Reminders.mealsKey)
+        withAnimation { answered = true }
+        guard on else { return }
+        Task {
+            // Notifications refused in iOS's question: the switch goes back off, as it really is.
+            guard await Reminders.requestPermission() else {
+                UserDefaults.standard.set(false, forKey: Reminders.mealsKey)
+                return
+            }
+            if let today { await Reminders.reschedule(from: today) }
+        }
     }
 }

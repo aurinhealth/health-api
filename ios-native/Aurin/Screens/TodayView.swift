@@ -27,7 +27,7 @@ struct TodayView: View {
             if let today = model.today {
                 PageScroll {
                     TodayContent(today: today, openSettings: openSettings, openCoach: openCoach, openShare: { sharing = true })
-                        .padding(.bottom, 100)
+                        .padding(.bottom, PageGrid.tabBottom)
                 }
                 .refreshable {
                     // Pulled down: the coach's cards ask again even when Today is the same.
@@ -138,11 +138,11 @@ struct TodayContent: View {
             // (Petr, 2026-11-11, as Bevel); a day drawn beside has none.
             if page == nil && !editing {
                 VStack(alignment: .leading, spacing: 0) { header }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, PageGrid.margin)
                     .padding(.top, 16)
             }
             day
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, editing ? 16 : 0)
                 .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
         }
@@ -279,11 +279,11 @@ struct TodayContent: View {
             // (TodayTraining.swift). With the coach off on Dnes the action stands alone.
             if coachShown, let words = firstWords {
                 CoachTextCard(screen: "today", fallbackText: words.0, fallbackAdvice: words.1, live: false,
-                              tip: AnyView(TodayCoachAction(today: today)))
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else if coachShown, let missed = today.missedWorkout {
                 // A key workout missed this week: the card proposes its day (Petr 2026-11-21).
-                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
                               tip: AnyView(VStack(alignment: .leading, spacing: 0) {
                                   MissedWorkoutBlock(missed: missed)
                                   // Today's own workouts keep their Start under it.
@@ -291,11 +291,12 @@ struct TodayContent: View {
                                       Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
                                       TodayCoachAction(today: today)
                                   }
+                                  coachThings(plain: true)
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
             } else if coachShown {
-                CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
-                              tip: AnyView(TodayCoachAction(today: today)))
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
                     .padding(.top, 12)
             } else {
                 TodayCoachAction(today: today)
@@ -303,6 +304,11 @@ struct TodayContent: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .cardSurface(cornerRadius: 22)
                     .padding(.top, 12)
+            }
+
+            // "Did you play?": yesterday's practice or match nothing recorded (other sports).
+            if !model.demo, let played = today.played {
+                PlayedCard(played: played).id(played.date + played.type).padding(.top, 12)
             }
 
             // Day 1 with a number (screen 02-todayh): what the setup left, after the coach.
@@ -314,12 +320,23 @@ struct TodayContent: View {
             if today.trainingPlan?.paused == true {
                 PlanPausedCard().padding(.top, 10)
             }
-            // One card for what the coach asks today (check-in, review after a
-            // workout, week check, threshold, the plan's proposal). It keeps its
-            // gap only while it shows (an empty one left a hole).
-            CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
-                            openCoach: openCoach, top: 12)
+            // What the coach asks today (check-in, review after a workout, week
+            // check, threshold, the plan's proposal) sits in the Coach card above
+            // (Petr 2026-11-24: one coach card). With the coach off on Dnes it is
+            // a card of its own, so its buttons stay. It keeps its gap only while
+            // it shows (an empty one left a hole).
+            if !coachShown {
+                coachThings(plain: false)
+            }
         }
+    }
+}
+
+extension TodayContent {
+    /// What the coach asks today: plain inside the Coach card, or its own card.
+    func coachThings(plain: Bool) -> some View {
+        CoachThingsCard(proposal: today.trainingPlan?.paused == true ? nil : today.trainingPlan?.proposal,
+                        openCoach: openCoach, top: plain ? 0 : 12, plain: plain)
     }
 }
 
@@ -473,7 +490,7 @@ struct WeekStrip: View {
                 strip
             }
         }
-        .padding(.horizontal, -6)
+        // No bleed past the page margin: the strip lines up with the cards (617 #13).
         // Food's rings: the last 30 days, again after a meal is logged today.
         .task(id: ahead ? model.food?.kcal : nil) {
             guard ahead else { return }
@@ -872,10 +889,12 @@ struct DayCapsule: View {
                         Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Předchozí den")
+                    // Never "Thu, O…" beside the Today button (review 2026-11-25).
                     Text(verbatim: Fmt.dayShort(date, today: today))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
+                        .fixedSize()
                     Button { move(1) } label: {
                         Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
@@ -933,7 +952,7 @@ struct ReadinessHero: View {
                 }
                 // What the numbers say (D-DNES-2), only for today; what to do
                 // is the coach card's alone.
-                if let line = ReadinessText.numbersLine(readiness.numbersLine) {
+                if let line = ReadinessText.numbersLine(readiness.numbersLine, off: readiness.numbersOff) {
                     Text(line)
                         .font(Typo.heading(24, relativeTo: .title2))
                         .foregroundStyle(Palette.ink)
@@ -968,7 +987,7 @@ struct ReadinessHero: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
-                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Připravenost i HRV se počítají ze spánku, ten z té noci chybí. Klidový tep najdeš níže.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
@@ -1052,7 +1071,8 @@ struct ReadinessLearning: View {
 
 /// "Jak se dnes cítíš?" under the readiness: one tap (src/morning-checkin.js).
 /// The answer can only lower the readiness, for Today and the coach alike.
-/// Tapping the chosen one again clears it; "Nemocný" offers the status Nemoc.
+/// Tapping the chosen one again clears it. The same three answers as Today's
+/// question (TodayHero); Nemoc is the status or the Journal, never this question.
 /// On Today it goes away once answered; the readiness detail keeps it, so the
 /// answer can be changed there.
 struct MorningCheckinCard: View {
@@ -1062,7 +1082,6 @@ struct MorningCheckinCard: View {
     var top: CGFloat = 0
     @State private var chosen: String?
     @State private var saving = false
-    @State private var offerSick = false
     @State private var answers = 0
 
     init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
@@ -1081,12 +1100,11 @@ struct MorningCheckinCard: View {
     static let options: [Option] = [
         Option(id: "fresh", symbol: "⚡️", label: "Svěží"),
         Option(id: "normal", symbol: "🙂", label: "Normál"),
-        Option(id: "tired", symbol: "🥱", label: "Unavený"),
-        Option(id: "sick", symbol: "🤒", label: "Nemocný")
+        Option(id: "tired", symbol: "🥱", label: "Unavený")
     ]
 
     var body: some View {
-        if keepAnswered || chosen == nil || saving || offerSick {
+        if keepAnswered || chosen == nil || saving {
             card.padding(.top, top)
         } else {
             // Holds onChange while the card is gone, so clearing the answer
@@ -1120,12 +1138,6 @@ struct MorningCheckinCard: View {
         }
         .onChange(of: feeling) { _, new in chosen = new }
         .sensoryFeedback(.impact(weight: .light), trigger: answers)
-        .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
-            Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
-            Button("Teď ne", role: .cancel) {}
-        } message: {
-            Text("Kouč do té doby nebude plánovat trénink.")
-        }
     }
 
     private func choose(_ id: String?) async {
@@ -1136,7 +1148,6 @@ struct MorningCheckinCard: View {
         defer { saving = false }
         do {
             try await model.setMorningCheckin(id)
-            if id == "sick", model.athleteStatus?.status != "sick" { offerSick = true }
         } catch {
             chosen = before
             model.notice = error.localizedDescription

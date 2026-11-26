@@ -145,7 +145,7 @@ struct IntegrationDetailView: View {
                 IntegrationIcon(id: current.id, size: 56)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: current.name ?? current.id).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                    Text(verbatim: state).font(Typo.small).foregroundStyle(current.needsAttention ? Palette.rust : Palette.green)
+                    Text(verbatim: state).font(Typo.small).foregroundStyle(current.needsAttention || appleNotHere ? Palette.rust : Palette.green)
                 }
             }
 
@@ -230,11 +230,17 @@ struct IntegrationDetailView: View {
     /// that went fine, its time (the server notes a success at most every 10 min).
     private var state: String {
         guard current.connected == true else { return L10n.tr("nepřipojeno") }
+        if appleNotHere { return L10n.tr("nečte se v tomhle iPhonu") }
         if let problem = current.problemText { return problem }
         if let line = syncLine, !line.problem { return L10n.tr("propojeno") + ", " + SourceActions.when(line.at) }
         if let at = current.lastSuccessAt.flatMap(SourceActions.when) { return L10n.tr("propojeno") + ", " + at }
         return L10n.tr("propojeno")
     }
+
+    /// Apple Health connected for the account, but this iPhone does not read it for
+    /// this account (another account connected it here, or it was switched off): the
+    /// header says so instead of a green "connected" over switches that are off (617 #32).
+    private var appleNotHere: Bool { current.id == "apple" && current.connected == true && !AppleHealth.shared.enabled && !store.demo }
 
     /// "Synchronizovat znovu": the sync, then one line on what it brought from this service.
     private func syncAgain() async {

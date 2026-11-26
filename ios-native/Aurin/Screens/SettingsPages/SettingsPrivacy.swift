@@ -12,6 +12,8 @@ struct PrivacySettingsView: View {
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
+    /// Bought coach messages still left: they end with the account (security audit 2026-11-24, point 3).
+    @State private var packsLeft = 0
     @State private var pausing = false
     @State private var stepUp: StepUpRequest?
     @State private var error: String?
@@ -81,7 +83,9 @@ struct PrivacySettingsView: View {
         .environment(\.inPrivacySettings, true)
         .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
-            guard !model.demo, !model.healthPaused else { return }
+            guard !model.demo else { return }
+            packsLeft = (try? await model.api.coachPacks().left) ?? 0
+            guard !model.healthPaused else { return }
             guard let allowed = try? await model.api.aiAllowed() else { return }
             ai = allowed
             aiLoaded = true
@@ -99,9 +103,10 @@ struct PrivacySettingsView: View {
             Button("Zrušit", role: .cancel) {}
         } message: {
             // Apple's account-deletion guidance: billing goes on until cancelled in the App Store.
-            Text(verbatim: ProStore.shared.entitled
+            Text(verbatim: (ProStore.shared.entitled
                  ? L10n.tr("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit. Předplatné Aurin Pro se tím nezruší, zrušíš ho v App Store.")
                  : L10n.tr("Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit."))
+                 + (packsLeft > 0 ? " " + L10n.tr("Zaniknou i koupené zprávy koučovi, které jsi ještě nevyužil.") : ""))
         }
         .stepUpSheet($stepUp)
     }
@@ -181,6 +186,8 @@ struct PrivacySettingsView: View {
             if let passkey { PasskeyService.forgetAccount(rpId: passkey.rpId, userHandle: passkey.userHandle) }
             PasskeyService.remember(false)
             AvatarStore.remove()
+            // A later account with the same id never counts as the one that connected Apple Health here.
+            AppleHealth.shared.disconnect()
             model.signOut()
         } catch APIError.stepUpRequired(_, let info) {
             stepUp = StepUpRequest(info: info, reason: L10n.tr("Smazání účtu potřebuje krátké ověření."), destructive: true) { await delete(ownerConfirmed: true) }

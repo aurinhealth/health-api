@@ -169,7 +169,20 @@ final class AppleHealth {
         return lastSync >= ten
     }
 
+    /// Before the 617 review: one switch for the whole iPhone, read once into ownerKey.
     private static let enabledKey = "appleHealth.enabled"
+    /// The account this iPhone reads Apple Health for, per server (as lastSyncKey).
+    /// Only that account's own Connect sets it (GDPR art. 9(2)(a), 25): another
+    /// account, a new one after skipping "Connect your data", or the same id on
+    /// the other server never reads it (617 review, c-06).
+    private static var ownerKey: String { ServerChoice.current == .live ? "appleHealth.owner" : "appleHealth.owner.staging" }
+    /// The signed-in account as this iPhone knows it (AppModel.loadAccountInitial).
+    private static var account: String? { (UserDefaults.standard.object(forKey: AvatarStore.idKey) as? Int).map(String.init) }
+    /// Whether this server's signed-in account is the one that connected Apple Health here.
+    private static var readsForAccount: Bool {
+        guard let owner = UserDefaults.standard.string(forKey: ownerKey) else { return false }
+        return owner == account
+    }
     private static let categoriesKey = "appleHealth.categories"
     private static let journalOffKey = "appleHealth.journalOff"
     /// Each server has its own last sync, so the days spent on the other one
@@ -180,7 +193,13 @@ final class AppleHealth {
 
     private init() {
         let defaults = UserDefaults.standard
-        enabled = defaults.bool(forKey: Self.enabledKey)
+        // An iPhone that read Apple Health before: for the account signed in now on
+        // Live (a tester on the test server connects there again).
+        if defaults.bool(forKey: Self.enabledKey) {
+            if ServerChoice.current == .live, defaults.string(forKey: Self.ownerKey) == nil, let account = Self.account { defaults.set(account, forKey: Self.ownerKey) }
+            defaults.removeObject(forKey: Self.enabledKey)
+        }
+        enabled = Self.readsForAccount
         let saved = (defaults.string(forKey: Self.categoriesKey) ?? "").split(separator: ",").flatMap { HealthCategory.saved(String($0)) }
         var chosen = saved.isEmpty ? HealthCategory.defaults : Set(saved)
         // Deník is read only when chosen (GDPR art. 25): an update once turned
@@ -202,6 +221,7 @@ final class AppleHealth {
     func connect(_ chosen: Set<HealthCategory>, api: APIClient) async -> Bool {
         guard isAvailable else { message = L10n.tr("Apple Health na tomhle zařízení není."); return false }
         guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return false }
+        guard let account = Self.account else { message = L10n.tr("Server neodpověděl."); return false }
         do {
             // What Synchronizace writes there stays allowed in the same sheet.
             let export = AppleHealthExport.shared
@@ -212,8 +232,20 @@ final class AppleHealth {
             return false
         }
         setCategories(chosen)
+        // The account's Connect, on the server too: uploads are kept only after it (src/apple-health.js).
+        // A failed one fails the Connect with its reason, instead of a first sync the server
+        // refuses (409) and that quietly switches reading off again (redesign review point 7).
+        do {
+            let _: JSONValue = try await api.send("/app/api/health/apple", method: "PUT", body: [String: String]())
+        } catch APIError.message("Method not allowed") {
+            // A server from before the Connect (#1256 not yet released there) keeps the uploads anyway.
+        } catch {
+            message = error.localizedDescription
+            ErrorLog.add(path: "Apple Health connect", status: nil, message: error.localizedDescription)
+            return false
+        }
+        UserDefaults.standard.set(account, forKey: Self.ownerKey)
         enabled = true
-        UserDefaults.standard.set(true, forKey: Self.enabledKey)
         // A new category needs its history, not just the last days.
         lastSync = nil
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
@@ -231,36 +263,43 @@ final class AppleHealth {
         _ = await sync(api: api, force: true)
     }
 
-    /// After switching the server: that server's last sync.
+    /// After switching the server: that server's last sync. Reading stops until
+    /// the account there turns out to be the one that connected it (resume).
     func serverChanged() {
         lastSync = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
+        stopReading()
     }
 
-    /// Stops reading. The server keeps what it already has.
-    func disconnect() {
+    /// Reading stops for now; the account that connected it stays (ownerKey).
+    private func stopReading() {
         enabled = false
         generation += 1
         nightsFound = nil
         readyToScore = false
-        UserDefaults.standard.set(false, forKey: Self.enabledKey)
-        UserDefaults.standard.removeObject(forKey: Self.resumeKey)
         stopObservers()
     }
 
-    /// Signing out: the next account must not read this iPhone, but signing
-    /// back in to this one reads it again (resume).
-    func pause(account email: String?) {
-        let wasOn = enabled
-        let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
-        disconnect()
+    /// Stops reading. The server keeps what it already has.
+    func disconnect() {
+        stopReading()
+        UserDefaults.standard.removeObject(forKey: Self.ownerKey)
+        UserDefaults.standard.removeObject(forKey: Self.resumeKey)
+    }
+
+    /// The session ran out (or the server was switched): nothing is read until the
+    /// next sign-in shows whose it is (resume), so an observer firing meanwhile
+    /// sends nothing with another account's new session (security review SEC-1).
+    func hold() { stopReading() }
+
+    /// Signing out or another account: the next account must not read this
+    /// iPhone, but signing back in to the one that connected it reads it again (resume).
+    func pause() {
+        stopReading()
         // The sources one account switched off are not the next one's, nor is
         // the reading it paused with its health data (resumeAfterHealthPause).
         hidden = [:]
         UserDefaults.standard.removeObject(forKey: Self.healthPausedKey)
         UserDefaults.standard.removeObject(forKey: Self.hiddenKey)
-        // Off already (a second sign-out): the account that read it still gets it back.
-        if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
-        else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
     }
 
     /// Health data paused in Settings → Soukromí a data (AppModel+HealthPause):
@@ -271,34 +310,39 @@ final class AppleHealth {
         disconnect()
         lastSync = nil
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
-        if wasOn { UserDefaults.standard.set(true, forKey: Self.healthPausedKey) }
+        // Kept for this account on this server only (a same e-mail on the other server is not it).
+        if wasOn, let account = Self.account { UserDefaults.standard.set(Self.ownerKey + ":" + account, forKey: Self.healthPausedKey) }
     }
 
     /// Health data on again: with the permissions iOS kept, from the start.
     func resumeAfterHealthPause(api: APIClient) async {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: Self.healthPausedKey) else { return }
+        guard let account = Self.account, defaults.string(forKey: Self.healthPausedKey) == Self.ownerKey + ":" + account else { return }
         defaults.removeObject(forKey: Self.healthPausedKey)
+        defaults.set(account, forKey: Self.ownerKey)
         enabled = true
-        defaults.set(true, forKey: Self.enabledKey)
         start(api: api)
         await sync(api: api, force: true)
     }
 
     private static let healthPausedKey = "appleHealth.readBeforePause"
 
-    /// After a sign-in to the account that read Apple Health before signing
-    /// out: on again with the permissions iOS kept, and the days in between.
+    /// After a sign-in (or switching the server) to the account that connected
+    /// Apple Health here: on again with the permissions iOS kept, and the days in between.
     func resume(account email: String?, api: APIClient) async {
         let defaults = UserDefaults.standard
-        guard let saved = defaults.string(forKey: Self.resumeKey), let email else { return }
-        guard saved == Self.fingerprint(email), !enabled else { defaults.removeObject(forKey: Self.resumeKey); return }
-        // Switched off for this account elsewhere in the meantime: stays off.
+        // Signed out before the 617 review: that account by its e-mail.
+        if let saved = defaults.string(forKey: Self.resumeKey) {
+            defaults.removeObject(forKey: Self.resumeKey)
+            if let email, saved == Self.fingerprint(email), let account = Self.account { defaults.set(account, forKey: Self.ownerKey) }
+        }
+        guard Self.readsForAccount else { stopReading(); return }
+        guard !enabled else { return }
+        // Switched off for this account elsewhere in the meantime (or an id used
+        // again after a deleted account): stays off.
         guard let status: AppleHealthServerStatus = try? await api.get("/app/api/health/apple") else { return }
-        defaults.removeObject(forKey: Self.resumeKey)
-        guard status.connected == true else { return }
+        guard status.connected == true else { disconnect(); return }
         enabled = true
-        defaults.set(true, forKey: Self.enabledKey)
         start(api: api)
         await sync(api: api)
     }
@@ -404,10 +448,7 @@ final class AppleHealth {
                     if let api = AppleHealth.shared.api {
                         // Woken in the background: the widgets follow the new data,
                         // after HealthKit heard back (BackgroundRefresh.healthWake).
-                        if UIApplication.shared.applicationState == .active {
-                            // HealthKit says something new came: no 10-minute wait.
-                            if await AppleHealth.shared.run(api: api, force: true).changed { AppleHealth.shared.newInApp += 1 }
-                        }
+                        if UIApplication.shared.applicationState == .active { AppleHealth.shared.followInApp(api: api) }
                         else { await BackgroundRefresh.healthWake(api: api) }
                     }
                     completion()
@@ -422,6 +463,34 @@ final class AppleHealth {
             reader.store.enableBackgroundDelivery(for: type, frequency: often) { _, _ in }
         }
     }
+
+    /// HealthKit says something new came while the app is open (review 2026-11-24
+    /// point 4): at most one sync every 2 minutes instead of one per wake, and
+    /// without force, so a wake with nothing new sends nothing. Wakes during a
+    /// sync or inside the 2 minutes wait for one sync after them, so a workout
+    /// saved meanwhile is not left until the next open. The tabs follow once
+    /// per sync that brought something new.
+    func followInApp(api: APIClient) {
+        // A wake while this one's sync reads and sends: one more round after it,
+        // as the sync may have read before the new data was there.
+        guard followUp == nil else { wokenAgain = true; return }
+        followUp = Task { @MainActor in
+            defer { followUp = nil }
+            repeat {
+                wokenAgain = false
+                while running != nil || lastSync.map({ Date().timeIntervalSince($0) < Self.inAppGap }) == true {
+                    let wait = running != nil ? 5 : max(5, Self.inAppGap - Date().timeIntervalSince(lastSync ?? .distantPast))
+                    try? await Task.sleep(for: .seconds(wait))
+                    if Task.isCancelled { return }
+                }
+                guard UIApplication.shared.applicationState == .active else { return }
+                if await run(api: api, within: Self.inAppGap).changed { newInApp += 1 }
+            } while wokenAgain
+        }
+    }
+    @ObservationIgnored private var followUp: Task<Void, Never>?
+    @ObservationIgnored private var wokenAgain = false
+    private static let inAppGap: TimeInterval = 120
 
     private func stopObservers() {
         for query in observers { reader.store.stop(query) }
@@ -447,15 +516,15 @@ final class AppleHealth {
     }
 
     /// The sync with what it did; one already running is awaited, not skipped.
-    func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
+    func run(api: APIClient, force: Bool = false, within gap: TimeInterval = 600) async -> SyncOutcome {
         if let running { return await running.value }
-        guard enabled, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
+        guard enabled, Self.readsForAccount, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
         // No health data leaves the phone before the account's consent to it.
         guard AppModel.healthConsentGiven else { return SyncOutcome(ok: false, changed: false) }
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
-        if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
+        if !force, let lastSync, Date().timeIntervalSince(lastSync) < gap { return SyncOutcome(ok: true, changed: false) }
         let task = Task { await perform(api: api, force: force) }
         running = task
         runningSince = Date()
@@ -538,7 +607,7 @@ final class AppleHealth {
             var changed = false, meaningful = false
             for upload in uploads {
                 // Signed out or another account meanwhile: this iPhone's data is not theirs to get.
-                guard round == generation, enabled, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
+                guard round == generation, enabled, Self.readsForAccount, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
                 let answer: UploadAnswer = try await api.send("/app/api/health/apple", method: "POST", body: upload)
                 // An older server does not say: count it as new.
                 let new = (answer.changed ?? 1) > 0
@@ -557,6 +626,12 @@ final class AppleHealth {
         } catch {
             // Abandoned (AppleHealth.abandon): no error to show, the next sync goes on.
             if AppModel.isCancellation(error) || round != generation { return SyncOutcome(ok: false, changed: false) }
+            // The server does not have this account connected (disconnected elsewhere): reading stops here too.
+            if case APIError.appleHealthNotConnected = error {
+                disconnect()
+                message = error.localizedDescription
+                return SyncOutcome(ok: false, changed: false)
+            }
             message = error.localizedDescription
             return SyncOutcome(ok: false, changed: false)
         }
@@ -579,6 +654,8 @@ private struct AppleHealthServerStatus: Decodable {
 
 struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
+    /// Kept by the server only for an account that connected Apple Health (PUT).
+    var connectedOnly = true
     var windows: [String: Window]? = nil
     var categories: [String]
     /// Food and water other apps logged, every one from these days (src/apple-food.js).
@@ -1101,11 +1178,33 @@ final class HealthReader: @unchecked Sendable {
         }
     }
 
-    /// The day's average (resting heart rate, VO2max, breathing, oxygen).
+    /// One device per day (617 review #12): Apple Health's own day average mixes
+    /// every app that writes the value (an Apple Watch and a Fitbit synced into
+    /// Health), and each device measures it its own way. As src/source-priority.js
+    /// does between services: the "home" source, the one with the most days in the
+    /// window, holds; another fills only the days it has nothing.
+    static func oneSource<T>(_ items: [T], day: (T) -> String, source: (T) -> String) -> [String: [T]] {
+        var byDay: [String: [String: [T]]] = [:]
+        for item in items { byDay[day(item), default: [:]][source(item), default: []].append(item) }
+        var days: [String: Int] = [:]
+        for sources in byDay.values { for key in sources.keys { days[key, default: 0] += 1 } }
+        // Ties by name, so the choice never changes between two syncs.
+        let home = days.max { a, b in a.value != b.value ? a.value < b.value : a.key > b.key }?.key
+        return byDay.compactMapValues { sources in
+            if let home, let own = sources[home] { return own }
+            return sources.max { a, b in a.value.count != b.value.count ? a.value.count < b.value.count : a.key > b.key }?.value
+        }
+    }
+
+    private static func sourceOf(_ sample: HKSample) -> String { sample.sourceRevision.source.bundleIdentifier }
+
+    /// The day's average (resting heart rate, VO2max, walking heart rate), from one device.
     private func daily(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
-        await statistics(HKQuantityType(id), options: .discreteAverage, from: from, to: to, step: DateComponents(day: 1)).compactMap { s -> AppleRecord? in
-            guard let value = s.averageQuantity()?.doubleValue(for: unit) else { return nil }
-            let date = day(s.startDate)
+        let list = await samples(HKQuantityType(id), from: from, to: to).compactMap { $0 as? HKQuantitySample }
+        let byDay = Self.oneSource(list, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) })
+        return byDay.keys.sorted().compactMap { date -> AppleRecord? in
+            guard let values = byDay[date]?.map({ $0.quantity.doubleValue(for: unit) }), !values.isEmpty else { return nil }
+            let value = values.reduce(0, +) / Double(values.count)
             return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
         }
     }
@@ -1118,10 +1217,9 @@ final class HealthReader: @unchecked Sendable {
     /// evening's samples) waits for the morning.
     private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, precision: Double = 10, from: Date, to: Date) async -> [AppleRecord] {
         let list = await samples(HKQuantityType(id), from: from.addingTimeInterval(-9 * 3600), to: to).compactMap { $0 as? HKQuantitySample }
-        var byDay: [String: [Double]] = [:]
-        for q in list {
-            byDay[wakeDay(q.startDate), default: []].append(q.quantity.doubleValue(for: unit))
-        }
+        // One device a night (617 review #12).
+        let byDay = Self.oneSource(list, day: { self.wakeDay($0.startDate) }, source: { Self.sourceOf($0) })
+            .mapValues { $0.map { $0.quantity.doubleValue(for: unit) } }
         let last = day(to)
         return byDay.keys.sorted().compactMap { date -> AppleRecord? in
             guard date <= last, let values = byDay[date], !values.isEmpty else { return nil }
@@ -1152,7 +1250,9 @@ final class HealthReader: @unchecked Sendable {
         let unit = HKUnit.secondUnit(with: .milli)
         async let sdnnRead = samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to)
         async let beatsRead = samples(HKSeriesType.heartbeat(), from: from, to: to)
-        let sdnn = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        // One device a day (617 review #12): an Apple Watch and a Fitbit synced into Health never averaged.
+        let sdnnAll = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        let sdnn = Self.oneSource(sdnnAll, day: { self.day($0.startDate) }, source: { Self.sourceOf($0) }).values.flatMap { $0 }
         let beats = await beatsRead.compactMap { $0 as? HKHeartbeatSeriesSample }.filter { calendar.component(.hour, from: $0.startDate) < 10 }
         var rmssd: [String: [Double]] = [:]
         let values = await concurrently(beats) { await self.rmssdOf($0) }

@@ -5,10 +5,10 @@ import SwiftUI
 // drinks, up to the target (Postupně, src/water-goal.js). Saved in the profile:
 // kcalGoal, waterMode, waterGoal, waterStart, waterFrom.
 
-/// "2,0 l" or "67.6 fl oz".
+/// "2 l", "2.25 L" or "67.6 fl oz" (Fmt.litres).
 func waterText(_ ml: Double?) -> String {
     guard let ml else { return "–" }
-    return Units.imperial ? Units.volumeText(ml) : Fmt.decimal(ml / 1000, digits: ml.truncatingRemainder(dividingBy: 100) == 0 ? 1 : 2) + " l"
+    return Units.imperial ? Units.volumeText(ml) : Fmt.litresText(ml)
 }
 
 /// Auto / Vlastní (/ Postupně): the choice at the top of both sheets.
@@ -119,6 +119,8 @@ struct CalorieGoalSheet: View {
 struct WaterGoalSheet: View {
     let store: SettingsStore
     let water: TodaySnapshot.Water?
+    /// Today's goal as every screen shows it, the workout's extra included (617 #3).
+    var goalMl: Double? = nil
     let today: String
     @Environment(\.dismiss) private var dismiss
     @State private var mode = "auto"
@@ -139,7 +141,8 @@ struct WaterGoalSheet: View {
                 default:
                     EmptyView()
                 }
-                if let auto = water?.autoTarget {
+                // Build-up has its own goal for today: Auto's recommendation beside it read as a third number (617 #3).
+                if mode != "build", let auto = water?.autoTarget {
                     Text(L10n.f("Aurin dnes doporučuje %@", waterText(auto))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 SaveSheetButton(saving: store.saving) {
@@ -165,9 +168,13 @@ struct WaterGoalSheet: View {
             }
             if let build = water?.build, water?.mode == "build" {
                 SettingsGroup(title: "Jak to šlo", footer: "Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění.") {
+                    // "Today 1.6 L" with "1.0 L + 0.6 L for training" under it: the number Today and Food show.
+                    let goal = max(goalMl ?? build.baseMl, build.baseMl)
+                    let extra = (goal - build.baseMl).rounded()
                     SettingsRow(title: build.done ? "Hotovo" : "Dnes",
-                                subtitle: build.done ? L10n.tr("Došel jsi na doporučený cíl.") : nil,
-                                value: waterText(build.baseMl), chevron: false)
+                                subtitle: build.done ? L10n.tr("Došel jsi na doporučený cíl.")
+                                    : extra >= 50 ? L10n.f("%@ + %@ za trénink", waterText(build.baseMl), waterText(extra)) : nil,
+                                value: waterText(goal), chevron: false)
                     ForEach(Array(build.days.enumerated()), id: \.element.date) { index, day in
                         SettingsDivider()
                         SettingsRow(title: index == 0 ? "Včera" : "Předevčírem",
@@ -208,6 +215,76 @@ struct WaterGoalSheet: View {
         let auto = water?.autoTarget ?? 2000
         custom = p["waterGoal"]?.number ?? (auto / 100).rounded() * 100
         start = p["waterStart"]?.number ?? max(1000, ((auto * 0.65) / 100).rounded() * 100)
+    }
+}
+
+/// Cíle → Spánek from the goals card: only the goal, as Kalorie and Pití.
+/// Auto follows age and the day; the alarms stay on the Spánek page.
+struct SleepGoalSheet: View {
+    let store: SettingsStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode = "auto"
+    @State private var minutes = 480
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SheetHeader(title: "Spánek") { dismiss() }
+                ModeChips(mode: $mode, options: [("auto", "Auto"), ("custom", "Vlastní")])
+                if mode == "custom" {
+                    ValueStepper(text: Fmt.duration(minutes),
+                                 minus: { minutes = max(360, minutes - 15) }, plus: { minutes = min(600, minutes + 15) })
+                } else {
+                    Text(L10n.tr("Podle věku a dne.")).font(Typo.small).foregroundStyle(Palette.muted)
+                }
+                SaveSheetButton(saving: store.saving) {
+                    if await store.saveProfile(["sleepGoal": mode == "custom" ? .number(Double(minutes)) : .null]) { dismiss() }
+                }
+                .padding(.top, 8)
+            }
+            .padding(20)
+        }
+        .background(Palette.background)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            let own = store.profile["sleepGoal"]?.number.map { Int($0.rounded()) }
+            mode = own != nil ? "custom" : "auto"
+            minutes = own.map { min(600, max(360, $0 / 15 * 15)) } ?? 480
+        }
+    }
+}
+
+/// Cíle → Cílová váha from the goals card: one number, in kilograms (0,5) or pounds (1).
+struct TargetWeightSheet: View {
+    let store: SettingsStore
+    /// The latest weighing, where the stepper starts without a target.
+    let latest: Double?
+    @Environment(\.dismiss) private var dismiss
+    @State private var kg: Double = 75
+
+    private var step: Double { Units.imperial ? 1 / Units.weight(1) : 0.5 }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                SheetHeader(title: "Cílová váha") { dismiss() }
+                ValueStepper(text: Fmt.decimal(Units.weight(kg), digits: Units.imperial ? 0 : 1) + " " + Units.weightUnit,
+                             minus: { kg = max(35, kg - step) }, plus: { kg = min(250, kg + step) })
+                SaveSheetButton(saving: store.saving) {
+                    if await store.saveProfile(["targetWeight": .number((kg * 10).rounded() / 10)]) { dismiss() }
+                }
+                .padding(.top, 8)
+            }
+            .padding(20)
+        }
+        .background(Palette.background)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            let start = store.profile["targetWeight"]?.number ?? latest ?? 75
+            kg = Units.imperial ? Units.weight(start).rounded() / Units.weight(1) : (start * 2).rounded() / 2
+        }
     }
 }
 

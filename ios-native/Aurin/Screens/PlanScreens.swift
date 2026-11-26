@@ -568,7 +568,7 @@ struct ActivePlanView: View {
                                           choose: { choosing = true }, stop: { confirmStop = true }) { await reload() }
                     }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }
@@ -697,7 +697,7 @@ struct ActivePlanContent: View {
         adjustTiles.padding(.top, 10)
 
         if active.started, active.paused != true, let week {
-            SectionLabel(text: L10n.f("Tento týden (%@–%@)", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
+            SectionLabel(text: L10n.f("Tento týden (%@–%@)", Fmt.dayMonthShort(week.monday), Fmt.dayMonthShort(ISODay.shift(week.monday, 6)))).padding(.top, 26)
             PlanSessionList(detail: week, sport: active.template.sport, changed: reload)
                 .padding(.top, 10)
         }
@@ -1290,7 +1290,7 @@ struct PlanSessionList: View {
         if s.editable == true {
             Menu { actions(s) } label: {
                 Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
-                    .frame(width: 32, height: 32).contentShape(Rectangle())
+                    .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
             }
             .accessibilityLabel(L10n.tr("Upravit trénink"))
         } else {
@@ -1500,7 +1500,7 @@ struct PlanResultView: View {
                     BackSlot { dismiss() }
                     PlanResultContent(result: result, plans: plans) { await close() }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, PageGrid.margin)
                 .padding(.top, 24)
                 .padding(.bottom, 100)
             }

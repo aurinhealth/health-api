@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private let api = APIClient()
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        // Water off for a new install only (before anything reads the switches).
+        Reminders.adoptNewDefaults()
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
         // Health data paused (also on another device) answers 403 health_paused:
@@ -50,7 +52,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + [CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
+        center.setNotificationCategories(Set(Reminders.pillNotificationCategories + Reminders.mealNotificationCategories + [Reminders.workoutNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
                                                                                     MorningPush.category, IdleWorkout.category]))
         center.delegate = self
         return true
@@ -124,6 +126,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         if content.categoryIdentifier == IdleWorkout.categoryID {
             IdleWorkout.answer(response)
+            return
+        }
+        // "Open workout" and "Reschedule" on the workout reminder, "Log lunch" on a meal's.
+        if content.categoryIdentifier == Reminders.workoutCategory {
+            if response.actionIdentifier == Reminders.workoutOpenAction { QuickActions.shared.pick = QuickActions.Pick(id: "today") }
+            if response.actionIdentifier == Reminders.workoutMoveAction { QuickActions.shared.pick = QuickActions.Pick(id: "weekPlan") }
+            return
+        }
+        if content.categoryIdentifier.hasPrefix(Reminders.mealCategoryPrefix) {
+            if response.actionIdentifier == Reminders.mealLogAction, let meal = content.userInfo["meal"] as? String {
+                QuickActions.shared.pick = QuickActions.Pick(id: "meal." + meal)
+            }
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {
@@ -301,22 +315,27 @@ enum PushRegistration {
 }
 
 /// The morning readiness push (src/push.js): held down it shows the morning
-/// in full (AurinMorning), with "Zeptat se kouče" under it, which opens the
-/// coach about today. A tap opens the app as before.
+/// in full (AurinMorning) with "Otevřít Dnes" and "Zeptat se kouče" under it
+/// (concept N1; without Aurin Pro the view drops the coach). A tap opens the app as before.
 enum MorningPush {
     static let categoryID = "MORNING_READINESS"
+    private static let todayAction = "MORNING_OPEN_TODAY"
     private static let coachAction = "MORNING_ASK_COACH"
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
+            UNNotificationAction(identifier: todayAction, title: L10n.tr("Otevřít Dnes"), options: [.foreground]),
             UNNotificationAction(identifier: coachAction, title: L10n.tr("Zeptat se kouče"), options: [.foreground])
         ], intentIdentifiers: [], options: [])
     }
 
     @MainActor
     static func answer(_ response: UNNotificationResponse) {
-        guard response.actionIdentifier == coachAction else { return }
-        QuickActions.shared.pick = QuickActions.Pick(id: "coach")
+        switch response.actionIdentifier {
+        case coachAction: QuickActions.shared.pick = QuickActions.Pick(id: "coach")
+        case todayAction: QuickActions.shared.pick = QuickActions.Pick(id: "today")
+        default: break
+        }
     }
 }
 
@@ -412,8 +431,15 @@ enum CoachPush {
             }
             try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "aurin-coach-swap", content: content, trigger: nil))
         case UNNotificationDefaultActionIdentifier:
-            // Tapping an answer opens its chat; the coach's own message opens the app on Dnes.
-            if let chatId { await MainActor.run { CoachPushOpen.shared.chat = chatId } }
+            // Tapping an answer opens its chat; the week's summary and the race week open
+            // the coach, whose opening posts their chat (CoachView.openPosted); the coach's
+            // other messages open the app on Dnes.
+            let kind = coach?["kind"] as? String
+            if let chatId {
+                await MainActor.run { CoachPushOpen.shared.chat = chatId }
+            } else if kind == "week_summary" || kind == "race_week" {
+                await MainActor.run { QuickActions.shared.pick = QuickActions.Pick(id: "coach") }
+            }
         default:
             break
         }

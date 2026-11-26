@@ -107,7 +107,7 @@ targets:
         NSLocationWhenInUseUsageDescription: Aurin vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
         NSHealthShareUsageDescription: "Aurin čte spánek, tréninky a jejich trasy (ukáže je jen v telefonu), tep, HRV, okysličení krve, dech, teplotu, kroky, váhu, tělesný tuk, výšku, věk a pohlaví, jídlo a pití, aby spočítal regeneraci, zátěž a kalorický cíl. Když je zapneš: náladu, příznaky, všímavost a sexuální aktivitu pro deník a cyklus. Data jdou na server Aurinu v EU, do AI jen s tvým svolením."
         # Settings → Zdroje dat → Apple Health writes workouts, weight, food and water (App/AppleHealthExport.swift).
-        NSHealthUpdateUsageDescription: "Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití, a náladu zapsanou v deníku."
+        NSHealthUpdateUsageDescription: "Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití, a náladu zapsanou v deníku. Když to zapneš, zapíše i data z dalších připojených služeb, třeba spánek a tep z Google Health nebo tréninky z Wahoo."
         # Nastavení → Snímač tepu: a Bluetooth chest strap or band for Režim tréninku (App/HeartRateSensor.swift).
         NSBluetoothAlwaysUsageDescription: Aurin se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.
         # Kdy mám čas → Kalendář v iPhonu (App/CalendarTime.swift): only the free minutes per day reach the server.
@@ -223,6 +223,8 @@ targets:
       - path: Shared/NotificationText.swift
       - path: Shared/StatusHex.swift
       - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Italic.ttf
         buildPhase: resources
     settings:
       base:

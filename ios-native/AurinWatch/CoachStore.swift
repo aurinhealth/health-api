@@ -60,7 +60,17 @@ final class CoachStore: ObservableObject {
         WCSession.default.sendMessage([WatchCoach.askKey: data], replyHandler: { _ in }, errorHandler: { _ in
             Task { @MainActor in CoachStore.shared.askServer(id, question, view: view) }
         })
+        // The iPhone took the question but no answer came (it went out of
+        // reach, or the app was stopped): not "thinking" for ever (watch review 2026-11-25).
+        Task {
+            try? await Task.sleep(for: .seconds(Self.answerWait))
+            guard waiting, let turn = turns.last, turn.id == id, turn.answer == nil else { return }
+            fail(id, W.tr("Kouč neodpověděl včas.", "The coach didn't answer in time."))
+        }
     }
+
+    /// The longest an answer through the iPhone may take before Try again.
+    static let answerWait = 150
 
     /// Without the iPhone: the watch asks the server itself (WatchAPI).
     private func askServer(_ id: String, _ question: String, view: String) {
@@ -126,8 +136,10 @@ final class CoachStore: ObservableObject {
         arrived(text, failed: true)
     }
 
+    /// The iPhone signed out: nothing of the chat stays on the watch.
     func clear() {
-        guard !waiting else { return }
         turns = []
+        waiting = false
+        progress = nil
     }
 }

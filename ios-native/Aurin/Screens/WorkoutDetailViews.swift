@@ -617,7 +617,7 @@ struct ActivityDetailContent: View {
                     Text("Čas").frame(width: 56, alignment: .trailing)
                     if hasWatts { Text("Výkon").frame(width: 70, alignment: .trailing) }
                     if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: paceWidth, alignment: .trailing) }
-                    if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
+                    if hasHr { Text(verbatim: L10n.isEnglish ? "HR" : "Tep").frame(width: 48, alignment: .trailing) }
                 }
                 .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
                 .padding(.top, 28).padding(.bottom, 8)
@@ -979,6 +979,11 @@ struct ZoneList: View {
         return colors[min(i, colors.count - 1)]
     }
 
+    /// "Z4" on the light amber stays dark: white on it is only 3.5 : 1 (redesign review 18).
+    static func label(_ i: Int) -> Color {
+        i > 3 ? Palette.onAccent : i == 3 ? Color(light: 0x1B1A17, dark: 0x0A0B0C) : Palette.ink
+    }
+
     var body: some View {
         let top = max(rows.map(\.percent).max() ?? 1, 1)
         VStack(spacing: 0) {
@@ -986,7 +991,7 @@ struct ZoneList: View {
                 VStack(spacing: 10) {
                     HStack(spacing: 12) {
                         Text(verbatim: "Z\(r.id + 1)").scaledFont(13, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(r.id >= 3 ? Palette.onAccent : Palette.ink)
+                            .foregroundStyle(Self.label(r.id))
                             .frame(width: 30, height: 30)
                             .background(Self.color(r.id), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         VStack(alignment: .leading, spacing: 1) {
@@ -1077,6 +1082,7 @@ struct PlannedWorkoutView: View {
                 }
                 .padding(.top, 16)
                 if !missed, let heat = plan?.heat { HeatLine(text: heat).padding(.top, 14) }
+                if !missed, let fuel = plan?.fuel { fuelLine(fuel).padding(.top, 14) }
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
@@ -1185,6 +1191,24 @@ struct PlannedWorkoutView: View {
         // Until the plan says where it is, the Undo would not know where to go back.
         .disabled(environmentNow == nil)
         .accessibilityAddTraits(current ? .isSelected : [])
+    }
+
+    /// "Sacharidy 60 g/h, asi 90 g na celý trénink" and the server's guide line;
+    /// an experienced rider's long ride says it can go up to 120 g/h.
+    private func fuelLine(_ fuel: PlannedWorkout.Fuel) -> some View {
+        let total = session.minutes.map { Double($0) / 60 * fuel.perHour }.map { (($0 / 10).rounded() * 10) }
+        let first = total.map { L10n.f("Sacharidy %@ g/h, asi %@ g na celý trénink.", Fmt.int(fuel.perHour), Fmt.int($0)) }
+            ?? L10n.f("Sacharidy %@ g/h.", Fmt.int(fuel.perHour))
+        let top = fuel.upTo.map { L10n.f("Pokud jsi zvyklý, až %@ g/h.", Fmt.int($0)) + (fuel.practise.map { " " + $0 } ?? "") }
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: first).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            ForEach([top, fuel.note].compactMap { $0 }, id: \.self) { line in
+                Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.secondary)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private func meta(_ title: String, _ value: String) -> some View {
@@ -1772,6 +1796,7 @@ struct ManualWorkoutSheet: View {
                 Image(systemName: symbol).scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(color)
                     .frame(width: 36, height: 36)
+                    .tapTarget(width: 36, height: 36)
                     .background(color.opacity(0.16), in: Circle())
                 Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                     .lineLimit(2).minimumScaleFactor(0.92).multilineTextAlignment(.center)
@@ -1839,10 +1864,9 @@ struct ManualWorkoutSheet: View {
         .padding(.horizontal, 16).padding(.vertical, 12)
     }
 
-    /// "55 min", "1 h 30", "4 h".
+    /// "55 min", "1 h 30 min", "4 h" (Fmt.duration).
     nonisolated static func length(_ minutes: Int) -> String {
-        if minutes < 60 { return "\(minutes) min" }
-        return minutes % 60 == 0 ? "\(minutes / 60) h" : String(format: "%d h %02d", minutes / 60, minutes % 60)
+        Fmt.duration(minutes)
     }
 
     // MARK: Heart rate or effort
@@ -1980,7 +2004,7 @@ struct PowerTermsButton: View {
         Button { open = true } label: {
             Label("Co znamenají TSS, NP, IF a FTP", systemImage: "info.circle")
                 .font(Typo.caption).foregroundStyle(Palette.muted)
-                .frame(minHeight: 32).contentShape(Rectangle())
+                .frame(minHeight: 32).tapTarget(width: 44, height: 32)
         }
         .buttonStyle(.plain)
         .sheet(isPresented: $open) { PowerTermsSheet() }

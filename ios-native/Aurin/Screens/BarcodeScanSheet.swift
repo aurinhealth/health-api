@@ -94,7 +94,7 @@ struct BarcodeScanSheet: View {
                     Color.clear.frame(width: 40, height: 40)
                 }
             }
-            .padding(.horizontal, 24).padding(.top, 12)
+            .padding(.horizontal, PageGrid.margin).padding(.top, 12)
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -362,6 +362,7 @@ struct BarcodeScanSheet: View {
                             Button { edit(product) } label: {
                                 Label("Upravit produkt", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                                     .padding(.horizontal, 12).frame(height: 30)
+                                    .tapTarget(width: 44, height: 30)
                                     .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                             }
                             .buttonStyle(.plain)
@@ -390,7 +391,7 @@ struct BarcodeScanSheet: View {
                     if product.canSuggestNew && !model.demo && pick == nil {
                         SettingsGroup { SettingsToggle(title: "Navrhnout pro všechny", isOn: $suggestNew) }
                     }
-                    if pick == nil { MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
+                    if pick == nil { MealDayRow(selection: Binding(get: { target }, set: { chosenMeal = $0 })) }
                     Button { Task { await save(product) } } label: {
                         Text(saving ? L10n.tr("Ukládám…") : (pick != nil ? L10n.tr("Hotovo") : MealSlot.addText(target)) + ", " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
@@ -640,7 +641,7 @@ struct BarcodeScanSheet: View {
             pick(p, value)
             return
         }
-        if let message = await model.logFood(product: p, amount: value, meal: target) {
+        if let message = await model.logFood(product: p, amount: value, meal: target, confirm: !next) {
             error = message
         } else {
             if suggestNew { model.suggestNewFood(p) }

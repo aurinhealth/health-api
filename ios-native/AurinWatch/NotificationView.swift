@@ -7,22 +7,23 @@ import WatchKit
 /// in the serif and the text under it. The buttons come from the iPhone's
 /// categories (PushRegistration.swift) and are answered there. With the
 /// values hidden on the iPhone (Skrýt zdravotní údaje) the push's own texts
-/// come in `private` (src/push.js): this long look shows them, since the watch
-/// shows notifications only unlocked on the wrist; the short look keeps the
-/// banner's stock text.
+/// come in `private` (src/push.js): the long look then keeps the banner's
+/// stock text and leaves out the readiness ring, so a wrist others can see
+/// shows no health values either (watch review 2026-11-25).
 final class CoachNotificationController: WKUserNotificationHostingController<CoachNotificationView> {
     private var titleText = ""
     private var bodyText = ""
+    private var hidden = false
 
     override var body: CoachNotificationView {
-        CoachNotificationView(title: titleText, text: bodyText, snapshot: WatchStore.shared.snapshot)
+        CoachNotificationView(title: titleText, text: bodyText, snapshot: hidden ? nil : WatchStore.shared.snapshot)
     }
 
     override func didReceive(_ notification: UNNotification) {
         let content = notification.request.content
-        let hidden = content.userInfo["private"] as? [String: Any]
-        titleText = hidden?["title"] as? String ?? content.title
-        bodyText = hidden?["body"] as? String ?? content.body
+        hidden = content.userInfo["private"] != nil
+        titleText = content.title
+        bodyText = content.body
     }
 }
 
@@ -44,6 +45,7 @@ struct CoachNotificationView: View {
                     // The zone in a word, not only the ring's colour (watch audit C1b).
                     Text(W.zoneWord(today?.zone) ?? W.tr("připravenost", "readiness"))
                         .watchFont(12, .semibold).foregroundStyle(W.zoneColor(today?.zone))
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             } else {
                 Image(systemName: "bubble.left.and.text.bubble.right")

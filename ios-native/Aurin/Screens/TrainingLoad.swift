@@ -106,14 +106,21 @@ enum LoadWords {
 }
 
 /// "LOAD" on Training: the two dials side by side, each opening its detail.
+/// Without logged gym sets (no Muscle load from the server) only Load balance,
+/// across the whole width (617 review p10 and C12): a Gym workout from Apple
+/// Health has no sets, so "No gym workouts yet" under it read as a mistake.
 struct LoadSection: View {
     let training: TrainingSnapshot
+
+    static func kinds(_ training: TrainingSnapshot) -> [LoadKind] {
+        training.muscleLoad == nil ? [.balance] : LoadKind.allCases
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             SectionLabel(text: "Zátěž")
             HStack(alignment: .top, spacing: 12) {
-                ForEach(LoadKind.allCases, id: \.self) { kind in
+                ForEach(Self.kinds(training), id: \.self) { kind in
                     RouteLink(route: .load(kind.rawValue)) { LoadTile(kind: kind, view: kind.view(training)) }
                 }
             }

@@ -84,7 +84,7 @@ struct PhotoItemsView: View {
                 MissingMacrosLine(missing: missingMacros)
                 Label("Množství jsou odhad z fotky. Omáčky a olej jsou nejméně přesné.", systemImage: "sparkles")
                     .font(Typo.caption).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true)
-                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                MealDayRow(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                 Button { Task { await save() } } label: {
                     Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
@@ -151,6 +151,7 @@ struct PhotoItemsView: View {
         Button(action: action) {
             Image(systemName: symbol).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 26, height: 26).background(Palette.track, in: Circle())
+                .tapTarget(width: 26, height: 26)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -174,8 +175,10 @@ struct PhotoItemsView: View {
     private func save() async {
         saving = true
         defer { saving = false }
-        for item in items {
-            _ = await model.logFood(product: item.product, amount: item.amount, meal: target, refreshAfter: false)
+        if !model.demo {
+            let day = model.writeDay
+            let ids = items.map { model.loggedFood(product: $0.product, amount: $0.amount, meal: target, day: day, send: false) }
+            model.confirmFood(items.map(\.product.name), meal: target, day: day, ids: ids)
         }
         Task { await model.sendOutbox(reloadToday: true) }
         done()

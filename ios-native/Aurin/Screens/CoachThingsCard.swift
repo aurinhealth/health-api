@@ -47,9 +47,14 @@ struct CoachThingsCard: View {
     var openCoach: () -> Void = {}
     /// The gap above the card, only while it shows.
     var top: CGFloat = 0
+    /// Inside the main Coach card on Today (Petr 2026-11-24, one coach card):
+    /// no card and no header of its own, a lone thing open, several as rows.
+    var plain = false
     @State private var things = CoachThings()
     /// The thing opened by a tap; nil (or a thing gone) shows the first one open.
     @State private var open: String?
+    /// Plain: the lone open thing closed by a tap stays a row.
+    @State private var closed = false
     @ScaledMetric(relativeTo: .caption) private var labelWidth: CGFloat = 104
 
     struct Item: Identifiable {
@@ -65,7 +70,17 @@ struct CoachThingsCard: View {
         let items = self.items
         // A stack, not a Group: on an empty Group the tasks never run.
         VStack(spacing: 0) {
-            if !items.isEmpty {
+            if !items.isEmpty && plain {
+                let opened = items.first(where: { $0.id == open })?.id ?? (items.count == 1 && !closed ? items[0].id : nil)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(items) { item in
+                        if item.id == opened { expanded(item) } else { row(item) }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // The gap under the Coach card's rows only while a thing shows.
+                .padding(.top, 14)
+            } else if !items.isEmpty {
                 Card {
                     header(count: items.count)
                     if let opened = items.first(where: { $0.id == open }) {
@@ -152,11 +167,12 @@ struct CoachThingsCard: View {
 
     private func header(count: Int) -> some View {
         let title = count > 1 ? L10n.tr("Kouč") + ", " + L10n.plural("%lld věcí dnes", count) : L10n.tr("Kouč")
-        return HStack(spacing: 6) {
-            Image(systemName: "sparkles").scaledFont(12, weight: .semibold)
-            Text(verbatim: title.uppercased(with: Fmt.locale)).font(.caption.weight(.semibold)).tracking(1.2)
+        // As the main Coach card's header (CoachTextCard): Two lights, sentence case, ink.
+        return HStack(spacing: 8) {
+            TwoLights(size: 18).accessibilityHidden(true)
+            Text(verbatim: title).font(Typo.bodyStrong)
         }
-        .foregroundStyle(Palette.indigo)
+        .foregroundStyle(Palette.ink)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -189,9 +205,9 @@ struct CoachThingsCard: View {
     /// An opened thing: its label (a tap closes it) and the whole content.
     private func expanded(_ item: Item) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button { withAnimation(.snappy) { open = nil } } label: {
+            Button { withAnimation(.snappy) { open = nil; closed = true } } label: {
                 HStack {
-                    caps(item.label).foregroundStyle(Palette.indigo)
+                    caps(item.label).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
                 }

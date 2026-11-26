@@ -20,6 +20,8 @@ enum APIError: LocalizedError, Equatable {
     /// The coach's answer stream ended without "done" or "error" (the server
     /// always sends one): the connection was cut, the server goes on.
     case interrupted
+    /// The account has not connected Apple Health (409 apple_health_not_connected, src/apple-health.js).
+    case appleHealthNotConnected(String)
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +34,7 @@ enum APIError: LocalizedError, Equatable {
         case .unknownPasskey(let text): return text
         case .notInvited(let text): return text
         case .stepUpRequired(let text, _): return text
+        case .appleHealthNotConnected(let text): return text
         case .interrupted: return L10n.tr("Spojení se přerušilo a odpověď se nedokončila.")
         }
     }
@@ -130,8 +133,9 @@ final class APIClient: @unchecked Sendable {
     /// Asks the coach; yields the answer as it grows and the final result.
     /// `appContext` replaces the screen and day when the coach is asked about a
     /// detail (CoachSubject.appContext). `ghost`: a temporary chat the coach
-    /// doesn't remember (src/assistant-chats.js).
-    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil, ghost: Bool = false) -> AsyncThrowingStream<AssistantEvent, Error> {
+    /// doesn't remember (src/assistant-chats.js). `reply`: the coach message whose
+    /// question chip `message` is (src/coach-questions.js), a free answer.
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil, ghost: Bool = false, reply: Int? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
         FirstDays.mark(FirstDays.coachKey)
         return AsyncThrowingStream { continuation in
             let task = Task {
@@ -145,6 +149,7 @@ final class APIClient: @unchecked Sendable {
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     if let image { body["image"] = .string(image) }
                     if ghost { body["ghost"] = .bool(true) }
+                    if let reply { body["reply"] = .object(["messageId": .number(Double(reply)), "chip": .string(message)]) }
                     request.httpBody = try JSONEncoder().encode(body)
                     let (bytes, response) = try await session.bytes(for: request)
                     let http = response as? HTTPURLResponse
@@ -276,6 +281,22 @@ final class APIClient: @unchecked Sendable {
         return (me.internalTester ?? false, me.user?.isOwner ?? false)
     }
 
+    /// E-mails about new Aurin features (src/consent.js productEmails): true or
+    /// false as chosen, nil when the account was never asked.
+    func productEmails() async throws -> Bool? {
+        struct Consent: Decodable { let productEmails: Bool? }
+        struct Me: Decodable { let consent: Consent? }
+        let me: Me = try await get("/app/api/me")
+        return me.consent?.productEmails
+    }
+
+    /// The same wrapped, so a failed read (nil from try?) differs from never asked (.some(nil)).
+    func productEmailsChoice() async throws -> Bool?? { .some(try await productEmails()) }
+
+    func setProductEmails(_ wanted: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["productEmails": JSONValue.bool(wanted)])
+    }
+
     func setAI(_ allowed: Bool) async throws {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
     }
@@ -381,6 +402,17 @@ final class APIClient: @unchecked Sendable {
         struct Response: Decodable { let kg: Double? }
         let r: Response? = try? await get("/app/api/gym/estimate?exercise=" + Self.query(exercise))
         return r?.kg.flatMap { $0 > 0 ? $0 : nil }
+    }
+
+    /// Today's loads of exercises the athlete starts themselves (the watch's
+    /// Repeat last, an exercise added in the live gym), worked out on the
+    /// server, which knows the day: a red or ill morning, a paused status and
+    /// a remembered pain (GET /app/api/gym/next; load ramp-back review C2).
+    /// Nil offline or on an older server: the local suggestion stays.
+    func gymNext(date: String, exercises: [String]) async -> GymNext? {
+        guard !exercises.isEmpty else { return nil }
+        let names = exercises.prefix(15).map { "&exercise=" + Self.query($0) }.joined()
+        return try? await get("/app/api/gym/next?date=" + Self.query(date) + names)
     }
 
     func activityDetail(id: String) async throws -> ActivityDetail {
@@ -941,6 +973,9 @@ final class APIClient: @unchecked Sendable {
             }
             if json?["status"] as? String == "health_paused" { onHealthPaused?() }
             if json?["status"] as? String == "health_consent_required" { onHealthConsentRequired?() }
+            if json?["status"] as? String == "apple_health_not_connected" {
+                throw APIError.appleHealthNotConnected(message ?? "")
+            }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }
@@ -962,3 +997,34 @@ final class APIClient: @unchecked Sendable {
     }
 }
 
+
+/// GET /app/api/gym/next: the day's warning (red or ill morning, a paused
+/// status) and each exercise's load for today, pain:true where a remembered
+/// pain leaves it out.
+struct GymNext: Decodable, Equatable {
+    struct Item: Decodable, Equatable {
+        let name: String
+        let kg: Double?
+        let pain: Bool?
+    }
+    let warning: String?
+    let exercises: [Item]
+
+    func item(_ name: String) -> Item? { exercises.first { $0.name == name } }
+    func pain(_ name: String) -> Bool { item(name)?.pain == true }
+
+    /// The local suggestion with the server's load and the reason in its
+    /// line: a pain first, then the day's warning, then the changed load.
+    func adjust(_ name: String, _ local: GymSuggestion) -> GymSuggestion {
+        var out = local
+        let localKg = local.work.first?.kg
+        if let kg = item(name)?.kg, kg > 0, localKg != nil, kg != localKg {
+            out.work = local.work.map { GymSuggestion.Planned(kg: kg, reps: $0.reps) }
+            out.warmups = GymCoach.warmups(for: kg)
+            out.line = L10n.f("Dnes %@ %@ podle tvých posledních tréninků.", GymCoach.shown(kg), Units.weightUnit)
+        }
+        if let warning, !warning.isEmpty { out.line = warning }
+        if pain(name) { out.line = L10n.tr("Tenhle cvik zatěžuje místo, které tě bolí. Když to bolí, vynech ho.") }
+        return out
+    }
+}

@@ -78,7 +78,7 @@ struct FinishSetupCard: View {
                     // Not now: the card goes, the rows stay in Settings.
                     Button { hide() } label: {
                         Image(systemName: "xmark").scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
-                            .tapTarget(width: 28, height: 28)
+                            .tapTarget(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Skrýt kartu"))
@@ -119,11 +119,11 @@ struct FinishSetupCard: View {
             .sheet(isPresented: $editingTime) {
                 let monday = WeekPlanView.monday(), day = APIClient.localToday()
                 // Done or Generate saved the days; only Generate replans.
-                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { generate in
+                WeekPlanSettingsView(monday: monday, today: day, calendar: model.calendar) { days in
                     time = true
-                    guard generate else { return }
+                    guard let days else { return }
                     Task {
-                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, calendar: model.calendar)
+                        _ = await WeekPlanGenerator.replan(model, weeks: [monday, ISODay.shift(monday, 7)], today: day, days: days.isEmpty ? nil : days, calendar: model.calendar)
                         await model.refreshTraining()
                     }
                 }
@@ -140,7 +140,7 @@ struct FinishSetupCard: View {
             ScrollView {
                 SetupGoalPage(focus: $focus).padding(24)
                 if let goalError {
-                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, 24)
+                    Text(goalError).font(Typo.small).foregroundStyle(Palette.rust).padding(.horizontal, PageGrid.margin)
                 }
             }
             .background { ScreenBackground(glow: Palette.Glow.today) }
@@ -164,10 +164,11 @@ struct FinishSetupCard: View {
     /// the evening line only where Reminders sends it (asksForWatch: Apple Watch).
     private var notificationsNote: String {
         if model.noWearable { return L10n.tr("Kouč, když je potřeba změnit plán, a kdy jít spát") }
-        let seven = ClockText.format("7:00")
+        // The morning one comes once the night has synced, not at a set hour
+        // (review 2026-11-25: "Readiness at 7:00 AM" vs Notifications).
         let watch = WatchBridge.shared.watchState.paired && (today.readiness.pastNights ?? 0) == 0
-        return watch ? L10n.f("Připravenost v %@ a dnes večer připomínka nasadit hodinky", seven)
-            : L10n.f("Připravenost v %@ a kouč, když se mění plán", seven)
+        return watch ? L10n.tr("Připravenost ráno po synchronizaci a dnes večer připomínka nasadit hodinky")
+            : L10n.tr("Připravenost ráno po synchronizaci a kouč, když se mění plán")
     }
 
     /// Whether iOS was asked already, Gym is one of the sports and a goal was set (a start on the web).

@@ -93,3 +93,16 @@ test('the settings keep the lengths and an own routine only while it exists', ()
   const moves = routineMoves();
   assert.ok(moves.warmup.length >= 29 && moves.stretching.some(m => m.id === 'child'));
 });
+
+test('Free time as the default: a clock with no moves, kept by the settings, overridden for a day', () => {
+  const free = routinesFor(legs, muscleOf, { warmupRoutine: 'free', stretchingRoutine: 'auto' }, 60);
+  assert.deepEqual(ids(free.warmup), ['free']);
+  assert.equal(free.warmup.items[0].seconds, 0);
+  assert.ok(free.stretching.items.length > 1);
+  const day = routinesFor(legs, muscleOf, { warmupRoutine: 'free' }, 60, { override: { warmup: { routine: 'auto', length: 'auto' } } });
+  assert.notDeepEqual(ids(day.warmup), ['free']);
+  assert.equal(normalizeTraining({ warmupRoutine: 'free', stretchingRoutine: 'nope' }).warmupRoutine, 'free');
+  assert.equal(normalizeTraining({ warmupRoutine: 'free', stretchingRoutine: 'nope' }).stretchingRoutine, 'auto');
+  const row = readRoutines([0, 0, 0, 0, 0, routinesRow(free)]);
+  assert.deepEqual(ids(row.warmup), ['free']);
+});

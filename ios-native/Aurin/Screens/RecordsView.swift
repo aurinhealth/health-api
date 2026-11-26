@@ -204,7 +204,7 @@ struct InsightsView: View {
             Button { togglePin(lift.exercise) } label: {
                 Image(systemName: isPinned ? "star.fill" : "star")
                     .scaledFont(17, cap: .denseCap).foregroundStyle(isPinned ? Palette.amber : Palette.faint)
-                    .frame(width: 32, height: 32).contentShape(Rectangle())
+                    .frame(width: 32, height: 32).tapTarget(width: 32, height: 32)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(isPinned ? "Odepnout" : "Připnout nahoru"))

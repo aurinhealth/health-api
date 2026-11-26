@@ -95,7 +95,9 @@ final class AppModel {
     /// The chosen day lies after today (Food only).
     var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
-    var athleteStatus: AthleteStatus?
+    var athleteStatus: AthleteStatus? {
+        didSet { if athleteStatus != oldValue { WatchBridge.shared.update(status: athleteStatus) } }
+    }
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?
@@ -118,6 +120,11 @@ final class AppModel {
     /// When each tab's data last came from the server, and for which day. The
     /// screens open with the copy saved on the phone; refreshIfStale loads it again.
     @ObservationIgnored var fetched: [AppTab: (at: Date, day: String)] = [:]
+    /// Food's load on its way, so Today's goals check waits for it instead of a second request (review 2026-11-24 point 15).
+    @ObservationIgnored var foodLoad: Task<Void, Never>?
+    /// Health detail charts (GET /app/api/health/series) kept for the session; see healthSeries(metric:period:).
+    @ObservationIgnored var seriesCache: [String: (at: Date, day: String, scope: AccountScope, series: HealthSeries)] = [:]
+    @ObservationIgnored var seriesRound = 0
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
     var dataRevision = 0
@@ -138,8 +145,10 @@ final class AppModel {
     /// The "+" sheet is open: what it adds goes to today, whatever day the
     /// screens show (weight always did).
     var writesToday = false
+    /// The day chosen on the day pill of an add flow (DayPill), until that flow closes.
+    var addDay: String?
     /// The day food and drinks are written to.
-    var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
+    var writeDay: String { addDay ?? (writesToday ? Self.localDate(Date()) : shownDay) }
     /// The open tab and each tab's navigation stack, so cards, widgets and
     /// links (aurin://open/sleep) can open any detail.
     var tab: AppTab = .today
@@ -173,6 +182,8 @@ final class AppModel {
     /// Cycle tracking was on before it had its own consent (src/cycle-store.js
     /// consentNeeded): its consent sheet, once per launch until answered (RootView).
     var cycleConsentAsk = false
+    /// An account set up before product news by e-mail existed: asked once whether it wants them (RootView).
+    var productEmailsAsk = false
     @ObservationIgnored var cycleConsentAsked = false
     /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
     var notInvited = false

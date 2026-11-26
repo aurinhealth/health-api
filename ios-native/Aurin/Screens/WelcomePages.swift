@@ -231,7 +231,7 @@ private struct WelcomeReadiness: View {
             .rises(play, delay: 0)
 
             HStack(spacing: 12) {
-                tile(title: "Spánek", value: "7:12", unit: nil, bar: RangeBar(value: play.shown ? 432 : 380, low: 473, high: 551, color: Palette.amberBar),
+                tile(title: "Spánek", value: "7 h 12", unit: "min", bar: RangeBar(value: play.shown ? 432 : 380, low: 473, high: 551, color: Palette.amberBar),
                      note: L10n.f("%d %% potřeby", 89), tone: Palette.amberBar)
                     .rises(play, delay: 0.25)
                 tile(title: "HRV", value: "64", unit: "ms", bar: RangeBar(value: play.shown ? 64 : 49, low: 55, high: 61, color: Palette.green),
@@ -246,7 +246,7 @@ private struct WelcomeReadiness: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(LocalizedStringKey(title)).font(Typo.small).foregroundStyle(Palette.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(verbatim: value).font(Typo.number(36)).foregroundStyle(Palette.ink)
+                Text(verbatim: value).font(Typo.number(36)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
                 if let unit { Text(verbatim: unit).font(Typo.small).foregroundStyle(Palette.muted) }
             }
             bar
@@ -299,10 +299,10 @@ private struct WelcomeTraining: View {
                 .rises(play, delay: 0.3)
 
                 VStack(spacing: 6) {
-                    MuscleFigurePair(colors: play.shown ? ["quads": Palette.rust, "chest": Palette.amberBar] : [:], spacing: 2)
+                    MuscleFigurePair(colors: play.shown ? ["quads": Palette.rust, "glutes": Palette.amberBar] : [:], spacing: 2)
                         .frame(height: 92)
                         .animation(.easeInOut(duration: 0.8).delay(1.0), value: play.shown)
-                    Text(verbatim: L10n.tr("Stehna") + ", " + L10n.tr("Hrudník"))
+                    Text(verbatim: L10n.tr("Stehna") + ", " + L10n.tr("Hýždě"))
                         .font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .welcomeCard(padding: 12)
@@ -384,7 +384,7 @@ private struct WelcomeCoach: View {
     let play: WelcomePlay
 
     private var parts: [String] {
-        [L10n.tr("Připravenost je 61 po 5 h 40 spánku. "), L10n.tr("Nohy nech, jen lehčeji:"), L10n.tr(" dřep 3 × 8 se 70 kg.")]
+        [L10n.tr("Připravenost je 61 po 5 h 40 min spánku. "), L10n.tr("Nohy nech, jen lehčeji:"), L10n.tr(" dřep 3 × 8 se 70 kg.")]
     }
 
     var body: some View {
@@ -438,8 +438,8 @@ private struct WelcomeCoach: View {
     private var workout: some View {
         HStack(spacing: 12) {
             Image(systemName: "figure.strengthtraining.traditional")
-                .scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
-                .frame(width: 40, height: 40).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.Sport.gym)
+                .frame(width: 40, height: 40).background(Palette.Sport.gym.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nohy, lehčeji").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                 Text(verbatim: "40 min, " + L10n.f("%@ cviky", "4")).font(Typo.caption).foregroundStyle(Palette.muted)

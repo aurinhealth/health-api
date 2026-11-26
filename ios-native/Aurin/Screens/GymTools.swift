@@ -1,7 +1,6 @@
 import PhotosUI
 import SwiftUI
 import UIKit
-import UniformTypeIdentifiers
 
 // MARK: - Training → tools
 
@@ -251,8 +250,16 @@ struct GymBuilderView: View {
     @State private var replacing: String?
     @State private var adding = false
     @State private var technique: String?
-    /// The exercise held and dragged to another place.
-    @State private var dragging: String?
+    /// Edit exercises (the live workout's sheet): order, remove, add, supersets.
+    @State private var reordering = false
+    /// The coach's reasons shown whole (two lines folded).
+    @State private var reasonsOpen = false
+    /// The exercise just swiped away, for Undo.
+    @State private var lastRemoved: RemovedExercise?
+    /// Just saved: "Saved to your plan and Intervals.icu" over the detail for a moment.
+    @State private var savedNote = false
+    /// Typing the own words: the pinned Save to plan steps aside for the keyboard.
+    @FocusState private var wishFocused: Bool
     /// "Kde budeš cvičit?" before the first workout of an account without places.
     @State private var askPlace = false
     /// The length was picked on the proposal, so the server no longer chooses it.
@@ -287,17 +294,23 @@ struct GymBuilderView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink", showsCoach: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
-                Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
-                    .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-                if let proposal { result(proposal) } else if let template { templateForm(template) }
-                else if quick && !showForm && error == nil { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 18) }
-                else { form }
-                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
+        // A ZStack, not a Group: a Group would hand the tasks below to each page again.
+        ZStack {
+            // Saved: the page is the day's gym detail (Start workout, Reorder, parts).
+            if saved { GymSessionView(date: isoDay) } else { builder }
+        }
+        .overlay(alignment: .top) {
+            if savedNote {
+                Label("Uloženo do plánu i do Intervals.icu.", systemImage: "checkmark.circle.fill")
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+                    .cardSurface(cornerRadius: 22)
+                    .padding(.top, 64)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(for: .seconds(3))
+                        withAnimation(.snappy) { savedNote = false }
+                    }
             }
         }
         .task {
@@ -374,6 +387,43 @@ struct GymBuilderView: View {
             Button("Zrušit", role: .cancel) { showForm = true }
         } message: {
             Text("Trénink složím jen z vybavení, které tam je. Místa a stroje upravíš ve Vybavení.")
+        }
+    }
+
+    /// The setup form, then the proposal in the planned gym detail's look
+    /// (concept 017): the same hero, exercise cards and What you'll work.
+    private var builder: some View {
+        DetailScreen(glow: proposal == nil ? Palette.Glow.training : Palette.Glow.gym,
+                     title: proposal == nil ? L10n.tr("Sestavit trénink") : L10n.tr("Sestavit trénink").uppercased(with: Fmt.locale),
+                     pinTitle: proposal != nil, showsCoach: proposal != nil) {
+            VStack(alignment: .leading, spacing: 0) {
+                if let proposal {
+                    result(proposal)
+                } else {
+                    SectionLabel(text: template == nil ? "Sestavit trénink do posilovny" : "Naplánovat trénink do posilovny").padding(.top, 24)
+                    Text(template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
+                        .font(Typo.heading(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10)
+                    if let template { templateForm(template) }
+                    else if quick && !showForm && error == nil { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 18) }
+                    else { form }
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
+                }
+            }
+        }
+        // Save to plan pinned at the bottom, as Start workout on the detail.
+        .overlay(alignment: .bottom) {
+            if let proposal, !wishFocused { pinned(proposal) }
+        }
+        .sheet(isPresented: $reordering) {
+            if let proposal {
+                EditExercisesSheet(day: proposal.day, catalog: catalog) { edited, _ in
+                    var next = proposal
+                    next.take(edited, catalog: catalog)
+                    self.proposal = next
+                }
+            }
         }
     }
 
@@ -578,210 +628,201 @@ struct GymBuilderView: View {
     }
 
     private func result(_ p: GymProposal) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if template == nil && !saved {
-                setupChips.padding(.top, 14)
-                if let keptAt {
-                    Label(L10n.f("Zatím neuloženo, z %@", keptAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Fmt.locale))),
-                          systemImage: "clock")
-                        .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 10)
-                }
-            } else {
-                Text(Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + ", \(minutes) min")
-                    .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
-            }
-            Card {
-                WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
-                BodyMap(load: p.load, height: 240)
-            }
-            .padding(.top, 18)
-
-            SectionLabel(text: "Cviky").padding(.top, 26)
-            if !saved && p.exercises.count > 1 {
-                Label("Podrž cvik a přetáhni ho jinam", systemImage: "line.3.horizontal")
-                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 4)
-            }
-            exerciseList(p)
-            if !saved {
-                Button { adding = true } label: {
-                    Label("Přidat cvik", systemImage: "plus.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green)
-                        .frame(maxWidth: .infinity, alignment: .leading).frame(height: 44)
-                }
-                .disabled(catalog.isEmpty || busy != nil)
-                .padding(.top, 4)
-            }
-            if let rationale = p.rationale {
-                Text(rationale).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-            }
-
-            if saved {
-                Label("Uloženo do plánu i do Intervals.icu.", systemImage: "checkmark.circle.fill")
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 22)
-                NavigationLink(value: AppRoute.trainingMode(isoDay)) {
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
+        let day = p.day
+        return VStack(alignment: .leading, spacing: 0) {
+            WorkoutHero(sport: "strength", title: p.planName, line: heroLine(p))
+                .padding(.top, 8)
+            if template == nil { setupChips.padding(.top, 14) }
+            if let rationale = p.rationale { reasons(rationale).padding(.top, 10) }
+            if template == nil {
+                Button { Task { await preview(another: true) } } label: {
+                    Text("Jiný návrh").font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(Palette.track, in: Capsule())
+                        .frame(minHeight: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // Start workout: it opens with 3, 2, 1 and starts (concept 08).
-                .simultaneousGesture(TapGesture().onEnded {
-                    // Only today's workout starts by itself; another day opens to look first.
-                    if isoDay == AppModel.localDate(Date()) { TrainingModeView.startOnOpen = isoDay }
-                })
-                .padding(.top, 12)
-            } else {
-                SectionLabel(text: "Upravit vlastními slovy").padding(.top, 26)
-                HStack(spacing: 10) {
-                    TextField("Třeba „bez dřepů, víc ramen“", text: $wish, axis: .vertical)
-                        .lineLimit(1...3)
-                        .font(.body)
-                        .padding(.horizontal, 14).padding(.vertical, 11)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .opacity(busy == "adjust" ? 0.45 : 1)
-                    Button { Task { await adjust() } } label: {
-                        Image(systemName: "arrow.up")
-                            .scaledFont(16, weight: .semibold, cap: .denseCap)
-                            .foregroundStyle(Palette.onButton)
-                            .frame(width: 44, height: 44)
-                            .background(Palette.button, in: Circle())
-                    }
-                    .disabled(wish.trimmingCharacters(in: .whitespaces).isEmpty || busy != nil)
-                    .opacity(busy == "adjust" ? 0.35 : 1)
-                    .accessibilityLabel("Upravit trénink")
-                }
-                .padding(.top, 10)
-                // What the coach is doing until his answer comes; the buttons below wait dimmed.
-                if busy == "adjust" { CoachThinking(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 12) }
-                if let answer, busy != "adjust" { Text(answer).font(Typo.small).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
-
-                PrimaryButton(title: busy == "confirm" ? "Ukládám…" : "Uložit do plánu", systemImage: "checkmark", busy: busy == "confirm") {
-                    Task { await confirm() }
-                }
-                .disabled(busy != nil || p.draftId == nil)
-                .padding(.top, 22)
-                if template == nil {
-                    HStack(spacing: 10) {
-                        SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview(another: true) } }
-                        SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { showForm = true; proposal = nil; answer = nil }
-                    }
-                    .disabled(busy != nil)
-                    .padding(.top, 10)
-                    // "Jiný návrh": the coach builds another one.
-                    if busy == "preview" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 12) }
-                } else {
-                    SecondaryButton(title: "Změnit den", systemImage: "calendar") { proposal = nil; answer = nil }
-                        .disabled(busy != nil)
-                        .padding(.top, 10)
-                }
+                .disabled(busy != nil)
+                .padding(.top, 4)
             }
+            if busy == "preview" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 12) }
+
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Cviky")
+                Spacer()
+                Button(LocalizedStringKey("Upravit pořadí")) { reordering = true }
+                    .font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
+                    .disabled(busy != nil)
+            }
+            .padding(.top, 18)
+            GymExerciseCards(day: day) { card(p, day, $0) }
+                .padding(.top, 4)
+            Button { adding = true } label: {
+                Text(verbatim: "+ " + L10n.tr("Přidat cvik")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 48).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(catalog.isEmpty || busy != nil)
+            .padding(.top, 6)
+
+            SectionLabel(text: "Upravit vlastními slovy").padding(.top, 22)
+            HStack(spacing: 10) {
+                TextField("Třeba „bez dřepů, víc ramen“", text: $wish, axis: .vertical)
+                    .lineLimit(1...3)
+                    .font(.body)
+                    .focused($wishFocused)
+                    .padding(.horizontal, 14).padding(.vertical, 11)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .opacity(busy == "adjust" ? 0.45 : 1)
+                Button { wishFocused = false; Task { await adjust() } } label: {
+                    Image(systemName: "arrow.up")
+                        .scaledFont(16, weight: .semibold, cap: .denseCap)
+                        .foregroundStyle(Palette.onButton)
+                        .frame(width: 44, height: 44)
+                        .background(Palette.button, in: Circle())
+                }
+                .disabled(wish.trimmingCharacters(in: .whitespaces).isEmpty || busy != nil)
+                .opacity(busy == "adjust" ? 0.35 : 1)
+                .accessibilityLabel("Upravit trénink")
+            }
+            .padding(.top, 10)
+            // What the coach is doing until his answer comes; the buttons wait dimmed.
+            if busy == "adjust" { CoachThinking(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 12) }
+            if let answer, busy != "adjust" { Text(answer).font(Typo.small).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
+
+            if !p.muscles.isEmpty { GymWorkedCard(load: p.load).padding(.top, 22) }
+
             // The workout without weights: kept to plan again, or sent to a friend.
             let kept = WorkoutTemplate.from(p, minutes: minutes)
             if template == nil || template?.fromName != nil {
-                SaveWorkoutButton(template: kept).padding(.top, 10)
+                SaveWorkoutButton(template: kept).padding(.top, 24)
             }
             ShareWorkoutButton(template: kept, date: isoDay, groups: WorkoutSharing.groups(p.muscles, template: kept))
                 .padding(.top, 10)
-        }
-    }
-
-    /// The exercises in order; a superset together under its mark. Keyed by
-    /// name, so a dragged exercise slides and the others make room.
-    private func exerciseList(_ p: GymProposal) -> some View {
-        let names: [String] = p.exercises.map { $0.name }
-        let runs: [Range<Int>] = ExerciseOrder.runs(p.supersets)
-        return VStack(spacing: 0) {
-            ForEach(runs.map { names[$0.lowerBound] }, id: \.self) { (first: String) in
-                let run: Range<Int> = runs.first { names[$0.lowerBound] == first } ?? 0..<0
-                if let letter = ExerciseOrder.letter(p.supersets[run.lowerBound]) {
-                    SupersetGroup(letter: letter) {
-                        ForEach(run.map { names[$0] }, id: \.self) { (name: String) in movableRow(p, names.firstIndex(of: name) ?? 0) }
-                    }
-                } else {
-                    ForEach(run.map { names[$0] }, id: \.self) { (name: String) in movableRow(p, names.firstIndex(of: name) ?? 0) }
+            if template != nil {
+                Button { proposal = nil; answer = nil } label: {
+                    Text("Změnit den").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(busy != nil)
+                .padding(.top, 6)
             }
+            // Room for the pinned Save to plan (52 pt and its fade).
+            Color.clear.frame(height: 84)
         }
     }
 
-    /// Held and dragged onto another exercise, it takes that place; VoiceOver
-    /// moves it one place with its actions.
-    @ViewBuilder private func movableRow(_ p: GymProposal, _ index: Int) -> some View {
-        let ex = p.exercises[index]
-        if saved {
-            exerciseRow(p, index, ex)
-        } else {
-            exerciseRow(p, index, ex)
-                .contentShape(Rectangle())
-                .onDrag {
-                    dragging = ex.name
-                    return NSItemProvider(object: ex.name as NSString)
-                }
-                .onDrop(of: [UTType.text], delegate: ExerciseDropDelegate(target: ex.name, dragging: $dragging) { name, target in
-                    move(name, to: target)
-                })
-                .accessibilityElement(children: .contain)
-                .accessibilityAction(named: Text("Posunout výš")) { move(index, by: -1) }
-                .accessibilityAction(named: Text("Posunout níž")) { move(index, by: 1) }
+    /// "Not saved yet, 7 exercises, 21 sets"; a friend's workout: its day and length.
+    private func heroLine(_ p: GymProposal) -> String {
+        if template != nil {
+            return Fmt.capitalized(Fmt.relativeDay(isoDay, today: AppModel.localDate(Date()))) + ", " + Fmt.duration(minutes)
         }
+        let state = keptAt.map { L10n.f("Zatím neuloženo, z %@", $0.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: Fmt.locale))) }
+            ?? L10n.tr("Zatím neuloženo")
+        let list = p.exercises
+        return [state, L10n.plural("%lld cviků", list.count), L10n.plural("%lld sérií", list.reduce(0) { $0 + $1.sets })].joined(separator: ", ")
     }
 
-    private func exerciseRow(_ p: GymProposal, _ index: Int, _ ex: (name: String, sets: Int, reps: String, kg: String)) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("\(index + 1)").font(Typo.number(20)).foregroundStyle(Palette.faint).frame(width: 22, alignment: .leading)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                    Text(muscleLine(p.muscles[ex.name])).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                    if p.failing.contains(ex.name) { GymTag.failure.padding(.top, 4) }
-                }
-                Spacer(minLength: 8)
-                Text(setsLine(ex.sets, ex.reps, ex.kg))
-                    .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
-                ExerciseInfoButton(name: ex.name) { technique = ex.name }
-                if !saved {
-                    Menu {
-                        Button { replacing = ex.name } label: { Label("Nahradit jiným", systemImage: "arrow.triangle.swap") }
-                        Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
-                            .disabled(p.exercises.count < 2)
-                    } label: {
-                        Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                            .frame(width: 32, height: 32).background(Palette.track, in: Circle())
-                    }
-                    .accessibilityLabel(L10n.f("Upravit %@", ex.name))
-                }
+    /// The coach's reasons for this proposal: two lines, a tap shows them whole.
+    private func reasons(_ text: String) -> some View {
+        Button { withAnimation(.snappy) { reasonsOpen.toggle() } } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(reasonsOpen ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Image(systemName: reasonsOpen ? "chevron.up" : "chevron.down").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
             }
-            .padding(.vertical, 12)
-            Rectangle().fill(Palette.hairline).frame(height: 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: 44)
+    }
+
+    /// The detail's exercise card, the plan only (nothing to tick before it is saved):
+    /// Swap and Technique on it, a swipe left takes it out (Undo under the list).
+    private func card(_ p: GymProposal, _ day: GymDay, _ exercise: GymExercise) -> some View {
+        let removable = p.exercises.count > 1 && busy == nil
+        return ExerciseCard(exercise: exercise,
+                            failure: Set(exercise.sets.map(\.row).filter { day.isToFailure(row: $0) }),
+                            started: false,
+                            onSet: { _, _, _, _ in }, onUndo: { _ in },
+                            onTechnique: { technique = exercise.name },
+                            onAlternatives: { replacing = exercise.name })
+            .modifier(SwipeToDelete(enabled: removable, exercise: true) { remove(exercise.name) })
+            .accessibilityAction(named: L10n.tr("Odebrat tento cvik")) { if removable { remove(exercise.name) } }
+    }
+
+    /// "Removed: Pendulum squat" with Undo, as in the live workout; gone after a few seconds.
+    private func undoRow(_ removed: RemovedExercise) -> some View {
+        HStack(spacing: 8) {
+            Text(verbatim: L10n.f("Odebráno: %@", ExerciseCatalog.shownName(removed.name)))
+                .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
+            Spacer(minLength: 8)
+            Button {
+                withAnimation(.snappy) { proposal = removed.before; lastRemoved = nil }
+            } label: {
+                Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14).frame(minHeight: 36)
+                    .tapTarget(width: 44, height: 36)
+                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
+            }
+            .buttonStyle(.plain)
+            .tapTarget(width: 44, height: 44)
+            .accessibilityLabel(L10n.f("Vrátit %@ do tréninku", ExerciseCatalog.shownName(removed.name)))
+        }
+        .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 4)
+        .cardSurface(cornerRadius: 22)
+        .transition(.opacity)
+        .task(id: removed.id) {
+            try? await Task.sleep(for: .seconds(TrainingModeView.undoRemoveSeconds))
+            if lastRemoved?.id == removed.id { withAnimation(.snappy) { lastRemoved = nil } }
         }
     }
 
-    /// "3 × 8–10, 60 kg" in steps: Xcode 26.6 times out on it as one expression.
-    private func setsLine(_ sets: Int, _ reps: String, _ kg: String) -> String {
-        let line: String = "\(sets) × " + Fmt.range(reps)
-        if kg.isEmpty { return line }
-        let weight: String = LiftWeight.shown(kg) ?? kg
-        return line + ", " + weight + " " + Units.weightUnit
+    /// Save to plan, pinned as an ink pill over a fade, as Start workout on the detail;
+    /// Undo of a removed exercise and an error right above it, where they are seen.
+    private func pinned(_ p: GymProposal) -> some View {
+        VStack(spacing: 10) {
+            if let lastRemoved, lastRemoved.after == p { undoRow(lastRemoved) }
+            if let error {
+                Text(error).font(Typo.small).foregroundStyle(Palette.rust)
+                    .frame(maxWidth: .infinity, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+            }
+            Button { Task { await confirm() } } label: {
+                Text(verbatim: L10n.tr(busy == "confirm" ? "Ukládám…" : "Uložit do plánu")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Palette.button, in: Capsule())
+                    .shadow(color: .black.opacity(0.22), radius: 10, y: 6)
+            }
+            .buttonStyle(.plain)
+            .disabled(busy != nil || p.draftId == nil)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 28)
+        .padding(.bottom, 12)
+        .background(LinearGradient(colors: [Palette.background.opacity(0), Palette.background], startPoint: .top, endPoint: .init(x: 0.5, y: 0.45)))
     }
 
     // MARK: Editing the proposal by hand
 
-    private func move(_ index: Int, by step: Int) {
-        guard var p = proposal else { return }
-        p.moveExercise(index, by: step)
-        proposal = p
-    }
-
-    private func move(_ name: String, to target: String) {
-        guard var p = proposal, let from = p.exercises.firstIndex(where: { $0.name == name }),
-              let to = p.exercises.firstIndex(where: { $0.name == target }) else { return }
-        p.moveExercise(from, to: to)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { proposal = p }
-    }
-
     private func remove(_ name: String) {
-        guard var p = proposal else { return }
-        p.rows.removeAll { $0.count > 1 && $0[1].string == name }
-        p.muscles[name] = nil
-        proposal = p
+        guard var p = proposal, p.exercises.count > 1 else { return }
+        let before = p
+        // As the live workout does: its superset partner is no longer one (deleteExercise).
+        var sheet = p.day
+        guard let at = sheet.exercises.firstIndex(where: { $0.name == name }) else { return }
+        sheet.deleteExercise(at: at)
+        p.take(sheet, catalog: catalog)
+        withAnimation(.snappy) {
+            proposal = p
+            lastRemoved = RemovedExercise(name: name, before: before, after: p)
+        }
     }
 
     /// The same sets with the other exercise and its estimated load.
@@ -811,10 +852,6 @@ struct GymBuilderView: View {
         if let map = ex.muscles { p.muscles[ex.name] = map }
         p.insert(rows, name: ex.name, catalog: catalog)
         proposal = p
-    }
-
-    private func muscleLine(_ map: [String: Double]?) -> String {
-        (map ?? [:]).filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }.map { BodyFigure.label($0.key) }.joined(separator: ", ")
     }
 
     // MARK: Server
@@ -927,6 +964,7 @@ struct GymBuilderView: View {
         await run("confirm") {
             try await model.api.confirmGym(draftId: id, rows: p.rows)
             saved = true
+            withAnimation(.snappy) { savedNote = true }
             if template == nil { GymLength.remember(minutes); GymKeptProposal.clear() }
             async let training: Void = model.refreshTraining()
             await model.refresh()
@@ -1397,7 +1435,8 @@ private struct SetupChip: View {
         .font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
         .padding(.horizontal, 14).frame(height: 34)
         .background(Palette.track, in: Capsule())
-        .contentShape(Capsule())
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -1462,23 +1501,19 @@ enum GymLength {
     }
 }
 
-/// Moves the held exercise to the one it is over, so the others make room.
-private struct ExerciseDropDelegate: DropDelegate {
-    let target: String
-    @Binding var dragging: String?
-    let move: (String, String) -> Void
-
-    func dropEntered(info: DropInfo) {
-        guard let moving = dragging, moving != target else { return }
-        move(moving, target)
+extension GymBuilderView {
+    /// Tests: the screen with this proposal, nothing built.
+    init(date: String, preview: GymProposal) {
+        self.init(date: date)
+        _proposal = State(initialValue: preview)
     }
+}
 
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        dragging = nil
-        return true
-    }
+/// An exercise taken out of the proposal and the proposal before, for Undo:
+/// offered while nothing else changed since (`after`).
+private struct RemovedExercise {
+    let id = UUID()
+    let name: String
+    let before: GymProposal
+    let after: GymProposal
 }
