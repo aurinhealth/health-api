@@ -21,7 +21,7 @@ import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync, ownActiveTime } from "./apple-health.js";
-import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
+import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE, WORKOUT_HEART_RATE_TYPE, WORKOUT_HEART_RATE_STEP } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -1028,33 +1028,51 @@ async function syncGoogleRecent(env){
 }
 
 // The nightly run stores heart rate as 5-minute rows only (saveGoogleHeartRateBuckets).
-// A workout's own minutes keep every sample, for its curve and zones: for
-// workouts that ended in the last 6 hours without samples they are read here;
-// the watch's samples may reach Google later, so it is tried again each run. A
-// workout that reaches Google later than that keeps the 5-minute rows only.
+// A workout's own minutes keep 5-second averages, for its curve, zones and
+// recovery: one row a workout (WORKOUT_HEART_RATE_TYPE), kept as long as the
+// workout. Every sample as its own row, deleted after a week, was ~14,000 D1 row
+// writes a day per Google user, and the zones of a workout older than a week were
+// then counted from 5-minute averages (2026-11-26). For workouts that ended in the
+// last 6 hours without enough of them they are read here; the watch's samples may
+// reach Google later, so it is tried again each run. A workout that reaches Google
+// later than that keeps the 5-minute rows only.
 const WORKOUT_HR_HOURS=6,WORKOUT_HR_MAX=3;
 export async function workoutHeartRate(env,token,fetchImpl=fetch){
   const since=new Date(Date.now()-WORKOUT_HR_HOURS*3600e3).toISOString().replace(/\.\d{3}Z$/,'Z');
   const rows=(await env.DB.prepare("SELECT start_time,end_time FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='exercise' AND end_time>=? AND COALESCE(record_role,'')!='duplicate' ORDER BY end_time DESC LIMIT ?").bind(env.USER_ID,since,WORKOUT_HR_MAX).all()).results||[];
+  const step=WORKOUT_HEART_RATE_STEP;
   let saved=0;
   for(const r of rows){
     const start=Date.parse(r.start_time),end=Date.parse(r.end_time);
     if(!(end>start)||end-start>6*3600e3)continue;
-    const have=await env.DB.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<?").bind(env.USER_ID,r.start_time,r.end_time).first();
-    // About one sample a minute is enough for the chart and the zones.
-    if(Number(have?.n)>=(end-start)/60e3)continue;
-    const iso=ms=>new Date(ms).toISOString().replace(/\.\d{3}Z$/,'Z');
+    const iso=ms=>new Date(ms).toISOString().replace(/\.\d{3}Z$/,'Z'),id='hrw:'+iso(start);
+    const stored=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type=? AND external_id=?").bind(env.USER_ID,WORKOUT_HEART_RATE_TYPE,id).first();
+    const points=p=>{try{return(JSON.parse(p||'{}').bpm||[]).filter(v=>v!=null).length;}catch{return 0;}};
+    // About one value a minute is enough for the chart and the zones.
+    if(points(stored?.payload_json)>=(end-start)/60e3)continue;
+    const t0=Math.floor(start/1000),bins=Array.from({length:Math.ceil((end-start)/1000/step)},()=>[0,0]);
+    // A 6-hour workout at a sample a second is ~22 pages of 1,000.
     let pageToken=null;
-    for(let i=0;i<10;i++){
+    for(let i=0;i<25;i++){
       const params=new URLSearchParams({dataSourceFamily:'users/me/dataSourceFamilies/google-wearables',filter:`heart_rate.sample_time.physical_time >= "${iso(start)}" AND heart_rate.sample_time.physical_time < "${iso(end)}"`,pageSize:'1000'});
       if(pageToken)params.set('pageToken',pageToken);
       const response=await fetchImpl('https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error('heart-rate HTTP '+response.status+': '+JSON.stringify(data).slice(0,200));
-      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[],{raw:true});
+      for(const point of data.dataPoints||[]){
+        const t=Date.parse(googleInfo('heart-rate',point).sample||''),v=Number(point?.heartRate?.beatsPerMinute??point?.heartRate?.bpm),k=Math.floor((t/1000-t0)/step);
+        if(!(v>=20&&v<=250)||!(k>=0&&k<bins.length))continue;
+        bins[k][0]+=v;bins[k][1]++;
+      }
       pageToken=data.nextPageToken||null;
       if(!pageToken)break;
     }
+    const bpm=bins.map(([sum,n])=>n?Math.round(sum/n):null),payload=JSON.stringify({t0,step,bpm}),count=bpm.filter(v=>v!=null).length;
+    if(count<=points(stored?.payload_json))continue;
+    await env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
+      VALUES (?,'google-wearables',?,?,NULL,?,?,?,'bpm',?) ON CONFLICT (user_id,source_family,data_type,external_id) DO UPDATE SET value_numeric=excluded.value_numeric,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP`)
+      .bind(env.USER_ID,WORKOUT_HEART_RATE_TYPE,id,iso(start),iso(end),Math.round(bpm.reduce((s,v)=>s+(v||0),0)/count),payload).run();
+    saved+=count;
   }
   return saved;
 }

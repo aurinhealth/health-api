@@ -130,3 +130,25 @@ test("a Google sync marks what changed; the source is chosen and the summary reb
     [{ hour: "2026-10-30T05:00:00Z", steps: 500 }, { hour: "2026-10-30T06:00:00Z", steps: 700 }]);
   assert.equal(await flushGoogleSync(env), 0, "nothing left to do");
 });
+
+test("a rebuild writes only the hours that changed and deletes the hours left with no row", async () => {
+  const t = setup();
+  fill(t);
+  const all = () => t.raw.sqlite.prepare("SELECT hour, source_family, steps, energy, zone_light, zone_moderate, zone_vigorous, zone_peak, wear_minutes FROM health_hour_summary ORDER BY hour, source_family").all();
+  assert.ok(await rebuildHourSummary(t.db, 1, "2026-09-01") > 0);
+  const first = all();
+  // The same rows again: nothing is written.
+  assert.equal(await rebuildHourSummary(t.db, 1, "2026-09-01"), 0);
+  assert.deepEqual(all(), first);
+  // One hour's steps change and another hour loses its rows: two writes, and the
+  // summary equals one built from nothing.
+  t.raw.sqlite.exec("UPDATE health_datapoints SET payload_json = '{\"steps\":{\"count\":5}}' WHERE data_type = 'steps' AND start_time = '2026-09-05T06:00:00Z'");
+  t.raw.sqlite.exec("DELETE FROM health_datapoints WHERE start_time >= '2026-09-06T08:00:00Z' AND start_time < '2026-09-06T09:00:00Z'");
+  assert.equal(await rebuildHourSummary(t.db, 1, "2026-09-01"), 2);
+  const after = all();
+  t.raw.sqlite.exec("DELETE FROM health_hour_summary");
+  await rebuildHourSummary(t.db, 1, "2026-09-01");
+  assert.deepEqual(all(), after);
+  assert.equal(after.find(r => r.hour === "2026-09-05T06:00:00Z" && r.source_family === "google-wearables").steps, 5);
+  assert.ok(!after.some(r => r.hour === "2026-09-06T08:00:00Z"));
+});

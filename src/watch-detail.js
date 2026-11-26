@@ -10,6 +10,7 @@ import { heartRateZones, heartRateRecovery } from './activity-detail.js';
 import { watchRecorder } from './activity-origin.js';
 import { activityRecoveryHours } from './recovery-hours.js';
 import { ownActiveTime } from './apple-health.js';
+import { WORKOUT_HEART_RATE_TYPE } from './heart-rate-compaction.js';
 
 const MAX_POINTS = 1500;
 const ROUTE_TYPE = 'exercise-route';
@@ -39,14 +40,17 @@ export function parseTcx(xml, start) {
   return thin(out);
 }
 
-// Heart rate through [start, end) from the stored samples: 10-second averages
-// where samples are kept, else the 5-minute rows (hourly after a month), seconds
-// from start.
+// Heart rate through [start, end) from the stored samples: a Google workout's own
+// 5-second averages (index.js workoutHeartRate), else 10-second averages where
+// samples are kept (Apple Health, Google rows from before the workout rows), else
+// the 5-minute rows (hourly after a month), seconds from start.
 export async function storedHeartRate(db, userId, start, end) {
   const s = Date.parse(start), e = Date.parse(end);
   if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 24 * 3600e3) return [];
   const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
-  const [raw, buckets] = await Promise.all([
+  const [workouts, samples, buckets] = await Promise.all([
+    db.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${WORKOUT_HEART_RATE_TYPE}' AND start_time<? AND end_time>?`)
+      .bind(userId, end, start).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 10) * 10 AS at, AVG(${bpm}) AS v FROM health_datapoints
       WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 25 AND 250 GROUP BY at ORDER BY at`)
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => []),
@@ -54,10 +58,17 @@ export async function storedHeartRate(db, userId, start, end) {
       WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? ORDER BY sample_time`)
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => [])
   ]);
-  // The 10-second averages where samples are kept (a Google workout's own
-  // minutes), the stored rows for the 5 minutes without any.
-  const covered = new Set(raw.map(r => Math.floor(n(r.at) / 300)));
-  const rows = [...raw, ...buckets.filter(r => !covered.has(Math.floor(n(r.at) / 300)))].sort((a, b) => n(a.at) - n(b.at));
+  const own = [];
+  for (const w of workouts) {
+    const p = parse(w.payload_json), step = n(p.step) || 5;
+    (Array.isArray(p.bpm) ? p.bpm : []).forEach((v, i) => { const at = n(p.t0) + i * step; if (n(v) >= 25 && n(v) <= 250 && at * 1000 >= s && at * 1000 < e) own.push({ at, v: n(v) }); });
+  }
+  // The workout's averages, then the samples, then the stored rows, for the 5
+  // minutes the finer ones leave without any.
+  const covered = new Set(own.map(r => Math.floor(r.at / 300)));
+  const raw = samples.filter(r => !covered.has(Math.floor(n(r.at) / 300)));
+  for (const r of raw) covered.add(Math.floor(n(r.at) / 300));
+  const rows = [...own, ...raw, ...buckets.filter(r => !covered.has(Math.floor(n(r.at) / 300)))].sort((a, b) => n(a.at) - n(b.at));
   return thin(rows.map(r => [Math.round(n(r.at) - s / 1000), Math.round(n(r.v))]).filter(([t, v]) => t >= 0 && v > 0));
 }
 
