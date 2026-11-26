@@ -18,8 +18,8 @@ export const HOURLY_TYPES = {
   'steps': { prefix: 'steps1h', unit: 'count', key: 'steps', field: 'count' },
   'active-energy-burned': { prefix: 'kcal1h', unit: 'kcal', key: 'activeEnergyBurned', field: 'kcal' },
   // As the zone compaction stores an hour (heart-rate-compaction.js): the interval
-  // as long as the minutes, the zone and the minutes in the payload and as the
-  // value (the hours worn count the value, source-priority.js and hour-summary.js).
+  // as long as the minutes, the zone in the payload, no value: Google's minute rows
+  // have none (checked on production 2026-11-26), and the hours worn sum the value.
   'time-in-heart-rate-zone': { prefix: 'zone1h', unit: 'min', zone: true }
 };
 const MARK = 'google_hourly';
@@ -76,8 +76,8 @@ export function hourlyRow(type, entry, storedPayload) {
   const total = round(m.reduce((s, v) => s + (v || 0), 0)), start = Date.parse(entry.hour);
   if (spec.zone) {
     const minutes = round(Math.min(60, total)), end = iso(start + Math.round(minutes * 60) * 1000);
-    return { id: hourlyId(type, entry), i: { sample: null, start: entry.hour, end, value: minutes, unit: spec.unit },
-      payload: JSON.stringify({ timeInHeartRateZone: { interval: { startTime: entry.hour, endTime: end }, heartRateZoneType: entry.zone, durationMinutes: minutes }, m }) };
+    return { id: hourlyId(type, entry), i: { sample: null, start: entry.hour, end, value: null, unit: spec.unit },
+      payload: JSON.stringify({ timeInHeartRateZone: { interval: { startTime: entry.hour, endTime: end }, heartRateZoneType: entry.zone }, m }) };
   }
   return { id: hourlyId(type, entry), i: { sample: null, start: entry.hour, end: iso(start + HOUR), value: total, unit: spec.unit },
     payload: JSON.stringify({ [spec.key]: { [spec.field]: total }, m }) };

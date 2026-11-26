@@ -221,13 +221,13 @@ test('Google steps, energy and zone minutes from the first hourly hour on are on
   assert.equal(rows()[2].value_numeric, 890);
   assert.deepEqual(JSON.parse(rows()[2].payload_json).m, JSON.parse(first[2].payload_json).m.map((v, k) => k === 9 ? 500 : v), 'the other minutes stay');
 
-  // Zone minutes: a row per hour and zone, as long as its minutes, the minutes as its value (hours worn).
+  // Zone minutes: a row per hour and zone, as long as its minutes, no value (as Google's minute rows).
   const zone = (m, z) => ({ name: 'zone-' + m, info: { sample: null, start: at(m), end: at(m + 1), value: null, unit: 'min' }, timeInHeartRateZone: { heartRateZoneType: z } });
   await context.saveGooglePointsBatch(env, 'google-wearables', 'time-in-heart-rate-zone', [zone(1, 'LIGHT'), zone(2, 'LIGHT'), zone(3, 'MODERATE'), zone(4, 'LIGHT')]);
   const zones = raw.sqlite.prepare("SELECT external_id, start_time, end_time, value_numeric, json_extract(payload_json, '$.timeInHeartRateZone.heartRateZoneType') z FROM health_datapoints WHERE data_type = 'time-in-heart-rate-zone' ORDER BY external_id").all();
   assert.deepEqual(zones.map(r => [r.external_id, r.start_time, r.end_time, r.value_numeric, r.z]), [
-    ['zone1h:LIGHT:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:03:00Z', 3, 'LIGHT'],
-    ['zone1h:MODERATE:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:01:00Z', 1, 'MODERATE']
+    ['zone1h:LIGHT:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:03:00Z', null, 'LIGHT'],
+    ['zone1h:MODERATE:2026-10-10T10:00:00Z', '2026-10-10T10:00:00Z', '2026-10-10T10:01:00Z', null, 'MODERATE']
   ]);
 });
 
