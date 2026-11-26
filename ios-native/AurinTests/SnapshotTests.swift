@@ -683,7 +683,7 @@ final class SnapshotTests: XCTestCase {
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings", height: 1700) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
         // Nastavení follows the text size up to AX5 (617 #35).
-        try render("settings-ax5", height: 4000, typeSize: .accessibility5) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-ax5", height: 2600, typeSize: .accessibility5) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-sports", height: 900) { NavigationStack { SportsSettingsView(store: store) }.environment(AppModel(demo: true)) }
