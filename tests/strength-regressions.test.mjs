@@ -740,3 +740,11 @@ test('the three shoulder parts are one choice: one of five groups, one turn, nam
   assert.match(plan.planName, /Ramena|Shoulders/);
   assert.doesNotMatch(plan.planName, /delt|Boční|Zadní|Přední/);
 });
+
+test("a similar exercise's weight holds after 14 days off and is lighter after 21 (load ramp-back review C14)", () => {
+  const set = date => ({ workout_date: date, type: "WORK", exercise: "Barbell back squat", actual_kg: 80, actual_reps: 8, rpe: 8, completed: 1, set_no: 1 });
+  const at = today => estimateStartingLoad({ exercise: "Smith machine squat", history: [set("2026-10-01")], targetReps: "6–8", today }).kg;
+  const fresh = at("2026-10-05"), held = at("2026-10-16"), back = at("2026-10-25");
+  assert.ok(held <= fresh, `${held} > ${fresh}`);
+  assert.ok(back < held, `${back} >= ${held}`);
+});

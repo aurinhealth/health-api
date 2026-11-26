@@ -151,20 +151,31 @@ export function estimateRunPace(sessions, athlete = {}, today) {
 
 // ---- a break ----------------------------------------------------------------
 // The day a sport came back after BREAK_DAYS or more without it (the last
-// such day within `window` days), or null. The window's first day counts as
-// the day before it, so there is no session before the window to see.
+// such day within `window` days), or null. The gap is counted from the last
+// real session before it, also one before the window (`dates` may reach back
+// further). `start`: the first day the dates cover, when the athlete has
+// older data; a first session with none before it since then is a return
+// after a break of that long. Without `start` (a new athlete) the first
+// session ever is no break (load ramp-back review 2026-11-25, C10: the
+// window's first day counted as a session).
 // Audit wave 2 (9.2, 7.2, O9): the week after it stays without intensity,
 // then a test is offered. 14 days is an estimate (Coyle 1984: VO2max about
 // 7 % lower after 3 weeks off; TrainerRoad retests after 14 days off).
 export const BREAK_DAYS = 14;
-export function returnAfterBreak(dates, today, { window = 35 } = {}) {
+export function returnAfterBreak(dates, today, { window = 35, start = null } = {}) {
   const from = shift(today, -window);
-  let back = null, before = from;
-  for (const d of [...new Set(dates || [])].filter(d => d >= from && d <= today).sort()) {
-    if (daysBetween(before, d) >= BREAK_DAYS) back = d;
+  let back = null, before = start;
+  for (const d of [...new Set(dates || [])].filter(d => d <= today && (!start || d >= start)).sort()) {
+    if (d >= from && before && daysBetween(before, d) >= BREAK_DAYS) back = d;
     before = d;
   }
   return back;
+}
+
+// Whether the athlete has an activity before `day`: then the dates read from
+// that day on can start returnAfterBreak (`start`), else the athlete is new.
+export async function activityBefore(db, userId, day) {
+  return !!(await db.prepare("SELECT 1 AS x FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time<? LIMIT 1").bind(userId, day).first().catch(() => null));
 }
 
 // ---- offers ----------------------------------------------------------------
@@ -184,7 +195,10 @@ export const OLD_DAYS = 56;
 export function thresholdOffer({ sport, sports = null, sessions, current, estimate: found, check = null, today, since = null, back = null }) {
   if (Array.isArray(sports) && !sports.includes(sport)) return null;
   const recent = (sessions || []).filter(s => s.kind === sport && s.date > shift(today, -42) && s.date <= today);
-  if (recent.length < 4) return null;
+  // 7–21 days after a break, 2 sessions are enough: the 4 in 6 weeks the
+  // break itself took away kept the offer from ever showing (C11).
+  const afterBreak = back && daysBetween(back, today) >= 7 && daysBetween(back, today) <= 21;
+  if (recent.length < (afterBreak ? 2 : 4)) return null;
   if (check && ["scheduled", "measured"].includes(check.status)) return null;
   const metric = sport === "run" ? "runThresholdPace" : sport === "swim" ? "swimCss" : current?.ftp || recent.some(s => s.avgPower > 50) ? "ftp" : "lthr";
   // The ride estimate is an FTP in watts: a heart-rate-only rider (LTHR) never compares it.
@@ -201,7 +215,7 @@ export function thresholdOffer({ sport, sports = null, sessions, current, estima
     if (Math.abs(change) >= CHANGE) reason = change > 0 ? "higher" : "lower";
   }
   const touched = String(check?.updatedAt || "").slice(0, 10);
-  if (!reason && back && daysBetween(back, today) >= 7 && daysBetween(back, today) <= 21 && !(touched && touched >= back)) reason = "break";
+  if (!reason && afterBreak && !(touched && touched >= back)) reason = "break";
   if (!reason && since && daysBetween(since, today) >= OLD_DAYS) reason = "old";
   if (!reason) return null;
   if (["dismissed", "applied"].includes(check?.status) && daysBetween(String(check.updatedAt || today).slice(0, 10), today) < SNOOZE_DAYS) {

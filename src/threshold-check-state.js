@@ -6,7 +6,7 @@ import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
 import { weekRoleOptions } from "./plan-context.js";
 import { availabilityOn } from "./training-availability.js";
-import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, curveTestResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor, returnAfterBreak } from "./threshold-check.js";
+import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, curveTestResult, getTestWorkout, thresholdOffer, recommendTestDay, testFor, returnAfterBreak, activityBefore } from "./threshold-check.js";
 import { intervalsReads } from "./intervals-reads.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { wahooStreams } from "./wahoo-detail.js";
@@ -58,7 +58,7 @@ async function testCurves(env,id){
 }
 
 export async function thresholdCheckState(env,ctx,today){
-  const [{sessions,swims,thresholds,athlete,sports},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
+  const [{sessions,swims,thresholds,athlete,sports},checks,older]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB),activityBefore(env.DB,env.USER_ID,shiftDate(today,-90))]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null,swimCss:thresholds.swimCss||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
   // Since when each value is known (the old-threshold offer): the row
@@ -128,7 +128,7 @@ export async function thresholdCheckState(env,ctx,today){
     if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
     if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
     const metric=sport==='run'?'runThresholdPace':sport==='swim'?'swimCss':current.ftp?'ftp':'lthr',dates=(sport==='swim'?swims:sessions).filter(x=>x.kind===sport).map(x=>x.date);
-    const offer=thresholdOffer({sport,sports,sessions:sport==='swim'?swims:sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(dates,today)});
+    const offer=thresholdOffer({sport,sports,sessions:sport==='swim'?swims:sessions,current,estimate:estimates[sport],check:c,today,since:sinceOf(metric,c),back:returnAfterBreak(dates,today,{start:older?shiftDate(today,-90):null})});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
     const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});

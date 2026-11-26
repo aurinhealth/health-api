@@ -118,17 +118,20 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     // fits: possible with the athlete's equipment (the active place), so the app can offer those first.
     // fatigue: how tiring it is, so the app puts an added exercise among the others (big lifts first).
     // liked: the athlete's thumbs up (true) or down (false), so the picker offers the disliked ones last.
-    const [setup,taste]=await Promise.all([trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
-    const liked=new Set(taste.liked),disliked=new Set(taste.disliked);
+    // pain: loads a body part that hurts, as the coach remembers (strength-generator.js
+    // painfulExercises): left out of the watch's search, marked in the full list
+    // (load ramp-back review 2026-11-25, C3).
+    const [setup,taste,state]=await Promise.all([trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB),getAthleteState(env.DB).catch(()=>({}))]);
+    const liked=new Set(taste.liked),disliked=new Set(taste.disliked),pain=painfulExercises(usedMemories(state)).avoid;
     // ?q= (the Apple Watch's search): the 20 names that match, fitting ones first, without the muscles.
     const q=String(url.searchParams.get('q')||'').trim().slice(0,60);
     if(q){
       const fold=t=>String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),key=fold(q);
-      const found=gymExerciseCatalog().filter(e=>fold(e.name).includes(key)).map(e=>({name:e.name,sets:e.sets??null,reps:e.reps??null,fits:fitsEquipment(e.name,setup)}))
+      const found=gymExerciseCatalog().filter(e=>fold(e.name).includes(key)&&!pain.has(e.name)).map(e=>({name:e.name,sets:e.sets??null,reps:e.reps??null,fits:fitsEquipment(e.name,setup)}))
         .sort((a,b)=>(a.fits===false)-(b.fits===false)||a.name.localeCompare(b.name)).slice(0,20);
       return Response.json({status:'ok',exercises:found},{headers:{'Cache-Control':'no-store'}});
     }
-    return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup),fatigue:EXERCISE_INTELLIGENCE[e.name]?.fatigue??null,liked:liked.has(e.name)?true:disliked.has(e.name)?false:null}))},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup),fatigue:EXERCISE_INTELLIGENCE[e.name]?.fatigue??null,pain:pain.has(e.name),liked:liked.has(e.name)?true:disliked.has(e.name)?false:null}))},{headers:{'Cache-Control':'no-store'}});
   }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
