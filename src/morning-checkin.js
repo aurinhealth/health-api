@@ -41,6 +41,31 @@ export async function readinessCheckin(db, date) {
   return Number(today) === 1 || (today == null && Number(answer(yesterday)) === 1) ? "sick" : null;
 }
 
+// R5 (Petr 2026-11-26): after Nemoc ticked in the Journal (the day after the
+// last tick still counts as sick, readinessCheckin), as many easy days as sick
+// days, at least 2 and at most 7. { day, of } for today, or null.
+export async function journalSickReturn(db, date) {
+  if (!db || !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return null;
+  const shift = n => new Date(Date.parse(date + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+  let rows = [];
+  try { rows = (await db.prepare("SELECT date,answer FROM journal_entries WHERE user_id=? AND item_key='sick' AND date>=? AND date<=?").bind(db.userId, shift(-21), date).all()).results || []; }
+  catch (error) { if (/no such table/i.test(String(error?.message || error))) return null; throw error; }
+  const answer = new Map(rows.map(r => [r.date, Number(r.answer)]));
+  const sick = d => answer.get(d) === 1;
+  // Ticked today: still a sick day (readinessCheckin).
+  if (sick(date)) return null;
+  for (let back = 1; back <= 8; back++) {
+    if (!sick(shift(-back))) continue;
+    let count = 0;
+    while (sick(shift(-back - count))) count++;
+    // The day after the last tick is sick too, unless it was ✕-ed.
+    const first = answer.get(shift(-back + 1)) === 0 ? back - 1 : back - 2;
+    const of = Math.min(7, Math.max(2, count)), day = first + 1;
+    return first >= 0 && day <= of ? { day, of } : null;
+  }
+  return null;
+}
+
 // null clears the day's answer.
 export async function saveCheckin(db, date, feeling) {
   if (feeling != null && !FEELINGS.includes(feeling)) throw new Error(L("Neznámá odpověď.", "Unknown answer."));

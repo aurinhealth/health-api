@@ -132,7 +132,7 @@ function runTemplate(kind,minutes){
 function swimTemplate(kind,minutes){
   const m=Math.max(15,Math.round(minutes||40));
   const templates=L({
-    recovery:{name:"Volné plavání",kind:"recovery",target:"o 12 s na 100 m pomaleji než práh (CSS) a víc",structure:[Math.min(m,30)+" min volně, klidně s piškotem"]},
+    recovery:{name:"Volné plavání",kind:"recovery",target:"o 12 s na 100 m pomaleji než práh (CSS) a víc",structure:[Math.min(m,30)+" min volně, klidně s piškotem (ne při bolesti ramene)"]},
     endurance:{name:"Plynulé plavání",kind:"endurance",target:"o 6–10 s na 100 m pomaleji než práh (CSS)",structure:["200 m rozplavání","2–4× 50 m drily","delší úseky plynule","100 m vyplavání"]},
     tempo:{name:"Plynulé úseky",kind:"tempo",target:"o 3–5 s na 100 m pomaleji než práh",structure:["200 m rozplavání","4–6× 200 m, 20 s pauza","100 m vyplavání"]},
     sweet_spot:{name:"Práh (CSS)",kind:"sweet_spot",target:"prahové tempo (CSS)",structure:["200 m rozplavání","8× 100 m, 15 s pauza","100 m vyplavání"]},
@@ -142,7 +142,7 @@ function swimTemplate(kind,minutes){
     openers:{name:"Aktivace před závodem",kind:"openers",target:"lehce, krátce závodní tempo",structure:["300 m lehce","4× 50 m závodní tempo, 30 s pauza","100 m volně"]},
     race:{name:"Závod",kind:"race",target:"rozplavání 5–10 min",structure:["5–10 min rozplavání","start"]}
   },{
-    recovery:{name:"Easy swim",kind:"recovery",target:"12 s per 100 m slower than threshold (CSS) or more",structure:[Math.min(m,30)+" min easy, a pull buoy is fine"]},
+    recovery:{name:"Easy swim",kind:"recovery",target:"12 s per 100 m slower than threshold (CSS) or more",structure:[Math.min(m,30)+" min easy, a pull buoy is fine (not with a sore shoulder)"]},
     endurance:{name:"Steady swim",kind:"endurance",target:"6–10 s per 100 m slower than threshold (CSS)",structure:["200 m warm-up","2–4× 50 m drills","longer repeats, steady","100 m cool-down"]},
     tempo:{name:"Steady repeats",kind:"tempo",target:"3–5 s per 100 m slower than threshold",structure:["200 m warm-up","4–6× 200 m, 20 s rest","100 m cool-down"]},
     sweet_spot:{name:"Threshold (CSS)",kind:"sweet_spot",target:"threshold pace (CSS)",structure:["200 m warm-up","8× 100 m, 15 s rest","100 m cool-down"]},
@@ -277,7 +277,7 @@ export function engineForAI(engine,{cycleShared=false}={}){
   return out;
 }
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},experience=null,sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null,returns=null,sickReturn=null,injuryTrial=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"||sport==="swim"?sport:"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:sport==="swim"?isSwim:isRide,hardOf=sport==="run"?isHardRun:sport==="swim"?isHardSwim:isHard,run=sport==="run",swim=sport==="swim",short=run||swim;
@@ -593,6 +593,35 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // pain blocks hard training (pain-words.js; audit 2026-11-07, point 4).
     const sore=athleteState?.memoryOff?[]:sorePartsFor(sport,athleteState?.memories);
     if(sore.length&&quality()){kind="endurance";adaptations.push(L("bolest "+sore.map(a=>a.label[0]).join(" a ")+" z toho, co si kouč pamatuje: bez intenzity","pain in the "+sore.map(a=>a.label[1]).join(" and ")+" the coach remembers: no intensity"));}
+    // R7 (Petr 2026-11-26): a sore shoulder in the pool: no paddles or pull
+    // buoy, which load it, and a pause from swimming offered; a longer easy
+    // swim the athlete chooses stays theirs.
+    if(sport==="swim"&&sore.some(a=>a.id==="shoulder"))adaptations.push(L("bolest ramene: bez packelí a piškotu; plavání můžeš na pár dní vynechat","sore shoulder: no paddles or pull buoy; you can also take a few days off swimming"));
+    // R6 (Petr 2026-11-26): easy days after the main race, only a
+    // recommendation the athlete's "harder" ends (insisted): run 5 and 10 km
+    // none, half marathon 5 days, marathon 14, ultra 21; a ride under 2 h none,
+    // 2 to 4 h 2 days, longer 3. Coach practice.
+    const pr=focus?.pastRace;
+    if(pr&&pr.sport===sport&&!insisted&&(sport==="run"||sport==="ride")){
+      const raceHours=completedAll.filter(a=>a.date===pr.date).reduce((t,a)=>t+n(a.durationHours,0),0)||(sport==="ride"?n(pr.km,0)/30:0);
+      const easyDays=sport==="run"?(pr.km<=15?0:pr.km<=30?5:pr.km<=45?14:21):raceHours<2?0:raceHours<=4?2:3;
+      if(pr.daysAgo>=1&&pr.daysAgo<=easyDays&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(pr.daysAgo+". den po závodě z "+easyDays+": lehce (doporučení, jde změnit na těžší)","day "+pr.daysAgo+" of "+easyDays+" after your race: easy (a suggestion, you can ask for harder)"));}
+    }
+    // R4 (Petr 2026-11-26): the trial session after Zranění, firm: easy and
+    // at most 30 min of walking and jogging, a 45 min ride, a 20 min swim;
+    // after "Build up slowly" the next 2 sessions easy (coach-gap-checkin.js).
+    if(injuryTrial?.mode==="trial"||injuryTrial?.mode==="ask"){
+      if(quality()||kind==="long_endurance")kind="endurance";
+      capAt({run:30,ride:45,swim:20}[sport]||30,L("zkušební trénink po zranění","trial session after an injury"));
+      adaptations.push(sport==="run"?L("zkušební trénink po zranění: nejvýš 30 min, střídej chůzi a klus","trial session after an injury: up to 30 min, alternate walking and jogging"):L("zkušební trénink po zranění: lehce a krátce","trial session after an injury: easy and short"));
+    } else if(injuryTrial?.mode==="slow"&&!insisted){
+      if(quality()||kind==="long_endurance")kind="endurance";
+      capAt(short?45:90,L("návrat po zranění","returning after an injury"));
+      adaptations.push(L("návrat po zranění: lehce, bez dlouhého tréninku","returning after an injury: easy, no long session"));
+    }
+    // R5 (Petr 2026-11-26): the easy days after Nemoc in the Journal
+    // (morning-checkin.js journalSickReturn), a recommendation like R6.
+    if(sickReturn&&!insisted&&(quality()||kind==="long_endurance")){kind="endurance";adaptations.push(L(sickReturn.day+". den z "+sickReturn.of+" po nemoci: lehce (doporučení, jde změnit na těžší)","day "+sickReturn.day+" of "+sickReturn.of+" after being sick: easy (a suggestion, you can ask for harder)"));}
     if(quality()&&!insisted){
       const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?(breakGap>=28?L("po pauze delší než 4 týdny: intenzita až po 3 trénincích a týdnu","back after more than 4 weeks off: intensity after 3 sessions and a week"):L("po pauze delší než 2 týdny: intenzita až po 2 trénincích","back after more than 2 weeks off: intensity after 2 sessions")):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
@@ -666,9 +695,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     // The coach's week reaches back 7 to 13 days: the 30 days come from
     // sportReturns (coach-pick.js, longestRun), read with the breaks.
     const lastRun=returns?.last?.run?diffDays(targetDate,returns.last.run):null,ran=within(14).length||(lastRun!=null&&lastRun>=1&&lastRun<=14);
-    const longest=ran?Math.max(0,n(returns?.longestRun,0),...within(30).map(a=>n(a.durationHours,0)*60)):0;
+    // R6: the main race does not count as the longest run.
+    const raceDay=focus?.pastRace?.date,notRace=d=>d!==raceDay;
+    const fromReturns=Array.isArray(returns?.runs)?Math.max(0,...returns.runs.filter(r=>notRace(r.day)).map(r=>n(r.minutes,0))):n(returns?.longestRun,0);
+    const longest=ran?Math.max(0,fromReturns,...within(30).filter(a=>notRace(a.date)).map(a=>n(a.durationHours,0)*60)):0;
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
-    if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za posledních 30 dní měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 30 days was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
+    if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za posledních 30 dní měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 30 days was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):ran&&raceDay?L("Kromě závodu nevidím za posledních 30 dní žádný běh, začínám na "+limit+" min.","Apart from your race I don't see any run in the last 30 days, so I start at "+limit+" min."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }
   if(testDays===1&&!plannedInfo?.minutes)requestedMinutes=Math.min(requestedMinutes,short?30:60);
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);

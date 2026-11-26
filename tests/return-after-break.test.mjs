@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { readinessCheckin } from "../src/morning-checkin.js";
+import { readinessCheckin, journalSickReturn } from "../src/morning-checkin.js";
 import { saveJournalEntry, getJournalSettings } from "../src/journal-store.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { rankOptions } from "../src/coach-pick.js";
@@ -137,4 +137,109 @@ test("the first gym session after Nemoc holds the weights with a set less, then 
   // Once a gym session is done after it, or two weeks later, as usual.
   assert.doesNotMatch(plan({ athleteState: { status: "active", recoveredAt: day(-10), memories: [] } }).planName, /po nemoci/);
   assert.doesNotMatch(plan({ athleteState: { status: "active", recoveredAt: day(-20), memories: [] } }).planName, /po nemoci/);
+});
+
+test("R6: easy days after the main race as a suggestion, the race not the longest run", () => {
+  const raced = week([{ date: day(-2), type: "Ride", name: "Race", tss: 200, durationHours: 3 }]);
+  const after = coach({ week: raced, focus: { pastRace: { date: day(-2), daysAgo: 2, sport: "ride", km: 90 } } });
+  assert.ok(!hard.includes(after.recommendation.session.kind), after.recommendation.session.kind);
+  assert.ok(after.recommendation.adaptations.some(a => /2\. den po závodě z 2/.test(a)));
+  assert.equal(coach({ week: raced, focus: { pastRace: { date: day(-3), daysAgo: 3, sport: "ride", km: 90 } } }).recommendation.session.kind, "threshold", "3 h race: 2 days only");
+});
+
+test("R5: as many easy days as sick days after Nemoc, at least 2, at most 7", async () => {
+  const raw = createD1(), db = scopedDb(raw, 5), settings = await getJournalSettings(db);
+  assert.equal(await journalSickReturn(db, date), null, "no journal table yet");
+  for (const o of [-6, -5, -4]) await saveJournalEntry(db, settings, { date: day(o), key: "sick", answer: 1 });
+  // Sick -6..-4, -3 still sick (the day after a tick), -2 is easy day 1 of 3.
+  assert.deepEqual(await journalSickReturn(db, day(-3)), null, "the day after the last tick is still a sick day");
+  assert.deepEqual(await journalSickReturn(db, day(-2)), { day: 1, of: 3 });
+  assert.deepEqual(await journalSickReturn(db, date), { day: 3, of: 3 });
+  assert.equal(await journalSickReturn(db, day(1)), null, "after the easy days, as usual");
+  const one = scopedDb(raw, 7), s7 = await getJournalSettings(one);
+  await saveJournalEntry(one, s7, { date: day(-3), key: "sick", answer: 1 });
+  assert.deepEqual(await journalSickReturn(one, date), { day: 2, of: 2 }, "one sick day still gives 2");
+  await saveJournalEntry(one, s7, { date: day(-2), key: "sick", answer: 0 });
+  assert.equal(await journalSickReturn(one, date), null, "a ✕ the day after starts the easy days a day earlier");
+  assert.deepEqual(await journalSickReturn(one, day(-1)), { day: 2, of: 2 });
+  await saveJournalEntry(one, s7, { date, key: "sick", answer: 1 });
+  assert.equal(await journalSickReturn(one, date), null, "ticked today: a sick day");
+  const easy = coach({ sickReturn: { day: 1, of: 3 } });
+  assert.ok(!hard.includes(easy.recommendation.session.kind), easy.recommendation.session.kind);
+  assert.ok(easy.recommendation.adaptations.some(a => /1\. den z 3 po nemoci/.test(a)));
+  assert.equal(coach({ sickReturn: { day: 1, of: 3 }, goal: { focus: "threshold", asked: true, chat: true, insisted: true } }).recommendation.session.kind, "threshold", "insisted: the athlete's call");
+});
+
+test("R7: a sore shoulder in the pool: no paddles or pull buoy, a pause offered, long easy swims stay", () => {
+  const swim = args => coach({ sport: "swim", athleteState: { status: "active", memories: ["bolí mě rameno"] }, ...args });
+  const easy = swim();
+  assert.ok(!hard.includes(easy.recommendation.session.kind), easy.recommendation.session.kind);
+  assert.ok(easy.recommendation.adaptations.some(a => /bez packelí a piškotu; plavání můžeš na pár dní vynechat/.test(a)));
+  assert.equal(swim({ goal: { focus: "long_endurance" } }).recommendation.session.kind, "long_endurance", "a longer swim stays");
+  assert.ok(!coach({ sport: "swim" }).recommendation.adaptations.some(a => /packelí/.test(a)), "no shoulder pain, no note");
+});
+
+test("R4 gym: after more than 21 days the first 2 sessions held, after more than 56 the first 4, weights 10 or 20 % lighter", async () => {
+  const { generateStrengthPlan } = await import("../src/strength-generator.js");
+  const { progressionDecision: decide } = await import("../src/strength-intelligence.js");
+  const session = when => Array.from({ length: 3 }, (_, i) => ({ workout_date: when, exercise: "DB bench press", type: "WORK", completed: 1, set_no: i + 1, actual_kg: 30, actual_reps: 10, rpe: 7 }));
+  const plan = days => withLang("cs", () => generateStrengthPlan({ date, cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: days.flatMap(d => session(day(d))) }, recoveryWeek: { recovery: false, known: true } }, { durationMinutes: 60 }));
+  assert.match(plan([-30]).planName, /, po pauze$/);
+  assert.match(plan([-30]).rationale, /Návrat do posilovny po 30 dnech/);
+  assert.match(plan([-40, -5]).planName, /, po pauze$/, "one session back of 2");
+  assert.doesNotMatch(plan([-40, -5, -3]).planName, /po pauze/, "two sessions back: as usual");
+  assert.match(plan([-80, -7, -5, -3]).planName, /, po pauze$/, "after 56 days: 4 sessions");
+  assert.doesNotMatch(plan([-80, -9, -7, -5, -3]).planName, /po pauze/);
+  assert.doesNotMatch(plan([-20, -10]).planName, /po pauze/, "21 days or less: as usual");
+  const kg = d => decide(session(day(d)), "DB bench press", 10, 1, date).kg;
+  assert.equal(kg(-30), 25, "27 kg rounded down to the 2.5 kg step");
+  assert.equal(kg(-70), 22.5, "24 kg rounded down");
+});
+
+test("R4: one trial session after Zranění, then a plan card, never a pain question", async () => {
+  const { injuryTrial, trialQuestion, welcomeAnswer } = await import("../src/coach-gap-checkin.js");
+  const { updateAthleteState, getAthleteState } = await import("../src/athlete-state.js");
+  const raw = createD1(), db = scopedDb(raw, 5);
+  await updateAthleteState(db, { status: "injured" }, { date: day(-5) });
+  await updateAthleteState(db, { status: "active" }, { date: day(-3) });
+  let state = await getAthleteState(db, { date });
+  assert.equal(state.injuryBack, day(-3));
+  assert.deepEqual(injuryTrial(state, [day(-10)], date), { mode: "trial" }, "nothing since the status ended");
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "ask" });
+  const q = trialQuestion(injuryTrial(state, [day(-1)], date));
+  assert.equal(q.text, "Jak pokračovat po zkušebním tréninku?");
+  assert.deepEqual(q.answers.map(a => a.label), ["Pomalu přidávat", "Zopakovat zkušební trénink", "Nechat Zranění"]);
+  assert.equal(trialQuestion({ mode: "trial" }), null);
+  assert.deepEqual(welcomeAnswer(q, "injured").patch, { status: "injured" });
+  assert.deepEqual(welcomeAnswer(q, "later").patch, { trial: "repeat" }, "closed: the trial again");
+  await updateAthleteState(db, welcomeAnswer(q, "slow").patch, { date });
+  state = await getAthleteState(db, { date });
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "slow" });
+  assert.equal(injuryTrial(state, [day(-1), date, day(1)], day(2)), null, "2 sessions after the choice: as usual");
+  await updateAthleteState(db, { trial: "repeat" }, { date });
+  state = await getAthleteState(db, { date });
+  assert.deepEqual(injuryTrial(state, [day(-1)], date), { mode: "trial" }, "repeat: a trial again");
+  assert.equal(injuryTrial(state, [], day(40)), null, "six weeks on: nothing");
+  // The status that ends on its own date counts the same.
+  assert.equal((await import("../src/athlete-state.js")).effectiveAthleteState({ status: "injured", statusUntil: day(-2), trial: { choice: "slow", on: day(-9) } }, date).injuryBack, day(-2));
+  // The day coach: capped and easy, firm.
+  const run = coach({ sport: "run", injuryTrial: { mode: "trial" }, availabilityMinutes: 90 });
+  assert.ok(!hard.includes(run.recommendation.session.kind));
+  assert.ok(run.recommendation.session.durationMinutes <= 30, String(run.recommendation.session.durationMinutes));
+  assert.ok(run.recommendation.adaptations.some(a => /střídej chůzi a klus/.test(a)));
+  assert.ok(coach({ injuryTrial: { mode: "trial" }, availabilityMinutes: 120 }).recommendation.session.durationMinutes <= 45);
+  assert.ok(coach({ sport: "swim", injuryTrial: { mode: "trial" }, availabilityMinutes: 60 }).recommendation.session.durationMinutes <= 20);
+  assert.ok(!hard.includes(coach({ injuryTrial: { mode: "slow" } }).recommendation.session.kind));
+});
+
+test("R8: the fixed physio or doctor sentence with Zranění and a pain remembered 7 days", async () => {
+  const { memoryCheck } = await import("../src/athlete-state.js");
+  const line = "Aurin není zdravotnický prostředek. Když bolest trvá, zhoršuje se nebo tě znepokojuje, poraď se s fyzioterapeutem nebo lékařem.";
+  assert.ok(withLang("cs", () => trainingStatus({ status: "injured" })).guidance[0].endsWith(line));
+  assert.ok(!withLang("cs", () => trainingStatus({ status: "sick" })).guidance.join(" ").includes("zdravotnický prostředek"));
+  assert.ok(withLang("en", () => trainingStatus({ status: "injured" })).guidance[0].endsWith("Aurin isn't a medical device. If the pain lasts, gets worse or worries you, check in with a physio or doctor."));
+  const state = { memories: ["bolí mě koleno"], memoryMeta: { "bolí mě koleno": { at: day(-7), check: day(0), group: "health" } } };
+  assert.equal(withLang("cs", () => memoryCheck(state, date)).message, line);
+  const cold = { memories: ["jsem nachlazený"], memoryMeta: { "jsem nachlazený": { at: day(-7), check: day(0), group: "health" } } };
+  assert.equal(withLang("cs", () => memoryCheck(cold, date))?.message ?? null, null, "no pain, no sentence");
 });

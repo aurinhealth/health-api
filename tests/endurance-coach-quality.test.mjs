@@ -128,6 +128,12 @@ test("a week's running grows at most 10 % only in a return after a break (R9)", 
   // Back after 14+ days without a run, or a first start: the weekly cap holds.
   assert.equal(weeklyRunCap([runDay("2026-09-08", 40), runDay("2026-09-15", 45)], "2026-10-05").cap, 60);
   assert.equal(weeklyRunCap([], "2026-10-05").cap, 60);
+  // R3: after 14 to 27 days 70, 85, 100 % of the average week before the break; 28 to 56 days 50, 70, 85, 100 %.
+  const before = ["2026-08-20", "2026-08-24", "2026-08-27", "2026-08-31", "2026-09-03", "2026-09-07", "2026-09-10", "2026-09-14"].map(d => runDay(d, 60));
+  assert.equal(weeklyRunCap(before, "2026-10-05").cap, 85, "20 days off, first week: 70 % of 120");
+  assert.equal(weeklyRunCap([...before, runDay("2026-10-06", 30)], "2026-10-12").cap, 100, "second week: 85 %");
+  assert.equal(weeklyRunCap([...before, runDay("2026-10-06", 30), runDay("2026-10-13", 40)], "2026-10-19").cap, null, "third week: 100 %, no cap");
+  assert.equal(weeklyRunCap(before, "2026-10-19").ladder.share, 0.5, "35 days off: 50 %");
   const targets = { status: "ok", items: [{ sport: "run", role: "endurance", minutes: 60, tss: 61, intensity: .78 }, { sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "ride", minutes: 90, tss: 70 }] };
   const capped = capRunVolume(targets, { cap: 90, base: 80, weeks: [] }, 30);
   assert.deepEqual(capped.items.map(x => x.sport + ":" + x.minutes), ["run:30", "run:30", "ride:90"]);
