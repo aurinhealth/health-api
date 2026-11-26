@@ -98,7 +98,7 @@ struct CoachThingsCard: View {
         // Each asks the server on its own, so a slow one does not hold the others,
         // once Today has come: they all read one database and would queue behind it.
         .task {
-            guard !model.demo else { return }
+            guard !model.demo else { things.advice = DemoData.easierDay; return }
             await model.afterTodayLoads()
             things.advice = try? await model.api.coachCheckIn()
             things.asking -= 1

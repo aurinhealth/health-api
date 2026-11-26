@@ -199,3 +199,21 @@ enum DemoData {
     }
     """
 }
+
+extension DemoData {
+    /// "-scene easier-day" (the App Store's screenshots): the sample Today with the
+    /// coach's easier-day offer (src/night-check.js) in its card.
+    static var easierDay: CoachCheckIn.Advice? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-scene"), i + 1 < args.count, args[i + 1] == "easier-day" else { return nil }
+        let en = L10n.isEnglish
+        return CoachCheckIn.Advice(
+            id: "demo-easier-day", headline: en ? "An easier day fits today" : "Dnes se hodí lehčí den", reasons: [],
+            message: en ? "Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this."
+                : "Klidový tep je nad tvým obvyklým rozmezím. Může za tím být alkohol, horko, pozdní jídlo, stres nebo tvrdý trénink.",
+            kind: "easier_day",
+            rows: [.init(id: "restingHR", label: en ? "Resting heart rate" : "Klidový tep", value: en ? "+6 bpm vs usual" : "+6 tepů/min proti obvyklému"),
+                   .init(id: "hrv", label: "HRV", value: en ? "−18 % vs usual" : "−18 % proti obvyklému")],
+            date: "2026-10-08", from: "Tempo, 60 min", to: en ? "Easy ride, 60 min" : "Lehká jízda, 60 min")
+    }
+}

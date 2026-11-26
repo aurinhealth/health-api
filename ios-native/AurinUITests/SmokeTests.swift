@@ -170,6 +170,17 @@ final class SmokeTests: XCTestCase {
             }
         }
 
+        // The App Store's easier day: Today with the coach's offer (-scene easier-day),
+        // scrolled until the card's buttons show.
+        english("-tab", "today", "-scene", "easier-day")
+        pause(6)
+        shot("lehci-den")
+        for _ in 0..<4 where !(app.buttons["Keep plan"].exists && app.buttons["Keep plan"].isHittable) {
+            app.swipeUp()
+            pause(1)
+        }
+        shot("lehci-den-2")
+
         // What affects you: from the journal.
         english("-open", "journal")
         pause(4)
