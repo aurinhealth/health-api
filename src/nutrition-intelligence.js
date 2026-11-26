@@ -98,6 +98,15 @@ function estimateStrengthCalories(weightKg, minutes) {
   return Math.round((met * 3.5 * weightKg / 200) * minutes);
 }
 
+// Before a ride that needs carbohydrate on the bike: 1 g/kg, the low end of
+// 1-4 g/kg in the 1-4 h before (Thomas et al. 2016, ACSM position stand).
+// The one rule for the food plan and /analysis/daily.
+export const PRE_RIDE_CARBS_PER_KG = 1.0;
+export function preRideCarbsGrams(weightKg, carbsDuringRide) {
+  const kg = Number(weightKg);
+  return kg > 0 && Number(carbsDuringRide) > 0 ? Math.round(kg * PRE_RIDE_CARBS_PER_KG) : null;
+}
+
 export function buildNutritionPlan(context, options = {}) {
   const weightTrend = options.weightTrend || context?.weightTrend || null;
   // The athlete's own latest weight; a neutral 70 kg only when nothing is
@@ -126,7 +135,7 @@ export function buildNutritionPlan(context, options = {}) {
   const calorieTarget = Math.max(adaptiveBase.target, defaults.calorieTarget, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
-  const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * rideRate))) : 0;
+  const preRideCarbs = preRideCarbsGrams(weightKg, plannedRideCarbs) ?? 0;
   const strengthPlan = options?.strengthPlan || context?.strength?.plannedWorkout || null;
   const strengthMinutes = Number(options?.strengthMinutes || estimateStrengthMinutes(strengthPlan));
   const strengthCalories = estimateStrengthCalories(weightKg, strengthMinutes);

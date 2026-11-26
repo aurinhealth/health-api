@@ -10,7 +10,7 @@ import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, MAX_CALORIE_TARGET, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { dayMacros, dietSummary } from "./diet.js";
-import { rideCarbsPerHour as rideCarbsPerHourFor } from "./nutrition-intelligence.js";
+import { rideCarbsPerHour as rideCarbsPerHourFor, preRideCarbsGrams } from "./nutrition-intelligence.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
@@ -216,7 +216,6 @@ const CONFIG = {
 
   // The rest-day baseline, weekly goal and target weight are personal: see
   // energyBaseline in energy-profile.js.
-  preRideCarbsPerKg: 1.0,
   preRideWindowHours: 2,
   fluidMlPerHour: 700,
 
@@ -2469,10 +2468,9 @@ function calculateFueling(
       rideCarbsPerHour
     );
 
-  // Pre-ride carbohydrate is per kg; without a weight it is not estimated.
-  const preRideCarbs = kg
-    ? Math.round(kg * CONFIG.preRideCarbsPerKg)
-    : null;
+  // The food plan's rule: per kg, only before a ride that needs carbs on
+  // the bike; without a weight it is not estimated.
+  const preRideCarbs = preRideCarbsGrams(kg, rideCarbs);
 
   const fluid =
     Math.round(
