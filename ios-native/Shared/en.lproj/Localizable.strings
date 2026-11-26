@@ -5256,6 +5256,40 @@
 "Další: %@" = "Next: %@";
 "jídlo nezapsáno" = "no food logged";
 
+/* Home-screen widgets, redesign (widgets concept v3) */
+"Bez zařízení" = "No tracker";
+"Potřebuje hodinky nebo prsten v noci" = "Needs a watch or ring at night";
+"Otevři Aurin a načti minulou noc" = "Open Aurin to sync last night";
+"Potřebuje hodinky nebo prsten" = "Needs a watch or ring";
+"Bez spánku" = "No sleep data";
+"Bez HRV" = "No HRV data";
+"Učím se tvůj cíl" = "Learning your target";
+"průměr %@ denně" = "your average %@ a day";
+"Zatím nic nezapsáno" = "Nothing logged yet";
+"Dnes v %@" = "Today at %@";
+"Připravenost proti tvému obvyklému rozmezí" = "Readiness against your own usual range";
+"Minulá noc a kdy dnes jít spát" = "Last night's sleep and tonight's bedtime";
+"Tvoje připravenost a jedna věta, co dnes dělat" = "Your readiness and one line on what to do today";
+"Snědené kalorie proti dnešnímu cíli" = "Calories eaten today against your target";
+"Denní čísla" = "Daily numbers";
+"Námaha, HRV, voda, kroky nebo klidový tep na první pohled" = "Strain, HRV, Water, Steps or Resting HR at a glance";
+"Splněné a naplánované tréninky po dnech" = "Sessions done and planned, day by day";
+"Tvoje další jízda, běh, plavání nebo posilovna" = "Your next ride, run, swim or gym session";
+"Přidej hodinky nebo prsten a uvidíš připravenost." = "Add a watch or ring for readiness.";
+"%@ z %@ tréninků splněno" = "%1$@ of %2$@ sessions done";
+"zatím, v plánu ještě %@" = "so far, %@ planned";
+"zatím" = "so far";
+"Nadcházející" = "Upcoming";
+"Zahrnuje %@ kcal na dnešní trénink" = "Includes %@ kcal for today's training";
+"Noční hodnoty" = "Night values";
+"Otevři Zdraví v Aurinu" = "Open Health in Aurin";
+"Zatím málo dat" = "Not enough data yet";
+"Dnes večer" = "Tonight";
+"Dnešní kroky proti tvému cíli" = "Steps today against your goal";
+"Tvůj odhad Aurin Age, součást Aurin Pro" = "Your Aurin Age estimate, part of Aurin Pro";
+"Hodnoty z noci z tvých hodinek nebo prstenu" = "Overnight values from your watch or ring";
+"VĚK" = "AGE";
+"Teplota ve spánku" = "Sleep temp";
 /* Settings → Notifications (concept v3, 2026-11-19) */
 "Trénink v plánu" = "Workout";
 "Od kouče" = "From Coach";

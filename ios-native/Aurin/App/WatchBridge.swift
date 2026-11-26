@@ -45,6 +45,8 @@ final class WatchBridge: NSObject {
         guard health.date == (today?.date ?? AppModel.localDate(Date())) else { return }
         self.health = health
         healthLoaded = Date()
+        // Also loaded hourly here for the watch: the Health widgets stay as fresh.
+        WidgetBridge.update(health: health)
         send()
     }
 

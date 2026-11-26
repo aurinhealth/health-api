@@ -1,0 +1,254 @@
+import SwiftUI
+import XCTest
+@testable import Aurin
+
+/// The home-screen widgets' faces (Shared/WidgetFaces.swift) on the concept's
+/// sample day, in English, light and dark: the board ios-designer and the
+/// critic hold against the widgets concept v3 (Figma page "v3 1").
+@MainActor
+final class WidgetFaceTests: XCTestCase {
+    private var outputDirectory: URL {
+        let path = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"]
+        return path.map { URL(fileURLWithPath: $0) } ?? FileManager.default.temporaryDirectory.appending(path: "snapshots")
+    }
+
+    /// The concept's demo day (v2 fix round): one set of numbers on every widget.
+    private var day: WidgetSnapshot {
+        var s = WidgetSnapshot.sample
+        s.readiness = 78
+        s.zone = "green"
+        s.hrv = 68
+        s.hrvLow = 60
+        s.hrvHigh = 74
+        s.restingHR = 53
+        s.restingLow = 50
+        s.restingHigh = 56
+        s.strain = 8.4
+        s.strainLow = 11
+        s.strainHigh = 14
+        s.sleepMinutes = 414
+        s.sleepNeed = 420
+        s.sleepStart = "23:36"
+        s.sleepEnd = "06:42"
+        s.waterMl = 800
+        s.waterTarget = 2500
+        s.steps = 6420
+        s.stepsGoal = 10000
+        s.stepsAverage = 9212
+        s.kcal = 1380
+        s.kcalTarget = 2650
+        s.nextTitle = "Upper body strength"
+        s.nextTime = "17:30"
+        s.nextSport = "strength"
+        s.nextMinutes = 45
+        s.bedtime = "23:10"
+        return s
+    }
+
+    func testSmallWidgets() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let s = day
+        // The captions carry a concrete number (design rule), in the app's words.
+        XCTAssertEqual(WidgetFaces.hrv(s).caption, "usual 60 to 74")
+        XCTAssertEqual(WidgetFaces.strain(s).caption, "target 11 to 14")
+        XCTAssertEqual(WidgetFaces.steps(s).caption?.hasPrefix("your average "), true)
+        XCTAssertEqual(WidgetFaces.readiness(s).caption, "in your usual range")
+
+        var low = s
+        low.readiness = 52
+        low.zone = "yellow"
+        var learning = s
+        learning.readiness = nil
+        learning.zone = nil
+        learning.learningDays = 4
+        var noData = s
+        noData.readiness = nil
+        noData.zone = nil
+        var noWatch = noData
+        noWatch.noWearable = true
+        noWatch.sleepMinutes = nil
+        noWatch.hrv = nil
+        var newUser = s
+        newUser.strainLow = nil
+        newUser.strainHigh = nil
+
+        try render("widgets-small", rows: [
+            [AnyView(WidgetFaces.readiness(s)), AnyView(WidgetFaces.strain(s)), AnyView(WidgetFaces.sleep(s)),
+             AnyView(WidgetFaces.hrv(s)), AnyView(WidgetFaces.water(s))],
+            [AnyView(WidgetFaces.next(s)), AnyView(WidgetFaces.food(s)), AnyView(WidgetFaces.restingHR(s)),
+             AnyView(WidgetFaces.steps(s)), AnyView(WidgetFaces.kcalLeft(s))],
+            [AnyView(WidgetFaces.readiness(low)), AnyView(WidgetFaces.readiness(learning)), AnyView(WidgetFaces.readiness(noData)),
+             AnyView(WidgetFaces.readiness(noWatch)), AnyView(WidgetFaces.sleep(noWatch))],
+            [AnyView(WidgetFaces.hrv(noWatch)), AnyView(WidgetFaces.strain(newUser)), AnyView(WidgetFaces.next(WidgetSnapshot(date: s.date, updated: s.updated))),
+             AnyView(WidgetFaces.food(WidgetSnapshot(date: s.date, updated: s.updated, kcal: 0, kcalTarget: 2650))), AnyView(WidgetFaces.sleep(noData))]
+        ])
+    }
+
+    /// The widgets' line under the readiness is Today's, word for word (D-DNES-2).
+    func testNumbersLineMatchesToday() {
+        let cases: [(String?, [String])] = [("hard", []), ("steady", []), ("easy", []), ("signs", []), ("usual", []), ("paused", []),
+                                            ("steady", ["sleep"]), ("easy", ["sleep", "restingHR"]), ("easy", ["sleep", "hrv", "restingHR"]),
+                                            ("hard", ["sleep"]), (nil, []), ("unknown", [])]
+        for language in ["cs", "en"] {
+            L10n.setLanguage(language)
+            for (key, off) in cases {
+                XCTAssertEqual(WidgetFaces.numbersLine(key, off: off), ReadinessText.numbersLine(key, off: off), "\(language) \(key ?? "nil") \(off)")
+            }
+        }
+        L10n.setLanguage("cs")
+        UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+    }
+
+    /// The Coach widget (medium): the coach's card, the free Today card with
+    /// "Unlock with Pro", a rest day, and before Today opened today.
+    func testCoachWidget() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        var s = day
+        s.numbersLine = "hard"
+        let coach = WidgetCoach(date: s.date, text: "Sleep was 6 minutes short, HRV is in your usual range.",
+                                advice: "Go all in on strength tonight.", free: false)
+        var free = coach
+        free.free = true
+        var rest = s
+        rest.nextTitle = nil
+        var yesterday = coach
+        yesterday.date = "2026-10-07"
+        XCTAssertEqual(WidgetFaces.coach(s, free).verdict, "Your numbers are in your usual range or better")
+        // Yesterday's words never show on today's card.
+        XCTAssertNil(WidgetFaces.coach(s, yesterday).advice)
+        try render("widgets-coach", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(WidgetFaces.coach(s, coach)), AnyView(WidgetFaces.coach(s, free))],
+            [AnyView(WidgetFaces.coach(rest, coach)), AnyView(WidgetFaces.coach(s, yesterday))]
+        ])
+        // The Lock Screen: the coach's advice, the free rule, the readiness circle.
+        try render("widgets-lock", size: CGSize(width: 170, height: 76), rows: [
+            [AnyView(CoachRectangleFace(face: WidgetFaces.coach(s, coach))), AnyView(CoachRectangleFace(face: WidgetFaces.coach(s, free))),
+             AnyView(ReadinessCircleFace(readiness: 78, zone: "green").frame(width: 76, height: 76))]
+        ])
+    }
+
+    /// This week (medium, large) and Food (medium), with their empty states.
+    func testWeekAndFoodWidgets() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let days: [(String, Double, Double, String?)] = [
+            ("2026-10-05", 92, 0, "ride"), ("2026-10-06", 55, 0, "strength"), ("2026-10-07", 35, 0, "run"),
+            ("2026-10-08", 42, 45, "run"), ("2026-10-09", 0, 0, nil), ("2026-10-10", 0, 180, "ride"), ("2026-10-11", 0, 50, "run")
+        ]
+        let week = WidgetWeek(days: days.map { WidgetWeek.Day(date: $0.0, minutes: $0.1, planned: $0.2, sport: $0.3) },
+                              minutes: 224, done: 4, planned: 7,
+                              next: [WidgetWeek.Session(title: "Upper body strength", sport: "strength", date: "2026-10-08", time: "17:30", minutes: 45),
+                                     WidgetWeek.Session(title: "Long ride", sport: "ride", date: "2026-10-10", time: "09:00", minutes: 180),
+                                     WidgetWeek.Session(title: "Easy run", sport: "run", date: "2026-10-11", time: "08:30", minutes: 50)])
+        var s = day
+        s.protein = 62
+        s.proteinTarget = 140
+        s.carbs = 205
+        s.carbsTarget = 350
+        s.fat = 37
+        s.fatTarget = 85
+        s.trainingKcal = 350
+        var empty = s
+        empty.kcal = 0
+        empty.protein = 0
+        empty.carbs = 0
+        empty.fat = 0
+        empty.waterMl = 0
+        try render("widgets-medium", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(WeekFace(week: week, today: "2026-10-08")), AnyView(FoodMediumFace(s: s))],
+            [AnyView(WeekFace(week: nil, today: "2026-10-08")), AnyView(FoodMediumFace(s: empty))]
+        ])
+        try render("widgets-large", size: CGSize(width: 364, height: 382), rows: [
+            [AnyView(WeekFace(week: week, today: "2026-10-08", large: true))]
+        ])
+    }
+
+    /// Aurin Age (small: Pro, free, collecting, before Health loaded), Night
+    /// values (medium, and without a watch) and Sleep (medium).
+    func testHealthWidgets() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        let h = WidgetHealth.sample
+        var free = h
+        free.aurinAge = nil
+        free.aurinAgeWords = nil
+        free.pro = false
+        var collecting = free
+        collecting.pro = true
+        var noWatch = h
+        noWatch.values = []
+        noWatch.nightTitle = nil
+        XCTAssertEqual(WidgetStyle.monday("2026-10-08"), "2026-10-05")
+        XCTAssertEqual(WidgetStyle.monday("2026-10-11"), "2026-10-05")
+        XCTAssertEqual(WidgetStyle.day("2026-10-05", plus: 6), "2026-10-11")
+        try render("widgets-health-small", rows: [
+            [AnyView(AurinAgeSmallFace(h: h)), AnyView(AurinAgeSmallFace(h: free)),
+             AnyView(AurinAgeSmallFace(h: collecting)), AnyView(AurinAgeSmallFace(h: nil))]
+        ])
+        try render("widgets-health-medium", size: CGSize(width: 364, height: 170), rows: [
+            [AnyView(NightValuesFace(h: h)), AnyView(NightValuesFace(h: noWatch))],
+            [AnyView(SleepMediumFace(s: day, h: h)), AnyView(SleepMediumFace(s: day, h: nil))],
+            // Health from an earlier day: never shown as last night.
+            [AnyView(NightValuesFace(h: h, today: "2026-10-09")), AnyView(NightValuesFace(h: h, today: h.date))]
+        ])
+    }
+
+    /// A snapshot saved by an older build (no redesign fields) still loads.
+    func testOlderSnapshotDecodes() throws {
+        let json = #"{"date":"2026-11-20","updated":1795000000,"readiness":70,"zone":"green"}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+        let s = try decoder.decode(WidgetSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(s.readiness, 70)
+        XCTAssertNil(s.sleepStart)
+        XCTAssertNil(s.strainLow)
+    }
+
+    /// The usual steps a day leave today out and skip days without steps.
+    func testStepsAverage() {
+        let today = DemoData.today
+        let earlier = today.steps.week.filter { $0.date != today.date && $0.value > 0 }
+        guard !earlier.isEmpty else { return XCTAssertNil(WidgetBridge.stepsAverage(today)) }
+        XCTAssertEqual(WidgetBridge.stepsAverage(today) ?? 0, earlier.map(\.value).reduce(0, +) / Double(earlier.count), accuracy: 0.001)
+    }
+
+    /// Each face on a widget's card (small 170 pt, medium 364 x 170, the 6.3" iPhone).
+    private func render(_ name: String, size: CGSize = CGSize(width: 170, height: 170), rows: [[AnyView]]) throws {
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
+            let board = VStack(spacing: 16) {
+                ForEach(rows.indices, id: \.self) { r in
+                    HStack(spacing: 16) {
+                        ForEach(rows[r].indices, id: \.self) { c in
+                            rows[r][c]
+                                .padding(16)
+                                .frame(width: size.width, height: size.height)
+                                .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Palette.card))
+                        }
+                    }
+                }
+            }
+            .padding(24)
+            .background(scheme == .dark ? Color(white: 0.05) : Color(red: 0.93, green: 0.91, blue: 0.87))
+            .environment(\.colorScheme, scheme)
+            let renderer = ImageRenderer(content: board)
+            renderer.scale = 2
+            let png = try XCTUnwrap(renderer.uiImage?.pngData(), "\(name) did not render")
+            try png.write(to: outputDirectory.appending(path: "\(name)-\(suffix).png"))
+        }
+    }
+}

@@ -8,7 +8,7 @@ import WidgetKit
 // MARK: - One number
 
 enum WidgetMetric: String, AppEnum {
-    case readiness, sleep, hrv, restingHR, steps, kcalLeft, water
+    case readiness, sleep, hrv, restingHR, steps, kcalLeft, water, strain
 
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: LocalizedStringResource("Údaj", table: "Controls"))
     static let caseDisplayRepresentations: [WidgetMetric: DisplayRepresentation] = [
@@ -19,6 +19,7 @@ enum WidgetMetric: String, AppEnum {
         .steps: DisplayRepresentation(title: LocalizedStringResource("Kroky", table: "Controls")),
         .kcalLeft: DisplayRepresentation(title: LocalizedStringResource("Zbývá kalorií", table: "Controls")),
         .water: DisplayRepresentation(title: LocalizedStringResource("Pití", table: "Controls")),
+        .strain: DisplayRepresentation(title: LocalizedStringResource("Námaha", table: "Controls")),
     ]
 }
 
@@ -65,8 +66,8 @@ struct MetricWidget: Widget {
                 .widgetURL(URL(string: entry.metric.link))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Jedno číslo")))
-        .description(Text(verbatim: L10n.tr("Číslo, které si vybereš: HRV, klidový tep, kroky a další.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Denní čísla")))
+        .description(Text(verbatim: L10n.tr("Námaha, HRV, voda, kroky nebo klidový tep na první pohled")))
         .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -81,17 +82,7 @@ extension WidgetMetric {
         case .steps: return L10n.tr("Kroky")
         case .kcalLeft: return L10n.tr("Zbývá kalorií")
         case .water: return L10n.tr("Pití")
-        }
-    }
-
-    var color: Color {
-        switch self {
-        // HRV green like in the app (Today, HRV detail).
-        case .readiness, .hrv: return W.green
-        case .sleep: return W.indigo
-        case .restingHR, .kcalLeft: return W.rust
-        case .steps: return W.amber
-        case .water: return W.blue
+        case .strain: return L10n.tr("Námaha")
         }
     }
 
@@ -103,19 +94,8 @@ extension WidgetMetric {
         case .restingHR: return "aurin://open/metric/restingHR"
         case .steps: return "aurin://open/steps"
         case .kcalLeft, .water: return "aurin://open/food"
+        case .strain: return "aurin://open/strain"
         }
-    }
-
-    /// The last seven days and the usual range, for HRV and resting heart rate.
-    func trend(_ s: WidgetSnapshot) -> (values: [Double], low: Double?, high: Double?)? {
-        let picked: (series: [Double]?, low: Double?, high: Double?)
-        switch self {
-        case .hrv: picked = (s.hrvSeries, s.hrvLow, s.hrvHigh)
-        case .restingHR: picked = (s.restingSeries, s.restingLow, s.restingHigh)
-        default: return nil
-        }
-        guard let values = picked.series, values.count >= 2 else { return nil }
-        return (values, picked.low, picked.high)
     }
 
     /// The number, its unit and the line under it.
@@ -139,6 +119,22 @@ extension WidgetMetric {
             let litres = !Units.imperial
             let shown: (Double?) -> String = { ml in litres ? W.decimal((ml ?? 0) / 1000) : W.int(Units.volume(ml ?? 0)) }
             return (shown(s.waterMl), litres ? "l" : Units.volumeUnit, s.waterTarget.map { L10n.f("cíl %@", shown($0)) })
+        case .strain:
+            return (W.decimal(s.strain), "", s.strainLow.flatMap { low in s.strainHigh.map { L10n.f("cíl %@ až %@", W.int(low), W.int($0)) } })
+        }
+    }
+
+    /// The small widget: the same dial as Today and Health.
+    @MainActor @ViewBuilder func face(_ s: WidgetSnapshot) -> some View {
+        switch self {
+        case .readiness: WidgetFaces.readiness(s)
+        case .sleep: WidgetFaces.sleep(s)
+        case .hrv: WidgetFaces.hrv(s)
+        case .restingHR: WidgetFaces.restingHR(s)
+        case .steps: WidgetFaces.steps(s)
+        case .kcalLeft: WidgetFaces.kcalLeft(s)
+        case .water: WidgetFaces.water(s)
+        case .strain: WidgetFaces.strain(s)
         }
     }
 
@@ -170,29 +166,8 @@ struct MetricWidgetView: View {
                     if let note { Text(note).font(.caption) }
                 }
             default:
-                let trend = entry.metric.trend(s)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(entry.metric.color).frame(width: 7, height: 7)
-                        Text(entry.metric.title).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                    }
-                    if trend == nil { Spacer(minLength: 0) }
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(v.number).font(W.number(trend == nil ? 50 : 42)).foregroundStyle(W.ink).minimumScaleFactor(0.5).lineLimit(1)
-                            .widgetAccentable()
-                        if !v.unit.isEmpty { Text(v.unit).font(.caption).foregroundStyle(W.muted) }
-                    }
-                    // HRV and resting heart rate: the week's line over the usual range.
-                    if let trend {
-                        Spacer(minLength: 4)
-                        WidgetTrend(values: trend.values, low: trend.low, high: trend.high, color: entry.metric.color)
-                            .frame(height: 30)
-                        if let note = v.note { Text(note + ", " + L10n.tr("7 dní")).font(.caption2).foregroundStyle(W.muted).lineLimit(1).padding(.top, 4) }
-                    } else if let note {
-                        Text(note).font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.8)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                // The redesign's faces (widgets concept v3): Today's dials.
+                entry.metric.face(s)
             }
         } else {
             EmptyWidgetView()
@@ -248,147 +223,19 @@ struct WeekWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/training"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Týden")))
-        .description(Text(verbatim: L10n.tr("Trénink po dnech, splněné tréninky a co tě čeká.")))
-        .supportedFamilies([.systemLarge])
+        .configurationDisplayName(Text(verbatim: L10n.tr("Tento týden")))
+        .description(Text(verbatim: L10n.tr("Splněné a naplánované tréninky po dnech")))
+        .supportedFamilies([.systemMedium, .systemLarge])
     }
 }
 
 struct WeekWidgetView: View {
-    @Environment(\.widgetRenderingMode) private var renderingMode
+    @Environment(\.widgetFamily) private var family
     let entry: WeekEntry
 
     var body: some View {
-        if let week = entry.week {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(L10n.tr("Tento týden")).font(.subheadline.weight(.semibold)).foregroundStyle(W.ink)
-                        Text(summary(week)).font(.caption).foregroundStyle(W.muted)
-                    }
-                    Spacer()
-                    // Today's readiness as a word and number, not a second ring
-                    // beside the small Připravenost widget.
-                    if let score = entry.readiness {
-                        Text((W.zoneWord(entry.zone).map { $0.capitalized(with: L10n.locale) + ", " } ?? "") + String(score))
-                            .font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(entry.zone))
-                            .padding(.horizontal, 9).padding(.vertical, 4)
-                            .background(W.zoneColor(entry.zone).opacity(0.14), in: Capsule())
-                            .widgetAccentable()
-                    }
-                }
-                bars(week).padding(.top, 14)
-                if week.days.contains(where: { $0.minutes > 0 && entry.zones[$0.date] != nil }) {
-                    Text(L10n.tr("barva = tvoje připravenost ten den")).font(.caption2).foregroundStyle(W.muted).padding(.top, 6)
-                }
-                Divider().padding(.top, 12).padding(.bottom, 4)
-                if week.next.isEmpty {
-                    Text(L10n.tr("Na zbytek týdne nic naplánovaného.")).font(.caption).foregroundStyle(W.muted)
-                } else {
-                    VStack(spacing: 7) {
-                        ForEach(Array(week.next.enumerated()), id: \.offset) { _, session in row(session) }
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-        } else {
-            EmptyWidgetView()
-        }
-    }
-
-    private func summary(_ week: WidgetWeek) -> String {
-        let time = W.hm(week.minutes) + " h"
-        guard week.planned > 0 else { return time }
-        return time + ", " + L10n.f("%@ z %@ splněno", String(week.done), String(week.planned))
-    }
-
-    /// Done training as solid bars in the day's readiness colour, what the
-    /// plan still has as dashed ones (on a day with both, the done part solid
-    /// inside the dashed whole); today's letter in a dark dot, or in a ring on
-    /// a tinted Home Screen, where the dot and the letter get one colour.
-    private func bars(_ week: WidgetWeek) -> some View {
-        let most = max(60, week.days.map { $0.minutes + $0.planned }.max() ?? 0)
-        return HStack(alignment: .bottom, spacing: 8) {
-            ForEach(week.days, id: \.date) { day in
-                VStack(spacing: 5) {
-                    if day.planned > 0 {
-                        RoundedRectangle(cornerRadius: 5)
-                            .strokeBorder(W.amber.opacity(0.8), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
-                            .background(RoundedRectangle(cornerRadius: 5).fill(W.amber.opacity(0.07)))
-                            .frame(height: 112 * (day.minutes + day.planned) / most)
-                            .overlay(alignment: .bottom) {
-                                if day.minutes > 0 {
-                                    RoundedRectangle(cornerRadius: 5).fill(color(day))
-                                        .frame(height: max(5, 112 * day.minutes / most))
-                                        .widgetAccentable()
-                                }
-                            }
-                    } else if day.minutes > 0 {
-                        RoundedRectangle(cornerRadius: 5).fill(color(day))
-                            .frame(height: max(5, 112 * day.minutes / most))
-                            .widgetAccentable()
-                    } else {
-                        RoundedRectangle(cornerRadius: 3).fill(W.muted.opacity(0.18)).frame(height: 5)
-                    }
-                    let today = day.date == entry.today
-                    let filled = renderingMode == .fullColor
-                    Text(weekday(day.date)).font(.caption2.weight(today ? .bold : .medium))
-                        .foregroundStyle(today ? (filled ? Palette.onButton : W.ink) : W.muted)
-                        .frame(width: 20, height: 20)
-                        .background {
-                            if today {
-                                if filled { Circle().fill(Palette.button) } else { Circle().strokeBorder(W.ink, lineWidth: 1.5) }
-                            }
-                        }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: 140, alignment: .bottom)
-    }
-
-    /// The day's readiness zone, else the training colour.
-    private func color(_ day: WidgetWeek.Day) -> Color {
-        entry.zones[day.date].map { W.zoneColor($0) } ?? W.amber
-    }
-
-    private func row(_ session: WidgetWeek.Session) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: Self.symbol(session.sport)).font(.caption).foregroundStyle(W.amber)
-                .frame(width: 26, height: 26)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.amberSoft))
-            Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(W.ink).lineLimit(1)
-            Spacer(minLength: 6)
-            Text(when(session)).font(.caption).foregroundStyle(W.muted).lineLimit(1)
-        }
-    }
-
-    private func when(_ session: WidgetWeek.Session) -> String {
-        let day = session.date == entry.today ? L10n.tr("Dnes") : weekday(session.date, short: false)
-        return day + (session.time.map { " " + ClockText.format($0) } ?? "")
-    }
-
-    private func weekday(_ date: String, short: Bool = true) -> String {
-        let parse = DateFormatter()
-        parse.calendar = Calendar(identifier: .gregorian)
-        parse.locale = Locale(identifier: "en_US_POSIX")
-        parse.dateFormat = "yyyy-MM-dd"
-        guard let d = parse.date(from: date) else { return "" }
-        let f = DateFormatter()
-        f.locale = L10n.locale
-        f.dateFormat = short ? "EEEEE" : "EEE"
-        return f.string(from: d).capitalized(with: L10n.locale)
-    }
-
-    static func symbol(_ sport: String?) -> String {
-        switch sport {
-        case "ride": return "figure.outdoor.cycle"
-        case "run": return "figure.run"
-        case "strength": return "dumbbell.fill"
-        case "swim": return "figure.pool.swim"
-        case "walk": return "figure.walk"
-        default: return "figure.mixed.cardio"
-        }
+        // The redesign's This week (widgets concept v3): Today's week strip, in large with what comes next.
+        WeekFace(week: entry.week, today: entry.today, large: family == .systemLarge)
     }
 }
 
@@ -404,7 +251,7 @@ struct NextWorkoutWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Další trénink")))
-        .description(Text(verbatim: L10n.tr("Dnešní trénink, jeho čas a délka. Hodí se i do StandBy.")))
+        .description(Text(verbatim: L10n.tr("Tvoje další jízda, běh, plavání nebo posilovna")))
         .supportedFamilies([.systemSmall])
     }
 }
@@ -423,20 +270,8 @@ struct NextWorkoutWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         } else if let s = entry.snapshot {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Image(systemName: WeekWidgetView.symbol(s.nextSport)).font(.caption2).foregroundStyle(W.amber)
-                    Text(L10n.tr("Další trénink")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                }
-                Spacer(minLength: 0)
-                if let title = s.nextTitle {
-                    Text(title).font(W.number(24)).foregroundStyle(W.amber).lineLimit(3).minimumScaleFactor(0.7)
-                    Text(detail(s)).font(.caption2).foregroundStyle(W.muted).lineLimit(2)
-                } else {
-                    Text(L10n.tr("Dnes už nic")).font(W.number(24)).foregroundStyle(W.ink)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            // The redesign's face: a Training row (sport disc, name, when, how long).
+            WidgetFaces.next(s)
         } else {
             EmptyWidgetView()
         }
