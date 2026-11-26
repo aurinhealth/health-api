@@ -83,15 +83,17 @@ export function sanitizeWeekPlan(input = {}) {
 export function playedCheck(events, date, completed = []) {
   if (!validDay(date)) return null;
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7, kinds = new Set(completed.map(a => otherSportKind(a?.type)).filter(Boolean));
+  // A watch that records it only as "Workout" (Other) still recorded it.
+  if (completed.some(a => a?.type === 'Workout')) return null;
   const left = (events?.[weekday] || []).find(e => !completed.some(a => a?.type === e.type) && !kinds.has(otherSportKind(e.type)));
   return left ? { date, type: left.type, name: typeName(left.type), kind: left.kind, minutes: left.minutes } : null;
 }
-// Up to two a day: a Log workout type of the athlete's other sports, training or
+// Up to two a day, each type once: a Log workout type of the athlete's other sports, training or
 // match, and its length (15 min to 5 h, by 5 min; none: the usual for the kind).
 export const MAX_EVENTS_PER_DAY = 2;
 export const EVENT_MINUTES = { match: 90, training: 75 };
 export function sanitizeEvents(raw) {
-  return Array.from({ length: 7 }, (_, i) => (Array.isArray(raw?.[i]) ? raw[i] : []).filter(e => isOtherSport(e?.type)).slice(0, MAX_EVENTS_PER_DAY).map(e => {
+  return Array.from({ length: 7 }, (_, i) => (Array.isArray(raw?.[i]) ? raw[i] : []).filter((e, j, day) => isOtherSport(e?.type) && day.findIndex(o => o?.type === e.type) === j).slice(0, MAX_EVENTS_PER_DAY).map(e => {
     const kind = e.kind === 'match' ? 'match' : 'training', minutes = Number(e.minutes);
     return { type: e.type, kind, minutes: Number.isInteger(minutes) && minutes >= 15 && minutes <= 300 && minutes % 5 === 0 ? minutes : EVENT_MINUTES[kind] };
   }));

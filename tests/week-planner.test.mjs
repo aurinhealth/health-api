@@ -189,6 +189,14 @@ test("Did you play?: yesterday's practice or match that nothing recorded", async
   // A watch that calls it another team sport records it too.
   assert.equal(playedCheck(events, "2026-11-21", [{ type: "Rugby" }]), null);
   assert.notEqual(playedCheck(events, "2026-11-21", [{ type: "Run" }]), null);
+  // So does one that records it only as "Workout" (Other).
+  assert.equal(playedCheck(events, "2026-11-21", [{ type: "Workout" }]), null);
   assert.equal(playedCheck(events, "2026-11-20", []), null);
   assert.equal(playedCheck(null, "2026-11-21", []), null);
+});
+
+test("a day keeps each other sport once", async () => {
+  const { sanitizeEvents } = await import("../src/week-planner.js");
+  const week = sanitizeEvents([[{ type: "Soccer", kind: "match" }, { type: "Soccer", kind: "training" }, { type: "Boxing" }]]);
+  assert.deepEqual(week[0], [{ type: "Soccer", kind: "match", minutes: 90 }, { type: "Boxing", kind: "training", minutes: 75 }]);
 });
