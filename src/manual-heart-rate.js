@@ -1,6 +1,6 @@
 import { activityTelemetryEnergy } from './activity-energy-check.js';
 import { minuteRows } from './google-hourly.js';
-import { pickBuckets, BUCKET_SECONDS } from './heart-rate-compaction.js';
+import { pickBuckets, BUCKET_SECONDS, BUNDLE_QUERY, bundleFrom, bundleBuckets } from './heart-rate-compaction.js';
 
 // A workout typed in afterwards (Zapsat trénink): the heart rate the watch
 // recorded between its start and end, and the calories. Aurin stores Google's
@@ -14,14 +14,16 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
   const from = Date.parse(start), to = Date.parse(end);
   if (!(to > from && to - from <= 12 * 3600000)) return null;
   const between = [userId, iso(from), iso(to)];
-  const [raw, buckets, energy] = await Promise.all([
+  const [raw, stored, energy, hours] = await Promise.all([
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / ${BUCKET_SECONDS}) * ${BUCKET_SECONDS} AS bucket, AVG(${bpm}) AS avg, MAX(${bpm}) AS max, COUNT(*) AS n FROM health_datapoints
       WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 20 AND 250 GROUP BY bucket`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n FROM health_datapoints
       WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
-      AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => [])
+      AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => []),
+    db.prepare(BUNDLE_QUERY).bind(userId, bundleFrom(iso(from)), iso(to)).all().then(r => r.results || []).catch(() => [])
   ]);
+  const buckets = [...stored, ...bundleBuckets(hours, from, to)];
   // Per 5 minutes the samples (a workout's own) or the stored row, which holds the
   // same samples: both together would count them twice, the samples alone would
   // leave out the minutes around the workout.

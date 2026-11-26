@@ -1,4 +1,4 @@
-import { HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
+import { HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE, HEART_RATE_BUNDLE_TYPE, bundleBuckets } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
 import { getAthleteState, usedMemories, brokenStations, focusGroups } from './athlete-state.js';
 import { isHardSession } from './session-intensity.js';
@@ -120,8 +120,8 @@ export async function d1Recovery(env, startDate, endDate) {
     .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && !NOT_RECOVERY.test(String(t)) && t !== HEART_RATE_HOUR_TYPE);
   // Google heart rate is stored as 5-minute rows; the raw samples left are a
   // workout's own, so the newest of them is not the heart rate of the moment.
-  // The 5-minute row is read instead, under the same name.
-  if (types.includes(HEART_RATE_BUCKET_TYPE)) types = types.filter(t => t !== "heart-rate" && t !== "heart_rate");
+  // The 5-minute row is read instead, under the same name (or its row an hour).
+  if (types.includes(HEART_RATE_BUCKET_TYPE) || types.includes(HEART_RATE_BUNDLE_TYPE)) types = types.filter(t => t !== "heart-rate" && t !== "heart_rate");
   if (!types.length) return {};
   // The Google families by name: a LIKE cannot use the (user_id, source_family,
   // data_type, start_time) index, and MAX(start_time) then read every row of the type.
@@ -152,8 +152,17 @@ export async function d1Recovery(env, startDate, endDate) {
     const r = reads[k++]?.results?.[0], avg = baseline ? reads[k++]?.results?.[0] : null;
     if (!r) continue;
     let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
-    const key = type === HEART_RATE_BUCKET_TYPE ? "heart-rate" : type;
-    out[key] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
+    const key = type === HEART_RATE_BUCKET_TYPE || type === HEART_RATE_BUNDLE_TYPE ? "heart-rate" : type;
+    let row = { sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload };
+    if (type === HEART_RATE_BUNDLE_TYPE) {
+      // The hour's last 5 minutes, as the 5-minute row would be.
+      const last = bundleBuckets([r]).at(-1);
+      if (!last) continue;
+      const at = new Date(last.bucket * 1000).toISOString().replace(".000Z", "Z");
+      row = { ...row, sampleTime: at, startTime: at, endTime: new Date(last.bucket * 1000 + 300e3).toISOString().replace(".000Z", "Z"), value: last.avg, payload: { avg: last.avg, min: last.min, max: last.max, n: last.n } };
+    }
+    if (out[key] && String(out[key][0].sampleTime || "") > String(row.sampleTime || "")) continue;
+    out[key] = [row];
     if (avg?.c >= 5 && Number(avg.v) > 0) out[key][0].baseline = Math.round(Number(avg.v) * 10) / 10;
   }
   return out;

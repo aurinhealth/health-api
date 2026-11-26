@@ -10,7 +10,7 @@ import { heartRateZones, heartRateRecovery } from './activity-detail.js';
 import { watchRecorder } from './activity-origin.js';
 import { activityRecoveryHours } from './recovery-hours.js';
 import { ownActiveTime } from './apple-health.js';
-import { WORKOUT_HEART_RATE_TYPE } from './heart-rate-compaction.js';
+import { WORKOUT_HEART_RATE_TYPE, BUNDLE_QUERY, bundleFrom, bundleBuckets } from './heart-rate-compaction.js';
 
 const MAX_POINTS = 1500;
 const ROUTE_TYPE = 'exercise-route';
@@ -48,7 +48,7 @@ export async function storedHeartRate(db, userId, start, end) {
   const s = Date.parse(start), e = Date.parse(end);
   if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 24 * 3600e3) return [];
   const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
-  const [workouts, samples, buckets] = await Promise.all([
+  const [workouts, samples, stored, hours] = await Promise.all([
     db.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${WORKOUT_HEART_RATE_TYPE}' AND start_time<? AND end_time>?`)
       .bind(userId, end, start).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 10) * 10 AS at, AVG(${bpm}) AS v FROM health_datapoints
@@ -56,8 +56,10 @@ export async function storedHeartRate(db, userId, start, end) {
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS at, value_numeric AS v FROM health_datapoints
       WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? ORDER BY sample_time`)
-      .bind(userId, start, end).all().then(r => r.results || []).catch(() => [])
+      .bind(userId, start, end).all().then(r => r.results || []).catch(() => []),
+    db.prepare(BUNDLE_QUERY).bind(userId, bundleFrom(start), end).all().then(r => r.results || []).catch(() => [])
   ]);
+  const buckets = [...stored, ...bundleBuckets(hours, s, e).map(r => ({ at: r.bucket, v: r.avg }))];
   const own = [];
   for (const w of workouts) {
     const p = parse(w.payload_json), step = n(p.step) || 5;

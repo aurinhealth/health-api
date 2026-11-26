@@ -4,7 +4,7 @@
 // only the signed-in user's rows.
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { localDateTime } from "./user-time.js";
-import { pickBuckets } from "./heart-rate-compaction.js";
+import { pickBuckets, BUNDLE_QUERY, bundleFrom, bundleBuckets } from "./heart-rate-compaction.js";
 
 const n = v => v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
 const ms = v => new Date(v).getTime();
@@ -117,7 +117,7 @@ async function heartRateBuckets(db, nights) {
   // The outer range keeps the scan on the index; the windows pick the nights in it.
   const from = nights.map(x => x.startTime).sort()[0], to = nights.map(x => x.endTime).sort().at(-1);
   const args = [db.userId, from, to, ...nights.flatMap(x => [x.startTime, x.endTime])];
-  const [raw, compact] = await Promise.all([
+  const [raw, compact, hours] = await Promise.all([
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket,
         AVG(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS avg,
         MIN(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS min,
@@ -127,7 +127,9 @@ async function heartRateBuckets(db, nights) {
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
         json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n
       FROM health_datapoints WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? AND (${within})
-      ORDER BY sample_time`).bind(...args).all().then(r => r.results || []).catch(() => [])
+      ORDER BY sample_time`).bind(...args).all().then(r => r.results || []).catch(() => []),
+    db.prepare(BUNDLE_QUERY).bind(db.userId, bundleFrom(from), to).all().then(r => r.results || []).catch(() => [])
   ]);
-  return pickBuckets(raw, compact).map(({ n: _count, ...r }) => r);
+  const inNight = r => nights.some(x => r.bucket * 1000 >= Date.parse(x.startTime) && r.bucket * 1000 < Date.parse(x.endTime));
+  return pickBuckets(raw, [...compact, ...bundleBuckets(hours).filter(inNight)]).map(({ n: _count, ...r }) => r);
 }

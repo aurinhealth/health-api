@@ -12,7 +12,7 @@
 // sync-destinations.js), and starts at the moment of that yes, or 14 days
 // before it when the user also wanted the last two weeks (from:health@).
 import { readSyncPrefs, healthAllowed, othersSince, OTHER_TYPES } from './sync-destinations.js';
-import { pickBuckets } from './heart-rate-compaction.js';
+import { pickBuckets, HEART_RATE_BUNDLE_TYPE, bundleBuckets } from './heart-rate-compaction.js';
 
 const MAX_DAYS = 14;
 const n = v => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
@@ -73,15 +73,18 @@ export async function appleHealthForward(env, { days = 2, now = Date.now() } = {
   }
   if (want.has('heartRate')) {
     // Five-minute averages: the samples, or the rows they were packed into (heart-rate-compaction.js).
-    const [raw, packed] = await Promise.all([
+    const [raw, packed, hours] = await Promise.all([
       db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket, AVG(CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)) AS avg, COUNT(*) AS n
         FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate' AND COALESCE(sample_time, end_time, start_time) >= ? AND (record_role IS NULL OR record_role != 'duplicate') GROUP BY bucket ORDER BY bucket DESC LIMIT 5000`)
         .bind(userId, since).all().then(r => r.results || []).catch(() => []),
       db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg, json_extract(payload_json, '$.n') AS n
         FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'heart-rate-5min' AND COALESCE(sample_time, end_time, start_time) >= ? ORDER BY COALESCE(sample_time, end_time, start_time) DESC LIMIT 5000`)
-        .bind(userId, since).all().then(r => r.results || []).catch(() => [])
+        .bind(userId, since).all().then(r => r.results || []).catch(() => []),
+      // The same 5 minutes kept as a row an hour (heart-rate-compaction.js).
+      db.prepare(`SELECT sample_time, payload_json FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = '${HEART_RATE_BUNDLE_TYPE}' AND sample_time >= ? ORDER BY sample_time DESC LIMIT 420`)
+        .bind(userId, String(since).slice(0, 13) + ':00:00Z').all().then(r => r.results || []).catch(() => [])
     ]);
-    out.heartRate = pickBuckets(raw, packed).map(b => ({ start: new Date(Number(b.bucket) * 1000).toISOString(), value: Math.round(n(b.avg) * 10) / 10 }))
+    out.heartRate = pickBuckets(raw, [...packed, ...bundleBuckets(hours, Date.parse(since) || -Infinity)]).map(b => ({ start: new Date(Number(b.bucket) * 1000).toISOString(), value: Math.round(n(b.avg) * 10) / 10 }))
       .filter(b => b.value >= 25 && b.value <= 230);
   }
   return out;
