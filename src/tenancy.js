@@ -82,6 +82,8 @@ export const PERSONAL_TABLES = {
   // The history of Apple's notifications for the owner's overview (app-store.js recordStoreEvent).
   store_events: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
+  // Saved and hidden recipes of the library (recipes.js).
+  recipe_marks: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
   // The coach's daily sentence per screen (screen-texts.js).
   ai_screen_texts: {},

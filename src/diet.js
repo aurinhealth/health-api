@@ -42,8 +42,20 @@ export function normalizeDiet(p = {}) {
     customSet: p.customSet === "carbs" ? "carbs" : "fat",
     customCarbs: inRange(p.customCarbs, 0, 800, 5),
     customFatPerKg: inRange(p.customFatPerKg, FAT_FLOOR_PER_KG, 2.5, 0.1),
-    nutrientTargets: cleanTargets(p.nutrientTargets)
+    nutrientTargets: cleanTargets(p.nutrientTargets),
+    // "I don't eat" (recipes.js): EU allergens, groups such as pork or
+    // mushrooms and single ingredients; recipes with any of them are not offered.
+    dietAvoid: cleanAvoid(p.dietAvoid)
   };
+}
+
+// At most 40 items: a lower-case word (an allergen or a group) or an
+// ingredient key of the recipe library ("usda_sr_legacy:169251", "u:coriander").
+export const AVOID_MAX = 40;
+const AVOID_ITEM = /^(?:[a-z_]{2,24}|(?:usda_sr_legacy|extra|u):[a-z0-9_]{1,60})$/;
+function cleanAvoid(v) {
+  if (!Array.isArray(v)) return [];
+  return [...new Set(v.map(x => String(x || '').trim()).map(x => x.includes(':') ? x : x.toLowerCase()).filter(x => AVOID_ITEM.test(x)))].slice(0, AVOID_MAX);
 }
 
 // Own vitamin and mineral targets, {key: amount}; the keys are checked by

@@ -23,6 +23,9 @@ export const KEPT_TABLES = new Set([
   'recipe_contributions', 'food_contributions', 'food_reports', 'food_suggestions',
   'api_cache_versions', 'sync_preferences', 'week_plan_preferences', 'journal_settings',
   'exercise_preferences', 'pinned_exercises', 'exercise_videos', 'personal_recipes', 'personal_foods',
+  // Saved and hidden recipes: choices about food like own recipes (privacy review
+  // 2026-11-25); the "I don't eat" list itself goes below.
+  'recipe_marks',
   'saved_workouts', 'workout_shares',
   // Cleaned below instead: the profile keeps its settings, sync_status the
   // switches of what is read (source-reading.js) and the Apple Health connection.
@@ -58,8 +61,9 @@ async function cleanSettings(db, userId) {
     // Rows 2 and 3 are worked out from the data (profile-suggestions.js).
     db.prepare('DELETE FROM dashboard_profile WHERE user_id = ? AND id IN (2, 3)').bind(id),
     // Body measurements in the profile (row 1, energy-profile.js); the rest of
-    // it is settings (goals, meals, diet, sleep goal).
-    db.prepare("UPDATE dashboard_profile SET profile_json = json_remove(profile_json, '$.height', '$.hrmax', '$.rhr', '$.targetWeight') WHERE user_id = ? AND id = 1 AND json_valid(profile_json)").bind(id),
+    // it is settings (goals, meals, diet, sleep goal). "I don't eat" may tell
+    // of an allergy, so it goes too.
+    db.prepare("UPDATE dashboard_profile SET profile_json = json_remove(profile_json, '$.height', '$.hrmax', '$.rhr', '$.targetWeight', '$.dietAvoid') WHERE user_id = ? AND id = 1 AND json_valid(profile_json)").bind(id),
     db.prepare("DELETE FROM sync_status WHERE user_id = ? AND sync_name NOT IN ('read_off', 'apple_health')").bind(id),
     // The journal's own consents (sensitive items for the coach, sexual activity
     // from Apple Health; journal-store.js) go with the health consent.
