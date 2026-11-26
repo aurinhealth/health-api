@@ -169,7 +169,8 @@ export async function compactZoneMinutes(db, userId, { now = Date.now() } = {}) 
 // the 1-hour row in place (one update, no delete): the hour's average, minimum,
 // maximum and samples, the 12 five minutes dropped. Returns the rows changed or null.
 export async function compactHeartRateBundles(db, userId, { now = Date.now() } = {}) {
-  const cutoff = cutoffFor(now, HEART_RATE_FIVE_MIN_DAYS);
+  // A whole UTC hour: local midnight falls within an hour in half-hour time zones.
+  const cutoff = new Date(Math.floor(Date.parse(cutoffFor(now, HEART_RATE_FIVE_MIN_DAYS)) / 3600e3) * 3600e3).toISOString().replace('.000Z', 'Z');
   const slot = k => `json_extract(j.value, '$.${k}')`;
   const result = await db.prepare(`UPDATE OR IGNORE health_datapoints SET data_type = '${HEART_RATE_HOUR_TYPE}', external_id = 'hr60:' || CAST(strftime('%s', sample_time) AS INTEGER),
       payload_json = (SELECT json_object('avg', ROUND(SUM(${slot('avg')} * ${slot('n')}) / SUM(${slot('n')}), 1), 'min', MIN(${slot('min')}), 'max', MAX(${slot('max')}), 'n', SUM(${slot('n')}))

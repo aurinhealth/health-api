@@ -1027,11 +1027,13 @@ async function saveGoogleHeartRateHours(env, hours) {
   for(let i=0;i<ids.length;i+=90){
     const chunk=ids.slice(i,i+90);
     const rows=(await env.DB.prepare(`SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${HEART_RATE_BUNDLE_TYPE}' AND external_id IN (${chunk.map(()=>'?').join(',')})`).bind(env.USER_ID,...chunk).all()).results||[];
-    for(const r of rows){try{stored.set(r.external_id,JSON.parse(r.payload_json).b);}catch{/* written again */}}
+    for(const r of rows)stored.set(r.external_id,r.payload_json);
   }
   const statements=[];
   for(const [h,slots] of hours){
-    const had=stored.get(id(h)),b=Array.isArray(had)&&had.length===12?[...had]:Array(12).fill(null);
+    const text=stored.get(id(h));
+    let had=null;try{had=JSON.parse(text||'{}').b;}catch{/* written again */}
+    const b=Array.isArray(had)&&had.length===12?[...had]:Array(12).fill(null);
     let changed=false;
     for(const [k,x] of slots){
       const o=b[k],avg=Math.round(x.sum/x.n*10)/10,neu={avg,min:x.min,max:x.max,n:x.n,first:x.first,last:x.last};
@@ -1041,10 +1043,14 @@ async function saveGoogleHeartRateHours(env, hours) {
     }
     if(!changed)continue;
     const n=b.reduce((s,x)=>s+(x?x.n:0),0),value=Math.round(b.reduce((s,x)=>s+(x?x.avg*x.n:0),0)/n*10)/10;
-    statements.push(env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
-      VALUES (?,'google-wearables','${HEART_RATE_BUNDLE_TYPE}',?,?,?,?,?,'bpm',?)
-      ON CONFLICT (user_id,source_family,data_type,external_id) DO UPDATE SET value_numeric=excluded.value_numeric,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP`)
-      .bind(env.USER_ID,id(h),iso(h),iso(h),iso(h+3600e3),value,JSON.stringify({b})));
+    // Only over the row as it was read: a sync writing the same hour at once is
+    // not overwritten, and the hour is merged again on the next sync that reads it.
+    statements.push(text==null
+      ?env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
+        VALUES (?,'google-wearables','${HEART_RATE_BUNDLE_TYPE}',?,?,?,?,?,'bpm',?) ON CONFLICT (user_id,source_family,data_type,external_id) DO NOTHING`)
+        .bind(env.USER_ID,id(h),iso(h),iso(h),iso(h+3600e3),value,JSON.stringify({b}))
+      :env.DB.prepare(`UPDATE health_datapoints SET value_numeric=?,payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND source_family='google-wearables' AND data_type='${HEART_RATE_BUNDLE_TYPE}' AND external_id=? AND payload_json=?`)
+        .bind(value,JSON.stringify({b}),env.USER_ID,id(h),text));
   }
   let changed=0;
   for(let i=0;i<statements.length;i+=50)for(const r of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(r?.meta?.changes||0);
