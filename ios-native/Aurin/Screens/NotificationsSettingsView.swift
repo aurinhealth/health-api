@@ -113,7 +113,7 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.bedtimeTimeKey) private var bedtimeTime = 22 * 60
     @AppStorage(Reminders.workoutKey) private var workout = true
     @AppStorage(Reminders.waterKey) private var water = Reminders.isOn(Reminders.waterKey)
-    @AppStorage(Reminders.mealsKey) private var meals = true
+    @AppStorage(Reminders.mealsKey) private var meals = Reminders.isOn(Reminders.mealsKey)
     @AppStorage(Reminders.weightKey) private var weight = false
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
     @AppStorage(Reminders.weekKey) private var week = true

@@ -437,7 +437,7 @@ enum CoachPush {
             let kind = coach?["kind"] as? String
             if let chatId {
                 await MainActor.run { CoachPushOpen.shared.chat = chatId }
-            } else if kind == "week_summary" || kind == "race_week" {
+            } else if kind == "race_week" {
                 await MainActor.run { QuickActions.shared.pick = QuickActions.Pick(id: "coach") }
             }
         default:
