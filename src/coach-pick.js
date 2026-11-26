@@ -9,7 +9,7 @@ import { parsePace } from "./training-zones.js";
 import { isHardKind } from "./session-intensity.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
 import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
-import { returnAfterBreak } from "./threshold-check.js";
+import { returnAfterBreak, activityBefore } from "./threshold-check.js";
 
 const TABLE = "CREATE TABLE IF NOT EXISTS coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, top TEXT, created_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 const KINDS = ["ride", "run", "gym", "swim", "sauna", "rest"];
@@ -244,8 +244,9 @@ export async function recentKinds(db, userId, today) {
 const RETURNS_DAYS = 90;
 export async function sportReturns(db, userId, today) {
   const from = new Date(Date.parse(today + "T00:00:00Z") - RETURNS_DAYS * 86400000).toISOString().slice(0, 10);
-  const rows = (await db.prepare("SELECT start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
-    .bind(userId, from).all().catch(() => ({ results: [] }))).results || [];
+  const [found, older] = await Promise.all([db.prepare("SELECT start_time, payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')")
+    .bind(userId, from).all().catch(() => ({ results: [] })), activityBefore(db, userId, from)]);
+  const rows = found.results || [];
   const dates = { ride: [], run: [], swim: [] };
   for (const r of rows) {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { /* no type */ }
@@ -253,7 +254,7 @@ export async function sportReturns(db, userId, today) {
     if (dates[kind] && day) dates[kind].push(day);
   }
   const before = list => list.filter(d => d < today).sort().at(-1) || null;
-  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])) };
+  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS, start: older ? from : null })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])) };
 }
 
 export async function pickState(db, userId, date) {

@@ -42,7 +42,10 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     if(until&&(!validDay(until)||until<=date))throw new Error(L('Konec platnosti musí být v budoucnu.','The end date must be in the future.'));
     // The day Nemoc ends: the first days back stay easy (cycling-coach-v2.js).
     if (state.status === 'sick' && patch.status === 'active') { state.recoveredAt = date; state.sickFrom = sickStart(state); }
-    state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
+    // changedAt stays when the status is saved again (a new note or end date):
+    // Nemoc set again kept counting from that day, so it read shorter (C13).
+    if (patch.status !== state.status || !state.changedAt) state.changedAt = new Date().toISOString();
+    state.status = patch.status; state.note = clean(patch.note);
     state.statusUntil=patch.status==='active'?null:until;
   }
   // A memory added by hand ("memory", with its group) or saved by the coach from

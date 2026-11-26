@@ -52,7 +52,12 @@ test("the coach and Aktivita dne rest on a Nemoc day, without the status", () =>
 test("back after 14+ days off: the whole first week without intensity, then quality again", () => {
   assert.equal(returnAfterBreak([day(-30), day(-29), day(-10), day(-8)], date), day(-10));
   assert.equal(returnAfterBreak([day(-30), day(-25), day(-20), day(-15), day(-10), day(-5)], date), null, "no gap of 14 days");
-  assert.equal(returnAfterBreak([day(-5)], date), day(-5), "nothing in the 30 days before");
+  // C10: a new athlete's first session is no break; with older data (start)
+  // it is, and a session before the window counts as the one before.
+  assert.equal(returnAfterBreak([day(-5)], date), null, "first session ever");
+  assert.equal(returnAfterBreak([day(-5)], date, { start: day(-90) }), day(-5), "nothing in the 90 days read");
+  assert.equal(returnAfterBreak([day(-20), day(-10)], date), null, "the window's first day is no session");
+  assert.equal(returnAfterBreak([day(-60), day(-20)], date), day(-20), "the gap began before the window");
   assert.equal(coach({}).recommendation.session.kind, "threshold");
   const third = coach({ returns: { ride: day(-3) } });
   assert.ok(!hard.includes(third.recommendation.session.kind), third.recommendation.session.kind);
@@ -104,6 +109,10 @@ test("a threshold test comes 7–21 days after a break, and when the value is 8 
   assert.equal(offer({ back: day(-8), check: { status: "dismissed", updatedAt: day(-5) + " 10:00:00" } }), null, "declined after the return");
   assert.equal(offer({ since: day(-60) }).reason, "old");
   assert.equal(offer({ since: day(-40) }), null);
+  // C11: two rides since the break are enough for the test after it.
+  const two = [day(-60), day(-58), day(-10), day(-9)].map(d => ({ kind: "ride", date: d, avgPower: 200 }));
+  assert.equal(thresholdOffer({ sport: "ride", sessions: two, current: { ftp: 250 }, estimate: null, today: date, back: day(-10) }).reason, "break");
+  assert.equal(thresholdOffer({ sport: "ride", sessions: two, current: { ftp: 250 }, estimate: null, today: date }), null);
 });
 
 test("the first gym session after Nemoc holds the weights with a set less, then training goes on", async () => {

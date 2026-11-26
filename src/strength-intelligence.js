@@ -667,13 +667,18 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     if (!half && Boolean(EXERCISE_INTELLIGENCE[name].unilateral) !== Boolean(def.unilateral)) continue;
     // Only a variant of the same movement says anything about this one.
     if (factor == null || similarity < 0.75 && !(EXERCISE_INTELLIGENCE[name].variants || []).includes(exercise) && !(EXERCISE_INTELLIGENCE[exercise].variants || []).includes(name)) continue;
-    candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor: half ? factor * 0.5 : factor, half, date: ref.workout_date });
+    candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor: half ? factor * 0.5 : factor, half, date: ref.workout_date, last: rows.map(r => dateKey(r.workout_date)).sort().at(-1) });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));
   const ref = candidates[0];
   if (ref) {
     let kg = ref.kg * ref.factor;
-    kg *= progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
+    // The same break rule as the athlete's own history (progressionDecision):
+    // no step up after 14 days without the reference exercise, 10 % lighter
+    // after 21 (load ramp-back review 2026-11-25, C14).
+    const gap = today && ref.last ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(ref.last + "T12:00:00Z")) / 86400000 : 0;
+    const progress = progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
+    kg *= gap > 21 ? Math.min(1, progress) * 0.9 : gap >= 14 ? Math.min(1, progress) : progress;
     kg *= recoveryMultiplier(loadFactor);
     // Never far above the catalogue's start for an exercise not done yet.
     // Half of the athlete's own two-arm weight needs no such limit.

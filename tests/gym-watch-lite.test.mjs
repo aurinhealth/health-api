@@ -89,3 +89,16 @@ test("a small home gym still gets three swaps that fit it", async () => {
   assert.equal(body.byExercise["Barbell bench press"].length, 3);
   assert.ok(body.byExercise["Barbell bench press"].every(a => !/barbell|smith|cable|machine/i.test(a.name)));
 });
+
+test("a remembered pain keeps its exercises out of the watch's search and marks them in the list (load ramp-back review C3)", async () => {
+  const { env } = setup();
+  const { updateAthleteState } = await import("../src/athlete-state.js");
+  await updateAthleteState(env.DB, { memory: "Bolí mě koleno" });
+  const search = new URL(ORIGIN + "/app/api/gym/exercises?q=squat");
+  const found = (await (await handleGymToolsApi(new Request(search), env, {}, search, { signedIn: true }, {})).json()).exercises;
+  assert.ok(!found.some(e => /squat/i.test(e.name)), found.map(e => e.name).join(", "));
+  const all = new URL(ORIGIN + "/app/api/gym/exercises");
+  const list = (await (await handleGymToolsApi(new Request(all), env, {}, all, { signedIn: true }, {})).json()).exercises;
+  assert.equal(list.find(e => e.name === "Barbell back squat")?.pain, true);
+  assert.equal(list.find(e => e.name === "Barbell bench press")?.pain, false);
+});

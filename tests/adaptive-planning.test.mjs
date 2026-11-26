@@ -242,3 +242,13 @@ test('an empty week leaves a match day to the match',()=>{
   // The day after the match is not a key day.
   assert.ok(p.items.filter(x=>x.date==='2026-10-11').every(x=>!['quality','long'].includes(x.role)));
 });
+test('Nemoc saved again keeps the day it began (load ramp-back review C13)',async()=>{
+  const a=scopedDb(createD1(),1);
+  await updateAthleteState(a,{status:'sick',note:'rýma'});
+  const first=(await getAthleteState(a)).changedAt;
+  await new Promise(r=>setTimeout(r,5));
+  await updateAthleteState(a,{status:'sick',note:'rýma a kašel'});
+  assert.equal((await getAthleteState(a)).changedAt,first);
+  await updateAthleteState(a,{status:'active'});
+  assert.notEqual((await getAthleteState(a)).changedAt,first);
+});
