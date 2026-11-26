@@ -64,6 +64,13 @@ enum OtherSports {
         L10n.f(event.kind == "match" ? "%@: zápas" : "%@: trénink", name(event.type))
     }
 
+    /// "Přidat na sobotu", "Add for Saturday": the coach card's button for that day.
+    static func addFor(_ date: String) -> String {
+        if date == AppModel.localDate(Date()) { return L10n.tr("Přidat na dnešek") }
+        let words = ["Přidat na pondělí", "Přidat na úterý", "Přidat na středu", "Přidat na čtvrtek", "Přidat na pátek", "Přidat na sobotu", "Přidat na neděli"]
+        return L10n.tr(words[ISODay.weekdayIndex(date)])
+    }
+
     @MainActor static func disc(_ type: String, size: CGFloat) -> some View {
         SportDisc(sport: "other", type: type, state: .done, size: size)
     }

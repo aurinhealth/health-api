@@ -204,6 +204,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var kcal: Double? = nil
     /// activity_merge: the second part; activity_time: the start now and the new one.
     var otherName: String? = nil
+    /// other_event: the athlete's own sport (a Log workout type) and match or training.
+    var otherType: String? = nil
+    var eventKind: String? = nil
     var fromTime: String? = nil
     var time: String? = nil
     /// workout: the session the server prepared for the card, a ride or run
@@ -304,6 +307,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
+        case "other_event":
+            return L10n.f(eventKind == "match" ? "%@: zápas" : "%@: trénink", otherName ?? "")
         case "week_sport":
             let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
             return title.map { L10n.tr($0) } ?? type
@@ -327,6 +332,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
         case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
+        case "other_event": return [day, minutes.map { planDuration(Int($0)) }, L10n.tr("jen tento týden")].compactMap { $0 }.joined(separator: ", ")
         // "3× 8–12, 5. cvik ze 6": the dose and the place the plan gives it.
         case "gym_add":
             let dose = sets.map { L10n.f("%d× %@", $0, reps ?? "") }

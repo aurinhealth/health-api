@@ -5375,3 +5375,11 @@
 "Naplánovat příští týden" = "Plan next week";
 "km %@ až %@" = "km %1$@ to %2$@";
 "%@ až %@ m" = "%1$@ to %2$@ m";
+"Přidat na dnešek" = "Add for today";
+"Přidat na pondělí" = "Add for Monday";
+"Přidat na úterý" = "Add for Tuesday";
+"Přidat na středu" = "Add for Wednesday";
+"Přidat na čtvrtek" = "Add for Thursday";
+"Přidat na pátek" = "Add for Friday";
+"Přidat na sobotu" = "Add for Saturday";
+"Přidat na neděli" = "Add for Sunday";
