@@ -18,8 +18,9 @@ function setup() {
   const insert = raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,end_time,value_numeric,payload_json,record_role) VALUES(?,?,?,?,?,?,?,?,?)");
   const row = (family, type, start, minutes, value, payload, role = "primary", user = 1) =>
     insert.run(user, family, type, `${family}:${type}:${start}:${JSON.stringify(payload).length}`, iso(start), iso(start + minutes * 60000), value, JSON.stringify(payload), role);
-  // Google's zone minutes, a row a minute: light most of the day, some moderate.
-  const zone = (start, z, family = "google-wearables", role = "primary") => row(family, "time-in-heart-rate-zone", start, 1, 1, { timeInHeartRateZone: { heartRateZoneType: z, durationMinutes: 1 } }, role);
+  // Google's zone minutes, a row a minute: light most of the day, some moderate. As
+  // on production, with no value and no durationMinutes: the interval is the minute.
+  const zone = (start, z, family = "google-wearables", role = "primary") => row(family, "time-in-heart-rate-zone", start, 1, null, { timeInHeartRateZone: { heartRateZoneType: z } }, role);
   return { raw, db: scopedDb(raw, 1), row, zone };
 }
 // A month and a half of days: every 7th minute moderate, the rest light, 06:00–09:00 UTC;
@@ -56,10 +57,10 @@ test("Today reads the same steps, energy and zone minutes from the hourly summar
   assert.ok(t.raw.sqlite.prepare("SELECT COUNT(*) n FROM health_hour_summary").get().n < 300);
 });
 
-test("the hours worn come from the summary as from the zone minutes", async () => {
+test("the hours worn come from the summary as from the zone minutes, counted by their length", async () => {
   const t = setup();
   fill(t);
-  const direct = t.raw.sqlite.prepare("SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone' AND start_time >= '2026-09-10' AND start_time < '2026-10-12' GROUP BY 1, 2").all().map(r => ({ ...r }));
+  const direct = t.raw.sqlite.prepare("SELECT source_family f, substr(start_time,1,10) d, COUNT(*) / 60.0 h FROM health_datapoints WHERE source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone' AND start_time >= '2026-09-10' AND start_time < '2026-10-12' GROUP BY 1, 2").all().map(r => ({ ...r }));
   assert.equal(await wearFromSummary(t.db, 1, "2026-09-10", "2026-10-12"), null, "not complete yet");
   while (await upkeepHourSummary(t.db, 1, { now: NOW }));
   assert.deepEqual(await wearFromSummary(t.db, 1, "2026-09-10", "2026-10-12"), direct);

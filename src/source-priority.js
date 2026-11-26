@@ -99,10 +99,11 @@ async function history(db, userId, from, to) {
   const [nights, worn, zones] = await Promise.all([
     db.prepare(`SELECT source_family f, ${DAY_OF} d FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ${FAMILY_SQL}
       AND end_time >= ? AND end_time < ? AND (julianday(end_time) - julianday(start_time)) * 24 >= 3 GROUP BY 1, 2`).bind(userId, from, to).all(),
-    // Hours with heart rate: Apple Watch's from the phone, Google's from its zone minutes (every minute worn).
+    // Hours with heart rate: Apple Watch's from the phone, Google's from its zone minutes (every minute worn),
+    // counted by their length: Google's zone rows carry no value.
     db.prepare(`SELECT source_family f, sample_time d, MAX(value_numeric) h FROM health_datapoints WHERE user_id = ? AND data_type = '${WEAR_TYPE}' AND sample_time >= ? AND sample_time < ? GROUP BY 1, 2`).bind(userId, from, to).all(),
     // From the hourly summary once it reaches back far enough (~60 k zone minutes a month otherwise).
-    wearFromSummary(db, userId, from, to).catch(() => null).then(rows => rows ? { results: rows } : db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
+    wearFromSummary(db, userId, from, to).catch(() => null).then(rows => rows ? { results: rows } : db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(MIN(1440, MAX(0, ROUND((julianday(end_time) - julianday(start_time)) * 86400) / 60.0))) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
       AND start_time >= ? AND start_time < ? GROUP BY 1, 2`).bind(userId, from, to).all())
   ]);
   const night = new Map(), wear = new Map();

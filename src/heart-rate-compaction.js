@@ -129,7 +129,8 @@ export async function compactHeartRateHours(db, userId, { now = Date.now() } = {
 }
 
 // Google's zone minutes older than ZONE_MINUTE_DAYS become a row per hour, zone and
-// role (the source choice keeps its marks), a UTC day per call: minutes summed, the
+// role (the source choice keeps its marks), a UTC day per call: minutes summed (their
+// length when the rows have no value, as Google's on production), the
 // interval as long as the minutes, as hour-summary.js and google-dashboard.js count
 // them. The day reached is kept (sync_status 'zone_compaction'), so the hourly rows
 // are not read again. Returns the window or null.
@@ -154,10 +155,10 @@ export async function compactZoneMinutes(db, userId, { now = Date.now() } = {}) 
       SELECT user_id, source_family, data_type, 'zone1h:' || z || ':' || h || ':' || role || ':' || COALESCE(matched, ''), NULL, h, ${end}, v, 'min',
         json_object('timeInHeartRateZone', json_object('interval', json_object('startTime', h, 'endTime', ${end}), 'heartRateZoneType', z, 'durationMinutes', v)), role, matched, confidence
       FROM (SELECT user_id, source_family, data_type, ${zone} AS z, ${hour} AS h, COALESCE(record_role, 'primary') AS role, matched_activity_id AS matched, MIN(match_confidence) AS confidence,
-          SUM(value_numeric) AS v, MIN(60, SUM(MAX(0, ${minutes}))) AS m
+          COALESCE(SUM(value_numeric), MIN(60, SUM(MAX(0, ${minutes})))) AS v, MIN(60, SUM(MAX(0, ${minutes}))) AS m
         FROM health_datapoints WHERE user_id = ? AND ${window} AND external_id NOT LIKE 'zone1h:%' GROUP BY z, h, role, matched) WHERE true
       ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET
-        value_numeric = health_datapoints.value_numeric + excluded.value_numeric, end_time = excluded.end_time, payload_json = excluded.payload_json, updated_at = CURRENT_TIMESTAMP`).bind(userId, from, to),
+        value_numeric = COALESCE(health_datapoints.value_numeric, 0) + excluded.value_numeric, end_time = excluded.end_time, payload_json = excluded.payload_json, updated_at = CURRENT_TIMESTAMP`).bind(userId, from, to),
     db.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND ${window} AND external_id NOT LIKE 'zone1h:%'`).bind(userId, from, to),
     db.prepare("INSERT INTO sync_status(user_id,sync_name,status,finished_at,details_json,updated_at) VALUES(?,?,'ok',datetime('now'),?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET details_json=excluded.details_json,updated_at=excluded.updated_at")
       .bind(userId, ZONE_MARK, JSON.stringify({ to }))
