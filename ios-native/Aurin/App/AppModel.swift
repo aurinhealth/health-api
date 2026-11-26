@@ -95,7 +95,9 @@ final class AppModel {
     /// The chosen day lies after today (Food only).
     var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
-    var athleteStatus: AthleteStatus?
+    var athleteStatus: AthleteStatus? {
+        didSet { if athleteStatus != oldValue { WatchBridge.shared.update(status: athleteStatus) } }
+    }
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?

@@ -43,7 +43,9 @@ struct TrainingPage: View {
                 }
                 content(day)
                 // Race day offers no gym (the race card is the day).
-                if day == today, noGymToday, !raceDay(day) { noGym }
+                if day == today, noGymToday, !raceDay(day) {
+                    if let paused = watch.settings.trainingPaused { pausedNote(paused) } else { noGym }
+                }
                 // The last button a little above the screen's rounded bottom edge.
                 Color.clear.frame(height: 8)
             }
@@ -118,6 +120,14 @@ struct TrainingPage: View {
         }
         .buttonStyle(.bordered)
         .padding(.top, 12)
+    }
+
+    /// Sick or Injured on the iPhone: no gym of the watch's own (C12).
+    private func pausedNote(_ status: String) -> some View {
+        Text(status == "sick" ? W.tr("Při Nemoci je trénink pozastavený.", "Training is paused while you're sick.")
+                              : W.tr("Při Zranění je trénink pozastavený.", "Training is paused while you're injured."))
+            .watchFont(14).foregroundStyle(W.muted)
+            .padding(.top, 12)
     }
 
     /// Repeat last workout (with which one it is), Build from rested, Empty
