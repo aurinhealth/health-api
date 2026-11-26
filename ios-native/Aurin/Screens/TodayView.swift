@@ -294,6 +294,19 @@ struct TodayContent: View {
                                   coachThings(plain: true)
                               }), pinned: (missed.text, missed.advice))
                     .padding(.top, 12)
+            } else if coachShown, !model.demo, let played = today.played {
+                // Yesterday's practice or match nothing recorded (other sports): its
+                // own block in the one coach card, as a missed workout's.
+                CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
+                              tip: AnyView(VStack(alignment: .leading, spacing: 0) {
+                                  PlayedCard(played: played, plain: true).id(played.date + played.type)
+                                  if !TodayCoachAction.planned(today).isEmpty {
+                                      Rectangle().fill(Palette.hairline).frame(height: 1).padding(.vertical, 14)
+                                      TodayCoachAction(today: today)
+                                  }
+                                  coachThings(plain: true)
+                              }))
+                    .padding(.top, 12)
             } else if coachShown {
                 CoachTextCard(screen: "today", fallbackText: TodayCoachWords.split(today.summary).text, fallbackAdvice: TodayCoachWords.split(today.summary).advice,
                               tip: AnyView(VStack(alignment: .leading, spacing: 0) { TodayCoachAction(today: today); coachThings(plain: true) }))
@@ -307,7 +320,8 @@ struct TodayContent: View {
             }
 
             // "Did you play?": yesterday's practice or match nothing recorded (other sports).
-            if !model.demo, let played = today.played {
+            // Its own card when the coach card holds something else or is off.
+            if !model.demo, let played = today.played, !coachShown || firstWords != nil || today.missedWorkout != nil {
                 PlayedCard(played: played).id(played.date + played.type).padding(.top, 12)
             }
 
@@ -889,10 +903,12 @@ struct DayCapsule: View {
                         Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Předchozí den")
+                    // Never "Thu, O…" beside the Today button (review 2026-11-25).
                     Text(verbatim: Fmt.dayShort(date, today: today))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
+                        .fixedSize()
                     Button { move(1) } label: {
                         Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                     }
@@ -985,7 +1001,7 @@ struct ReadinessHero: View {
                     .font(Typo.heading(34, relativeTo: .largeTitle))
                     .foregroundStyle(Palette.ink)
                     .padding(.top, 8)
-                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže.")
+                Text(newAthlete ? "Nos dnes v noci hodinky nebo prsten, číslo přijde zítra ráno." : "Připravenost i HRV se počítají ze spánku, ten z té noci chybí. Klidový tep najdeš níže.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
@@ -1069,7 +1085,8 @@ struct ReadinessLearning: View {
 
 /// "Jak se dnes cítíš?" under the readiness: one tap (src/morning-checkin.js).
 /// The answer can only lower the readiness, for Today and the coach alike.
-/// Tapping the chosen one again clears it; "Nemocný" offers the status Nemoc.
+/// Tapping the chosen one again clears it. The same three answers as Today's
+/// question (TodayHero); Nemoc is the status or the Journal, never this question.
 /// On Today it goes away once answered; the readiness detail keeps it, so the
 /// answer can be changed there.
 struct MorningCheckinCard: View {
@@ -1079,7 +1096,6 @@ struct MorningCheckinCard: View {
     var top: CGFloat = 0
     @State private var chosen: String?
     @State private var saving = false
-    @State private var offerSick = false
     @State private var answers = 0
 
     init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
@@ -1098,12 +1114,11 @@ struct MorningCheckinCard: View {
     static let options: [Option] = [
         Option(id: "fresh", symbol: "⚡️", label: "Svěží"),
         Option(id: "normal", symbol: "🙂", label: "Normál"),
-        Option(id: "tired", symbol: "🥱", label: "Unavený"),
-        Option(id: "sick", symbol: "🤒", label: "Nemocný")
+        Option(id: "tired", symbol: "🥱", label: "Unavený")
     ]
 
     var body: some View {
-        if keepAnswered || chosen == nil || saving || offerSick {
+        if keepAnswered || chosen == nil || saving {
             card.padding(.top, top)
         } else {
             // Holds onChange while the card is gone, so clearing the answer
@@ -1137,12 +1152,6 @@ struct MorningCheckinCard: View {
         }
         .onChange(of: feeling) { _, new in chosen = new }
         .sensoryFeedback(.impact(weight: .light), trigger: answers)
-        .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
-            Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
-            Button("Teď ne", role: .cancel) {}
-        } message: {
-            Text("Kouč do té doby nebude plánovat trénink.")
-        }
     }
 
     private func choose(_ id: String?) async {
@@ -1153,7 +1162,6 @@ struct MorningCheckinCard: View {
         defer { saving = false }
         do {
             try await model.setMorningCheckin(id)
-            if id == "sick", model.athleteStatus?.status != "sick" { offerSick = true }
         } catch {
             chosen = before
             model.notice = error.localizedDescription

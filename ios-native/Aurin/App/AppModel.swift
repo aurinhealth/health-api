@@ -95,7 +95,9 @@ final class AppModel {
     /// The chosen day lies after today (Food only).
     var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
-    var athleteStatus: AthleteStatus?
+    var athleteStatus: AthleteStatus? {
+        didSet { if athleteStatus != oldValue { WatchBridge.shared.update(status: athleteStatus) } }
+    }
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?
@@ -180,6 +182,8 @@ final class AppModel {
     /// Cycle tracking was on before it had its own consent (src/cycle-store.js
     /// consentNeeded): its consent sheet, once per launch until answered (RootView).
     var cycleConsentAsk = false
+    /// An account set up before product news by e-mail existed: asked once whether it wants them (RootView).
+    var productEmailsAsk = false
     @ObservationIgnored var cycleConsentAsked = false
     /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
     var notInvited = false
@@ -360,6 +364,21 @@ final class AppModel {
     }
 
     func handle(_ url: URL) {
+        // The Coach and Aurin Age widgets without Pro: "Unlock with Pro" opens the offer.
+        if AppRoute.schemes.contains(url.scheme ?? ""), url.host() == "open", url.pathComponents.filter({ $0 != "/" }) == ["pro"] {
+            // Pro already: Today, never the offer.
+            guard !ProStore.shared.entitled else {
+                tab = .today
+                paths[.today] = []
+                return
+            }
+            // After launch the window may not be up yet.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
+                Paywall.present(self)
+            }
+            return
+        }
         if let route = AppRoute(url: url) {
             open(route)
         } else if let tab = TabLink.tab(url) {

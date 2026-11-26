@@ -684,12 +684,13 @@ struct WideView: View {
         }
     }
 
-    /// The zone in the app's words: high, moderate, low.
+    /// The zone in the app's words: the numbers against their usual range
+    /// (Petr 2026-11-26, watch review decision 5).
     private func zoneWord(_ zone: String) -> String {
         switch zone {
-        case "red": tr("NÍZKÁ", "LOW")
-        case "yellow": tr("STŘEDNÍ", "MODERATE")
-        default: tr("VYSOKÁ", "HIGH")
+        case "red": tr("POD OBVYKLÝM", "BELOW USUAL")
+        case "yellow": tr("ČÁST POD", "SOME BELOW")
+        default: tr("OBVYKLÉ", "USUAL")
         }
     }
 
@@ -1205,9 +1206,7 @@ enum C {
     /// HRV or resting HR against the athlete's normal: green within it or
     /// better, amber the worse way.
     static func normal(_ value: Double, _ m: WatchSnapshot.Metric, higherIsBetter: Bool) -> Color {
-        guard let low = m.low, let high = m.high, high > low else { return green }
-        let worse = higherIsBetter ? value < low : value > high
-        return worse ? amber : green
+        WatchSnapshot.Metric.worse(value, low: m.low, high: m.high, higherIsBetter: higherIsBetter) == true ? amber : green
     }
 
     /// The watch app's zone colours (PlanStore.color).

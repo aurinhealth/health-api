@@ -433,8 +433,16 @@ struct CoachPacksPage: View {
                     .font(.caption).foregroundStyle(Night.faint)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
-                Link(destination: L10n.legalURL("terms")) {
-                    Text("Podmínky").font(.caption).foregroundStyle(Night.muted).underline()
+                // Terms and Privacy by the purchase, 44 pt each (review 2026-11-25).
+                HStack(spacing: 20) {
+                    Link(destination: L10n.legalURL("terms")) {
+                        Text("Podmínky").font(.caption).foregroundStyle(Night.muted).underline()
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    Link(destination: L10n.legalURL("privacy")) {
+                        Text("Soukromí").font(.caption).foregroundStyle(Night.muted).underline()
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
                 }
             }
             .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 80)

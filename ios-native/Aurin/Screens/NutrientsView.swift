@@ -138,7 +138,7 @@ struct NutrientsContent: View {
                     Image(systemName: "gearshape").scaledFont(15).foregroundStyle(Palette.muted)
                 }
             }
-            .frame(width: 32, height: 44)
+            .frame(width: 44, height: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -178,8 +178,7 @@ struct FoodPage: View {
     /// "0.8 of 2.5 L" or "27 of 85 fl oz".
     static func waterLine(_ food: WatchSnapshot.Food) -> String {
         guard let target = food.waterTarget else { return W.water(food.water ?? 0) }
-        let unit = W.imperial ? " fl oz" : " l"
-        return W.water(food.water ?? 0).replacingOccurrences(of: unit, with: "") + W.tr(" z ", " of ") + W.water(target)
+        return W.water(food.water ?? 0).replacingOccurrences(of: " " + W.waterUnit, with: "") + W.tr(" z ", " of ") + W.water(target)
     }
 
     private func fraction(_ value: Double?, _ target: Double?) -> Double {
@@ -225,8 +224,8 @@ struct WaterPage: View {
                 Text(W.tr("Voda dnes", "Water today"))
                     .watchFont(13, .medium).foregroundStyle(W.muted)
                 WaterRing(fraction: target > 0 ? min(water / target, 1) : 0,
-                          number: W.water(water).replacingOccurrences(of: W.imperial ? " fl oz" : " l", with: ""),
-                          unit: W.imperial ? "fl oz" : "L")
+                          number: W.water(water).replacingOccurrences(of: " " + W.waterUnit, with: ""),
+                          unit: W.waterUnit)
                     .padding(.top, 4)
                 if target > 0 {
                     Text(W.tr("z ", "of ") + W.water(target))

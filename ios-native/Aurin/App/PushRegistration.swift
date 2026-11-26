@@ -431,8 +431,15 @@ enum CoachPush {
             }
             try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "aurin-coach-swap", content: content, trigger: nil))
         case UNNotificationDefaultActionIdentifier:
-            // Tapping an answer opens its chat; the coach's own message opens the app on Dnes.
-            if let chatId { await MainActor.run { CoachPushOpen.shared.chat = chatId } }
+            // Tapping an answer opens its chat; the week's summary and the race week open
+            // the coach, whose opening posts their chat (CoachView.openPosted); the coach's
+            // other messages open the app on Dnes.
+            let kind = coach?["kind"] as? String
+            if let chatId {
+                await MainActor.run { CoachPushOpen.shared.chat = chatId }
+            } else if kind == "race_week" {
+                await MainActor.run { QuickActions.shared.pick = QuickActions.Pick(id: "coach") }
+            }
         default:
             break
         }

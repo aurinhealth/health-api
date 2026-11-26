@@ -4,7 +4,7 @@ import UserNotifications
 // MARK: - Goals
 
 /// Cíle: every goal in one place (concept 10, D-NAST-1). The main goal is the
-/// onboarding's choice (Get fitter, Race, Lose weight); a race takes its name,
+/// onboarding's choice (Get fitter, Race, Lose weight, Strength and muscle); a race takes its name,
 /// sport, day and distance, losing weight its pace and target weight. Training
 /// has one time to train (the week plan's free time, Plan settings) and what
 /// the athlete trains now (Auto from the records, or own hours), which sets
@@ -33,7 +33,7 @@ struct GoalsSettingsView: View {
     var body: some View {
         SettingsPage(title: "Cíle", hero: SettingsHero(text: "Tvoje cíle pro spánek, jídlo, váhu a trénink.", art: AnyView(GoalsHeroArt()))) {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            SettingsGroup(title: "Hlavní cíl") {
+            SettingsGroup(title: "Hlavní cíl", footer: goalType == "muscle" ? FocusChoice.muscleNote : nil) {
                 ForEach(FocusChoice.goals.indices, id: \.self) { i in
                     let item = FocusChoice.goals[i]
                     if i > 0 { SettingsDivider() }
@@ -163,15 +163,22 @@ struct GoalsSettingsView: View {
     }
 
     /// The main goal: losing weight starts at a pace (half a kilo, or a quarter
-    /// under 50 kg); away from it a losing pace becomes maintain.
+    /// under 50 kg); away from it a losing pace becomes maintain. Strength and
+    /// muscle gains a quarter kilo a week; away from it gaining becomes maintain.
     private func pick(_ type: String) {
         withMotion(.snappy) {
+            let before = goalType
             goalType = type
             if type == "lose", !goal.hasPrefix("lose_") {
                 // Back to the saved pace, else half a kilo.
                 let saved = original["goal"]?.string ?? ""
                 goal = saved.hasPrefix("lose_") ? saved : goalOptions.contains { $0.0 == "lose_0.5" } ? "lose_0.5" : "lose_0.25"
             } else if type != "lose", goal.hasPrefix("lose_") {
+                goal = "maintain"
+            }
+            if type == "muscle", !goal.hasPrefix("gain_") {
+                goal = "gain_0.25"
+            } else if before == "muscle", type != "muscle", goal.hasPrefix("gain_") {
                 goal = "maintain"
             }
         }
@@ -222,9 +229,12 @@ struct GoalsSettingsView: View {
         return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
-    /// "7 h 30", or "Auto" while the goal follows age and the day.
+    /// "7 h 30", or "Auto (dnes 8 h 30 min)" while the goal follows age and the day.
     private var sleepValue: String {
-        store.profile["sleepGoal"]?.number.map { Fmt.duration(Int($0.rounded())) } ?? L10n.tr("Auto")
+        if let goal = store.profile["sleepGoal"]?.number { return Fmt.duration(Int(goal.rounded())) }
+        // Auto shows tonight's need too, the number Settings shows (review 2026-11-25).
+        guard let need = model.settingsToday?.tonight?.need else { return L10n.tr("Auto") }
+        return L10n.f("Auto (dnes %@)", Fmt.duration(need))
     }
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]

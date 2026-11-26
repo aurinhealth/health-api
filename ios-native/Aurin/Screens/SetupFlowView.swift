@@ -31,6 +31,9 @@ struct SetupFlowView: View {
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
+    /// Product news by e-mail: a new account's soft opt-in, ticked unless refused
+    /// (restrictions audit 2026-11-25, point 1). Accounts set up before it are asked once (RootView).
+    @State private var agreeNews = true
     /// The setup is done: Today is put together from the answers (SetupBuildToday).
     @State private var building = false
     // Data sources
@@ -263,6 +266,13 @@ struct SetupFlowView: View {
             checkbox("Posílat data, která AI funkce potřebují, společnosti OpenAI (USA)",
                      note: LocalizedStringKey(AIConsentText.note),
                      isOn: $agreeAI)
+        }
+        if !consentOnly {
+            Card {
+                checkbox("Posílat mi e-mailem novinky o Aurinu",
+                         note: "Občas, o nových funkcích. Vypneš je v Nastavení → Oznámení nebo odkazem v každém e-mailu.",
+                         isOn: $agreeNews)
+            }
         }
         Link("Zásady ochrany soukromí", destination: L10n.legalURL("privacy")).font(Typo.small)
     }
@@ -801,7 +811,7 @@ struct SetupFlowView: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.giveHealthConsent(ai: agreeAI)
+            try await model.api.giveHealthConsent(ai: agreeAI, productEmails: consentOnly ? nil : agreeNews)
             // Apple Health may send from now on (AppleHealth.run).
             AppModel.healthConsentGiven = true
             // The coach and the AI parts of the screens follow the choice the server

@@ -109,9 +109,12 @@ enum WeekPlanText {
 /// Week plan as Training opens it: a sheet with its own stack, so Workout
 /// details pushes inside it and comes back to the same spot.
 struct WeekPlanSheet: View {
+    /// The week to open on (WeekPlanView.init).
+    var week: String? = nil
+
     var body: some View {
         NavigationStack {
-            WeekPlanView().appRoutes()
+            WeekPlanView(week: week).appRoutes()
         }
         .presentationDragIndicator(.visible)
     }
@@ -162,6 +165,15 @@ struct WeekPlanView: View {
     /// until either, the next Generate or leaving the screen (Petr 2026-11-25).
     @State private var affects: WeekProposalResponse.ReplanAffects?
     @State private var confirmRecalculate = false
+
+    /// `week`: a later week's Monday ("Plan next week" under the coach's
+    /// Sunday summary) opens with next week shown and unfolded.
+    init(week: String? = nil) {
+        if let week, week > Self.monday() {
+            _showNext = State(initialValue: true)
+            _openWeeks = State(initialValue: [week])
+        }
+    }
 
     private var today: String { model.demo ? (model.training?.date ?? AppModel.localDate(Date())) : AppModel.localDate(Date()) }
     private var monday: String { FreeTime.monday(today) }
@@ -254,7 +266,8 @@ struct WeekPlanView: View {
         HStack(spacing: 0) {
             ForEach(week.days, id: \.self) { date in
                 Button { pick(date) } label: {
-                    DayCircle(date: date, today: today, selected: date == today, day: model.calendar[date])
+                    DayCircle(date: date, today: today, selected: date == today, day: model.calendar[date],
+                              own: date >= today ? ownEvents(week, date: date, sessions: week.sessions(on: date)).first?.type : nil)
                 }
                 .buttonStyle(.plain)
             }

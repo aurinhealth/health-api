@@ -25,6 +25,10 @@ struct WatchSettings: Codable, Equatable, Sendable {
     var lastGymExercises: Int? = nil
     /// When the iPhone's backup for the watch's alarm rings; nil when none is set.
     var alarmBackup: Date? = nil
+    /// "sick" or "injured" while Stav sportovce pauses training: the watch then
+    /// offers no gym of its own (Repeat last, Empty), as the server builds none
+    /// (load ramp-back review 2026-11-25, C12); nil otherwise.
+    var trainingPaused: String? = nil
 
     init() {}
 
@@ -40,6 +44,7 @@ struct WatchSettings: Codable, Equatable, Sendable {
         lastGym = try c.decodeIfPresent(String.self, forKey: .lastGym)
         lastGymExercises = try c.decodeIfPresent(Int.self, forKey: .lastGymExercises)
         alarmBackup = try c.decodeIfPresent(Date.self, forKey: .alarmBackup)
+        trainingPaused = try c.decodeIfPresent(String.self, forKey: .trainingPaused)
     }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }

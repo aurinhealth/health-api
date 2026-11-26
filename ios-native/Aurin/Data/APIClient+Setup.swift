@@ -56,8 +56,11 @@ extension APIClient {
     /// needs to OpenAI, as ticked on that page. Left unticked, an AI consent
     /// given earlier ends, so after a new text it holds only when ticked again
     /// (legal review 2026-11-05, point 4).
-    func giveHealthConsent(ai: Bool) async throws {
-        let body: [String: JSONValue] = ["health": .bool(true), "ai": .bool(ai)]
+    /// A new account's choice of product news by e-mail goes with it (soft opt-in, ticked
+    /// unless refused); nil when the page did not offer it.
+    func giveHealthConsent(ai: Bool, productEmails: Bool? = nil) async throws {
+        var body: [String: JSONValue] = ["health": .bool(true), "ai": .bool(ai)]
+        if let productEmails { body["productEmails"] = .bool(productEmails) }
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: body)
     }
 }

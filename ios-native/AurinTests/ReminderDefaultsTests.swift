@@ -25,6 +25,25 @@ final class ReminderDefaultsTests: XCTestCase {
         XCTAssertEqual(defaults.object(forKey: Reminders.weekKey) as? Bool, false, "the week plan stays off where it was")
     }
 
+    func testNewInstallLeavesMealsOffUntilOffered() {
+        let defaults = fresh()
+        Reminders.adoptNewDefaults(defaults)
+        XCTAssertNil(defaults.object(forKey: Reminders.mealsKey))
+        XCTAssertFalse(MealRemindersOffer.due(loggedToday: false, defaults), "no offer before a meal is logged")
+        XCTAssertTrue(MealRemindersOffer.due(loggedToday: true, defaults))
+        defaults.set(false, forKey: Reminders.mealsKey)
+        XCTAssertFalse(MealRemindersOffer.due(loggedToday: true, defaults), "Not now answers it for good")
+    }
+
+    func testEarlierUseKeepsMealsOn() {
+        let defaults = fresh()
+        defaults.set(true, forKey: "remind.defaults.v3")
+        defaults.set("tok", forKey: "push.sentToken")
+        Reminders.adoptNewDefaults(defaults)
+        XCTAssertEqual(defaults.object(forKey: Reminders.mealsKey) as? Bool, true)
+        XCTAssertFalse(MealRemindersOffer.due(loggedToday: true, defaults))
+    }
+
     func testOwnChoiceStaysAndRunsOnce() {
         let defaults = fresh()
         defaults.set(false, forKey: Reminders.waterKey)

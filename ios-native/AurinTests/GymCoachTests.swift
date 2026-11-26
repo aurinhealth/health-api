@@ -24,6 +24,18 @@ final class GymCoachTests: XCTestCase {
         XCTAssertEqual(s.warmups.map { $0.kg ?? 0 }, [42.5, 60])
     }
 
+    // After a break as the server (C2, load ramp-back review 2026-11-25): no step up from 14 days, 10 % down after 21.
+    func testTwoWeeksOffHoldsTheWeight() {
+        let s = GymCoach.suggest("Barbell bench press", history: history([lift(82.5, 6, 6), lift(82.5, 6, 6), lift(82.5, 6, 6)]), before: "2026-10-20", catalog: nil)
+        XCTAssertEqual(s.work.first?.kg, 82.5)
+    }
+
+    func testThreeWeeksOffStartsLighter() {
+        let s = GymCoach.suggest("Barbell bench press", history: history([lift(82.5, 6, 6), lift(82.5, 6, 6), lift(82.5, 6, 6)]), before: "2026-10-30", catalog: nil)
+        XCTAssertEqual(s.work.first?.kg, 72.5)
+        XCTAssertEqual(s.work.first?.reps, 6)
+    }
+
     func testShortOfTheRepsRepeatsTheWeight() {
         let s = GymCoach.suggest("Barbell bench press", history: history([lift(80, 8, 8), lift(80, 7, 8), lift(80, 6, 8)]), before: "2026-10-11", catalog: nil)
         XCTAssertEqual(s.work.first?.kg, 80)

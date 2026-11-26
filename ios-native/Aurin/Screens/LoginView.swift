@@ -4,6 +4,14 @@ import SwiftUI
 /// The first screen: an opening and three pages of what Aurin does
 /// (WelcomePages.swift), then the sign-in.
 struct LoginView: View {
+    /// The Terms and Privacy links underlined, not only a shade darker (review 2026-11-25).
+    static var legalLine: AttributedString {
+        let text = L10n.tr("Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs).")
+        var line = (try? AttributedString(markdown: text)) ?? AttributedString(text)
+        for run in line.runs where run.link != nil { line[run.range].underlineStyle = .single }
+        return line
+    }
+
     @Environment(AppModel.self) private var model
     @State private var page = 0
     /// When the last page turn began: a second tap during the slide does
@@ -199,7 +207,7 @@ struct LoginView: View {
                 .disabled(model.signingIn)
                 .padding(.top, 4)
             }
-            Text("Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs).")
+            Text(Self.legalLine)
                 .font(Typo.caption).foregroundStyle(Palette.muted)
                 .tint(Palette.secondary)
                 .multilineTextAlignment(.center)

@@ -129,7 +129,7 @@ struct FreeTimeForm: View {
             }
             FreeTimeEditor(minutes: editingB && twoWeeks ? $b : $a, highlight: planDays)
             HStack {
-                Text("Celkem").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(planDays.isEmpty ? "Celkem" : "Celkem ve dnech plánu").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
                 Text(verbatim: FreeTime.total(editingB && twoWeeks ? b : a, days: planDays.isEmpty ? nil : planDays))
                     .font(Typo.number(20)).foregroundStyle(Palette.ink)
@@ -220,7 +220,7 @@ struct TimeThisWeekSheet: View {
                     .font(Typo.small).foregroundStyle(Palette.secondary)
                 FreeTimeEditor(minutes: $minutes, highlight: planDays)
                 HStack {
-                    Text("Celkem").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(planDays.isEmpty ? "Celkem" : "Celkem ve dnech plánu").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
                     Text(verbatim: FreeTime.total(minutes, days: planDays.isEmpty ? nil : planDays)).font(Typo.number(20)).foregroundStyle(Palette.ink)
                 }

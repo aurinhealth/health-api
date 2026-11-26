@@ -142,6 +142,13 @@ struct MealDetailContent: View {
         meal.entries.compactMap { $0[keyPath: key] }.reduce(0, +)
     }
 
+    /// Nil when no food has the value: an unknown fibre is "–", never a
+    /// measured 0 g (review 2026-11-25), as on each food's own row.
+    private func known(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double? {
+        let values = meal.entries.compactMap { $0[keyPath: key] }
+        return values.isEmpty ? nil : values.reduce(0, +)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -171,9 +178,9 @@ struct MealDetailContent: View {
                 MacroBars(carbs: sum(\.carbs), protein: sum(\.protein), fat: sum(\.fat), goal: goal)
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(spacing: 0) {
-                    extra("Vláknina", sum(\.fiber), unit: "g")
-                    extra("Cukry", sum(\.sugar), unit: "g")
-                    extra("Sůl", sum(\.salt), unit: "g", digits: 1)
+                    extra("Vláknina", known(\.fiber), unit: "g")
+                    extra("Cukry", known(\.sugar), unit: "g")
+                    extra("Sůl", known(\.salt), unit: "g", digits: 1)
                 }
             }
             .padding(.top, 22)
@@ -203,12 +210,17 @@ struct MealDetailContent: View {
         .padding(.top, 16)
     }
 
-    private func extra(_ title: String, _ value: Double, unit: String, digits: Int = 0) -> some View {
+    private func extra(_ title: String, _ value: Double?, unit: String, digits: Int = 0) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(digits == 0 ? Fmt.int(value) : Fmt.decimal(value, digits: digits)).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                Text(unit).font(Typo.caption).foregroundStyle(Palette.faint)
+                if let value {
+                    Text(digits == 0 ? Fmt.int(value) : Fmt.decimal(value, digits: digits)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                    Text(unit).font(Typo.caption).foregroundStyle(Palette.faint)
+                } else {
+                    Text(verbatim: "–").font(Typo.number(22)).foregroundStyle(Palette.faint)
+                        .accessibilityLabel(Text("neuvedeno"))
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

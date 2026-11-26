@@ -313,6 +313,30 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["dismiss": JSONValue.string(id)])
     }
 
+    /// The coach's own message the chat posts when it opens: "race-week"
+    /// or "gap-checkin" (src/entrypoint.js). The new chat's id,
+    /// nil when there was nothing to post (or it was posted before).
+    func postedCoachChat(_ kind: String) async throws -> Int? {
+        struct Posted: Decodable { let chatId: Int }
+        struct Response: Decodable { let posted: Posted?; let question: Posted? }
+        let r: Response = try await send("/app/api/coach/" + kind, method: "POST", body: JSONObject())
+        return (r.posted ?? r.question)?.chatId
+    }
+
+    /// The card under the coach's Sunday message: the week from its Monday.
+    func weekSummary(start: String) async throws -> WeekSummary {
+        struct Response: Decodable { let summary: WeekSummary }
+        let r: Response = try await get("/app/api/coach/week-summary?start=" + start)
+        return r.summary
+    }
+
+    /// The race week's cards (fuel, pacing); nil outside the race week.
+    func raceWeek() async throws -> RaceWeek? {
+        struct Response: Decodable { let raceWeek: RaceWeek? }
+        let r: Response = try await get("/app/api/coach/race-week")
+        return r.raceWeek
+    }
+
     /// What the coach remembers about the athlete.
     func coachMemories() async throws -> [CoachMemory] {
         let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")
@@ -360,6 +384,13 @@ extension APIClient {
         struct Response: Decodable { let nudge: CoachNudge? }
         let r: Response = try await send("/app/api/coach/nudge", method: "POST", body: ["date": JSONValue.string(date), "decision": .string(decision)])
         return r.nudge
+    }
+
+    /// "Vrátit původní" of the plans the coach eased this morning, in Wahoo
+    /// and Intervals.icu too (POST /app/api/coach/eased).
+    func restoreEasedPlans() async throws {
+        struct Response: Decodable { let status: String? }
+        let _: Response = try await send("/app/api/coach/eased", method: "POST", body: ["action": JSONValue.string("restore")])
     }
 
     private func changeMemories(_ body: [String: JSONValue]) async throws -> [CoachMemory] {

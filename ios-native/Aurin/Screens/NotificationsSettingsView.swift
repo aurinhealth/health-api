@@ -113,7 +113,7 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.bedtimeTimeKey) private var bedtimeTime = 22 * 60
     @AppStorage(Reminders.workoutKey) private var workout = true
     @AppStorage(Reminders.waterKey) private var water = Reminders.isOn(Reminders.waterKey)
-    @AppStorage(Reminders.mealsKey) private var meals = true
+    @AppStorage(Reminders.mealsKey) private var meals = Reminders.isOn(Reminders.mealsKey)
     @AppStorage(Reminders.weightKey) private var weight = false
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
     @AppStorage(Reminders.weekKey) private var week = true
@@ -125,6 +125,8 @@ struct NotificationsSettingsView: View {
     /// The two above say only what came, the app's reminders leave their numbers out; opened they show it all.
     @AppStorage(PushRegistration.hideValuesKey) private var hideValues = true
     @State private var allowed: Bool?
+    /// Product news by e-mail as the server holds it; the row shows once it is known.
+    @State private var newsEmails: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
     /// the days, read straight from UserDefaults, are shown anew).
     @State private var revision = 0
@@ -168,12 +170,26 @@ struct NotificationsSettingsView: View {
             SettingsGroup(title: "Soukromí") {
                 SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: privacyCaption, isOn: $hideValues)
             }
+            if !model.demo {
+                // Always there (the alert and the setup point here); off and disabled until the server answers.
+                SettingsGroup(title: "E-mail") {
+                    SettingsToggle(title: "Novinky e-mailem", subtitle: "O nových funkcích Aurinu. Odhlásit se dá i odkazem v každém e-mailu.",
+                                   isOn: Binding(get: { newsEmails ?? false }, set: { wanted in
+                                       self.newsEmails = wanted
+                                       Task {
+                                           do { try await model.api.setProductEmails(wanted) } catch { self.newsEmails = !wanted }
+                                       }
+                                   }), disabled: newsEmails == nil)
+                }
+            }
         }
         .sheet(item: $editing) { kind in
             ReminderEditSheet(kind: kind)
         }
         // Skrýt zdravotní údaje as another iPhone of the account set it.
         .task { await PushRegistration.adoptAccountChoice(api: model.api) }
+        // Never asked counts as off here; turning it on is the yes.
+        .task { if !model.demo, let chosen = try? await model.api.productEmailsChoice() { newsEmails = chosen ?? false } }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
         // Back from iPhone Settings: the off card goes once notifications are on.
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await check() } } }
@@ -201,7 +217,7 @@ struct NotificationsSettingsView: View {
 
     // MARK: The values shown
 
-    /// "Coach and reminders are on. Notifications show no numbers.": how the page is set now.
+    /// "Coach and reminders are on. Notifications show no health values.": how the page is set now (a workout reminder still says its length and start).
     private var heroText: String {
         let fromCoach = morning || (coach && !coachLocked)
         let reminders = Self.rows.contains { isOn($0).wrappedValue }
@@ -209,7 +225,7 @@ struct NotificationsSettingsView: View {
             : fromCoach ? L10n.tr("Kouč je zapnutý, připomínky vypnuté.")
             : reminders ? L10n.tr("Připomínky jsou zapnuté, kouč vypnutý.")
             : L10n.tr("Kouč i připomínky jsou vypnuté.")
-        return first + "\n" + (hideValues ? L10n.tr("Oznámení neukazují čísla.") : L10n.tr("Oznámení ukazují tvoje čísla."))
+        return first + "\n" + (hideValues ? L10n.tr("Oznámení neukazují zdravotní údaje.") : L10n.tr("Oznámení ukazují tvoje zdravotní údaje."))
     }
 
     private func days(_ kind: ReminderKind) -> Int {

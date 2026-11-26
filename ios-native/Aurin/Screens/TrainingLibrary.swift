@@ -1396,7 +1396,7 @@ struct LibraryFilterMenu<Items: View>: View {
     var body: some View {
         Menu { items } label: {
             HStack(spacing: 6) {
-                Text(L10n.tr(title)).font(Typo.small).foregroundStyle(Palette.muted)
+                Text(L10n.tr(title)).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 Text(verbatim: value).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.down").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)

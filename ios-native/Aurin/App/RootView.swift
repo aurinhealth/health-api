@@ -248,6 +248,19 @@ struct RootView: View {
                         .transition(.opacity)
                         .zIndex(3)
                 }
+                // Under the floating bar only: content fades out so it never shows between the icons;
+                // ~85 % so a hint of the next row stays for the glass (Petr 2026-11-25).
+                if !model.immersive && !barHidden && tabsShown && !showAdd {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(colors: [Palette.background.opacity(0), Palette.background.opacity(0.85)],
+                                       startPoint: .top, endPoint: .bottom).frame(height: 20)
+                        Color.clear.frame(height: 54 + (model.minimizedGym == nil ? 0 : 68))
+                            .background(Palette.background.opacity(0.85).ignoresSafeArea(edges: .bottom))
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
                 if !model.immersive {
                     VStack(spacing: 8) {
                         // The "+" card floats above the bar (PlusCard.swift).
@@ -409,6 +422,12 @@ struct RootView: View {
                 CycleTrackingConsentSheet { Task { try? await model.saveCycleSettings(["enabled": .bool(true), "consent": .bool(true)]) } }
                     .dynamicTypeSize(Self.textSizes)
             }
+            .alert("Novinky e-mailem?", isPresented: Binding(get: { model.productEmailsAsk && !model.passkeyOffer && !model.needsSetup && !model.cycleConsentAsk }, set: { model.productEmailsAsk = $0 })) {
+                Button("Ano, posílat") { Task { try? await model.api.setProductEmails(true) } }
+                Button("Ne, díky", role: .cancel) { Task { try? await model.api.setProductEmails(false) } }
+            } message: {
+                Text("Občas ti napíšeme o nových funkcích Aurinu. Vypneš to v Nastavení → Oznámení nebo odkazem v každém e-mailu.")
+            }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
@@ -422,6 +441,8 @@ struct RootView: View {
                 }
                 // A fresh install takes back the settings the account kept.
                 if !model.demo { await SettingsBackup.restore(api: model.api) }
+                // Product news by e-mail, never asked (an account from before it): once, as an opt-in.
+                if !model.demo && !model.needsSetup, let chosen = try? await model.api.productEmailsChoice(), chosen == nil { model.productEmailsAsk = true }
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.

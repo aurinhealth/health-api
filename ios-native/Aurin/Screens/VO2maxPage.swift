@@ -118,7 +118,9 @@ struct VO2maxDetailContent: View {
             SectionLabel(text: "Analýza trendu").padding(.top, 28)
             Card { TrendTable(rows: rows, digits: 1) }.padding(.top, 10)
         }
-        if let years = health.aurinAge?.parts["vo2max"], abs(years) >= 0.05 {
+        // The Kondice group of Aurin age (VO2max with a quarter of resting HR,
+        // activity and steps), the number its page shows (review 2026-11-25: 1,6 here, 1,8 there).
+        if let parts = health.aurinAge?.parts, let years = AurinAgeText.groups(parts).first(where: { $0.key == "fitness" })?.years, abs(years) >= 0.05 {
             RouteLink(route: .aurinAge) {
                 Card {
                     HStack(alignment: .firstTextBaseline) {

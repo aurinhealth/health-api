@@ -192,6 +192,11 @@ struct FoodContent: View {
                 .padding(.top, 20)
             }
 
+            // b09: meal reminders are off for a new install; after the first logged meal the page offers them once.
+            if page == nil, food.date == today, MealRemindersOffer.due(loggedToday: (food.kcal ?? 0) > 0 || food.meals.contains { !$0.entries.isEmpty }) {
+                MealRemindersOffer(today: model.today).padding(.top, 14)
+            }
+
             // The coach: today and the days ahead; a day gone by shows only its data.
             let day = page.map(\.selectedDate) ?? model.selectedDate
             if day.map({ $0 > today }) ?? true {
@@ -697,7 +702,10 @@ struct MealRow: View {
     var add: () -> Void = {}
 
     private var empty: Bool { meal.entries.isEmpty }
-    private var goal: FoodSnapshot.Suggestion? { meal.target ?? meal.suggestion }
+    /// An empty meal still ahead shows the server's share of what is left
+    /// (suggestion), so the open meals add up to "to go" (review 2026-11-25:
+    /// 270 + 660 against 1 270 left); a meal with food keeps its target.
+    private var goal: FoodSnapshot.Suggestion? { empty ? meal.suggestion ?? meal.target : meal.target ?? meal.suggestion }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -879,5 +887,61 @@ struct NextMealRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: MealSlot.addText(meal.type)))
+    }
+}
+
+/// "Meal reminders" on the Food page (b09, approved 2026-11-25): a new install
+/// has the meal nudges off, so after the first logged meal the page offers
+/// them once. Turn on and Not now both answer it for good (the switch in
+/// Settings → Notifications is then set either way).
+struct MealRemindersOffer: View {
+    let today: TodaySnapshot?
+    @State private var answered = false
+
+    /// Not answered yet (the meals switch never set) and a meal logged today.
+    /// Not with the sample data ("-demo"): its Food page is the screenshots' page.
+    static func due(loggedToday: Bool, _ defaults: UserDefaults = .standard) -> Bool {
+        loggedToday && defaults.object(forKey: Reminders.mealsKey) == nil && !ProcessInfo.processInfo.arguments.contains("-demo")
+    }
+
+    var body: some View {
+        if !answered {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Připomínky jídla").font(.headline).foregroundStyle(Palette.ink)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Nejvýš 2 připomenutí, když jídlo chybí").font(Typo.small).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+                Button { answer(true) } label: {
+                    Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity, minHeight: 46).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+                Button { answer(false) } label: {
+                    Text("Teď ne").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 46).background(Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardSurface(cornerRadius: 22)
+        }
+    }
+
+    private func answer(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: Reminders.mealsKey)
+        withMotion { answered = true }
+        guard on else { return }
+        Task {
+            // Notifications refused in iOS's question: the switch goes back off, as it really is.
+            guard await Reminders.requestPermission() else {
+                UserDefaults.standard.set(false, forKey: Reminders.mealsKey)
+                return
+            }
+            if let today { await Reminders.reschedule(from: today) }
+        }
     }
 }

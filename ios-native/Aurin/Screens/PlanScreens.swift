@@ -685,7 +685,7 @@ struct ActivePlanContent: View {
         adjustTiles.padding(.top, 10)
 
         if active.started, active.paused != true, let week {
-            SectionLabel(text: L10n.f("Tento týden (%@–%@)", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
+            SectionLabel(text: L10n.f("Tento týden (%@–%@)", Fmt.dayMonthShort(week.monday), Fmt.dayMonthShort(ISODay.shift(week.monday, 6)))).padding(.top, 26)
             PlanSessionList(detail: week, sport: active.template.sport, changed: reload)
                 .padding(.top, 10)
         }

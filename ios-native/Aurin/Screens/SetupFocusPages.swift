@@ -69,11 +69,11 @@ struct SwimLevelGroup: View {
     }
 }
 
-/// "Jaký je tvůj cíl?": FocusSheet's three goals; a race also takes its name and day.
+/// "Jaký je tvůj cíl?": FocusSheet's four goals; a race also takes its name and day.
 struct SetupGoalPage: View {
     @Binding var focus: SetupFocus
 
-    static let subtitles = ["fitness": "Víc energie, postupné zlepšení", "race": "Datum a vzdálenost", "lose": "Jídlo i trénink k tomu"]
+    static let subtitles = ["fitness": "Víc energie, postupné zlepšení", "race": "Datum a vzdálenost", "lose": "Jídlo i trénink k tomu", "muscle": "Víc bílkovin, malý přebytek"]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -99,6 +99,11 @@ struct SetupGoalPage: View {
                         .frame(minHeight: 50)
                 }
                 .padding(.top, 6)
+            }
+            if focus.goal == "muscle" {
+                Text(L10n.tr(FocusChoice.muscleNote)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16).padding(.top, 2)
             }
         }
         .sensoryFeedback(.selection, trigger: focus.goal)

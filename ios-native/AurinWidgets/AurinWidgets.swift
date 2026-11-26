@@ -9,14 +9,18 @@ import WidgetKit
 @main
 struct AurinWidgetBundle: WidgetBundle {
     var body: some Widget {
-        ReadinessWidget()
-        SleepWidget()
+        // The picker's order (widgets concept v3): the coach first.
         DayWidget()
-        FoodWaterWidget()
-        GymActivityWidget()
-        MetricWidget()
-        WeekWidget()
+        ReadinessWidget()
         NextWorkoutWidget()
+        WeekWidget()
+        FoodWaterWidget()
+        SleepWidget()
+        StepsWidget()
+        MetricWidget()
+        AurinAgeWidget()
+        NightValuesWidget()
+        GymActivityWidget()
         if #available(iOS 18.0, *) {
             WaterControl()
             StartGymControl()
@@ -34,14 +38,16 @@ struct AurinWidgetBundle: WidgetBundle {
 struct SnapshotEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
+    /// The widget gallery or a placeholder: Health widgets show the sample too.
+    var preview = false
 }
 
 struct SnapshotProvider: TimelineProvider {
-    func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .sample) }
+    func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .sample, preview: true) }
 
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
         let saved = context.isPreview ? (WidgetSnapshot.load() ?? .sample) : WidgetSnapshot.load()
-        completion(SnapshotEntry(date: Date(), snapshot: saved?.current(today: PendingDrinks.localDate())))
+        completion(SnapshotEntry(date: Date(), snapshot: saved?.current(today: PendingDrinks.localDate()), preview: context.isPreview))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
@@ -78,12 +84,13 @@ enum W {
         }
     }
 
-    /// The readiness zone in a word: "dobrá", "střední", "nízká".
+    /// The readiness zone in words of the usual range, as Today's verdict:
+    /// "obvyklé", "část pod", "pod obvyklým" (Petr 2026-11-26).
     static func zoneWord(_ zone: String?) -> String? {
         switch zone {
-        case "green": return L10n.tr("dobrá")
-        case "yellow": return L10n.tr("střední")
-        case "red": return L10n.tr("nízká")
+        case "green": return L10n.tr("obvyklé")
+        case "yellow": return L10n.tr("část pod")
+        case "red": return L10n.tr("pod obvyklým")
         default: return nil
         }
     }
@@ -109,18 +116,6 @@ enum W {
         guard let v else { return "–" }
         return v.formatted(.number.precision(.fractionLength(1)).locale(L10n.locale))
     }
-
-    /// "1,2 / 2,8 l" or "41 / 95 fl oz".
-    static func water(_ ml: Double?, _ target: Double?) -> String {
-        if Units.imperial {
-            return int(Units.volume(ml ?? 0)) + (target.map { " / " + int(Units.volume($0)) } ?? "") + " " + Units.volumeUnit
-        }
-        return decimal((ml ?? 0) / 1000) + (target.map { " / " + decimal($0 / 1000) } ?? "") + " l"
-    }
-
-    /// The widget's water buttons: a glass and a bottle, 250/500 ml or 8/16 fl oz.
-    static var glass: Int { Units.imperial ? Units.roundedMl(fluidOunces: 8) : 250 }
-    static var bottle: Int { Units.imperial ? Units.roundedMl(fluidOunces: 16) : 500 }
 }
 
 /// Today's dial in small: the zone's ring and the number in the app's serif.
@@ -140,49 +135,11 @@ struct WidgetRing: View {
                 .stroke(W.zoneColor(zone), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .widgetAccentable()
-            Text(score.map(String.init) ?? "–").font(W.number(fontSize)).foregroundStyle(ink)
+            Text(score.map(String.init) ?? "–").font(WidgetStyle.serif(fontSize)).foregroundStyle(ink)
                 .minimumScaleFactor(0.5).lineLimit(1).padding(lineWidth)
                 .widgetAccentable()
         }
         .padding(lineWidth / 2)
-    }
-}
-
-/// The last days as a line over the usual range (a soft band), the newest
-/// day as a dot.
-struct WidgetTrend: View {
-    let values: [Double]
-    var low: Double? = nil
-    var high: Double? = nil
-    var color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            let all = values + [low, high].compactMap { $0 }
-            let lo = (all.min() ?? 0) - 2, hi = (all.max() ?? 1) + 2
-            let y: (Double) -> CGFloat = { geo.size.height * CGFloat(1 - ($0 - lo) / max(1, hi - lo)) }
-            let x: (Int) -> CGFloat = { geo.size.width * CGFloat($0) / CGFloat(max(1, values.count - 1)) }
-            ZStack(alignment: .topLeading) {
-                if let low, let high {
-                    RoundedRectangle(cornerRadius: 3).fill(color.opacity(0.12))
-                        .frame(width: geo.size.width, height: max(2, y(low) - y(high)))
-                        .offset(y: y(high))
-                }
-                Path { path in
-                    for (i, v) in values.enumerated() {
-                        let point = CGPoint(x: x(i), y: y(v))
-                        if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                    }
-                }
-                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                .widgetAccentable()
-                if let last = values.last {
-                    Circle().fill(color).frame(width: 7, height: 7)
-                        .position(x: x(values.count - 1), y: y(last))
-                        .widgetAccentable()
-                }
-            }
-        }
     }
 }
 
@@ -233,7 +190,7 @@ struct ReadinessWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
-        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a námaha.")))
+        .description(Text(verbatim: L10n.tr("Připravenost proti tvému obvyklému rozmezí")))
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -248,12 +205,8 @@ struct ReadinessWidgetView: View {
         if let s = entry.snapshot {
             switch family {
             case .accessoryCircular:
-                Gauge(value: Double(s.readiness ?? 0), in: 0...100) {
-                    Text(L10n.tr("PŘ"))
-                } currentValueLabel: {
-                    Text(s.readiness.map(String.init) ?? "–")
-                }
-                .gaugeStyle(.accessoryCircular)
+                // Concept v3: the number on Today's dial, no label.
+                ReadinessCircleFace(readiness: s.readiness, zone: s.zone)
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
@@ -261,22 +214,19 @@ struct ReadinessWidgetView: View {
                     if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
-                // Today's dial (Petr's yes on the mockup, 2026-10-30): the ring, its word and the night.
-                VStack(spacing: card ? 4 : 8) {
-                    WidgetRing(score: s.readiness, zone: s.zone, lineWidth: card ? 9 : 14, fontSize: card ? 40 : 62,
-                               track: card ? W.muted.opacity(0.18) : Color.white.opacity(0.12), ink: card ? W.ink : .white)
-                    if card {
-                        if let word = W.zoneWord(s.zone) {
-                            Text(word.capitalized(with: L10n.locale)).font(.caption.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
-                        }
-                        Text(L10n.f("Spánek %@, námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain)))
-                            .font(.caption2).foregroundStyle(W.muted).lineLimit(1).minimumScaleFactor(0.7)
-                    } else {
-                        Text(L10n.tr("Připravenost") + (W.zoneWord(s.zone).map { ", " + $0 } ?? ""))
-                            .font(.subheadline.weight(.medium)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
+                if card {
+                    // The redesign's face (widgets concept v3): Readiness as its dial.
+                    WidgetFaces.readiness(s)
+                } else {
+                    // StandBy: one big ring without the card, green only in the
+                    // usual range, else neutral (MDR: no warning colour).
+                    VStack(spacing: 8) {
+                        WidgetRing(score: s.readiness, zone: s.zone == "green" ? "green" : nil, lineWidth: 14, fontSize: 62,
+                                   track: Color.white.opacity(0.12), ink: .white)
+                        Text(L10n.tr("Připravenost")).font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.7))
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         } else {
             EmptyWidgetView()
@@ -296,8 +246,8 @@ struct SleepWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Spánek")))
-        .description(Text(verbatim: L10n.tr("Poslední noc a kdy dnes jít spát.")))
-        .supportedFamilies([.systemSmall, .accessoryInline])
+        .description(Text(verbatim: L10n.tr("Minulá noc a kdy dnes jít spát")))
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryInline])
     }
 }
 
@@ -309,23 +259,116 @@ struct SleepWidgetView: View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
                 Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { ", " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
+            } else if family == .systemMedium {
+                // The arc, this week's nights against the need and tonight's bedtime.
+                SleepMediumFace(s: s, h: WidgetHealth.load() ?? (entry.preview ? .sample : nil))
             } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Circle().fill(W.indigo).frame(width: 7, height: 7)
-                        Text(L10n.tr("Spánek")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                    }
-                    Text(W.hm(s.sleepMinutes)).font(W.number(46)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                    if let index = s.sleepIndex { Text(L10n.f("index %@", String(index))).font(.caption2).foregroundStyle(W.indigo) }
-                    Spacer(minLength: 0)
-                    if let bed = s.bedtime {
-                        Label(L10n.f("postel %@", ClockText.format(bed)), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
-                    }
-                }
+                // The redesign's face: Today's night arc.
+                WidgetFaces.sleep(s)
             }
         } else {
             EmptyWidgetView()
         }
+    }
+}
+
+// MARK: - Steps
+
+/// Steps on their own in the picker (widgets concept v3); "Daily numbers" keeps
+/// Steps as an option for widgets already on a Home Screen.
+struct StepsWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "steps", provider: SnapshotProvider()) { entry in
+            Group {
+                if let s = entry.snapshot { WidgetFaces.steps(s) } else { EmptyWidgetView() }
+            }
+            .privacySensitive()
+            .widgetURL(URL(string: "aurin://open/steps"))
+            .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Kroky")))
+        .description(Text(verbatim: L10n.tr("Dnešní kroky proti tvému cíli")))
+        .supportedFamilies([.systemSmall])
+    }
+}
+
+// MARK: - Aurin Age
+
+struct AurinAgeWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "aurinAge", provider: SnapshotProvider()) { entry in
+            // The gallery shows the sample day, as the other widgets.
+            AurinAgeWidgetView(h: WidgetHealth.load() ?? (entry.preview ? .sample : nil))
+                .privacySensitive()
+                .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Aurin Age")))
+        .description(Text(verbatim: L10n.tr("Tvůj odhad Aurin Age, součást Aurin Pro")))
+        .supportedFamilies([.systemSmall, .accessoryRectangular, .accessoryCircular])
+    }
+}
+
+struct AurinAgeWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let h: WidgetHealth?
+
+    /// Without Pro the whole widget opens the offer (concept v3), else the Aurin Age page.
+    private var link: URL? {
+        URL(string: h.map { $0.aurinAge == nil && !$0.pro } == true ? "aurin://open/pro" : "aurin://open/aurin-age")
+    }
+
+    var body: some View {
+        Group {
+            switch family {
+            case .accessoryRectangular:
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: L10n.tr(h.map { $0.aurinAge == nil && !$0.pro } == true ? "Aurin Age" : "Odhad Aurin age").uppercased(with: L10n.locale))
+                        .font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                    if let age = h?.aurinAge {
+                        Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(26)).widgetAccentable()
+                        if let words = h?.aurinAgeWords { Text(verbatim: words).font(.system(size: 12)) }
+                    } else if let h, !h.pro {
+                        Label(L10n.tr("Odemknout s Pro"), systemImage: "lock.fill").font(.system(size: 13, weight: .semibold))
+                    } else {
+                        Text(verbatim: L10n.tr("Zatím málo dat")).font(.system(size: 13))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            case .accessoryCircular:
+                ZStack {
+                    AccessoryWidgetBackground()
+                    if let age = h?.aurinAge {
+                        VStack(spacing: -2) {
+                            Text(verbatim: WidgetStyle.decimal(age)).font(WidgetStyle.serif(20)).minimumScaleFactor(0.6).widgetAccentable()
+                            Text(verbatim: L10n.tr("VĚK")).font(.system(size: 8, weight: .semibold))
+                        }
+                    } else {
+                        // Without Pro or data: the orb's outline, no number (concept v3).
+                        WidgetOrb(locked: true, size: 40)
+                    }
+                }
+            default:
+                AurinAgeSmallFace(h: h)
+            }
+        }
+        .widgetURL(link)
+    }
+}
+
+// MARK: - Night values
+
+struct NightValuesWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "nightValues", provider: SnapshotProvider()) { entry in
+            NightValuesFace(h: WidgetHealth.load() ?? (entry.preview ? .sample : nil),
+                            today: entry.preview ? nil : PendingDrinks.localDate(entry.date))
+                .privacySensitive()
+                .widgetURL(URL(string: "aurin://open/health"))
+                .widgetCard()
+        }
+        .configurationDisplayName(Text(verbatim: L10n.tr("Noční hodnoty")))
+        .description(Text(verbatim: L10n.tr("Hodnoty z noci z tvých hodinek nebo prstenu")))
+        .supportedFamilies([.systemMedium])
     }
 }
 
@@ -340,59 +383,27 @@ struct DayWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/today"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
-        .description(Text(verbatim: L10n.tr("Připravenost, spánek, námaha, jídlo, pití a další trénink.")))
-        .supportedFamilies([.systemMedium])
+        .configurationDisplayName(Text(verbatim: L10n.tr("Kouč")))
+        .description(Text(verbatim: L10n.tr("Tvoje připravenost a jedna věta, co dnes dělat")))
+        // The Lock Screen's default rectangle is the coach's advice (concept v3).
+        .supportedFamilies([.systemMedium, .accessoryRectangular])
     }
 }
 
 struct DayWidgetView: View {
+    @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
 
     var body: some View {
         if let s = entry.snapshot {
-            // Steps and strain from hours ago would read as now (Background App Refresh off).
-            let age = W.age(s, at: entry.date)
-            HStack(alignment: .top, spacing: 14) {
-                Link(destination: URL(string: "aurin://open/readiness")!) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-                        Text(s.readiness.map(String.init) ?? "–").font(W.number(50)).foregroundStyle(W.ink)
-                        // The zone in a word, not only a coloured dot: readable
-                        // without colour and on a tinted Home Screen.
-                        if let word = W.zoneWord(s.zone) {
-                            Text(word.capitalized(with: L10n.locale)).font(.caption2.weight(.semibold)).foregroundStyle(W.zoneColor(s.zone)).widgetAccentable()
-                        }
-                        Spacer(minLength: 0)
-                        if let title = s.nextTitle {
-                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber)
-                                .lineLimit(age == nil ? 2 : 1)
-                        }
-                        if let age { Text(age).font(.caption2).foregroundStyle(W.muted).lineLimit(1) }
-                    }
-                }
-                VStack(alignment: .leading, spacing: 7) {
-                    Link(destination: URL(string: "aurin://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "aurin://open/strain")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
-                    Link(destination: URL(string: "aurin://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
-                    Link(destination: URL(string: "aurin://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
-                    if let bed = s.bedtime {
-                        Link(destination: URL(string: "aurin://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            if family == .accessoryRectangular {
+                CoachRectangleFace(face: WidgetFaces.coach(s, WidgetCoach.load()))
+            } else {
+                // The redesign's Coach card (widgets concept v3), what Today's coach card says.
+                WidgetFaces.coach(s, WidgetCoach.load())
             }
         } else {
             EmptyWidgetView()
-        }
-    }
-
-    private func row(_ symbol: String, _ color: Color, _ title: String, _ value: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol).font(.caption2).foregroundStyle(color).frame(width: 14)
-            Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
-            Spacer(minLength: 4)
-            Text(value).font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 }
@@ -408,8 +419,8 @@ struct FoodWaterWidget: Widget {
                 .widgetURL(URL(string: "aurin://open/food"))
                 .widgetCard()
         }
-        .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo a pití")))
-        .description(Text(verbatim: L10n.tr("Kalorie, živiny a pití. Vodu přidáš jedním klepnutím.")))
+        .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo")))
+        .description(Text(verbatim: L10n.tr("Snědené kalorie proti dnešnímu cíli")))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -418,95 +429,17 @@ struct FoodWaterWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
 
-    static let protein = Palette.protein
-    static let carbs = Palette.carbs
-    static let fat = Palette.fat
-
     var body: some View {
         if let s = entry.snapshot {
             if family == .systemMedium {
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        kcal(s)
-                        macro("Sacharidy", s.carbs, s.carbsTarget, Self.carbs)
-                        macro("Bílkoviny", s.protein, s.proteinTarget, Self.protein)
-                        macro("Tuky", s.fat, s.fatTarget, Self.fat)
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        water(s)
-                        HStack(spacing: 6) {
-                            add(W.glass)
-                            add(W.bottle)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                // The redesign's Food card: hero, training's share, macros and water.
+                FoodMediumFace(s: s)
             } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    kcal(s)
-                    Spacer(minLength: 0)
-                    water(s)
-                    add(W.glass)
-                }
+                // The redesign's face: Food's hero; water has its own widget and control.
+                WidgetFaces.food(s)
             }
         } else {
             EmptyWidgetView()
         }
-    }
-
-    private func kcal(_ s: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.tr("Jídlo")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(W.int(s.kcal)).font(W.number(30)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                if let target = s.kcalTarget { Text("/ " + W.int(target)).font(.caption2).foregroundStyle(W.muted) }
-            }
-        }
-    }
-
-    private func water(_ s: WidgetSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 4) {
-                Image(systemName: "drop.fill").font(.caption2).foregroundStyle(W.blue)
-                Text(W.water(s.waterMl, s.waterTarget))
-                    .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
-            }
-            // Without a goal a full bar would read as "goal reached".
-            if s.waterTarget ?? 0 > 0 {
-                bar(s.waterMl, s.waterTarget, W.blue)
-            } else {
-                Text(L10n.tr("bez cíle")).font(.caption2).foregroundStyle(W.muted)
-            }
-        }
-    }
-
-    private func macro(_ title: String, _ eaten: Double?, _ target: Double?, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
-                Spacer(minLength: 2)
-                Text(W.int(eaten) + (target.map { "/" + W.int($0) } ?? "") + " g").font(.caption2.weight(.semibold)).foregroundStyle(W.ink)
-            }
-            bar(eaten, target, color)
-        }
-    }
-
-    private func bar(_ value: Double?, _ target: Double?, _ color: Color) -> some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(color.opacity(0.18))
-                Capsule().fill(color).frame(width: geo.size.width * min(1, max(0, (value ?? 0) / max(1, target ?? 1))))
-            }
-        }
-        .frame(height: 4)
-    }
-
-    private func add(_ ml: Int) -> some View {
-        Button(intent: AddWaterIntent(ml: ml)) {
-            Label(Units.imperial ? W.int(Units.volume(Double(ml))) + " " + Units.volumeUnit : Units.volumeText(Double(ml)), systemImage: "plus")
-                .font(.caption.weight(.semibold))
-                .frame(maxWidth: .infinity)
-        }
-        .tint(W.blue)
     }
 }

@@ -602,6 +602,9 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(ActionCard.yesConfirms(actions[1], today: "2026-10-10"))
         XCTAssertFalse(ActionCard.yesConfirms(actions[0], today: "2026-10-10"))
         XCTAssertFalse(ActionCard.yesConfirms(actions[2], today: "2026-10-10"), "a delete needs the tap")
+        let event = try JSONDecoder().decode(CoachAction.self, from: Data(#"{"type":"other_event","date":"2026-10-10","draftId":5,"reason":"","otherType":"tennis","otherName":"Tennis","eventKind":"match","minutes":90}"#.utf8))
+        XCTAssertFalse(ActionCard.yesConfirms(event, today: "2026-10-10"), "an own match needs the tap")
+        XCTAssertTrue(event.title.hasPrefix("Tennis"), event.title)
         let steps = [CoachStep(id: "a", icon: nil, title: "Looked at Saturday's plan", text: nil, status: "done", view: nil),
                      CoachStep(id: "b", icon: nil, title: "Looked at the forecast", text: nil, status: "done", view: nil)]
         XCTAssertEqual(CoachSteps.summary(steps), "Looked at Saturday's plan, looked at the forecast")

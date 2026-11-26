@@ -43,7 +43,24 @@ struct CoachCheckInCard: View {
                 if advice.kind != "easier_day", let message = advice.message {
                     Text(message).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
-                if advice.kind == "swap" || advice.kind == "easier_day", let from = advice.from, let to = advice.to {
+                if advice.kind == "eased", let from = advice.from, let to = advice.to {
+                    // The coach already eased today's plan everywhere (src/entrypoint.js easeTodayPlans):
+                    // the plan and today's session side by side, and the way back.
+                    HStack(alignment: .top, spacing: 8) {
+                        SwapTile(label: L10n.tr("Původní plán"), session: from, chosen: false)
+                        Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.faint)
+                            .frame(maxHeight: .infinity).accessibilityHidden(true)
+                        SwapTile(label: L10n.tr("Dnes"), session: to, chosen: true)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
+                        PrimaryButton(title: L10n.tr("Nechat")) { Task { await dismiss(advice) } }
+                        SecondaryButton(title: "Vrátit původní") { Task { await restoreEased() } }
+                    }
+                    if let swapError {
+                        Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if advice.kind == "swap" || advice.kind == "easier_day", let from = advice.from, let to = advice.to {
                     let easier = advice.kind == "easier_day"
                     // The planned session and the easier one side by side (Petr 2026-11-24,
                     // morning v2), as the server offers them ("VO2max 5×4, 75 min").
@@ -95,6 +112,18 @@ struct CoachCheckInCard: View {
             _ = try await model.api.answerCoachNudge(date: date, decision: swap ? "swap" : "keep")
             withMotion { things.advice = nil }
             if swap { await model.refresh() }
+        } catch {
+            swapError = error.localizedDescription
+        }
+    }
+
+    /// "Vrátit původní": the plans come back, in Wahoo and Intervals.icu too.
+    private func restoreEased() async {
+        swapError = nil
+        do {
+            try await model.api.restoreEasedPlans()
+            withMotion { things.advice = nil }
+            await model.refresh()
         } catch {
             swapError = error.localizedDescription
         }

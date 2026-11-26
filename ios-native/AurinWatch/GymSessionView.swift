@@ -58,6 +58,8 @@ struct GymSessionView: View {
     @State private var info: Info?
     /// The crown is on the tiles (not scrolling the screen).
     @FocusState private var crown: Bool
+    /// Gym workouts begun on this watch, for the crown hint in the first three.
+    @AppStorage("gymCrownHintWorkouts") private var hintWorkouts = 0
     /// Until when the crown stays on the tiles without a turn (holdCrown).
     @State private var crownUntil: Date?
     /// The wrist lowered (Always On): the crown lets go of the tiles.
@@ -192,7 +194,10 @@ struct GymSessionView: View {
         }
         // While up, this screen ends the workout (idle, the iPhone's end);
         // closed, GymStore.endWithoutScreen does.
-        .onAppear { store.screenOpen = true }
+        .onAppear {
+            store.screenOpen = true
+            if hintWorkouts <= 3 { hintWorkouts += 1 }
+        }
         .onDisappear { store.screenOpen = false }
         .onChange(of: store.endedOnPhone) { _, ended in
             // Finished in Training mode on the iPhone: saved here, as one workout.
@@ -359,8 +364,17 @@ struct GymSessionView: View {
             // Time and heart rate as a small line right above Set done, never
             // under it (concept 06, point 3; CI screenshot: the line was cut).
             if !dimmed {
-                VStack(alignment: .leading, spacing: 3) {
-                    liveLine.padding(.horizontal, 2)
+                VStack(alignment: .leading, spacing: 2) {
+                    // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts.
+                    // In the live line's place while it shows: one line more did not fit above the tiles (CI screenshot).
+                    if hintWorkouts <= 3, !crown {
+                        Text(W.tr("Klepni na číslo, pak otoč korunkou", "Tap a number, then turn the crown"))
+                            .watchFont(12).foregroundStyle(W.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .padding(.horizontal, 2)
+                    } else {
+                        liveLine.padding(.horizontal, 2)
+                    }
                     setDone(gym, lift)
                 }
             }
@@ -391,7 +405,8 @@ struct GymSessionView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
-                .frame(height: W.small ? 30 : 32)
+                // Big enough with gloves on (watch review KRIT-18); 44 pt pushed the tiles under it.
+                .frame(height: 40)
                 .background(W.ink, in: Capsule())
                 .contentShape(Capsule())
         }
@@ -438,7 +453,10 @@ struct GymSessionView: View {
                     }
                     .watchFont(12, .medium).foregroundStyle(W.secondary)
                     .frame(minHeight: 18)
+                    // A 28 pt tap area (watchOS's minimum) without making the row taller.
+                    .padding(.vertical, 5)
                     .contentShape(Rectangle())
+                    .padding(.vertical, -5)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(W.tr("Seznam cviků", "The exercises"))
@@ -543,11 +561,12 @@ struct GymSessionView: View {
         .background(W.tile, in: Capsule())
     }
 
-    /// "série 2/4" ("kolo 2/4" in a superset), "rozcvička", "drop", with the side of a one-sided set.
+    /// "série 2/4" ("kolo 2/4" in a superset), "zahřívací série", "drop", with the side of a one-sided set.
     private func label(_ lift: WatchGym.Lift, in e: WatchGym.Exercise, superset: Bool = false, side: Bool = true) -> String {
         var text: String
         if lift.warmup {
-            text = W.tr("Rozcvička", "Warm-up")
+            // Not "Rozcvička": that is the day's warm-up part (GymPartView).
+            text = W.tr("Zahřívací série", "Warm-up set")
         } else if lift.drop {
             text = "Drop"
         } else {
@@ -610,8 +629,10 @@ struct GymSessionView: View {
     /// set and the rest already have (no row of its own where the screen is short).
     private var liveLine: some View {
         HStack(spacing: 5) {
+            // The workout's time, not the time of day beside it at the top (QA-24): marked as a stopwatch.
+            Image(systemName: "stopwatch").foregroundStyle(W.secondary).accessibilityHidden(true)
             clock.foregroundStyle(W.secondary)
-            Circle().fill(W.pink).frame(width: 5, height: 5).accessibilityHidden(true)
+            Image(systemName: "heart.fill").foregroundStyle(W.pink).padding(.leading, 3).accessibilityHidden(true)
             // As the Heart tile said it: a bare dash told nothing (Petr 2026-11-09).
             Text(workout.heartRate.map { W.number($0) + " bpm" } ?? (workout.noHealth ? W.tr("Povol ve Zdraví", "Allow in Health") : "–"))
                 .foregroundStyle(W.secondary)
@@ -803,7 +824,7 @@ struct GymSessionView: View {
         }
         liveLine
         HStack(spacing: 4) {
-            Button { shift(-15) } label: { Text("−15 s").frame(height: 30) }
+            Button { shift(-15) } label: { Text("−15 s").frame(height: 40) }
                 .buttonStyle(.bordered)
                 .fixedSize()
             Button {
@@ -812,11 +833,11 @@ struct GymSessionView: View {
                 Text(startLabel(lift, in: e)).foregroundStyle(.black)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 30)
+                    .frame(height: 40)
             }
             .mainButton()
             .doubleTap()
-            Button { shift(15) } label: { Text("+15 s").frame(height: 30) }
+            Button { shift(15) } label: { Text("+15 s").frame(height: 40) }
                 .buttonStyle(.bordered)
                 .fixedSize()
         }
@@ -1322,7 +1343,7 @@ struct GymExerciseList: View {
         let routine = parts.moves(part, day: day)
         if part == .warmup {
             let count = routine?.items.count ?? 0
-            return W.english ? "\(count) move" + (count == 1 ? "" : "s") : "\(count) " + (count == 1 ? "cvik" : count < 5 ? "cviky" : "cviků")
+            return W.english ? "\(count) move" + (count == 1 ? "" : "s") : W.czech(count, "cvik", "cviky", "cviků")
         }
         return "\(routine?.minutes ?? 0) min"
     }
@@ -1578,7 +1599,7 @@ struct GymSummary: View {
                     stat(W.tr("Série", "Sets"), "\(store.gym?.setsDone ?? 0)")
                     stat(W.tr("Objem", "Volume"), GymText.volume(store.gym?.volume ?? 0))
                     stat(W.tr("Kalorie", "Calories"), W.number(workout.calories))
-                    stat(W.tr("Tep ø", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
+                    stat(W.tr("Prům. tep", "Avg HR"), workout.averageHeartRate.map { W.number($0) } ?? "–")
                 }
                 partRows
                 exerciseRows
@@ -1713,7 +1734,7 @@ struct GymRateExercises: View {
             Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
                 .watchFont(14, .semibold)
                 .foregroundStyle(on ? tint : W.muted)
-                .frame(width: 32, height: 30)
+                .frame(width: 40, height: 36)
                 .background(on ? tint.opacity(0.22) : W.tile, in: Capsule())
         }
         .buttonStyle(.plain)

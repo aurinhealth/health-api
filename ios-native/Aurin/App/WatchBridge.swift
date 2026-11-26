@@ -18,6 +18,8 @@ final class WatchBridge: NSObject {
     private(set) var lastSent: Date?
     /// The profile's wake times for the watch's alarm (Settings → Sleep).
     private var profile: JSONObject?
+    /// Stav sportovce when it pauses the gym (sick, injured), for the watch.
+    private var paused: String?
     private var healthLoaded: Date?
     private var loadingHealth = false
     /// The gym days the watch works on (WatchGymBridge.swift).
@@ -43,12 +45,23 @@ final class WatchBridge: NSObject {
         guard health.date == (today?.date ?? AppModel.localDate(Date())) else { return }
         self.health = health
         healthLoaded = Date()
+        // Also loaded hourly here for the watch: the Health widgets stay as fresh.
+        WidgetBridge.update(health: health)
         send()
     }
 
     /// This week's sessions for the watch's Training page.
     func update(_ training: TrainingSnapshot) {
         self.training = training
+        send()
+    }
+
+    /// Stav sportovce after it loaded or changed: Sick and Injured take the
+    /// watch's own gym away.
+    func update(status: AthleteStatus?) {
+        let paused = status.flatMap { ["sick", "injured"].contains($0.status) ? $0.status : nil }
+        guard paused != self.paused else { return }
+        self.paused = paused
         send()
     }
 
@@ -175,6 +188,7 @@ final class WatchBridge: NSObject {
         (settings.restSets, settings.restExercises) = Self.restSettings
         (settings.lastGym, settings.lastGymExercises) = Self.lastGym
         settings.alarmBackup = backup
+        settings.trainingPaused = paused
         context[WatchSettings.contextKey] = settings.encoded()
         if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         // The same Today again (a refresh with nothing new; only the time it
@@ -321,7 +335,7 @@ final class WatchBridge: NSObject {
             bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone, learningDays: today.readiness.learningDays,
-                             verdict: today.readiness.verdict,
+                             numbersLine: today.readiness.numbersLine, numbersOff: today.readiness.numbersOff,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
                              week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
@@ -540,7 +554,7 @@ extension WatchBridge: WCSessionDelegate {
                 steps.append(WatchPlan.step(seconds: s.durationSeconds, low: s.percentLow, high: s.percentHigh, note: s.note, intensity: s.intensity,
                                             meters: s.meters, rest: s.rest == true, swim: swim, english: L10n.isEnglish,
                                             repeats: max(1, block.repeats ?? 1), first: i == 0,
-                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast)))
+                                            watts: (s.wattsLow, s.wattsHigh), pace: (s.paceSlow, s.paceFast), hr: (s.hrLow, s.hrHigh)))
             }
         }
         // Without steps too: a brick's steady leg goes to the watch as one multisport workout.

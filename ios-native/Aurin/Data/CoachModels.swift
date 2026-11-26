@@ -32,6 +32,14 @@ struct AssistantResult: Decodable, Equatable {
     /// The cards of the last answer that "potvrzuju" in this message confirmed
     /// (src/coach-chat-confirm.js), each with its draftId.
     var confirmedInChat: [CoachAction]? = nil
+    /// "From last night's sleep and this morning's HRV" and "From memory: …"
+    /// under the answer (src/coach-steps.js sourceLines); the live answer only.
+    var sources: Sources? = nil
+
+    struct Sources: Decodable, Equatable {
+        let from: String?
+        let memory: String?
+    }
 
     struct Check: Decodable, Equatable {
         let status: String?
@@ -196,6 +204,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var kcal: Double? = nil
     /// activity_merge: the second part; activity_time: the start now and the new one.
     var otherName: String? = nil
+    /// other_event: the athlete's own sport (a Log workout type) and match or training.
+    var otherType: String? = nil
+    var eventKind: String? = nil
     var fromTime: String? = nil
     var time: String? = nil
     /// workout: the session the server prepared for the card, a ride or run
@@ -296,6 +307,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
+        case "other_event":
+            return L10n.f(eventKind == "match" ? "%@: zápas" : "%@: trénink", otherName ?? otherType ?? "")
         case "week_sport":
             let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
             return title.map { L10n.tr($0) } ?? type
@@ -319,6 +332,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
         case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
+        case "other_event": return [day, minutes.map { planDuration(Int($0)) }, L10n.tr("jen tento týden")].compactMap { $0 }.joined(separator: ", ")
         // "3× 8–12, 5. cvik ze 6": the dose and the place the plan gives it.
         case "gym_add":
             let dose = sets.map { L10n.f("%d× %@", $0, reps ?? "") }
@@ -414,6 +428,22 @@ struct ChatDetail: Decodable, Equatable {
     let messages: [ChatMessage]
     /// The proposals made in this chat.
     var actions: [CoachAction]? = nil
+    /// The chips of the server's question under the last coach message, until one is tapped (src/coach-questions.js).
+    var question: Question? = nil
+    /// The coach's own message from the rules (the week's summary, the race week) with its card under it.
+    var card: Card? = nil
+
+    struct Question: Decodable, Equatable {
+        let messageId: Int
+        let chips: [String]
+    }
+
+    struct Card: Decodable, Equatable {
+        /// "week_summary" (key: the week's Monday) or "race_week" (key: the race's day).
+        let kind: String
+        let messageId: Int
+        let key: String
+    }
 }
 
 /// GET /app/api/coaches?date= (src/coach-engine.js), the coach's home.
@@ -425,5 +455,107 @@ struct CoachesSnapshot: Decodable, Equatable {
         let headline: String?
         let text: String?
         let recommendation: String?
+    }
+}
+
+/// GET /app/api/coach/week-summary?start= (src/coach-week-summary.js): the
+/// numbers of the coach's Sunday message, from the rules, against the week before.
+struct WeekSummary: Decodable, Equatable {
+    let start: String
+    let end: String
+    let headline: String?
+    let workouts: Workouts
+    let minutes: Minutes
+    let sports: [Sport]?
+    /// The load in words only, never the ratio (Petr 2026-11-16).
+    let load: Load?
+    let sleep: Sleep?
+    /// "From your workouts and sleep this week".
+    let from: String?
+
+    struct Workouts: Decodable, Equatable {
+        let done: Int
+        let planned: Int
+        let was: Was?
+
+        struct Was: Decodable, Equatable {
+            let done: Int
+            let planned: Int
+        }
+    }
+
+    struct Minutes: Decodable, Equatable {
+        let total: Int
+        let was: Int?
+    }
+
+    /// ride, run, swim or gym; km for the ones with a distance.
+    struct Sport: Decodable, Equatable {
+        let sport: String
+        let done: Int
+        let planned: Int
+        let minutes: Int
+        let km: Double?
+    }
+
+    struct Load: Decodable, Equatable {
+        let text: String
+    }
+
+    struct Sleep: Decodable, Equatable {
+        let text: String
+    }
+}
+
+/// GET /app/api/coach/race-week (src/coach-race-week.js): the main race's last
+/// six days, with the fuel and pacing cards behind the message's chips. From the
+/// rules, no AI; null outside a run, ride or swim race's race week.
+struct RaceWeek: Decodable, Equatable {
+    let race: Race
+    let text: String?
+    /// "Fuel and drinks", then "Pacing plan" when there is one, in the app's language.
+    let chips: [String]?
+    let fuel: Fuel?
+    let pacing: Pacing?
+
+    struct Race: Decodable, Equatable {
+        let name: String?
+        let date: String?
+        let sport: String
+        let km: Double
+        let daysLeft: Int?
+        let estimate: String?
+    }
+
+    struct Fuel: Decodable, Equatable {
+        let rows: [Row]
+        let note: String?
+        let from: String?
+
+        struct Row: Decodable, Equatable {
+            let title: String
+            let text: String?
+        }
+    }
+
+    struct Pacing: Decodable, Equatable {
+        /// "Start easy, finish strong."
+        let line: String?
+        let segments: [Segment]
+        /// A ride: the long climbs; a swim: how often to sight.
+        let climb: String?
+        let sight: String?
+        let from: String?
+
+        /// A run or ride by km with its pace or watts, a swim by metres with its pace.
+        struct Segment: Decodable, Equatable {
+            let fromKm: Double?
+            let toKm: Double?
+            let fromM: Double?
+            let toM: Double?
+            let paceText: String?
+            let wattsText: String?
+            let cue: String?
+        }
     }
 }
