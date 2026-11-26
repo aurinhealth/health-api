@@ -346,8 +346,10 @@ struct ReadinessDetailContent: View {
 
             // The coach card at the bottom (concept 4); Ask Coach is its last
             // row, the coach itself is top right.
-            if let summary, let lead = summary.headline ?? summary.text {
-                CoachSentenceCard(lead: lead, key: summary.recommendation).padding(.top, 24)
+            // Reason and advice as on Today; the headline is a title, never
+            // the first words of the sentence (review 2026-11-25).
+            if let summary, case let words = TodayCoachWords.split(summary), let lead = words.text ?? summary.text {
+                CoachSentenceCard(lead: lead, key: words.advice).padding(.top, 24)
             }
         }
         .task { await model.loadQuarter(ending: health.date) }
@@ -595,7 +597,10 @@ struct WristTempWidget: View {
                         TileRange(value: deviation, low: -0.5, high: 0.5, text: TileRange.temperatureWord(deviation), edges: TileRange.temperatureEdges, tint: Palette.amber)
                     }
                 } else {
-                    NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
+                    // Skin at the wrist is not body temperature: no number
+                    // before the usual exists (review 2026-11-25: "36,3 °C").
+                    Text("Obvyklá teplota se ukáže po 7 nocích.").font(Typo.small).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if bars.count > 1 && (size != .small || wrist.deviation == nil) {
                     VStack(spacing: 6) {

@@ -217,7 +217,7 @@ struct NotificationsSettingsView: View {
 
     // MARK: The values shown
 
-    /// "Coach and reminders are on. Notifications show no numbers.": how the page is set now.
+    /// "Coach and reminders are on. Notifications show no health values.": how the page is set now (a workout reminder still says its length and start).
     private var heroText: String {
         let fromCoach = morning || (coach && !coachLocked)
         let reminders = Self.rows.contains { isOn($0).wrappedValue }
@@ -225,7 +225,7 @@ struct NotificationsSettingsView: View {
             : fromCoach ? L10n.tr("Kouč je zapnutý, připomínky vypnuté.")
             : reminders ? L10n.tr("Připomínky jsou zapnuté, kouč vypnutý.")
             : L10n.tr("Kouč i připomínky jsou vypnuté.")
-        return first + "\n" + (hideValues ? L10n.tr("Oznámení neukazují čísla.") : L10n.tr("Oznámení ukazují tvoje čísla."))
+        return first + "\n" + (hideValues ? L10n.tr("Oznámení neukazují zdravotní údaje.") : L10n.tr("Oznámení ukazují tvoje zdravotní údaje."))
     }
 
     private func days(_ kind: ReminderKind) -> Int {

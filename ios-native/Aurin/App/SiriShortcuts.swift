@@ -253,7 +253,7 @@ enum SiriMetric: String, AppEnum {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Hodnota"
     static let caseDisplayRepresentations: [SiriMetric: DisplayRepresentation] = [
         .readiness: "Připravenost", .sleep: "Spánek v minutách", .kcalLeft: "Zbývající kalorie",
-        .strain: "Zátěž dne", .steps: "Kroky", .hrv: "HRV", .restingHR: "Klidový tep"
+        .strain: "Námaha dne", .steps: "Kroky", .hrv: "HRV", .restingHR: "Klidový tep"
     ]
 
     func value(in today: TodaySnapshot) -> Double? {

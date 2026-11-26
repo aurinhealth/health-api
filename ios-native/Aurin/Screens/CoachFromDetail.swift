@@ -9,7 +9,7 @@ struct CoachSubject: Equatable {
     enum Kind: String { case activity, planned, exercise, metric, workout }
     let kind: Kind
     /// The line above the title on the card.
-    var label = "Ptáš se na"
+    var label = "Téma otázky"
     var id: String? = nil
     /// The title on the card ("Kolo, tempo").
     let title: String
@@ -190,7 +190,7 @@ enum WorkoutCoachChat {
     }
 }
 
-/// "Ptáš se na" on top of a chat opened from a detail.
+/// "Téma otázky" on top of a chat opened from a detail.
 struct CoachSubjectCard: View {
     let subject: CoachSubject
 

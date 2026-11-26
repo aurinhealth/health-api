@@ -342,6 +342,7 @@ struct PaywallView: View {
         VStack(spacing: 0) {
             Text(verbatim: chosen.terms(trialDays: withTrial)).font(.caption2).foregroundStyle(Palette.muted)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 8)
             // Not at the end of the setup: the sheet's button would allow the AI without saying so.
             if allowAI == nil {
             Button { allPlans = true } label: {
@@ -879,8 +880,8 @@ struct AllProPlans: View {
                 .disabled(buying)
                 .padding(.top, 18)
                 HStack(spacing: 22) {
-                    Button(action: redeem) { Text("Uplatnit promo kód") }
-                    Button(action: restore) { Text("Obnovit nákup") }
+                    Button(action: redeem) { Text("Uplatnit promo kód").frame(minHeight: 44).contentShape(Rectangle()) }
+                    Button(action: restore) { Text("Obnovit nákup").frame(minHeight: 44).contentShape(Rectangle()) }
                 }
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink).buttonStyle(.plain)
                 .padding(.top, 14)
@@ -890,10 +891,10 @@ struct AllProPlans: View {
                         .padding(.top, 12)
                 }
                 HStack(spacing: 16) {
-                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline() }
-                    Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline() }
+                    Link(destination: L10n.legalURL("terms")) { Text("Podmínky").underline().frame(minHeight: 44).contentShape(Rectangle()) }
+                    Link(destination: L10n.legalURL("privacy")) { Text("Soukromí").underline().frame(minHeight: 44).contentShape(Rectangle()) }
                 }
-                .font(.caption2).foregroundStyle(Palette.muted).padding(.top, 3).padding(.bottom, 16)
+                .font(.caption2).foregroundStyle(Palette.muted).padding(.bottom, 6)
             }
             .padding(.horizontal, 20)
         }
@@ -962,10 +963,10 @@ struct PlanCard: View {
         }
     }
 
-    /// The name on the card: "Platíš měsíčně" (the year paid monthly), "Ročně", "Měsíčně".
+    /// The name on the card: "Ročně, placeno měsíčně" (one name with the main offer), "Ročně", "Měsíčně".
     var name: String {
         switch offer.kind {
-        case .yearMonthly: return L10n.tr("Platíš měsíčně")
+        case .yearMonthly: return L10n.tr("Ročně, placeno měsíčně")
         case .yearOnce: return L10n.tr("Ročně")
         case .monthly: return L10n.tr("Měsíčně")
         }
