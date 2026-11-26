@@ -310,12 +310,12 @@ struct CoachView: View {
     }
 
     /// The opening asks the server for the coach's own message, in this order:
-    /// the race week, the week's summary, the question after a training gap.
+    /// the race week, then the question after a training gap.
     /// The first one posted (a new chat, once) opens as History would open it.
     private func openPosted() async {
         guard !model.demo, !askedPosted, openChat == nil, subject == nil else { return }
         askedPosted = true
-        for kind in ["race-week", "week-summary", "gap-checkin"] {
+        for kind in ["race-week", "gap-checkin"] {
             guard let id = try? await model.api.postedCoachChat(kind) else { continue }
             // Only on the empty opening: a question the athlete already sent stays in its chat.
             if messages.isEmpty, chatId == nil, !sending, !ghost { await open(id) }
