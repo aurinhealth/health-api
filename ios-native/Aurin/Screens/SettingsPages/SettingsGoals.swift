@@ -222,9 +222,12 @@ struct GoalsSettingsView: View {
         return L10n.tr(word) + (ml.map { ", " + waterText($0) } ?? "")
     }
 
-    /// "7 h 30", or "Auto" while the goal follows age and the day.
+    /// "7 h 30", or "Auto (dnes 8 h 30 min)" while the goal follows age and the day.
     private var sleepValue: String {
-        store.profile["sleepGoal"]?.number.map { Fmt.duration(Int($0.rounded())) } ?? L10n.tr("Auto")
+        if let goal = store.profile["sleepGoal"]?.number { return Fmt.duration(Int(goal.rounded())) }
+        // Auto shows tonight's need too, the number Settings shows (review 2026-11-25).
+        guard let need = model.settingsToday?.tonight?.need else { return L10n.tr("Auto") }
+        return L10n.f("Auto (dnes %@)", Fmt.duration(need))
     }
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]

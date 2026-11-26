@@ -9,7 +9,9 @@ extension ReadinessText {
     /// what the numbers say, never what to do; that stays in the coach's card.
     /// One key from the server (src/day-verdict.js NUMBERS_LINE_KEYS).
     static func numbersLine(_ key: String?, off: [String]? = nil) -> String? {
-        if key == "steady" || key == "easy", let named = offLine(off ?? []) { return named }
+        // Green with a part off (sleep under its usual range) names it too:
+        // "in your usual range or better" was false then (review 2026-11-25).
+        if key == "hard" || key == "steady" || key == "easy", let named = offLine(off ?? []) { return named }
         switch key {
         // Descriptive only (improvement pass 2026-11-20): "support a hard
         // workout" read as advice and said the opposite of the coach's card
@@ -24,7 +26,7 @@ extension ReadinessText {
         }
     }
 
-    /// A yellow or red line names what is off (p7, Petr 2026-11-23): "Short
+    /// A green, yellow or red line names what is off (p7, Petr 2026-11-23): "Short
     /// sleep and a high resting heart rate". Nil when nothing is named.
     static func offLine(_ off: [String]) -> String? {
         let parts = off.compactMap { key -> String? in

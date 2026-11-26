@@ -113,6 +113,7 @@ struct SettingsGoalsCard: View {
                             // The number always 20 pt; the unit small beside it, so the row stays even.
                             HStack(alignment: .firstTextBaseline, spacing: 3) {
                                 Text(verbatim: cell.number ?? "–").font(Typo.number(20)).foregroundStyle(Palette.ink)
+                                    .lineLimit(1).minimumScaleFactor(0.6)
                                 if cell.number != nil {
                                     Text(verbatim: cell.unit).font(Typo.tiny).foregroundStyle(Palette.muted)
                                 }

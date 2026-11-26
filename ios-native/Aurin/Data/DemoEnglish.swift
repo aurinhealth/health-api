@@ -30,10 +30,17 @@ extension DemoData {
         "Sucho, nejvýš 13°.": "Dry, high of 13°.",
         "Sucho, nejvýš 9°.": "Dry, high of 9°.",
         "Jak dnes začít": "How to start today",
+        "Dnes odpočinek": "Rest today",
+        "Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.":
+            "If you feel unwell, skip training today and rest. Come back when you're well again.",
+        "Se zraněním dnes plán stojí. Pohyb jen takový, který nebolí, a s bolestí za lékařem.":
+            "With an injury the plan waits today. Only movement that doesn't hurt, and see a doctor if it does.",
+        "Máš pauzu od tréninku: plán stojí, dokud ji neukončíš.":
+            "You're taking a break from training: the plan waits until you end it.",
         "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.":
             "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day.",
-        "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy.":
-            "Go all in on strength today, with a carb snack an hour and a half before.",
+        "Horní polovinu těla dej naplno, dřep jen krátce.":
+            "Go all in on the upper body, keep the squat short.",
         "Silový trénink": "Strength training",
         "45 min, celé tělo": "45 min, full body",
         "Do postele": "Bedtime",
@@ -48,8 +55,8 @@ extension DemoData {
         "obvyklá": "usual",
         "pod obvyklou": "below usual",
         "Silový trénink, celé tělo": "Strength, full body",
-        "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen lehký dřep po ranním běhu, ať jsou v sobotu čerstvé na dlouhý běh.":
-            "Why today: high readiness and a rested upper body. Legs get only light squats after this morning's run, to stay fresh for Saturday's long run.",
+        "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen krátký dřep po ranním běhu, ať jsou v sobotu čerstvé na dlouhý běh.":
+            "Why today: high readiness and a rested upper body. Legs get only a short squat block after this morning's run, to stay fresh for Saturday's long run.",
         "Dřep": "Squat",
         "Tlak na lavici": "Bench press",
         "Přítahy": "Rows",
@@ -85,10 +92,10 @@ extension DemoData {
         // Gym
         "Celé tělo": "Full body",
         "Celé tělo  •  08. 10. 2026": "Full body  •  Oct 8, 2026",
-        "Ráno běh, v sobotu dlouhý běh: dřep jen lehce, 4×3.":
-            "Run this morning, long run on Saturday: squats light only, 4×3.",
+        "Ráno běh, v sobotu dlouhý běh: dřep jen krátce, 4×3.":
+            "Run this morning, long run on Saturday: squats kept short, 4×3.",
         // Food
-        "Tréninkový den: o 350 kcal víc. Zbývá 1270 kcal, odpolední svačina kolem 360 kcal.":
+        "Tréninkový den: o 350 kcal víc. Zbývá 1 270 kcal, odpolední svačina kolem 360 kcal.":
             "Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.",
         "Snídaně": "Breakfast",
         "Dopolední svačina": "Morning snack",

@@ -21,6 +21,8 @@ final class TodayRedesignTests: XCTestCase {
             XCTAssertFalse(line?.contains("Good day") ?? true, key)
         }
         XCTAssertEqual(ReadinessText.numbersLine("hard"), "Your numbers are in your usual range or better")
+        // Green with sleep under its range names it (review 2026-11-25).
+        XCTAssertEqual(ReadinessText.numbersLine("hard", off: ["sleep"]), "Short sleep")
         XCTAssertNil(ReadinessText.numbersLine(nil))
         XCTAssertNil(ReadinessText.numbersLine("legs"))
     }
