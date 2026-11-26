@@ -79,9 +79,11 @@ struct DayCircle: View {
     let today: String
     let selected: Bool
     let day: CalendarDay?
+    /// The athlete's own practice or match ahead that day (Week plan, other sports).
+    var own: String? = nil
 
     var body: some View {
-        let mark = Look(day: day, date: date, today: today)
+        let mark = Look(day: day, date: date, today: today, own: own)
         // The shared cell of every week strip (WeekDayCell, Petr 2026-11-22 variant B):
         // the sport's disc under the date, as tall as the strip on Dnes and Jídlo.
         WeekDayCell(day: date, today: today, selected: selected) {
@@ -110,16 +112,22 @@ extension DayCircle {
         var second: String? = nil
         var label: String
 
-        init(day: CalendarDay?, date: String, today: String) {
+        init(day: CalendarDay?, date: String, today: String, own: String? = nil) {
             let list = (day?.activities ?? []).filter { $0.status == "done" || $0.status == "planned" || $0.status == "missed" }
             guard let first = Self.lead(list) else {
-                label = L10n.tr(day == nil ? "bez dat" : "volno")
+                if let own {
+                    type = own
+                    state = .ahead
+                    label = L10n.tr(SportStyle.name("other")) + ", " + L10n.tr("v plánu")
+                } else {
+                    label = L10n.tr(day == nil ? "bez dat" : "volno")
+                }
                 return
             }
             sport = first.sport
             type = first.type
             state = SportDisc.State(status: first.status)
-            second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport
+            second = list.first { $0.id != first.id && $0.sport != "walk" && $0.status != "missed" }?.sport ?? (own == nil ? nil : "other")
             label = L10n.tr(SportStyle.name(first.sport)) + ", " + L10n.tr(state == .done ? "hotovo" : state == .missed ? "nesplněno" : "v plánu")
         }
 

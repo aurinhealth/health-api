@@ -266,7 +266,8 @@ struct WeekPlanView: View {
         HStack(spacing: 0) {
             ForEach(week.days, id: \.self) { date in
                 Button { pick(date) } label: {
-                    DayCircle(date: date, today: today, selected: date == today, day: model.calendar[date])
+                    DayCircle(date: date, today: today, selected: date == today, day: model.calendar[date],
+                              own: date >= today ? ownEvents(week, date: date, sessions: week.sessions(on: date)).first?.type : nil)
                 }
                 .buttonStyle(.plain)
             }

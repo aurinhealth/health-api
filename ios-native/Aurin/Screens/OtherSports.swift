@@ -184,19 +184,34 @@ struct OtherSportsGroup: View {
 struct PlayedCard: View {
     @Environment(AppModel.self) private var model
     let played: TodaySnapshot.Played
+    /// Inside Today's coach card (its own block, as a missed workout's): no card of its own.
+    var plain = false
     @State private var rpe: Int?
     @State private var minutes: Double
     @State private var saving = false
     @State private var done = false
     @State private var error: String?
 
-    init(played: TodaySnapshot.Played) {
+    init(played: TodaySnapshot.Played, plain: Bool = false) {
         self.played = played
+        self.plain = plain
         _minutes = State(initialValue: Double(played.minutes))
     }
 
     var body: some View {
-        if !done {
+        if done {
+            EmptyView()
+        } else if plain {
+            content
+        } else {
+            content
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardSurface(cornerRadius: 22)
+        }
+    }
+
+    private var content: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     OtherSports.disc(played.type, size: 40)
@@ -256,10 +271,7 @@ struct PlayedCard: View {
                     Text(verbatim: error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .cardSurface(cornerRadius: 22)
-        }
     }
 
     private func save() async {
