@@ -30,8 +30,10 @@ struct FocusPromptCard: View {
 /// outside the views so both read them from anywhere.
 enum FocusChoice {
     /// The goal rows, kept as the profile's sportGoal in the athlete's words.
-    static let goals = [("fitness", "Zlepšit kondici"), ("race", "Závod"), ("lose", "Zhubnout")]
-    static let goalTexts = ["fitness": "zlepšit kondici", "race": "závod", "lose": "zhubnout"]
+    static let goals = [("fitness", "Zlepšit kondici"), ("race", "Závod"), ("lose", "Zhubnout"), ("muscle", "Síla a svaly")]
+    static let goalTexts = ["fitness": "zlepšit kondici", "race": "závod", "lose": "zhubnout", "muscle": "síla a svaly"]
+    /// Under Síla a svaly when it is chosen (617 p3; the server, src/diet.js, sets the protein).
+    static let muscleNote = "Aurin zvedne bílkoviny asi na 2 g na kg a přidá malý přebytek kalorií."
 
     /// The profile with the sports and the goal; no sport ticked or no goal leaves it as it was.
     static func applying(_ profile: JSONObject, sports: SportsChoice, goal: String, swims100: Bool?) -> JSONObject {
@@ -39,6 +41,8 @@ enum FocusChoice {
         if let text = goalTexts[goal] { next["sportGoal"] = .string(text) }
         // Losing weight is also the weight goal of the calorie target, unless one is set already.
         if goal == "lose", !(next["goal"]?.string ?? "").hasPrefix("lose") { next["goal"] = .string("lose_0.5") }
+        // Strength and muscle is a small surplus, unless gaining is set already.
+        if goal == "muscle", !(next["goal"]?.string ?? "").hasPrefix("gain") { next["goal"] = .string("gain_0.25") }
         // Can't swim 100 m yet: the coach suggests lessons, swims stay in the pool (src/athlete-focus.js).
         if let swims100, sports.swims { next["swims100"] = .bool(swims100) }
         return next

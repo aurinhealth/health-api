@@ -1744,6 +1744,7 @@
 "Kdy máš čas" = "When you have time";
 "Zlepšit kondici" = "Get fitter";
 "Zhubnout" = "Lose weight";
+"Síla a svaly" = "Strength and muscle";
 
 "Pocit" = "Feeling";
 "Ranní pocit" = "Morning feeling";
@@ -3792,6 +3793,8 @@
 "Víc energie, postupné zlepšení" = "More energy, steady progress";
 "Datum a vzdálenost" = "A date and a distance";
 "Jídlo i trénink k tomu" = "Eat and train for it";
+"Víc bílkovin, malý přebytek" = "More protein, a small surplus";
+"Aurin zvedne bílkoviny asi na 2 g na kg a přidá malý přebytek kalorií." = "Aurin raises protein to about 2 g per kg and adds a small calorie surplus.";
 "Kdy můžeš trénovat?" = "When can you train?";
 "Potáhni pruh u každého dne. Aurin plánuje v tomhle čase a když potřebuješ odpočinek, vezme si méně." = "Drag each bar. Aurin plans within it and uses less when you need rest.";
 "Kde posiluješ?" = "Where do you lift?";
