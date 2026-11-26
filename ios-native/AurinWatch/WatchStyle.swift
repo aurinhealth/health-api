@@ -53,11 +53,13 @@ enum W {
     }
 
     /// The zone in a word, as the first page's pill: the colour never alone.
+    /// The numbers against their usual range, as the iPhone's verdict, not
+    /// high, moderate or low (Petr 2026-11-26, watch review decision 5).
     static func zoneWord(_ zone: String?) -> String? {
         switch zone {
-        case "green": tr("vysoká", "high")
-        case "yellow": tr("střední", "moderate")
-        case "red": tr("nízká", "low")
+        case "green": tr("obvyklé", "usual")
+        case "yellow": tr("část pod", "some below")
+        case "red": tr("pod obvyklým", "below usual")
         default: nil
         }
     }

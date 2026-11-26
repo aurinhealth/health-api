@@ -684,12 +684,13 @@ struct WideView: View {
         }
     }
 
-    /// The zone in the app's words: high, moderate, low.
+    /// The zone in the app's words: the numbers against their usual range
+    /// (Petr 2026-11-26, watch review decision 5).
     private func zoneWord(_ zone: String) -> String {
         switch zone {
-        case "red": tr("NÍZKÁ", "LOW")
-        case "yellow": tr("STŘEDNÍ", "MODERATE")
-        default: tr("VYSOKÁ", "HIGH")
+        case "red": tr("POD OBVYKLÝM", "BELOW USUAL")
+        case "yellow": tr("ČÁST POD", "SOME BELOW")
+        default: tr("OBVYKLÉ", "USUAL")
         }
     }
 
