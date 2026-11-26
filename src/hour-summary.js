@@ -33,11 +33,13 @@ const MAX_ROW_WRITES = 50;
 const same = (a, b) => (a ?? null) === (b ?? null) || (a != null && b != null && Math.abs(Number(a) - Number(b)) < 1e-9);
 
 // The summary's rows of a user and range, from the raw rows (binds user, start, end).
+// Worn minutes: the length of Google's zone rows. They carry no value (NULL on
+// every one on production, 2026-11-26), and the sum of the value was 0.
 const aggregate = `SELECT substr(start_time, 1, 13) || ':00:00Z' AS hour, source_family,
     SUM(CASE WHEN data_type = 'steps' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.steps.count')) END) AS steps,
     SUM(CASE WHEN data_type = 'active-energy-burned' AND ${primary} THEN COALESCE(value_numeric, json_extract(payload_json, '$.activeEnergyBurned.kcal')) END) AS energy,
     ${ZONES.map(z => `${zoneSum(z)} AS zone_${z}`).join(', ')},
-    SUM(CASE WHEN data_type = 'time-in-heart-rate-zone' AND source_family = 'google-wearables' THEN value_numeric END) AS wear_minutes
+    SUM(CASE WHEN data_type = 'time-in-heart-rate-zone' AND source_family = 'google-wearables' AND ${minutes} > 0 AND ${minutes} <= 1440 THEN ${minutes} END) AS wear_minutes
   FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'apple-health') AND data_type IN (${SUMMARY_TYPES.map(t => `'${t}'`).join(', ')})
     AND start_time >= ? AND start_time < ? GROUP BY 1, 2`;
 

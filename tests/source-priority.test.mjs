@@ -133,7 +133,7 @@ test("the history behind the home source is read only when two sources meet, and
   const { raw } = setup();
   fitbitEveryDay(raw);
   let reads = 0;
-  const counted = scopedDb({ ...raw, prepare: sql => { if (/SUM\(value_numeric\) \/ 60\.0/.test(sql)) reads++; return raw.prepare(sql); } }, 1);
+  const counted = scopedDb({ ...raw, prepare: sql => { if (/\/ 60\.0 h FROM health_datapoints/.test(sql)) reads++; return raw.prepare(sql); } }, 1);
   await resolveSources(counted, 1, { types: ["time-in-heart-rate-zone"], since: day(2), now: NOW, cacheHistory: true });
   assert.equal(reads, 0, "Google alone: nothing to choose between");
   insert(raw, "apple-health", "time-in-heart-rate-zone", "az" + day(1), { start: day(1) + "T00:00:00Z", end: day(1) + "T02:00:00Z", value: 120 });
