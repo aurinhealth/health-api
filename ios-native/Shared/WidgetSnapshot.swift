@@ -45,6 +45,27 @@ struct WidgetSnapshot: Codable, Equatable {
     /// The last seven days of HRV and resting heart rate, oldest first (the trend line).
     var hrvSeries: [Double]? = nil
     var restingSeries: [Double]? = nil
+    /// The redesign's widgets (concept v3): the night's ends and need (the
+    /// night arc), today's strain target, the usual steps a day, and why
+    /// readiness has no number yet (no watch or ring, still learning).
+    var sleepStart: String? = nil
+    var sleepEnd: String? = nil
+    var sleepNeed: Int? = nil
+    var strainLow: Double? = nil
+    var strainHigh: Double? = nil
+    var stepsAverage: Double? = nil
+    var noWearable: Bool? = nil
+    var learningDays: Int? = nil
+    /// What the day's numbers say, a key of src/day-verdict.js ("hard"): the
+    /// free Today card's line (the free morning push says the same).
+    var verdict: String? = nil
+    /// What the day's numbers say, never advice (D-DNES-2): a key of
+    /// src/day-verdict.js NUMBERS_LINE_KEYS and what is off ("sleep", "hrv",
+    /// "restingHR"), the line under Today's readiness.
+    var numbersLine: String? = nil
+    var numbersOff: [String]? = nil
+    /// The calories today's training adds to the target ("Includes 350 kcal for today's training").
+    var trainingKcal: Double? = nil
 
     static func load() -> WidgetSnapshot? {
         guard let data = UserDefaults(suiteName: group)?.data(forKey: key) else { return nil }
@@ -74,6 +95,13 @@ struct WidgetSnapshot: Codable, Equatable {
         s.zone = nil
         s.sleepMinutes = nil
         s.sleepIndex = nil
+        s.sleepStart = nil
+        s.sleepEnd = nil
+        s.strainLow = nil
+        s.strainHigh = nil
+        s.verdict = nil
+        s.numbersLine = nil
+        s.numbersOff = nil
         s.hrv = nil
         s.strain = nil
         s.kcal = 0
@@ -107,7 +135,38 @@ struct WidgetSnapshot: Codable, Equatable {
                                        protein: 64, proteinTarget: 150, carbs: 140, carbsTarget: 320, fat: 38, fatTarget: 80,
                                        steps: 6400, stepsGoal: 10000, bedtime: "22:45", nextTitle: "Celé tělo", nextTime: "17:30",
                                        hrvLow: 48, hrvHigh: 66, restingHR: 52, restingLow: 49, restingHigh: 56, nextSport: "strength", nextMinutes: 60,
-                                       hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52])
+                                       hrvSeries: [51, 55, 49, 60, 57, 53, 58], restingSeries: [53, 52, 54, 51, 52, 53, 52],
+                                       sleepStart: "23:36", sleepEnd: "06:42", sleepNeed: 420, strainLow: 11, strainHigh: 14, stepsAverage: 9212)
+}
+
+/// The coach's word on Today for the Coach widget: what the card on Today
+/// shows (the AI's sentence or the rule-based one, the advice in green), saved
+/// by CoachTextCard. `free`: the account has the paywall on without Aurin Pro,
+/// so the widget shows the free Today card (concept v3) instead.
+struct WidgetCoach: Codable, Equatable {
+    static let key = "widgetCoach"
+
+    var date: String
+    var text: String?
+    var advice: String?
+    var free: Bool
+
+    static func load() -> WidgetCoach? {
+        guard let data = UserDefaults(suiteName: WidgetSnapshot.group)?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetCoach.self, from: data)
+    }
+
+    /// True when it changed (the Coach widget then reloads).
+    @discardableResult
+    func save() -> Bool {
+        guard Self.load() != self, let data = try? JSONEncoder().encode(self) else { return false }
+        UserDefaults(suiteName: WidgetSnapshot.group)?.set(data, forKey: Self.key)
+        return true
+    }
+
+    static func clear() {
+        UserDefaults(suiteName: WidgetSnapshot.group)?.removeObject(forKey: key)
+    }
 }
 
 /// The week for the large widget: Monday to Sunday's training time, how many
@@ -121,11 +180,15 @@ struct WidgetWeek: Codable, Equatable {
         var minutes: Double
         /// What the plan still has that day (a dashed bar).
         var planned: Double = 0
+        /// The day's sport for its disc (This week widget): the first done
+        /// session's, else the first planned one's; nil on a rest day.
+        var sport: String? = nil
 
-        init(date: String, minutes: Double, planned: Double = 0) {
+        init(date: String, minutes: Double, planned: Double = 0, sport: String? = nil) {
             self.date = date
             self.minutes = minutes
             self.planned = planned
+            self.sport = sport
         }
 
         init(from decoder: Decoder) throws {
@@ -133,6 +196,7 @@ struct WidgetWeek: Codable, Equatable {
             date = try c.decode(String.self, forKey: .date)
             minutes = try c.decode(Double.self, forKey: .minutes)
             planned = try c.decodeIfPresent(Double.self, forKey: .planned) ?? 0
+            sport = try c.decodeIfPresent(String.self, forKey: .sport)
         }
     }
 
@@ -141,6 +205,7 @@ struct WidgetWeek: Codable, Equatable {
         var sport: String
         var date: String
         var time: String?
+        var minutes: Int? = nil
     }
 
     var days: [Day]
@@ -180,4 +245,71 @@ struct WidgetWeek: Codable, Equatable {
         next: [Session(title: "Silový trénink, celé tělo", sport: "strength", date: "2026-10-08", time: "17:30"),
                Session(title: "Lehká jízda Z2", sport: "ride", date: "2026-10-09", time: nil),
                Session(title: "Dlouhý běh", sport: "run", date: "2026-10-10", time: nil)])
+}
+
+/// Health for the Aurin Age, Night values and Sleep (medium) widgets: written
+/// when Health loads (WidgetBridge.update(health:)), on its own key so
+/// Today's snapshot never overwrites it.
+struct WidgetHealth: Codable, Equatable {
+    static let key = "widgetHealth"
+
+    /// One of last night's values on the Health monitor card, as it drew it.
+    struct Value: Codable, Equatable {
+        /// The app's word for it ("Tep v klidu", "Dech" …), translated when shown.
+        var label: String
+        var text: String
+        var unit: String
+        /// Where the dot sits, and the usual range for the green arc.
+        var drawn: Double
+        var low: Double?
+        var high: Double?
+    }
+
+    /// A night of this week (Monday on), and whether it reached the need.
+    struct Night: Codable, Equatable {
+        var date: String
+        var reached: Bool
+    }
+
+    var date: String
+    /// The estimate and the real age; nil without Pro or while it collects data.
+    var aurinAge: Double?
+    var realAge: Double?
+    /// "2.4 years younger" in the app's words.
+    var aurinAgeWords: String?
+    var pro: Bool
+    /// The Health monitor card's sentence and its five values.
+    var nightTitle: String?
+    var values: [Value]
+    var nights: [Night]
+    var need: Int?
+
+    static func load() -> WidgetHealth? {
+        guard let data = UserDefaults(suiteName: WidgetSnapshot.group)?.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(WidgetHealth.self, from: data)
+    }
+
+    /// True when it changed (the widgets then reload).
+    @discardableResult
+    func save() -> Bool {
+        guard Self.load() != self, let data = try? JSONEncoder().encode(self) else { return false }
+        UserDefaults(suiteName: WidgetSnapshot.group)?.set(data, forKey: Self.key)
+        return true
+    }
+
+    static func clear() {
+        UserDefaults(suiteName: WidgetSnapshot.group)?.removeObject(forKey: key)
+    }
+
+    static let sample = WidgetHealth(
+        date: "2026-10-08", aurinAge: 29.6, realAge: 32, aurinAgeWords: "2.4 years younger", pro: true,
+        nightTitle: "Breathing above your usual range.",
+        values: [Value(label: "Tep v klidu", text: "53", unit: "bpm", drawn: 53, low: 50, high: 56),
+                 Value(label: "HRV", text: "68", unit: "ms", drawn: 68, low: 60, high: 74),
+                 Value(label: "Kyslík", text: "96", unit: "%", drawn: 96, low: 94, high: 98),
+                 Value(label: "Dech", text: "16.1", unit: "/min", drawn: 16.25, low: 15, high: 16),
+                 Value(label: "Teplota kůže", text: "0.1", unit: "°C", drawn: 0.1, low: -0.5, high: 0.5)],
+        nights: [Night(date: "2026-10-05", reached: true), Night(date: "2026-10-06", reached: false),
+                 Night(date: "2026-10-07", reached: false), Night(date: "2026-10-08", reached: false)],
+        need: 420)
 }
