@@ -297,7 +297,9 @@ extension View {
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 12).frame(height: 32)
             .chromeGlass(in: Capsule())
-            .tapTarget(width: 44, height: 32)
+            // The row keeps 44 pt, so the tap area never reaches the card under it.
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
     }
 }
 

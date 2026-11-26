@@ -459,7 +459,7 @@ struct PlanSportChips: View {
                     .foregroundStyle(on ? Palette.onButton : Palette.muted)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .opacity(toggle == nil && !on ? 0.5 : 1)
+                    .opacity(toggle == nil && !on ? 0.6 : 1)
                 }
                 .buttonStyle(.plain)
                 .disabled(toggle == nil)
