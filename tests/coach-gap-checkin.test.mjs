@@ -104,9 +104,9 @@ test('the easier week: first sessions of each sport easy and capped, the gym sta
     day('2026-12-05', [{ id: 'planned:3', name: 'Easy run', type: 'Run', durationHours: 40 / 60 }]),
     day('2026-12-06', [{ id: 'planned:4', name: 'Long run', type: 'Run', durationHours: 100 / 60 }])
   ];
-  const w = easierWeek({ date: '2026-12-02', weekDays: plan, gapDays: 18 });
+  const w = easierWeek({ date: '2026-12-02', weekDays: plan, since: '2026-11-14' });
   assert.deepEqual(w.rows.map(r => [r.name, r.minutes]), [['Easy run', 45], ['Strength', 45], ['Easy run', 40], ['Long run', 100]]);
   assert.deepEqual(w.rows[0].was, { name: 'Tempo run', minutes: 50 });
-  const long = easierWeek({ date: '2026-12-02', weekDays: plan, gapDays: 30 });
+  const long = easierWeek({ date: '2026-12-02', weekDays: plan, since: '2026-11-01' });
   assert.deepEqual(long.rows.map(r => [r.name, r.minutes]), [['Easy run', 30], ['Strength', 45], ['Easy run', 40], ['Easy run', 45]], '28+ days: 3 sessions, the first 30 min');
 }));

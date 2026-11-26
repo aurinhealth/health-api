@@ -264,8 +264,11 @@ export async function sportReturns(db, userId, today) {
   const gap = {}, since = {};
   for (const [kind, back] of Object.entries(backs)) {
     if (!back) continue;
-    const days = [...new Set(dates[kind])].sort(), prev = days.filter(d => d < back).at(-1) || (older ? from : null);
-    if (prev) gap[kind] = Math.round((Date.parse(back + "T12:00:00Z") - Date.parse(prev + "T12:00:00Z")) / 864e5);
+    const days = [...new Set(dates[kind])].sort(), prev = days.filter(d => d < back).at(-1) || null;
+    const between = from => Math.round((Date.parse(back + "T12:00:00Z") - Date.parse(from + "T12:00:00Z")) / 864e5);
+    // None of this sport in the days read: the break began before them (or the
+    // sport is new), so it counts as the long one (28 days or more).
+    if (prev) gap[kind] = between(prev); else if (older) gap[kind] = Math.max(28, between(from));
     since[kind] = days.filter(d => d >= back && d < today).length;
   }
   return { ...backs, gap, since, last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun };

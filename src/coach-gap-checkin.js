@@ -154,13 +154,16 @@ export function welcomeAnswer(question, answer) {
 // The day coach applies the same rules each day; this only shows them.
 const EASY = { ride: ['Lehká jízda', 'Easy ride'], run: ['Lehký běh', 'Easy run'], swim: ['Lehké plavání', 'Easy swim'] };
 const LONG = /long|dlouh/i;
-export function easierWeek({ date, weekDays = [], gapDays }) {
-  const long = gapDays >= 28, need = long ? 3 : 2, seen = {};
+export function easierWeek({ date, weekDays = [], since }) {
+  const seen = {}, gapOf = {};
   const rows = [];
   for (const d of [...weekDays].filter(d => d?.date >= date).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 7)) {
     for (const p of plannedSessions(d.daily?.training?.planned)) {
       const sport = sportOf(p), minutes = Math.round((Number(p.durationHours) || 0) * 60) || Number(p.minutes) || null;
       if (!['ride', 'run', 'swim'].includes(sport)) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
+      // The break as the day coach counts it: from the last session to this sport's first one back.
+      const gapDays = gapOf[sport] ??= days(since, d.date), long = gapDays >= 28, need = long ? 3 : 2;
+      if (gapDays < 14) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
       const index = seen[sport] = (seen[sport] || 0) + 1, short = sport !== 'ride';
       if (index > need) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
       const cap = index === 1 && long ? (short ? 30 : 60) : short ? 45 : 90;

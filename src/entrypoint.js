@@ -1841,7 +1841,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const date=localToday(),[state,inputs]=await Promise.all([getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,date)]);
       const weekDays=inputs.week?.days||[],readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
       const question=welcomeBack({date,weekDays,sleep:inputs.health?.sleep||[],wellness:[...(inputs.fitness?.wellness||[]),...(inputs.health?.wellness||[])],hrvLow:readiness?.body?.components?.hrv?.low??null,state});
-      const weekFor=q=>q&&q.days>=14?easierWeek({date,weekDays,gapDays:q.days}):null;
+      const weekFor=q=>q&&q.days>=14?easierWeek({date,weekDays,since:q.key}):null;
       if(request.method==='GET')return Response.json({status:'ok',question,week:question?.ended?weekFor(question):null},{headers:{'Cache-Control':'no-store'}});
       const body=await request.json().catch(()=>({}));
       // "keep" comes after the question was answered: the gap it was asked for.
