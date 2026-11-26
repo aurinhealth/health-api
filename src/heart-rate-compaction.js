@@ -15,6 +15,11 @@ export const HEART_RATE_FIVE_MIN_DAYS = 30;
 export const ZONE_MINUTE_DAYS = 35;
 export const HEART_RATE_BUCKET_TYPE = 'heart-rate-5min';
 export const HEART_RATE_HOUR_TYPE = 'heart-rate-1h';
+// A Google workout's own heart rate, one row a workout, kept: 5-second averages in
+// its payload ({ t0: seconds, step: 5, bpm: [..., null for none] }), read by
+// watch-detail.js for the curve, the zones and the recovery (index.js workoutHeartRate).
+export const WORKOUT_HEART_RATE_TYPE = 'heart-rate-workout';
+export const WORKOUT_HEART_RATE_STEP = 5;
 // Every compacted heart-rate type, for the readers that fall back to them.
 export const HEART_RATE_COMPACT_TYPES = [HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE];
 export const BUCKET_SECONDS = 300;

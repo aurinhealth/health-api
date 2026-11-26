@@ -8,6 +8,7 @@ import { KEEP_TYPE_SQL } from "../src/activity-type.js";
 import { mergeProposal, mergeWorkouts, keepWorkoutsApart, recorderOf } from "../src/workout-merge.js";
 import { buildCalendar } from "../src/app-calendar.js";
 import { googleExerciseActivity, workoutHeartRate } from "../src/index.js";
+import { storedHeartRate } from "../src/watch-detail.js";
 import { deleteActivity } from "../src/activity-edits.js";
 
 // The girlfriend's gym on 2026-10-17: Aurin on the iPhone and the Apple Watch's workout app.
@@ -150,7 +151,20 @@ test("a workout that just ended gets its heart rate from Google now, once", asyn
   assert.equal(await workoutHeartRate(env, "t", fetchImpl), 20);
   assert.match(asked[0], /dataTypes\/heart-rate\/dataPoints:reconcile/);
   assert.equal(new URL(asked[0]).searchParams.get("filter"), `heart_rate.sample_time.physical_time >= "${iso(start)}" AND heart_rate.sample_time.physical_time < "${iso(end)}"`, "only the workout's own minutes");
-  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='heart-rate'").get().n, 20);
+  // One row for the workout, 5-second averages, no row a sample.
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='heart-rate'").get().n, 0);
+  const kept = raw.sqlite.prepare("SELECT external_id, value_numeric, payload_json FROM health_datapoints WHERE data_type='heart-rate-workout'").all();
+  assert.equal(kept.length, 1);
+  const p = JSON.parse(kept[0].payload_json);
+  assert.equal(p.step, 5);
+  assert.equal(p.bpm.filter(v => v != null).length, 20);
+  assert.equal(p.bpm[0], 100);
+  assert.equal(p.bpm[Math.floor(42 / 5)], 101);
+  assert.equal(kept[0].value_numeric, 110);
+  // The workout's curve reads them, a week later too.
+  const heart = await storedHeartRate(env.DB, env.USER_ID, iso(start), iso(end));
+  assert.equal(heart.length, 20);
+  assert.deepEqual(heart[1], [40, 101]);
   // With the samples in, the next run asks nothing.
   assert.equal(await workoutHeartRate(env, "t", fetchImpl), 0);
   assert.equal(asked.length, 1);
