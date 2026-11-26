@@ -1,7 +1,8 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts, painfulExercises } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts, painfulExercises, gymDayWarning } from "./strength-generator.js";
+import { trainingStatus } from "./training-status.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { cardioFavourites, cardioFor, cardioLength, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
@@ -167,6 +168,25 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     const history=await withHistoryOf(env.DB,recent,historyFamily(normalizeExerciseName(exercise)));
     const estimate=gymLoadEstimate(exercise,history,localToday())||catalogueStartLoad(exercise,{sex,experience:setup?.experience||''},history);
     return Response.json({status:'ok',exercise,kg:estimate?.kg??null},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Today's loads of exercises the athlete starts themselves (the watch's
+  // Repeat last, an exercise added in the live gym), worked out here and not
+  // in the app, so they know the day (load ramp-back review 2026-11-25, C2):
+  // the 14 and 21 days without the exercise, a red or ill day or a paused
+  // status that keeps the loads, and an exercise a remembered pain leaves
+  // out (pain:true). A warning only: saving the sets is never blocked.
+  if(url.pathname==='/app/api/gym/next'&&request.method==='GET'){
+    const asked=String(url.searchParams.get('date')||''),date=/^\d{4}-\d{2}-\d{2}$/.test(asked)?asked:localToday();
+    const names=[...new Set(url.searchParams.getAll('exercise').map(e=>String(e).slice(0,120)).filter(Boolean))].slice(0,15);
+    const [recent,setup,sex,state,context]=await Promise.all([getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),athleteSexOf(env),getAthleteState(env.DB).catch(()=>null),buildStrengthContext(env,date).catch(()=>null)]);
+    const policy=trainingStatus(state),warning=policy.paused?policy.headline+'. '+policy.guidance[0]:gymDayWarning(context);
+    const pain=painfulExercises(usedMemories(state)).avoid;
+    const history=await withHistoryOf(env.DB,recent,[...new Set(names.flatMap(e=>historyFamily(normalizeExerciseName(e))))]);
+    const exercises=names.map(name=>{
+      const estimate=gymLoadEstimate(name,history,date,warning?0.85:1)||catalogueStartLoad(name,{sex,experience:setup?.experience||''},history);
+      return {name,kg:estimate?.kg??null,pain:pain.has(normalizeExerciseName(name))};
+    });
+    return Response.json({status:'ok',date,warning:warning||null,exercises},{headers:{'Cache-Control':'no-store'}});
   }
   // The live mode's effort sheet: each letter with its reps left (gym-intensity.js effortScale).
   if(url.pathname==='/app/api/gym/effort-scale'&&request.method==='GET'){
