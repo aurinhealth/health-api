@@ -2850,7 +2850,7 @@
 "Spánek se teď nepodařilo načíst" = "Sleep couldn’t load right now";
 "Krátká noc: méně než 3 hodiny spánku." = "Short night: under 3 hours of sleep.";
 "Bez zaznamenané noci" = "No night recorded";
-"Bez spánku z té noci se připravenost nepočítá. HRV a klidový tep najdeš níže." = "Readiness needs that night’s sleep. HRV and resting heart rate are below.";
+"Připravenost i HRV se počítají ze spánku, ten z té noci chybí. Klidový tep najdeš níže." = "Readiness and HRV come from sleep, and that night’s is missing. Resting heart rate is below.";
 "Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";
 "Data ze zdraví se teď nepodařilo načíst" = "Health data couldn’t load right now";
 "Trénink se teď nepodařilo načíst" = "Training couldn’t load right now";
@@ -5263,8 +5263,8 @@
 "Kouč je zapnutý, připomínky vypnuté." = "Coach is on, reminders are off.";
 "Připomínky jsou zapnuté, kouč vypnutý." = "Reminders are on, Coach is off.";
 "Kouč i připomínky jsou vypnuté." = "Coach and reminders are off.";
-"Oznámení neukazují čísla." = "Notifications show no numbers.";
-"Oznámení ukazují tvoje čísla." = "Notifications show your numbers.";
+"Oznámení neukazují zdravotní údaje." = "Notifications show no health values.";
+"Oznámení ukazují tvoje zdravotní údaje." = "Notifications show your health values.";
 "Nejvýš 2 připomenutí, když jídlo chybí" = "Up to 2 nudges if a meal isn't logged";
 "Oznámení jsou vypnutá" = "Notifications are off";
 "Zapni je v Nastavení iPhonu, ať ti chodí připomínky a zprávy kouče." = "Turn them on in iPhone Settings to get reminders and coach messages.";
@@ -5348,6 +5348,9 @@
 "Každý bod je jeden den. Čárkovaně průměr období. Dnešek je zatím jen část dne." = "Each point is one day. The dashed line is the period's average. Today is only part of the day so far.";
 "Celkem ve dnech plánu" = "Total on plan days";
 "Auto (dnes %@)" = "Auto (tonight %@)";
+"Sacharidy %@ g/h, asi %@ g na celý trénink." = "Carbs %@ g/h, about %@ g for the whole workout.";
+"Sacharidy %@ g/h." = "Carbs %@ g/h.";
+"Pokud jsi zvyklý, až %@ g/h." = "If you are used to it, up to %@ g/h.";
 "Tvůj týden" = "Your week";
 "Minulý týden %@" = "Was %@";
 "%@ z %@ hotovo" = "%1$@ of %2$@ done";

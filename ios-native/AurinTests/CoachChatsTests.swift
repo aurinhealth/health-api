@@ -72,6 +72,9 @@ import SwiftUI
         XCTAssertNil(summary.sleep)
         XCTAssertEqual(WeekSummaryCard.count(5, of: 6), L10n.f("%@ z %@", "5", "6"))
         XCTAssertEqual(WeekSummaryCard.count(3, of: 0), "3")
+        // A sport's row never reads "2 of 0 done".
+        XCTAssertEqual(WeekSummaryCard.done(2, of: 2), L10n.f("%@ z %@ hotovo", "2", "2"))
+        XCTAssertEqual(WeekSummaryCard.done(2, of: 0), L10n.f("%@ hotovo", "2"))
         // A first week has nothing to compare with.
         let first = try JSONDecoder().decode(WeekSummary.self, from: Data(#"{"start":"2026-11-16","end":"2026-11-22","workouts":{"done":1,"planned":0},"minutes":{"total":40},"sports":[],"missed":[]}"#.utf8))
         XCTAssertNil(first.workouts.was)

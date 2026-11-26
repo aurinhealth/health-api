@@ -1082,6 +1082,7 @@ struct PlannedWorkoutView: View {
                 }
                 .padding(.top, 16)
                 if !missed, let heat = plan?.heat { HeatLine(text: heat).padding(.top, 14) }
+                if !missed, let fuel = plan?.fuel { fuelLine(fuel).padding(.top, 14) }
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
@@ -1190,6 +1191,24 @@ struct PlannedWorkoutView: View {
         // Until the plan says where it is, the Undo would not know where to go back.
         .disabled(environmentNow == nil)
         .accessibilityAddTraits(current ? .isSelected : [])
+    }
+
+    /// "Sacharidy 60 g/h, asi 90 g na celý trénink" and the server's guide line;
+    /// an experienced rider's long ride says it can go up to 120 g/h.
+    private func fuelLine(_ fuel: PlannedWorkout.Fuel) -> some View {
+        let total = session.minutes.map { Double($0) / 60 * fuel.perHour }.map { (($0 / 10).rounded() * 10) }
+        let first = total.map { L10n.f("Sacharidy %@ g/h, asi %@ g na celý trénink.", Fmt.int(fuel.perHour), Fmt.int($0)) }
+            ?? L10n.f("Sacharidy %@ g/h.", Fmt.int(fuel.perHour))
+        let top = fuel.upTo.map { L10n.f("Pokud jsi zvyklý, až %@ g/h.", Fmt.int($0)) + (fuel.practise.map { " " + $0 } ?? "") }
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: first).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            ForEach([top, fuel.note].compactMap { $0 }, id: \.self) { line in
+                Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.secondary)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private func meta(_ title: String, _ value: String) -> some View {
