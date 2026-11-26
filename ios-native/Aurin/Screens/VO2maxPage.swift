@@ -24,7 +24,7 @@ struct VO2maxPage: View {
         .sheet(isPresented: $info) {
             ScrollView { VO2maxDetailContent.howMeasured(vo2).padding(24) }
                 .presentationDetents([.medium, .large])
-                .presentationBackground(Palette.background)
+                .presentationBackground(Palette.sheet)
         }
     }
 

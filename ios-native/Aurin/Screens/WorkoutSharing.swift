@@ -107,13 +107,13 @@ struct SharePreviewCard: View {
     let groups: [String]
     let dark: Bool
 
-    private var background: Color { dark ? Color(hex: 0x17191A) : Color(hex: 0xF3EFE8) }
+    private var background: Color { dark ? Color(hex: 0x1B1D20) : Color(hex: 0xF3EFE8) }
     private var ink: Color { dark ? Color(hex: 0xF4F2EE) : Color(hex: 0x1B1A17) }
-    private var muted: Color { dark ? Color(hex: 0x9AA39F) : Color(hex: 0x6D6A63) }
+    private var muted: Color { dark ? Color(hex: 0xB4B9B6) : Color(hex: 0x5F5B54) }
     private var avatar: Color { dark ? Color(hex: 0x2E9C74) : Color(hex: 0x1F6B52) }
     private var bars: [Color] {
         dark ? [Color(hex: 0xF0B36E), Color(hex: 0x8FE6C4), Color(hex: 0xA5A1FF), Color(hex: 0x7CC3F0)]
-             : [Color(hex: 0xA35A12), Color(hex: 0x1F6B52), Color(hex: 0x4F46C8), Color(hex: 0x1D6FA3)]
+             : [Color(hex: 0x96520F), Color(hex: 0x1F6B52), Color(hex: 0x4F46C8), Color(hex: 0x1D6FA3)]
     }
 
     private var line: String {

@@ -1564,7 +1564,7 @@ struct FeedbackSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .task { await load() }
     }
 

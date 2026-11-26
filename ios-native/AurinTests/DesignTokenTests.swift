@@ -34,7 +34,7 @@ final class DesignTokenTests: XCTestCase {
     /// the strongest point of each section tint, in light and dark mode.
     func testSmallTextContrast() {
         let surfaces: [(String, Color)] = [
-            ("background", Palette.background), ("settings", Palette.settingsBackground), ("card", Palette.card),
+            ("background", Palette.background), ("settings", Palette.settingsBackground), ("sheet", Palette.sheet), ("card", Palette.card),
             ("cardLift", Palette.cardLift), ("today", Palette.Glow.today), ("training", Palette.Glow.training),
             ("food", Palette.Glow.food), ("health", Palette.Glow.health)
         ]
@@ -47,16 +47,54 @@ final class DesignTokenTests: XCTestCase {
         }
     }
 
+    /// The state colours (over a target, slightly off, within) as text on
+    /// the screen, the sheet and the cards, in light and dark mode.
+    func testStateTextContrast() {
+        let surfaces: [(String, Color)] = [
+            ("background", Palette.background), ("settings", Palette.settingsBackground), ("sheet", Palette.sheet),
+            ("card", Palette.card), ("cardLift", Palette.cardLift)
+        ]
+        for dark in [false, true] {
+            for (textName, text) in [("good", Palette.Status.good), ("warn", Palette.Status.warn), ("bad", Palette.Status.bad)] {
+                for (name, surface) in surfaces {
+                    XCTAssertGreaterThanOrEqual(contrast(text, surface, dark: dark), 4.5, "\(textName) on \(name), dark \(dark)")
+                }
+            }
+        }
+    }
+
+    /// A chip's text on its own soft fill (Edited, Kept, Sleep, Period).
+    func testChipContrast() {
+        let chips: [(String, Color, Color)] = [
+            ("amber", Palette.amber, Palette.amberSoft), ("green", Palette.green, Palette.greenSoft),
+            ("indigo", Palette.indigo, Palette.lilac), ("pink", Palette.pink, Palette.pinkSoft)
+        ]
+        for dark in [false, true] {
+            for (name, text, fill) in chips {
+                XCTAssertGreaterThanOrEqual(contrast(text, fill, dark: dark), 4.5, "\(name) chip, dark \(dark)")
+            }
+        }
+    }
+
+    /// Palette A (Petr 2026-11-26): charcoal dark mode, its sheet a touch lighter.
+    func testDarkSurfaces() {
+        XCTAssertEqual(hex(Palette.background, dark: true), 0x1B1D20)
+        XCTAssertEqual(hex(Palette.sheet, dark: true), 0x202326)
+        XCTAssertEqual(hex(Palette.sheet, dark: false), hex(Palette.background, dark: false))
+        XCTAssertEqual(hex(Palette.card, dark: true), 0x26292D)
+        XCTAssertEqual(hex(Palette.cardLift, dark: true), 0x2C3034)
+    }
+
     func testSectionTints() {
-        XCTAssertEqual(hex(Palette.Glow.today, dark: true), 0x19322B)
-        XCTAssertEqual(hex(Palette.Glow.training, dark: false), 0xF3E3C6)
-        XCTAssertEqual(hex(Palette.Glow.training, dark: true), 0x322519)
+        XCTAssertEqual(hex(Palette.Glow.today, dark: true), 0x24423A)
+        XCTAssertEqual(hex(Palette.Glow.training, dark: false), 0xF4DEBE)
+        XCTAssertEqual(hex(Palette.Glow.training, dark: true), 0x4A3216)
         XCTAssertEqual(hex(Palette.Glow.food, dark: false), 0xF6E1DF)
-        XCTAssertEqual(hex(Palette.Glow.food, dark: true), 0x382224)
+        XCTAssertEqual(hex(Palette.Glow.food, dark: true), 0x4A2C30)
         XCTAssertEqual(hex(Palette.Glow.health, dark: false), 0xE3E6F3)
-        XCTAssertEqual(hex(Palette.Glow.health, dark: true), 0x1E2136)
+        XCTAssertEqual(hex(Palette.Glow.health, dark: true), 0x2A2E4A)
         // The share images take the same tints.
-        XCTAssertEqual(hex(Palette.Glow.food.resolved(dark: true), dark: false), 0x382224)
+        XCTAssertEqual(hex(Palette.Glow.food.resolved(dark: true), dark: false), 0x4A2C30)
     }
 
     /// One set of state colours: Palette, the Watch, widgets and extensions
@@ -73,7 +111,7 @@ final class DesignTokenTests: XCTestCase {
     /// Set B (Petr 2026-11-15), Z1 to Z7.
     func testZonePalette() {
         let light: [UInt32] = [0x8A857C, 0x3E6FD9, 0x1F6B52, 0xC4782A, 0xC2362B, 0xA52FB8, 0xE0357F]
-        let dark: [UInt32] = [0x8C928F, 0x86A9FF, 0x8FE6C4, 0xE09A55, 0xEC4A58, 0xD98BF0, 0xFF7EB6]
+        let dark: [UInt32] = [0x8C928F, 0x86A9FF, 0x8FE6C4, 0xE09A55, 0xFF7380, 0xD98BF0, 0xFF7EB6]
         XCTAssertEqual(Palette.Zone.all.map { hex($0, dark: false) }, light)
         XCTAssertEqual(Palette.Zone.all.map { hex($0, dark: true) }, dark)
         XCTAssertEqual(hex(Palette.Zone.color(12), dark: true), 0xFF7EB6)

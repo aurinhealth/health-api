@@ -326,7 +326,7 @@ struct MuscleFigureFixedPair: View {
 /// The grey of rested muscles and of the bones, and half the camera's vertical field of view.
 private enum Figure3DStyle {
     static let rest = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x4A4B4C) : UIColor(hex: 0xC9C3BA) }
-    static let bone = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x2C2D2E) : UIColor(hex: 0xE4DFD7) }
+    static let bone = UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: 0x3A3E42) : UIColor(hex: 0xE4DFD7) }
     static let halfField: Float = 14 * .pi / 180
 }
 

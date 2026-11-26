@@ -462,7 +462,7 @@ struct SavedEnduranceSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .onAppear {
             if let preset, let d = GymBuilderView.isoFormatter.date(from: preset), d >= Calendar.current.startOfDay(for: Date()) { date = d }
         }

@@ -690,7 +690,7 @@ struct DrinkSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 
     /// −/+ by 50 ml, or by 1 fl oz in imperial units; the amount stays in ml.

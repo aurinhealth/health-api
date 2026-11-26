@@ -6,9 +6,9 @@ enum StatusHex {
     /// Within the usual range, done, fine.
     static let good = (light: UInt32(0x1F6B52), dark: UInt32(0x8FE6C4))
     /// Slightly off, low, take care.
-    static let warn = (light: UInt32(0xA35A12), dark: UInt32(0xF2B46B))
+    static let warn = (light: UInt32(0x96520F), dark: UInt32(0xF2B46B))
     /// Far off, past a limit, over.
-    static let bad = (light: UInt32(0xC2362B), dark: UInt32(0xEC4A58))
+    static let bad = (light: UInt32(0xC2362B), dark: UInt32(0xFF7380))
 }
 
 extension StatusHex {

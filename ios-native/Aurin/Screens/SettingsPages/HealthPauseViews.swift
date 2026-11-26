@@ -67,7 +67,7 @@ struct HealthPauseSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .interactiveDismissDisabled(pausing)
         // Shared or not, the export does not stay on the phone after the sheet.
         .onDisappear {

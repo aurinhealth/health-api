@@ -52,7 +52,7 @@ struct LabelCameraSheet: View {
             .padding(.horizontal, PageGrid.margin).padding(.top, 12)
 
             ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
+                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x26292D))
                 if cameraAllowed == nil {
                     ProgressView().tint(.white)
                 } else if cameraReady {

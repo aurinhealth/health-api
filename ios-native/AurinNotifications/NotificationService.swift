@@ -65,9 +65,9 @@ enum ReadinessRing {
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
             // The welcome screen's sunrise: a warm glow rising from the bottom
             // of the night (AurinMorning/MorningViewController.swift Sunrise).
-            UIColor(red: 0x0A / 255, green: 0x0B / 255, blue: 0x0C / 255, alpha: 1).setFill()
+            UIColor(red: 0x1B / 255, green: 0x1D / 255, blue: 0x20 / 255, alpha: 1).setFill()
             context.fill(CGRect(x: 0, y: 0, width: side, height: side))
-            let glow = [(0xE0, 0x9A, 0x55), (0x8A, 0x4A, 0x20), (0x24, 0x17, 0x0E), (0x0A, 0x0B, 0x0C)]
+            let glow = [(0xE0, 0x9A, 0x55), (0x8A, 0x4A, 0x20), (0x24, 0x17, 0x0E), (0x1B, 0x1D, 0x20)]
                 .map { UIColor(red: CGFloat($0.0) / 255, green: CGFloat($0.1) / 255, blue: CGFloat($0.2) / 255, alpha: 1).cgColor }
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: glow as CFArray, locations: [0, 0.3, 0.62, 1]) {
                 context.cgContext.drawRadialGradient(gradient, startCenter: CGPoint(x: side / 2, y: side * 1.15), startRadius: 0,

@@ -945,7 +945,7 @@ struct LibraryBrickSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 
     /// Both legs on the day, the second joined right after the first.
@@ -1531,7 +1531,7 @@ struct LibraryWorkoutSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .onAppear { if let start { date = max(start, Calendar.current.startOfDay(for: Date())) } }
     }
 

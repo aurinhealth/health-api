@@ -4,12 +4,12 @@ export const themeTokens = `
 :root{color-scheme:light;
   /* Surfaces and text. */
   --bg:#F3EFE8;--panel:#FBFAF7;--panel2:#EAE5DC;--text:#1B1A17;--sec:#3B3832;--muted:#5F5B54;
-  --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.08);
+  --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.12);
   /* App hues: readiness green, strain amber, coach indigo, macros. */
-  --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--amber-soft:#F3E1C6;--sand:#E6D3B5;--brown:#8A6D3B;
+  --green:#1F6B52;--green-soft:#D3EADF;--amber:#96520F;--amber-bar:#C4782A;--amber-soft:#F3E1C6;--sand:#D9BE94;--brown:#8A6D3B;
   --indigo:#4F46C8;--lilac:#D9D6F3;--rust:#B4532F;--rust-ink:#A3482A;--blue:#1D6FA3;--protein:#2F7FD8;--carbs:#D98A06;--fat:#7C5CE0;
   /* Cycle pink (CycleViews.swift), and the set letters' failure red and record gold (GymIntensity.swift). */
-  --pink:#B83A6E;--pink-soft:#F6DCE6;--red:#C2362B;--gold:#D9A521;
+  --pink:#B83A6E;--pink-soft:#F8E6ED;--red:#C2362B;--gold:#D9A521;
   --primary:#1F6B52;--primary-text:#1F6B52;--primary-ink:#FFFFFF;--primary-surface:#D3EADF;
   --button:#15140F;--on-button:#F3EFE8;--frame:#DCD5CA;--health-red:#FF2D55;--google-blue:#4285F4;
   /* The Aurin mark (Rovnováha): the load half over the recovery half. */
@@ -17,7 +17,7 @@ export const themeTokens = `
   /* The aurora behind the hero (the mark's two halves and a touch of the coach's lilac) and the phone's titanium. */
   --aurora-lilac:#B9B4EE;--device-hi:#F4F1EC;--device-mid:#C9C2B8;--device-lo:#A2998E;
   /* Soft glow behind each section's card, in the tint of the app tab it shows. */
-  --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
+  --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F4DEBE;--glow-food:#F2E4D0;
   /* The welcome before the sign-in (WelcomePages.swift): its sunrise and coach tints, the logo's sun, the plate loader. */
   --glow-sunrise:#F7DFC2;--glow-coach:#E6E1F3;
   /* The night sky behind Sleep: only in dark mode, so in the light look it is the page itself and no stars. */
@@ -44,16 +44,16 @@ export const themeTokens = `
 export const DARK_SITE = true;
 export const darkTokens = `
 @media (prefers-color-scheme:dark){:root{color-scheme:dark;
-  --bg:#0A0B0C;--panel:#1C1E1F;--panel2:#141617;--text:#ECEAE6;--sec:#D9D6D0;--muted:#9AA39F;
-  --line:rgba(236,234,230,.1);--track:rgba(236,234,230,.08);
-  --green:#8FE6C4;--green-soft:#1D3B33;--amber:#F2B46B;--amber-bar:#E09A55;--amber-soft:#3A2A17;--sand:#4A3B28;--brown:#CFB07A;
-  --indigo:#A5A1FF;--lilac:#34325A;--rust:#F0907A;--rust-ink:#F0907A;--blue:#7CC3F0;--protein:#83C7FF;--carbs:#FFC274;--fat:#B3A1FF;
-  --pink:#F0A0C0;--pink-soft:#4A2A38;--red:#FF6B5B;--gold:#E8C25A;
-  --primary:#8FE6C4;--primary-text:#8FE6C4;--primary-ink:#0A0B0C;--primary-surface:#1D3B33;
+  --bg:#1B1D20;--panel:#26292D;--panel2:#202326;--text:#ECEAE6;--sec:#D9D6D0;--muted:#B4B9B6;
+  --line:rgba(236,234,230,.1);--track:rgba(236,234,230,.12);
+  --green:#8FE6C4;--green-soft:#21433A;--amber:#F2B46B;--amber-bar:#E09A55;--amber-soft:#45321A;--sand:#4A3B28;--brown:#CFB07A;
+  --indigo:#A5A1FF;--lilac:#3A3864;--rust:#F0907A;--rust-ink:#F0907A;--blue:#7CC3F0;--protein:#83C7FF;--carbs:#FFC274;--fat:#B3A1FF;
+  --pink:#F0A0C0;--pink-soft:#52303F;--red:#FF6B5B;--gold:#E8C25A;
+  --primary:#8FE6C4;--primary-text:#8FE6C4;--primary-ink:#0A0B0C;--primary-surface:#21433A;
   --button:#F4F2EE;--on-button:#0A0B0C;--frame:#2E3132;
-  --aurora-lilac:#34325A;--device-hi:#8E8A84;--device-mid:#55524E;--device-lo:#34322F;
-  --glow-today:#1D3B33;--glow-health:#22253A;--glow-training:#3A2A17;--glow-food:#352818;
-  --glow-sunrise:#3A2A17;--glow-coach:#2A2740;--night:#181B33;--stars:1;--sun:#F2B46B;--metal:#5E615F;
+  --aurora-lilac:#3A3864;--device-hi:#8E8A84;--device-mid:#55524E;--device-lo:#34322F;
+  --glow-today:#24423A;--glow-health:#2A2E4A;--glow-training:#4A3216;--glow-food:#45321A;
+  --glow-sunrise:#4A3216;--glow-coach:#35324A;--night:#181B33;--stars:1;--sun:#F2B46B;--metal:#5E615F;
   --plate-25-line:#E2AFA3;--plate-20-line:#AAB7DA;--plate-15-line:#D8C08A;--plate-10-line:#B5CDB6;--plate-5-line:#D2D5DA;--plate-2-5-line:#AFAAA2;--plate-1-25-line:#CBC6BE;
   --shadow-card:0 0 0 1px var(--line);
   --shadow-float:0 0 0 1px rgba(236,234,230,.08),0 30px 70px -28px rgba(0,0,0,.8);
