@@ -662,7 +662,7 @@ struct MuscleFatigueInfoSheet: View {
                 }
             }
         }
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .fullTextSize()
     }
 }

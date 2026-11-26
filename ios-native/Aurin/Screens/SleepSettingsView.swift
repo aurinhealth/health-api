@@ -414,7 +414,7 @@ private struct TonightInfo: View {
             .padding(24)
         }
         .presentationDetents([.medium])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 }
 

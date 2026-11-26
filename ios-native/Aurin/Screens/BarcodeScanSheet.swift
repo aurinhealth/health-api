@@ -214,7 +214,7 @@ struct BarcodeScanSheet: View {
     @ViewBuilder
     private var camera: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
+            RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x26292D))
             if cameraAllowed == nil {
                 ProgressView().tint(.white)
             } else if scannerReady {

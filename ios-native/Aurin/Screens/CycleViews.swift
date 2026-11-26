@@ -487,7 +487,7 @@ struct CycleLogSheet: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 
     private func tile(on: Bool, symbols: [String], title: String, action: @escaping () -> Void) -> some View {
@@ -951,7 +951,7 @@ struct DateChoiceSheet: View {
         }
         .padding(24)
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .onAppear {
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")

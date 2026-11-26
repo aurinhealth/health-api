@@ -14,7 +14,7 @@ const lum = h => { const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : 
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
 
 test('muted is 4.5:1 on every surface and section glow, faint on every surface', () => {
-  const surfaces = ['background', 'settingsBackground', 'card', 'cardLift'].map(token);
+  const surfaces = ['background', 'settingsBackground', 'sheet', 'card', 'cardLift'].map(token);
   const glows = ['today', 'health', 'training', 'food'].map(n => token(n));
   for (const [name, on] of [['muted', [...surfaces, ...glows]], ['faint', surfaces]]) {
     const t = token(name);

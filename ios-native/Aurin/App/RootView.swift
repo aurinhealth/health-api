@@ -362,7 +362,7 @@ struct RootView: View {
                     FoodAmountView(product: product, meal: MealSlot.now(slots: model.food?.mealSlots), fixed: true, done: { fixedFood = nil })
                 }
                 .dynamicTypeSize(Self.textSizes)
-                .presentationBackground(Palette.background)
+                .presentationBackground(Palette.sheet)
                 // Added from the push goes to today, like "+".
                 .onAppear { model.writesToday = true }
                 .onDisappear { model.writesToday = false; model.addDay = nil }

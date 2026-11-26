@@ -98,18 +98,18 @@ struct TodayMorningView: View {
         return Color(red: c.red, green: c.green, blue: c.blue)
     }
     // Today's dark tokens (Shared/Palette.swift): Glow.today, card, ink, muted, green.
-    private let glow = TodayMorningView.color(0x19322B)
-    private let page = TodayMorningView.color(0x0A0B0C)
-    private let card = TodayMorningView.color(0x1C1E1F)
+    private let glow = TodayMorningView.color(0x24423A)
+    private let page = TodayMorningView.color(0x1B1D20)
+    private let card = TodayMorningView.color(0x26292D)
     private let ink = TodayMorningView.color(0xECEAE6)
-    private let muted = TodayMorningView.color(0xA3A8A5)
+    private let muted = TodayMorningView.color(0xB4B9B6)
     private let green = TodayMorningView.color(StatusHex.good.dark)
 
     private var pillColors: (Color, Color) {
         // Today's pill (HealthView ReadinessText.pill, dark): green, amber, rust.
         switch zone {
-        case "green": return (green, Self.color(0x1D3B33))
-        case "yellow": return (Self.color(StatusHex.warn.dark), Self.color(0x3A2A17))
+        case "green": return (green, Self.color(0x21433A))
+        case "yellow": return (Self.color(StatusHex.warn.dark), Self.color(0x45321A))
         case "red": return (Self.color(0xF0907A), Self.color(0xF0907A).opacity(0.14))
         default: return (muted, muted.opacity(0.16))
         }
@@ -278,7 +278,7 @@ struct MorningView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 18).padding(.vertical, 14)
-                    .background(Color(red: 0x14 / 255, green: 0x16 / 255, blue: 0x17 / 255))
+                    .background(Color(red: 0x26 / 255, green: 0x29 / 255, blue: 0x2D / 255))
             }
         }
         .environment(\.colorScheme, .dark)
@@ -292,9 +292,9 @@ struct Sunrise: View {
             .init(color: Color(red: 0xE0 / 255, green: 0x9A / 255, blue: 0x55 / 255), location: 0),
             .init(color: Color(red: 0x8A / 255, green: 0x4A / 255, blue: 0x20 / 255), location: 0.3),
             .init(color: Color(red: 0x24 / 255, green: 0x17 / 255, blue: 0x0E / 255), location: 0.62),
-            .init(color: Color(red: 0x0A / 255, green: 0x0B / 255, blue: 0x0C / 255), location: 1),
+            .init(color: Color(red: 0x1B / 255, green: 0x1D / 255, blue: 0x20 / 255), location: 1),
         ], center: UnitPoint(x: 0.5, y: 1.08), startRadius: 0, endRadius: 420)
-        .background(Color(red: 0x0A / 255, green: 0x0B / 255, blue: 0x0C / 255))
+        .background(Color(red: 0x1B / 255, green: 0x1D / 255, blue: 0x20 / 255))
     }
 }
 

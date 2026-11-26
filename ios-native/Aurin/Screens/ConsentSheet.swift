@@ -58,7 +58,7 @@ struct ConsentSheet<Content: View>: View {
             .padding(24)
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 }
 

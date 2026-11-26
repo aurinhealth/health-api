@@ -1030,7 +1030,7 @@ struct TechniqueSheet: View {
             Text("Hotové série zůstanou uložené.")
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .sheet(isPresented: $writingNote) { ExerciseNoteSheet(exercise: exercise) }
         .fullScreenCover(isPresented: $playing) {
             if let id = videoId { ExerciseVideoPlayer(id: id) }

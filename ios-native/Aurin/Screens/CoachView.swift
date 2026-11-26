@@ -310,12 +310,13 @@ struct CoachView: View {
     }
 
     /// The opening asks the server for the coach's own message, in this order:
-    /// the race week, then the question after a training gap.
+    /// the race week. The question after a training gap is on Welcome back
+    /// (WelcomeBackSheet), no longer a chat.
     /// The first one posted (a new chat, once) opens as History would open it.
     private func openPosted() async {
         guard !model.demo, !askedPosted, openChat == nil, subject == nil else { return }
         askedPosted = true
-        for kind in ["race-week", "gap-checkin"] {
+        for kind in ["race-week"] {
             guard let id = try? await model.api.postedCoachChat(kind) else { continue }
             // Only on the empty opening: a question the athlete already sent stays in its chat.
             if messages.isEmpty, chatId == nil, !sending, !ghost { await open(id) }
@@ -1590,7 +1591,7 @@ struct ChatsPanel: View {
                 }
                 .frame(width: min(320, geo.size.width * 0.82))
                 .frame(maxHeight: .infinity)
-                .background { Palette.background.ignoresSafeArea() }
+                .background { Palette.sheet.ignoresSafeArea() }
                 .shadow(color: .black.opacity(0.25), radius: 20, x: 6)
             }
         }

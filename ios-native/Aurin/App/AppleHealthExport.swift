@@ -281,7 +281,8 @@ final class AppleHealthExport {
     /// Wahoo's and Google Health's workouts the server lists (src/watch-forward.js
     /// appleForwardList), each written once: one Apple Health has at about that
     /// time already (the Wahoo app writes there itself, or the watch recorded it)
-    /// stays as it is. At most every ten minutes unless `force`.
+    /// stays as it is; one that comes later replaces Aurin's copy
+    /// (removeForwardedTwins). At most every ten minutes unless `force`.
     func writeForwarded(api: APIClient, force: Bool = false) async {
         guard forwards(prefs), writes, api.hasSession, !forwarding, allowed(HKObjectType.workoutType()) else { return }
         let defaults = UserDefaults.standard
@@ -302,6 +303,30 @@ final class AppleHealthExport {
                 continue
             }
             try? await api.forwardedWorkoutDone(key: item.key, status: status)
+        }
+        await removeForwardedTwins()
+    }
+
+    /// A forwarded copy whose app wrote the same workout later (the Wahoo app
+    /// opened hours after a ride uploaded over Wi-Fi) goes, with its calories and
+    /// distance, so the ride and its energy are in Apple Health once.
+    private func removeForwardedTwins() async {
+        let recent = HKQuery.predicateForSamples(withStart: Date().addingTimeInterval(-14 * 86400), end: nil)
+        let own = await samples(HKObjectType.workoutType(), NSCompoundPredicate(andPredicateWithSubpredicates: [recent, HKQuery.predicateForObjects(from: HKSource.default())]))
+            .compactMap { $0 as? HKWorkout }
+            .filter { ($0.metadata?[HKMetadataKeySyncIdentifier] as? String)?.hasPrefix(Self.syncPrefix + "forward:") == true }
+        guard !own.isEmpty else { return }
+        let ownSource = HKSource.default().bundleIdentifier
+        for copy in own {
+            let others = await samples(HKObjectType.workoutType(), HKQuery.predicateForSamples(withStart: copy.startDate, end: copy.endDate))
+            let half = copy.endDate.timeIntervalSince(copy.startDate) / 2
+            guard others.contains(where: { $0.sourceRevision.source.bundleIdentifier != ownSource
+                && min($0.endDate, copy.endDate).timeIntervalSince(max($0.startDate, copy.startDate)) >= half }) else { continue }
+            let linked = HKQuery.predicateForObjects(from: copy)
+            for type in [HKQuantityType(.activeEnergyBurned), HKQuantityType(.distanceCycling), HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceSwimming)] {
+                _ = try? await store.deleteObjects(of: type, predicate: linked)
+            }
+            try? await store.delete(copy)
         }
     }
 

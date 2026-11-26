@@ -529,7 +529,7 @@ enum ShareExport {
         if clear {
             item["com.instagram.sharedSticker.stickerImage"] = data
             item["com.instagram.sharedSticker.backgroundTopColor"] = dark ? "#2C2416" : "#F3E1C6"
-            item["com.instagram.sharedSticker.backgroundBottomColor"] = dark ? "#0B0C0D" : "#F3EFE8"
+            item["com.instagram.sharedSticker.backgroundBottomColor"] = dark ? "#1B1D20" : "#F3EFE8"
         } else {
             item["com.instagram.sharedSticker.backgroundImage"] = data
         }

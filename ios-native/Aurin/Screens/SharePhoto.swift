@@ -128,7 +128,7 @@ struct ShareCameraView: View {
                 .padding(.horizontal, 18).padding(.top, 6)
 
                 ZStack {
-                    Color(hex: 0x151718)
+                    Color(hex: 0x26292D)
                     if cameraAllowed == nil {
                         ProgressView().tint(.white)
                     } else if cameraReady {

@@ -202,7 +202,7 @@ struct AddFoodSheet: View {
             }
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .task(id: query) { await search() }
         .task { await loadRecent() }
         // Again after each photo read, so the count follows.

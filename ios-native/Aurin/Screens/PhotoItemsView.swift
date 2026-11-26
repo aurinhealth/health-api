@@ -106,7 +106,7 @@ struct PhotoItemsView: View {
                     editing = nil
                 })
             }
-            .presentationBackground(Palette.background)
+            .presentationBackground(Palette.sheet)
         }
         .sheet(isPresented: $adding) {
             AddFoodSheet(meal: target, pick: { product, amount in
