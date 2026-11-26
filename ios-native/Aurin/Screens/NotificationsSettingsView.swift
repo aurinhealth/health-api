@@ -125,6 +125,8 @@ struct NotificationsSettingsView: View {
     /// The two above say only what came, the app's reminders leave their numbers out; opened they show it all.
     @AppStorage(PushRegistration.hideValuesKey) private var hideValues = true
     @State private var allowed: Bool?
+    /// Product news by e-mail as the server holds it; the row shows once it is known.
+    @State private var newsEmails: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
     /// the days, read straight from UserDefaults, are shown anew).
     @State private var revision = 0
@@ -168,12 +170,26 @@ struct NotificationsSettingsView: View {
             SettingsGroup(title: "Soukromí") {
                 SettingsToggle(title: "Skrýt zdravotní údaje v oznámeních", subtitle: privacyCaption, isOn: $hideValues)
             }
+            if !model.demo {
+                // Always there (the alert and the setup point here); off and disabled until the server answers.
+                SettingsGroup(title: "E-mail") {
+                    SettingsToggle(title: "Novinky e-mailem", subtitle: "O nových funkcích Aurinu. Odhlásit se dá i odkazem v každém e-mailu.",
+                                   isOn: Binding(get: { newsEmails ?? false }, set: { wanted in
+                                       self.newsEmails = wanted
+                                       Task {
+                                           do { try await model.api.setProductEmails(wanted) } catch { self.newsEmails = !wanted }
+                                       }
+                                   }), disabled: newsEmails == nil)
+                }
+            }
         }
         .sheet(item: $editing) { kind in
             ReminderEditSheet(kind: kind)
         }
         // Skrýt zdravotní údaje as another iPhone of the account set it.
         .task { await PushRegistration.adoptAccountChoice(api: model.api) }
+        // Never asked counts as off here; turning it on is the yes.
+        .task { if !model.demo, let chosen = try? await model.api.productEmailsChoice() { newsEmails = chosen ?? false } }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
         // Back from iPhone Settings: the off card goes once notifications are on.
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await check() } } }
