@@ -184,7 +184,7 @@ import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchSchedul
 import { planningHistory, triathlonHistory, planForWeek, planTrendCheck, syncedPlans, planSportDates, planSportMinutes, todayPlace, weekForecast, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor, isRideType } from "./coach-ride-reviews.js";
 import { gapCheckin, postGapCheckin } from "./coach-gap-checkin.js";
-import { weekSummary, summaryWeek, summaryDue, postWeekSummary, SUMMARY_FROM_HOUR } from "./coach-week-summary.js";
+import { weekSummary, summaryWeek } from "./coach-week-summary.js";
 import { raceWeek, postRaceWeek, RACE_WEEK_DAYS, RACE_WEEK_SPORTS } from "./coach-race-week.js";
 import { stepList, bodySteps, historyStep, reviewStep, todayStep, notesStep, writingStep, checkStep, refineStep, sourceLines } from "./coach-steps.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
@@ -1042,9 +1042,7 @@ async function coachPush(env, ctx) {
   if (await logged(COACH_PUSH, date)) return { sent: 0, reason: 'already-sent' };
   const zoneDue = Boolean(state.zone && Math.abs(state.zone.shift) >= 3 && state.zone.changed >= shiftDate(date, -1) && !(await logged('coach-zone', state.zone.changed)));
   const morningDue = hour < 11 && (hour >= 10 || await logged(MORNING_READINESS, date)) && !(await logged('coach-am', date));
-  // On Sunday the evening check waits for the week's summary (from 18:00), so the claim below does not end it first.
-  const sunday = new Date(date + 'T12:00:00Z').getUTCDay() === 0;
-  const eveningDue = hour >= (sunday ? SUMMARY_FROM_HOUR : EVENING_FROM_HOUR) && !(await logged('coach-pm', date));
+  const eveningDue = hour >= EVENING_FROM_HOUR && !(await logged('coach-pm', date));
   if (!zoneDue && !morningDue && !eveningDue) return { sent: 0, reason: 'nothing-due' };
   // Each check runs once, so a failing one is not repeated every five minutes.
   if (zoneDue) await claim('coach-zone', state.zone.changed);
@@ -1055,12 +1053,7 @@ async function coachPush(env, ctx) {
   // Read only when a check is due and after it is claimed, so it runs once, not every 5 minutes.
   if (paywallOn(env) && !proActive(env, await subscriptionRow(env).catch(() => null))) return { sent: 0, reason: 'no-pro' };
   let nudge = zoneDue ? coachNudge({ date, hour, zone: state.zone }) : null;
-  // The coach's own chat messages (concept 09 pages 7 and 8): the week's summary on
-  // Sunday evening and the race week's first morning; the chat posts them when it opens.
-  if (!nudge && eveningDue && sunday && state.posted?.week?.key !== mondayOfDate(date)) {
-    const summary = await weekSummaryFor(env, ctx, internalHeaders(), mondayOfDate(date), date).catch(() => null);
-    if (summary && (summary.workouts.done || summary.workouts.planned)) nudge = { kind: 'week_summary', title: L('Tvůj týden', 'Your week'), body: summary.headline };
-  }
+  // The race week's first morning (concept 09 page 8); the chat posts its message when it opens.
   // The plans the coach eased this morning (easeTodayPlans), with "Vrátit původní" on Today.
   if (!nudge && morningDue && state.eased?.day === date && state.eased.status === 'eased') nudge = easedPush(state.eased);
   if (!nudge && morningDue) {
@@ -1915,26 +1908,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(start>today)throw new Error(L('Ten týden ještě nezačal.', 'That week has not started yet.'));
       return Response.json({status:'ok',summary:await weekSummaryFor(env,ctx,internalAuth,start,today)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
-  }
-  // The Sunday message (coach-week-summary.js postWeekSummary): the redesign app
-  // asks when the coach chat opens; from Sunday 18:00 to Monday's end the server
-  // posts the week's summary once as a new chat. No AI.
-  if(url.pathname==='/app/api/coach/week-summary'&&request.method==='POST'){
-    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    try{
-      const today=localToday();
-      if(!summaryDue(today,localHour()))return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
-      const state=await getAthleteState(env.DB),start=summaryWeek(today,mondayOfDate(today));
-      if(state.posted?.week?.key===start)return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
-      // Once a week even when the chat opens twice at once: the claim is one atomic row (push_log).
-      const claimed=await env.DB.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,'coach-week-post',?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(env.DB.userId??env.USER_ID,start).run().then(r=>Boolean(Number(r?.meta?.changes)));
-      if(!claimed)return Response.json({status:'ok',posted:null},{headers:{'Cache-Control':'no-store'}});
-      const summary=await weekSummaryFor(env,ctx,internalAuth,start,today);
-      // A week without a plan and without a workout has nothing to sum up.
-      const posted=summary.workouts.done||summary.workouts.planned?await postWeekSummary(env.DB,summary,state):null;
-      return Response.json({status:'ok',posted},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){console.error('Week summary message failed',error.message);return Response.json({message:error.message},{status:500});}
   }
   // The coach's race-week message (coach-race-week.js): fuel, drinks and
   // pacing from the rules, no AI; null outside a run, ride or swim race's last six days.
