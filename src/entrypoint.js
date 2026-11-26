@@ -1278,7 +1278,7 @@ async function computeWeekTargets(env,ctx,start,prefs,{original=false}={}){
   const runCommitted=days.reduce((n,d)=>n+committedRunMinutes(d.date,today,runOn[d.date]?.planned,runOn[d.date]?.done),0);
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekForecast(env,ctx,prefs.location,start).catch(()=>({}));
-  const history=await planningHistory(env,start,30).catch(()=>[]),runCap=weeklyRunCap(history,start);
+  const history=await planningHistory(env,start,84).catch(()=>[]),runCap=weeklyRunCap(history,start);
   const plan=await planForWeek(env,ctx,start);
   const hrvDown=hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),event=plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event,eventDate=event?.date||null,taperDays=event?.taperDays??7;
   const build=p=>{
@@ -1919,7 +1919,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
       const plan=await planForWeek(env,ctx,start);
-      const [weather,history,triathlon,openWater]=await Promise.all([weekForecast(env,ctx,prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),30),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const [weather,history,triathlon,openWater]=await Promise.all([weekForecast(env,ctx,prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),84),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null,swimOpenWater(env,inputs.focus,plan.plan)]),proposal=weekProposal({triathlon,openWater,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
@@ -2032,7 +2032,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // for a pain, one long ride or run a week, the running cap.
       const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system),minutes:Math.max(0,Math.min(600,Math.round(Number(o.minutes)||0)))||null}));
       // The week the session lands in: its runs done and in the calendar (the rules' cap) and the other drafts.
-      const landing=mondayOfDate(changed.date||date),weekCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?(await computeWeekTargets(env,ctx,landing,null).catch(()=>null))?.runCap||weeklyRunCap(await planningHistory(env,landing<today?landing:today,30).catch(()=>[]),landing):null;
+      const landing=mondayOfDate(changed.date||date),weekCap=sport==='run'&&changed.sport==='run'&&changed.minutes>current.minutes?(await computeWeekTargets(env,ctx,landing,null).catch(()=>null))?.runCap||weeklyRunCap(await planningHistory(env,landing<today?landing:today,84).catch(()=>[]),landing):null;
       const runCap=weekCap?{...weekCap,cap:weekCap.cap==null?null:weekCap.cap-(Number(weekCap.committed)||0)}:null;
       changed=guardSessionChange(changed,current,{paused:pausedSports(await getAthleteState(env.DB).catch(()=>({}))),others,runCap});
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
@@ -2100,7 +2100,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // runs done and planned count against its cap; next week's runs keep the one-run cap.
       const weekStart=mondayOfDate(today),weekEnd=shiftDate(weekStart,6);
       const runOf=list=>(list||[]).filter(a=>sportOf(a)==='run').reduce((m,a)=>m+(Number(a.durationHours)||0)*60,0);
-      const runCap=upcoming.some(u=>u.sport==='run')?{...weeklyRunCap(await planningHistory(env,today,30).catch(()=>[]),weekStart),committed:days.filter(d=>d.date>=weekStart&&d.date<=weekEnd).reduce((n,d)=>n+committedRunMinutes(d.date,today,runOf(d.daily?.training?.planned),runOf(d.daily?.training?.completed)),0)}:null;
+      const runCap=upcoming.some(u=>u.sport==='run')?{...weeklyRunCap(await planningHistory(env,today,84).catch(()=>[]),weekStart),committed:days.filter(d=>d.date>=weekStart&&d.date<=weekEnd).reduce((n,d)=>n+committedRunMinutes(d.date,today,runOf(d.daily?.training?.planned),runOf(d.daily?.training?.completed)),0)}:null;
       const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus,guards:{paused:pausedSports(athlete),runCap,weekEnd}}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
       // Each change gets its workout now, so the card shows what replaces what.
       const changes=[];

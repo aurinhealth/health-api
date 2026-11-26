@@ -526,7 +526,30 @@ export function weeklyRunCap(history = [], weekStart) {
   const month = (history || []).filter(d => d.date >= dayShift(weekStart, -30) && d.date < weekStart);
   const longest = Math.round(Math.max(0, ...month.flatMap(d => (d.daily?.training?.completed || []).filter(isRunActivity).map(a => (Number(a.durationHours) || 0) * 60))));
   const recent = (history || []).some(d => d.date >= dayShift(weekStart, -14) && d.date < weekStart && runMinutes(d.daily?.training?.completed) > 0);
-  return { cap: recent ? null : Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : FIRST_RUN_MINUTES };
+  const ladder = runReturnLadder(history, weekStart);
+  return { cap: ladder ? ladder.cap : recent ? null : Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks, longest, single: longest ? Math.max(longest + 5, Math.floor(longest * 1.1 / 5) * 5) : FIRST_RUN_MINUTES, ...(ladder ? { ladder } : {}) };
+}
+// R3 (Petr 2026-11-26): the week's running after a break comes back in steps
+// of the average week of the 4 weeks before it: after 14 to 27 days 70, 85,
+// 100 %, after 28 to 56 days 50, 70, 85, 100 % (coach practice, an estimate).
+// A longer break, or none run before it in the history read (84 days), keeps
+// the first-start rule (60 min, +10 %). null outside a return.
+export function runReturnLadder(history = [], weekStart) {
+  const days = [...new Set((history || []).filter(d => d.date < weekStart && runMinutes(d.daily?.training?.completed) > 0).map(d => d.date))].sort();
+  const gapDays = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
+  // The last gap of 14 days or more: before weekStart (going on) or between two runs.
+  let start = null, back = null;
+  const stops = [...days, weekStart];
+  for (let i = stops.length - 1; i > 0; i--) if (gapDays(stops[i - 1], stops[i]) >= 14) { start = stops[i - 1]; back = i < days.length ? stops[i] : weekStart; break; }
+  if (!start) return null;
+  const gap = gapDays(start, back);
+  if (gap > 56) return null;
+  const steps = gap >= 28 ? [0.5, 0.7, 0.85, 1] : [0.7, 0.85, 1];
+  const week = Math.floor(gapDays(back, weekStart) / 7) + (back < weekStart && gapDays(back, weekStart) % 7 ? 1 : 0);
+  if (week >= steps.length - 1) return null;
+  const before = (history || []).filter(d => d.date > dayShift(start, -28) && d.date <= start).reduce((n, d) => n + runMinutes(d.daily?.training?.completed), 0) / 4;
+  if (!(before > 0)) return null;
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(before * steps[week])), share: steps[week], week: week + 1, gap, before: Math.round(before) };
 }
 // Proposed runs share what is left under the cap, at least 20 min each: a run
 // that would get less is left out (the shortest first) and the rest share again.
