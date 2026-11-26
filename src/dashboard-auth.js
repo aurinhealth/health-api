@@ -56,6 +56,8 @@ const PUBLIC_PATHS = new Set([
   "/robots.txt",
   "/sitemap.xml",
   "/app/logout",
+  // The owner's overview page (owner-overview.js): its shell holds no data and offers the sign-in.
+  "/app/owner",
   "/auth/google",
   "/auth/google/callback",
   "/auth/app/session",

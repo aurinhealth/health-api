@@ -50,6 +50,8 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^'DELETE FROM store_events WHERE signed_at<\?'$/,
   // The owner's morning e-mail counts yesterday's purchase events of everyone (store-report.js).
   /FROM store_events WHERE (environment = 'Production' AND signed_at >= \?|original_transaction_id IN \(SELECT value FROM json_each)/,
+  // The owner's overview reads every account's App Store history and AI spending this month, owner only (owner-overview.js).
+  /FROM store_events WHERE environment = 'Production' AND user_id > 0 ORDER BY signed_at/, /^"SELECT user_id, SUM\(cost_usd\) AS cost FROM ai_usage WHERE day >= \? AND model != 'pending' GROUP BY user_id"$/, /FROM ai_usage WHERE day >= \? AND model NOT IN \('pending', 'carried-over'\) GROUP BY user_id HAVING/,
   // The night's job finds the users with a coach day note due (coach-notes.js).
   /FROM users u WHERE u\.disabled = 0 AND u\.id IN \(SELECT q\.user_id FROM coach_note_queue q WHERE q\.due_at <= \?\)/];
 
