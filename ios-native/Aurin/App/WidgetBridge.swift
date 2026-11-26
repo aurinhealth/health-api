@@ -26,7 +26,8 @@ enum WidgetBridge {
                                       strainLow: today.strain.target?.low, strainHigh: today.strain.target?.high,
                                       stepsAverage: stepsAverage(today),
                                       noWearable: today.readiness.noWearable, learningDays: today.readiness.learningDays,
-                                      verdict: today.readiness.verdict, trainingKcal: today.nutrition.trainingBonus)
+                                      verdict: today.readiness.verdict, numbersLine: today.readiness.numbersLine,
+                                      numbersOff: today.readiness.numbersOff, trainingKcal: today.nutrition.trainingBonus)
         // The same day again (a refresh with nothing new) keeps the new time,
         // but redraws the widgets only when they may show "před 3 h" by now:
         // reloads are budgeted.

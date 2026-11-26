@@ -582,15 +582,31 @@ struct CoachMediumFace: View {
 }
 
 extension WidgetFaces {
-    /// The free Today card's line, the readiness detail's verdict words (src/day-verdict.js).
-    nonisolated static func verdictLine(_ key: String?) -> String? {
+    /// The free Today card's line: Today's line under the readiness (D-DNES-2),
+    /// what the numbers say and never advice. A copy of ReadinessText.numbersLine
+    /// (the app's Format is not in the extension); WidgetFaceTests keeps them equal.
+    nonisolated static func numbersLine(_ key: String?, off: [String]? = nil) -> String? {
+        if key == "hard" || key == "steady" || key == "easy" {
+            let parts = (off ?? []).compactMap { part -> String? in
+                switch part {
+                case "sleep": return L10n.tr("krátký spánek")
+                case "hrv": return L10n.tr("nízká HRV")
+                case "restingHR": return L10n.tr("vysoký klidový tep")
+                default: return nil
+                }
+            }
+            if let last = parts.last {
+                let joined = parts.count == 1 ? last : parts.dropLast().joined(separator: ", ") + " " + L10n.tr("a") + " " + last
+                return joined.prefix(1).uppercased() + joined.dropFirst()
+            }
+        }
         switch key {
-        case "hard": return L10n.tr("Dobrý den na tvrdý trénink")
-        case "steady": return L10n.tr("Dnes s mírou")
-        case "easy": return L10n.tr("Dnes v klidu")
-        case "legs": return L10n.tr("Dej nohám pauzu")
-        case "no_intensity": return L10n.tr("Dnes bez intenzity")
-        case "rest": return L10n.tr("Dnes odpočinek")
+        case "hard": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí nebo lepší")
+        case "steady": return L10n.tr("Některá tvoje čísla jsou pod obvyklým rozmezím")
+        case "easy": return L10n.tr("Tvoje čísla jsou pod obvyklým rozmezím")
+        case "signs": return L10n.tr("Teplota nebo dech jsou nad tvým obvyklým rozmezím")
+        case "usual": return L10n.tr("Tvoje čísla jsou v obvyklém rozmezí")
+        case "paused": return L10n.tr("Trénink je dnes pozastavený")
         default: return nil
         }
     }
@@ -598,8 +614,8 @@ extension WidgetFaces {
     /// The Coach widget from the snapshot and Today's coach card (nil before Today opened today).
     static func coach(_ s: WidgetSnapshot, _ c: WidgetCoach?) -> CoachMediumFace {
         let coach = c?.date == s.date ? c : nil
-        return CoachMediumFace(readiness: s.readiness, text: coach?.text ?? (coach == nil ? verdictLine(s.verdict) : nil), advice: coach?.advice,
-                               free: coach?.free ?? false, verdict: verdictLine(s.verdict),
+        return CoachMediumFace(readiness: s.readiness, text: coach?.text ?? (coach == nil ? numbersLine(s.numbersLine, off: s.numbersOff) : nil), advice: coach?.advice,
+                               free: coach?.free ?? false, verdict: numbersLine(s.numbersLine, off: s.numbersOff),
                                nextTitle: s.nextTitle, nextSport: s.nextSport, nextTime: s.nextTime, nextMinutes: s.nextMinutes)
     }
 }
@@ -1088,7 +1104,7 @@ struct ReadinessCircleFace: View {
 
 /// The coach on the Lock Screen (rectangular): "COACH" and the coach's italic
 /// advice. Before the coach has spoken today, or without Pro, the morning's
-/// rule instead: "READINESS 78" and the verdict (concept v3).
+/// rule instead: "READINESS 78" and Today's line under the readiness (concept v3, D-DNES-2).
 struct CoachRectangleFace: View {
     var face: CoachMediumFace
 

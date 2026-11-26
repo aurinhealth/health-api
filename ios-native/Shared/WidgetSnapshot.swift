@@ -59,6 +59,11 @@ struct WidgetSnapshot: Codable, Equatable {
     /// What the day's numbers say, a key of src/day-verdict.js ("hard"): the
     /// free Today card's line (the free morning push says the same).
     var verdict: String? = nil
+    /// What the day's numbers say, never advice (D-DNES-2): a key of
+    /// src/day-verdict.js NUMBERS_LINE_KEYS and what is off ("sleep", "hrv",
+    /// "restingHR"), the line under Today's readiness.
+    var numbersLine: String? = nil
+    var numbersOff: [String]? = nil
     /// The calories today's training adds to the target ("Includes 350 kcal for today's training").
     var trainingKcal: Double? = nil
 
@@ -95,6 +100,8 @@ struct WidgetSnapshot: Codable, Equatable {
         s.strainLow = nil
         s.strainHigh = nil
         s.verdict = nil
+        s.numbersLine = nil
+        s.numbersOff = nil
         s.hrv = nil
         s.strain = nil
         s.kcal = 0

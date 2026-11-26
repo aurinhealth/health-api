@@ -88,6 +88,21 @@ final class WidgetFaceTests: XCTestCase {
         ])
     }
 
+    /// The widgets' line under the readiness is Today's, word for word (D-DNES-2).
+    func testNumbersLineMatchesToday() {
+        let cases: [(String?, [String])] = [("hard", []), ("steady", []), ("easy", []), ("signs", []), ("usual", []), ("paused", []),
+                                            ("steady", ["sleep"]), ("easy", ["sleep", "restingHR"]), ("easy", ["sleep", "hrv", "restingHR"]),
+                                            ("hard", ["sleep"]), (nil, []), ("unknown", [])]
+        for language in ["cs", "en"] {
+            L10n.setLanguage(language)
+            for (key, off) in cases {
+                XCTAssertEqual(WidgetFaces.numbersLine(key, off: off), ReadinessText.numbersLine(key, off: off), "\(language) \(key ?? "nil") \(off)")
+            }
+        }
+        L10n.setLanguage("cs")
+        UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+    }
+
     /// The Coach widget (medium): the coach's card, the free Today card with
     /// "Unlock with Pro", a rest day, and before Today opened today.
     func testCoachWidget() throws {
@@ -97,7 +112,7 @@ final class WidgetFaceTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
         var s = day
-        s.verdict = "hard"
+        s.numbersLine = "hard"
         let coach = WidgetCoach(date: s.date, text: "Sleep was 6 minutes short, HRV is in your usual range.",
                                 advice: "Go all in on strength tonight.", free: false)
         var free = coach
@@ -106,7 +121,7 @@ final class WidgetFaceTests: XCTestCase {
         rest.nextTitle = nil
         var yesterday = coach
         yesterday.date = "2026-10-07"
-        XCTAssertEqual(WidgetFaces.coach(s, free).verdict, "Good day for a hard workout")
+        XCTAssertEqual(WidgetFaces.coach(s, free).verdict, "Your numbers are in your usual range or better")
         // Yesterday's words never show on today's card.
         XCTAssertNil(WidgetFaces.coach(s, yesterday).advice)
         try render("widgets-coach", size: CGSize(width: 364, height: 170), rows: [
