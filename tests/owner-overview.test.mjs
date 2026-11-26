@@ -112,3 +112,23 @@ test("only the owner's session reads the overview; anyone else gets nothing", as
   assert.equal(shell.status, 200, "the sign-in page for nobody signed in");
   assert.doesNotMatch(await shell.text(), /paid@example/);
 });
+
+test("with Cloudflare Access set up, the data also needs Access's signed token for the owner", async () => {
+  const { accessAllowed } = await import("../src/owner-overview.js");
+  const keys = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const jwk = { ...(await crypto.subtle.exportKey("jwk", keys.publicKey)), kid: "k1" };
+  const b64 = v => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const token = async claims => { const data = b64({ alg: "RS256", kid: "k1" }) + "." + b64(claims); return data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", keys.privateKey, new TextEncoder().encode(data))).toString("base64url"); };
+  const env = { OWNER_EMAIL: "owner@example.com", ACCESS_TEAM_DOMAIN: "team.cloudflareaccess.com", ACCESS_AUD: "aud1" };
+  const certs = async url => { assert.equal(url, "https://team.cloudflareaccess.com/cdn-cgi/access/certs"); return Response.json({ keys: [jwk] }); };
+  const request = async claims => new Request("https://aurin.health/app/owner/data", { headers: claims ? { "Cf-Access-Jwt-Assertion": await token(claims) } : {} });
+  const good = { iss: "https://team.cloudflareaccess.com", aud: ["aud1"], email: "owner@example.com", exp: Math.floor(Date.now() / 1000) + 60 };
+  assert.equal(await accessAllowed(await request(good), env, certs), true);
+  assert.equal(await accessAllowed(await request(null), env, certs), false, "no token");
+  assert.equal(await accessAllowed(await request({ ...good, email: "someone@example.com" }), env, certs), false, "another e-mail");
+  assert.equal(await accessAllowed(await request({ ...good, aud: ["other"] }), env, certs), false, "another application");
+  assert.equal(await accessAllowed(await request({ ...good, exp: 1 }), env, certs), false, "expired");
+  const forged = (await token(good)).split("."); forged[1] = b64({ ...good, email: "owner@example.com", exp: good.exp + 1 });
+  assert.equal(await accessAllowed(new Request("https://aurin.health/", { headers: { "Cf-Access-Jwt-Assertion": forged.join(".") } }), env, certs), false, "a changed token");
+  assert.equal(await accessAllowed(await request(null), { OWNER_EMAIL: "owner@example.com" }, certs), true, "before Access is set up the session decides");
+});

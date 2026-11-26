@@ -192,7 +192,7 @@ import { activityCompareRoute } from "./activity-compare.js";
 import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
-import { ownerPageResponse, ownerDataResponse } from "./owner-overview.js";
+import { ownerPageResponse, ownerDataResponse, accessAllowed } from "./owner-overview.js";
 import { handleAccountApi } from "./routes-account.js";
 import { pausedRefusal, consentRefusal, finishHealthPauses } from "./health-pause.js";
 import { firstImport } from "./first-imports.js";
@@ -748,7 +748,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // The owner's overview of accounts and subscriptions (owner-overview.js): the page holds no
     // data and offers the passkey sign-in; its data only for the owner, anyone else gets 404.
     if (url.pathname === "/app/owner" && request.method === "GET") return signedIn && !user.isOwner ? notFoundPage(request) : ownerPageResponse();
-    if (url.pathname === "/app/owner/data" && request.method === "GET") return signedIn && user.isOwner ? ownerDataResponse(rawEnv) : Response.json({ status: "error", message: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
+    if (url.pathname === "/app/owner/data" && request.method === "GET") return signedIn && user.isOwner && await accessAllowed(request, rawEnv) ? ownerDataResponse(rawEnv) : Response.json({ status: "error", message: "Not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
       // The App Review account shows a sample athlete's Apple Health (review-sample.js);

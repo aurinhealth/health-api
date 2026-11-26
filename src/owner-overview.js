@@ -77,8 +77,9 @@ export async function ownerOverview(env, { now = Date.now() } = {}) {
   const db = env.DB;
   await ensureStoreColumns(db);
   await ensureAiUsage(db);
-  const left = new Set([env.OWNER_EMAIL, env.APP_REVIEW_EMAIL].map(e => String(e || "").trim().toLowerCase()).filter(Boolean));
-  const users = ((await db.prepare("SELECT id, email, created_at FROM users").all()).results || []).filter(u => !left.has(String(u.email || "").trim().toLowerCase()));
+  // Left out: the owner, App Review, and the server's own accounts (the deploy check is disabled, the load test's are @test.aurin.health).
+  const left = new Set([env.OWNER_EMAIL, env.APP_REVIEW_EMAIL, env.SMOKE_USER_EMAIL].map(e => String(e || "").trim().toLowerCase()).filter(Boolean));
+  const users = ((await db.prepare("SELECT id, email, created_at FROM users WHERE disabled = 0").all()).results || []).filter(u => { const email = String(u.email || "").trim().toLowerCase(); return !left.has(email) && !/^sample\+load.*@test\.aurin\.health$/.test(email); });
   const subs = new Map(((await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial, offer_type, testflight, auto_renew, first_download_at FROM subscriptions").all()).results || []).map(s => [Number(s.user_id), s]));
   const rows = await db.prepare("SELECT user_id, original_transaction_id, type, subtype, product_id, free_trial, ownership, expires_at, signed_at FROM store_events WHERE environment = 'Production' AND user_id > 0 ORDER BY signed_at").all().then(r => r.results || [], error => { if (missingTable(error)) return []; throw error; });
   const events = new Map();
@@ -126,6 +127,30 @@ export function ownerPageResponse() {
   return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Content-Security-Policy": scriptPolicy(SCRIPT_TAG) } });
 }
 
+// Cloudflare Access in front of /app/owner* (security review 2026-11-26, SEC-1): once
+// ACCESS_TEAM_DOMAIN (e.g. aurin.cloudflareaccess.com) and ACCESS_AUD (the
+// application's audience tag) are set, the data also needs Access's signed
+// token for the owner's e-mail, so a stolen session alone reads nothing.
+// Unset (before Access is set up, and locally) the owner's session decides.
+const accessKeys = new Map();
+const bytes = text => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((text.length + 3) % 4)), c => c.charCodeAt(0));
+export async function accessAllowed(request, env, fetchImpl = fetch) {
+  const team = String(env.ACCESS_TEAM_DOMAIN || "").trim(), aud = String(env.ACCESS_AUD || "").trim();
+  if (!team && !aud) return true;
+  try {
+    const [head, body, signature] = String(request.headers.get("Cf-Access-Jwt-Assertion") || "").split(".");
+    const header = JSON.parse(new TextDecoder().decode(bytes(head))), claims = JSON.parse(new TextDecoder().decode(bytes(body)));
+    const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+    if (header.alg !== "RS256" || claims.iss !== "https://" + team || !audiences.includes(aud) || !(claims.exp > Date.now() / 1000)) return false;
+    if (String(claims.email || "").toLowerCase() !== String(env.OWNER_EMAIL || "").trim().toLowerCase()) return false;
+    if (!accessKeys.has(team) || !accessKeys.get(team).some(k => k.kid === header.kid)) accessKeys.set(team, (await (await fetchImpl(`https://${team}/cdn-cgi/access/certs`)).json()).keys || []);
+    const jwk = accessKeys.get(team).find(k => k.kid === header.kid);
+    if (!jwk) return false;
+    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, bytes(signature), new TextEncoder().encode(head + "." + body));
+  } catch { return false; }
+}
+
 export async function ownerDataResponse(env) {
   return Response.json(await ownerOverview(env), { headers: { "cache-control": "no-store", "X-Robots-Tag": "noindex, nofollow" } });
 }
@@ -166,7 +191,7 @@ async function signIn(){$("signin-error").textContent="";try{
 $("signin-button").onclick=signIn;
 async function load(){const r=await fetch("/app/owner/data",{headers:{Accept:"application/json"}});
  if(r.status===401||r.status===403){$("signin").hidden=false;$("main").hidden=true;$("loading").hidden=true;return;}
- if(!r.ok){$("loading").textContent="Přehled se nenačetl. Zkus to za chvíli.";return;}
+ if(!r.ok){$("loading").textContent=r.status===404?"Tento účet k přehledu nemá přístup.":"Přehled se nenačetl. Zkus to za chvíli.";$("signin").hidden=true;return;}
  const d=await r.json();$("signin").hidden=true;$("main").hidden=false;$("loading").hidden=true;render(d);}
 function render(d){const n=d.numbers,pct=n.trialsDone?Math.round(n.trialsPaid/n.trialsDone*100):0;
  const k=[[num(n.accounts),"účtů, +"+n.newWeek+" za 7 dní"],[n.trials,"ve zkušebním období, "+n.trialsEnding+" končí do 3 dní"],[n.monthly+n.yearly,"platí ("+n.monthly+" měsíčně, "+n.yearly+" ročně)"+(n.gifts?", dárky "+n.gifts:"")],["~"+num(n.earnsUsd)+" USD","měsíčně po odečtení Applu a DPH (odhad)"],[n.renew30+" / "+n.end30,"příštích 30 dní se obnoví / skončí"],[n.trialsPaid+" z "+n.trialsDone,"ukončených trialů zaplatilo"+(n.trialsDone>=30?" ("+pct+" %)":"")],[n.aiWeek,"lidí použilo AI za 7 dní"],[n.refundRequests+" / "+n.refunds,"žádosti o vrácení peněz / vráceno tento měsíc"]];
