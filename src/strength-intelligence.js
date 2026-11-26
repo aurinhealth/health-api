@@ -568,7 +568,7 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   // Chen 2022, two weeks off lower strength); after three, a little lighter.
   const gap = today ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(dates[0] + "T12:00:00Z")) / 86400000 : 0;
   if (gap >= 14 && decision === "increase") { decision = "hold"; kg = topKg; }
-  if (gap > 21 && decision !== "decrease") { decision = "return"; kg = Math.min(topKg, stepDown(topKg * 0.9, step, rule.min) || topKg); }
+  if (gap > 21 && decision !== "decrease") { decision = "return"; kg = Math.min(topKg, stepDown(topKg * (gap > 56 ? 0.8 : 0.9), step, rule.min) || topKg); }
   // An assisted machine works the other way: progress takes counterweight
   // off, a step back (or a return after a break) adds a step of it.
   if (meta?.loadUnit === LOAD_UNITS.ASSISTANCE_KG) kg = decision === "increase" ? Math.max(rule.min, topKg - step) : decision === "decrease" || decision === "return" ? topKg + step : topKg;
@@ -678,7 +678,7 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     // after 21 (load ramp-back review 2026-11-25, C14).
     const gap = today && ref.last ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(ref.last + "T12:00:00Z")) / 86400000 : 0;
     const progress = progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
-    kg *= gap > 21 ? Math.min(1, progress) * 0.9 : gap >= 14 ? Math.min(1, progress) : progress;
+    kg *= gap > 21 ? Math.min(1, progress) * (gap > 56 ? 0.8 : 0.9) : gap >= 14 ? Math.min(1, progress) : progress;
     kg *= recoveryMultiplier(loadFactor);
     // Never far above the catalogue's start for an exercise not done yet.
     // Half of the athlete's own two-arm weight needs no such limit.

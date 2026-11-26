@@ -173,3 +173,20 @@ test("R7: a sore shoulder in the pool: no paddles or pull buoy, a pause offered,
   assert.equal(swim({ goal: { focus: "long_endurance" } }).recommendation.session.kind, "long_endurance", "a longer swim stays");
   assert.ok(!coach({ sport: "swim" }).recommendation.adaptations.some(a => /packelí/.test(a)), "no shoulder pain, no note");
 });
+
+test("R4 gym: after more than 21 days the first 2 sessions held, after more than 56 the first 4, weights 10 or 20 % lighter", async () => {
+  const { generateStrengthPlan } = await import("../src/strength-generator.js");
+  const { progressionDecision: decide } = await import("../src/strength-intelligence.js");
+  const session = when => Array.from({ length: 3 }, (_, i) => ({ workout_date: when, exercise: "DB bench press", type: "WORK", completed: 1, set_no: i + 1, actual_kg: 30, actual_reps: 10, rpe: 7 }));
+  const plan = days => withLang("cs", () => generateStrengthPlan({ date, cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: days.flatMap(d => session(day(d))) }, recoveryWeek: { recovery: false, known: true } }, { durationMinutes: 60 }));
+  assert.match(plan([-30]).planName, /, po pauze$/);
+  assert.match(plan([-30]).rationale, /Návrat do posilovny po 30 dnech/);
+  assert.match(plan([-40, -5]).planName, /, po pauze$/, "one session back of 2");
+  assert.doesNotMatch(plan([-40, -5, -3]).planName, /po pauze/, "two sessions back: as usual");
+  assert.match(plan([-80, -7, -5, -3]).planName, /, po pauze$/, "after 56 days: 4 sessions");
+  assert.doesNotMatch(plan([-80, -9, -7, -5, -3]).planName, /po pauze/);
+  assert.doesNotMatch(plan([-20, -10]).planName, /po pauze/, "21 days or less: as usual");
+  const kg = d => decide(session(day(d)), "DB bench press", 10, 1, date).kg;
+  assert.equal(kg(-30), 25, "27 kg rounded down to the 2.5 kg step");
+  assert.equal(kg(-70), 22.5, "24 kg rounded down");
+});
