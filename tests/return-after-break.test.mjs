@@ -59,12 +59,20 @@ test("back after 14+ days off: the whole first week without intensity, then qual
   assert.equal(returnAfterBreak([day(-20), day(-10)], date), null, "the window's first day is no session");
   assert.equal(returnAfterBreak([day(-60), day(-20)], date), day(-20), "the gap began before the window");
   assert.equal(coach({}).recommendation.session.kind, "threshold");
-  const third = coach({ returns: { ride: day(-3) } });
-  assert.ok(!hard.includes(third.recommendation.session.kind), third.recommendation.session.kind);
-  assert.ok(third.recommendation.adaptations.some(a => /první týden po pauze/.test(a)));
-  assert.equal(coach({ returns: { ride: day(-7) } }).recommendation.session.kind, "threshold", "day 8 back");
+  // R2: after 14 to 27 days off intensity after 2 sessions, after 28 or more after 3 and a week.
+  const second = coach({ returns: { ride: day(-3), gap: { ride: 20 }, since: { ride: 1 } } });
+  assert.ok(!hard.includes(second.recommendation.session.kind), second.recommendation.session.kind);
+  assert.ok(second.recommendation.adaptations.some(a => /intenzita až po 2 trénincích/.test(a)));
+  assert.equal(coach({ returns: { ride: day(-3), gap: { ride: 20 }, since: { ride: 2 } } }).recommendation.session.kind, "threshold", "third session back");
+  assert.ok(!hard.includes(coach({ returns: { ride: day(-5), gap: { ride: 30 }, since: { ride: 3 } } }).recommendation.session.kind), "28+ days: a week too");
+  assert.equal(coach({ returns: { ride: day(-7), gap: { ride: 30 }, since: { ride: 3 } } }).recommendation.session.kind, "threshold", "28+ days: 3 sessions and a week");
+  // The first session back: at most 90 min after 14 to 27 days, 60 after 28 or more.
+  assert.ok(coach({ week: week([]), returns: { last: { ride: day(-20) } }, availabilityMinutes: 240 }).recommendation.session.durationMinutes <= 90);
+  assert.ok(coach({ week: week([]), returns: { last: { ride: day(-30) } }, availabilityMinutes: 240 }).recommendation.session.durationMinutes <= 60);
+  // "Trained elsewhere" on Welcome back cancels it.
+  assert.equal(coach({ returns: { ride: day(-3), gap: { ride: 20 }, since: { ride: 1 } }, athleteState: { status: "active", elsewhere: day(-23) } }).recommendation.session.kind, "threshold", "trained elsewhere");
   // Another sport's break does not ease the ride.
-  assert.equal(coach({ returns: { run: day(-3) } }).recommendation.session.kind, "threshold");
+  assert.equal(coach({ returns: { run: day(-3), gap: { run: 20 }, since: { run: 1 } } }).recommendation.session.kind, "threshold");
 });
 
 test("the return after Nemoc follows how long it lasted, with a stop line", () => {

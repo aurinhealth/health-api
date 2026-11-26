@@ -13,7 +13,7 @@ const clean = v => String(v || '').trim().slice(0, 500);
 // statusUntil is the first calendar day on which the status no longer applies.
 export function effectiveAthleteState(state,date=localToday()){
   return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date
-    ? {...state,status:'active',note:'',statusUntil:null,...(state.status==='sick'?{recoveredAt:state.statusUntil,sickFrom:sickStart(state)}:{})} : state;
+    ? {...state,status:'active',note:'',statusUntil:null,ended:{status:state.status,on:state.statusUntil},...(state.status==='sick'?{recoveredAt:state.statusUntil,sickFrom:sickStart(state)}:{})} : state;
 }
 // The first day of Nemoc (changedAt is when it was set), so the return can
 // follow how long it lasted (cycling-coach-v2.js).
@@ -96,6 +96,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   if (patch.eased !== undefined) state.eased = patch.eased;
   // The coach's question after a training gap (coach-gap-checkin.js): the gap it was asked for.
   if (validDay(patch.gapAsked)) state.gapAsked = patch.gapAsked;
+  // "Trained elsewhere" or "Keep as is" on Welcome back: the gap's last session day; the R2 rules after a break do not apply to it (cycling-coach-v2.js).
+  if (validDay(patch.elsewhere)) state.elsewhere = patch.elsewhere;
   // The coach's own chat messages from the rules (coach-week-summary.js, coach-race-week.js):
   // the week or race each was posted for and where, so it is posted once and the chat shows its card.
   if (['week', 'race'].includes(patch.posted?.kind) && validDay(patch.posted.key) && Number.isInteger(patch.posted.chatId) && Number.isInteger(patch.posted.messageId))

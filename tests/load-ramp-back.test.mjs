@@ -85,11 +85,11 @@ test('C7: the first day back after 30 days has no planned or asked intensity and
   assert.equal(coach({}).session.kind, 'threshold', 'no activity known at all says nothing about a break');
 });
 
-test('C7: days 2 to 6 back have no long session and a length cap', () => {
-  const ride = coach({ week: week([{ date: day(-3), type: 'Ride', name: 'Endurance', tss: 60, durationHours: 1.25 }]), returns: { ride: day(-3), last: { ride: day(-3) } }, goal: { focus: 'long_endurance' }, availabilityMinutes: 240 });
+test('C7 and R2: until intensity is back no long session and a length cap', () => {
+  const ride = coach({ week: week([{ date: day(-3), type: 'Ride', name: 'Endurance', tss: 60, durationHours: 1.25 }]), returns: { ride: day(-3), gap: { ride: 20 }, since: { ride: 1 }, last: { ride: day(-3) } }, goal: { focus: 'long_endurance' }, availabilityMinutes: 240 });
   assert.equal(ride.session.kind, 'endurance');
   assert.ok(ride.session.durationMinutes <= 90, String(ride.session.durationMinutes));
-  const run = coach({ sport: 'run', week: week([{ date: day(-3), type: 'Run', name: 'Easy', tss: 40, durationHours: 0.75 }]), returns: { run: day(-3), last: { run: day(-3) } }, goal: { focus: 'long_endurance' }, availabilityMinutes: 240 });
+  const run = coach({ sport: 'run', week: week([{ date: day(-3), type: 'Run', name: 'Easy', tss: 40, durationHours: 0.75 }]), returns: { run: day(-3), gap: { run: 20 }, since: { run: 1 }, last: { run: day(-3) } }, goal: { focus: 'long_endurance' }, availabilityMinutes: 240 });
   assert.ok(run.session.durationMinutes <= 45, String(run.session.durationMinutes));
 });
 
@@ -141,7 +141,7 @@ test('C6: the week revision keeps the pause, one long a week and the running cap
 });
 
 test('C7: asked again after the coach\'s concern, a long ride in the week back stands', () => {
-  const r = coach({ week: week([{ date: day(-3), type: 'Ride', name: 'Endurance', tss: 60, durationHours: 1.25 }]), returns: { ride: day(-3), last: { ride: day(-3) } }, goal: { focus: 'long_endurance', asked: true, chat: true, insisted: true }, availabilityMinutes: 240 });
+  const r = coach({ week: week([{ date: day(-3), type: 'Ride', name: 'Endurance', tss: 60, durationHours: 1.25 }]), returns: { ride: day(-3), gap: { ride: 20 }, since: { ride: 1 }, last: { ride: day(-3) } }, goal: { focus: 'long_endurance', asked: true, chat: true, insisted: true }, availabilityMinutes: 240 });
   assert.ok(r.session.durationMinutes > 90, String(r.session.durationMinutes));
 });
 

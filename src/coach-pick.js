@@ -258,7 +258,17 @@ export async function sportReturns(db, userId, today) {
     if (kind === "run" && day >= month && day < today && minutes > 0 && minutes < 600) longestRun = Math.max(longestRun, Math.round(minutes));
   }
   const before = list => list.filter(d => d < today).sort().at(-1) || null;
-  return { ...Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS, start: older ? from : null })])), last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun };
+  // R2 (Petr 2026-11-26): the break's length before the return and the
+  // sessions done since it, so intensity comes back after 2 (or 3) sessions.
+  const backs = Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, returnAfterBreak(list, today, { window: RETURNS_DAYS, start: older ? from : null })]));
+  const gap = {}, since = {};
+  for (const [kind, back] of Object.entries(backs)) {
+    if (!back) continue;
+    const days = [...new Set(dates[kind])].sort(), prev = days.filter(d => d < back).at(-1) || (older ? from : null);
+    if (prev) gap[kind] = Math.round((Date.parse(back + "T12:00:00Z") - Date.parse(prev + "T12:00:00Z")) / 864e5);
+    since[kind] = days.filter(d => d >= back && d < today).length;
+  }
+  return { ...backs, gap, since, last: Object.fromEntries(Object.entries(dates).map(([kind, list]) => [kind, before(list)])), longestRun };
 }
 
 export async function pickState(db, userId, date) {

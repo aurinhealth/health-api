@@ -18,6 +18,7 @@ import { saveCoachQuestion } from './coach-questions.js';
 import { ensureAssistantChats } from './assistant-chats.js';
 import { updateAthleteState } from './athlete-state.js';
 import { sportOf } from './adaptive-week.js';
+import { isHardSession } from './session-intensity.js';
 
 export const GAP_DAYS = 3;
 export const GAP_MISSED = 2;
@@ -88,4 +89,86 @@ export async function postGapCheckin(db, question) {
   const message = await db.prepare("INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,'assistant',?) RETURNING id").bind(chat.id, db.userId, content).first();
   await saveCoachQuestion(db, { chatId: chat.id, messageId: message.id, chips: question.chips });
   return { chatId: chat.id, messageId: message.id, text: question.text, chips: question.chips, ...(question.note ? { note: question.note } : {}) };
+}
+
+// ---- Welcome back: one question, one flow (Petr 2026-11-26) -----------------
+// The gap question moves from a new chat to the Welcome back screen: the same
+// trigger as gapCheckin (no "days without opening the app"), asked once per
+// gap, the answers our statuses in a fixed order, none preselected, with one
+// line on what each does and "Not now". The easier week (R2) only after 14
+// days: 3 to 6 days change nothing, 7 to 13 keep the day coach's first day
+// without intensity. Nothing goes to the AI.
+const validEnd = (on, date) => typeof on === 'string' && on <= date && days(on, date) <= 3;
+export const WELCOME_ANSWERS = ['elsewhere', 'break', 'sick', 'injured', 'later', 'keep'];
+export function welcomeBack(args) {
+  const q = gapCheckin(args);
+  if (!q) return null;
+  const gap = days(q.key, args.date);
+  // Rest with an end date the athlete set ended: the reason is known, so no
+  // question; Welcome back shows the easier week (from 14 days) with Extend.
+  const ended = args.state?.ended;
+  if (ended?.status === 'on_break' && validEnd(ended.on, args.date))
+    return { key: q.key, days: gap, ended: true, title: L('Vítej zpátky.', 'Welcome back.'), text: L('Pauza dnes skončila.', 'Rest ended today.'), answers: [] };
+  return {
+    key: q.key, days: gap,
+    title: L('Vítej zpátky.', 'Welcome back.'),
+    text: L(`Od ${since(q.key, args.date)} nevidím žádný trénink. Jak se máš teď?`, `I don't see a workout since ${since(q.key, args.date)}. How are things now?`),
+    answers: [
+      { id: 'elsewhere', label: L('Trénoval jsem jinde', 'Trained elsewhere') },
+      { id: 'break', label: L('Dal jsem si pauzu', 'Took a break') },
+      { id: 'sick', label: L('Nemoc', 'Sick') },
+      { id: 'injured', label: L('Zranění', 'Injured') }
+    ],
+    outcomes: gap >= 14
+      ? L('Pauza: lehčí první týden. Jinde: plán zůstává. Nemoc nebo Zranění: stav, dokud ho neukončíš.', 'Took a break: an easier first week. Trained elsewhere: your plan stays. Sick or Injured: a status until you end it.')
+      : L('Pauza nebo jinde: plán zůstává. Nemoc nebo Zranění: stav, dokud ho neukončíš.', 'Took a break or trained elsewhere: your plan stays. Sick or Injured: a status until you end it.'),
+    later: L('Teď ne', 'Not now'),
+    ...(q.note ? { note: q.note } : {})
+  };
+}
+
+// The coach's one sentence after an answer, and what to save: the gap is asked
+// first (gapAsked), "Trained elsewhere" and "Keep as is" mark it (elsewhere),
+// Sick and Injured switch the status on as the Status card does.
+export function welcomeAnswer(question, answer) {
+  if (!question || !WELCOME_ANSWERS.includes(answer)) return null;
+  const patch = { gapAsked: question.key };
+  if (answer === 'elsewhere' || answer === 'keep') patch.elsewhere = question.key;
+  if (answer === 'sick' || answer === 'injured') patch.status = answer;
+  const long = question.days >= 28;
+  const coach = answer === 'elsewhere' ? L('Rozumím. Plán jede dál, jak je.', 'Got it. Your plan goes on as it is.')
+    : answer === 'keep' ? L('Dobře, plán zůstává, jak je.', 'Okay, your plan stays as it is.')
+    : answer === 'break' ? (question.days >= 14
+      ? L(`Nic nedoháníme. Nejdřív ${long ? '3 lehké tréninky' : '2 lehké tréninky'}, pak zase intenzita a dlouhé tréninky.`, `No catching up. ${long ? 'Three' : 'Two'} easy sessions first, then intensity and long sessions again.`)
+      : question.days >= 7 ? L('Rozumím. Dnes lehce, pak plán jede dál.', 'Got it. Today stays easy, then your plan goes on.')
+      : L('Rozumím. Plán jede dál.', 'Got it. Your plan goes on.'))
+    : null;
+  return { patch, coach, easierWeek: answer === 'break' && question.days >= 14 };
+}
+
+// The easier week on Welcome back after "Took a break" (R2): the plan's
+// sessions from today to the end of the plan's week, each ride, run and swim
+// until intensity is back (2 sessions after 14 to 27 days, 3 after 28 or more)
+// easy and without a long one; the first one at most 90 min (run and swim 45),
+// after 28 days 60 (30), the others 90 (45). The gym stays (R2 leaves it).
+// The day coach applies the same rules each day; this only shows them.
+const EASY = { ride: ['Lehká jízda', 'Easy ride'], run: ['Lehký běh', 'Easy run'], swim: ['Lehké plavání', 'Easy swim'] };
+const LONG = /long|dlouh/i;
+export function easierWeek({ date, weekDays = [], gapDays }) {
+  const long = gapDays >= 28, need = long ? 3 : 2, seen = {};
+  const rows = [];
+  for (const d of [...weekDays].filter(d => d?.date >= date).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 7)) {
+    for (const p of plannedSessions(d.daily?.training?.planned)) {
+      const sport = sportOf(p), minutes = Math.round((Number(p.durationHours) || 0) * 60) || Number(p.minutes) || null;
+      if (!['ride', 'run', 'swim'].includes(sport)) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
+      const index = seen[sport] = (seen[sport] || 0) + 1, short = sport !== 'ride';
+      if (index > need) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
+      const cap = index === 1 && long ? (short ? 30 : 60) : short ? 45 : 90;
+      const easy = isHardSession(p, sport) || LONG.test(String(p.name || '')), capped = minutes && minutes > cap ? cap : minutes;
+      if (!easy && capped === minutes) { rows.push({ date: d.date, sport, name: p.name, minutes, was: null }); continue; }
+      rows.push({ date: d.date, sport, name: easy ? L(...EASY[sport]) : p.name, minutes: capped, was: { name: p.name, minutes } });
+    }
+  }
+  const sum = list => list.reduce((t, r) => t + (Number(r.minutes) || 0), 0);
+  return { rows, minutes: sum(rows), planMinutes: sum(rows.map(r => r.was || r)) };
 }

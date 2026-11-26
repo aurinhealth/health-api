@@ -453,7 +453,17 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // sportReturns): the whole first week without intensity, not only the
   // first session (audit wave 2, 9.2; the week is an estimate).
   const backDays=returns?.[sport]?diffDays(targetDate,returns[sport]):null;
-  const breakWeek=(lastRide!=null&&lastRide>=14)||(backDays!=null&&backDays>=0&&backDays<=6);
+  // R2 (Petr 2026-11-26): after 14 to 27 days off, intensity after 2 sessions
+  // of the sport; after 28 or more, after 3 and at least 7 days back. The
+  // first session is at most 90 min (run and swim 45), after 28 days 60 (30).
+  // "Trained elsewhere" on Welcome back (athleteState.elsewhere, the last
+  // session's day before the gap) cancels it. Coach practice, an estimate.
+  const firstBack=lastRide!=null&&lastRide>=14;
+  const breakGap=firstBack?lastRide:backDays!=null&&backDays>=0?n(returns?.gap?.[sport],0):0;
+  const backSessions=firstBack?0:n(returns?.since?.[sport],0);
+  const breakStart=breakGap>=14?new Date(Date.parse(targetDate+"T12:00:00Z")-(breakGap+(firstBack?0:backDays))*864e5).toISOString().slice(0,10):null;
+  const elsewhere=Boolean(breakStart&&athleteState?.elsewhere&&athleteState.elsewhere>=breakStart);
+  const breakWeek=!elsewhere&&breakGap>=14&&(breakGap>=28?backSessions<3||(backDays??0)<7:backSessions<2);
   const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!otherRecent&&hardAll7<3&&!(lastRide!=null&&lastRide>=7)&&!breakWeek;
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
@@ -584,7 +594,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const sore=athleteState?.memoryOff?[]:sorePartsFor(sport,athleteState?.memories);
     if(sore.length&&quality()){kind="endurance";adaptations.push(L("bolest "+sore.map(a=>a.label[0]).join(" a ")+" z toho, co si kouč pamatuje: bez intenzity","pain in the "+sore.map(a=>a.label[1]).join(" and ")+" the coach remembers: no intensity"));}
     if(quality()&&!insisted){
-      const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?L("první týden po pauze delší než 2 týdny: bez intenzity","first week back after more than 2 weeks off: no intensity"):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
+      const why=novice?W.novice:offBreak?W.off(lastRide):breakWeek?(breakGap>=28?L("po pauze delší než 4 týdny: intenzita až po 3 trénincích a týdnu","back after more than 4 weeks off: intensity after 3 sessions and a week"):L("po pauze delší než 2 týdny: intenzita až po 2 trénincích","back after more than 2 weeks off: intensity after 2 sessions")):lastHard!=null&&lastHard<2?W.recent:waitsForRecovery?recoveryWhy(halfDay(recoveryTime.readyAt)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
     }
     // The first day back and the rest of the first week alike: no long
@@ -593,7 +603,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if((offBreak||breakWeek)&&!novice)returning=true;
     if((offBreak||breakWeek)&&!novice&&!insisted){
       if(kind==="long_endurance")kind="endurance";
-      capAt(short?45:90,L("návrat po pauze","returning after a break"));
+      capAt(breakWeek&&backSessions===0&&breakGap>=28?(short?30:60):short?45:90,L("návrat po pauze","returning after a break"));
     }
   }
   // A threshold test the athlete planned (threshold-check.js): the two days

@@ -61,3 +61,52 @@ test('posted as a new chat whose chip is a free reply, and the gap is marked ask
   assert.equal((await getAthleteState(db)).gapAsked, '2026-11-06');
   assert.equal(await postGapCheckin(db, null), null);
 });
+
+// ---- Welcome back: one question, one flow (Petr 2026-11-26) ----
+import { welcomeBack, welcomeAnswer, easierWeek } from '../src/coach-gap-checkin.js';
+import { effectiveAthleteState } from '../src/athlete-state.js';
+
+test('Welcome back asks the gap question with our statuses, one line on each and Not now', () => withLang('en', () => {
+  const q = welcomeBack({ date: DATE, weekDays, sleep, wellness: [], state: {} });
+  assert.equal(q.text, "I don't see a workout since Friday. How are things now?");
+  assert.deepEqual(q.answers.map(a => a.id), ['elsewhere', 'break', 'sick', 'injured'], 'fixed order, none preselected');
+  assert.equal(q.later, 'Not now');
+  assert.match(q.outcomes, /your plan stays/);
+  assert.equal(welcomeBack({ date: DATE, weekDays, sleep, wellness: [], state: { gapAsked: q.key } }), null, 'once per gap');
+  assert.equal(welcomeBack({ date: DATE, weekDays, sleep, wellness: [], state: { status: 'sick' } }), null, 'never while Sick');
+}));
+
+test('Welcome back answers: elsewhere keeps the plan, a break of 14 days gives the easier week, Sick sets the status', () => withLang('en', () => {
+  const q = { key: '2026-11-01', days: 18 };
+  assert.deepEqual(welcomeAnswer(q, 'elsewhere').patch, { gapAsked: q.key, elsewhere: q.key });
+  const pause = welcomeAnswer(q, 'break');
+  assert.equal(pause.easierWeek, true);
+  assert.match(pause.coach, /Two easy sessions first/);
+  assert.equal(welcomeAnswer({ ...q, days: 30 }, 'break').coach.startsWith('No catching up. Three'), true);
+  assert.equal(welcomeAnswer({ ...q, days: 5 }, 'break').easierWeek, false, '3 to 6 days change nothing');
+  assert.match(welcomeAnswer({ ...q, days: 9 }, 'break').coach, /Today stays easy/);
+  assert.deepEqual(welcomeAnswer(q, 'sick').patch, { gapAsked: q.key, status: 'sick' });
+  assert.deepEqual(welcomeAnswer(q, 'later').patch, { gapAsked: q.key }, 'Not now: never asked again for this gap');
+  assert.equal(welcomeAnswer(q, 'nonsense'), null);
+}));
+
+test('Rest with an end date ends: Welcome back without the question', () => withLang('en', () => {
+  const state = effectiveAthleteState({ status: 'on_break', statusUntil: DATE }, DATE);
+  const q = welcomeBack({ date: DATE, weekDays, sleep, wellness: [], state });
+  assert.equal(q.ended, true);
+  assert.deepEqual(q.answers, []);
+}));
+
+test('the easier week: first sessions of each sport easy and capped, the gym stays', () => withLang('en', () => {
+  const plan = [
+    day('2026-12-02', [{ id: 'planned:1', name: 'Tempo run', type: 'Run', durationHours: 50 / 60 }]),
+    day('2026-12-03', [{ id: 'planned:2', name: 'Strength', type: 'WeightTraining', durationHours: 0.75 }]),
+    day('2026-12-05', [{ id: 'planned:3', name: 'Easy run', type: 'Run', durationHours: 40 / 60 }]),
+    day('2026-12-06', [{ id: 'planned:4', name: 'Long run', type: 'Run', durationHours: 100 / 60 }])
+  ];
+  const w = easierWeek({ date: '2026-12-02', weekDays: plan, gapDays: 18 });
+  assert.deepEqual(w.rows.map(r => [r.name, r.minutes]), [['Easy run', 45], ['Strength', 45], ['Easy run', 40], ['Long run', 100]]);
+  assert.deepEqual(w.rows[0].was, { name: 'Tempo run', minutes: 50 });
+  const long = easierWeek({ date: '2026-12-02', weekDays: plan, gapDays: 30 });
+  assert.deepEqual(long.rows.map(r => [r.name, r.minutes]), [['Easy run', 30], ['Strength', 45], ['Easy run', 40], ['Easy run', 45]], '28+ days: 3 sessions, the first 30 min');
+}));
