@@ -215,3 +215,14 @@ test("logged foods are counted for the frequent list", async () => {
   assert.deepEqual(frequent.map(p => [p.name, p.uses]), [["Jogurt", 2], ["Rohlík", 1]]);
   assert.equal((await listPersonalFoods(db)).length, 2, "the recent list has them all");
 });
+
+test("carbs before a ride follow one rule in the food plan and the daily analysis", async () => {
+  const { buildNutritionPlan, preRideCarbsGrams } = await import("../src/nutrition-intelligence.js");
+  const ride = { date: "2026-10-05", name: "Intervals", durationHours: 1, intensity: true };
+  const plan = buildNutritionPlan({ date: "2026-10-05", cycling: { plannedWorkouts: [ride], nextRide: ride, recentActivities: [] } }, { weightKg: 75 });
+  assert.equal(plan.fueling.plannedRide.preRideCarbsGrams, 75);
+  assert.equal(preRideCarbsGrams(75, plan.fueling.plannedRide.carbsDuringRideGrams), 75);
+  assert.equal(preRideCarbsGrams(75, 0), null);
+  assert.equal(preRideCarbsGrams(null, 60), null);
+  assert.ok(readFileSync(new URL("../src/index.js", import.meta.url), "utf8").includes("preRideCarbsGrams(kg, rideCarbs)"));
+});
