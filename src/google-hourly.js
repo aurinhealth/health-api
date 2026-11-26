@@ -28,13 +28,13 @@ const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
 const round = v => Math.round(v * 1000) / 1000;
 
 // The first hour stored this way for the user: the next full hour the first time.
-export async function hourlyFrom(db, userId, now = Date.now()) {
-  const row = await db.prepare('SELECT details_json FROM sync_status WHERE user_id = ? AND sync_name = ?').bind(userId, MARK).first().catch(() => null);
+export async function hourlyFrom(db, userId, now = Date.now(), mark = MARK) {
+  const row = await db.prepare('SELECT details_json FROM sync_status WHERE user_id = ? AND sync_name = ?').bind(userId, mark).first().catch(() => null);
   try { const from = JSON.parse(row?.details_json || '{}').from; if (Date.parse(from)) return from; } catch { /* written below */ }
   const from = iso(Math.ceil(now / HOUR) * HOUR);
   await db.prepare("INSERT INTO sync_status(user_id,sync_name,status,finished_at,details_json,updated_at) VALUES(?,?,'ok',datetime('now'),?,datetime('now')) ON CONFLICT(user_id,sync_name) DO NOTHING")
-    .bind(userId, MARK, JSON.stringify({ from })).run();
-  return hourlyFrom(db, userId, now);
+    .bind(userId, mark, JSON.stringify({ from })).run();
+  return hourlyFrom(db, userId, now, mark);
 }
 
 // The points from `from` on, as minutes per hour (and zone): a point's value split

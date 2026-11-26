@@ -21,6 +21,8 @@ function db() {
   add("google-wearables", "daily-resting-heart-rate", "2026-11-11T00:00:00Z", null, null, { dailyRestingHeartRate: { date: { year: 2026, month: 11, day: 11 }, beatsPerMinute: 52 } });
   add("google-wearables", "heart-rate-5min", null, null, 61.24, { n: 40 });
   d.sqlite.prepare("UPDATE health_datapoints SET sample_time = '2026-11-11T08:00:00Z' WHERE data_type = 'heart-rate-5min'").run();
+  // From the switch hour on, the 5 minutes come as a row an hour (heart-rate-compaction.js).
+  add("google-wearables", "heart-rate-5min-hour", "2026-11-11T09:00:00Z", "2026-11-11T10:00:00Z", 63, { b: [{ avg: 62.04, n: 50 }, null, { avg: 64, n: 50 }, ...Array(9).fill(null)] });
   add("google-wearables", "steps", "2026-11-11T08:00:00.000Z", "2026-11-11T09:00:00.000Z", 1200, {});
   // Before the yes: not sent.
   add("google-wearables", "steps", "2026-11-01T08:00:00.000Z", "2026-11-01T09:00:00.000Z", 900, {});
@@ -42,7 +44,7 @@ test("other apps' health data goes to Apple Health only after the yes, and only 
   assert.equal(out.sleep.length, 1);
   assert.deepEqual(out.sleep[0].stages.map(s => s.type), ["core", "deep"]);
   assert.deepEqual(out.restingHR, [{ date: "2026-11-11", value: 52 }]);
-  assert.deepEqual(out.heartRate, [{ start: "2026-11-11T08:00:00.000Z", value: 61.2 }]);
+  assert.deepEqual(out.heartRate, [{ start: "2026-11-11T08:00:00.000Z", value: 61.2 }, { start: "2026-11-11T09:00:00.000Z", value: 62 }, { start: "2026-11-11T09:10:00.000Z", value: 64 }]);
   assert.deepEqual(out.steps.map(s => s.value), [1200, 900]);
   // Saving again keeps the first yes; turning every such type off ends it.
   await saveSyncPrefs(d, 7, "apple", { health: ["sleep"] }, { now: NOW + 86400000 });

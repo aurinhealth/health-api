@@ -22,7 +22,7 @@ import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync, flushGoogleSync, ownActiveTime } from "./apple-health.js";
 import { HOURLY_TYPES, hourlyFrom, hourlySlots, hourlyId, hourlyRow, minuteRows } from "./google-hourly.js";
-import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE, WORKOUT_HEART_RATE_TYPE, WORKOUT_HEART_RATE_STEP } from "./heart-rate-compaction.js";
+import { pickBuckets, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE, HEART_RATE_BUNDLE_TYPE, BUNDLE_QUERY, bundleFrom, bundleBuckets, WORKOUT_HEART_RATE_TYPE, WORKOUT_HEART_RATE_STEP } from "./heart-rate-compaction.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { bumpCacheVersion, closedDay } from "./api-cache.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -998,6 +998,12 @@ async function saveGoogleHeartRateBuckets(env, points) {
   }
   if(!buckets.size)return 0;
   const iso=ms=>new Date(ms).toISOString().replace('.000Z','Z');
+  // From the switch hour on, the 5 minutes go into the hour's row (heart-rate-compaction.js).
+  const from=Date.parse(await hourlyFrom(env.DB,env.USER_ID,Date.now(),'google_hr_hourly'));
+  const hourly=new Map();
+  for(const [b,x] of buckets){if(b<from)continue;buckets.delete(b);const h=Math.floor(b/3600e3)*3600e3;if(!hourly.has(h))hourly.set(h,new Map());hourly.get(h).set((b-h)/HR_BUCKET_MS,x);}
+  const bundled=hourly.size?await saveGoogleHeartRateHours(env,hourly):0;
+  if(!buckets.size)return bundled;
   const old=k=>`json_extract(health_datapoints.payload_json,'$.${k}')`,neu=k=>`json_extract(excluded.payload_json,'$.${k}')`;
   const apart=`(${neu('first')}>${old('last')} OR ${neu('last')}<${old('first')})`,more=`(${neu('first')}<=${old('first')} AND ${neu('last')}>=${old('last')} AND (${neu('n')}>${old('n')} OR (${neu('n')}=${old('n')} AND (${neu('min')} IS NOT ${old('min')} OR ${neu('max')} IS NOT ${old('max')}))))`;
   const avg=`ROUND((health_datapoints.value_numeric*${old('n')}+excluded.value_numeric*${neu('n')})/(${old('n')}+${neu('n')}),1)`;
@@ -1009,6 +1015,43 @@ async function saveGoogleHeartRateBuckets(env, points) {
       updated_at=CURRENT_TIMESTAMP
     WHERE ${apart} OR ${more}`)
     .bind(env.USER_ID,'hr5:'+b/1000,iso(b),iso(b),iso(b+HR_BUCKET_MS),Math.round(x.sum/x.n*10)/10,JSON.stringify({avg:Math.round(x.sum/x.n*10)/10,min:x.min,max:x.max,n:x.n,first:x.first,last:x.last})));
+  let changed=bundled;
+  for(let i=0;i<statements.length;i+=50)for(const r of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(r?.meta?.changes||0);
+  return changed;
+}
+// The hours' rows: each stored 5 minutes merged with the new one as the 5-minute
+// rows are above (joined when a page cut split it, replaced by one that spans it
+// with more samples or another min or max), written only when one changed.
+async function saveGoogleHeartRateHours(env, hours) {
+  const iso=ms=>new Date(ms).toISOString().replace('.000Z','Z'),id=h=>'hr5h:'+h/1000,ids=[...hours.keys()].map(id),stored=new Map();
+  for(let i=0;i<ids.length;i+=90){
+    const chunk=ids.slice(i,i+90);
+    const rows=(await env.DB.prepare(`SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${HEART_RATE_BUNDLE_TYPE}' AND external_id IN (${chunk.map(()=>'?').join(',')})`).bind(env.USER_ID,...chunk).all()).results||[];
+    for(const r of rows)stored.set(r.external_id,r.payload_json);
+  }
+  const statements=[];
+  for(const [h,slots] of hours){
+    const text=stored.get(id(h));
+    let had=null;try{had=JSON.parse(text||'{}').b;}catch{/* written again */}
+    const b=Array.isArray(had)&&had.length===12?[...had]:Array(12).fill(null);
+    let changed=false;
+    for(const [k,x] of slots){
+      const o=b[k],avg=Math.round(x.sum/x.n*10)/10,neu={avg,min:x.min,max:x.max,n:x.n,first:x.first,last:x.last};
+      if(!o){b[k]=neu;changed=true;continue;}
+      if(neu.first>o.last||neu.last<o.first){const n=o.n+neu.n;b[k]={avg:Math.round((o.avg*o.n+avg*neu.n)/n*10)/10,min:Math.min(o.min,neu.min),max:Math.max(o.max,neu.max),n,first:Math.min(o.first,neu.first),last:Math.max(o.last,neu.last)};changed=true;}
+      else if(neu.first<=o.first&&neu.last>=o.last&&(neu.n>o.n||(neu.n===o.n&&(neu.min!==o.min||neu.max!==o.max)))){b[k]=neu;changed=true;}
+    }
+    if(!changed)continue;
+    const n=b.reduce((s,x)=>s+(x?x.n:0),0),value=Math.round(b.reduce((s,x)=>s+(x?x.avg*x.n:0),0)/n*10)/10;
+    // Only over the row as it was read: a sync writing the same hour at once is
+    // not overwritten, and the hour is merged again on the next sync that reads it.
+    statements.push(text==null
+      ?env.DB.prepare(`INSERT INTO health_datapoints (user_id,source_family,data_type,external_id,sample_time,start_time,end_time,value_numeric,value_unit,payload_json)
+        VALUES (?,'google-wearables','${HEART_RATE_BUNDLE_TYPE}',?,?,?,?,?,'bpm',?) ON CONFLICT (user_id,source_family,data_type,external_id) DO NOTHING`)
+        .bind(env.USER_ID,id(h),iso(h),iso(h),iso(h+3600e3),value,JSON.stringify({b}))
+      :env.DB.prepare(`UPDATE health_datapoints SET value_numeric=?,payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND source_family='google-wearables' AND data_type='${HEART_RATE_BUNDLE_TYPE}' AND external_id=? AND payload_json=?`)
+        .bind(value,JSON.stringify({b}),env.USER_ID,id(h),text));
+  }
   let changed=0;
   for(let i=0;i<statements.length;i+=50)for(const r of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(r?.meta?.changes||0);
   return changed;
@@ -1886,14 +1929,16 @@ export async function heartRateInWindows(db, userId, windows) {
   // One statement a window, all in one batch: D1 refuses a UNION ALL of more
   // than a few SELECTs ("too many terms in compound SELECT"), which stopped the
   // nights of two weeks from going to Intervals.icu.
-  const results = await db.batch(asked.map(([[start, end], i]) => db.prepare(one).bind(i, userId, utcSecond(start), utcSecond(end))));
-  for (const result of results || []) {
-    const rows = result?.results || [];
-    if (!rows.length) continue;
-    const parts = pickBuckets(rows.filter(r => Number(r.raw)), rows.filter(r => !Number(r.raw)));
+  // With each window the hour rows of its 5 minutes (heart-rate-compaction.js).
+  const results = await db.batch(asked.flatMap(([[start, end], i]) => [db.prepare(one).bind(i, userId, utcSecond(start), utcSecond(end)), db.prepare(BUNDLE_QUERY).bind(userId, bundleFrom(utcSecond(start)), utcSecond(end))]));
+  asked.forEach(([[start, end], i], k) => {
+    const rows = results?.[2 * k]?.results || [];
+    // The window's end counts, as above.
+    const hours = bundleBuckets(results?.[2 * k + 1]?.results, start, end + 1).filter(r => r.avg >= 30 && r.avg <= 240);
+    const parts = pickBuckets(rows.filter(r => Number(r.raw)), [...rows.filter(r => !Number(r.raw)), ...hours]);
     const count = parts.reduce((s, r) => s + Number(r.n), 0);
-    if (count >= 3) out[Number(rows[0].i)] = Math.round(parts.reduce((s, r) => s + Number(r.avg) * Number(r.n), 0) / count);
-  }
+    if (count >= 3) out[i] = Math.round(parts.reduce((s, r) => s + Number(r.avg) * Number(r.n), 0) / count);
+  });
   return out;
 }
 

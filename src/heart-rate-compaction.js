@@ -23,6 +23,32 @@ export const WORKOUT_HEART_RATE_STEP = 5;
 // Every compacted heart-rate type, for the readers that fall back to them.
 export const HEART_RATE_COMPACT_TYPES = [HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE];
 export const BUCKET_SECONDS = 300;
+// From the hour this first runs for a user (index.js), Google's 5-minute rows come
+// as one row an hour (2026-11-26): its 12 five minutes in the payload ({ b: [null
+// or { avg, min, max, n, first, last }] }), the hour's average as the value. A row
+// a 5 minutes was ~1,300 D1 row writes a day per user, and as many again for the
+// delete a month later; the hour row is written once and updated in place. After
+// HEART_RATE_FIVE_MIN_DAYS it becomes the 1-hour row (compactHeartRateBundles).
+export const HEART_RATE_BUNDLE_TYPE = 'heart-rate-5min-hour';
+// The hour rows that can hold [from, to): from the full hour before `from`.
+export const BUNDLE_QUERY = `SELECT sample_time, payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${HEART_RATE_BUNDLE_TYPE}' AND sample_time>=? AND sample_time<?`;
+export const bundleFrom = time => new Date(Math.floor(Date.parse(time) / 3600e3) * 3600e3).toISOString().replace('.000Z', 'Z');
+// The hour rows back as the 5-minute rows ({ bucket (seconds), avg, min, max, n })
+// starting in [from, to) (ms, optional).
+export function bundleBuckets(rows, from = -Infinity, to = Infinity) {
+  const out = [];
+  for (const row of rows || []) {
+    let b;
+    try { b = JSON.parse(row?.payload_json || '{}').b; } catch { continue; }
+    const hour = Date.parse(row?.sample_time || '');
+    if (!Array.isArray(b) || !Number.isFinite(hour)) continue;
+    b.forEach((x, k) => {
+      const at = hour + k * BUCKET_SECONDS * 1000;
+      if (x && Number.isFinite(Number(x.avg)) && at >= from && at < to) out.push({ bucket: at / 1000, avg: Number(x.avg), min: x.min, max: x.max, n: Number(x.n) || 1 });
+    });
+  }
+  return out;
+}
 // The same 5 minutes from the raw samples and from a stored row: the one made of
 // more samples counts. A workout keeps its own samples, which inside it are the
 // same as the stored row's, while at its edges they cover only part of the 5
@@ -139,9 +165,24 @@ export async function compactZoneMinutes(db, userId, { now = Date.now() } = {}) 
   return { from, to, deleted: Number(deleted?.meta?.changes || 0) };
 }
 
+// The hour rows of 5-minute heart rate older than HEART_RATE_FIVE_MIN_DAYS become
+// the 1-hour row in place (one update, no delete): the hour's average, minimum,
+// maximum and samples, the 12 five minutes dropped. Returns the rows changed or null.
+export async function compactHeartRateBundles(db, userId, { now = Date.now() } = {}) {
+  // A whole UTC hour: local midnight falls within an hour in half-hour time zones.
+  const cutoff = new Date(Math.floor(Date.parse(cutoffFor(now, HEART_RATE_FIVE_MIN_DAYS)) / 3600e3) * 3600e3).toISOString().replace('.000Z', 'Z');
+  const slot = k => `json_extract(j.value, '$.${k}')`;
+  const result = await db.prepare(`UPDATE OR IGNORE health_datapoints SET data_type = '${HEART_RATE_HOUR_TYPE}', external_id = 'hr60:' || CAST(strftime('%s', sample_time) AS INTEGER),
+      payload_json = (SELECT json_object('avg', ROUND(SUM(${slot('avg')} * ${slot('n')}) / SUM(${slot('n')}), 1), 'min', MIN(${slot('min')}), 'max', MAX(${slot('max')}), 'n', SUM(${slot('n')}))
+        FROM json_each(health_datapoints.payload_json, '$.b') j WHERE j.type = 'object'), updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = '${HEART_RATE_BUNDLE_TYPE}' AND sample_time < ?`).bind(userId, cutoff).run();
+  const changed = Number(result?.meta?.changes || 0);
+  return changed ? { to: cutoff, changed } : null;
+}
+
 // One step of whichever compaction has work left, in this order; null when none has.
 export async function compactOldData(db, userId, { now = Date.now() } = {}) {
-  for (const step of [compactHeartRate, compactHeartRateHours, compactZoneMinutes]) {
+  for (const step of [compactHeartRate, compactHeartRateHours, compactHeartRateBundles, compactZoneMinutes]) {
     const done = await step(db, userId, { now });
     if (done) return { step: step.name, ...done };
   }
