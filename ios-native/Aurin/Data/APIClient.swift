@@ -388,6 +388,17 @@ final class APIClient: @unchecked Sendable {
         return r?.kg.flatMap { $0 > 0 ? $0 : nil }
     }
 
+    /// Today's loads of exercises the athlete starts themselves (the watch's
+    /// Repeat last, an exercise added in the live gym), worked out on the
+    /// server, which knows the day: a red or ill morning, a paused status and
+    /// a remembered pain (GET /app/api/gym/next; load ramp-back review C2).
+    /// Nil offline or on an older server: the local suggestion stays.
+    func gymNext(date: String, exercises: [String]) async -> GymNext? {
+        guard !exercises.isEmpty else { return nil }
+        let names = exercises.prefix(15).map { "&exercise=" + Self.query($0) }.joined()
+        return try? await get("/app/api/gym/next?date=" + Self.query(date) + names)
+    }
+
     func activityDetail(id: String) async throws -> ActivityDetail {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
@@ -970,3 +981,34 @@ final class APIClient: @unchecked Sendable {
     }
 }
 
+
+/// GET /app/api/gym/next: the day's warning (red or ill morning, a paused
+/// status) and each exercise's load for today, pain:true where a remembered
+/// pain leaves it out.
+struct GymNext: Decodable, Equatable {
+    struct Item: Decodable, Equatable {
+        let name: String
+        let kg: Double?
+        let pain: Bool?
+    }
+    let warning: String?
+    let exercises: [Item]
+
+    func item(_ name: String) -> Item? { exercises.first { $0.name == name } }
+    func pain(_ name: String) -> Bool { item(name)?.pain == true }
+
+    /// The local suggestion with the server's load and the reason in its
+    /// line: a pain first, then the day's warning, then the changed load.
+    func adjust(_ name: String, _ local: GymSuggestion) -> GymSuggestion {
+        var out = local
+        let localKg = local.work.first?.kg
+        if let kg = item(name)?.kg, kg > 0, localKg != nil, kg != localKg {
+            out.work = local.work.map { GymSuggestion.Planned(kg: kg, reps: $0.reps) }
+            out.warmups = GymCoach.warmups(for: kg)
+            out.line = L10n.f("Dnes %@ %@ podle tvých posledních tréninků.", GymCoach.shown(kg), Units.weightUnit)
+        }
+        if let warning, !warning.isEmpty { out.line = warning }
+        if pain(name) { out.line = L10n.tr("Tenhle cvik zatěžuje místo, které tě bolí. Když to bolí, vynech ho.") }
+        return out
+    }
+}
