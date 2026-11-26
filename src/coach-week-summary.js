@@ -11,8 +11,6 @@ import { shiftDate } from './dashboard-shared.js';
 import { sportOf } from './adaptive-week.js';
 import { compactActivity } from './coach-assistant.js';
 import { isNap } from './sleep-sessions.js';
-import { ensureAssistantChats } from './assistant-chats.js';
-import { updateAthleteState } from './athlete-state.js';
 
 export const SUMMARY_SPORTS = ['ride', 'run', 'swim', 'gym'];
 // The week's sleep against the usual is worth a sentence from this difference.
@@ -85,29 +83,3 @@ export function weekSummary({ start, today, days = [], sleep = [], load = null }
 
 // The week a summary is about: this one on Sunday, the one before on other days.
 export const summaryWeek = (today, monday) => (new Date(today + 'T12:00:00Z').getUTCDay() === 0 ? monday : shiftDate(monday, -7));
-
-// The Sunday message in the coach chat (concept 09 page 7): from Sunday 18:00
-// to the end of Monday, once a week (state.posted.week). Its text is the
-// headline and the week's lines in words; the card's numbers come from
-// /app/api/coach/week-summary. Activity names stay out of the text: the text
-// goes to the model when the athlete answers, and names from other services
-// are untrusted (AI-8).
-export const SUMMARY_FROM_HOUR = 18;
-export const summaryDue = (today, hour) => { const day = new Date(today + 'T12:00:00Z').getUTCDay(); return (day === 0 && hour >= SUMMARY_FROM_HOUR) || day === 1; };
-const SPORT_WORDS = () => L({ ride: 'kolo', run: 'běh', swim: 'plavání', gym: 'posilovna' }, { ride: 'ride', run: 'run', swim: 'swim', gym: 'gym session' });
-const ON_DAY = () => L(['v neděli', 'v pondělí', 'v úterý', 've středu', 've čtvrtek', 'v pátek', 'v sobotu'], ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
-export function summaryText(s) {
-  const words = SPORT_WORDS(), days = ON_DAY();
-  const missed = s.missed.slice(0, 3).map(m => L(`${words[m.sport]} ${days[new Date(m.date + 'T12:00:00Z').getUTCDay()]}`, `the ${words[m.sport]} on ${days[new Date(m.date + 'T12:00:00Z').getUTCDay()]}`));
-  const lines = [missed.length ? L(`Vynechané: ${missed.join(', ')}.`, `Missed: ${missed.join(', ')}.`) : null, s.sleep?.text || null, s.load?.text || null].filter(Boolean);
-  return [s.headline, lines.join(' ')].filter(Boolean).join('\n\n');
-}
-export async function postWeekSummary(db, summary, state) {
-  if (!summary || state?.posted?.week?.key === summary.start) return null;
-  await ensureAssistantChats(db);
-  const chat = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?) RETURNING id').bind(db.userId, L('Shrnutí týdne', 'Your week')).first();
-  const text = summaryText(summary);
-  const message = await db.prepare("INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,'assistant',?) RETURNING id").bind(chat.id, db.userId, text).first();
-  await updateAthleteState(db, { posted: { kind: 'week', key: summary.start, chatId: chat.id, messageId: message.id } });
-  return { chatId: chat.id, messageId: message.id, text, start: summary.start };
-}
