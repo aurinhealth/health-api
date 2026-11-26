@@ -775,7 +775,8 @@ struct WeekPlanRow: View {
             // The concept's sport disc (as the week strip): pale while ahead, never a dashed ring.
             SportDisc(sport: activity.sport, type: activity.type, state: SportDisc.State(status: activity.status), size: 40)
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: activity.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
+                // Three lines: "Push: chest, shoulders, triceps" next to the duration was cut after two (620).
+                Text(verbatim: activity.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(3)
                 if let line {
                     Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
