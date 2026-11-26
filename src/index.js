@@ -2089,7 +2089,7 @@ async function energyForDate(env, date) {
   const edited=a=>mark(a.payload,'Kcal')!=null;
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
-    const telemetry=minuteRows((await env.DB.prepare("SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[]);
+    const telemetry=minuteRows((await env.DB.prepare("SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,new Date(Date.parse(dayStart)-3600000).toISOString(),dayEnd).all().catch(()=>({results:[]}))).results||[]);
     for(const activity of walking){
       const checked=walkingEnergyCheck(activity,weight?.value_numeric),measured=activityTelemetryEnergy(activity,telemetry);
       activity.reportedCalories=activity.calories;

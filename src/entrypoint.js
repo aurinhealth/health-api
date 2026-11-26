@@ -242,7 +242,7 @@ async function calendarWalkKcal(env, windows) {
   try {
     const sql = "SELECT start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time";
     const shown = windows.slice(-60);
-    const results = await env.DB.batch(shown.map(w => env.DB.prepare(sql).bind(env.USER_ID, new Date(Date.parse(w.start) - 10 * 60000).toISOString(), w.end)));
+    const results = await env.DB.batch(shown.map(w => env.DB.prepare(sql).bind(env.USER_ID, new Date(Date.parse(w.start) - 70 * 60000).toISOString(), w.end)));
     shown.forEach((w, i) => { const measured = activityTelemetryEnergy(w, minuteRows(results[i]?.results || [])); if (measured) out.set(w.id, measured.kcal); });
   } catch (error) { console.error("Calendar walk energy read failed", error.message); }
   return out;
