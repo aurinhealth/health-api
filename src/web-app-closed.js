@@ -11,6 +11,7 @@ import { verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { APP_CHALLENGE } from "./google-login.js";
 import { APP_RETURN_PATH, APP_CONNECTED_PATH } from "./app-origin.js";
 import { siteLang } from "./site-pages.js";
+import { ownerAccess } from "./owner-overview.js";
 
 const OPEN_PATHS = new Set([
   "/",
@@ -27,6 +28,7 @@ const OPEN_PATHS = new Set([
   APP_CONNECTED_PATH,
   "/auth/app/connect"
 ]);
+const OWNER_PATHS = new Set(["/app/owner", "/app/owner/data", "/auth/passkey/options", "/auth/passkey/verify"]);
 // /t/<id>: a workout shared with a link (workout-templates.js).
 const OPEN_PREFIXES = ["/oauth/", "/.well-known/", "/t/", "/support/report/"];
 
@@ -46,6 +48,9 @@ export async function closedToBrowser(request, env) {
   if (appApiLevel(request) !== null) return null;
   if (path === "/auth/google") return APP_CHALLENGE.test(url.searchParams.get("app") || "") ? null : closed(request);
   if (OPEN_PATHS.has(path) || OPEN_PREFIXES.some(prefix => path.startsWith(prefix))) return null;
+  // The owner's overview (owner-overview.js) and its passkey sign-in, only with Cloudflare
+  // Access's valid token for the owner; without it they stay closed like the rest.
+  if (OWNER_PATHS.has(path) && await ownerAccess(request, env)) return null;
   // Passkeys, e-mail codes and Sign in with Apple in the browser.
   if (path.startsWith("/auth/")) return closed(request);
   // Anything else with the browser's session; the API key and anonymous requests carry on.
