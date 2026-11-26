@@ -1635,8 +1635,16 @@ function afterIllness(context) {
 // (Revize doporučování tréninků 2026-10-16, nález 22), a generated plan and a
 // saved workout alike (load ramp-back review 2026-11-25, C5).
 function assertGymDay(context) {
+  const warning=gymDayWarning(context);
+  if(warning)throw new Error(warning);
+}
+// The same check as a sentence, for a workout the athlete starts themselves
+// (Repeat last, an exercise added in the live gym): it never blocks it, the
+// loads only hold (load ramp-back review 2026-11-25, C2). Null on a good day.
+export function gymDayWarning(context) {
   const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
-  if(today?.zone==='red'||ill)throw new Error(context?.checkin==='sick'?L('V Deníku máš Nemoc. Posilovnu dnes vynech a odpočívej.','You marked Sick in your Journal. Skip the gym today and rest.'):ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  if(!(today?.zone==='red'||ill))return null;
+  return (context?.checkin==='sick'?L('V Deníku máš Nemoc. Posilovnu dnes vynech a odpočívej.','You marked Sick in your Journal. Skip the gym today and rest.'):ill?L('Dech nebo teplota ve spánku jsou nad tvým obvyklým rozmezím. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your usual range. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
 }
 // No completed gym set in the 14 days before the day (the same 14 days after
 // which the loads hold, strength-intelligence.js progressionDecision).

@@ -348,9 +348,10 @@ export function gymExerciseCatalog(){
 // squat). An exercise unlike anything done before stays without a weight.
 // today: the day the load is for, so a break holds the weight (14 days) or
 // takes it down (more than 21 days) as in a generated plan.
-export function gymLoadEstimate(exercise,history=[],today=null){
+// loadFactor under 0.9 (a red or ill day) keeps a load that would go up.
+export function gymLoadEstimate(exercise,history=[],today=null,loadFactor=1){
   const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!def)return null;
-  const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null,today});
+  const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null,today,loadFactor});
   if(estimate.kg==null)return null;
   // From another exercise never more than twice the catalogue's start, as the
   // generator (Revize 2026-10-16, nález 21: a 150 kg back squat gave a 135 kg pendulum squat).
