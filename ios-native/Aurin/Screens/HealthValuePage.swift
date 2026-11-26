@@ -642,6 +642,6 @@ struct HealthValueInfo: View {
                     .font(Typo.body).foregroundStyle(Palette.muted)
             }
         }
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 }

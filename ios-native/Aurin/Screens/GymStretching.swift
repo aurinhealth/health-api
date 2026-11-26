@@ -233,7 +233,7 @@ struct StretchInfoSheet: View {
                     }
             }
         }
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 }
 

@@ -22,14 +22,17 @@ extension View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return background(LinearGradient(colors: [Palette.cardLift, Palette.card], startPoint: .top, endPoint: .center), in: shape)
             .overlay(
-                shape.strokeBorder(LinearGradient(colors: [Palette.cardEdge, Palette.cardEdge.opacity(0)], startPoint: .top, endPoint: .center), lineWidth: 1)
+                // A thin outline all round (palette A: the white light cards
+                // and the charcoal dark ones stand off the screen), under the lit top edge.
+                shape.strokeBorder(Palette.hairline, lineWidth: 1)
+                    .overlay(shape.strokeBorder(LinearGradient(colors: [Palette.cardEdge, Palette.cardEdge.opacity(0)], startPoint: .top, endPoint: .center), lineWidth: 1))
                     .allowsHitTesting(false)
             )
     }
 
-    /// A sheet over the app: the system's glass on iOS 26, the paper colour
+    /// A sheet over the app: the system's glass on iOS 26, the sheet colour
     /// (or the sheet's own colour) before it.
-    @ViewBuilder func glassSheetBackground(_ fallback: Color = Palette.background) -> some View {
+    @ViewBuilder func glassSheetBackground(_ fallback: Color = Palette.sheet) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26, *) {
             self

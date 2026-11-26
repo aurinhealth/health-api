@@ -71,7 +71,7 @@ struct JournalMoodSheet: View {
             .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
         .presentationDetents([.large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
         .sensoryFeedback(.selection, trigger: level)
     }
 

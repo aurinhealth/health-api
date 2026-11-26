@@ -41,9 +41,9 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
 }
 
 enum WelcomeGlow {
-    static let sunrise = Color(light: 0xF7DFC2, dark: 0x3A2A17)
-    static let coach = Color(light: 0xE6E1F3, dark: 0x2A2740)
-    static let signIn = Color(light: 0xF5E3CC, dark: 0x352818)
+    static let sunrise = Color(light: 0xF7DFC2, dark: 0x4A3216)
+    static let coach = Color(light: 0xE6E1F3, dark: 0x35324A)
+    static let signIn = Color(light: 0xF5E3CC, dark: 0x45321A)
 }
 
 /// What a page's pieces need to move: `shown` turns true when the page comes

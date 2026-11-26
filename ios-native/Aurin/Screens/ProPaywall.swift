@@ -217,7 +217,7 @@ struct PaywallView: View {
             AllProPlans(offers: offers, selected: $plan, buying: store.purchasing || !chosen.priced, start: { allPlans = false; buy() },
                         redeem: { allPlans = false; redeemCode = true }, restore: restore)
                 .presentationDetents([.large])
-                .presentationBackground(Palette.background)
+                .presentationBackground(Palette.sheet)
         }
         // Apple's own sheet for an offer code; what it redeems comes through Transaction.updates (ProStore).
         .offerCodeRedemption(isPresented: $redeemCode) { result in

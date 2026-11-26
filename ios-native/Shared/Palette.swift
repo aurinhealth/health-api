@@ -2,30 +2,36 @@ import SwiftUI
 import UIKit
 
 // Colour tokens from the design (artifact "Aurin iOS návrh"): a warm paper
-// light mode and an almost black dark mode. Every token has both variants, so
+// light mode and a charcoal dark mode (palette A, Petr 2026-11-26, like
+// Bevel: lighter than the old almost black). Every token has both variants, so
 // views never check the colour scheme themselves. In Shared, so the widgets
 // use the same colours.
 enum Palette {
-    static let background = Color(light: 0xF3EFE8, dark: 0x0A0B0C)
+    static let background = Color(light: 0xF3EFE8, dark: 0x1B1D20)
+    /// A sheet over a screen: a touch lighter than the background in dark
+    /// mode, so it lifts off the screen; cards in it use cardLift.
+    static let sheet = Color(light: 0xF3EFE8, dark: 0x202326)
     /// Settings pages: flat, a touch greyer than the other screens.
-    static let settingsBackground = Color(light: 0xF1EDE5, dark: 0x0A0B0C)
-    static let card = Color(light: 0xFBFAF7, dark: 0x1C1E1F)
+    static let settingsBackground = Color(light: 0xF1EDE5, dark: 0x1B1D20)
+    static let card = Color(light: 0xFBFAF7, dark: 0x26292D)
     /// The top of a card, a touch lighter, and its lit top edge (cardSurface):
     /// the cards look like the glass of the bars and stay solid.
-    static let cardLift = Color(light: 0xFFFFFF, dark: 0x25282A)
-    static let cardEdge = Color(light: 0xFFFFFF, dark: 0x3A3E40)
+    static let cardLift = Color(light: 0xFFFFFF, dark: 0x2C3034)
+    static let cardEdge = Color(light: 0xFFFFFF, dark: 0x454A4F)
     static let ink = Color(light: 0x1B1A17, dark: 0xECEAE6)
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)
     /// Secondary text. At least 4.5:1 (WCAG AA for small text) on every
     /// surface in both modes, the section tints at the top of a screen
     /// included (DesignTokenTests). Text in it is never smaller than 11 pt.
-    static let muted = Color(light: 0x5F5B54, dark: 0xA3A8A5)
+    static let muted = Color(light: 0x5F5B54, dark: 0xB4B9B6)
     /// Tertiary text: units, chart axes, hints. Also at least 4.5:1 on every
     /// surface and tint in both modes (redesign D-TMAVY-3; 4.2:1 on the dark
     /// Today tint before), never smaller than 11 pt.
-    static let faint = Color(light: 0x66625B, dark: 0x939A97)
-    static let hairline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
-    static let track = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
+    static let faint = Color(light: 0x66625B, dark: 0xA3A8A5)
+    /// Lines and the light card outline (cardSurface): 8 % light, 10 % dark.
+    static let hairline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08, darkAlpha: 0.10)
+    /// Empty rings and bars: 12 % in both modes.
+    static let track = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.12)
 
     /// Solid buttons and the centre "+" of the tab bar.
     static let button = Color(light: 0x15140F, dark: 0xF4F2EE)
@@ -36,16 +42,16 @@ enum Palette {
     static let onAccent = Color(light: 0xFFFFFF, dark: 0x0A0B0C)
 
     static let green = Color(light: Status.Hex.good.light, dark: Status.Hex.good.dark)
-    static let greenSoft = Color(light: 0xD3EADF, dark: 0x1D3B33)
+    static let greenSoft = Color(light: 0xD3EADF, dark: 0x21433A)
     static let amber = Color(light: Status.Hex.warn.light, dark: Status.Hex.warn.dark)
     static let amberBar = Color(light: 0xC4782A, dark: 0xE09A55)
-    static let amberSoft = Color(light: 0xF3E1C6, dark: 0x3A2A17)
-    static let sand = Color(light: 0xE6D3B5, dark: 0x4A3B28)
+    static let amberSoft = Color(light: 0xF3E1C6, dark: 0x45321A)
+    static let sand = Color(light: 0xD9BE94, dark: 0x4A3B28)
     static let indigo = Color(light: 0x4F46C8, dark: 0xA5A1FF)
-    static let lilac = Color(light: 0xD9D6F3, dark: 0x34325A)
+    static let lilac = Color(light: 0xD9D6F3, dark: 0x3A3864)
     /// Cycle tracking: the period, its soft fill.
     static let pink = Color(light: 0xB83A6E, dark: 0xF0A0C0)
-    static let pinkSoft = Color(light: 0xF6DCE6, dark: 0x4A2A38)
+    static let pinkSoft = Color(light: 0xF8E6ED, dark: 0x52303F)
     static let rust = Color(light: 0xB4532F, dark: 0xF0907A)
     /// Past a limit (Týdenní kalorie over the week's target): redder than rust.
     static let red = Color(light: Status.Hex.bad.light, dark: Status.Hex.bad.dark)
@@ -66,14 +72,14 @@ enum Palette {
     /// live gym and the exercise swap take the Gym green (D-TMAVY-1). The dark
     /// tints are drawn weaker than the light ones.
     enum Glow {
-        static let today = Color(light: 0xDCEBE2, dark: 0x19322B)
-        static let health = Color(light: 0xE3E6F3, dark: 0x1E2136)
-        static let training = Color(light: 0xF3E3C6, dark: 0x322519)
-        static let food = Color(light: 0xF6E1DF, dark: 0x382224)
+        static let today = Color(light: 0xDCEBE2, dark: 0x24423A)
+        static let health = Color(light: 0xE3E6F3, dark: 0x2A2E4A)
+        static let training = Color(light: 0xF4DEBE, dark: 0x4A3216)
+        static let food = Color(light: 0xF6E1DF, dark: 0x4A2C30)
         /// Live gym and the exercise swap: the Gym sport's green.
         static let gym = today
         /// The coach's temporary chat (Dočasný chat), set apart from a normal one.
-        static let ghost = Color(light: 0xDCD9E6, dark: 0x2A2836)
+        static let ghost = Color(light: 0xDCD9E6, dark: 0x35324A)
     }
 
     /// The one set of state colours for the whole app, the Watch, the widgets
@@ -96,7 +102,7 @@ enum Palette {
         static let all: [Color] = [
             Color(light: 0x8A857C, dark: 0x8C928F), Color(light: 0x3E6FD9, dark: 0x86A9FF),
             Color(light: 0x1F6B52, dark: 0x8FE6C4), Color(light: 0xC4782A, dark: 0xE09A55),
-            Color(light: 0xC2362B, dark: 0xEC4A58), Color(light: 0xA52FB8, dark: 0xD98BF0),
+            Color(light: 0xC2362B, dark: 0xFF7380), Color(light: 0xA52FB8, dark: 0xD98BF0),
             Color(light: 0xE0357F, dark: 0xFF7EB6)
         ]
         /// Zone `index` from 0 (Z1); past Z7 stays Z7.
@@ -155,9 +161,11 @@ enum Palette {
 }
 
 extension Color {
-    init(light: UInt32, dark: UInt32, alpha: Double = 1) {
+    init(light: UInt32, dark: UInt32, alpha: Double = 1, darkAlpha: Double? = nil) {
         self.init(uiColor: UIColor { traits in
-            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light, alpha: alpha)
+            traits.userInterfaceStyle == .dark
+                ? UIColor(hex: dark, alpha: darkAlpha ?? alpha)
+                : UIColor(hex: light, alpha: alpha)
         })
     }
 }

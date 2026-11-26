@@ -212,7 +212,7 @@ struct LoadDetailView: View {
         .sheet(isPresented: $info) {
             ScrollView { LoadDetailContent.howMeasured(kind, kind.view(training)).padding(24) }
                 .presentationDetents([.medium, .large])
-                .presentationBackground(Palette.background)
+                .presentationBackground(Palette.sheet)
         }
     }
 }

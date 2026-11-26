@@ -40,12 +40,12 @@ palette changes, change `design-system.js` and this file together.
 | `--sec` | #3B3832 | Secondary body text in long passages |
 | `--muted` | #69665F | Sub-lines, captions, nav links (5.0:1 on paper, same as the app) |
 | `--line` | rgba(27,26,23,.09) | Borders and dividers |
-| `--track` | rgba(27,26,23,.08) | Hover fills, empty bars, close buttons |
+| `--track` | rgba(27,26,23,.12) | Hover fills, empty bars, close buttons |
 | `--button` | #15140F | Primary button (the ink pill) |
 | `--on-button` | #F3EFE8 | Text on the ink pill |
 | `--primary` / `--green` | #1F6B52 | Links, focus ring, readiness |
 | `--green-soft` | #D3EADF | Success fills (waitlist "done") |
-| `--amber` | #A35A12 | Strain, gym and food numbers and text inside the app's screens and demos |
+| `--amber` | #96520F | Strain, gym and food numbers and text inside the app's screens and demos |
 | `--amber-bar` | #C4782A | Strain bars, "recovering" muscles |
 | `--indigo` | #4F46C8 | Sleep and the coach |
 | `--rust` | #B4532F | Tired muscles, warnings (shapes and bars) |
@@ -56,8 +56,8 @@ palette changes, change `design-system.js` and this file together.
 | `--sun` | #E09A55 | The rings and glow around the mark, the scanning beam, the progress pill's dot (`AurinMark.amber`) |
 | `--glow-sunrise` `--glow-coach` | #F7DFC2, #E6E1F3 | The hero and final tint; the coach's part (`WelcomeGlow`) |
 | `--metal` `--plate-25` `--plate-5` | #BDB7AC, #C98A7C, #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
-| `--sand` `--brown` | #E6D3B5, #8A6D3B | The privacy lock's shackle (`WelcomeLock`), nothing else |
-| `--glow-today` `-health` `-training` `-food` | #DCEBE2, #E3E6F3, #F3E3C6, #F2E4D0 | The soft glow behind each section's phone |
+| `--sand` `--brown` | #D9BE94, #8A6D3B | The privacy lock's shackle (`WelcomeLock`), nothing else |
+| `--glow-today` `-health` `-training` `-food` | #DCEBE2, #E3E6F3, #F4DEBE, #F2E4D0 | The soft glow behind each section's phone |
 
 Each section sets two variables, `--tone` (the bar under its active step) and `--glow` (the tint behind the phone):
 readiness, training and the coach are green on `glow-today`; each part's opening is tinted with its welcome page's glow (readiness `glow-today`, training `glow-training`, nutrition `glow-food`, sleep `glow-health`, coach `glow-coach`); sleep is indigo on `glow-health`; strain and the
@@ -67,7 +67,7 @@ Contrast: body text is `--text`; small text is never lighter than `--muted`. `--
 colours and the glows are for shapes and bars, not for small text.
 
 For a future dark band (for example the final call to action), the app's dark values are ready in
-`Palette.swift`: background #0A0B0C, card #1C1E1F, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF.
+`Palette.swift` (palette A, 2026-11-26): background #1B1D20, sheet #202326, card #26292D, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF.
 
 ## Typography
 
@@ -209,9 +209,9 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 ## Dark mode
 
 On since 2026-10-29 (`DARK_SITE`). `darkTokens` in `src/design-system.js` is the app's dark palette for every
-colour token (`Palette.swift`, `WelcomePages.swift`, `AurinMark.swift`, `PlateLoader.swift`: background #0A0B0C,
-card #1C1E1F, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), under `prefers-color-scheme: dark`. The
-shadows turn into light rings, since a shadow does not show on near black; the glows are the app's dark tints; the
+colour token (`Palette.swift`, `WelcomePages.swift`, `AurinMark.swift`, `PlateLoader.swift`; palette A since 2026-11-26: background #1B1D20,
+sheet #202326, card #26292D, muted #B4B9B6, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), under `prefers-color-scheme: dark`. The
+shadows turn into light rings, since a shadow barely shows on the charcoal; the glows are the app's dark tints; the
 ink pill turns light (`Palette.button`). Each phone becomes a `<picture>` whose dark source is the same screen
 taken in dark mode.
 

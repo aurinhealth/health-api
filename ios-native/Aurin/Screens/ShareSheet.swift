@@ -332,7 +332,7 @@ struct ShareChecker: View {
 
     var body: some View {
         Canvas { context, size in
-            let a = Color(hex: dark ? 0x2A2C2E : 0xE4E0D9), b = Color(hex: dark ? 0x1E2022 : 0xF4F1EC)
+            let a = Color(hex: dark ? 0x2C3034 : 0xE4E0D9), b = Color(hex: dark ? 0x202326 : 0xF4F1EC)
             context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(b))
             var y: CGFloat = 0, row = 0
             while y < size.height {
@@ -502,7 +502,7 @@ struct ShareEditView: View {
             switch swatch {
             case .clear: ShareChecker(dark: dark, cell: 6)
             case .background: ShareTheme(dark: dark, clear: false).background(.indigo, width: 160)
-            default: Color(hex: dark ? 0x14161A : 0xF3EFE8)
+            default: Color(hex: dark ? 0x1B1D20 : 0xF3EFE8)
             }
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 5) {

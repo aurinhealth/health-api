@@ -147,6 +147,6 @@ struct AIConsentAsk: View {
             .padding(24)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 }

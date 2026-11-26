@@ -1590,7 +1590,7 @@ struct ChatsPanel: View {
                 }
                 .frame(width: min(320, geo.size.width * 0.82))
                 .frame(maxHeight: .infinity)
-                .background { Palette.background.ignoresSafeArea() }
+                .background { Palette.sheet.ignoresSafeArea() }
                 .shadow(color: .black.opacity(0.25), radius: 20, x: 6)
             }
         }

@@ -174,7 +174,7 @@ struct PlanComplianceSheet: View {
         .background(Palette.background)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .presentationBackground(Palette.sheet)
     }
 
     /// "Zátěž 73 z plánovaných 79 TSS".
