@@ -5,7 +5,7 @@ import {assistantTask} from '../src/coach-assistant.js';
 import {validateCoachActions} from '../src/coach-actions.js';
 import {assistantStreamResponse} from '../src/assistant-stream.js';
 import {planValues} from '../src/gym-plan-store.js';
-import {getWeekPlan,saveWeekPlan,addWeekSport} from '../src/week-planner.js';
+import {getWeekPlan,saveWeekPlan,addWeekSport,addWeekEvent} from '../src/week-planner.js';
 import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
 
@@ -45,6 +45,24 @@ test('a confirmed gym addition preserves Sunday ride, availability and other wee
   const saved=await getWeekPlan(db,sunday);assert.deepEqual(saved.days[6],['ride','gym']);assert.deepEqual(saved.days[0],['gym']);assert.equal(saved.availability[6].minutes,90);assert.equal(saved.weeklyActivities,5);
   assert.deepEqual((await getWeekPlan(db,'2026-10-18')).days[6],['ride']);assert.deepEqual((await getWeekPlan(other,sunday)).days[6],[]);
   assert.deepEqual(validateCoachActions([{...action,date:'2026-10-04'}],{},today),[]);assert.deepEqual(validateCoachActions([action],{athleteState:'sick'},today),[]);
+});
+
+test("the coach's match card: one of the athlete's other sports, that week only, for an app that shows it",async()=>{
+  const raw=createD1(),db=scopedDb(raw,1);
+  await saveWeekPlan(db,{days:[['gym'],[],[],[],[],[],['ride']],availability:Array.from({length:7},()=>({minutes:90})),weeklyActivities:4});
+  const ctx={otherEventCards:true,otherSports:{sports:[{type:'Tennis',name:'Tenis'}],planned:[]}};
+  const saturday='2026-10-10',ask={type:'other_event',date:saturday,otherType:'Tennis',eventKind:'match',minutes:0,reason:'Turnaj v sobotu.'};
+  const action=validateCoachActions([ask],ctx,today)[0];
+  assert.deepEqual(action,{type:'other_event',date:saturday,otherType:'Tennis',otherName:'Tenis',eventKind:'match',minutes:90,reason:'Turnaj v sobotu.'});
+  // Not one of their sports, a past day, an app without the card: none.
+  assert.deepEqual(validateCoachActions([{...ask,otherType:'Soccer'}],ctx,today),[]);
+  assert.deepEqual(validateCoachActions([{...ask,date:'2026-10-04'}],ctx,today),[]);
+  assert.deepEqual(validateCoachActions([ask],{...ctx,otherEventCards:false},today),[]);
+  await addWeekEvent(db,saturday,{type:action.otherType,kind:action.eventKind,minutes:action.minutes});
+  await addWeekEvent(db,saturday,{type:'Tennis',kind:'match',minutes:120});
+  assert.deepEqual((await getWeekPlan(db,saturday)).events[5],[{type:'Tennis',kind:'match',minutes:120}]);
+  assert.deepEqual((await getWeekPlan(db,'2026-10-17')).events[5],[]);
+  assert.deepEqual((await getWeekPlan(db,saturday)).days[6],['ride']);
 });
 
 test('assistant progress appears before readable reply and validated actions',async()=>{
