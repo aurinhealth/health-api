@@ -655,7 +655,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const within=days=>completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=1&&d<=days;});
     // The coach's week reaches back 7 to 13 days: the 30 days come from
     // sportReturns (coach-pick.js, longestRun), read with the breaks.
-    const longest=within(14).length?Math.max(0,n(returns?.longestRun,0),...within(30).map(a=>n(a.durationHours,0)*60)):0;
+    const lastRun=returns?.last?.run?diffDays(targetDate,returns.last.run):null,ran=within(14).length||(lastRun!=null&&lastRun>=1&&lastRun<=14);
+    const longest=ran?Math.max(0,n(returns?.longestRun,0),...within(30).map(a=>n(a.durationHours,0)*60)):0;
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
     if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za posledních 30 dní měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 30 days was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }

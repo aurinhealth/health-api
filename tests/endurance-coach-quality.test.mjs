@@ -54,6 +54,9 @@ test("the time available is a limit: an easy run does not fill two hours and run
   // Without a run in 14 days the 30 min start stays.
   const back = coach({ sport: "run", goal: { focus: "endurance" }, availabilityMinutes: 120, returns: { longestRun: 70 } });
   assert.equal(back.recommendation.session.durationMinutes, 30);
+  // A run the coach's week does not hold: still counts (sportReturns last).
+  const earlier = coach({ sport: "run", goal: { focus: "endurance" }, availabilityMinutes: 120, returns: { longestRun: 70, last: { run: day(-5) } } });
+  assert.equal(earlier.recommendation.session.durationMinutes, 75);
   // A ride is not limited that way, but a recovery ride stays short.
   assert.ok(coach({ goal: { focus: "recovery" }, availabilityMinutes: 180 }).recommendation.session.durationMinutes <= 60);
 });
