@@ -16,7 +16,11 @@ struct FoodView: View {
                 .tabRoot(.food)
         }
         .task { await model.refreshIfStale(.food) }
-        .task { recipesOn = !model.demo && ((try? await model.api.recipeMarks()) != nil) }
+        .task {
+            guard !model.demo else { return }
+            let marks = try? await model.api.recipeMarks()
+            recipesOn = marks != nil
+        }
         .environment(\.recipesOn, recipesOn)
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
         .fullScreenCover(isPresented: $scanning) {
