@@ -361,6 +361,16 @@ def upload(notes_file):
     else:
         sys.exit("The build did not appear in App Store Connect within an hour")
     set_notes(app, builds[0]["id"], notes)
+    # The food track (N.2) goes to the Close testers straight away; a group takes a build
+    # only once Apple has processed it.
+    if env.get("GROUP"):
+        for _ in range(120):
+            build = call("GET", query)["data"][0]
+            if build["attributes"].get("processingState") == "VALID":
+                add_to_group(app, build, env["BUILD_NUMBER"], env["GROUP"])
+                return
+            time.sleep(30)
+        print(f"::warning::Build {env['BUILD_NUMBER']} se do hodiny nezpracoval; přidej ho do skupiny {env['GROUP']} ručně.")
 
 
 if __name__ == "__main__":

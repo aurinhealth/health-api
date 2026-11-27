@@ -33,6 +33,11 @@ on:
         description: "What to Test (empty: the changes since the last build)"
         required: false
         default: ""
+      food_track:
+        description: "Only build N.2 (with the Apple Watch app): the food version for the Close testers (Petr 2026-11-27)"
+        type: boolean
+        required: false
+        default: false
   push:
     branches:
       - main
@@ -142,10 +147,11 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           BUILD: ${{ github.run_number }}
+          TWIN: ${{ inputs.food_track && '2' || '1' }}
         run: |
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Release \
             -destination 'generic/platform=iOS' -archivePath build/Aurin.xcarchive \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD.1" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="$BUILD.$TWIN" \
             CODE_SIGNING_ALLOWED=NO archive
           ditto build/Aurin.xcarchive build/AurinNoWatch.xcarchive
           plain=build/AurinNoWatch.xcarchive/Products/Applications/Aurin.app
@@ -207,7 +213,10 @@ jobs:
           </dict>
           </plist>
           EOF
-          for archive in AurinNoWatch Aurin; do
+          # The food track (N.2) uploads only the build with the watch app.
+          archives="AurinNoWatch Aurin"
+          if [ "${{ inputs.food_track }}" = true ]; then archives="Aurin"; fi
+          for archive in $archives; do
             xcodebuild -exportArchive -archivePath "build/$archive.xcarchive" \
               -exportOptionsPlist build/ExportOptions.plist -exportPath "build/export-$archive" \
               -allowProvisioningUpdates \
@@ -215,7 +224,11 @@ jobs:
               -authenticationKeyID "$ASC_KEY_ID" \
               -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           done
-          echo "Uploaded build ${{ github.run_number }} (without the Apple Watch app) and ${{ github.run_number }}.1 (with it); they show in TestFlight once Apple finishes processing them." >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.food_track }}" = true ]; then
+            echo "Uploaded build ${{ github.run_number }}.2 (food version, with the Apple Watch app); it shows in TestFlight once Apple finishes processing it." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Uploaded build ${{ github.run_number }} (without the Apple Watch app) and ${{ github.run_number }}.1 (with it); they show in TestFlight once Apple finishes processing them." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Remove the API key
         if: always()
@@ -226,7 +239,7 @@ jobs:
     needs: testflight
     if: needs.testflight.outputs.uploaded == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 130
     environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     steps:
       - name: Checkout repository
@@ -269,11 +282,14 @@ jobs:
           BUNDLE_ID: health.aurin.app
           MARKETING_VERSION: ${{ needs.testflight.outputs.version }}
           BUILD: ${{ github.run_number }}
+          GROUP: ${{ inputs.food_track && (vars.WATCH_GROUP || 'Close testers') || '' }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
-          # Both builds: N without the watch, N.1 with it.
-          for number in "$BUILD" "$BUILD.1"; do
+          # Both builds: N without the watch, N.1 with it; the food track only N.2.
+          numbers="$BUILD $BUILD.1"
+          if [ "${{ inputs.food_track }}" = true ]; then numbers="$BUILD.2"; fi
+          for number in $numbers; do
             BUILD_NUMBER="$number" python3 .github/scripts/testflight_notes.py upload build/WhatToTest.txt
           done
 
