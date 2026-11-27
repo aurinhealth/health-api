@@ -868,6 +868,8 @@ struct ExerciseCard: View {
                                 .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
                         }
                     }
+                    // Fixed columns: past xLarge the "Last time" column is left too narrow on a 402 pt iPhone.
+                    .dynamicTypeSize(...DynamicTypeSize.xLarge)
                     .padding(.horizontal, -4)
                     if let onAddSet {
                         Button(action: onAddSet) {
