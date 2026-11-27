@@ -84,8 +84,10 @@ enum KeyboardDismiss {
             config.cornerStyle = .capsule
             config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
             config.baseForegroundColor = .label
-            let button = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in
-                self?.window?.endEditing(true)
+            // To whatever field is editing: this bar lives in the keyboard's
+            // own window, so ending editing in its window ended nothing (IMG_0533).
+            let button = UIButton(configuration: config, primaryAction: UIAction { _ in
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             })
             button.accessibilityLabel = L10n.tr(done ? "Hotovo" : "Skrýt klávesnici")
             button.accessibilityIdentifier = done ? "keyboard.done" : "keyboard.hide"
