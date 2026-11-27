@@ -267,10 +267,7 @@ struct GymSetTableHeader: View {
     // The same columns as GymSetRow, growing with the text size.
     @ScaledMetric(relativeTo: .subheadline) private var labelWidth: CGFloat = 26
     @ScaledMetric(relativeTo: .largeTitle) private var kgWidth: CGFloat = 64
-    // A range ("10–12", about 63 pt in title2) whole, growing with the
-    // numbers' own style: the fields were 64 pt in a 52 pt column and cut it
-    // to "10–…" (tester 2026-11-27).
-    @ScaledMetric(relativeTo: .title2) private var repsWidth: CGFloat = 66
+    @ScaledMetric(relativeTo: .largeTitle) private var repsWidth: CGFloat = 52
     /// The exercise's name and whether it is in pounds (LiftUnits): the unit
     /// then opens a menu to switch it. Nil: the app's unit, no menu.
     var exercise: String? = nil
@@ -374,15 +371,18 @@ struct GymSetRow: View {
     // The columns grow with the text size, as the numbers in them do (Typo.number).
     @ScaledMetric(relativeTo: .subheadline) private var labelWidth: CGFloat = 26
     @ScaledMetric(relativeTo: .largeTitle) private var kgWidth: CGFloat = 64
-    // A range ("10–12", about 63 pt in title2) whole, growing with the
-    // numbers' own style: the fields were 64 pt in a 52 pt column and cut it
-    // to "10–…" (tester 2026-11-27).
-    @ScaledMetric(relativeTo: .title2) private var repsWidth: CGFloat = 66
+    @ScaledMetric(relativeTo: .largeTitle) private var repsWidth: CGFloat = 52
     @ScaledMetric(relativeTo: .largeTitle) private var fieldHeight: CGFloat = 34
     @State private var editKg = ""
     @State private var editReps = ""
     /// Live (large): SF Pro with tabular digits, read from afar; the gym day keeps the serif.
     private var numberFont: Font { large ? Typo.tabular(.title2) : Typo.number(22) }
+    /// A range of five characters or more ("10–12") a step smaller: in the
+    /// title2 digits it overflowed its field and showed "10–…" (tester 2026-11-27).
+    private func numberFont(_ field: Field, _ text: String) -> Font {
+        guard field == .reps, text.count >= 5 else { return numberFont }
+        return large ? Typo.tabular(.title3) : Typo.number(19)
+    }
 
     /// What VoiceOver calls the set: "Set 2", "Warm-up set", "Drop set".
     private var spokenSet: String {
@@ -476,11 +476,10 @@ struct GymSetRow: View {
             TextField("–", text: edit)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(numberFont)
+                .font(numberFont(field, edit.wrappedValue))
                 .foregroundStyle(state == .next && focus != field ? Palette.faint : Palette.ink)
                 .focused($focus, equals: field)
-                .minimumScaleFactor(0.6)
-                .frame(width: field == .reps ? repsWidth : kgWidth, height: fieldHeight)
+                .frame(width: kgWidth, height: fieldHeight)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     if state == .next, focus != field, !large {
@@ -493,7 +492,7 @@ struct GymSetRow: View {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
                     .font(numberFont)
                     .foregroundStyle(Palette.ink)
-                    .frame(width: field == .reps ? repsWidth : kgWidth, height: fieldHeight)
+                    .frame(width: kgWidth, height: fieldHeight)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -504,17 +503,16 @@ struct GymSetRow: View {
             TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(numberFont)
+                .font(numberFont(field, binding.wrappedValue.nilIfBlank ?? hint ?? ""))
                 .foregroundStyle(Palette.ink)
-                .minimumScaleFactor(0.6)
-                .frame(width: field == .reps ? repsWidth : kgWidth, height: fieldHeight)
+                .frame(width: kgWidth, height: fieldHeight)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .accessibilityLabel(spokenField(field))
         } else {
-            Text(value.isEmpty ? "–" : value).font(numberFont)
-                .lineLimit(1).minimumScaleFactor(0.6)
+            Text(value.isEmpty ? "–" : value).font(numberFont(field, value))
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundStyle(state == .next ? Palette.faint : Palette.ink)
-                .frame(width: field == .reps ? repsWidth : kgWidth)
+                .frame(width: kgWidth)
                 .accessibilityLabel(spokenField(field))
                 .accessibilityValue(value.isEmpty ? L10n.tr("Nevyplněno") : value)
         }
