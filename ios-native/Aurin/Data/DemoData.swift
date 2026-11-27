@@ -3,7 +3,7 @@ import Foundation
 /// Sample day in the shape of /app/api/today, for previews, the screenshot
 /// tests and the "-demo" launch argument.
 enum DemoData {
-    static var today: TodaySnapshot { L10n.isEnglish ? todayEnglish : todayCzech }
+    static var today: TodaySnapshot { easierDayToday ?? (L10n.isEnglish ? todayEnglish : todayCzech) }
 
     /// The sample day under a Stav sportovce other than active, as the server
     /// answers it (day-verdict.js rest, app-today.js readinessSummary): the
@@ -198,4 +198,59 @@ enum DemoData {
         "outdoorRun": { "environment": "outdoor", "reason": "Podle dostupné předpovědi." }, "now": {"temp": 12, "code": 2, "wind": 18, "windDirection": 315, "daylight": true, "feelsLike": 10, "asOf": "2026-10-08T07:41:00Z"}, "next": [{"hour": 9, "temp": 10, "code": 2, "rainProb": 10}, {"hour": 10, "temp": 12, "code": 2, "rainProb": 10}, {"hour": 11, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 12, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 13, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 14, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 15, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 16, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 17, "temp": 13, "code": 61, "rainProb": 70}, {"hour": 18, "temp": 12, "code": 61, "rainProb": 70}, {"hour": 19, "temp": 10, "code": 61, "rainProb": 60}, {"hour": 20, "temp": 9, "code": 61, "rainProb": 60}, {"hour": 21, "temp": 8, "code": 2, "rainProb": 10}, {"hour": 22, "temp": 6, "code": 2, "rainProb": 10}, {"hour": 23, "temp": 7, "code": 3, "rainProb": 30}], "week": [{"date": "2026-10-08", "code": 2, "max": 14, "min": 6, "rainProb": 30, "hours": [{"hour": 6, "temp": 6, "code": 2, "rainProb": 10}, {"hour": 7, "temp": 8, "code": 2, "rainProb": 10}, {"hour": 8, "temp": 9, "code": 2, "rainProb": 10}, {"hour": 9, "temp": 10, "code": 2, "rainProb": 10}, {"hour": 10, "temp": 12, "code": 2, "rainProb": 10}, {"hour": 11, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 12, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 13, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 14, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 15, "temp": 14, "code": 2, "rainProb": 10}, {"hour": 16, "temp": 13, "code": 2, "rainProb": 10}, {"hour": 17, "temp": 13, "code": 61, "rainProb": 70}, {"hour": 18, "temp": 12, "code": 61, "rainProb": 70}, {"hour": 19, "temp": 10, "code": 61, "rainProb": 60}, {"hour": 20, "temp": 9, "code": 61, "rainProb": 60}, {"hour": 21, "temp": 8, "code": 2, "rainProb": 10}, {"hour": 22, "temp": 6, "code": 2, "rainProb": 10}], "ride": {"environment": "outdoor", "reason": "Nejvýš 14°, déšť na 30 %."}, "run": {"environment": "outdoor", "reason": "Nejvýš 14°, déšť na 30 %."}, "outdoors": {"ride": {"start": 11, "end": 15}, "run": {"start": 9, "end": 17}}}, {"date": "2026-10-09", "code": 61, "max": 10, "min": 5, "rainProb": 80, "hours": [{"hour": 6, "temp": 5, "code": 61, "rainProb": 80}, {"hour": 7, "temp": 6, "code": 61, "rainProb": 80}, {"hour": 8, "temp": 7, "code": 61, "rainProb": 80}, {"hour": 9, "temp": 8, "code": 61, "rainProb": 80}, {"hour": 10, "temp": 8, "code": 61, "rainProb": 80}, {"hour": 11, "temp": 9, "code": 61, "rainProb": 80}, {"hour": 12, "temp": 10, "code": 61, "rainProb": 80}, {"hour": 13, "temp": 10, "code": 61, "rainProb": 80}, {"hour": 14, "temp": 10, "code": 61, "rainProb": 80}, {"hour": 15, "temp": 10, "code": 61, "rainProb": 80}, {"hour": 16, "temp": 10, "code": 61, "rainProb": 80}, {"hour": 17, "temp": 9, "code": 61, "rainProb": 80}, {"hour": 18, "temp": 8, "code": 61, "rainProb": 80}, {"hour": 19, "temp": 8, "code": 61, "rainProb": 80}, {"hour": 20, "temp": 7, "code": 61, "rainProb": 80}, {"hour": 21, "temp": 6, "code": 61, "rainProb": 80}, {"hour": 22, "temp": 5, "code": 61, "rainProb": 80}], "ride": {"environment": "indoor", "reason": "Déšť na 80 %."}, "run": {"environment": "indoor", "reason": "Déšť na 80 %."}}, {"date": "2026-10-10", "code": 3, "max": 9, "min": 3, "rainProb": 20, "hours": [{"hour": 6, "temp": 3, "code": 3, "rainProb": 6}, {"hour": 7, "temp": 4, "code": 3, "rainProb": 6}, {"hour": 8, "temp": 5, "code": 3, "rainProb": 6}, {"hour": 9, "temp": 6, "code": 3, "rainProb": 6}, {"hour": 10, "temp": 7, "code": 3, "rainProb": 6}, {"hour": 11, "temp": 8, "code": 3, "rainProb": 6}, {"hour": 12, "temp": 8, "code": 3, "rainProb": 6}, {"hour": 13, "temp": 9, "code": 3, "rainProb": 6}, {"hour": 14, "temp": 9, "code": 3, "rainProb": 6}, {"hour": 15, "temp": 9, "code": 3, "rainProb": 6}, {"hour": 16, "temp": 8, "code": 3, "rainProb": 6}, {"hour": 17, "temp": 8, "code": 3, "rainProb": 6}, {"hour": 18, "temp": 7, "code": 3, "rainProb": 6}, {"hour": 19, "temp": 6, "code": 3, "rainProb": 6}, {"hour": 20, "temp": 5, "code": 3, "rainProb": 6}, {"hour": 21, "temp": 4, "code": 3, "rainProb": 6}, {"hour": 22, "temp": 3, "code": 3, "rainProb": 6}], "ride": {"environment": "outdoor", "reason": "Sucho, nejvýš 9°."}, "run": {"environment": "outdoor", "reason": "Sucho, nejvýš 9°."}}, {"date": "2026-10-11", "code": 0, "max": 12, "min": 2, "rainProb": 0, "hours": [{"hour": 6, "temp": 2, "code": 0, "rainProb": 0}, {"hour": 7, "temp": 4, "code": 0, "rainProb": 0}, {"hour": 8, "temp": 6, "code": 0, "rainProb": 0}, {"hour": 9, "temp": 8, "code": 0, "rainProb": 0}, {"hour": 10, "temp": 9, "code": 0, "rainProb": 0}, {"hour": 11, "temp": 10, "code": 0, "rainProb": 0}, {"hour": 12, "temp": 11, "code": 0, "rainProb": 0}, {"hour": 13, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 14, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 15, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 16, "temp": 11, "code": 0, "rainProb": 0}, {"hour": 17, "temp": 10, "code": 0, "rainProb": 0}, {"hour": 18, "temp": 9, "code": 0, "rainProb": 0}, {"hour": 19, "temp": 8, "code": 0, "rainProb": 0}, {"hour": 20, "temp": 6, "code": 0, "rainProb": 0}, {"hour": 21, "temp": 4, "code": 0, "rainProb": 0}, {"hour": 22, "temp": 2, "code": 0, "rainProb": 0}], "ride": {"environment": "outdoor", "reason": "Sucho, nejvýš 12°."}, "run": {"environment": "outdoor", "reason": "Sucho, nejvýš 12°."}}, {"date": "2026-10-12", "code": 61, "max": 8, "min": 4, "rainProb": 60, "hours": [{"hour": 6, "temp": 4, "code": 61, "rainProb": 60}, {"hour": 7, "temp": 5, "code": 61, "rainProb": 60}, {"hour": 8, "temp": 6, "code": 61, "rainProb": 60}, {"hour": 9, "temp": 6, "code": 61, "rainProb": 60}, {"hour": 10, "temp": 7, "code": 61, "rainProb": 60}, {"hour": 11, "temp": 7, "code": 61, "rainProb": 60}, {"hour": 12, "temp": 8, "code": 61, "rainProb": 60}, {"hour": 13, "temp": 8, "code": 61, "rainProb": 60}, {"hour": 14, "temp": 8, "code": 61, "rainProb": 60}, {"hour": 15, "temp": 8, "code": 61, "rainProb": 60}, {"hour": 16, "temp": 8, "code": 61, "rainProb": 60}, {"hour": 17, "temp": 7, "code": 61, "rainProb": 60}, {"hour": 18, "temp": 7, "code": 61, "rainProb": 60}, {"hour": 19, "temp": 6, "code": 61, "rainProb": 60}, {"hour": 20, "temp": 6, "code": 61, "rainProb": 60}, {"hour": 21, "temp": 5, "code": 61, "rainProb": 60}, {"hour": 22, "temp": 4, "code": 61, "rainProb": 60}], "ride": {"environment": "outdoor", "reason": "Nejvýš 8°, déšť na 60 %."}, "run": {"environment": "outdoor", "reason": "Nejvýš 8°, déšť na 60 %."}}, {"date": "2026-10-13", "code": 2, "max": 11, "min": 4, "rainProb": 10, "hours": [{"hour": 6, "temp": 4, "code": 2, "rainProb": 3}, {"hour": 7, "temp": 5, "code": 2, "rainProb": 3}, {"hour": 8, "temp": 7, "code": 2, "rainProb": 3}, {"hour": 9, "temp": 8, "code": 2, "rainProb": 3}, {"hour": 10, "temp": 9, "code": 2, "rainProb": 3}, {"hour": 11, "temp": 10, "code": 2, "rainProb": 3}, {"hour": 12, "temp": 10, "code": 2, "rainProb": 3}, {"hour": 13, "temp": 11, "code": 2, "rainProb": 3}, {"hour": 14, "temp": 11, "code": 2, "rainProb": 3}, {"hour": 15, "temp": 11, "code": 2, "rainProb": 3}, {"hour": 16, "temp": 10, "code": 2, "rainProb": 3}, {"hour": 17, "temp": 10, "code": 2, "rainProb": 3}, {"hour": 18, "temp": 9, "code": 2, "rainProb": 3}, {"hour": 19, "temp": 8, "code": 2, "rainProb": 3}, {"hour": 20, "temp": 7, "code": 2, "rainProb": 3}, {"hour": 21, "temp": 5, "code": 2, "rainProb": 3}, {"hour": 22, "temp": 4, "code": 2, "rainProb": 3}], "ride": {"environment": "outdoor", "reason": "Sucho, nejvýš 11°."}, "run": {"environment": "outdoor", "reason": "Sucho, nejvýš 11°."}}, {"date": "2026-10-14", "code": 0, "max": 13, "min": 5, "rainProb": 0, "hours": [{"hour": 6, "temp": 5, "code": 0, "rainProb": 0}, {"hour": 7, "temp": 7, "code": 0, "rainProb": 0}, {"hour": 8, "temp": 8, "code": 0, "rainProb": 0}, {"hour": 9, "temp": 9, "code": 0, "rainProb": 0}, {"hour": 10, "temp": 11, "code": 0, "rainProb": 0}, {"hour": 11, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 12, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 13, "temp": 13, "code": 0, "rainProb": 0}, {"hour": 14, "temp": 13, "code": 0, "rainProb": 0}, {"hour": 15, "temp": 13, "code": 0, "rainProb": 0}, {"hour": 16, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 17, "temp": 12, "code": 0, "rainProb": 0}, {"hour": 18, "temp": 11, "code": 0, "rainProb": 0}, {"hour": 19, "temp": 9, "code": 0, "rainProb": 0}, {"hour": 20, "temp": 8, "code": 0, "rainProb": 0}, {"hour": 21, "temp": 7, "code": 0, "rainProb": 0}, {"hour": 22, "temp": 5, "code": 0, "rainProb": 0}], "ride": {"environment": "outdoor", "reason": "Sucho, nejvýš 13°."}, "run": {"environment": "outdoor", "reason": "Sucho, nejvýš 13°."}}] }
     }
     """
+}
+
+extension DemoData {
+    /// "-scene easier-day" (the App Store's screenshots): the sample Today with the
+    /// coach's easier-day offer (src/night-check.js) in its card.
+    static var easierDay: CoachCheckIn.Advice? {
+        guard easierDayScene else { return nil }
+        let en = L10n.isEnglish
+        return CoachCheckIn.Advice(
+            id: "demo-easier-day", headline: en ? "An easier day fits today" : "Dnes se hodí lehčí den", reasons: [],
+            message: en ? "Resting heart rate is above your usual range. Alcohol, heat, a late meal, stress or hard training can do this."
+                : "Klidový tep je nad tvým obvyklým rozmezím. Může za tím být alkohol, horko, pozdní jídlo, stres nebo tvrdý trénink.",
+            kind: "easier_day",
+            rows: [.init(id: "restingHR", label: en ? "Resting heart rate" : "Klidový tep", value: en ? "+6 bpm vs usual" : "+6 tepů/min proti obvyklému"),
+                   .init(id: "hrv", label: "HRV", value: en ? "−18 % vs usual" : "−18 % proti obvyklému")],
+            date: "2026-10-08", from: "Tempo, 60 min", to: en ? "Easy ride, 60 min" : "Lehká jízda, 60 min")
+    }
+
+    private static var easierDayScene: Bool {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-scene"), i + 1 < args.count else { return false }
+        return args[i + 1] == "easier-day"
+    }
+
+    /// The same sample day as the easier-day card reads it: readiness under the
+    /// usual range, HRV under it (−18 %) and the resting heart rate over it (+6),
+    /// a Tempo ride planned instead of the gym, and the coach's words to match.
+    private static let easierDayToday: TodaySnapshot? = {
+        guard easierDayScene,
+              var day = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return nil }
+        day["readiness"] = ["score": 58, "zone": "yellow", "verdict": "easy", "numbersLine": "easy", "numbersOff": ["hrv", "restingHR"]]
+        func lastValue(_ key: String, _ value: Int) {
+            guard var part = day[key] as? [String: Any], var series = part["series"] as? [[String: Any]], !series.isEmpty else { return }
+            series[series.count - 1]["value"] = value
+            part["series"] = series
+            part["value"] = value
+            if key == "hrv" { part["trend"] = "down" }
+            day[key] = part
+        }
+        lastValue("hrv", 48)
+        lastValue("restingHR", 56)
+        day["summary"] = ["headline": "Jak dnes začít",
+                          "text": "Spánek 7 h 12 min, kousek pod potřebou. HRV je pod obvyklým rozmezím a klidový tep nad ním.",
+                          "recommendation": "Tempo dnes vyměň za lehkou jízdu, ať se tělo dotáhne."]
+        if var plan = day["plan"] as? [[String: Any]],
+           let gym = plan.firstIndex(where: { ($0["sport"] as? String) == "strength" && ($0["done"] as? Bool) == false }) {
+            plan[gym] = ["kind": "workout", "time": "17:30", "title": "Tempo", "detail": "60 min, 62 TSS", "done": false, "sport": "ride", "status": "planned",
+                         "session": ["id": "planned:2026-10-08:Tempo", "kind": "planned", "status": "planned", "date": "2026-10-08", "time": "17:30",
+                                     "title": "Tempo", "sport": "ride", "minutes": 60, "tss": 62, "eventId": "planned:2026-10-08:Tempo"]]
+            day["plan"] = plan
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: day, options: .withoutEscapingSlashes) else { return nil }
+        let text = String(decoding: data, as: UTF8.self)
+        return decode(L10n.isEnglish ? inEnglish(text) : text)
+    }()
 }

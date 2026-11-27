@@ -39,6 +39,10 @@ extension DemoData {
             "You're taking a break from training: the plan waits until you end it.",
         "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.":
             "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day.",
+        "Spánek 7 h 12 min, kousek pod potřebou. HRV je pod obvyklým rozmezím a klidový tep nad ním.":
+            "Sleep 7 h 12 min, a little under your need. HRV is below your usual range and resting heart rate above it.",
+        "Tempo dnes vyměň za lehkou jízdu, ať se tělo dotáhne.":
+            "Swap today's tempo for an easy ride while your body catches up.",
         "Horní polovinu těla dej naplno, dřep jen krátce.":
             "Go all in on the upper body, keep the squat short.",
         "Silový trénink": "Strength training",
