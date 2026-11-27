@@ -376,8 +376,9 @@ struct GymSetRow: View {
     @State private var editKg = ""
     @State private var editReps = ""
     /// Live (large): SF Pro with tabular digits, read from afar; the gym day keeps the serif.
-    // The numbers' full size, growing with the text size as title2 (live) and the serif's largeTitle do.
-    @ScaledMetric(relativeTo: .title2) private var liveNumberSize: CGFloat = 22
+    // The numbers' full size, growing with the text size as body (live) and the serif's largeTitle do.
+    // Live 17 pt, as calm as Bevel's set rows (Petr 2026-11-27, was 22).
+    @ScaledMetric(relativeTo: .body) private var liveNumberSize: CGFloat = 17
     @ScaledMetric(relativeTo: .largeTitle) private var serifNumberSize: CGFloat = 22
     /// One rule for the kg and reps fields: a number keeps its full size while
     /// it fits the field and gets smaller only as far as its length needs, so
