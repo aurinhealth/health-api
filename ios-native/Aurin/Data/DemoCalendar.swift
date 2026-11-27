@@ -19,8 +19,9 @@ extension DemoData {
             [("swim", "Lehké plavání", 30, 1.2, 280)]
         ]
         return ISODay.range(ISODay.shift(today, -42), ISODay.shift(today, 14)).map { (date: String) -> CalendarDay in
-            // Every fifth week a lighter one; a few days off now and then.
-            let skip = (Int(date.suffix(2)) ?? 0) % 11 == 0
+            // Every fifth week a lighter one; a few days off now and then, only in
+            // the past: the sample week ahead shows its whole plan (Sunday's swim).
+            let skip = date < today && (Int(date.suffix(2)) ?? 0) % 11 == 0
             // The sample day itself as Today plans it (DemoData.today): the morning run
             // done, the strength session still ahead at 17:30.
             let items: [(String, String, Double, Double?, Double)] = date == today ? [("run", "Ranní běh", 42, 8.2, 520), ("strength", "Silový trénink, celé tělo", 45, nil, 0)]
