@@ -212,7 +212,7 @@ import { morningMetrics } from "./journal-impact.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
-import { hideActivity, mergeActivities, setActivityTime, undoActivityChange, rememberChange } from "./activity-chat-edits.js";
+import { hideActivity, mergeActivities, setActivityTime, setPillByCoach, undoActivityChange, rememberChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
@@ -2843,6 +2843,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           coachCtx.otherSports={sports:ownSports.map(type=>({type,name:typeName(type)})),planned:selected.week.days.filter(d=>d.date>=date).flatMap(d=>((plans.get(mondayOfDate(d.date))?.events||[])[(new Date(d.date+'T12:00:00Z').getUTCDay()+6)%7]||[]).map(e=>({date:d.date,type:e.type,name:typeName(e.type),kind:e.kind,minutes:e.minutes})))};
           if(Number(appApiLevel(request)??body.appApi)>=4)coachCtx.otherEventCards=true;
         }
+        // Log or take back a pill of the last week (the cycle shared): an app that shows the card (API level 5).
+        if(coachCtx.cycle?.pills?.length&&Number(appApiLevel(request)??body.appApi)>=5)coachCtx.pillCards=true;
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
@@ -3043,6 +3045,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // "Plan around your knee?" is a card of the redesign app (API level 3) only.
       if(!(Number(appApiLevel(request))>=3))chat.actions=chat.actions.filter(a=>a.type!=='plan_around');
       if(!(Number(appApiLevel(request))>=4))chat.actions=chat.actions.filter(a=>a.type!=='other_event');
+      if(!(Number(appApiLevel(request))>=5))chat.actions=chat.actions.filter(a=>!['pill_log','pill_clear'].includes(a.type));
       // The chips of a server question under the chat's last coach message, until one is tapped (coach-questions.js).
       const lastCoach=chat.messages.filter(m=>m.role==='assistant').at(-1);
       const chips=lastCoach&&chat.messages.at(-1)===lastCoach?await questionChips(env.DB,chat.id,lastCoach.id).catch(()=>[]):[];
@@ -3128,6 +3131,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
         // Done activities in Aurin only; the result carries the "Vrátit" token (activity-chat-edits.js).
         else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId);await bumpCacheVersion(env.DB);}
+        // The pill of a day logged or taken back; the result carries the "Vrátit" token (activity-chat-edits.js).
+        else if(a.type==='pill_log'||a.type==='pill_clear'){result=await setPillByCoach(env,a.date,a.type==='pill_log');await bumpCacheVersion(env.DB);}
         else if(a.type==='activity_merge'){result=await mergeActivities(env,[a.activityId,a.otherActivityId]);await bumpCacheVersion(env.DB);}
         else if(a.type==='activity_time'){result=await setActivityTime(env,a.activityId,a.time);await bumpCacheVersion(env.DB);}
         else if(a.type==='workout'){
@@ -3191,7 +3196,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),other_event:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),other_event:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed'),pill_log:L('Zapsáno','Logged'),pill_clear:L('Záznam zrušen','Undone')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }

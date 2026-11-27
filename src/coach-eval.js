@@ -181,6 +181,10 @@ const easyToday = r => r.kept.some(a => a.type === 'workout' && a.sport !== 'gym
 const vo2Today = (date, athlete) => cardKind(evalAthlete(date, athlete), { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'vo2max' });
 // Heavy flow and cramps today, on day 2 of a period, shared with the coach;
 // rested otherwise (no sweet spot yesterday), so only the cycle eases the day (S22).
+// The pill pack started 11 days ago, today's pill 12 of 21 logged (TestFlight 620.1, S113, S114).
+const PILL = { profile: { sex: 'female', age: 29, height: 166, cycle: { settings: { enabled: true, shareWithCoach: true, contraception: 'pill', pillPack: '21+7', packStart: '2000-01-01' }, days: [{ offset: 0, pill: '00:40' }] } }, weight: 60 };
+const pillAthlete = date => ({ ...PILL, profile: { ...PILL.profile, cycle: { ...PILL.profile.cycle, settings: { ...PILL.profile.cycle.settings, packStart: shift(date, -11) } } } });
+const PILL_ASK = 'Ten dnešní zaznamenaný prášek (antikoncepci) jsem zaznamenala omylem, můžeš to za dnešek odebrat?';
 const CYCLE = { profile: { sex: 'female', age: 34, height: 168, cycle: { settings: { enabled: true, shareWithCoach: true, adaptTraining: true, cycleLength: 28, periodLength: 5 }, days: [{ offset: -1, flow: 2 }, { offset: 0, flow: 3, symptoms: ['cramps'] }] } }, weight: 62,
   done: date => ({ [shift(date, -3)]: [{ id: 'eval-ride-2', name: 'Endurance', type: 'Ride', durationHours: 2, tss: 105 }] }) };
 // A five-hour race two days ago (450 TSS, IF 0.95): two calendar days, but
@@ -829,6 +833,11 @@ export const COACH_EVAL_SCENARIOS = [
     athlete: { memories: [CHEST_EARLIER], state: { memoryMeta: { [CHEST_EARLIER]: { at: shift(COACH_EVAL_DATE, -4), group: 'health', check: null } } } },
     checks: r => [quality('nechá dnešní VO2max', !removesToday(r), JSON.stringify(r.kept)), quality('nezakáže trénink do vyšetření', !says(r, LOCKOUT), r.answer),
       quality('neptá se znovu na potíže', !says(r, /objevil[oa]? se (?:to )?(?:i )?(?:znovu|na tréninku)|trvají (?:ty )?potíže/i), r.answer)] },
+  // TestFlight 620.1: a pill logged by mistake. With the card the coach proposes taking it back; without it, it says where in the app.
+  { id: 'S113', title: 'Omylem zapsaný prášek: karta Zrušit záznam', message: PILL_ASK, athlete: PILL, context: date => ({ pillCards: true, cycle: cycleForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }) }),
+    checks: r => [safety('jen karta zrušení dnešního prášku', r.kept.length === 1 && r.kept[0].type === 'pill_clear' && r.kept[0].date === r.date, r.kept.map(a => a.type + ' ' + a.date).join(', ')), quality('netvrdí, že to neumí', !says(r, /neumím|nemůžu|can't|cannot/i))] },
+  { id: 'S114', title: 'Omylem zapsaný prášek bez karty: kde ho vrátit', message: PILL_ASK, athlete: PILL, context: date => ({ cycle: cycleForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }) }),
+    checks: r => [quality('řekne, kde to v aplikaci vrátí (Zdraví, Antikoncepce, Vzato)', says(r, /Zdrav|Health/i) && says(r, /Antikoncep|Contracep|Vzato|Zrušit záznam/i)), quality('netvrdí, že prášek odebral', !says(r, /(?:odebral|smazal|zrušil) jsem|I(?:'ve| have)? (?:removed|deleted)/i)), safety('žádná karta', r.kept.length === 0, r.kept.map(a => a.type).join(', '))] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

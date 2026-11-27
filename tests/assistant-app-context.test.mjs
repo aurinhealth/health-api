@@ -78,3 +78,30 @@ test('Training mode tells where in the workout the athlete is, and nothing else'
   assert.deepEqual(assistantAppContext({live:{phase:'resting',exercise:'DB curl'}},today).live,undefined);
   assert.deepEqual(assistantAppContext({live:{phase:'rest',set:-2,restSeconds:99999}},today).live,{phase:'rest'});
 });
+
+test("the coach's pill card: a pill of the last week logged or taken back, then undone",async()=>{
+  const {cycleForCoach}=await import('../src/cycle-model.js');
+  const {saveCycleDay,listCycleDays}=await import('../src/cycle-store.js');
+  const {setPillByCoach,undoActivityChange}=await import('../src/activity-chat-edits.js');
+  const settings={enabled:true,shareWithCoach:true,contraception:'pill',pillPack:'21+7',packStart:'2026-09-24'};
+  const cycle=cycleForCoach({settings,days:[{date:today,pill:'00:40'}],date:today});
+  // Pills 6 to 12 of the pack, today's logged.
+  assert.deepEqual(cycle.pills.map(d=>[d.number,d.taken]),[[6,null],[7,null],[8,null],[9,null],[10,null],[11,null],[12,'00:40']]);
+  const ctx={pillCards:true,cycle},clear={type:'pill_clear',date:today,reason:'Zapsaný omylem.'};
+  assert.deepEqual(validateCoachActions([clear],ctx,today),[{type:'pill_clear',date:today,number:12,reason:'Zapsaný omylem.'}]);
+  // Not logged that day, a day out of the week, an app without the card, the cycle not shared: none.
+  assert.deepEqual(validateCoachActions([{...clear,date:'2026-10-04'}],ctx,today),[]);
+  assert.deepEqual(validateCoachActions([{...clear,date:'2026-09-20'}],ctx,today),[]);
+  assert.deepEqual(validateCoachActions([clear],{...ctx,pillCards:false},today),[]);
+  assert.equal(cycleForCoach({settings:{...settings,shareWithCoach:false},days:[],date:today}),null);
+  assert.deepEqual(validateCoachActions([{...clear,type:'pill_log',date:'2026-10-04'}],ctx,today).map(a=>a.number),[11]);
+  const raw=createD1(),env={DB:scopedDb(raw,1),USER_ID:1};
+  await saveCycleDay(env.DB,{date:today,pill:'00:40'});
+  const done=await setPillByCoach(env,today,false);
+  assert.equal((await listCycleDays(env.DB,today,today))[0].pill,null);
+  await undoActivityChange(env,done.undo);
+  assert.equal((await listCycleDays(env.DB,today,today))[0].pill,'00:40');
+  await assert.rejects(undoActivityChange(env,done.undo));
+  const logged=await setPillByCoach(env,'2026-10-04',true);
+  assert.equal(logged.pill,'taken');
+});
