@@ -174,6 +174,12 @@ final class SmokeTests: XCTestCase {
         // coach card down to its workout's Start, scrolled in short drags.
         english("-tab", "today")
         pause(6)
+        // First about 133 pt (one slow drag, no fling): the month and the week strip
+        // go, the readiness 78 stays above the tiles and the whole coach text.
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+        from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -133)), withVelocity: .slow, thenHoldForDuration: 0.5)
+        pause(1)
+        shot("dnes-78-kouc")
         let start = app.buttons["Start"].firstMatch
         for _ in 0..<6 where !(start.exists && start.isHittable && start.frame.maxY < app.frame.maxY * 0.8) {
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
