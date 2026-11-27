@@ -241,7 +241,7 @@ struct PaywallView: View {
     // MARK: - The demo
 
     /// One conversation with the coach in a loop (Pro concept, Petr 2026-11-14:
-    /// the demo always starts at the coach): a half marathon and its plan, the
+    /// the demo always starts at the coach): a marathon and its plan, the
     /// plan in Training, food after the run by photo, then how to tell it works,
     /// with Aurin age. Continue skips it any time (D-PRO-6).
     private var demoPhone: some View {
@@ -558,8 +558,8 @@ struct ProCoachScript: View {
     let shown: Int
 
     private static let messages: [(mine: Bool, text: String)] = [
-        (true, "Zvládnu půlmaraton za 1:45?"),
-        (false, "Na Pražský půlmaraton je 1:45 reálný cíl. Upravil jsem ti plán: dva tempové běhy týdně a sobotní dlouhý běh."),
+        (true, "Zvládnu maraton za 3:30?"),
+        (false, "Na tvůj maraton je 3:30 reálný cíl. Upravil jsem ti plán: tempový běh ve středu a sobotní dlouhý běh až 30 km."),
         (true, "Co sníst po běhu?"),
         (false, "Do hodiny bílkoviny se sacharidy, třeba kuře s rýží. Vyfoť oběd a zapíšu ho za tebe."),
         (true, "Jak poznám, že to funguje?"),

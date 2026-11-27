@@ -4448,6 +4448,7 @@
 "učí se, %@ ze 14 dní" = "learning, %@ of 14 days";
 "Dnes v noci" = "Tonight";
 "v posteli do %@" = "in bed by %@";
+"%@ v posteli" = "%@ in bed";
 "v posteli do %@, budík %@" = "in bed by %1$@, alarm at %2$@";
 "potřeba %@" = "need %@";
 "potřeba splněna" = "need met";
@@ -5219,8 +5220,8 @@
 ", %@ g sacharidů" = ", %@ g carbs";
 "kolem %@ kcal" = "about %@ kcal";
 "Odemknout s Pro" = "Unlock with Pro";
-"Zvládnu půlmaraton za 1:45?" = "Can I run a half marathon in 1:45?";
-"Na Pražský půlmaraton je 1:45 reálný cíl. Upravil jsem ti plán: dva tempové běhy týdně a sobotní dlouhý běh." = "For the Prague Half Marathon, 1:45 is a realistic goal. I've adjusted your plan: two tempo runs a week and a long run on Saturday.";
+"Zvládnu maraton za 3:30?" = "Can I run a marathon in 3:30?";
+"Na tvůj maraton je 3:30 reálný cíl. Upravil jsem ti plán: tempový běh ve středu a sobotní dlouhý běh až 30 km." = "For your marathon, 3:30 is a realistic goal. I've adjusted your plan: a tempo run on Wednesday and a Saturday long run of up to 30 km.";
 "Co sníst po běhu?" = "What should I eat after the run?";
 "Do hodiny bílkoviny se sacharidy, třeba kuře s rýží. Vyfoť oběd a zapíšu ho za tebe." = "Within an hour, protein with carbs, like chicken with rice. Take a photo of your lunch and I'll log it for you.";
 "Jak poznám, že to funguje?" = "How will I know it's working?";

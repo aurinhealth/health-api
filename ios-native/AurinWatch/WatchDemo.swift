@@ -53,7 +53,7 @@ enum WatchDemo {
         let rhr = (0..<29).map { [53.0, 50, 51, 52][$0 % 4] } + [48]
         let hrv = (0..<27).map { [55.0, 62, 60, 58, 56, 54, 61, 59, 57][$0 % 9] } + [62, 62, 64]
         return WatchSnapshot(
-            date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green", numbersLine: "hard", numbersOff: ["sleep"],
+            date: day(0), updated: now, language: english ? "en" : "cs", readiness: 78, zone: "green", numbersLine: "hard",
             headline: tr("Jak dnes začít", "How to start today"),
             summary: tr("Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad obvyklým rozmezím.",
                         "Sleep 7 h 12 min, a little under your need. HRV is above your usual range for the third day."),
@@ -84,11 +84,11 @@ enum WatchDemo {
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
             ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Procházka", "Walk", "walk", 70),
-            ("Dlouhý běh", "Long run", "run", 96),
+            ("Dlouhý běh", "Long run", "run", 160),
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72)]
         let after: [(String, String, String, Int)] = [
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72),
-            ("Dlouhý běh", "Long run", "run", 96),
+            ("Dlouhý běh", "Long run", "run", 160),
             ("Procházka", "Walk", "walk", 70),
             ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),

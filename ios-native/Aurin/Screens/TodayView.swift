@@ -893,7 +893,7 @@ struct DayBar: View {
     var ahead = false
 
     var body: some View {
-        DayCapsule(date: date, today: AppModel.localDate(Date()),
+        DayCapsule(date: date, today: model.demo ? (model.today?.date ?? date) : AppModel.localDate(Date()),
                    canGoForward: DayNavigator.canGoForward(model: model, date: date, ahead: ahead),
                    move: { offset in Task { await model.showDay(offset: offset, ahead: ahead) } },
                    showToday: { Task { await model.showToday() } })
