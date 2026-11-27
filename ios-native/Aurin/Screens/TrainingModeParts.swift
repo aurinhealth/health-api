@@ -415,8 +415,8 @@ struct GymSetRow: View {
                     Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted).frame(width: 12)
                 }
             }
-            // A long one ("222,5 × 12") goes on two lines, then smaller, before it would be cut.
-            Text(lastTime ?? "—").font(large ? Font.footnote.monospacedDigit() : .footnote).foregroundStyle(Palette.faint).lineLimit(2).minimumScaleFactor(0.7)
+            // One line (Petr 2026-11-27): a long one ("222,5 × 12") smaller before it would be cut.
+            Text(lastTime ?? "—").font(large ? Font.footnote.monospacedDigit() : .footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !noWeight { field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint) }
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
