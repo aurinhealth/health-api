@@ -147,12 +147,18 @@ struct RecipesView: View {
         .task { await loadSaved() }
     }
 
+    /// The saved rows after a heart on a recipe page, without reading them again.
+    private func keep(_ rows: [LibraryRecipe], _ recipe: LibraryRecipe, _ marks: RecipeMarks) -> [LibraryRecipe] {
+        let all = rows.contains { $0.id == recipe.id } ? rows : [recipe] + rows
+        return all.filter { marks.saved.contains($0.id) }
+    }
+
     private func rows(_ recipes: [LibraryRecipe], more: Bool = false) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(recipes.enumerated()), id: \.element.id) { index, recipe in
                 // The Food tab's path holds AppRoute only, so the detail is pushed as a destination.
                 NavigationLink {
-                    RecipeDetailView(row: recipe, saved: marks?.saved.contains(recipe.id) == true) { marks = $0; Task { await loadSaved() } }
+                    RecipeDetailView(row: recipe) { new in marks = new; saved = keep(saved, recipe, new) }
                 } label: { RecipeRow(recipe: recipe, saved: marks?.saved.contains(recipe.id) == true) }
                     .buttonStyle(.plain)
                 if index < recipes.count - 1 || more { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -173,14 +179,18 @@ struct RecipesView: View {
 
     private func load(reset: Bool) async {
         loading = true
-        defer { loading = false }
         do {
             let page = try await model.api.libraryRecipes(query: query.trimmingCharacters(in: .whitespaces), cursor: reset ? nil : next)
             list = reset ? page.recipes : list + page.recipes
             next = page.next
             error = nil
-        } catch is CancellationError {
-        } catch { self.error = error.localizedDescription }
+            loading = false
+        } catch {
+            // A newer search cancelled this one: the newer one shows its own answer.
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled { return }
+            self.error = error.localizedDescription
+            loading = false
+        }
     }
 
     /// The saved recipes, newest first: one detail read each (the list route has no ids filter), at most 20.
@@ -238,15 +248,15 @@ struct RecipeDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let row: LibraryRecipe
-    @State var saved: Bool
+    /// nil until the saved recipes load; the heart waits for it.
+    @State private var saved: Bool?
     var changed: (RecipeMarks) -> Void = { _ in }
     @State private var recipe: LibraryRecipeDetail?
     @State private var error: String?
     @State private var logging = false
 
-    init(row: LibraryRecipe, saved: Bool, changed: @escaping (RecipeMarks) -> Void = { _ in }) {
+    init(row: LibraryRecipe, changed: @escaping (RecipeMarks) -> Void = { _ in }) {
         self.row = row
-        _saved = State(initialValue: saved)
         self.changed = changed
     }
 
@@ -286,8 +296,9 @@ struct RecipeDetailView: View {
             }
         }
         .floatingBack(title: "",
-                      trailing: ChromeAction(systemImage: saved ? "heart.fill" : "heart",
-                                             label: saved ? "Odebrat z uložených" : "Uložit recept", text: nil) { Task { await toggleSaved() } },
+                      trailing: ChromeAction(systemImage: saved == true ? "heart.fill" : "heart",
+                                             label: saved == true ? "Odebrat z uložených" : "Uložit recept", text: nil,
+                                             enabled: saved != nil && !model.demo) { Task { await toggleSaved() } },
                       coach: CoachEntry(view: "food")) { dismiss() }
         .navBarVisibility(.hidden)
         .sheet(isPresented: $logging) {
@@ -384,17 +395,20 @@ struct RecipeDetailView: View {
     }
 
     private func load() async {
+        async let marks = try? model.api.recipeMarks()
         do { recipe = try await model.api.libraryRecipe(id: row.id); error = nil }
         catch { self.error = error.localizedDescription }
+        if let marks = await marks { saved = marks.saved.contains(row.id) }
     }
 
     private func toggleSaved() async {
-        let want = !saved
+        guard let now = saved else { return }
+        let want = !now
         saved = want
         do {
             let marks = try await model.api.markRecipe(id: row.id, mark: want ? "saved" : nil)
             changed(marks)
         }
-        catch { saved = !want; self.error = error.localizedDescription }
+        catch { saved = now; self.error = error.localizedDescription }
     }
 }
