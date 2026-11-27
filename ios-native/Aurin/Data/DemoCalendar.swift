@@ -15,7 +15,8 @@ extension DemoData {
             [("strength", "Posilovna, celé tělo", 45, nil, 300), ("walk", "Chůze", 25, 2.1, 110)],
             [("ride", "Lehká jízda Z2", 72, 30, 700)],
             [("run", "Dlouhý běh", 96, 17.5, 1350)],
-            [("walk", "Procházka", 70, 5.8, 290)]
+            // Sunday an easy swim: the week holds ride, run, swim and gym (App Store shots).
+            [("swim", "Lehké plavání", 30, 1.2, 280)]
         ]
         return ISODay.range(ISODay.shift(today, -42), ISODay.shift(today, 14)).map { (date: String) -> CalendarDay in
             // Every fifth week a lighter one; a few days off now and then.
