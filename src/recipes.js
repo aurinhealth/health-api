@@ -3,8 +3,9 @@
 // version, recipes/<version>/index.json carries what the list and its filters
 // need, and one ranged read of recipes/<version>/details.txt gives a recipe.
 // Off until RECIPES_ENABLED is "true" (staging only until the food version
-// ships): every route answers 404 then. "owner" turns it on for the owner's
-// account only, for the owner's own TestFlight build (Petr 2026-11-27).
+// ships): every route answers 404 then. A list of "owner" and account ids
+// ("owner,6") turns it on for those accounts only, the Close testers of the
+// TestFlight build N.2 (Petr 2026-11-27).
 //
 // GET /app/api/recipes?slot=&diet=&exclude=&q=&limit=&cursor=  the list
 // GET /app/api/recipes/index    the whole index for the app to keep (ETag = version)
@@ -25,8 +26,10 @@ export const MAX_PAGE = 50;
 const TTL_MS = 10 * 60 * 1000;
 
 export const recipesOn = env => {
-  const value = String(env?.RECIPES_ENABLED || '');
-  return value === 'true' || (value === 'owner' && env?.USER_IS_OWNER === true);
+  const value = String(env?.RECIPES_ENABLED || '').trim();
+  if (value === 'true') return true;
+  return value.split(/[,\s]+/).some(item => (item === 'owner' && env?.USER_IS_OWNER === true)
+    || (/^\d+$/.test(item) && Number(item) === Number(env?.USER_ID)));
 };
 const fold = s => String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
