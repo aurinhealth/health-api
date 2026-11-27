@@ -159,9 +159,11 @@ export async function aiAllowance(env) {
 // spending reached its limit; the daily one does not stop the coach chat. exceptId: the asking
 // call's own slot, whose reservation does not count against itself.
 export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = {}) {
-  if (!tracked(env)) return;
+  // The check of a coach answer (coach-checker.js) is safety: the athlete's own limits never
+  // stop it, or the answer that just reached the limit would go out unchecked. The group brake still holds.
+  if (!tracked(env) || feature === COACH_CHECK_FEATURE) return;
   const [share, plan] = await Promise.all([aiLimitShare(env), aiPlan(env)]);
-  const monthLimit = aiMonthlyLimitUsd(env, share, plan.plan), weekLimit = aiWeeklyLimitUsd(monthLimit, plan.plan), dayLimit = feature === COACH_CHAT_FEATURE || feature === COACH_CHECK_FEATURE ? null : aiDailyLimitUsd(env, share);
+  const monthLimit = aiMonthlyLimitUsd(env, share, plan.plan), weekLimit = aiWeeklyLimitUsd(monthLimit, plan.plan), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env, share);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
