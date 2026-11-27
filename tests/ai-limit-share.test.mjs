@@ -65,6 +65,8 @@ test("the halved month stops AI at 3 USD", async () => {
   env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) VALUES (7, ?, 'assistant', 'gpt-6-sol', 3)").bind(localToday()).run();
   await assert.rejects(assertAiAllowance(env, "assistant"), error => error.status === 429);
   await assert.doesNotReject(assertAiAllowance(await account({ plan: "ai" }), "assistant"));
+  // The check of the answer that reached the limit still runs (coach-checker.js).
+  await assert.doesNotReject(assertAiAllowance(env, "coach-check"));
 });
 
 test("coach message packs are not offered in the free week: the chat locks when it ends unpaid", async () => {

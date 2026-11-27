@@ -54,7 +54,7 @@ test('the 12 s limit holds for the whole check, a cut-off first answer is not of
 test('the check is part of the chat: the daily AI limit leaves it out like the coach', async () => {
   const { readFileSync } = await import('node:fs');
   const usage = readFileSync(new URL('../src/ai-usage.js', import.meta.url), 'utf8'), entry = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(usage, /feature === COACH_CHAT_FEATURE \|\| feature === COACH_CHECK_FEATURE \? null/);
+  assert.match(usage, /feature === COACH_CHAT_FEATURE \? null/);assert.match(usage, /!tracked\(env\) \|\| feature === COACH_CHECK_FEATURE\) return;/);
   assert.match(usage, /NOT IN \(\?, \?, \?\)[^\n]*COACH_CHAT_FEATURE, COACH_CHECK_FEATURE, CARRIED_MONTH_FEATURE/);
   // A photo message is not checked (the checker does not see the photo).
   assert.match(entry, /checking=coachCheckOn\(env\)&&!image/);
