@@ -955,6 +955,8 @@ struct TrainingModeView: View {
                 gap(after: s, in: exercise, offset: offset)
             }
         }
+        // Fixed columns: past xLarge the "Last time" column is left too narrow on a 402 pt iPhone.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .padding(.horizontal, 4)
     }
 

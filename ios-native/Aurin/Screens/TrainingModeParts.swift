@@ -376,12 +376,18 @@ struct GymSetRow: View {
     @State private var editKg = ""
     @State private var editReps = ""
     /// Live (large): SF Pro with tabular digits, read from afar; the gym day keeps the serif.
-    private var numberFont: Font { large ? Typo.tabular(.title2) : Typo.number(22) }
-    /// A range of five characters or more ("10–12") a step smaller: in the
-    /// title2 digits it overflowed its field and showed "10–…" (tester 2026-11-27).
-    private func numberFont(_ field: Field, _ text: String) -> Font {
-        guard field == .reps, text.count >= 5 else { return numberFont }
-        return large ? Typo.tabular(.title3) : Typo.number(19)
+    // The numbers' full size, growing with the text size as title2 (live) and the serif's largeTitle do.
+    @ScaledMetric(relativeTo: .title2) private var liveNumberSize: CGFloat = 22
+    @ScaledMetric(relativeTo: .largeTitle) private var serifNumberSize: CGFloat = 22
+    /// One rule for the kg and reps fields: a number keeps its full size while
+    /// it fits the field and gets smaller only as far as its length needs, so
+    /// "10–12", "222,5" or "1000" lb show whole at any text size (a text field
+    /// does not shrink by itself: "10–…", tester 2026-11-27).
+    private func numberFont(_ text: String) -> Font {
+        // A digit is about 0.62 of the size in SF Pro semibold, 0.5 in the serif.
+        let fit = (kgWidth - 4) / (CGFloat(max(text.count, 1)) * (large ? 0.62 : 0.5))
+        if large { return .system(size: min(liveNumberSize, fit), weight: .semibold).monospacedDigit() }
+        return .custom("InstrumentSerif-Regular", fixedSize: min(serifNumberSize, fit))
     }
 
     /// What VoiceOver calls the set: "Set 2", "Warm-up set", "Drop set".
@@ -409,7 +415,8 @@ struct GymSetRow: View {
                     Text(verbatim: GymSides.letter(side)).font(.caption.weight(.bold)).foregroundStyle(Palette.muted).frame(width: 12)
                 }
             }
-            Text(lastTime ?? "—").font(large ? Font.footnote.monospacedDigit() : .footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
+            // A long one ("222,5 × 12") goes on two lines, then smaller, before it would be cut.
+            Text(lastTime ?? "—").font(large ? Font.footnote.monospacedDigit() : .footnote).foregroundStyle(Palette.faint).lineLimit(2).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !noWeight { field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint) }
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
@@ -476,7 +483,7 @@ struct GymSetRow: View {
             TextField("–", text: edit)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(numberFont(field, edit.wrappedValue))
+                .font(numberFont(edit.wrappedValue))
                 .foregroundStyle(state == .next && focus != field ? Palette.faint : Palette.ink)
                 .focused($focus, equals: field)
                 .frame(width: kgWidth, height: fieldHeight)
@@ -490,7 +497,7 @@ struct GymSetRow: View {
         } else if field == .kg, state == .current, let onKgTap {
             Button(action: onKgTap) {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
-                    .font(numberFont)
+                    .font(numberFont(binding?.wrappedValue.nilIfBlank ?? value))
                     .foregroundStyle(Palette.ink)
                     .frame(width: kgWidth, height: fieldHeight)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -503,13 +510,13 @@ struct GymSetRow: View {
             TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
-                .font(numberFont(field, binding.wrappedValue.nilIfBlank ?? hint ?? ""))
+                .font(numberFont(binding.wrappedValue.nilIfBlank ?? hint ?? ""))
                 .foregroundStyle(Palette.ink)
                 .frame(width: kgWidth, height: fieldHeight)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .accessibilityLabel(spokenField(field))
         } else {
-            Text(value.isEmpty ? "–" : value).font(numberFont(field, value))
+            Text(value.isEmpty ? "–" : value).font(numberFont(value))
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundStyle(state == .next ? Palette.faint : Palette.ink)
                 .frame(width: kgWidth)
