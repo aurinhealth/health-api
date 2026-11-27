@@ -377,6 +377,9 @@ final class SnapshotTests: XCTestCase {
         let old: [PlacedWidget] = [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .hrv, size: .small),
                                    .init(kind: .steps, size: .medium), .init(kind: .oxygen, size: .small), .init(kind: .weight, size: .medium), .init(kind: .bedtime, size: .medium)]
         XCTAssertEqual(WidgetLayoutStore.redesigned(old).map(\.kind), [.night, .healthMonitor, .steps, .body, .journal])
+        // Cycle tracking joins the board under Body, so it can be moved (TestFlight 620.1).
+        XCTAssertEqual(WidgetLayoutStore.withCycle(WidgetPanel.health.defaults).map(\.kind), [.healthMonitor, .night, .body, .cycle, .journal])
+        XCTAssertEqual(WidgetLayoutStore.withCycle([.init(kind: .journal, size: .medium)]).map(\.kind), [.journal, .cycle])
     }
 
     func testWorkoutScreens() throws {

@@ -131,6 +131,11 @@ struct HealthContent: View {
             }
         }
         .task { if model.cycle == nil { await model.loadCycle() } }
+        // Cycle tracking is a widget of the board, under Body (D-ZDRAVI-20),
+        // so it moves and goes like the others (TestFlight 620.1).
+        .onChange(of: model.cycle?.enabled == true, initial: true) { _, on in
+            if on && page == nil { WidgetLayoutStore.addCycleToHealth() }
+        }
         .sheet(isPresented: $showMonth) { MonthCalendarSheet(date: health.date) }
     }
 
@@ -157,11 +162,6 @@ struct HealthContent: View {
                         editing: $editing, editTitle: "Upravit přehled", editButtonBelow: true)
                 .padding(.top, editing ? 0 : 30)
 
-            // Cycle tracking, only for today and for those who track it, under
-            // Body (D-ZDRAVI-20), with the morning question.
-            if !editing, (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
-                CycleHealthSection(state: state, today: (page.map(\.today) ?? model.today)?.cycle).padding(.top, 20)
-            }
         }
     }
 }

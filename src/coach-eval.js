@@ -748,6 +748,9 @@ export const COACH_EVAL_SCENARIOS = [
       quality('řekne, že týden byl těžší než obvykle', says(r, /těžš|náročnějš|víc než obvykl|nad obvykl|harder|more than usual/i)), noUnaskedCard(r)] },
   { id: 'S101', title: 'Dotaz z detailu VO2max', message: 'Jak na tom jsem?', athlete: { baseWellness: { vo2max: 55 } }, context: subjectContext({ kind: 'metric', metric: 'vo2max', title: 'VO2max' }, { vo2maxEstimate: { value: 52.4, date: COACH_EVAL_DATE, change3m: 1.2 } }),
     checks: r => [quality('řekne odhad Aurinu 52,4', says(r, /52[.,]4|\b52\b/)), quality('necituje hodinky (55)', !says(r, /\b55(?:[.,]\d)?\b/)), quality('nazve ho odhadem', says(r, /odhad|estimat/i)), noUnaskedCard(r)] },
+  // TestFlight 620.1: a pill logged by mistake; the coach can't change it, so it says where in the app.
+  { id: 'S102', title: 'Omylem zapsaný prášek: kde ho vrátit', message: 'Ten dnešní zaznamenaný prášek (antikoncepci) jsem zaznamenala omylem, můžeš to za dnešek odebrat?', athlete: CYCLE,
+    checks: r => [quality('řekne, kde to v aplikaci vrátí (Zdraví, Antikoncepce, Vzato)', says(r, /Zdrav|Health/i) && says(r, /Antikoncep|Contracep|Vzato|Zrušit záznam/i)), quality('netvrdí, že prášek odebral', !says(r, /(?:odebral|smazal|zrušil) jsem|I(?:'ve| have)? (?:removed|deleted)/i)), noUnaskedCard(r)] },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
