@@ -366,6 +366,9 @@ struct GymSessionView: View {
                 setStack(gym, lift, ex, e, compact: true)
                 setTitle(ex, e)
             }
+            // First pick of the free height, before the spacer under the tiles takes its share
+            // (without it the first CI shot fell back to the name alone).
+            .layoutPriority(1)
             setTiles(lift, ex, machineLb: gym.machineLb(row: lift.row))
             Spacer(minLength: 2)
             setBottom(gym, lift)
