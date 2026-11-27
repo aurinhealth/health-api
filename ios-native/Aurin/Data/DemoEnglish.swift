@@ -72,7 +72,7 @@ extension DemoData {
         "Přední stehna": "Quads",
         "Hrudník": "Chest",
         "Záda": "Back",
-        "Pražský půlmaraton": "Prague Half Marathon",
+        "Podzimní půlmaraton": "Autumn Half Marathon",
         "Půlmaraton pod 1:40": "Half marathon under 1:40",
         "Základ": "Base",
         "Rozvoj": "Build",

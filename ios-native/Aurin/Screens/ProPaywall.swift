@@ -559,7 +559,7 @@ struct ProCoachScript: View {
 
     private static let messages: [(mine: Bool, text: String)] = [
         (true, "Zvládnu půlmaraton za 1:45?"),
-        (false, "Na Pražský půlmaraton je 1:45 reálný cíl. Upravil jsem ti plán: dva tempové běhy týdně a sobotní dlouhý běh."),
+        (false, "Na tvůj půlmaraton je 1:45 reálný cíl. Upravil jsem ti plán: dva tempové běhy týdně a sobotní dlouhý běh."),
         (true, "Co sníst po běhu?"),
         (false, "Do hodiny bílkoviny se sacharidy, třeba kuře s rýží. Vyfoť oběd a zapíšu ho za tebe."),
         (true, "Jak poznám, že to funguje?"),

@@ -187,8 +187,12 @@ final class SmokeTests: XCTestCase {
         english("-tab", "today", "-scene", "easier-day")
         pause(6)
         shot("lehci-den")
-        for _ in 0..<4 where !(app.buttons["Keep plan"].exists && app.buttons["Keep plan"].isHittable) {
-            app.swipeUp()
+        // Short drags keep the tab bar out (a swipe hid it, and the two floating
+        // buttons then sat over the Food card's numbers).
+        let keep = app.buttons["Keep plan"]
+        for _ in 0..<10 where !(keep.exists && keep.isHittable && keep.frame.maxY < app.frame.maxY * 0.8) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)))
             pause(1)
         }
         shot("lehci-den-2")

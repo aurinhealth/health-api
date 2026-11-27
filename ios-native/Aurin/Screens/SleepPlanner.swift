@@ -269,6 +269,11 @@ struct SleepDial: View {
                         .contentTransition(.numericText())
                         .accessibilityLabel(Fmt.hoursMinutesSpoken(Double(sleep)))
                     Text("spánku").font(Typo.small).foregroundStyle(Palette.muted)
+                    // The night on the dial is longer than the sleep in its middle: time
+                    // to fall asleep and wake-ups (Gemini check of the App Store shots).
+                    Text(verbatim: L10n.f("%@ v posteli", SleepPlanner.short(SleepPlanner.wrap(wake - bed))))
+                        .font(Typo.tiny).foregroundStyle(Palette.faint)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .position(c)
                 .accessibilityElement(children: .combine)
