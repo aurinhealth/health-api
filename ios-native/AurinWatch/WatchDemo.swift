@@ -84,11 +84,11 @@ enum WatchDemo {
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),
             ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Procházka", "Walk", "walk", 70),
-            ("Dlouhý běh", "Long run", "run", 96),
+            ("Dlouhý běh", "Long run", "run", 160),
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72)]
         let after: [(String, String, String, Int)] = [
             ("Lehká jízda Z2", "Easy ride Z2", "ride", 72),
-            ("Dlouhý běh", "Long run", "run", 96),
+            ("Dlouhý běh", "Long run", "run", 160),
             ("Procházka", "Walk", "walk", 70),
             ("Posilovna, dolní tělo", "Gym, lower body", "strength", 60),
             ("Sweet spot 3×12", "Sweet spot 3×12", "ride", 75),

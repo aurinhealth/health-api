@@ -14,7 +14,7 @@ extension DemoData {
             [("run", "Běh 14 km", 72, 14, 980)],
             [("strength", "Posilovna, celé tělo", 45, nil, 300), ("walk", "Chůze", 25, 2.1, 110)],
             [("ride", "Lehká jízda Z2", 72, 30, 700)],
-            [("run", "Dlouhý běh", 96, 17.5, 1350)],
+            [("run", "Dlouhý běh", 160, 28, 2250)],
             // Sunday an easy swim: the week holds ride, run, swim and gym (App Store shots).
             [("swim", "Lehké plavání", 30, 1.2, 280)]
         ]
