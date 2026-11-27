@@ -186,38 +186,68 @@ struct CyclePeriodButtons: View {
     }
 }
 
-/// "7. prášek z 21" with Vzato, the pack as a row of bars.
+/// "7. prášek z 21" with Vzato, the pack as a row of bars. On Health the card
+/// opens the cycle calendar (the month with the periods and the pills); a
+/// pill logged by mistake is taken back from its green "Vzato 21:04".
 struct PillCard: View {
     @Environment(AppModel.self) private var model
     let pill: PillDay
     let date: String
+    /// False on the calendar itself.
+    var opensCalendar = true
     @State private var saving = false
 
-    init(pill: PillDay, date: String) {
+    init(pill: PillDay, date: String, opensCalendar: Bool = true) {
         self.pill = pill
         self.date = date
+        self.opensCalendar = opensCalendar
     }
 
     var body: some View {
+        // Vzato can't sit inside the link (as the morning question's buttons):
+        // the header with the number and the bars open the calendar, the
+        // button beside them keeps its own tap.
         Card {
-            WidgetHeader(title: "Antikoncepce", color: Palette.indigo)
-            HStack(alignment: .center, spacing: 10) {
-                Text(verbatim: "\(pill.number ?? 0).").font(Typo.number(36)).foregroundStyle(Palette.ink)
-                Text(L10n.f("prášek z %@", String(pill.of))).font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                Spacer(minLength: 8)
-                PillButton(taken: pill.taken, saving: saving) { take() }
-            }
-            HStack(spacing: 3) {
-                ForEach(1...max(pill.of, 1), id: \.self) { i in
-                    let number = pill.number ?? 0
-                    let done = pill.isTaken(i)
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(done ? Palette.indigo : i == number ? Color.clear : Palette.track)
-                        .overlay { RoundedRectangle(cornerRadius: 3).stroke(i == number && !done ? Palette.indigo : Color.clear, lineWidth: 1.5) }
-                        .frame(height: 7)
+            HStack(alignment: .pillRow, spacing: 8) {
+                linked {
+                    VStack(alignment: .leading, spacing: 12) {
+                        WidgetHeader(title: "Antikoncepce", color: Palette.indigo)
+                        HStack(alignment: .center, spacing: 10) {
+                            Text(verbatim: "\(pill.number ?? 0).").font(Typo.number(36)).foregroundStyle(Palette.ink)
+                            Text(L10n.f("prášek z %@", String(pill.of))).font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                        }
+                        .alignmentGuide(.pillRow) { $0[VerticalAlignment.center] }
+                    }
                 }
+                PillButton(taken: pill.taken, saving: saving, action: take, undo: undo)
+                    .alignmentGuide(.pillRow) { $0[VerticalAlignment.center] }
+            }
+            linked {
+                HStack(spacing: 3) {
+                    ForEach(1...max(pill.of, 1), id: \.self) { i in
+                        let number = pill.number ?? 0
+                        let done = pill.isTaken(i)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(done ? Palette.indigo : i == number ? Color.clear : Palette.track)
+                            .overlay { RoundedRectangle(cornerRadius: 3).stroke(i == number && !done ? Palette.indigo : Color.clear, lineWidth: 1.5) }
+                            .frame(height: 7)
+                    }
+                }
+                .padding(.vertical, 4)
             }
             .accessibilityHidden(true)
+        }
+    }
+
+    /// The calendar behind `content` on Health; on the calendar only the content.
+    @ViewBuilder private func linked(@ViewBuilder _ content: () -> some View) -> some View {
+        if opensCalendar {
+            NavigationLink(value: AppRoute.cycle) {
+                content().frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            content().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -232,6 +262,27 @@ struct PillCard: View {
             saving = false
         }
     }
+
+    /// "Zrušit záznam": the day's pill back to not taken (the server clears it with null).
+    private func undo() {
+        saving = true
+        Task {
+            do {
+                try await model.logCycleDay(date, ["pill": .null])
+            } catch {
+                model.notice = error.localizedDescription
+            }
+            saving = false
+        }
+    }
+}
+
+extension VerticalAlignment {
+    /// The pill's number and Vzato on one line, though only the number is in the link.
+    private enum PillRow: AlignmentID {
+        static func defaultValue(in d: ViewDimensions) -> CGFloat { d[VerticalAlignment.center] }
+    }
+    static let pillRow = VerticalAlignment(PillRow.self)
 }
 
 /// Today, an hour after the usual time with today's pill not logged (the same
@@ -296,18 +347,35 @@ struct MissedPillCard: View {
     }
 }
 
-/// "Vzato" until the pill is taken, then "Vzato 21:04" in green.
+/// "Vzato" until the pill is taken, then "Vzato 21:04" in green; with `undo`
+/// a tap on the green one asks whether to take the record back.
 struct PillButton: View {
     let taken: String?
     var saving = false
     let action: () -> Void
+    var undo: (() -> Void)? = nil
+    @State private var confirmUndo = false
 
     var body: some View {
         if let taken {
-            Label(taken == "taken" ? L10n.tr("Vzato") : L10n.f("Vzato %@", ClockText.format(taken)), systemImage: "checkmark")
+            let label = Label(taken == "taken" ? L10n.tr("Vzato") : L10n.f("Vzato %@", ClockText.format(taken)), systemImage: "checkmark")
                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.green)
                 .padding(.horizontal, 12).frame(height: 32)
                 .background(Palette.greenSoft, in: Capsule())
+            if let undo {
+                Button { confirmUndo = true } label: { label.tapTarget(width: 44, height: 32) }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                    .accessibilityHint(Text(verbatim: L10n.tr("Zruší dnešní záznam prášku")))
+                    .confirmationDialog(L10n.tr("Zrušit záznam prášku?"), isPresented: $confirmUndo, titleVisibility: .visible) {
+                        Button(L10n.tr("Zrušit záznam"), role: .destructive, action: undo)
+                        Button(L10n.tr("Ponechat"), role: .cancel) {}
+                    } message: {
+                        Text(verbatim: L10n.tr("Prášek bude zase jako nevzatý."))
+                    }
+            } else {
+                label
+            }
         } else {
             Button(action: action) {
                 Text("Vzato").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
@@ -584,7 +652,7 @@ struct CycleCalendarView: View {
             }
 
             if let pill = model.cycle?.state?.pill, !pill.pause, pill.number != nil, let date = model.cycle?.state?.date {
-                PillCard(pill: pill, date: date).padding(.top, 12)
+                PillCard(pill: pill, date: date, opensCalendar: false).padding(.top, 12)
             }
 
             Button { editing = days.first { $0.date == today } ?? CycleDay(date: today, flow: 0, symptoms: []) } label: {

@@ -1818,6 +1818,14 @@
 "Potíže" = "Symptoms";
 "První den balení" = "First day of the pack";
 "Prášek vzat" = "Pill taken";
+"Zapsat prášek" = "Log pill";
+"Zrušit záznam prášku" = "Undo pill";
+"%@. prášek" = "Pill %@";
+"Prášek bude zase jako nevzatý." = "The pill will show as not taken again.";
+"Ponechat" = "Keep";
+"Zrušit záznam" = "Undo";
+"Zrušit záznam prášku?" = "Undo the pill?";
+"Zruší dnešní záznam prášku" = "Undoes the logged pill";
 "Připomínat" = "Remind me";
 "Připomínat i v pauze" = "Remind during the break too";
 "Silné" = "Heavy";

@@ -772,6 +772,8 @@ struct CoachView: View {
                 if let token = answer.undo { $0.undo[draftId] = token }
             }
             if confirm { await model.refreshTraining(); await model.refresh() }
+            // The pill on Health and in the calendar follows the card.
+            if confirm, action.type.hasPrefix("pill_") { await model.loadCycle() }
         } catch {
             edit(bubble) { $0.failedActions[draftId] = error.localizedDescription }
         }
@@ -801,6 +803,7 @@ struct CoachView: View {
             try await model.api.undoActivityChange(token: token)
             edit(bubble) { $0.undo[draftId] = nil; $0.decided[draftId] = L10n.tr("Vráceno") }
             await model.refreshTraining(); await model.refresh()
+            if action.type.hasPrefix("pill_") { await model.loadCycle() }
         } catch {
             self.error = error.localizedDescription
         }
@@ -1124,7 +1127,7 @@ struct ActionCard: View {
     /// a card over more days or one that deletes needs the tap.
     static func yesConfirms(_ a: CoachAction, today: String = AppModel.localDate(Date())) -> Bool {
         guard a.draftId != nil, a.date == today else { return false }
-        return !["rest", "activity_delete", "activity_merge", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
+        return !["rest", "activity_delete", "activity_merge", "pill_clear", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
     }
 
     private var health: Bool { action.type == "status" || action.type == "plan_around" }

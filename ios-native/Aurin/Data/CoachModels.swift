@@ -207,6 +207,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// other_event: the athlete's own sport (a Log workout type) and match or training.
     var otherType: String? = nil
     var eventKind: String? = nil
+    /// pill_log, pill_clear: the pill of the pack on that day (12 of 21).
+    var number: Int? = nil
     var fromTime: String? = nil
     var time: String? = nil
     /// workout: the session the server prepared for the card, a ride or run
@@ -302,6 +304,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "gym_remove": return L10n.f("V posilovně odebrat %@", fromExercise ?? L10n.tr("cvik"))
         case "plan_around": return L10n.f("Plánovat s ohledem na bolest %@?", label ?? "")
         case "activity_delete": return L10n.tr("Smazat aktivitu")
+        case "pill_log": return L10n.tr("Zapsat prášek")
+        case "pill_clear": return L10n.tr("Zrušit záznam prášku")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
         case "activity_time": return L10n.tr("Upravit čas")
         case "activity_kcal":
@@ -328,6 +332,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
         switch type {
         case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: ", ")
+        // "12. prášek, so 28. 11.".
+        case "pill_log", "pill_clear": return [number.map { L10n.f("%@. prášek", String($0)) }, day].compactMap { $0 }.joined(separator: ", ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.

@@ -72,7 +72,7 @@ enum WidgetPanel: String {
     var recommended: [WidgetKind] {
         switch self {
         case .today: return [.cycle, .sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
-        case .health: return [.steps, .vo2max, .hrv, .restingHR, .sleepDebt, .form, .drinks, .food, .activeCalories]
+        case .health: return [.cycle, .steps, .vo2max, .hrv, .restingHR, .sleepDebt, .form, .drinks, .food, .activeCalories]
         case .training: return [.musclesFigure, .thisWeek, .zones, .activeCalories, .sessions, .musclesGlance, .sleep, .hrv, .restingHR, .steps]
         case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
@@ -291,6 +291,31 @@ enum WidgetLayoutStore {
         }
         // The journal goes last until the athlete arranges Zdraví (concept 1 and 20).
         if let i = out.firstIndex(where: { $0.kind == .journal }) { out.append(out.remove(at: i)) }
+        return out
+    }
+
+    /// Set once cycle tracking was put on Zdraví, so a removed one doesn't come back.
+    static let cycleAddedKey = "widgets.health.cycleAdded"
+
+    /// Cycle tracking on: Cyklus with the pill on Zdraví once, under Body
+    /// (D-ZDRAVI-20), where it was drawn outside the board before (TestFlight 620.1).
+    static func addCycleToHealth() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: cycleAddedKey) else { return }
+        defaults.set(true, forKey: cycleAddedKey)
+        let items = decode(defaults.string(forKey: key(.health)) ?? "", panel: .health)
+        guard !items.contains(where: { $0.kind == .cycle }) else { return }
+        defaults.set(encode(withCycle(items)), forKey: key(.health))
+        // The layout is stored converted now, as when the athlete saves it.
+        defaults.set(true, forKey: healthRedesignKey)
+    }
+
+    /// The layout with Cyklus right under Body, else last.
+    static func withCycle(_ items: [PlacedWidget]) -> [PlacedWidget] {
+        guard !items.contains(where: { $0.kind == .cycle }) else { return items }
+        var out = items
+        let at = out.firstIndex(where: { $0.kind == .body }).map { $0 + 1 } ?? out.count
+        out.insert(PlacedWidget(kind: .cycle, size: .medium), at: at)
         return out
     }
 
@@ -659,7 +684,13 @@ struct PanelWidget: View {
             if let h = data.health { BodyCard(health: h).allowsHitTesting(linked) }
         case .cycle:
             if let t = data.today, let cycle = t.cycle {
-                CycleWidget(cycle: cycle, date: t.date, past: t.steps.hour == nil, size: item.size).allowsHitTesting(linked)
+                // On Zdraví today's state with the pill card (the morning
+                // question too), each opening the calendar.
+                if data.panel == .health, item.size == .medium, t.steps.hour != nil, let state = model.cycle?.state {
+                    CycleHealthSection(state: state, today: cycle).allowsHitTesting(linked)
+                } else {
+                    CycleWidget(cycle: cycle, date: t.date, past: t.steps.hour == nil, size: item.size).allowsHitTesting(linked)
+                }
             }
         }
     }
