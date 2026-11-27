@@ -196,7 +196,7 @@ private struct DaySwipe: ViewModifier {
             var instant = Transaction()
             instant.disablesAnimations = true
             withTransaction(instant) { slide = (new > old ? 1 : -1) * 60 }
-            withAnimation(.snappy(duration: 0.3)) { slide = 0 }
+            withMotion(.snappy(duration: 0.3)) { slide = 0 }
         }
         // The days beside a moment after this one: read with the first
         // frame they doubled the work of opening a tab (Food froze for about

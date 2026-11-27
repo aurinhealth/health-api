@@ -200,7 +200,7 @@ struct CoachMemoryEditor: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        NavigationStack {
+        SheetFrame(title: original == nil ? "Přidat" : "Upravit") {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(spacing: 8) {
                     ForEach(CoachMemoryGroup.allCases) { g in
@@ -220,6 +220,11 @@ struct CoachMemoryEditor: View {
                     .focused($focused)
                     .padding(.horizontal, 16).padding(.vertical, 14)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                PrimaryButton(title: L10n.tr("Uložit")) {
+                    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task { await save(value, group); dismiss() }
+                }
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (text == original && group == originalGroup))
                 if original != nil {
                     Button(role: .destructive) {
                         Task { await delete(); dismiss() }
@@ -229,26 +234,10 @@ struct CoachMemoryEditor: View {
                     .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
                 }
-                Spacer()
             }
-            .padding(20)
-            .background { Palette.settingsBackground.ignoresSafeArea() }
-            .navigationTitle(L10n.tr(original == nil ? "Přidat" : "Upravit"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Uložit") {
-                        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        Task { await save(value, group); dismiss() }
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (text == original && group == originalGroup))
-                }
-            }
-            .onAppear { text = original ?? ""; group = originalGroup; focused = original == nil }
         }
-        .presentationDetents([.medium])
+        .glassSheetBackground()
+        .onAppear { text = original ?? ""; group = originalGroup; focused = original == nil }
     }
 }
 

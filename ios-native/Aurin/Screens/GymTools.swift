@@ -309,7 +309,7 @@ struct GymBuilderView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .task {
                         try? await Task.sleep(for: .seconds(3))
-                        withAnimation(.snappy) { savedNote = false }
+                        withMotion(.snappy) { savedNote = false }
                     }
             }
         }
@@ -728,7 +728,7 @@ struct GymBuilderView: View {
 
     /// The coach's reasons for this proposal: two lines, a tap shows them whole.
     private func reasons(_ text: String) -> some View {
-        Button { withAnimation(.snappy) { reasonsOpen.toggle() } } label: {
+        Button { withMotion(.snappy) { reasonsOpen.toggle() } } label: {
             HStack(alignment: .center, spacing: 10) {
                 Text(verbatim: text).font(Typo.body).foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.leading)
@@ -765,7 +765,7 @@ struct GymBuilderView: View {
                 .font(Typo.small).foregroundStyle(Palette.muted).lineLimit(2)
             Spacer(minLength: 8)
             Button {
-                withAnimation(.snappy) { proposal = removed.before; lastRemoved = nil }
+                withMotion(.snappy) { proposal = removed.before; lastRemoved = nil }
             } label: {
                 Text(verbatim: L10n.tr("Vrátit")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 14).frame(minHeight: 36)
@@ -781,7 +781,7 @@ struct GymBuilderView: View {
         .transition(.opacity)
         .task(id: removed.id) {
             try? await Task.sleep(for: .seconds(TrainingModeView.undoRemoveSeconds))
-            if lastRemoved?.id == removed.id { withAnimation(.snappy) { lastRemoved = nil } }
+            if lastRemoved?.id == removed.id { withMotion(.snappy) { lastRemoved = nil } }
         }
     }
 
@@ -819,7 +819,7 @@ struct GymBuilderView: View {
         guard let at = sheet.exercises.firstIndex(where: { $0.name == name }) else { return }
         sheet.deleteExercise(at: at)
         p.take(sheet, catalog: catalog)
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             proposal = p
             lastRemoved = RemovedExercise(name: name, before: before, after: p)
         }
@@ -964,7 +964,7 @@ struct GymBuilderView: View {
         await run("confirm") {
             try await model.api.confirmGym(draftId: id, rows: p.rows)
             saved = true
-            withAnimation(.snappy) { savedNote = true }
+            withMotion(.snappy) { savedNote = true }
             if template == nil { GymLength.remember(minutes); GymKeptProposal.clear() }
             async let training: Void = model.refreshTraining()
             await model.refresh()

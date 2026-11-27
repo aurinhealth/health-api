@@ -80,11 +80,11 @@ struct ProBanner: View {
         guard !model.demo, let status = try? await model.api.subscription() else { return }
         await store.load()
         model.coachLocked = !status.pilot && !status.hasAI && !store.entitled
-        withAnimation(.easeInOut(duration: 0.25)) { banner = status.proBanner }
+        withMotion(.easeInOut(duration: 0.25)) { banner = status.proBanner }
     }
 
     private func close() async {
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .snappy) {
+        withMotion(reduceMotion ? .easeInOut(duration: 0.2) : .snappy) {
             banner = SubscriptionStatus.ProBanner(show: false, offer: banner?.offer)
         }
         AccessibilityNotification.Announcement(L10n.tr("Nabídka zůstane v Nastavení.")).post()

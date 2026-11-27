@@ -166,7 +166,7 @@ struct GoalsSettingsView: View {
     /// under 50 kg); away from it a losing pace becomes maintain. Strength and
     /// muscle gains a quarter kilo a week; away from it gaining becomes maintain.
     private func pick(_ type: String) {
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             let before = goalType
             goalType = type
             if type == "lose", !goal.hasPrefix("lose_") {

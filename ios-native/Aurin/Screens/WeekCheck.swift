@@ -256,14 +256,14 @@ struct WeekCheckCard: View {
         error = nil
         do {
             let next = try await model.api.decideWeekCheck(date: date, apply: apply)
-            withAnimation { things.check = apply ? next : nil }
+            withMotion { things.check = apply ? next : nil }
             if apply {
                 await model.refreshTraining()
                 // "Upraveno i v kalendáři." for a moment, then the next thing moves up;
                 // a session that did not change keeps its warning in view.
                 guard next?.changes?.contains(where: { $0.applied == false }) != true else { return }
                 try? await Task.sleep(for: CoachThings.settleDelay)
-                if things.check?.date == date { withAnimation(.snappy) { things.check = nil } }
+                if things.check?.date == date { withMotion(.snappy) { things.check = nil } }
             }
         } catch {
             self.error = error.localizedDescription

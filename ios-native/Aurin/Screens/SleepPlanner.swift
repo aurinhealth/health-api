@@ -341,14 +341,8 @@ struct WakeSheet: View {
     @State private var every = false
 
     var body: some View {
+        SheetFrame(title: "Zítra vstávám") {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Button("Zrušit") { dismiss() }.foregroundStyle(Palette.muted)
-                Spacer()
-                Text("Zítra vstávám").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Hotovo") { done(minutes, every); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.green)
-            }
             DatePicker("Zítra vstávám", selection: $time, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
@@ -365,10 +359,9 @@ struct WakeSheet: View {
                     .font(Typo.number(36)).foregroundStyle(Palette.green)
                     .contentTransition(.numericText())
             }
-            Spacer(minLength: 0)
+            PrimaryButton(title: L10n.tr("Hotovo")) { done(minutes, every); dismiss() }
         }
-        .padding(24)
-        .presentationDetents([.height(440)])
+        }
         .glassSheetBackground()
         .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: wake)) }
     }
@@ -391,14 +384,8 @@ struct BedSheet: View {
     @State private var time = Date()
 
     var body: some View {
+        SheetFrame(title: "Dnes jdu spát") {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Button("Zrušit") { dismiss() }.foregroundStyle(Palette.muted)
-                Spacer()
-                Text("Dnes jdu spát").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Hotovo") { done(minutes); dismiss() }.fontWeight(.semibold).foregroundStyle(Palette.green)
-            }
             DatePicker("Dnes jdu spát", selection: $time, displayedComponents: .hourAndMinute)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
@@ -410,10 +397,9 @@ struct BedSheet: View {
                     .font(Typo.number(36)).foregroundStyle(Palette.green)
                     .contentTransition(.numericText())
             }
-            Spacer(minLength: 0)
+            PrimaryButton(title: L10n.tr("Hotovo")) { done(minutes); dismiss() }
         }
-        .padding(24)
-        .presentationDetents([.height(400)])
+        }
         .glassSheetBackground()
         .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: bed)) }
     }

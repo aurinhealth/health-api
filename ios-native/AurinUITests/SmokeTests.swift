@@ -170,6 +170,29 @@ final class SmokeTests: XCTestCase {
             }
         }
 
+        // Today a little lower for the App Store: under the readiness the whole
+        // coach card down to its workout's Start, scrolled in short drags.
+        english("-tab", "today")
+        pause(6)
+        let start = app.buttons["Start"].firstMatch
+        for _ in 0..<6 where !(start.exists && start.isHittable && start.frame.maxY < app.frame.maxY * 0.8) {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55)))
+            pause(1)
+        }
+        shot("dnes-kouc")
+
+        // The App Store's easier day: Today with the coach's offer (-scene easier-day),
+        // scrolled until the card's buttons show.
+        english("-tab", "today", "-scene", "easier-day")
+        pause(6)
+        shot("lehci-den")
+        for _ in 0..<4 where !(app.buttons["Keep plan"].exists && app.buttons["Keep plan"].isHittable) {
+            app.swipeUp()
+            pause(1)
+        }
+        shot("lehci-den-2")
+
         // What affects you: from the journal.
         english("-open", "journal")
         pause(4)

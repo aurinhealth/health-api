@@ -265,7 +265,7 @@ struct SharePlaceView: View {
                     Spacer()
                     if !offsets.isEmpty {
                         Button {
-                            withAnimation(.snappy) { offsets = [:] }
+                            withMotion(.snappy) { offsets = [:] }
                         } label: {
                             Label(L10n.tr("Původní rozložení"), systemImage: "arrow.counterclockwise")
                                 .font(.subheadline.weight(.medium)).foregroundStyle(.white)

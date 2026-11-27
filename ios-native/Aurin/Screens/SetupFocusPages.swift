@@ -80,7 +80,7 @@ struct SetupGoalPage: View {
             SetupPageTitle(title: "Jaký je tvůj cíl?", subtitle: "Kouč podle něj skládá tvůj týden. Změníš ho kdykoli.")
             ForEach(FocusChoice.goals, id: \.0) { item in
                 ChoiceCard(title: item.1, subtitle: Self.subtitles[item.0], selected: focus.goal == item.0) {
-                    withAnimation(.snappy) {
+                    withMotion(.snappy) {
                         focus.goal = item.0
                         if item.0 == "race", focus.eventDate == nil {
                             focus.eventDate = Calendar.current.date(byAdding: .month, value: 3, to: Date())

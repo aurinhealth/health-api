@@ -95,8 +95,8 @@ struct BulkMoveSheet: View {
     private var lastDay: Date { Calendar.current.date(byAdding: .day, value: AppModel.foodDaysAhead, to: Date()) ?? Date() }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: L10n.f(verb == "Kopírovat" ? "Kopírovat %@" : "Přesunout %@", Self.items(count))) {
+        SheetFrame(title: L10n.f(verb == "Kopírovat" ? "Kopírovat %@" : "Přesunout %@", Self.items(count))) {
+            VStack(alignment: .leading, spacing: 26) {
                 SettingsGroup(title: "Den") {
                     HStack(spacing: 8) {
                         chip("Dnes", Calendar.current.isDate(day, inSameDayAs: today)) { day = today }
@@ -138,12 +138,9 @@ struct BulkMoveSheet: View {
                 }
                 .disabled(working)
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } }
-            }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
-        .presentationDetents([.large])
         .onAppear {
             day = FoodEntryEditSheet.date(from) ?? Date()
             if let meal { chosenMeal = meal }

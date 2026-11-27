@@ -252,7 +252,7 @@ struct TrainingModeView: View {
                         .scrollIndicators(.hidden)
                         // The exercise under way goes under the panel when it changes.
                         .onChange(of: index) { _, _ in
-                            withAnimation(.snappy) { reader.scrollTo(Self.runningID, anchor: .top) }
+                            withMotion(.snappy) { reader.scrollTo(Self.runningID, anchor: .top) }
                         }
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -663,7 +663,7 @@ struct TrainingModeView: View {
             if !doneRows.isEmpty {
                 let seconds = doneRows.reduce(0) { $0 + live.seconds(of: $1.key) }
                 LiveListRow(title: L10n.f("%@ hotovo", String(doneRows.count)), detail: Self.clock(seconds), done: true, open: showDone) {
-                    withAnimation(.snappy) { showDone.toggle() }
+                    withMotion(.snappy) { showDone.toggle() }
                 }
                 if showDone {
                     ForEach(doneRows) { row in listItem(row, day) }
@@ -687,7 +687,7 @@ struct TrainingModeView: View {
             if !upcoming.isEmpty {
                 LiveListRow(title: L10n.f("%@ zbývá", String(upcoming.count)),
                             detail: L10n.f("Potom %@", upcoming[0].name), open: showUpcoming) {
-                    withAnimation(.snappy) { showUpcoming.toggle() }
+                    withMotion(.snappy) { showUpcoming.toggle() }
                 }
                 if showUpcoming {
                     ForEach(upcoming) { row in listItem(row, day) }
@@ -748,7 +748,7 @@ struct TrainingModeView: View {
     }
 
     private func open(_ at: Int) {
-        withAnimation(.snappy) { viewing = at == index ? nil : at }
+        withMotion(.snappy) { viewing = at == index ? nil : at }
     }
 
     /// The exercise under way: open, or folded with "Now" while another is open.
@@ -772,7 +772,7 @@ struct TrainingModeView: View {
         let named = !running
         return VStack(alignment: .leading, spacing: 8) {
             LiveSetCard(title: named ? exercise.name : nil,
-                        onFold: running ? nil : { withAnimation(.snappy) { viewing = nil } },
+                        onFold: running ? nil : { withMotion(.snappy) { viewing = nil } },
                         onHistory: { historyFor = exercise.name },
                         onTechnique: { technique = exercise.name },
                         // Each side only for a one-sided exercise (or one done by sides): never on a push-up (617 C15).
@@ -841,7 +841,7 @@ struct TrainingModeView: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .task(id: removed.id) {
                 try? await Task.sleep(for: .seconds(Self.undoRemoveSeconds))
-                if lastRemoved?.id == removed.id { withAnimation(.snappy) { lastRemoved = nil } }
+                if lastRemoved?.id == removed.id { withMotion(.snappy) { lastRemoved = nil } }
             }
         }
     }
@@ -854,7 +854,7 @@ struct TrainingModeView: View {
         if next.exercises[at].sets.contains(where: \.done) { next.removeExercise(at: at) } else { next.deleteExercise(at: at) }
         guard next != before else { return }
         viewing = nil
-        withAnimation(.snappy) { lastRemoved = (name, before, next, UUID()) }
+        withMotion(.snappy) { lastRemoved = (name, before, next, UUID()) }
         await saveEdited(next)
     }
 
@@ -887,7 +887,7 @@ struct TrainingModeView: View {
                     restEnd = nil
                 }
             } else if viewing != nil {
-                PrimaryButton(title: L10n.f("Zpět na %@", exercise.name)) { withAnimation(.snappy) { viewing = nil } }
+                PrimaryButton(title: L10n.f("Zpět na %@", exercise.name)) { withMotion(.snappy) { viewing = nil } }
             } else if let set = nextSet(exercise) {
                 PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
                     Task { await complete(set) }
@@ -1301,7 +1301,7 @@ struct TrainingModeView: View {
 
     /// Edit warm-up, Edit cardio, Edit stretching under the part (concept 08).
     private func editPill(_ part: GymDayPart, _ parts: GymDayParts, _ day: GymDay) -> some View {
-        Button { withAnimation(.snappy) { editingPart = LivePartDraft.start(part, parts: parts, day: day) } } label: {
+        Button { withMotion(.snappy) { editingPart = LivePartDraft.start(part, parts: parts, day: day) } } label: {
             Text(verbatim: L10n.tr(Self.editTitle(part))).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 16).frame(height: 36)
                 .background(Palette.ink.opacity(0.08), in: Capsule())
@@ -1334,7 +1334,7 @@ struct TrainingModeView: View {
         if draft != LivePartDraft.start(draft.part, parts: parts, day: day), draft.canSave {
             dayParts = GymDayParts.saving(draft.applied(to: parts), date: date, into: dayParts)
         }
-        withAnimation(.snappy) { editingPart = nil }
+        withMotion(.snappy) { editingPart = nil }
     }
 
     /// The warm-up's or stretching's holds, or the cardio's time, in this screen.

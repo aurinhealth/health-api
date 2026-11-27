@@ -79,7 +79,7 @@ struct PortionWheel: View {
                 // whose last column is the unit; closed, only this row shows.
                 Button {
                     typing = false
-                    withAnimation(.easeOut(duration: 0.2)) { wheelOpen.toggle() }
+                    withMotion(.easeOut(duration: 0.2)) { wheelOpen.toggle() }
                 } label: {
                     HStack {
                         Text(verbatim: current.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)

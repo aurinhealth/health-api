@@ -228,7 +228,7 @@ struct CoachPickCard: View {
                 }
             } else if let pick, pick.chosen == nil, let best = pick.best {
                 VStack(alignment: .leading, spacing: 12) {
-                    Button { withAnimation(.snappy) { folded.toggle() } } label: {
+                    Button { withMotion(.snappy) { folded.toggle() } } label: {
                         HStack {
                             Label("Aktivita dne", systemImage: "sparkles")
                                 .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.green)
@@ -243,7 +243,7 @@ struct CoachPickCard: View {
                     .padding(.trailing, 44)
                     .overlay(alignment: .trailing) { moreMenu(best) }
                     if folded {
-                        Button { withAnimation(.snappy) { folded = false } } label: {
+                        Button { withMotion(.snappy) { folded = false } } label: {
                             HStack(spacing: 12) {
                                 PickIcon(option: best, size: 32)
                                 Text(verbatim: best.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
@@ -296,12 +296,12 @@ struct CoachPickCard: View {
         .task(id: declined) {
             guard declined else { return }
             try? await Task.sleep(for: .seconds(6))
-            withAnimation(.easeOut(duration: 0.2)) { declined = false }
+            withMotion(.easeOut(duration: 0.2)) { declined = false }
         }
         .task(id: notice) {
             guard notice != nil else { return }
             try? await Task.sleep(for: .seconds(6))
-            withAnimation(.easeOut(duration: 0.2)) { notice = nil }
+            withMotion(.easeOut(duration: 0.2)) { notice = nil }
         }
     }
 
@@ -357,7 +357,7 @@ struct CoachPickCard: View {
         error = nil
         do {
             try await model.api.setSportSuggested(sport, false)
-            withAnimation(.snappy) { notice = Notice(kind: .off(sport), text: PickMenuText.off(sport)) }
+            withMotion(.snappy) { notice = Notice(kind: .off(sport), text: PickMenuText.off(sport)) }
             await model.refreshTraining()
         } catch { self.error = error.localizedDescription }
         await reload()
@@ -368,13 +368,13 @@ struct CoachPickCard: View {
         error = nil
         do {
             try await model.api.recommendLess(kind: kind, less: true)
-            withAnimation(.snappy) { notice = Notice(kind: .less(kind), text: PickMenuText.lessDone(kind)) }
+            withMotion(.snappy) { notice = Notice(kind: .less(kind), text: PickMenuText.lessDone(kind)) }
         } catch { self.error = error.localizedDescription }
         await reload()
     }
 
     private func undoNotice(_ shown: Notice) async {
-        withAnimation(.easeOut(duration: 0.2)) { notice = nil }
+        withMotion(.easeOut(duration: 0.2)) { notice = nil }
         do {
             switch shown.kind {
             case .off(let sport): try await model.api.setSportSuggested(sport, true); await model.refreshTraining()
@@ -479,15 +479,15 @@ struct CoachPickCard: View {
     private func decline(_ best: CoachPick.Option) async {
         guard !model.demo else { return }
         error = nil
-        withAnimation(.easeOut(duration: 0.2)) { pick?.chosen = "skip"; declined = true }
+        withMotion(.easeOut(duration: 0.2)) { pick?.chosen = "skip"; declined = true }
         do { try await model.api.chooseCoachPick(kind: "skip", top: best.kind) } catch {
-            withAnimation { pick?.chosen = nil; declined = false }
+            withMotion { pick?.chosen = nil; declined = false }
             self.error = error.localizedDescription
         }
     }
 
     private func undo() async {
-        withAnimation(.easeOut(duration: 0.2)) { declined = false; pick?.chosen = nil }
+        withMotion(.easeOut(duration: 0.2)) { declined = false; pick?.chosen = nil }
         do { try await model.api.undoSkipCoachPick() } catch { self.error = error.localizedDescription }
         await reload()
     }
@@ -587,7 +587,7 @@ struct CoachPickView: View {
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
         .cardSurface(cornerRadius: 22)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .onTapGesture { withAnimation(.snappy) { open = expanded ? nil : option.id } }
+        .onTapGesture { withMotion(.snappy) { open = expanded ? nil : option.id } }
         .contextMenu {
             if option.best != true {
                 Button { Task { await setLess(option.kind, true) } } label: { Label("Doporučovat méně", systemImage: "minus.circle") }

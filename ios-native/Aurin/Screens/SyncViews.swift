@@ -735,28 +735,21 @@ struct SyncToastView: View {
 /// Each app's state for the activity: ✓, "odešle se", or the error with "Zkusit znovu".
 struct SyncStatusSheet: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Odeslání").font(Typo.heading(26, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-            }
-            if let report = model.syncReport {
-                Text(verbatim: report.activity.name).font(Typo.small).foregroundStyle(Palette.muted)
-                SettingsGroup {
-                    ForEach(Array(report.rows.enumerated()), id: \.element.id) { index, row in
-                        if index > 0 { SettingsDivider() }
-                        line(row)
+        SheetFrame(title: "Odeslání") {
+            VStack(alignment: .leading, spacing: 16) {
+                if let report = model.syncReport {
+                    Text(verbatim: report.activity.name).font(Typo.small).foregroundStyle(Palette.muted)
+                    SettingsGroup {
+                        ForEach(Array(report.rows.enumerated()), id: \.element.id) { index, row in
+                            if index > 0 { SettingsDivider() }
+                            line(row)
+                        }
                     }
                 }
             }
-            Spacer(minLength: 0)
         }
-        .padding(24)
-        .presentationDetents([.medium, .large])
         .glassSheetBackground(Palette.settingsBackground)
     }
 

@@ -81,7 +81,7 @@ struct SportsSettingsView: View {
         guard !model.demo else { return }
         do {
             try await model.api.recommendLess(kind: kind, less: false)
-            withAnimation { less.removeAll { $0 == kind } }
+            withMotion { less.removeAll { $0 == kind } }
         } catch { self.error = error.localizedDescription }
     }
 }

@@ -739,7 +739,7 @@ struct SwipeToDelete: ViewModifier {
                 let dx = drag.translation.width
                 guard base != nil else { return }
                 base = nil
-                withAnimation(.snappy) {
+                withMotion(.snappy) {
                     if !exercise, offset < -width * 2.4 { offset = 0; onDelete() }
                     else { offset = offset < -width / 2 && dx < 0 ? -width : 0 }
                 }
@@ -755,7 +755,7 @@ struct SwipeToDelete: ViewModifier {
     }
 
     private func delete() {
-        withAnimation(.snappy) { offset = 0 }
+        withMotion(.snappy) { offset = 0 }
         onDelete()
     }
 }

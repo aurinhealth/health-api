@@ -270,7 +270,7 @@ struct WeekPlanSettingsView: View {
         let past = date < today
         let on = selected == date
         return Button {
-            withAnimation(.snappy) {
+            withMotion(.snappy) {
                 selected = on ? nil : date
                 // A day with its own practice or match opens it, so it can be changed right away.
                 editing = choice.events[i].first?.type
@@ -364,7 +364,7 @@ struct WeekPlanSettingsView: View {
                         } action: {
                             // On already: the tap opens its Training or Match, Length and Repeat
                             // (Remove from this day is there); off: on as a practice, opened.
-                            if on { withAnimation(.snappy) { editing = type } } else {
+                            if on { withMotion(.snappy) { editing = type } } else {
                                 update(week) { $0.toggleEvent(type, day: i) }
                                 editing = type
                             }
@@ -475,7 +475,7 @@ struct WeekPlanSettingsView: View {
     private func update(_ week: String, _ change: (inout WeekPlanChoice) -> Void) {
         var c = choices[week] ?? WeekPlanChoice(prefs: nil)
         change(&c)
-        withAnimation(.snappy) { choices[week] = c }
+        withMotion(.snappy) { choices[week] = c }
     }
 
     // MARK: Time

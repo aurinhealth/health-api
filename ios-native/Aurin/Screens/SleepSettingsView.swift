@@ -206,7 +206,7 @@ struct SleepSettingsForm: View {
     /// A row with its value muted and the up-down glyph; a tap opens its wheel below (and closes any other).
     private func wheelRow(_ title: String, value: String, key: String) -> some View {
         Button {
-            withAnimation(.easeOut(duration: 0.2)) { open = open == key ? nil : key }
+            withMotion(.easeOut(duration: 0.2)) { open = open == key ? nil : key }
         } label: {
             HStack(spacing: 8) {
                 Text(title).font(.body).foregroundStyle(Palette.ink)

@@ -143,7 +143,7 @@ struct PlusCard: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 4) {
                         ForEach(more) { item in
-                            Button { if left > 0 { withAnimation(.snappy) { draft.append(item.id) } } } label: {
+                            Button { if left > 0 { withMotion(.snappy) { draft.append(item.id) } } } label: {
                                 label(item, badge: "plus")
                             }
                             .buttonStyle(.plain)
@@ -167,14 +167,14 @@ struct PlusCard: View {
 
     private func finishEditing() {
         held = false
-        withAnimation(.snappy) { editing = false }
+        withMotion(.snappy) { editing = false }
     }
 
     private func startEditing() {
         draft = saved.filter { $0 != "period" || cycleOn }
         pouring = nil
         poured = nil
-        withAnimation(.snappy) { editing = true }
+        withMotion(.snappy) { editing = true }
     }
 
     // MARK: Tiles
@@ -186,7 +186,7 @@ struct PlusCard: View {
                 label(item, badge: fixed ? nil : "minus")
                     .modifier(Wiggle(amplitude: fixed ? 0 : 1.6, seed: id.count))
                     .contentShape(Rectangle())
-                    .onTapGesture { if !fixed { withAnimation(.snappy) { draft.removeAll { $0 == id } } } }
+                    .onTapGesture { if !fixed { withMotion(.snappy) { draft.removeAll { $0 == id } } } }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.tr(item.title))
                     .accessibilityIdentifier("plus." + id)
@@ -291,7 +291,7 @@ struct PlusCard: View {
         let id = model.addDrinkForUndo(ml: ml, kind: kind)
         let name = L10n.tr(PlusItem.find(kind)?.title ?? kind)
         lastDrink = kind
-        withAnimation(.easeOut(duration: 0.2)) {
+        withMotion(.easeOut(duration: 0.2)) {
             pouring = nil
             poured = Poured(name: name, amount: Units.volumeText(Double(ml)), localId: id)
         }
@@ -301,7 +301,7 @@ struct PlusCard: View {
     private func undo() {
         guard let p = poured else { return }
         if let id = p.localId { Task { _ = await model.deleteDrink(id: id) } }
-        withAnimation(.easeOut(duration: 0.2)) {
+        withMotion(.easeOut(duration: 0.2)) {
             poured = Poured(name: p.name, amount: p.amount, localId: nil, undone: true)
         }
         if let poured { AccessibilityNotification.Announcement(poured.text).post() }
@@ -312,7 +312,7 @@ struct PlusCard: View {
     private func run(_ id: String) {
         if let item = PlusItem.find(id), item.pours {
             lastDrink = id
-            withAnimation(.easeOut(duration: 0.2)) {
+            withMotion(.easeOut(duration: 0.2)) {
                 poured = nil
                 pouring = pouring == id ? nil : id
             }
@@ -391,7 +391,7 @@ private struct PlusDrop: DropDelegate {
               let from = items.firstIndex(of: moving), let to = items.firstIndex(of: target) else { return }
         var list = items
         list.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
-        withAnimation(.snappy) { items = list }
+        withMotion(.snappy) { items = list }
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
@@ -608,13 +608,8 @@ struct DrinkSheet: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
-        PageScroll {
+        SheetFrame(title: editing ? "Upravit pití" : "Co piješ?", fitted: false) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.heading(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-                }
                 LazyVGrid(columns: columns, spacing: 8) {
                     ForEach(DrinkKind.all) { d in
                         Button { kind = d.id } label: {
@@ -687,10 +682,8 @@ struct DrinkSheet: View {
                 }
                 .disabled(saving)
             }
-            .padding(24)
         }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.sheet)
+        .glassSheetBackground()
     }
 
     /// −/+ by 50 ml, or by 1 fl oz in imperial units; the amount stays in ml.

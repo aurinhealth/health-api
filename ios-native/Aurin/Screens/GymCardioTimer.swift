@@ -108,7 +108,7 @@ struct CardioTimeSheet: View {
     @State private var minutes = 25
 
     var body: some View {
-        NavigationStack {
+        SheetFrame(title: "Přidat čas") {
             VStack(alignment: .leading, spacing: 16) {
                 Stepper(value: $minutes, in: 1...60) {
                     HStack {
@@ -122,18 +122,10 @@ struct CardioTimeSheet: View {
                 Slider(value: Binding(get: { Double(minutes) }, set: { minutes = Int($0.rounded()) }), in: 1...60, step: 1)
                     .tint(Palette.ink)
                     .accessibilityHidden(true)
-                Spacer()
-            }
-            .padding(20)
-            .background(Palette.background)
-            .navigationTitle("Přidat čas")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Přidat") { onAdd(minutes); dismiss() } }
+                PrimaryButton(title: L10n.tr("Přidat")) { onAdd(minutes); dismiss() }
             }
         }
-        .presentationDetents([.medium])
+        .glassSheetBackground()
     }
 }
 

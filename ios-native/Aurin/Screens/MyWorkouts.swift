@@ -115,7 +115,7 @@ struct MyWorkoutsView: View {
         return HStack(spacing: 4) {
             ForEach([false, true], id: \.self) { tab in
                 Button {
-                    withAnimation(.snappy) { friends = tab; sport = nil }
+                    withMotion(.snappy) { friends = tab; sport = nil }
                     // The dots stay for this visit; the badge in Knihovna goes.
                     if tab, unseen, !model.demo { Task { try? await model.api.markFriendWorkoutsSeen() } }
                 } label: {

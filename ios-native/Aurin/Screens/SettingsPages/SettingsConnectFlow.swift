@@ -323,7 +323,7 @@ struct ServiceConnectSheet: View {
                 healthError = L10n.f("Zdravotní data se nepodařilo zapnout. Zapneš je v Nastavení → Zdroje dat → %@ → Zdravotní data.", service.name)
             }
         }
-        withAnimation { phase = .done }
+        withMotion { phase = .done }
         await connected()
     }
 }
@@ -344,7 +344,7 @@ private struct DownloadBar: View {
         }
         .frame(height: 6)
         // Reduce Motion: the bar stands still.
-        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } } }
+        .onAppear { if !reduceMotion { withMotion(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } } }
         .accessibilityHidden(true)
     }
 }
