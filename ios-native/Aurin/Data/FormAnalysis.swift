@@ -62,7 +62,17 @@ enum FormAnalysis {
     /// Knee this share of hip width off the hip-ankle line counts as in or out.
     static let kneeBand = 0.25
 
-    static func squat(_ frames: [FormFrame]) -> FormResult {
+    /// Seconds each side of a frame within which its standing height is looked for:
+    /// a person walking towards or away from the phone changes size, so one top for
+    /// the whole video misses reps.
+    static let topWindow = 1.5
+    /// Reps further apart than this many times the usual gap belong to setup, not the set.
+    static let setGap = 1.6
+
+    /// `aspect` is the video's width over height: Vision's 0...1 points stretch a
+    /// portrait video sideways, so x is scaled back before any angle is measured.
+    static func squat(_ frames: [FormFrame], aspect: Double = 1) -> FormResult {
+        let frames = scaled(frames, aspect)
         let view = self.view(frames)
         guard view != .unknown, view != .oblique else { return FormResult(view: view, reps: []) }
         let hips = frames.compactMap { f in mid(f, .leftHip, .rightHip).map { (f, Double($0.y)) } }
@@ -70,11 +80,15 @@ enum FormAnalysis {
             return FormResult(view: view, reps: [])
         }
         let smooth = movingAverage(hips.map(\.1), 5)
-        let top = percentile(smooth, 0.9)
+        let times = hips.map(\.0.time)
         var reps: [FormRep] = []
         var startIndex = 0
         var lowest: Int?
+        var lo = 0, hi = 0
         for i in smooth.indices {
+            while times[lo] < times[i] - topWindow { lo += 1 }
+            while hi + 1 < smooth.count, times[hi + 1] <= times[i] + topWindow { hi += 1 }
+            let top = smooth[lo...hi].max()!
             if smooth[i] >= top - standingBand * thigh {
                 if let low = lowest {
                     reps.append(rep(hips.map(\.0), start: startIndex, bottom: low, end: i, view: view, thigh: thigh))
@@ -85,7 +99,28 @@ enum FormAnalysis {
                 if lowest == nil || smooth[i] < smooth[lowest!] { lowest = i }
             }
         }
-        return FormResult(view: view, reps: reps)
+        return FormResult(view: view, reps: theSet(reps))
+    }
+
+    /// The longest run of reps with no long pause: walking to the phone, setting up
+    /// the machine and walking off afterwards fall away.
+    static func theSet(_ reps: [FormRep]) -> [FormRep] {
+        guard reps.count > 2 else { return reps }
+        let gaps = zip(reps.dropFirst(), reps).map { $0.bottom - $1.bottom }
+        let limit = setGap * median(gaps)!
+        var best = 0..<1, start = 0
+        for i in 1..<reps.count {
+            if gaps[i - 1] > limit { start = i }
+            if i + 1 - start > best.count { best = start..<(i + 1) }
+        }
+        return Array(reps[best])
+    }
+
+    private static func scaled(_ frames: [FormFrame], _ aspect: Double) -> [FormFrame] {
+        guard aspect != 1 else { return frames }
+        return frames.map { f in
+            FormFrame(time: f.time, points: f.points.mapValues { CGPoint(x: $0.x * aspect, y: $0.y) })
+        }
     }
 
     /// Side, front or back from the median shape over the video. Front: the person's

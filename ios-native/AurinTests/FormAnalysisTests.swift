@@ -94,6 +94,34 @@ final class FormAnalysisTests: XCTestCase {
         XCTAssertEqual(caving?.rightKnee, .inward)
     }
 
+    func testSetupMovesLongBeforeTheSetAreLeftOut() {
+        // One squat while setting up, a long pause, then the set of three.
+        let setup = sideSquats([100])
+        let end = setup.last!.time
+        let pause = (1...180).map { FormFrame(time: end + Double($0) / 30, points: setup[0].points) }
+        let set = sideSquats([100, 100, 100]).map { FormFrame(time: $0.time + end + 6 + 1.0 / 30, points: $0.points) }
+        let frames = setup + pause + set
+        XCTAssertEqual(FormAnalysis.squat(frames).reps.count, 3)
+    }
+
+    func testWalkingTowardsThePhoneStillCountsEachRep() {
+        // The person grows in the picture as they come closer: the standing hip rises rep by rep.
+        let frames = sideSquats([100, 100, 100, 100]).map { f in
+            FormFrame(time: f.time, points: f.points.mapValues { CGPoint(x: $0.x, y: $0.y + 0.01 * f.time) })
+        }
+        XCTAssertEqual(FormAnalysis.squat(frames).reps.count, 4)
+    }
+
+    func testAPortraitVideoIsMeasuredInRealProportions() {
+        // A portrait video squeezes x: Vision's x of 0...1 spans only 9/16 of the height.
+        let squeezed = sideSquats([100]).map { f in
+            FormFrame(time: f.time, points: f.points.mapValues { CGPoint(x: 0.5 + ($0.x - 0.5) * 16 / 9, y: $0.y) })
+        }
+        let plain = FormAnalysis.squat(sideSquats([100])).reps.first?.kneeAngle
+        XCTAssertNotNil(plain)
+        XCTAssertEqual(FormAnalysis.squat(squeezed, aspect: 9.0 / 16).reps.first?.kneeAngle, plain)
+    }
+
     func testAnObliqueVideoGivesNoNumbers() {
         var frames = sideSquats([100])
         for i in frames.indices {
