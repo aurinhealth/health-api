@@ -84,6 +84,7 @@ extension DemoData {
         "Lehká jízda Z2": "Easy ride Z2",
         "Dlouhý běh": "Long run",
         "Regenerace": "Recovery",
+        "Lehké plavání": "Easy swim",
         "vyšší intenzita než plán": "harder than planned",
         "Posilovna, horní tělo": "Gym, upper body",
         "Posilovna, dolní tělo": "Gym, lower body",
