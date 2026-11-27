@@ -78,4 +78,12 @@ final class GymLive617Tests: XCTestCase {
         XCTAssertFalse(TrainingModeView.canUndoRemove(after: after, now: ticked))
         XCTAssertFalse(TrainingModeView.canUndoRemove(after: after, now: before))
     }
+
+    func testZoneOneHasNoZeroLowerBound() {
+        // Zone 1 starts at 0 bpm: "up to 148 bpm", never "0 to 148 bpm" (IMG_0529).
+        let lows: [Double] = [0, 149, 160, 171, 182]
+        XCTAssertEqual(LiveStatsPanel.range(0, lows: lows), L10n.isEnglish ? "up to 148 bpm" : "do 148 bpm")
+        XCTAssertEqual(LiveStatsPanel.range(1, lows: lows), L10n.isEnglish ? "149 to 159 bpm" : "149 až 159 bpm")
+        XCTAssertEqual(LiveStatsPanel.range(4, lows: lows), L10n.isEnglish ? "from 182 bpm" : "od 182 bpm")
+    }
 }

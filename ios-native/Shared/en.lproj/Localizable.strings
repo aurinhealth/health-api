@@ -4670,6 +4670,7 @@
 "Jede dál: %@." = "Keeps going: %@.";
 "Vyber, co si odpočine." = "Pick what pauses.";
 "od %@ bpm" = "from %@ bpm";
+"do %@ bpm" = "up to %@ bpm";
 "%@ až %@ bpm" = "%1$@ to %2$@ bpm";
 "Pauza, zbývá %@" = "Rest, %@ left";
 "Pauza podle plánu %@" = "Planned rest %@";
