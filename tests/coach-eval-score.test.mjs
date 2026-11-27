@@ -14,7 +14,8 @@ test('the Wilson interval matches known values', () => {
 test('every fifth situation by number is held out, about a fifth of them', () => {
   assert.ok(isHoldout('S05') && isHoldout('S100') && isHoldout('D15') && isHoldout('K10'));
   assert.ok(!isHoldout('S01') && !isHoldout('L05') && !isHoldout('P05') && !isHoldout('P05.1'));
-  const share = COACH_EVAL_SCENARIOS.filter(s => isHoldout(s.id)).length / COACH_EVAL_SCENARIOS.length;
+  // The missing-data measurement (M01–M70) is a set of its own, outside the tuning and the held-out split.
+  const tuned = COACH_EVAL_SCENARIOS.filter(s => !s.missing), share = tuned.filter(s => isHoldout(s.id)).length / tuned.length;
   assert.ok(share > 0.15 && share < 0.25, String(share));
 });
 
