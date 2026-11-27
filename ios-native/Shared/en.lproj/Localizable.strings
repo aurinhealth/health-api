@@ -5420,3 +5420,26 @@
 "Přidat na pátek" = "Add for Friday";
 "Přidat na sobotu" = "Add for Saturday";
 "Přidat na neděli" = "Add for Sunday";
+
+/* Recipe library (RecipeLibrary.swift) */
+"Hledat recept" = "Search recipes";
+"Žádný recept to nenašlo." = "No recipes found.";
+"Další recepty" = "More recipes";
+"Uložený" = "Saved";
+"Odebrat z uložených" = "Remove from saved";
+"Postup" = "Method";
+"Obsahuje: %@. Zkontroluj etiketu." = "Contains: %@. Check the label.";
+"lepek" = "gluten";
+"korýši" = "crustaceans";
+"vejce" = "eggs";
+"ryby" = "fish";
+"arašídy" = "peanuts";
+"sója" = "soy";
+"mléko" = "milk";
+"ořechy" = "tree nuts";
+"celer" = "celery";
+"hořčice" = "mustard";
+"sezam" = "sesame";
+"siřičitany" = "sulphites";
+"vlčí bob" = "lupin";
+"měkkýši" = "molluscs";

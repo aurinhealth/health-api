@@ -5,6 +5,8 @@ struct FoodView: View {
     @Environment(\.tabActions) private var actions
     @State private var adding: AddFoodTarget?
     @State private var scanning = false
+    /// The recipe library answers for this account (RecipeLibrary.swift).
+    @State private var recipesOn = false
 
     var body: some View {
         NavigationStack(path: model.path(.food)) {
@@ -14,6 +16,8 @@ struct FoodView: View {
                 .tabRoot(.food)
         }
         .task { await model.refreshIfStale(.food) }
+        .task { recipesOn = !model.demo && ((try? await model.api.recipeMarks()) != nil) }
+        .environment(\.recipesOn, recipesOn)
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
         .fullScreenCover(isPresented: $scanning) {
             BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots))
@@ -123,6 +127,7 @@ struct FoodContent: View {
     /// "Přidat" on a food that AI found after "Co přidáme?" closed.
     @State private var adding: PendingFood?
     @Environment(\.wideLayout) private var wide
+    @Environment(\.recipesOn) private var recipesOn
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -208,10 +213,18 @@ struct FoodContent: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jídla")
                 Spacer()
-                NavigationLink { MealSlotsSettingsView(title: "Časy jídel") } label: {
-                    Text("Časy jídel").linkPill()
+                // Meal times live in Nastavení → Jídla dne (Petr 2026-11-26); the recipe
+                // library only where the server has it on (RecipeLibrary.swift).
+                if recipesOn {
+                    NavigationLink { RecipesView() } label: {
+                        HStack(spacing: 6) {
+                            Text("Recepty")
+                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold)
+                        }
+                        .linkPill()
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.top, wide ? 22 : 24)
             .padding(.horizontal, 4)
