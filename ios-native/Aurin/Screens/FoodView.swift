@@ -209,8 +209,7 @@ struct FoodContent: View {
                 SectionLabel(text: "Jídla")
                 Spacer()
                 NavigationLink { MealSlotsSettingsView(title: "Časy jídel") } label: {
-                    Text("Časy jídel").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                    Text("Časy jídel").linkPill()
                 }
                 .buttonStyle(.plain)
             }
@@ -532,7 +531,7 @@ struct DrinksCard: View {
                     Spacer(minLength: 6)
                     if let id = added.id {
                         Button("Vrátit") {
-                            withAnimation(.easeOut(duration: 0.2)) { self.added = nil }
+                            withMotion(.easeOut(duration: 0.2)) { self.added = nil }
                             Task { _ = await model.deleteDrink(id: id) }
                         }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.blue)
@@ -551,19 +550,13 @@ struct DrinksCard: View {
         .onChange(of: reached) { _, now in
             // The lively figures jump themselves at the goal.
             guard now, animate, !reduceMotion, !figure.lively else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
+            withMotion(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
+            withMotion(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
         }
         .sensoryFeedback(.success, trigger: reached) { _, now in now }
         .sheet(isPresented: $choosing) {
-            NavigationStack {
-                PageScroll { DrinkFigurePicker().padding(20) }
-                    .background { Palette.settingsBackground.ignoresSafeArea() }
-                    .navigationTitle("Postavička pití")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { choosing = false } } }
-            }
-            .presentationDetents([.medium, .large])
+            SheetFrame(title: "Postavička pití") { DrinkFigurePicker() }
+                .glassSheetBackground()
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
     }
@@ -583,10 +576,10 @@ struct DrinksCard: View {
         adds += 1
         let id = (model.food?.water.drinks ?? []).first { !before.contains($0.id) && $0.kind == q.kind }?.id
         let text = L10n.f("Přidáno: %@ %@", L10n.tr(DrinkKind.find(q.kind)?.label ?? q.kind).lowercased(with: L10n.locale), Units.volumeText(Double(q.ml)))
-        withAnimation(.easeOut(duration: 0.2)) { added = (id, text) }
+        withMotion(.easeOut(duration: 0.2)) { added = (id, text) }
         let shown = adds
         try? await Task.sleep(nanoseconds: 4_000_000_000)
-        if adds == shown { withAnimation(.easeOut(duration: 0.2)) { added = nil } }
+        if adds == shown { withMotion(.easeOut(duration: 0.2)) { added = nil } }
     }
 }
 
@@ -940,7 +933,7 @@ struct MealRemindersOffer: View {
 
     private func answer(_ on: Bool) {
         UserDefaults.standard.set(on, forKey: Reminders.mealsKey)
-        withAnimation { answered = true }
+        withMotion { answered = true }
         guard on else { return }
         Task {
             // Notifications refused in iOS's question: the switch goes back off, as it really is.

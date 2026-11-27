@@ -121,7 +121,7 @@ struct SiblingCells: View {
         .padding(.horizontal, -16)
         // The chosen sibling in view, in the middle as in the concept.
         .onAppear { reader.scrollTo(selected, anchor: .center) }
-        .onChange(of: selected) { withAnimation { reader.scrollTo(selected, anchor: .center) } }
+        .onChange(of: selected) { withMotion { reader.scrollTo(selected, anchor: .center) } }
         }
     }
 }

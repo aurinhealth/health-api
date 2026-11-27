@@ -48,7 +48,7 @@ struct SwipeRow<Content: View>: View {
                         .onEnded { value in
                             let to = start + value.translation.width, sideways = abs(value.translation.width) > abs(value.translation.height)
                             let next: CGFloat = !sideways ? 0 : to < -width / 2 ? -width : (select != nil && to > selectWidth / 2) ? selectWidth : 0
-                            withAnimation(.spring(duration: 0.25)) { offset = next }
+                            withMotion(.spring(duration: 0.25)) { offset = next }
                             start = offset
                         }
                 )
@@ -61,7 +61,7 @@ struct SwipeRow<Content: View>: View {
     }
 
     private func close() {
-        withAnimation(.spring(duration: 0.25)) { offset = 0 }
+        withMotion(.spring(duration: 0.25)) { offset = 0 }
         start = 0
     }
 

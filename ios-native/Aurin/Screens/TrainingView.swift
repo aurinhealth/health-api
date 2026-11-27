@@ -167,8 +167,7 @@ struct TrainingContent: View {
             SectionLabel(text: isToday ? L10n.tr("Dnes") : Fmt.weekdayDayMonth(shownDay))
             Spacer(minLength: 8)
             WeekPlanLink {
-                Text(verbatim: L10n.tr("Plán týdne")).font(Typo.body).foregroundStyle(Palette.secondary)
-                    .frame(minHeight: 44).contentShape(Rectangle())
+                Text(verbatim: L10n.tr("Plán týdne")).linkPill()
             }
         }
         .padding(.top, top - 12)
@@ -455,8 +454,8 @@ struct TodaySessions: View {
                 .accessibilityAdjustableAction { direction in
                     let now = current ?? 0
                     switch direction {
-                    case .increment: withAnimation { current = min(sessions.count - 1, now + 1) }
-                    case .decrement: withAnimation { current = max(0, now - 1) }
+                    case .increment: withMotion { current = min(sessions.count - 1, now + 1) }
+                    case .decrement: withMotion { current = max(0, now - 1) }
                     @unknown default: break
                     }
                 }

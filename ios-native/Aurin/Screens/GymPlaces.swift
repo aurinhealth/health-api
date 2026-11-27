@@ -135,7 +135,7 @@ struct GymPlaceView: View {
                 chip(L10n.f("Zaškrtnuté %@", String(on)), chosen: onlyTicked) { onlyTicked = true }
                 ForEach(visibleSections) { s in
                     chip(s.label, chosen: false) {
-                        withAnimation(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.anchor(s.id), anchor: UnitPoint(x: 0.5, y: 0.12)) }
+                        withMotion(.easeOut(duration: 0.3)) { proxy.scrollTo(Self.anchor(s.id), anchor: UnitPoint(x: 0.5, y: 0.12)) }
                     }
                 }
             }

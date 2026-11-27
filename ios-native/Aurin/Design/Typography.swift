@@ -67,6 +67,24 @@ extension EnvironmentValues {
 }
 
 extension View {
+    /// A screen of text (Nastavení, an explanation): it follows the iPhone's
+    /// text size past screenCap up to AX5 (617 #35); its fixed-size icons and
+    /// numbers keep their own caps (scaledFont).
+    func fullTextSize() -> some View {
+        modifier(FullTextSize())
+    }
+}
+
+private struct FullTextSize: ViewModifier {
+    @Environment(\.fullTypeSize) private var fullTypeSize
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        content.environment(\.dynamicTypeSize, max(fullTypeSize ?? typeSize, typeSize))
+    }
+}
+
+extension View {
     /// The system font at `size` pt at the default text size, growing with the
     /// iPhone's text size like `style` (by default the text style nearest to
     /// `size`), up to `cap`. Icons in a fixed frame and dense rows pass

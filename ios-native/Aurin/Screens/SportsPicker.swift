@@ -100,7 +100,7 @@ struct SportsPicker: View {
     private func row(_ kind: String) -> some View {
         let on = choice.kinds.contains(kind), main = choice.mains.contains(kind)
         return HStack(spacing: 12) {
-            Button { withAnimation(.snappy) { choice.toggle(kind) } } label: {
+            Button { withMotion(.snappy) { choice.toggle(kind) } } label: {
                 HStack(spacing: 12) {
                     Image(systemName: SportsChoice.symbol(kind))
                         .scaledFont(16, weight: .semibold, cap: .denseCap)
@@ -116,7 +116,7 @@ struct SportsPicker: View {
             .accessibilityLabel(SportsChoice.name(kind))
             .accessibilityAddTraits(on ? .isSelected : [])
 
-            Button { withAnimation(.snappy) { choice.toggleMain(kind) } } label: {
+            Button { withMotion(.snappy) { choice.toggleMain(kind) } } label: {
                 HStack(spacing: 4) {
                     if main { Image(systemName: "star.fill").scaledFont(11, weight: .bold) }
                     Text("Hlavní").font(Typo.small.weight(.semibold))
@@ -137,7 +137,7 @@ struct SportsPicker: View {
             .accessibilityLabel(L10n.f("Hlavní sport: %@", SportsChoice.name(kind)))
             .accessibilityAddTraits(main ? .isSelected : [])
 
-            Button { withAnimation(.snappy) { choice.toggle(kind) } } label: {
+            Button { withMotion(.snappy) { choice.toggle(kind) } } label: {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
                     .scaledFont(24).foregroundStyle(on ? Palette.green : Palette.faint)
                     .frame(width: 32, height: 32)

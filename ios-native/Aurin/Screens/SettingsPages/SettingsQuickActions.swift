@@ -19,7 +19,7 @@ struct QuickActionsSettingsView: View {
                     HStack(spacing: 0) {
                         SettingsGrip()
                         row(action) {
-                            withAnimation(.snappy) { save(shown.filter { $0 != action }) }
+                            withMotion(.snappy) { save(shown.filter { $0 != action }) }
                         }
                         .padding(.leading, -4)
                     }
@@ -32,7 +32,7 @@ struct QuickActionsSettingsView: View {
                     ForEach(Array(hidden.enumerated()), id: \.element.id) { i, action in
                         if i > 0 { SettingsDivider() }
                         row(action, adding: true) {
-                            withAnimation(.snappy) { save(shown + [action]) }
+                            withMotion(.snappy) { save(shown + [action]) }
                         }
                     }
                 }
@@ -72,7 +72,7 @@ struct QuickActionsSettingsView: View {
     private func move(_ moved: String, to target: QuickAction) {
         var list = shown
         guard let from = list.firstIndex(where: { $0.id == moved }), let to = list.firstIndex(of: target), from != to else { return }
-        withAnimation(.snappy) {
+        withMotion(.snappy) {
             let item = list.remove(at: from)
             list.insert(item, at: to)
             save(list)

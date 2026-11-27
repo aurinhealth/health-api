@@ -110,7 +110,7 @@ struct DrinkHistoryView: View {
     }
 
     private func tab(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button { withAnimation(.easeOut(duration: 0.2), action) } label: {
+        Button { withMotion(.easeOut(duration: 0.2), action) } label: {
             Text(L10n.tr(title)).font(Typo.bodyStrong)
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 34)
@@ -148,7 +148,7 @@ struct DrinkHistoryView: View {
                     .padding(.vertical, 10)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        withAnimation(.easeOut(duration: 0.2)) {
+                        withMotion(.easeOut(duration: 0.2)) {
                             if open.contains(g.kind) { open.remove(g.kind) } else { open.insert(g.kind) }
                         }
                     }
@@ -189,7 +189,7 @@ struct DrinkHistoryView: View {
             await model.refreshFood()
             await model.refresh()
         }
-        withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+        withMotion(.easeOut(duration: 0.2)) { selecting = false }
         selected = []
         return nil
     }
@@ -211,7 +211,7 @@ struct DrinkHistoryView: View {
     @ViewBuilder
     private func editableRow(_ d: FoodSnapshot.Drink) -> some View {
         let delete = { Task { _ = await model.deleteDrink(id: d.id) } }
-        let select = { selected = [d.id]; withAnimation(.easeOut(duration: 0.2)) { selecting = true } }
+        let select = { selected = [d.id]; withMotion(.easeOut(duration: 0.2)) { selecting = true } }
         Group {
             if d.app != nil {
                 SwipeRow(select: select, delete: { _ = delete() }) { DrinkLine(drink: d) }

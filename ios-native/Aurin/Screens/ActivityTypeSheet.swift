@@ -46,43 +46,36 @@ struct ActivityTypeSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            PageScroll {
-                VStack(alignment: .leading, spacing: 22) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
-                        TextField(L10n.tr("Hledat sport"), text: $query)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    }
-                    .font(.body)
-                    .padding(.horizontal, 12).frame(height: 42)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                    if types.isEmpty && error == nil {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
-                    } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
-                        let favs = favorites.compactMap { f in types.first { $0.type == f } }
-                        if !favs.isEmpty { group(favs, title: L10n.tr("Oblíbené")) }
-                        group(sorted, title: L10n.tr("Všechny sporty"))
-                    } else {
-                        group(found, title: nil)
-                    }
-                    if let footer { Text(footer).font(Typo.caption).foregroundStyle(Palette.muted) }
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 40)
+        // Uložit in the header: the list is long.
+        SheetFrame(title: "Typ aktivity", fitted: false) {
+            ChromeButton(systemImage: "checkmark", label: "Uložit", text: "Uložit", enabled: !(saving || chosen == nil || chosen == current)) {
+                Task { await save() }
             }
-            .background { Palette.settingsBackground.ignoresSafeArea() }
-            .navigationTitle(L10n.tr("Typ aktivity"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { Task { await save() } } label: { Text("Uložit").fontWeight(.semibold) }
-                        .disabled(saving || chosen == nil || chosen == current)
+        } content: {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+                    TextField(L10n.tr("Hledat sport"), text: $query)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
+                .font(.body)
+                .padding(.horizontal, 12).frame(height: 42)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                if types.isEmpty && error == nil {
+                    ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
+                } else if query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    let favs = favorites.compactMap { f in types.first { $0.type == f } }
+                    if !favs.isEmpty { group(favs, title: L10n.tr("Oblíbené")) }
+                    group(sorted, title: L10n.tr("Všechny sporty"))
+                } else {
+                    group(found, title: nil)
+                }
+                if let footer { Text(footer).font(Typo.caption).foregroundStyle(Palette.muted) }
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             }
         }
+        .glassSheetBackground()
         .tint(Palette.ink)
         .task { await load() }
     }

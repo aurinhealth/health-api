@@ -44,8 +44,8 @@ struct GymPlanActionsSheet: View {
     private var target: String { AppModel.localDate(moveDate) }
 
     var body: some View {
-        NavigationStack {
-            SettingsPage(title: "Změnit trénink") {
+        SheetFrame(title: "Změnit trénink") {
+            VStack(alignment: .leading, spacing: 22) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title ?? L10n.tr("Posilovna")).font(Typo.heading(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Text(Fmt.capitalized(Fmt.relativeDay(date, today: AppModel.localDate(Date())))).font(Typo.small).foregroundStyle(Palette.muted)
@@ -84,13 +84,11 @@ struct GymPlanActionsSheet: View {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } }
-            }
-            .confirmationDialog("Zrušit trénink?", isPresented: $confirmCancel, titleVisibility: .visible) {
-                Button("Zrušit trénink", role: .destructive) {
-                    Task { await run { try await GymPlanActions.cancel(model, date: date, eventId: event) } }
-                }
+        }
+        .glassSheetBackground()
+        .confirmationDialog("Zrušit trénink?", isPresented: $confirmCancel, titleVisibility: .visible) {
+            Button("Zrušit trénink", role: .destructive) {
+                Task { await run { try await GymPlanActions.cancel(model, date: date, eventId: event) } }
             }
         }
         .tint(Palette.ink)

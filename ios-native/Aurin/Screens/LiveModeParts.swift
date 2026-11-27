@@ -532,7 +532,7 @@ struct StartCountdown: View {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 if left == 1 { onStart(); return }
-                withAnimation(.snappy) { left -= 1 }
+                withMotion(.snappy) { left -= 1 }
             }
         }
     }

@@ -870,7 +870,7 @@ struct JournalValueSheet: View {
         .glassSheetBackground()
         // Turning on the time shows the wheel: the sheet grows to show it whole.
         .onChange(of: hasTime) { _, on in
-            if on { withAnimation(.snappy) { detent = .large } }
+            if on { withMotion(.snappy) { detent = .large } }
         }
     }
 

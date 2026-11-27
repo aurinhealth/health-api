@@ -58,13 +58,13 @@ struct SuggestFeatureView: View {
     private func send() async {
         let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard message.count >= 3 else { return }
-        guard !model.demo else { withAnimation { sent = true }; return }
+        guard !model.demo else { withMotion { sent = true }; return }
         sending = true
         defer { sending = false }
         do {
             _ = try await model.api.suggestFeature(message: message, app: app)
             error = nil
-            withAnimation { sent = true }
+            withMotion { sent = true }
         } catch {
             self.error = error.localizedDescription
         }

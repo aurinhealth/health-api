@@ -38,7 +38,7 @@ struct CoachSteps: View {
 
     private var header: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.2)) { open.toggle() }
+            withMotion(.easeInOut(duration: 0.2)) { open.toggle() }
         } label: {
             HStack(alignment: .center, spacing: 8) {
                 Text(verbatim: Self.summary(steps)).lineLimit(2).multilineTextAlignment(.leading)

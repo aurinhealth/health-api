@@ -183,7 +183,7 @@ struct CoachThingsCard: View {
 
     /// A closed thing: its label and one line; a tap opens it here.
     private func row(_ item: Item) -> some View {
-        Button { withAnimation(.snappy) { open = item.id } } label: {
+        Button { withMotion(.snappy) { open = item.id } } label: {
             HStack(alignment: .center, spacing: 12) {
                 caps(item.label).foregroundStyle(Palette.muted)
                     .lineLimit(2)
@@ -205,7 +205,7 @@ struct CoachThingsCard: View {
     /// An opened thing: its label (a tap closes it) and the whole content.
     private func expanded(_ item: Item) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button { withAnimation(.snappy) { open = nil; closed = true } } label: {
+            Button { withMotion(.snappy) { open = nil; closed = true } } label: {
                 HStack {
                     caps(item.label).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)

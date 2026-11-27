@@ -110,7 +110,7 @@ struct CoachCheckInCard: View {
         swapError = nil
         do {
             _ = try await model.api.answerCoachNudge(date: date, decision: swap ? "swap" : "keep")
-            withAnimation { things.advice = nil }
+            withMotion { things.advice = nil }
             if swap { await model.refresh() }
         } catch {
             swapError = error.localizedDescription
@@ -122,7 +122,7 @@ struct CoachCheckInCard: View {
         swapError = nil
         do {
             try await model.api.restoreEasedPlans()
-            withAnimation { things.advice = nil }
+            withMotion { things.advice = nil }
             await model.refresh()
         } catch {
             swapError = error.localizedDescription
@@ -130,7 +130,7 @@ struct CoachCheckInCard: View {
     }
 
     private func settle(_ memory: String, keep: Bool) async {
-        withAnimation { things.advice = nil }
+        withMotion { things.advice = nil }
         if keep { _ = try? await model.api.keepMemory(memory) } else { _ = try? await model.api.forgetMemory(memory, toPast: true) }
     }
 
@@ -139,14 +139,14 @@ struct CoachCheckInCard: View {
         swapError = nil
         do {
             try await model.setAthleteStatus("active", until: nil, note: nil)
-            withAnimation { things.advice = nil }
+            withMotion { things.advice = nil }
         } catch {
             swapError = error.localizedDescription
         }
     }
 
     private func dismiss(_ advice: CoachCheckIn.Advice) async {
-        withAnimation { things.advice = nil }
+        withMotion { things.advice = nil }
         if let id = advice.id { try? await model.api.dismissAdvice(id: id) }
     }
 }
@@ -251,7 +251,7 @@ struct WeekRevisionCard: View {
         error = nil
         do {
             let next = try await model.api.decideRevision(date: r.date, apply: apply)
-            withAnimation { things.revision = apply ? next : nil }
+            withMotion { things.revision = apply ? next : nil }
             if apply {
                 await model.refreshTraining()
                 if next?.changes?.contains(where: { $0.applied == false }) == true {
@@ -259,7 +259,7 @@ struct WeekRevisionCard: View {
                 } else {
                     // "Upraveno i v kalendáři" for a moment, then the next thing moves up.
                     try? await Task.sleep(for: CoachThings.settleDelay)
-                    if things.revision?.date == r.date { withAnimation(.snappy) { things.revision = nil } }
+                    if things.revision?.date == r.date { withMotion(.snappy) { things.revision = nil } }
                 }
             }
         } catch {
