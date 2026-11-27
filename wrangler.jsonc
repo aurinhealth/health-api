@@ -110,8 +110,9 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
-    // The recipe library of the food version (src/recipes.js): off here until it ships.
-    "RECIPES_ENABLED": "false",
+    // The recipe library of the food version (src/recipes.js): only the owner's account
+    // until it ships, for the owner's TestFlight build N.2 (Petr 2026-11-27).
+    "RECIPES_ENABLED": "owner",
     // Coach writes today's ride or run first (src/ai-workout-compose.js coachFirstOn):
     // on since the evals passed (run 92, D01–D16 × 3, 48/48; Petr "vydej" 2026-11-16).
     "COACH_FIRST": "true",

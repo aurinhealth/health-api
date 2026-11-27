@@ -102,6 +102,13 @@ test('routes: 404 while off, 401 signed out, list with pages, detail in the lang
   assert.equal((await call(e, '/app/api/recipes/nope')).status, 404);
 });
 
+test('"owner" opens the library to the owner only', async () => {
+  const owner = { ...env(), RECIPES_ENABLED: 'owner', USER_IS_OWNER: true };
+  assert.equal((await call(owner, '/app/api/recipes?limit=1')).status, 200);
+  assert.equal((await call({ ...owner, USER_IS_OWNER: false }, '/app/api/recipes?limit=1')).status, 404);
+  assert.equal((await call({ ...owner, USER_IS_OWNER: undefined }, '/app/api/recipes/marks')).status, 404);
+});
+
 test('index route answers 304 for the version the app has', async () => {
   const e = env();
   const first = await call(e, '/app/api/recipes/index');
