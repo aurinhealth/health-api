@@ -355,30 +355,31 @@ struct GymSessionView: View {
     private func setScreen(_ gym: WatchGym, _ lift: WatchGym.Lift) -> some View {
         let e = gym.exercises.firstIndex { $0.lifts.contains { $0.row == lift.row } } ?? exercise
         let ex = gym.exercises[e]
-        // Set done pinned at the bottom as the system's bottom bar in every
-        // text size, the set scrolling above it (watch concept 06, M-1).
+        // Set done at the bottom with the time line above it, in the same scroll
+        // as the set, never over the tiles (Petr's watch 2026-11-27: a superset
+        // tag and "last time" pushed the tiles under a pinned Set done). The
+        // scroll starts at the bottom, so the tiles and Set done always show and
+        // the lines above them go up off the top when the set is long.
         return ScrollView {
-            setStack(gym, lift, ex, e)
-        }
-        .safeAreaInset(edge: .bottom) {
-            // Time and heart rate as a small line right above Set done, never
-            // under it (concept 06, point 3; CI screenshot: the line was cut).
-            if !dimmed {
-                VStack(alignment: .leading, spacing: 2) {
-                    // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts.
-                    // In the live line's place while it shows: one line more did not fit above the tiles (CI screenshot).
+            VStack(alignment: .leading, spacing: 2) {
+                setStack(gym, lift, ex, e)
+                if !dimmed {
+                    // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts,
+                    // in the live line's place.
                     if hintWorkouts <= 3, !crown {
                         Text(W.tr("Klepni na číslo, pak otoč korunkou", "Tap a number, then turn the crown"))
                             .watchFont(12).foregroundStyle(W.secondary)
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 2)
+                            .padding(.top, 4)
                     } else {
-                        liveLine.padding(.horizontal, 2)
+                        liveLine.padding(.horizontal, 2).padding(.top, 4)
                     }
                     setDone(gym, lift)
                 }
             }
         }
+        .defaultScrollAnchor(.bottom)
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
         .onAppear { load(lift, of: ex.name, in: gym) }
