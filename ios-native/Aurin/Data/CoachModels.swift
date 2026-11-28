@@ -209,6 +209,17 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var eventKind: String? = nil
     var fromTime: String? = nil
     var time: String? = nil
+    /// food_delete, food_move, food_portion, fluid_add (src/coach-food-cards.js): the
+    /// food or drink by name, its meal now and the new one, the amount now and the new one.
+    var foodName: String? = nil
+    var fromMealName: String? = nil
+    var toMealName: String? = nil
+    var fromAmount: String? = nil
+    var toAmount: String? = nil
+    var ml: Double? = nil
+
+    /// The food and drink cards change Jídlo: it loads again after them.
+    var changesFood: Bool { ["food_delete", "food_move", "food_portion", "fluid_add"].contains(type) }
     /// workout: the session the server prepared for the card, a ride or run
     /// (POST /app/api/workouts/generate) or the gym exercises (/gym/generate).
     var preview: Preview? = nil
@@ -304,6 +315,10 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_delete": return L10n.tr("Smazat aktivitu")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
         case "activity_time": return L10n.tr("Upravit čas")
+        case "food_delete": return L10n.tr("Smazat z jídla")
+        case "food_move": return L10n.f("Přesunout do %@", toMealName ?? "")
+        case "food_portion": return L10n.tr("Upravit porci")
+        case "fluid_add": return L10n.tr("Zapsat pití")
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
@@ -328,6 +343,13 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
         switch type {
         case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: ", ")
+        // "Káva s mlékem, Snídaně 07:40, 45 kcal"; the move and the portion show their rows.
+        case "food_delete":
+            let meal = [fromMealName, time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: " ")
+            return [foodName, meal.isEmpty ? nil : meal, fromKcal.map { Fmt.int($0) + " kcal" }].compactMap { $0 }.joined(separator: ", ")
+        case "food_move": return [foodName, fromKcal.map { Fmt.int($0) + " kcal" }].compactMap { $0 }.joined(separator: ", ")
+        case "food_portion": return foodName
+        case "fluid_add": return [foodName, ml.map { Fmt.int($0) + " ml" }].compactMap { $0 }.joined(separator: " ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.

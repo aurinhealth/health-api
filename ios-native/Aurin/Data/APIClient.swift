@@ -51,7 +51,8 @@ final class APIClient: @unchecked Sendable {
     /// 2: the coach's gym_add and gym_remove cards (src/coach-actions.js).
     /// 3: the redesign's coach cards, "Plan around your knee?" (plan_around).
     /// 4: the coach's card adding an own practice or match to a day (other_event).
-    static let apiLevel = 4
+    /// 5: the coach's food and drink cards (food_delete, food_move, food_portion, fluid_add).
+    static let apiLevel = 5
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?
