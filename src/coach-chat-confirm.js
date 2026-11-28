@@ -96,7 +96,7 @@ export function chatUndo(message) {
 // What the chat's "vrať to" puts back: the gym plan, a planned ride, run or
 // swim of the app, and a done activity the coach hid, merged, re-timed or whose
 // calories it changed (activity-chat-edits.js).
-export const UNDO_KINDS = ['gym_plan', 'planned', 'hide', 'merge', 'time', 'kcal', 'food', 'fluid', 'manual'];
+export const UNDO_KINDS = ['gym_plan', 'planned', 'hide', 'merge', 'time', 'kcal', 'food', 'fluid', 'manual', 'feeling', 'effort'];
 // The last change of today's gym plan confirmed in this chat that can still
 // go back. Stale when a later change of this chat's plan was confirmed (its
 // undo used already): an older one goes back only by its own card's button.

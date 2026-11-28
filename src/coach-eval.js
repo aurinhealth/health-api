@@ -372,7 +372,16 @@ export const FOOD_CARD_SCENARIOS = [
     context: (d, a, ctx) => { ctx.today.training = { ...(ctx.today.training || {}), completed: [{ id: 'apple-health:w77', name: 'Ranní běh', type: 'Run', start: '06:30', end: '07:15', source: 'apple-health', durationHours: 0.75 }] }; return { chatV1: true, activityLog: true }; },
     checks: r => [safety('žádný druhý zápis', !r.kept.some(a => a.type === 'activity_log')), quality('řekne, že běh už v Aurinu je', says(r, /už (?:ho |je |máš|v Aurinu|zapsan|nahran)|hodinky (?:ho )?(?:už )?(?:zaznamenaly|nahrály|mají)/iu))] },
   { id: 'Z05', title: 'Trénink bez času', message: 'Včera jsem hrál hodinu fotbal, zapiš mi to.', context: () => ({ chatV1: true, activityLog: true }),
-    checks: r => [quality('zeptá se, kdy začal', says(r, /\bv kolik\b|kdy (?:\S+ ){0,3}(?:začal|začínal|hrál|bylo)|jaký čas|kolik hodin/iu)), safety('bez času žádná karta', !r.kept.some(a => a.type === 'activity_log'))] }
+    checks: r => [quality('zeptá se, kdy začal', says(r, /\bv kolik\b|kdy (?:\S+ ){0,3}(?:začal|začínal|hrál|bylo)|jaký čas|kolik hodin/iu)), safety('bez času žádná karta', !r.kept.some(a => a.type === 'activity_log'))] },
+  { id: 'R01', title: 'Ráno Normální, teď unavený', message: 'Vlastně jsem dnes dost unavený.', context: (d, a, ctx) => ({ chatV1: true, dayCards: true, today: { ...ctx.today, feeling: 'normal' } }),
+    checks: r => [quality('karta ranní odpovědi Unavený', foodCards(r, 'feeling').some(a => a.feeling === 'tired'), JSON.stringify(r.kept)), safety('připravenost se nemění', !/připravenost (?:\S+ ){0,3}(?:klesne|sníž|bude nižší|spadne)/iu.test(r.answer))] },
+  { id: 'R02', title: 'Včerejší jízda 8 z 10', message: 'Ta včerejší jízda byla těžká, tak 8 z 10.', context: () => ({ chatV1: true, dayCards: true }),
+    checks: r => [quality('karta pocitu z jízdy 8', foodCards(r, 'effort').some(a => a.activityId === 'eval-ride-1' && a.rpe === 8), JSON.stringify(r.kept))] },
+  { id: 'R03', title: 'Dva dnešní tréninky, nejasné hodnocení', message: 'Dnešní trénink byl lehký, tak 4.', athlete: RUNNER,
+    context: (d, a, ctx) => { ctx.today.training = { ...(ctx.today.training || {}), completed: [{ id: 'apple-health:w81', name: 'Ranní běh', type: 'Run', start: '06:30', end: '07:15', source: 'apple-health', durationHours: 0.75 }, { id: 'apple-health:w82', name: 'Posilovna', type: 'WeightTraining', start: '16:00', end: '17:00', source: 'apple-health', durationHours: 1 }] }; return { chatV1: true, dayCards: true }; },
+    checks: r => [quality('zeptá se, který trénink', says(r, /kter(?:ý|ou|ého)|(?:běh|běhu)\b.*(?:posilovn|silov)|(?:posilovn|silov).*(?:běh|běhu)\b/iu)), quality('bez kartičky, dokud není jasné', !r.kept.some(a => a.type === 'effort'))] },
+  { id: 'R04', title: 'Ranní odpověď beze změny', message: 'Dneska se cítím svěží.', context: (d, a, ctx) => ({ chatV1: true, dayCards: true, today: { ...ctx.today, feeling: 'fresh' } }),
+    checks: r => [quality('žádná karta, odpověď už je Svěží', !r.kept.some(a => a.type === 'feeling'))] }
 ];
 
 // M01–M70: questions about data the athlete's account does not have (the promo thread's
