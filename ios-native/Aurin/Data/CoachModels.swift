@@ -32,6 +32,8 @@ struct AssistantResult: Decodable, Equatable {
     /// The cards of the last answer that "potvrzuju" in this message confirmed
     /// (src/coach-chat-confirm.js), each with its draftId.
     var confirmedInChat: [CoachAction]? = nil
+    /// "Vrať to" took back workouts the coach logged: their Apple Health copies go too.
+    var removedWorkouts: [String]? = nil
     /// "From last night's sleep and this morning's HRV" and "From memory: …"
     /// under the answer (src/coach-steps.js sourceLines); the live answer only.
     var sources: Sources? = nil
@@ -319,6 +321,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "food_move": return L10n.f("Přesunout do %@", toMealName ?? "")
         case "food_portion": return L10n.tr("Upravit porci")
         case "fluid_add": return L10n.tr("Zapsat pití")
+        case "activity_log": return L10n.tr("Zapsat trénink")
         case "fluid_delete": return L10n.tr("Smazat z pití")
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
@@ -344,6 +347,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
         switch type {
         case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: ", ")
+        // "Jízda 60 min, út 20. 10., 18:00"
+        case "activity_log": return [[activityName, minutes.map { Fmt.int($0) + " min" }].compactMap { $0 }.joined(separator: " "), day, time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: ", ")
         // "Káva s mlékem, Snídaně 07:40, 45 kcal"; the move and the portion show their rows.
         case "food_delete":
             let meal = [fromMealName, time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: " ")
@@ -583,4 +588,13 @@ struct RaceWeek: Decodable, Equatable {
             let cue: String?
         }
     }
+}
+
+/// A workout the coach logged (activity_log, src/coach-manual-workout.js): what
+/// the app writes to Apple Health, as after Zapsat trénink.
+struct CoachLoggedWorkout: Decodable, Equatable {
+    let activityKey: String?
+    let type: String?
+    let start: String?
+    let sends: [SyncSend]?
 }
