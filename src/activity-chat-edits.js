@@ -216,6 +216,12 @@ export async function undoActivityChange(env, token) {
     const done = await deleteActivity(env, { id: change.id }).catch(async error => { await release(); throw error; });
     return { status: 'ok', kind: 'manual', proposal: change.proposal || null, activityKey: change.activityKey || null, removed: done.removed };
   }
+  // The morning answer or a workout's effort from the coach (coach-day-cards.js).
+  if (change.kind === 'feeling' || change.kind === 'effort') {
+    const { undoDayCard } = await import('./coach-day-cards.js');
+    const done = await undoDayCard(env, change, fail).catch(async error => { await release(); throw error; });
+    return { status: 'ok', kind: change.kind, proposal: change.proposal || null, ...done };
+  }
   if (change.kind === 'kcal') {
     // Only while the activity is still as the change left it (a sync may have rewritten it).
     const back = await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND payload_json = ?').bind(change.before, change.id, env.USER_ID, change.after).run().catch(async error => { await release(); throw error; });

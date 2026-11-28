@@ -215,6 +215,7 @@ import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange, rememberChange } from "./activity-chat-edits.js";
 import { FOOD_CARD_TYPES, applyFoodCard } from "./coach-food-cards.js";
 import { applyActivityLog } from "./coach-manual-workout.js";
+import { applyFeeling, applyEffort } from "./coach-day-cards.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 import { saveReadOff } from "./source-reading.js";
@@ -2738,6 +2739,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const foodCards=chatV1On(env)&&(level=>level===null||level===undefined||Number(level)>=5)(appApiLevel(request)??body.appApi);
     // The Zapsat trénink card from API 6: the app writes it to Apple Health and takes it back on Vrátit.
     const activityLog=chatV1On(env)&&(level=>level===null||level===undefined||Number(level)>=6)(appApiLevel(request)??body.appApi);
+    const dayCards=chatV1On(env)&&(level=>level===null||level===undefined||Number(level)>=7)(appApiLevel(request)??body.appApi);
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&!image&&isFoodLogMessage(message,{cards:foodCards})){
       try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,...await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
@@ -2890,7 +2892,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(undoneInChat){const {activityKeys,...told}=undoneInChat;coachCtx.undoneInChat=told;}
       // An iPhone app before API 2 cannot show the add and remove cards (app-version.js).
       if(oldAppCards)coachCtx.oldAppCards=true;
-      coachCtx.foodCards=foodCards;coachCtx.activityLog=activityLog;
+      coachCtx.foodCards=foodCards;coachCtx.activityLog=activityLog;coachCtx.dayCards=dayCards;
       // Chat v1 (coach vision 2026-11-14): its new changes only where the server has it on (staging until it ships).
       if(chatV1On(env))coachCtx.chatV1=true;
       onProgress(L('Kouč píše…', 'The coach is writing…'));
@@ -3138,6 +3140,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         else if(FOOD_CARD_TYPES.includes(a.type)){result=await applyFoodCard(env,a,activityUndoMeta(draft,row.id));if(result.id!=null)result.google=await queueFoodGoogleSafely(env,ctx,result.id,{deleted:Boolean(result.deleted)});await bumpCacheVersion(env.DB);}
         // A done workout as Plus → Log workout; the app writes Apple Health from result.activityKey.
         else if(a.type==='activity_log'){const logUrl=new URL('https://internal/app/api/workouts/manual');result=await applyActivityLog(env,a,activityUndoMeta(draft,row.id),async sent=>{const r=await handleDashboardApi(new Request(logUrl,{method:'POST',headers:{Origin:logUrl.origin,'Content-Type':'application/json'},body:JSON.stringify(sent)}),env,ctx,logUrl,{signedIn:true});const out=await r.json().catch(()=>({}));if(!r.ok)throw new Error(out.message||L('Trénink se nepodařilo zapsat.','The workout couldn\'t be logged.'));return out;});await bumpCacheVersion(env.DB);}
+        // Today's morning answer (advice only, never the readiness) and a done activity's effort, with Vrátit (coach-day-cards.js).
+        else if(a.type==='feeling'){result=await applyFeeling(env,a,activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
+        else if(a.type==='effort'){const ruleEnv={...env};delete ruleEnv.OPENAI_API_KEY;result=await applyEffort(env,a,activityUndoMeta(draft,row.id),input=>createReflection(ruleEnv,input,day=>reflectionData(env,ctx,internalAuth,day,input.workoutId)));await bumpCacheVersion(env.DB);}
         else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal},{undo:activityUndoMeta(draft,row.id)});await bumpCacheVersion(env.DB);}
         else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId,activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
         else if(a.type==='activity_merge'){result=await mergeActivities(env,[a.activityId,a.otherActivityId],activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
@@ -3203,7 +3208,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),other_event:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_log:L('Zapsáno','Logged'),food_delete:L('Smazáno','Deleted'),food_move:L('Přesunuto','Moved'),food_portion:L('Upraveno','Changed'),fluid_add:L('Zapsáno','Logged'),fluid_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),other_event:L('Přidáno do týdenního plánu','Added to the week plan'),gym_add:L('Přidáno do plánu','Added to the plan'),gym_remove:L('Odebráno z plánu','Removed from the plan'),activity_delete:L('Smazáno','Deleted'),activity_log:L('Zapsáno','Logged'),feeling:L('Změněno','Changed'),effort:L('Zapsáno','Logged'),food_delete:L('Smazáno','Deleted'),food_move:L('Přesunuto','Moved'),food_portion:L('Upraveno','Changed'),fluid_add:L('Zapsáno','Logged'),fluid_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
