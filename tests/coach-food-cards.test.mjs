@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withTimeZone } from "../src/user-time.js";
-import { foodsForCoach, checkFoodCard, applyFoodCard, foodCardMessage } from "../src/coach-food-cards.js";
+import { foodsForCoach, drinksForCoach, checkFoodCard, applyFoodCard, foodCardMessage } from "../src/coach-food-cards.js";
 import { undoActivityChange } from "../src/activity-chat-edits.js";
 import { lastUndoInChat } from "../src/coach-chat-confirm.js";
 import { validateCoachActions, actionSummary, COACH_ACTION_FORMAT } from "../src/coach-actions.js";
@@ -107,6 +107,24 @@ test("water goes to Pití and Vrátit takes it out while it is as logged", async
   await assert.rejects(undoActivityChange(env, again.undo), /upravilo/);
 });
 
+test("the last drink in Pití goes, and Vrátit brings it back with its id", async () => {
+  const { raw, env } = setup();
+  const logged = await prague(() => applyFoodCard(env, card({ type: "fluid_add", amount: 500, drink: "water" }, []), meta));
+  const drinks = drinksForCoach([{ id: logged.entry.id, consumedAt: logged.entry.consumedAt, ml: 500, kind: "water" }, { id: 99, ml: 300, kind: "water", app: "Apple Health" }, { id: "food:3", ml: 250, kind: "food" }]).entries;
+  assert.deepEqual(drinks.map(d => d.id), [String(logged.entry.id)]);
+  const a = checkFoodCard({ type: "fluid_delete", foodId: String(logged.entry.id), meal: "", amount: 0, drink: "" }, [], "Řekl jsi, že to byl omyl.", DAY, drinks)[0];
+  assert.deepEqual([a.ml, a.foodName], [500, "Voda"]);
+  assert.equal(checkFoodCard({ type: "fluid_delete", foodId: "99" }, [], "", DAY, drinks).length, 0);
+  const done = await applyFoodCard(env, a, meta);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM fluid_log").get().n, 0);
+  await undoActivityChange(env, done.undo);
+  assert.equal(raw.sqlite.prepare("SELECT ml FROM fluid_log WHERE id=?").get(logged.entry.id).ml, 500);
+  await assert.rejects(undoActivityChange(env, done.undo));
+  raw.sqlite.prepare("UPDATE fluid_log SET ml=750").run();
+  await assert.rejects(applyFoodCard(env, a, meta), /změnilo/);
+  assert.match(actionSummary(a), /Smazat z pití: Voda 500 ml/);
+});
+
 test("food cards only from the athlete's own message, in an app that shows them", () => {
   const foods = [{ id: "5", date: DAY, meal: "lunch", name: "Pizza", kcal: 820, amount: 1, unit: "portion" }];
   const context = { today: { nutrition: { foods } } };
@@ -119,7 +137,7 @@ test("food cards only from the athlete's own message, in an app that shows them"
 });
 
 test("corrections and water go to the coach's cards, the rest logs as before", () => {
-  for (const t of ["Byla to jen půlka pizzy", "To nebyl oběd, ale večeře", "Smaž tu kávu ze snídaně", "Vypil jsem 2 sklenice vody"]) {
+  for (const t of ["Byla to jen půlka pizzy", "To nebyl oběd, ale večeře", "Smaž tu kávu ze snídaně", "Vypil jsem 2 sklenice vody", "Smaž to poslední pití", "Smaž tu vodu"]) {
     assert.ok(foodCardMessage(t), t);
     assert.equal(isFoodLogMessage(t), false, t);
   }

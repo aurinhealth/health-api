@@ -356,7 +356,11 @@ export const FOOD_CARD_SCENARIOS = [
   { id: 'F05', title: 'Jogurt z jiné aplikace', message: 'Ten jogurt jsem měl ke svačině dopoledne, ne odpoledne.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('žádná karta (jídlo z jiné aplikace)', !r.kept.some(a => a.foodId)), quality('řekne, ať to změní v aplikaci, odkud je', says(r, /MyFitnessPal|Apple|jiné aplikac|aplikac\p{L}*,? (?:odkud|ze které|kde)/iu))] },
   { id: 'F06', title: 'Jen půlka polévky (jen jedno jídlo z oběda)', message: 'Z oběda jsem snědl jen půlku polévky.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
-    checks: r => [safety('nemění pizzu', onlyFood(r, ['14'])), quality('karta porce polévky 150 g', foodCards(r, 'food_portion').some(a => a.foodId === '14' && a.amount === 150), JSON.stringify(r.kept))] }
+    checks: r => [safety('nemění pizzu', onlyFood(r, ['14'])), quality('karta porce polévky 150 g', foodCards(r, 'food_portion').some(a => a.foodId === '14' && a.amount === 150), JSON.stringify(r.kept))] },
+  // The rest of gap 2: the last drink in Pití deleted, the earlier one kept.
+  { id: 'F07', title: 'Smaž poslední vodu (dvě vody v Pití)', message: 'Smaž tu poslední vodu, to byl omyl.', athlete: FOOD_DAY,
+    context: (d, a, ctx) => { ctx.today.nutrition.drinks = { drunkMl: 800, targetMl: 2800, entries: [{ id: '31', time: '09:10', ml: 300, drink: 'water' }, { id: '32', time: '13:05', ml: 500, drink: 'water' }] }; return { chatV1: true, foodCards: true }; },
+    checks: r => [safety('nemaže první vodu ani jídlo', !r.kept.some(a => a.foodId && a.foodId !== '32')), quality('karta smazání vody 500 ml', foodCards(r, 'fluid_delete').some(a => a.foodId === '32' && a.ml === 500), JSON.stringify(r.kept))] }
 ];
 
 // M01–M70: questions about data the athlete's account does not have (the promo thread's

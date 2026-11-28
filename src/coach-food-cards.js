@@ -14,13 +14,15 @@ const CORRECTION = /(?<!\p{L})(?:jen|jenom|only)\s+(?:půl|pul|půlk\p{L}*|pulk\
 const EDIT = /(?<!\p{L})(?:smaž|smaz|vymaž|vymaz|odstraň|odstran|přesuň|presun|delete|remove|move)\p{L}*\s+(?:\p{L}+\s+){0,3}?(?:z|ze|do|from|to|k|ke)\s+(?:snídan|snidan|oběd|obed|večeř|vecer|svačin|svacin|jídl|jidl|breakfast|lunch|dinner|snack|food)/u;
 // Only water ("Vypil jsem 2 sklenice vody"): the drink card logs it to Pití.
 const WATER = /(?<!\p{L})(?:vod[auyě]|vodou|water)(?!\p{L})/u, JOINED = /[,+;]|(?<!\p{L})(?:a|and|s|se|with|plus)(?!\p{L})/u;
+// "Smaž to poslední pití", "Smaž tu vodu": a drink logged in Pití.
+const DRINK_DELETE = /(?<!\p{L})(?:smaž|smaz|vymaž|vymaz|odstraň|odstran|delete|remove)\p{L}*\s+(?:\p{L}+\s+){0,3}?(?:pití|piti|vod[auyě]|vodu|drink|water)(?!\p{L})/u;
 const WATER_DRUNK = /(?<!\p{L})(?:vypil[a]?|pil[a]? jsem|drank|had)(?!\p{L})/u;
 export function foodCardMessage(message) {
   const t = String(message || '').toLowerCase().replace(/[’‘]/g, "'");
-  return CORRECTION.test(t) || EDIT.test(t) || WATER.test(t) && WATER_DRUNK.test(t) && !JOINED.test(t);
+  return CORRECTION.test(t) || EDIT.test(t) || DRINK_DELETE.test(t) || WATER.test(t) && WATER_DRUNK.test(t) && !JOINED.test(t);
 }
 
-export const FOOD_CARD_TYPES = ['food_delete', 'food_move', 'food_portion', 'fluid_add'];
+export const FOOD_CARD_TYPES = ['food_delete', 'food_move', 'food_portion', 'fluid_add', 'fluid_delete'];
 export const MEAL_IDS = MEALS.map(m => m.type);
 export const DRINKS = ['water', 'coffee', 'tea', 'juice', 'milk', 'sport', 'soda', 'beer', 'wine', 'other'];
 const DRINK_NAMES = () => L({ water: 'Voda', coffee: 'Káva', tea: 'Čaj', juice: 'Džus', milk: 'Mléko', sport: 'Sportovní nápoj', soda: 'Limonáda', beer: 'Pivo', wine: 'Víno', other: 'Pití' },
@@ -59,9 +61,20 @@ export function foodsForCoach(days = []) {
   return out;
 }
 
+// Today's drinks logged in Pití the coach may delete (fluid_delete), the
+// latest 10: the athlete's own only, not another app's or the food diary's.
+export function drinksForCoach(entries) {
+  const own = (Array.isArray(entries) ? entries : []).filter(e => Number.isInteger(Number(e?.id)) && !e.app && DRINKS.includes(e.kind));
+  return own.length ? { entries: own.slice(-10).map(e => ({ id: String(e.id), time: String(e.consumedAt || '').slice(11, 16), ml: Math.round(Number(e.ml) || 0), drink: e.kind })) } : {};
+}
+
 // The card from the coach's proposal, or none: only foods it was shown, the
 // athlete's own, a real change; a drink of 10 to 3,000 ml for today.
-export function checkFoodCard(a, foods = [], reason, today) {
+export function checkFoodCard(a, foods = [], reason, today, drinks = []) {
+  if (a.type === 'fluid_delete') {
+    const drink = drinks.find(d => d.id === String(a.foodId || ''));
+    return drink ? [{ type: 'fluid_delete', foodId: drink.id, date: today, ml: drink.ml, drink: drink.drink, foodName: DRINK_NAMES()[drink.drink], ...(drink.time ? { time: drink.time } : {}), reason }] : [];
+  }
   if (a.type === 'fluid_add') {
     const ml = Math.round(Number(a.amount)), drink = DRINKS.includes(a.drink) ? a.drink : 'water';
     if (!(ml >= 10 && ml <= 3000)) return [];
@@ -97,6 +110,14 @@ export async function applyFoodCard(env, a, meta = {}) {
     const undo = await rememberChange(env, { kind: 'fluid', id: entry.id, ml: entry.ml, ...meta });
     return { status: 'ok', entry, undo };
   }
+  if (a.type === 'fluid_delete') {
+    const row = await env.DB.prepare('SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL').bind(env.DB.userId, Number(a.foodId)).first();
+    if (!row) throw new Error(L('Pití už v Pití není.', 'The drink is no longer logged.'));
+    if (Number(row.ml) !== a.ml) throw new Error(L('Pití se mezitím změnilo. Požádej o nový návrh.', 'The drink has changed in the meantime. Ask for a new proposal.'));
+    await env.DB.prepare('DELETE FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL').bind(env.DB.userId, Number(row.id)).run();
+    const undo = await rememberChange(env, { kind: 'fluid', op: 'delete', row, ...meta });
+    return { status: 'ok', deleted: true, undo };
+  }
   const before = await rowOf(env.DB, a.foodId);
   if (!before) throw new Error(L('Jídlo už v deníku není.', 'The meal is no longer in the log.'));
   if (Math.round(Number(before.kcal) || 0) !== a.fromKcal) throw new Error(L('Jídlo se mezitím změnilo. Požádej o nový návrh.', 'The meal has changed in the meantime. Ask for a new proposal.'));
@@ -116,6 +137,12 @@ export async function applyFoodCard(env, a, meta = {}) {
 // still as logged. Returns the food id for the Google export.
 export async function undoFoodChange(env, change, changed) {
   const db = env.DB;
+  if (change.kind === 'fluid' && change.op === 'delete') {
+    const row = change.row || {};
+    if (await db.prepare('SELECT id FROM fluid_log WHERE user_id=? AND id=?').bind(db.userId, Number(row.id)).first()) throw changed(L('Pití už v Pití je.', 'The drink is logged already.'));
+    await db.prepare('INSERT INTO fluid_log (id,user_id,date,consumed_at,ml,kind) VALUES (?,?,?,?,?,?)').bind(Number(row.id), db.userId, row.date, row.consumed_at, Number(row.ml), row.kind).run();
+    return {};
+  }
   if (change.kind === 'fluid') {
     const gone = await db.prepare('DELETE FROM fluid_log WHERE user_id=? AND id=? AND ml=? AND source IS NULL').bind(db.userId, Number(change.id), Number(change.ml)).run();
     if (gone.meta?.changes !== 1) throw changed(L('Pití se od té změny upravilo, vrátit ho už nejde.', 'The drink has changed since, it can no longer be undone.'));
@@ -137,6 +164,7 @@ export async function undoFoodChange(env, change, changed) {
 // One line per card for the chat's memory of what it proposed (coach-actions.js actionSummary).
 export function foodSummary(a) {
   if (a.type === 'fluid_add') return L('Zapsat pití: ', 'Log a drink: ') + a.foodName + ' ' + a.ml + ' ml';
+  if (a.type === 'fluid_delete') return L('Smazat z pití: ', 'Delete from drinks: ') + a.foodName + ' ' + a.ml + ' ml' + (a.time ? ' (' + a.time + ')' : '');
   if (a.type === 'food_delete') return L('Smazat z jídla: ', 'Delete from food: ') + a.foodName + ' (' + a.fromMealName + ', ' + a.fromKcal + ' kcal)';
   if (a.type === 'food_move') return L('Přesunout ', 'Move ') + a.foodName + ': ' + a.fromMealName + ' → ' + a.toMealName;
   if (a.type === 'food_portion') return L('Upravit porci ', 'Change the portion of ') + a.foodName + ': ' + a.fromAmount + ' → ' + a.toAmount + ', ' + a.fromKcal + ' → ' + a.kcal + ' kcal';

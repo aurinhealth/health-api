@@ -216,7 +216,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     // Food and drinks the athlete told about in this chat (coach-food-cards.js): never from a push.
     if(FOOD_CARD_TYPES.includes(a.type)){
       if(!userInitiated||context.foodCards===false||taken().some(x=>x.type===a.type&&x.foodId&&x.foodId===String(a.foodId||'')))return [];
-      return checkFoodCard(a,context.today?.nutrition?.foods||[],reason,today);
+      return checkFoodCard(a,context.today?.nutrition?.foods||[],reason,today,context.today?.nutrition?.drinks?.entries||[]);
     }
     // Calories of a done activity it was shown, set in Aurin only (activity-edits.js).
     if(a.type==='activity_kcal'){
