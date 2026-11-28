@@ -56,7 +56,7 @@ test('the confirm keeps the undo only with Chat v1, and the chat undoes before t
   assert.match(src, /preview,\.\.\.await gymUndo\(env,draft,a\.trim\.source,a\.trim\.values,row\.id\)\}/);
   const undo = src.indexOf('const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message)'), reads = src.indexOf("onProgress(L('Kouč čte tvoje data…'");
   assert.ok(undo > 0 && undo < reads);
-  assert.match(src, /if\(undoneInChat\)coachCtx\.undoneInChat=undoneInChat;/);
+  assert.match(src, /if\(undoneInChat\)\{const \{activityKeys,\.\.\.told\}=undoneInChat;coachCtx\.undoneInChat=told;\}/);
 });
 
 test('after a later change of the chat was undone, the text does not go one change further back', async () => {
