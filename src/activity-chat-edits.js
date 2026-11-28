@@ -104,9 +104,13 @@ export async function hideActivity(env, id) {
 // "Ten prášek jsem zapsala omylem": the day's pill logged or taken back
 // (cycle-store.js), with a token that puts the record back as it was.
 export async function setPillByCoach(env, date, taken) {
-  const { listCycleDays, saveCycleDay } = await import('./cycle-store.js');
+  const { listCycleDays, saveCycleDay, getCycleSettings } = await import('./cycle-store.js');
   const { localNow } = await import('./user-time.js');
+  // As the card was proposed: the pill shared with the coach, the day still unlogged (log) or logged (clear).
+  const settings = await getCycleSettings(env.DB);
+  if (!settings.enabled || !settings.shareWithCoach || settings.contraception !== 'pill') throw fail(L('Prášek už se v Cyklu nesleduje.', 'The pill is no longer tracked in Cycle.'));
   const before = (await listCycleDays(env.DB, date, date))[0]?.pill ?? null;
+  if (taken === (before != null)) throw fail(L('Záznam prášku se mezitím změnil. Požádej o nový návrh.', 'The pill record has changed in the meantime. Ask for a new proposal.'));
   // Today's pill at the time now, as Vzato logs it; an earlier day without a time.
   const now = localNow();
   const day = await saveCycleDay(env.DB, { date, pill: !taken ? null : now.slice(0, 10) === date ? now.slice(11, 16) : true });

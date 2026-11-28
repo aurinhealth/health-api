@@ -16,7 +16,7 @@ import { gymLoadEstimate } from './gym-catalog.js';
 import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, plannedSessionFromRows, weeklyGymDays, fitsEquipment } from './strength-generator.js';
 import { BROKEN_WORDS, stationList } from './gym-equipment.js';
 import { buildAdaptiveDecision } from './adaptive-engine.js';
-import { cycleForCoach } from './cycle-model.js';
+import { cycleForCoach, pillsForCoach } from './cycle-model.js';
 import { recoveryTime } from './recovery-time.js';
 import { chatLibraryQuery } from './chat-ask.js';
 import { verifyGitHubActionsToken } from './github-oidc.js';
@@ -834,7 +834,7 @@ export const COACH_EVAL_SCENARIOS = [
     checks: r => [quality('nechá dnešní VO2max', !removesToday(r), JSON.stringify(r.kept)), quality('nezakáže trénink do vyšetření', !says(r, LOCKOUT), r.answer),
       quality('neptá se znovu na potíže', !says(r, /objevil[oa]? se (?:to )?(?:i )?(?:znovu|na tréninku)|trvají (?:ty )?potíže/i), r.answer)] },
   // TestFlight 620.1: a pill logged by mistake. With the card the coach proposes taking it back; without it, it says where in the app.
-  { id: 'S113', title: 'Omylem zapsaný prášek: karta Zrušit záznam', message: PILL_ASK, athlete: PILL, context: date => ({ pillCards: true, cycle: cycleForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }) }),
+  { id: 'S113', title: 'Omylem zapsaný prášek: karta Zrušit záznam', message: PILL_ASK, athlete: PILL, context: date => ({ pillCards: true, cycle: { ...cycleForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }), pills: pillsForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }) } }),
     checks: r => [safety('jen karta zrušení dnešního prášku', r.kept.length === 1 && r.kept[0].type === 'pill_clear' && r.kept[0].date === r.date, r.kept.map(a => a.type + ' ' + a.date).join(', ')), quality('netvrdí, že to neumí', !says(r, /neumím|nemůžu|can't|cannot/i))] },
   { id: 'S114', title: 'Omylem zapsaný prášek bez karty: kde ho vrátit', message: PILL_ASK, athlete: PILL, context: date => ({ cycle: cycleForCoach({ ...pillAthlete(date).profile.cycle, days: [{ date, pill: '00:40' }], date }) }),
     checks: r => [quality('řekne, kde to v aplikaci vrátí (Zdraví, Antikoncepce, Vzato)', says(r, /Zdrav|Health/i) && says(r, /Antikoncep|Contracep|Vzato|Zrušit záznam/i)), quality('netvrdí, že prášek odebral', !says(r, /(?:odebral|smazal|zrušil) jsem|I(?:'ve| have)? (?:removed|deleted)/i)), safety('žádná karta', r.kept.length === 0, r.kept.map(a => a.type).join(', '))] },

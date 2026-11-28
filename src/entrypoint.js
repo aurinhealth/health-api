@@ -209,7 +209,7 @@ import { handleJournalApi, journalForCoach } from "./routes-journal.js";
 import { saunaRisks } from "./journal-store.js";
 import { muscleModelResponse } from "./muscle-model.js";
 import { morningMetrics } from "./journal-impact.js";
-import { cycleForCoach } from "./cycle-model.js";
+import { cycleForCoach, pillsForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, setPillByCoach, undoActivityChange, rememberChange } from "./activity-chat-edits.js";
@@ -2844,7 +2844,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(Number(appApiLevel(request)??body.appApi)>=4)coachCtx.otherEventCards=true;
         }
         // Log or take back a pill of the last week (the cycle shared): an app that shows the card (API level 5).
-        if(coachCtx.cycle?.pills?.length&&Number(appApiLevel(request)??body.appApi)>=5)coachCtx.pillCards=true;
+        if(coachCtx.cycle&&Number(appApiLevel(request)??body.appApi)>=5){const pills=pillsForCoach({...inputs.profile?.cycle,date});if(pills){coachCtx.cycle={...coachCtx.cycle,pills};coachCtx.pillCards=true;}}
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // A triathlete's week split and why, so the coach can explain it ("why three swims?").
         if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
