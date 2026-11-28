@@ -342,8 +342,8 @@ struct RecipeDetailView: View {
     /// A number stays on the line of what follows it ("1.5 l", "20 cm"), and a
     /// range stays whole ("2–3 minutes").
     static func keepUnits(_ text: String) -> String {
-        text.replacing(/(\d) /) { "\($0.1)\u{00A0}" }
-            .replacing(/(\d)–(\d)/) { "\($0.1)–\u{2060}\($0.2)" }
+        text.replacing(#/(\d) /#) { "\($0.1)\u{00A0}" }
+            .replacing(#/(\d)–(\d)/#) { "\($0.1)–\u{2060}\($0.2)" }
     }
 
     @ViewBuilder private func content(_ recipe: LibraryRecipeDetail) -> some View {
