@@ -1,6 +1,6 @@
 import { raceWeek } from './coach-race-week.js';
 import {assertAIAccess} from './subscription.js';
-import { foodsForCoach, foodCardMessage } from './coach-food-cards.js';
+import { foodsForCoach, drinksForCoach, foodCardMessage } from './coach-food-cards.js';
 import { assertAiTotal, addAiSpend, alertAiQuota } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META, engineForAI } from "./cycling-coach-v2.js";
@@ -113,7 +113,7 @@ export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}=
     minimumKcal:num(b.floorTarget??b.minTarget),deficitKcal:num(b.weightLossDeficit),
     weight:filled({currentKg:avg(w.current??n.currentWeight),average7dKg:avg(w.average7d),average30dKg:avg(w.average30d),goalKg:avg(n.targetWeightKg)}),
     burned:filled({dayKcal:round(num(daily?.burned?.total)),activityKcal:round(num(daily?.burned?.activity)),activeSoFarKcal:round(num(n.energyBudget?.active))}),
-    drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml)}:null,
+    drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml),...drinksForCoach(fluids.entries)}:null,
     lastDays:lastDays.length?lastDays:null,
     // Today's and yesterday's foods with the ids the food cards name (coach-food-cards.js).
     foods:date?foodsForCoach([{date,entries:n.foodLog?.entries},{date:shiftDay(date,-1),entries:(week?.days||[]).find(d=>d.date===shiftDay(date,-1))?.daily?.nutrition?.foodLog?.entries}]):null});
