@@ -4673,6 +4673,7 @@
 "do %@ bpm" = "up to %@ bpm";
 "%@ až %@ bpm" = "%1$@ to %2$@ bpm";
 "Pauza, zbývá %@" = "Rest, %@ left";
+"Na aktuální sérii" = "Go to the current set";
 "Pauza podle plánu %@" = "Planned rest %@";
 "Zkrátit pauzu o 15 sekund" = "Shorten the rest by 15 seconds";
 "Prodloužit pauzu o 15 sekund" = "Add 15 seconds to the rest";
