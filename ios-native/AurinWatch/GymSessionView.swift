@@ -355,24 +355,31 @@ struct GymSessionView: View {
     private func setScreen(_ gym: WatchGym, _ lift: WatchGym.Lift) -> some View {
         let e = gym.exercises.firstIndex { $0.lifts.contains { $0.row == lift.row } } ?? exercise
         let ex = gym.exercises[e]
-        // Set done at the bottom with the time line above it, never over the
-        // tiles: the whole set when it fits, else without "last time" and with
-        // the superset in the progress row (Petr's watch 2026-11-27: a superset
-        // pushed the tiles under Set done), else the name only (big text).
-        return VStack(alignment: .leading, spacing: 2) {
-            // Only the lines above the tiles give way; the tiles are one view, so the crown's focus stays put.
-            ViewThatFits(in: .vertical) {
-                setStack(gym, lift, ex, e, compact: false)
-                setStack(gym, lift, ex, e, compact: true)
-                setTitle(ex, e)
+        // Set done at the bottom with the time line above it, in the same scroll
+        // as the set, never over the tiles (Petr's watch 2026-11-27: a superset
+        // tag and "last time" pushed the tiles under a pinned Set done). The
+        // scroll starts at the bottom, so the tiles and Set done always show and
+        // the lines above them go up off the top when the set is long.
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                setStack(gym, lift, ex, e)
+                if !dimmed {
+                    // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts,
+                    // in the live line's place.
+                    if hintWorkouts <= 3, !crown {
+                        Text(W.tr("Klepni na číslo, pak otoč korunkou", "Tap a number, then turn the crown"))
+                            .watchFont(12).foregroundStyle(W.secondary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                            .padding(.horizontal, 2)
+                            .padding(.top, 4)
+                    } else {
+                        liveLine.padding(.horizontal, 2).padding(.top, 4)
+                    }
+                    setDone(gym, lift)
+                }
             }
-            // First pick of the free height, before the spacer under the tiles takes its share
-            // (without it the first CI shot fell back to the name alone).
-            .layoutPriority(1)
-            setTiles(lift, ex, machineLb: gym.machineLb(row: lift.row))
-            Spacer(minLength: 2)
-            setBottom(gym, lift)
         }
+        .defaultScrollAnchor(.bottom)
         // The crown starts on the weight, also when the tiles come back after a rest.
         .defaultFocus($crown, true)
         .onAppear { load(lift, of: ex.name, in: gym) }
@@ -386,26 +393,6 @@ struct GymSessionView: View {
             if abs(shown - kg) >= 0.05 { kg = shown }
             if Double(draft.reps) != reps { reps = Double(draft.reps) }
             putIn = [kg, reps]
-        }
-    }
-
-    /// The time and heart rate (or the crown hint) right above Set done
-    /// (concept 06, point 3); nothing while the wrist is down.
-    @ViewBuilder private func setBottom(_ gym: WatchGym, _ lift: WatchGym.Lift) -> some View {
-        if !dimmed {
-            VStack(alignment: .leading, spacing: 2) {
-                // The crown turns a tile only after a tap (Petr 2026-11-12): said in the first three workouts,
-                // in the live line's place.
-                if hintWorkouts <= 3, !crown {
-                    Text(W.tr("Klepni na číslo, pak otoč korunkou", "Tap a number, then turn the crown"))
-                        .watchFont(12).foregroundStyle(W.secondary)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .padding(.horizontal, 2)
-                } else {
-                    liveLine.padding(.horizontal, 2)
-                }
-                setDone(gym, lift)
-            }
         }
     }
 
@@ -429,11 +416,10 @@ struct GymSessionView: View {
         .padding(.horizontal, 4)
     }
 
-    /// compact: without the superset tag and "last time", the superset said in the progress row.
-    private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, compact: Bool) -> some View {
+    private func setStack(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int) -> some View {
         let lb = gym.machineLb(row: lift.row)
         return VStack(alignment: .leading, spacing: 2) {
-            if !compact, let line = supersetLine(gym, lift, e) {
+            if let line = supersetLine(gym, lift, e) {
                 // The superset's violet tag, as on the iPhone.
                 Text(line).watchFont(12, .semibold).foregroundStyle(W.indigo)
                     .lineLimit(1).minimumScaleFactor(0.6)
@@ -463,7 +449,7 @@ struct GymSessionView: View {
             HStack(spacing: 4) {
                 Button { list = true } label: {
                     HStack(spacing: 3) {
-                        Text(progress(gym, lift, ex, e, compact: compact)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(progress(gym, lift, ex, e)).lineLimit(1).minimumScaleFactor(0.7)
                         Image(systemName: "chevron.right").font(.system(size: 9, weight: .bold))
                     }
                     .watchFont(12, .medium).foregroundStyle(W.secondary)
@@ -480,23 +466,10 @@ struct GymSessionView: View {
             }
             .disabled(store.changing)
             // "last time 57.5 kg × 8".
-            if !dimmed, !compact, let line = GymText.info(lift, machineLb: lb) {
+            if !dimmed, let line = GymText.info(lift, machineLb: lb) {
                 Text(line).watchFont(12).foregroundStyle(W.muted)
                     .lineLimit(1).minimumScaleFactor(0.7)
             }
-        }
-        .padding(.top, 2)
-    }
-
-    /// Only the name, when nothing more fits above the tiles (big text).
-    private func setTitle(_ ex: WatchGym.Exercise, _ e: Int) -> some View {
-        Text(ex.title).font(W.serif(W.small ? 17 : 19)).foregroundStyle(W.num)
-            .lineLimit(1).minimumScaleFactor(0.7)
-    }
-
-    /// The weight and reps tiles, the crown on them.
-    private func setTiles(_ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, machineLb lb: Bool) -> some View {
-        Group {
             // One crown for both fields, turning the one tapped last. A focusable
             // tile each (build 380) left the reps out of reach: a tap never
             // moved the crown off the weight.
@@ -516,16 +489,13 @@ struct GymSessionView: View {
                                   by: selected == .kg ? (lb ? 1 : W.weightStep) : 1, sensitivity: selected == .kg ? .medium : .low,
                                   isContinuous: false, isHapticFeedbackEnabled: true)
         }
+        .padding(.top, 2)
     }
 
     /// "Exercise 1 of 7, set 2 of 4".
-    /// Compact, in a superset: "Superset A 1/2, round 1 of 3" (its tag is left out).
-    private func progress(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int, compact: Bool = false) -> String {
+    private func progress(_ gym: WatchGym, _ lift: WatchGym.Lift, _ ex: WatchGym.Exercise, _ e: Int) -> String {
         let set = label(lift, in: ex, superset: gym.superset(of: e) != nil, side: false)
         let lower: String = set.prefix(1).lowercased() + String(set.dropFirst())
-        if compact, !lift.warmup, let group = gym.superset(of: e), let letter = ex.superset, let at = group.firstIndex(of: e) {
-            return W.tr("Supersérie \(letter) \(at + 1)/\(group.count), ", "Superset \(letter) \(at + 1)/\(group.count), ") + lower
-        }
         return W.tr("Cvik \(e + 1) z \(gym.exercises.count), ", "Exercise \(e + 1) of \(gym.exercises.count), ") + lower
     }
 
