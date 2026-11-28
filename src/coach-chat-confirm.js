@@ -93,6 +93,10 @@ export function chatUndo(message) {
   const verb = w => UNDO.has(w) || (back && PUT.has(w));
   return words.some(verb) && words.every(w => verb(w) || UNDO_FILLER.has(w));
 }
+// What the chat's "vrať to" puts back: the gym plan, a planned ride, run or
+// swim of the app, and a done activity the coach hid, merged, re-timed or whose
+// calories it changed (activity-chat-edits.js).
+export const UNDO_KINDS = ['gym_plan', 'planned', 'hide', 'merge', 'time', 'kcal', 'food', 'fluid'];
 // The last change of today's gym plan confirmed in this chat that can still
 // go back. Stale when a later change of this chat's plan was confirmed (its
 // undo used already): an older one goes back only by its own card's button.
@@ -103,12 +107,12 @@ export async function lastUndoInChat(db, chatId, since) {
   const row = await db.prepare("SELECT token,change_json,created_at FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC LIMIT 1").bind(db.userId, since, chat).first();
   if (!row) return null;
   let c; try { c = JSON.parse(row.change_json); } catch { return null; }
-  if (!['gym_plan', 'planned'].includes(c.kind) || c.chatId !== Number(chatId)) return null;
+  if (!UNDO_KINDS.includes(c.kind) || c.chatId !== Number(chatId)) return null;
   // A ride or run changed by two cards of one answer (a new one and the old
-  // one off the plan) goes back as a whole.
-  if (c.kind === 'planned') {
+  // one off the plan), or several done activities of one answer, go back as a whole.
+  if (c.kind !== 'gym_plan') {
     const rows = c.messageId ? ((await db.prepare("SELECT token,change_json FROM activity_undo WHERE user_id=? AND created_at>=? AND change_json LIKE ? ORDER BY created_at DESC,rowid DESC").bind(db.userId, since, chat).all()).results || []) : [];
-    const same = rows.map(r => { try { return { token: r.token, c: JSON.parse(r.change_json) }; } catch { return null; } }).filter(r => r && r.c.kind === 'planned' && !r.c.undone && r.c.messageId === c.messageId && r.c.chatId === Number(chatId));
+    const same = rows.map(r => { try { return { token: r.token, c: JSON.parse(r.change_json) }; } catch { return null; } }).filter(r => r && r.c.kind !== 'gym_plan' && UNDO_KINDS.includes(r.c.kind) && !r.c.undone && r.c.messageId === c.messageId && r.c.chatId === Number(chatId));
     // All of it went back by the cards' Vrátit: an older change stays (as for the gym below).
     if (c.undone && !same.length) return { token: row.token, tokens: [], proposal: c.proposal || '', stale: true };
     const all = same.length ? same : [{ token: row.token, c }];

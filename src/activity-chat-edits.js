@@ -93,16 +93,17 @@ export async function rememberChange(env, change) {
 }
 
 // "Smaž tu jízdu z úterý": hidden in Aurin only.
-export async function hideActivity(env, id) {
+// meta: the coach card's chatId, messageId, draftId and proposal, so the chat's "vrať to" finds it.
+export async function hideActivity(env, id, meta = {}) {
   const row = await rowOf(env, id);
   if (!row) throw notFound();
-  const undo = await rememberChange(env, { kind: 'hide', rows: [before(row)] });
+  const undo = await rememberChange(env, { kind: 'hide', rows: [before(row)], ...meta });
   await hide(env, row).run();
   return { status: 'ok', id: row.external_id, undo };
 }
 
 // Two parts of one session become one activity in Aurin.
-export async function mergeActivities(env, ids) {
+export async function mergeActivities(env, ids, meta = {}) {
   const [first, second] = await Promise.all((ids || []).slice(0, 2).map(id => rowOf(env, id)));
   if (!first || !second || first.id === second.id) throw notFound();
   const parts = [activityFacts(first), activityFacts(second)];
@@ -120,12 +121,12 @@ export async function mergeActivities(env, ids) {
         payload_json = excluded.payload_json, record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP`).bind(env.USER_ID, key, start, start, end, JSON.stringify(payload)),
     hide(env, first), hide(env, second)
   ]);
-  const undo = await rememberChange(env, { kind: 'merge', created: key, rows: [before(first), before(second)] });
+  const undo = await rememberChange(env, { kind: 'merge', created: key, rows: [before(first), before(second)], ...meta });
   return { status: 'ok', id: key, undo, merged: { start, end, distanceM: payload.distance ?? null, movingSec: payload.moving_time ?? null } };
 }
 
 // The new start "HH:MM" of an activity typed into Aurin, the same length.
-export async function setActivityTime(env, id, time) {
+export async function setActivityTime(env, id, time, meta = {}) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time || ''))) throw fail(L('Zadej čas ve tvaru 18:00.', 'Enter the time as 18:00.'));
   const row = await rowOf(env, id);
   if (!row) throw notFound();
@@ -133,7 +134,7 @@ export async function setActivityTime(env, id, time) {
   if (row.source_family !== 'local' || payload.pairedWith) throw fail(L('Čas změřily hodinky, ten se nemění.', 'The watch measured the time; it doesn\'t change.'));
   const facts = activityFacts(row), start = facts.start.slice(0, 11) + time + ':00';
   const length = ms(facts.end) - ms(facts.start), end = row.end_time ? wall(ms(start) + length) : null;
-  const undo = await rememberChange(env, { kind: 'time', id: row.id, sample_time: row.sample_time, start_time: row.start_time, end_time: row.end_time, start_date_local: payload.start_date_local ?? null });
+  const undo = await rememberChange(env, { kind: 'time', id: row.id, sample_time: row.sample_time, start_time: row.start_time, end_time: row.end_time, start_date_local: payload.start_date_local ?? null, ...meta });
   await env.DB.prepare('UPDATE health_datapoints SET sample_time = ?, start_time = ?, end_time = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
     .bind(start, start, end, JSON.stringify({ ...payload, start_date_local: start }), row.id, env.USER_ID).run();
   return { status: 'ok', id: row.external_id, undo, from: facts.start.slice(11, 16), to: time };
@@ -196,6 +197,25 @@ export async function undoActivityChange(env, token) {
     }
     return { status: 'ok', kind: 'planned', op: change.op, proposal: change.proposal || null };
   }
+  // A done activity (hidden, merged, re-timed, its calories) or food: claimed first like
+  // the planned one, so a double tap acts once and the chat's "vrať to" never
+  // goes one change further back; the claim is undone when the change fails.
+  if (change.undone) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
+  const claim = await env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ? AND change_json = ?').bind(JSON.stringify({ ...change, undone: true }), env.USER_ID, String(token), stored.change_json).run();
+  if (claim.meta?.changes !== 1) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
+  const release = () => env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ?').bind(stored.change_json, env.USER_ID, String(token)).run().catch(() => null);
+  // A food or drink card of the coach (coach-food-cards.js); foodId goes to the Google export.
+  if (change.kind === 'food' || change.kind === 'fluid') {
+    const { undoFoodChange } = await import('./coach-food-cards.js');
+    const done = await undoFoodChange(env, change, fail).catch(async error => { await release(); throw error; });
+    return { status: 'ok', kind: change.kind, proposal: change.proposal || null, ...done };
+  }
+  if (change.kind === 'kcal') {
+    // Only while the activity is still as the change left it (a sync may have rewritten it).
+    const back = await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND payload_json = ?').bind(change.before, change.id, env.USER_ID, change.after).run().catch(async error => { await release(); throw error; });
+    if (back.meta?.changes !== 1) { await release(); throw fail(L('Aktivita se od té změny upravila, vrátit ji už nejde.', 'The activity has changed since, it can no longer be undone.')); }
+    return { status: 'ok', kind: 'kcal', proposal: change.proposal || null };
+  }
   for (const r of change.rows || []) batch.push(env.DB.prepare('UPDATE health_datapoints SET record_role = ?, matched_activity_id = ?, match_confidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(r.record_role, r.matched_activity_id, r.match_confidence, r.id, env.USER_ID));
   if (change.kind === 'merge') batch.push(env.DB.prepare("DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'local' AND data_type = 'activity' AND external_id = ?").bind(env.USER_ID, change.created));
   if (change.kind === 'time') {
@@ -203,7 +223,6 @@ export async function undoActivityChange(env, token) {
     if (row) batch.push(env.DB.prepare('UPDATE health_datapoints SET sample_time = ?, start_time = ?, end_time = ?, payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
       .bind(change.sample_time, change.start_time, change.end_time, JSON.stringify({ ...parse(row.payload_json), start_date_local: change.start_date_local }), change.id, env.USER_ID));
   }
-  batch.push(env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)));
-  await env.DB.batch(batch);
-  return { status: 'ok' };
+  if (batch.length) await env.DB.batch(batch).catch(async error => { await release(); throw error; });
+  return { status: 'ok', kind: change.kind, proposal: change.proposal || null };
 }

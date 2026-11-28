@@ -90,3 +90,38 @@ test("the coach may propose these only for activities it was shown", () => {
   assert.equal(time.fromTime, "17:30");
   assert.equal(validateCoachActions([{ ...base, type: "activity_delete", activityId: "g-run-2" }], context, "2026-10-14")[0].type, "activity_delete");
 });
+
+// One Vrátit for every card (Petr 2026-11-28, gap 16): calories get it too, and
+// the chat's "vrať to" finds a done activity's change of this chat.
+test("calories changed from the coach's card go back by Vrátit, once, only while unchanged", async () => {
+  const { setActivityKcal } = await import("../src/activity-edits.js");
+  const { env, insert, row } = setup();
+  insert(evening);
+  const before = row("g-run-3").payload_json;
+  const plain = await setActivityKcal(env, { id: "g-run-3", kcal: 420 });
+  assert.equal(plain.undo, undefined, "the app's own edit keeps no token");
+  const r = await setActivityKcal(env, { id: "g-run-3", kcal: 500 }, { undo: { chatId: 7, proposal: "Kalorie 500 kcal" } });
+  assert.ok(r.undo);
+  assert.equal((await undoActivityChange(env, r.undo)).kind, "kcal");
+  assert.notEqual(row("g-run-3").payload_json, before, "back to 420, the value before the card");
+  assert.match(row("g-run-3").payload_json, /"caloriesKcal":420/);
+  await assert.rejects(undoActivityChange(env, r.undo), /už vrátit nejde/);
+  // Changed again since (a sync, a hand edit): no undo, and the token stays for nothing else.
+  const again = await setActivityKcal(env, { id: "g-run-3", kcal: 600 }, { undo: { chatId: 7 } });
+  await setActivityKcal(env, { id: "g-run-3", kcal: 610 });
+  await assert.rejects(undoActivityChange(env, again.undo), /od té změny upravila/);
+  assert.match(row("g-run-3").payload_json, /"caloriesKcal":610/);
+});
+
+test("the chat's vrať to finds the last done-activity change of this chat and goes back once", async () => {
+  const { lastUndoInChat } = await import("../src/coach-chat-confirm.js");
+  const { env, insert, row } = setup();
+  insert(evening);
+  const r = await hideActivity(env, "g-run-3", { chatId: 7, messageId: 3, draftId: 40, proposal: "Smazat Běh (14. 10.)" });
+  assert.equal(await lastUndoInChat(env.DB, 8, "2000-01-01 00:00:00"), null, "another chat");
+  const last = await lastUndoInChat(env.DB, 7, "2000-01-01 00:00:00");
+  assert.deepEqual(last, { token: r.undo, tokens: [r.undo], proposal: "Smazat Běh (14. 10.)" });
+  await undoActivityChange(env, last.token);
+  assert.equal(row("g-run-3").record_role, "primary");
+  assert.equal((await lastUndoInChat(env.DB, 7, "2000-01-01 00:00:00")).stale, true, "a second vrať to goes no further back");
+});
