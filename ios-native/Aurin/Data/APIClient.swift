@@ -53,7 +53,8 @@ final class APIClient: @unchecked Sendable {
     /// 4: the coach's card adding an own practice or match to a day (other_event).
     /// 5: the coach's food and drink cards (food_delete, food_move, food_portion, fluid_add).
     /// 6: the coach's Zapsat trénink card (activity_log); the app writes it to Apple Health and takes it back on Vrátit.
-    static let apiLevel = 6
+    /// 7: the coach's Ranní odpověď and Pocit z tréninku cards (feeling, effort).
+    static let apiLevel = 7
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?
