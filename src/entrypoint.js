@@ -2799,7 +2799,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // "Vrať to zpátky" (Chat v1): the last change of the plan from this chat today goes back first.
       const undoAsked=!ghost&&!body.pushReply&&chatV1On(env)&&chatUndo(message);
       const last=undoAsked?await lastUndoInChat(env.DB,body.chatId,dayStartSql(date)).catch(()=>null):null;
-      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna plánu, kterou by šlo vrátit.','There is no change of the plan in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await undoTokens(env,last);
+      const undoneInChat=!undoAsked?null:!last?{done:false,reason:L('V tomhle chatu dnes není žádná změna, kterou by šlo vrátit.','There is no change in this chat today that could be undone.')}:last.stale?{proposal:last.proposal,done:false,reason:L('Poslední změna z tohohle chatu už je vrácená; starší změnu vrátí tlačítko Vrátit u její karty.','The last change from this chat is already undone; an older one goes back with the Undo button on its card.')}:await undoTokens(env,last);
       if(undoneInChat?.done)madeInChat=[...madeInChat,{proposal:L('vráceno: ','undone: ')+undoneInChat.proposal,done:true}];
       // The steps the app shows under the question (CoachThinking), each one
       // what the server really does: the data, the day's ride or run review when
@@ -3125,11 +3125,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Plán se nepodařilo založit.', 'The plan couldn\'t be started.'));
           result={status:'ok',sport:template.sport,active:template.sport==='gym'?savedBody.activeGym:savedBody.active};
         }
-        else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
-        // Done activities in Aurin only; the result carries the "Vrátit" token (activity-chat-edits.js).
-        else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId);await bumpCacheVersion(env.DB);}
-        else if(a.type==='activity_merge'){result=await mergeActivities(env,[a.activityId,a.otherActivityId]);await bumpCacheVersion(env.DB);}
-        else if(a.type==='activity_time'){result=await setActivityTime(env,a.activityId,a.time);await bumpCacheVersion(env.DB);}
+        // Done activities in Aurin only; the result carries the "Vrátit" token (activity-chat-edits.js),
+        // with the card's chat, so the chat's "vrať to" finds it too (coach-chat-confirm.js).
+        else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal},{undo:activityUndoMeta(draft,row.id)});await bumpCacheVersion(env.DB);}
+        else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId,activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
+        else if(a.type==='activity_merge'){result=await mergeActivities(env,[a.activityId,a.otherActivityId],activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
+        else if(a.type==='activity_time'){result=await setActivityTime(env,a.activityId,a.time,activityUndoMeta(draft,row.id));await bumpCacheVersion(env.DB);}
         else if(a.type==='workout'){
           // The workout the chat showed is the one that gets planned: the ride
           // or run goes to the calendar (and Intervals.icu), the gym draft is saved.
@@ -4081,6 +4082,8 @@ async function undoTokens(env,last){
   await bumpCacheVersion(env.DB).catch(()=>null);
   return {proposal:done.join(', '),done:true,...(failed.length?{reason:L('Část změny vrátit nešlo: ','Part of the change could not be undone: ')+failed[0]}:{})};
 }
+// The card's chat for the undo of a done activity (kcal, hide, merge, time).
+const activityUndoMeta=(draft,draftId)=>({chatId:Number(draft.chatId)||null,messageId:Number(draft.messageId)||null,draftId:Number(draftId)||null,proposal:actionSummary(draft.action)});
 // The same for a planned ride, run or swim of the app (activity-chat-edits.js planned).
 async function plannedUndo(env,draft,change,draftId){
   if(!chatV1On(env)||!change.start&&!change.from)return {};
