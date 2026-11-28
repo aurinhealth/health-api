@@ -1133,7 +1133,7 @@ struct ActionCard: View {
     /// a card over more days or one that deletes needs the tap.
     static func yesConfirms(_ a: CoachAction, today: String = AppModel.localDate(Date())) -> Bool {
         guard a.draftId != nil, a.date == today else { return false }
-        return !["rest", "activity_delete", "activity_merge", "food_delete", "fluid_delete", "activity_log", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
+        return !["rest", "activity_delete", "activity_merge", "food_delete", "fluid_delete", "activity_log", "feeling", "effort", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
     }
 
     private var health: Bool { action.type == "status" || action.type == "plan_around" }
@@ -1252,7 +1252,7 @@ struct ActionCard: View {
         // "Add for Saturday" (the concept's card).
         if action.type == "other_event", let date = action.date { return OtherSports.addFor(date) }
         // The food and drink cards say what they do (the concept's mockup).
-        if let title = ["food_delete": "Smazat", "food_move": "Přesunout", "food_portion": "Upravit", "fluid_add": "Zapsat", "fluid_delete": "Smazat", "activity_log": "Zapsat"][action.type] { return L10n.tr(title) }
+        if let title = ["food_delete": "Smazat", "food_move": "Přesunout", "food_portion": "Upravit", "fluid_add": "Zapsat", "fluid_delete": "Smazat", "activity_log": "Zapsat", "feeling": "Změnit", "effort": "Zapsat"][action.type] { return L10n.tr(title) }
         guard action.type == "status" else { return L10n.tr("Potvrdit") }
         switch action.status {
         case "sick": return L10n.tr("Nastavit Nemoc")

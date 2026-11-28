@@ -219,6 +219,11 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var fromAmount: String? = nil
     var toAmount: String? = nil
     var ml: Double? = nil
+    /// Ranní odpověď: today's new answer (fresh, normal, tired) and the one it replaces.
+    var feeling: String? = nil
+    var from: String? = nil
+    /// Pocit z tréninku: RPE 1 to 10.
+    var rpe: Double? = nil
 
     /// The food and drink cards change Jídlo: it loads again after them.
     var changesFood: Bool { ["food_delete", "food_move", "food_portion", "fluid_add", "fluid_delete"].contains(type) }
@@ -323,6 +328,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "fluid_add": return L10n.tr("Zapsat pití")
         case "activity_log": return L10n.tr("Zapsat trénink")
         case "fluid_delete": return L10n.tr("Smazat z pití")
+        case "feeling": return L10n.tr("Ranní odpověď")
+        case "effort": return L10n.tr("Pocit z tréninku")
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
@@ -359,6 +366,12 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         // "Voda 500 ml, 13:05"
         case "fluid_delete": return [[foodName, ml.map { Fmt.int($0) + " ml" }].compactMap { $0 }.joined(separator: " "), time.map { ClockText.format($0) }].compactMap { $0 }.joined(separator: ", ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
+        // "Unavený, místo Normál"
+        case "feeling":
+            let name = { (id: String?) in id.flatMap { ["fresh": "Svěží", "normal": "Normál", "tired": "Unavený"][$0] }.map { L10n.tr($0) } }
+            return [name(feeling), name(from).map { L10n.f("místo %@", $0) }].compactMap { $0 }.joined(separator: ", ")
+        // "Sweet spot 3×15, pá 27. 11., 17:30, 8 z 10"
+        case "effort": return [activityName, day, time.map { ClockText.format($0) }, rpe.map { L10n.f("%d z 10", Int($0)) }].compactMap { $0 }.joined(separator: ", ")
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: ", ")
         // A sport added to the week plan holds for that one week only.
         case "week_sport": return day.map { $0 + ", " + L10n.tr("jen tento týden") }
