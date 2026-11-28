@@ -577,6 +577,8 @@ struct CoachView: View {
                         for i in messages.indices { for a in messages[i].actions where a.draftId.map(ids.contains) == true { messages[i].decided[a.draftId!] = L10n.tr("Hotovo.") } }
                         Task { await model.refreshTraining(); await model.refresh() }
                     }
+                    // "Vrať to" took back a workout the coach logged: its Apple Health copy goes too.
+                    if let keys = result.removedWorkouts, !keys.isEmpty { Task { for key in keys { await AppleHealthExport.shared.removeWorkout(key: key) } } }
                     // A sport turned off: Training and Aktivita dne without it.
                     if result.sportChanges?.removed?.isEmpty == false { Task { await model.refreshTraining(); await model.reloadToday() } }
                     if let chat = result.chatId {
@@ -771,6 +773,12 @@ struct CoachView: View {
                 $0.decided[draftId] = answer.message ?? (confirm ? "Hotovo." : "Zamítnuto.")
                 if let token = answer.undo { $0.undo[draftId] = token }
             }
+            // A workout the coach logged goes to Apple Health and the toast, as after Zapsat trénink.
+            if confirm, action.type == "activity_log", let logged = answer.logged, let key = logged.activityKey, let date = action.date {
+                let activity = ActivityToSync(key: key, sport: action.sport ?? "other", name: action.activityName ?? L10n.tr("Trénink"), date: date,
+                                              start: AppleHealthExport.serverDate(logged.start), minutes: Int(action.minutes ?? 0), notes: "", rpe: nil, type: action.sport == nil || action.sport == "other" ? logged.type : nil)
+                await model.shareActivity(activity, sends: logged.sends ?? [])
+            }
             if confirm { await model.refreshTraining(); await model.refresh(); if action.changesFood { await model.refreshFood() } }
         } catch {
             edit(bubble) { $0.failedActions[draftId] = error.localizedDescription }
@@ -798,7 +806,7 @@ struct CoachView: View {
     private func undo(_ action: CoachAction, in bubble: UUID) async {
         guard let draftId = action.draftId, let token = messages.first(where: { $0.id == bubble })?.undo[draftId] else { return }
         do {
-            try await model.api.undoActivityChange(token: token)
+            if let key = try await model.api.undoActivityChange(token: token) { await AppleHealthExport.shared.removeWorkout(key: key) }
             edit(bubble) { $0.undo[draftId] = nil; $0.decided[draftId] = L10n.tr("Vráceno") }
             await model.refreshTraining(); await model.refresh()
             if action.changesFood { await model.refreshFood() }
@@ -1125,7 +1133,7 @@ struct ActionCard: View {
     /// a card over more days or one that deletes needs the tap.
     static func yesConfirms(_ a: CoachAction, today: String = AppModel.localDate(Date())) -> Bool {
         guard a.draftId != nil, a.date == today else { return false }
-        return !["rest", "activity_delete", "activity_merge", "food_delete", "fluid_delete", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
+        return !["rest", "activity_delete", "activity_merge", "food_delete", "fluid_delete", "activity_log", "plan", "week_sport", "other_event", "status", "plan_around"].contains(a.type)
     }
 
     private var health: Bool { action.type == "status" || action.type == "plan_around" }
@@ -1244,7 +1252,7 @@ struct ActionCard: View {
         // "Add for Saturday" (the concept's card).
         if action.type == "other_event", let date = action.date { return OtherSports.addFor(date) }
         // The food and drink cards say what they do (the concept's mockup).
-        if let title = ["food_delete": "Smazat", "food_move": "Přesunout", "food_portion": "Upravit", "fluid_add": "Zapsat", "fluid_delete": "Smazat"][action.type] { return L10n.tr(title) }
+        if let title = ["food_delete": "Smazat", "food_move": "Přesunout", "food_portion": "Upravit", "fluid_add": "Zapsat", "fluid_delete": "Smazat", "activity_log": "Zapsat"][action.type] { return L10n.tr(title) }
         guard action.type == "status" else { return L10n.tr("Potvrdit") }
         switch action.status {
         case "sick": return L10n.tr("Nastavit Nemoc")

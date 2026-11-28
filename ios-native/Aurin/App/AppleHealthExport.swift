@@ -267,6 +267,17 @@ final class AppleHealthExport {
         }
     }
 
+    /// A workout Aurin wrote (saveWorkout) taken away again: the coach's Zapsat
+    /// trénink undone with Vrátit or "vrať to".
+    func removeWorkout(key: String) async {
+        guard writes, allowed(HKObjectType.workoutType()) else { return }
+        let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: [Self.syncPrefix + "workout:" + key])
+        _ = try? await store.deleteObjects(of: HKObjectType.workoutType(), predicate: predicate)
+    }
+
+    /// A time the server sent (toISOString).
+    static func serverDate(_ value: String?) -> Date? { value.flatMap { serverTime.date(from: $0) } }
+
     // MARK: Workouts from other apps
 
     @ObservationIgnored private var forwarding = false
