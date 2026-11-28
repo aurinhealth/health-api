@@ -515,7 +515,12 @@ struct WeekPlanSettingsView: View {
             Button {
                 if plannedAhead { confirmGenerate = true } else { Task { await close(generate: true) } }
             } label: {
-                Text(verbatim: L10n.tr("Vygenerovat tréninky")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                // While the settings save, the button shows it is working (Petr 2026-11-28: nothing moved for seconds).
+                Group {
+                    if saving { ProgressView().tint(Palette.onButton) } else {
+                        Text(verbatim: L10n.tr("Vygenerovat tréninky")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    }
+                }
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(Palette.button, in: Capsule())
             }
