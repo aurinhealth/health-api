@@ -339,12 +339,19 @@ struct RecipeDetailView: View {
         .cardSurface(cornerRadius: 22)
     }
 
+    /// A number stays on the line of what follows it ("1.5 l", "20 cm"), and a
+    /// range stays whole ("2–3 minutes").
+    static func keepUnits(_ text: String) -> String {
+        text.replacing(/(\d) /) { "\($0.1)\u{00A0}" }
+            .replacing(/(\d)–(\d)/) { "\($0.1)–\u{2060}\($0.2)" }
+    }
+
     @ViewBuilder private func content(_ recipe: LibraryRecipeDetail) -> some View {
         let items = (recipe.components ?? []).flatMap { $0.items ?? [] }.compactMap(\.display)
         SectionLabel(text: "Suroviny").padding(.top, 26).padding(.horizontal, 4)
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                Text(item).font(Typo.body).foregroundStyle(Palette.ink).frame(maxWidth: .infinity, alignment: .leading)
+                Text(Self.keepUnits(item)).font(Typo.body).foregroundStyle(Palette.ink).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 11)
                 if index < items.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
             }
@@ -363,7 +370,7 @@ struct RecipeDetailView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if let title = phase.title { Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.ink) }
                     ForEach(Array((phase.steps ?? []).enumerated()), id: \.offset) { _, step in
-                        Text(step).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                        Text(Self.keepUnits(step)).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
