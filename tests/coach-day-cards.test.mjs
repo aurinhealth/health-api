@@ -24,7 +24,7 @@ function setup() {
 test("the morning answer only when it changes; the effort of a done activity of today or yesterday", () => {
   const a = checkFeeling({ feeling: "tired" }, context, "Píšeš, že jsi unavený.", DAY)[0];
   assert.deepEqual([a.feeling, a.from, a.date], ["tired", "normal", DAY]);
-  assert.equal(actionSummary(a), "Ranní odpověď: Unavený místo Normální");
+  assert.equal(actionSummary(a), "Ranní odpověď: Unavený místo Normál");
   assert.equal(checkFeeling({ feeling: "normal" }, context, "r", DAY).length, 0, "the same answer");
   assert.equal(checkFeeling({ feeling: "sick" }, context, "r", DAY).length, 0, "never sick");
   const e = checkEffort({ activityId: ride.id, rpe: 8 }, context, "Řekl jsi 8 z 10.", DAY)[0];

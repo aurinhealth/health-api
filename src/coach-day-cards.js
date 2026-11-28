@@ -10,7 +10,7 @@ import { L } from './lang.js';
 import { getCheckin, saveCheckin } from './morning-checkin.js';
 
 const FEELINGS = ['fresh', 'normal', 'tired'];
-const NAMES = () => L({ fresh: 'Svěží', normal: 'Normální', tired: 'Unavený' }, { fresh: 'Fresh', normal: 'Normal', tired: 'Tired' });
+const NAMES = () => L({ fresh: 'Svěží', normal: 'Normál', tired: 'Unavený' }, { fresh: 'Fresh', normal: 'Normal', tired: 'Tired' });
 const addDays = (date, n) => new Date(Date.parse(date + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10);
 
 export const feelingName = feeling => NAMES()[feeling] || feeling;
