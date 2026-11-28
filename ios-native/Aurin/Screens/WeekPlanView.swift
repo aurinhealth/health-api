@@ -224,8 +224,9 @@ struct WeekPlanView: View {
         .sheet(isPresented: $settings) {
             WeekPlanSettingsView(monday: monday, today: today, calendar: model.calendar) { days in
                 Task {
-                    await reload()
-                    if let days { generateDays = days.isEmpty ? nil : days; generateFrom = nil; await runGenerate() }
+                    // Generate shows its building state at once; the reload runs under it (Petr 2026-11-28:
+                    // the old week stayed for seconds before anything started).
+                    if let days { generateDays = days.isEmpty ? nil : days; generateFrom = nil; await runGenerate(reloadFirst: true) } else { await reload() }
                 }
             }
         }
@@ -648,9 +649,11 @@ struct WeekPlanView: View {
         }
     }
 
-    private func runGenerate() async {
+    private func runGenerate(reloadFirst: Bool = false) async {
         guard !model.demo else { return }
         withMotion(.snappy) { generating = true; generateFailed = false; opened = nil; adding = nil; affects = nil }
+        // The saved settings and the calendar Generate replaces from.
+        if reloadFirst { await reload() }
         let result = await WeekPlanGenerator.replan(model, weeks: [monday, nextMonday], today: today, from: generateFrom, days: generateDays, calendar: model.calendar)
         await reload()
         withMotion(.snappy) {
