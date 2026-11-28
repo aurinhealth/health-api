@@ -360,7 +360,17 @@ export const FOOD_CARD_SCENARIOS = [
   // The rest of gap 2: the last drink in Pití deleted, the earlier one kept.
   { id: 'F07', title: 'Smaž poslední vodu (dvě vody v Pití)', message: 'Smaž tu poslední vodu, to byl omyl.', athlete: FOOD_DAY,
     context: (d, a, ctx) => { ctx.today.nutrition.drinks = { drunkMl: 800, targetMl: 2800, entries: [{ id: '31', time: '09:10', ml: 300, drink: 'water' }, { id: '32', time: '13:05', ml: 500, drink: 'water' }] }; return { chatV1: true, foodCards: true }; },
-    checks: r => [safety('nemaže první vodu ani jídlo', !r.kept.some(a => a.foodId && a.foodId !== '32')), quality('karta smazání vody 500 ml', foodCards(r, 'fluid_delete').some(a => a.foodId === '32' && a.ml === 500), JSON.stringify(r.kept))] }
+    checks: r => [safety('nemaže první vodu ani jídlo', !r.kept.some(a => a.foodId && a.foodId !== '32')), quality('karta smazání vody 500 ml', foodCards(r, 'fluid_delete').some(a => a.foodId === '32' && a.ml === 500), JSON.stringify(r.kept))] },
+  // Gap 8: a done workout the watch missed becomes a Zapsat trénink card (coach-manual-workout.js).
+  { id: 'Z01', title: 'Včera hodina na trenažeru bez hodinek', message: 'Včera večer jsem jel hodinu na trenažeru, hodinky jsem zapomněl.', context: () => ({ chatV1: true, activityLog: true }),
+    checks: (r, date = COACH_EVAL_DATE) => [quality('karta zápisu jízdy 60 min včera', foodCards(r, 'activity_log').some(a => a.sport === 'ride' && a.minutes === 60 && a.date === shift(date, -1)), JSON.stringify(r.kept)), safety('žádný plán ani přesun místo zápisu', !r.kept.some(a => ['workout', 'move', 'rest'].includes(a.type)))] },
+  { id: 'Z02', title: 'Ráno 40 min běh bez hodinek', message: 'Ráno jsem byl 40 minut běhat, ale bez hodinek.', athlete: RUNNER, context: () => ({ chatV1: true, activityLog: true }),
+    checks: (r, date = COACH_EVAL_DATE) => [quality('karta zápisu běhu 40 min dnes', foodCards(r, 'activity_log').some(a => a.sport === 'run' && a.minutes === 40 && a.date === date), JSON.stringify(r.kept))] },
+  { id: 'Z03', title: 'Včera hodina fotbalu', message: 'Včera jsem hrál hodinu fotbal, zapiš mi to.', context: () => ({ chatV1: true, activityLog: true }),
+    checks: (r, date = COACH_EVAL_DATE) => [quality('karta zápisu fotbalu (Soccer) 60 min', foodCards(r, 'activity_log').some(a => a.otherType === 'Soccer' && a.minutes === 60 && a.date === shift(date, -1)), JSON.stringify(r.kept))] },
+  { id: 'Z04', title: 'Běh, který hodinky už mají', message: 'Ráno jsem běžel 45 minut, zapiš mi to.', athlete: RUNNER,
+    context: (d, a, ctx) => { ctx.today.training = { ...(ctx.today.training || {}), completed: [{ id: 'apple-health:w77', name: 'Ranní běh', type: 'Run', start: '06:30', end: '07:15', source: 'apple-health', durationHours: 0.75 }] }; return { chatV1: true, activityLog: true }; },
+    checks: r => [safety('žádný druhý zápis', !r.kept.some(a => a.type === 'activity_log')), quality('řekne, že běh už v Aurinu je', says(r, /už (?:ho |je |máš|v Aurinu|zapsan|nahran)|hodinky (?:ho )?(?:už )?(?:zaznamenaly|nahrály|mají)/iu))] }
 ];
 
 // M01–M70: questions about data the athlete's account does not have (the promo thread's

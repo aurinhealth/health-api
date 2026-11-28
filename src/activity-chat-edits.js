@@ -17,7 +17,7 @@
 import { L } from './lang.js';
 import { localDateTime } from './user-time.js';
 import { googleExerciseActivity } from './index.js';
-import { DELETED } from './activity-edits.js';
+import { DELETED, deleteActivity } from './activity-edits.js';
 
 // The longest pause between two parts of one session.
 export const MERGE_GAP_MINUTES = 90;
@@ -209,6 +209,12 @@ export async function undoActivityChange(env, token) {
     const { undoFoodChange } = await import('./coach-food-cards.js');
     const done = await undoFoodChange(env, change, fail).catch(async error => { await release(); throw error; });
     return { status: 'ok', kind: change.kind, proposal: change.proposal || null, ...done };
+  }
+  // A workout the coach logged (coach-manual-workout.js): gone from Aurin and
+  // Intervals.icu; the app takes its Apple Health copy away by activityKey.
+  if (change.kind === 'manual') {
+    const done = await deleteActivity(env, { id: change.id }).catch(async error => { await release(); throw error; });
+    return { status: 'ok', kind: 'manual', proposal: change.proposal || null, activityKey: change.activityKey || null, removed: done.removed };
   }
   if (change.kind === 'kcal') {
     // Only while the activity is still as the change left it (a sync may have rewritten it).
