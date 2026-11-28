@@ -51,7 +51,9 @@ final class APIClient: @unchecked Sendable {
     /// 2: the coach's gym_add and gym_remove cards (src/coach-actions.js).
     /// 3: the redesign's coach cards, "Plan around your knee?" (plan_around).
     /// 4: the coach's card adding an own practice or match to a day (other_event).
-    static let apiLevel = 4
+    /// 5: the coach's food and drink cards (food_delete, food_move, food_portion, fluid_add).
+    /// 6: the coach's Zapsat trénink card (activity_log); the app writes it to Apple Health and takes it back on Vrátit.
+    static let apiLevel = 6
 
     /// An AI feature answered 402: AppModel shows the Aurin Pro offer.
     var onSubscriptionRequired: (@Sendable () -> Void)?
@@ -197,12 +199,12 @@ final class APIClient: @unchecked Sendable {
     /// The server's line ("Návrh potvrzen.", "Smazáno") and, for a change of a
     /// done activity, the token "Vrátit" sends back.
     /// `sports`: on "Plan around your knee?", the sports that rest (the card's ticked chips).
-    func decideCoachAction(draftId: Int, confirm: Bool, sports: [String]? = nil) async throws -> (message: String?, undo: String?) {
-        struct Response: Decodable { let message: String?; let undo: String? }
+    func decideCoachAction(draftId: Int, confirm: Bool, sports: [String]? = nil) async throws -> (message: String?, undo: String?, logged: CoachLoggedWorkout?) {
+        struct Response: Decodable { let message: String?; let undo: String?; let result: CoachLoggedWorkout? }
         var body: JSONObject = ["draftId": .number(Double(draftId)), "decision": .string(confirm ? "confirm" : "reject")]
         if let sports { body["sports"] = .array(sports.map { .string($0) }) }
         let r: Response = try await send("/app/api/assistant/action", method: "POST", body: body)
-        return (r.message, r.undo)
+        return (r.message, r.undo, r.result?.activityKey == nil ? nil : r.result)
     }
 
     /// Kratší, Delší, Lehčí, Těžší, Jiný den ("day" with `date`) or "undo" on a
@@ -216,8 +218,12 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// "Vrátit" under a confirmed delete, merge or time change of a done activity.
-    func undoActivityChange(token: String) async throws {
-        let _: JSONValue = try await send("/app/api/activity/undo", method: "POST", body: ["token": JSONValue.string(token)])
+    /// Returns the Apple Health key of a workout the coach logged, whose copy goes too.
+    @discardableResult
+    func undoActivityChange(token: String) async throws -> String? {
+        struct Response: Decodable { let activityKey: String? }
+        let r: Response = try await send("/app/api/activity/undo", method: "POST", body: ["token": JSONValue.string(token)])
+        return r.activityKey
     }
 
     func chats() async throws -> [ChatSummary] {

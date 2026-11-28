@@ -70,14 +70,17 @@ function withKcal(row, payload, kcal) {
 }
 
 // POST /app/api/activity/kcal { id, kcal }: kcal null goes back to the device's.
-export async function setActivityKcal(env, { id, kcal } = {}) {
+// undo (the coach's card): the change is kept for "Vrátit" with these fields
+// (chatId and the card, so the chat's "vrať to" finds it, activity-chat-edits.js).
+export async function setActivityKcal(env, { id, kcal } = {}, { undo = null } = {}) {
   const value = kcal == null || kcal === '' ? null : Math.round(Number(kcal));
   if (value != null && !(value > 0 && value <= 6000)) throw fail(L('Zadej kalorie mezi 1 a 6000.', 'Enter calories between 1 and 6000.'));
   const row = await activityRow(env, id);
   if (!row) throw notFound();
   const payload = withKcal(row, parse(row.payload_json), value);
+  const token = undo ? await (await import('./activity-chat-edits.js')).rememberChange(env, { kind: 'kcal', id: row.id, before: row.payload_json, after: JSON.stringify(payload), ...undo }) : null;
   await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
-  return { status: 'ok', id: row.external_id, kcal: value ?? deviceKcal(row, payload), device: deviceKcal(row, payload), edited: value != null };
+  return { status: 'ok', id: row.external_id, kcal: value ?? deviceKcal(row, payload), device: deviceKcal(row, payload), edited: value != null, ...(token ? { undo: token } : {}) };
 }
 
 // The Intervals.icu id the app's own copy of a typed-in workout has there.

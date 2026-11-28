@@ -154,7 +154,11 @@ enum WatchDemo {
         squat += sets(8, 4, 80, 3, "3", rest: 150)
         squat[1].done = true
         squat[1].intensity = "M"
-        return WatchGym(
+        // -superset: the squat and the bench press as superset A with last
+        // time's numbers, the longest set screen (CI screenshot 4-gym-superset).
+        let superset = flag("-superset")
+        if superset { for i in squat.indices where !squat[i].warmup { squat[i].last = WatchGym.Last(kg: 77.5, reps: 3) } }
+        var gym = WatchGym(
             date: day(0), title: tr("Celé tělo", "Full body"), minutes: 45, restExercises: 120,
             exercises: [
                 WatchGym.Exercise(name: "Dřep", shown: tr("Dřep", "Squat"), lifts: squat),
@@ -162,5 +166,7 @@ enum WatchDemo {
                 WatchGym.Exercise(name: "Přítahy", shown: tr("Přítahy", "Rows"), lifts: sets(16, 4, 50, 8, "8", rest: 90)),
                 WatchGym.Exercise(name: "Tlaky s jednoručkami nad hlavu", shown: tr("Tlaky s jednoručkami nad hlavu", "DB shoulder press"), lifts: sets(20, 3, 16, 10, "10", rest: 75)),
                 WatchGym.Exercise(name: "Pallof press", shown: "Pallof press", lifts: sets(23, 3, 10, 10, "10", rest: 60))])
+        if superset { gym.exercises[0].superset = "A"; gym.exercises[1].superset = "A" }
+        return gym
     }
 }

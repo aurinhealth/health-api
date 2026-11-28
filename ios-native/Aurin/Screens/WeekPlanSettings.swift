@@ -201,7 +201,9 @@ struct WeekPlanSettingsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(verbatim: L10n.tr("Sporty")).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
-                Text(verbatim: restLine ?? L10n.tr("Vybere je kouč")).font(Typo.caption).foregroundStyle(Palette.muted)
+                if let caption = restLine ?? (coachPicks ? L10n.tr("Vybere je kouč") : nil) {
+                    Text(verbatim: caption).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
             }
             .padding(.horizontal, 4)
             VStack(alignment: .leading, spacing: 14) {
@@ -216,6 +218,14 @@ struct WeekPlanSettingsView: View {
             }
             .padding(16)
             .cardSurface(cornerRadius: 22)
+        }
+    }
+
+    /// A day from today left to the coach (no sport, not rest): only then "Coach picks them" (620: shown with every day set).
+    private var coachPicks: Bool {
+        weeks.contains { week in
+            let choice = choices[week] ?? WeekPlanChoice(prefs: nil)
+            return (0..<7).contains { ISODay.shift(week, $0) >= today && choice.days[$0].isEmpty && !choice.rest.contains($0) }
         }
     }
 
@@ -485,8 +495,10 @@ struct WeekPlanSettingsView: View {
                         .tint(Palette.ink)
                         .accessibilityLabel(Text(verbatim: FreeTime.weekdayNames[i]))
                         .accessibilityValue(Text(verbatim: WeekPlanSettingsText.day(usual[i])))
+                    // One line: "2 h 30 min" broke under the slider at 54 pt (620).
                     Text(verbatim: WeekPlanSettingsText.day(usual[i])).font(Typo.number(15)).foregroundStyle(Palette.ink)
-                        .frame(width: 54, alignment: .trailing)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(width: 66, alignment: .trailing)
                         .accessibilityHidden(true)
                 }
             }
@@ -503,7 +515,12 @@ struct WeekPlanSettingsView: View {
             Button {
                 if plannedAhead { confirmGenerate = true } else { Task { await close(generate: true) } }
             } label: {
-                Text(verbatim: L10n.tr("Vygenerovat tréninky")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                // While the settings save, the button shows it is working (Petr 2026-11-28: nothing moved for seconds).
+                Group {
+                    if saving { ProgressView().tint(Palette.onButton) } else {
+                        Text(verbatim: L10n.tr("Vygenerovat tréninky")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    }
+                }
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(Palette.button, in: Capsule())
             }

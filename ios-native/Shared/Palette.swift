@@ -192,12 +192,15 @@ struct ScreenBackground: View {
     var glow: Color = Palette.Glow.today
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Palette.background
-            RadialGradient(colors: [glow, glow.opacity(0)], center: .top, startRadius: 0, endRadius: 520)
-                .frame(height: 620)
-                .offset(y: -60)
-        }
-        .ignoresSafeArea()
+        // The glow in an overlay: as a ZStack child its 620 pt asked the
+        // screen for that height, so with the keyboard up (less room) the
+        // whole screen moved up under the status bar (IMG_0533).
+        Palette.background
+            .overlay(alignment: .top) {
+                RadialGradient(colors: [glow, glow.opacity(0)], center: .top, startRadius: 0, endRadius: 520)
+                    .frame(height: 620)
+                    .offset(y: -60)
+            }
+            .ignoresSafeArea()
     }
 }

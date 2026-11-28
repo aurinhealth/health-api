@@ -366,6 +366,7 @@ jobs:
             shoot $dir 2-training "$@" -page training -week
             shoot $dir 3-food "$@" -page food
             shoot $dir 4-gym "$@" -gym
+            shoot $dir 4-gym-superset "$@" -gym -superset
             shoot $dir 5-rest "$@" -gym -rest
             shoot $dir 6-face "$@" -face
             shoot $dir 7-sleep "$@" -open sleep

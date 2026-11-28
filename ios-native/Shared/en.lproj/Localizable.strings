@@ -4670,8 +4670,10 @@
 "Jede dál: %@." = "Keeps going: %@.";
 "Vyber, co si odpočine." = "Pick what pauses.";
 "od %@ bpm" = "from %@ bpm";
+"do %@ bpm" = "up to %@ bpm";
 "%@ až %@ bpm" = "%1$@ to %2$@ bpm";
 "Pauza, zbývá %@" = "Rest, %@ left";
+"Na aktuální sérii" = "Go to the current set";
 "Pauza podle plánu %@" = "Planned rest %@";
 "Zkrátit pauzu o 15 sekund" = "Shorten the rest by 15 seconds";
 "Prodloužit pauzu o 15 sekund" = "Add 15 seconds to the rest";
@@ -5420,6 +5422,10 @@
 "Přidat na pátek" = "Add for Friday";
 "Přidat na sobotu" = "Add for Saturday";
 "Přidat na neděli" = "Add for Sunday";
+"Smazat z jídla" = "Delete from food";
+"Přesunout do %@" = "Move to %@";
+"Upravit porci" = "Change the portion";
+"Smazat z pití" = "Delete from drinks";
 
 /* Recipe library (RecipeLibrary.swift) */
 "Hledat recept" = "Search recipes";

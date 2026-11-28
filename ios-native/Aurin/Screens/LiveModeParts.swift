@@ -67,10 +67,12 @@ struct LiveStatsPanel: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "123 to 139 bpm", the last zone "from 170 bpm".
+    /// "123 to 139 bpm", zone 1 "up to 122 bpm" (no lower bound, as in the
+    /// zone settings), the last zone "from 170 bpm".
     static func range(_ zone: Int, lows: [Double]) -> String {
         let low = Fmt.int(lows[zone])
         guard let next = lows[safe: zone + 1] else { return L10n.f("od %@ bpm", low) }
+        if lows[zone] <= 0 { return L10n.f("do %@ bpm", Fmt.int(next - 1)) }
         return L10n.f("%@ až %@ bpm", low, Fmt.int(next - 1))
     }
 
@@ -161,7 +163,10 @@ struct LiveRestGap: View {
         let running = fill != nil
         return HStack(spacing: 8) {
             hair(fill: fill.map { min(1, $0 * 2) })
+            // Before the hairlines: the HStack would otherwise give the text a
+            // third of the row and cut "2:30 before the next exercise".
             Text(verbatim: text).font(Typo.small.weight(strong ? .semibold : .medium)).monospacedDigit()
+                .lineLimit(1).layoutPriority(1)
                 .foregroundStyle(running ? Palette.onAccent : strong ? Palette.ink : Palette.muted)
                 .padding(.horizontal, strong ? 10 : 0).padding(.vertical, running ? 3 : 1)
                 .background(running ? Palette.green : strong ? Palette.track : .clear, in: Capsule())
@@ -293,15 +298,12 @@ struct LiveSetCard<Table: View>: View {
 
     private func pair(_ left: String?, _ leftAction: @escaping () -> Void, _ right: String, _ rightAction: @escaping () -> Void) -> some View {
         HStack(spacing: 0) {
-            Group {
-                if let left {
-                    Button(action: leftAction) { label(left) }.buttonStyle(.plain)
-                } else {
-                    Color.clear
-                }
+            // Without a left button (no sides to pick) the right one takes the
+            // whole row: no divider beside an empty half (IMG_0529).
+            if let left {
+                Button(action: leftAction) { label(left) }.buttonStyle(.plain).frame(maxWidth: .infinity)
+                Rectangle().fill(Palette.hairline).frame(width: 1, height: 16)
             }
-            .frame(maxWidth: .infinity)
-            Rectangle().fill(Palette.hairline).frame(width: 1, height: 16)
             Button(action: rightAction) { label(right) }.buttonStyle(.plain).frame(maxWidth: .infinity)
         }
         .frame(height: 44)

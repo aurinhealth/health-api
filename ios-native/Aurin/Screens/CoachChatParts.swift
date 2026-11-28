@@ -235,6 +235,13 @@ struct CoachChangeRow: Equatable {
         case "activity_kcal":
             guard let to = a.kcal else { return [] }
             return [CoachChangeRow(name: L10n.tr("Kalorie"), now: a.fromKcal.map { Fmt.int($0) } ?? "–", new: Fmt.int(to))]
+        case "food_move":
+            guard let from = a.fromMealName, let to = a.toMealName else { return [] }
+            return [CoachChangeRow(name: L10n.tr("Jídlo"), now: from, new: to)]
+        case "food_portion":
+            guard let from = a.fromAmount, let to = a.toAmount else { return [] }
+            let kcal = a.fromKcal.flatMap { f in a.kcal.map { CoachChangeRow(name: L10n.tr("Kalorie"), now: Fmt.int(f), new: Fmt.int($0)) } }
+            return [CoachChangeRow(name: L10n.tr("Porce"), now: from, new: to)] + (kcal.map { [$0] } ?? [])
         case "gym_swap":
             guard let from = a.fromExercise, let to = a.toExercise else { return [] }
             return [CoachChangeRow(name: L10n.tr("Cvik"), now: from, new: to)]

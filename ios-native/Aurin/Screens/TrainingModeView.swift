@@ -113,6 +113,9 @@ struct TrainingModeView: View {
     @State private var minimizing = false
     /// An exercise other than the one under way opened in place (concept part 4).
     @State private var viewing: Int?
+    /// Bumped to bring the set at hand to the middle of the list: Set done on
+    /// the phone, another exercise coming on, a tap on the header (Petr 2026-11-27).
+    @State private var focusTick = 0
     /// The green "3 done" row and the "6 upcoming" row unfolded.
     @State private var showDone = false
     @State private var showUpcoming = false
@@ -250,9 +253,15 @@ struct TrainingModeView: View {
                             .animation(.easeInOut(duration: 0.2), value: paused)
                         }
                         .scrollIndicators(.hidden)
-                        // The exercise under way goes under the panel when it changes.
-                        .onChange(of: index) { _, _ in
-                            withMotion(.snappy) { reader.scrollTo(Self.runningID, anchor: .top) }
+                        // The set at hand to the middle: one rule for Set done, the next
+                        // exercise and the header's tap. A frame later, once a closed
+                        // card or the keyboard has left the layout.
+                        .onChange(of: index) { _, _ in focusTick += 1 }
+                        .onChange(of: focusTick) { _, _ in
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(60))
+                                withMotion(.snappy) { reader.scrollTo(Self.atHandID, anchor: .center) }
+                            }
                         }
                     }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -490,6 +499,9 @@ struct TrainingModeView: View {
                         editHead(draft)
                     } else {
                         headTitleBlock(day)
+                            .contentShape(Rectangle())
+                            .onTapGesture { backToSet() }
+                            .accessibilityAction(named: L10n.tr("Na aktuální sérii")) { backToSet() }
                     }
                     Spacer(minLength: 4)
                     if let draft = editingPart, draft.part == activePart {
@@ -531,6 +543,9 @@ struct TrainingModeView: View {
             }
             if let day, !finishedSession, started, day.exercises.count > 1 {
                 ExerciseSegments(exercises: day.exercises, current: activePart == nil ? index : nil)
+                    // The thin dashes get a finger's height (44 pt) to tap.
+                    .contentShape(Rectangle().inset(by: -20))
+                    .onTapGesture { backToSet() }
             }
         }
     }
@@ -647,6 +662,18 @@ struct TrainingModeView: View {
 
     /// Where the exercise under way is in the list, to scroll it under the panel.
     static let runningID = "running"
+    /// The row of the set at hand (one at a time).
+    static let atHandID = "atHand"
+
+    /// A tap on the header: the keyboard down (what was typed stays), another
+    /// open exercise closed, and the set at hand to the middle. Nothing while a
+    /// part runs, before the start or with every set done.
+    private func backToSet() {
+        guard activePart == nil, started, !waiting, atHand != nil else { return }
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        if viewing != nil { withMotion(.snappy) { viewing = nil } }
+        focusTick += 1
+    }
 
     /// The whole workout on one screen (concept part 4): what is done folded
     /// into one green row on top, the exercise under way open, its superset
@@ -945,6 +972,7 @@ struct TrainingModeView: View {
                 // Swiped left: just this set goes away (a done one, a warm-up too).
                 setRow(s, exercise, current: set, last: last, offset: offset)
                     .modifier(SwipeToDelete(enabled: !saving) { Task { await deleteSet(s) } })
+                    .id(s.row == set?.row ? Self.atHandID : "set\(s.row)")
                 if s.row == set?.row, let change = adjusted(s, in: exercise) {
                     AdjustmentNote(text: change.text, keep: change.keep) { keep(change.from, in: exercise) }
                         .padding(.horizontal, 8).padding(.vertical, 2)
@@ -955,6 +983,8 @@ struct TrainingModeView: View {
                 gap(after: s, in: exercise, offset: offset)
             }
         }
+        // Fixed columns: past xLarge the "Last time" column is left too narrow on a 402 pt iPhone.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .padding(.horizontal, 4)
     }
 
@@ -3001,6 +3031,8 @@ struct TrainingModeView: View {
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        // Set done on the phone: the next set to the middle (a tick on the watch moves nothing here).
+        focusTick += 1
         // A set ticked in the table before "Začít trénink" starts the workout too.
         if !started { Task { await start() } }
         // The last set of the exercise: on to the next one after a longer rest.
