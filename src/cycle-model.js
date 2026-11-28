@@ -254,6 +254,24 @@ export function cycleForCoach(input) {
   return out;
 }
 
+// The pill days of the last week up to `date` and whether each pill was
+// logged ("HH:MM", "taken" or null), for the coach chat's cards that log a pill
+// or take a logged one back (coach-actions.js pill_log, pill_clear), only with
+// the cycle shared (entrypoint.js); no other AI text gets them. Pause days and
+// days before the pack are left out; null unless the contraception is the pill.
+export function pillsForCoach(input) {
+  const settings = normalizeCycleSettings(input && input.settings);
+  const date = input && input.date;
+  if (!settings.enabled || settings.contraception !== "pill" || !isDate(date)) return null;
+  const byDate = new Map((input.days || []).map(normalizeCycleDay).filter(d => d.date).map(d => [d.date, d]));
+  const out = [];
+  for (let i = 6; i >= 0; i--) {
+    const day = shift(date, -i), pill = pillState(settings, day, null);
+    if (pill && !pill.pause) out.push({ date: day, number: pill.number, taken: byDate.get(day)?.pill || null });
+  }
+  return out.length ? out : null;
+}
+
 // The rows the readiness reads, marked with the phase each day was in (only
 // for a natural cycle), so the luteal rise of resting heart rate and wrist
 // temperature is compared with the athlete's own luteal days

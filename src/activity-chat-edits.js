@@ -101,6 +101,23 @@ export async function hideActivity(env, id) {
   return { status: 'ok', id: row.external_id, undo };
 }
 
+// "Ten prášek jsem zapsala omylem": the day's pill logged or taken back
+// (cycle-store.js), with a token that puts the record back as it was.
+export async function setPillByCoach(env, date, taken) {
+  const { listCycleDays, saveCycleDay, getCycleSettings } = await import('./cycle-store.js');
+  const { localNow } = await import('./user-time.js');
+  // As the card was proposed: the pill shared with the coach, the day still unlogged (log) or logged (clear).
+  const settings = await getCycleSettings(env.DB);
+  if (!settings.enabled || !settings.shareWithCoach || settings.contraception !== 'pill') throw fail(L('Prášek už se v Cyklu nesleduje.', 'The pill is no longer tracked in Cycle.'));
+  const before = (await listCycleDays(env.DB, date, date))[0]?.pill ?? null;
+  if (taken === (before != null)) throw fail(L('Záznam prášku se mezitím změnil. Požádej o nový návrh.', 'The pill record has changed in the meantime. Ask for a new proposal.'));
+  // Today's pill at the time now, as Vzato logs it; an earlier day without a time.
+  const now = localNow();
+  const day = await saveCycleDay(env.DB, { date, pill: !taken ? null : now.slice(0, 10) === date ? now.slice(11, 16) : true });
+  const undo = await rememberChange(env, { kind: 'pill', date, before, after: day.pill ?? null });
+  return { status: 'ok', date, pill: day.pill ?? null, undo };
+}
+
 // Two parts of one session become one activity in Aurin.
 export async function mergeActivities(env, ids) {
   const [first, second] = await Promise.all((ids || []).slice(0, 2).map(id => rowOf(env, id)));
@@ -169,6 +186,14 @@ export async function undoActivityChange(env, token) {
     }
     await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
     return { status: 'ok', kind: 'gym_plan', date: change.date, values: change.before, proposal: change.proposal || null };
+  }
+  // The pill record as it was, only while it is still as the change left it.
+  if (change.kind === 'pill') {
+    const { listCycleDays, saveCycleDay } = await import('./cycle-store.js');
+    if (((await listCycleDays(env.DB, change.date, change.date))[0]?.pill ?? null) !== change.after) throw fail(L('Záznam se od té změny upravil, vrátit ho už nejde.', 'The record has changed since, it can no longer be undone.'));
+    await saveCycleDay(env.DB, { date: change.date, pill: change.before === 'taken' ? true : change.before });
+    await env.DB.prepare('DELETE FROM activity_undo WHERE user_id = ? AND token = ?').bind(env.USER_ID, String(token)).run();
+    return { status: 'ok', kind: 'pill', date: change.date };
   }
   // A planned workout of the app (local-workouts.js) back where it was, only
   // while it is still as the change left it and its day has not passed.
