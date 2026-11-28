@@ -403,7 +403,7 @@ struct ChromeButton: View {
     var enabled = true
     var tint: Color? = nil
     /// The tabs' pinned bar uses the header capsule's height (HeaderCapsule).
-    var height: CGFloat = 40
+    var height: CGFloat = 44
     var action: () -> Void
 
     var body: some View {
@@ -432,10 +432,9 @@ struct ChromeButton: View {
                 Image(systemName: systemImage)
                     .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(tint ?? Palette.ink)
-                    .frame(width: 40, height: 40)
+                    // 44 pt, Apple's size for a bar button (Petr 2026-11-28; was 40).
+                    .frame(width: 44, height: 44)
                     .contentShape(Circle())
-                    // 44 pt to tap around the 40 pt glass disc (617 #35).
-                    .tapTarget(width: 40, height: 40)
             }
             .buttonStyle(.plain)
             .chromeGlass(in: Circle())
@@ -643,7 +642,7 @@ private struct PageHeader: ViewModifier {
                                  tint: trailing.tint, action: trailing.action)
                 } else if extra == nil {
                     // Balances the back button; "Vybrat" alone sits at the edge itself.
-                    Color.clear.frame(width: 40, height: 40)
+                    Color.clear.frame(width: 44, height: 44)
                 }
             }
             .frame(minHeight: 44)

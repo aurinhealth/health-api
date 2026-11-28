@@ -22,8 +22,8 @@ struct CoachEntry: View {
     var menu: AnyView? = nil
     /// The first subpage opened shows "Ask Coach about this" once.
     var hint = true
-    /// As high as the back button (ChromeButton); 44 pt to tap.
-    private let height: CGFloat = 40
+    /// As high as the back button (ChromeButton): 44 pt.
+    private let height: CGFloat = 44
 
     /// Optional: screen renders in the tests draw pages without the app.
     @Environment(AppModel.self) private var model: AppModel?
