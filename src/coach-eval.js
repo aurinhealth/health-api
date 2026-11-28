@@ -344,18 +344,18 @@ const FOOD_DAY = { nutrition: { calorieTarget: 2600, macros: { protein_g: 150, c
 const foodCards = (r, type) => r.kept.filter(a => a.type === type);
 const onlyFood = (r, ids) => r.kept.filter(a => a.foodId).every(a => ids.includes(a.foodId));
 export const FOOD_CARD_SCENARIOS = [
-  { id: 'F01', title: 'Jen půlka pizzy (porce receptu)', message: 'Byla to jen půlka té pizzy.', athlete: FOOD_DAY,
+  { id: 'F01', title: 'Jen půlka pizzy (porce receptu)', message: 'Byla to jen půlka té pizzy.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('mění jen pizzu', onlyFood(r, ['13'])), quality('karta porce 0,5', foodCards(r, 'food_portion').some(a => a.foodId === '13' && a.amount === 0.5), JSON.stringify(r.kept))] },
-  { id: 'F02', title: 'Celý oběd byl večeře (dvě jídla)', message: 'To nebyl oběd, ale večeře.', athlete: FOOD_DAY,
+  { id: 'F02', title: 'Celý oběd byl večeře (dvě jídla)', message: 'To nebyl oběd, ale večeře.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => { const moved = foodCards(r, 'food_move'); return [safety('nesahá na jiná jídla než oběd', onlyFood(r, ['13', '14'])),
       quality('obě jídla oběda do večeře, nebo se zeptá které', moved.length === 2 && moved.every(a => a.toMeal === 'dinner') || !moved.length && says(r, /\?/), JSON.stringify(moved))]; } },
-  { id: 'F03', title: 'Smaž kávu ze snídaně (dvě jídla ve snídani)', message: 'Smaž tu kávu ze snídaně.', athlete: FOOD_DAY,
+  { id: 'F03', title: 'Smaž kávu ze snídaně (dvě jídla ve snídani)', message: 'Smaž tu kávu ze snídaně.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('nemaže kaši ani nic jiného', onlyFood(r, ['11'])), quality('karta smazání kávy', foodCards(r, 'food_delete').some(a => a.foodId === '11'))] },
-  { id: 'F04', title: 'Dvě sklenice vody', message: 'Vypil jsem 2 sklenice vody.', athlete: FOOD_DAY,
+  { id: 'F04', title: 'Dvě sklenice vody', message: 'Vypil jsem 2 sklenice vody.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('žádná karta jídla', !r.kept.some(a => a.foodId)), quality('karta pití: voda 500 ml', foodCards(r, 'fluid_add').some(a => a.drink === 'water' && a.ml === 500), JSON.stringify(r.kept))] },
-  { id: 'F05', title: 'Jogurt z jiné aplikace', message: 'Ten jogurt jsem měl ke svačině dopoledne, ne odpoledne.', athlete: FOOD_DAY,
+  { id: 'F05', title: 'Jogurt z jiné aplikace', message: 'Ten jogurt jsem měl ke svačině dopoledne, ne odpoledne.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('žádná karta (jídlo z jiné aplikace)', !r.kept.some(a => a.foodId)), quality('řekne, ať to změní v aplikaci, odkud je', says(r, /MyFitnessPal|Apple|jiné aplikac|aplikac\p{L}*,? (?:odkud|ze které|kde)/iu))] },
-  { id: 'F06', title: 'Jen půlka polévky (jen jedno jídlo z oběda)', message: 'Z oběda jsem snědl jen půlku polévky.', athlete: FOOD_DAY,
+  { id: 'F06', title: 'Jen půlka polévky (jen jedno jídlo z oběda)', message: 'Z oběda jsem snědl jen půlku polévky.', athlete: FOOD_DAY, context: () => ({ chatV1: true, foodCards: true }),
     checks: r => [safety('nemění pizzu', onlyFood(r, ['14'])), quality('karta porce polévky 150 g', foodCards(r, 'food_portion').some(a => a.foodId === '14' && a.amount === 150), JSON.stringify(r.kept))] }
 ];
 
