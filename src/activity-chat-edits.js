@@ -197,13 +197,19 @@ export async function undoActivityChange(env, token) {
     }
     return { status: 'ok', kind: 'planned', op: change.op, proposal: change.proposal || null };
   }
-  // A done activity (hidden, merged, re-timed, its calories): claimed first like
+  // A done activity (hidden, merged, re-timed, its calories) or food: claimed first like
   // the planned one, so a double tap acts once and the chat's "vrať to" never
   // goes one change further back; the claim is undone when the change fails.
   if (change.undone) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
   const claim = await env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ? AND change_json = ?').bind(JSON.stringify({ ...change, undone: true }), env.USER_ID, String(token), stored.change_json).run();
   if (claim.meta?.changes !== 1) throw fail(L('Tuhle změnu už vrátit nejde.', 'This change can no longer be undone.'));
   const release = () => env.DB.prepare('UPDATE activity_undo SET change_json = ? WHERE user_id = ? AND token = ?').bind(stored.change_json, env.USER_ID, String(token)).run().catch(() => null);
+  // A food or drink card of the coach (coach-food-cards.js); foodId goes to the Google export.
+  if (change.kind === 'food' || change.kind === 'fluid') {
+    const { undoFoodChange } = await import('./coach-food-cards.js');
+    const done = await undoFoodChange(env, change, fail).catch(async error => { await release(); throw error; });
+    return { status: 'ok', kind: change.kind, proposal: change.proposal || null, ...done };
+  }
   if (change.kind === 'kcal') {
     // Only while the activity is still as the change left it (a sync may have rewritten it).
     const back = await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND payload_json = ?').bind(change.before, change.id, env.USER_ID, change.after).run().catch(async error => { await release(); throw error; });

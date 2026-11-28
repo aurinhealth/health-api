@@ -2,6 +2,7 @@
 // draft of food entries. Saved foods are used first; only new foods are looked
 // up on the web. Nothing is logged until the user confirms the draft.
 import { L } from './lang.js';
+import { foodCardMessage } from './coach-food-cards.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { lookupFoodWithAI } from "./food-ai.js";
 import { searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
@@ -29,13 +30,16 @@ const NOT_DONE = /(?<!\p{L})(?:bych|bys|by|budu|půjdu|pujdu|chci|chtěl|chtela|
 // When and around what it was eaten is not a training message: "Po jízdě jsem snědl banán".
 const AROUND_TRAINING = /(?<!\p{L})(?:po|před|pred|během|behem|cestou z|after|before|during|on) (?:(?:the|my|dnešní|dnesni|ranní|ranni|\p{L}+é) )?(?:jízd\p{L}*|kole|kolem|běhu|behu|tréninku|treninku|posilovně|posilovne|intervalech|ride|run|training|workout|gym)(?!\p{L})/gu;
 const ATE = /(?<!\p{L})(?:snědl[a]?|snedl[a]?|jedl[a]?|vypil[a]?|dal[a]? jsem si|ate|drank|eaten)(?!\p{L})/u;
-export function isFoodLogMessage(message) {
+export function isFoodLogMessage(message, { cards = true } = {}) {
   const t = String(message || "").toLowerCase().replace(/[’‘]/g, "'").trim();
   if (!t || t.includes("?") || FOOD_QUESTION.test(t)) return false;
   const said = FOOD_PAST.test(t) || (MEAL_SAID.test(t) && !NOT_DONE.test(t));
   // Only a real eating or drinking verb lets the training around it go ("Po jízdě jsem měl křeče" is not food).
-  return said && !NOT_FOOD.test(ATE.test(t) ? t.replace(AROUND_TRAINING, " ") : t);
+  // A change of a food already logged or only water goes to the coach's food
+  // cards (coach-food-cards.js) in an app that shows them (`cards`).
+  return said && !(cards && foodCardMessage(t)) && !NOT_FOOD.test(ATE.test(t) ? t.replace(AROUND_TRAINING, " ") : t);
 }
+
 
 export const FOOD_PARSE_SCHEMA = {
   type: "json_schema",
